@@ -1,0 +1,7 @@
+C:\DATA\Project\mailX\mailX\obj\Debug\net8.0-windows\mailX.csproj.AssemblyReference.cache
+C:\DATA\Project\mailX\mailX\obj\Debug\net8.0-windows\Views\MainWindow.g.cs
+C:\DATA\Project\mailX\mailX\obj\Debug\net8.0-windows\App.g.cs
+C:\DATA\Project\mailX\mailX\obj\Debug\net8.0-windows\mailX_Content.g.cs
+C:\DATA\Project\mailX\mailX\obj\Debug\net8.0-windows\GeneratedInternalTypeHelper.g.cs
+C:\DATA\Project\mailX\mailX\obj\Debug\net8.0-windows\mailX_MarkupCompile.cache
+C:\DATA\Project\mailX\mailX\obj\Debug\net8.0-windows\mailX_MarkupCompile.lref

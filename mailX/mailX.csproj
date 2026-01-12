@@ -1,0 +1,58 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net10.0-windows</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <UseWPF>true</UseWPF>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- MVVM -->
+    <PackageReference Include="CommunityToolkit.Mvvm" Version="8.4.0" />
+
+    <!-- WPF UI (Fluent Design) -->
+    <PackageReference Include="WPF-UI" Version="4.1.0" />
+
+    <!-- WebView2 (메일 본문 렌더링) -->
+    <PackageReference Include="Microsoft.Web.WebView2" Version="1.0.3124.44" />
+
+    <!-- MS Graph API -->
+    <PackageReference Include="Microsoft.Graph" Version="5.77.0" />
+    <PackageReference Include="Azure.Identity" Version="1.14.1" />
+    <PackageReference Include="Microsoft.Identity.Client" Version="4.71.1" />
+
+    <!-- SQLite + EF Core -->
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" Version="9.0.1" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Design" Version="9.0.1">
+      <PrivateAssets>all</PrivateAssets>
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+    </PackageReference>
+
+    <!-- OCR + 문서 처리 -->
+    <PackageReference Include="Tesseract" Version="5.2.0" />
+    <PackageReference Include="MsgReader" Version="5.6.2" />
+    <PackageReference Include="MimeKit" Version="4.10.0" />
+
+    <!-- HWP 처리 -->
+    <PackageReference Include="HwpSharp" Version="1.0.0" />
+
+    <!-- 로깅 -->
+    <PackageReference Include="Serilog" Version="4.2.0" />
+    <PackageReference Include="Serilog.Sinks.File" Version="6.0.0" />
+    <PackageReference Include="Serilog.Extensions.Hosting" Version="8.0.0" />
+
+    <!-- DI -->
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection" Version="9.0.1" />
+    <PackageReference Include="Microsoft.Extensions.Hosting" Version="9.0.1" />
+
+    <!-- JSON -->
+    <PackageReference Include="Newtonsoft.Json" Version="13.0.3" />
+
+    <!-- 클라우드 다운로드 (Google Drive) -->
+    <PackageReference Include="Google.Apis.Drive.v3" Version="1.69.0.3674" />
+    <PackageReference Include="Google.Apis.Auth" Version="1.69.0" />
+  </ItemGroup>
+
+</Project>

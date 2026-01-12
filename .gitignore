@@ -1,0 +1,30 @@
+# 빌드 결과
+bin/
+obj/
+publish/
+
+# IDE
+.vs/
+.vscode/
+*.user
+*.suo
+
+# OS
+Thumbs.db
+.DS_Store
+
+# 임시 파일
+*.tmp
+tmpclaude-*
+
+# SQLite DB
+*.db
+*.db-shm
+*.db-wal
+
+# 로그
+logs/
+*.log
+
+# 사용자 설정
+appsettings.local.json
