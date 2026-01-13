@@ -11,9 +11,29 @@
         Height="800" Width="1400"
         MinHeight="600" MinWidth="1000"
         WindowStartupLocation="CenterScreen"
+        ExtendsContentIntoTitleBar="True"
+        WindowBackdropType="Mica"
         d:DataContext="{d:DesignInstance Type=vm:MainViewModel, IsDesignTimeCreatable=False}">
 
     <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+        </Grid.RowDefinitions>
+
+        <!-- 타이틀바 -->
+        <ui:TitleBar
+            x:Name="TitleBar"
+            Grid.Row="0"
+            Title="mailX"
+            Icon="pack://application:,,,/Assets/icon.png"
+            ShowMaximize="True"
+            ShowMinimize="True"
+            ShowClose="True"
+            CanMaximize="True"/>
+
+        <!-- 메인 콘텐츠 -->
+        <Grid Grid.Row="1">
         <Grid.ColumnDefinitions>
             <!-- 폴더 트리 (250px 고정) -->
             <ColumnDefinition Width="250" MinWidth="150" MaxWidth="400"/>
@@ -130,7 +150,7 @@
 
                         <!-- 새로고침 버튼 -->
                         <ui:Button Grid.Column="1"
-                                   Icon="{ui:SymbolIcon Refresh24}"
+                                   Icon="{ui:SymbolIcon ArrowClockwise24}"
                                    Command="{Binding LoadEmailsCommand}"
                                    ToolTip="새로고침"
                                    Appearance="Secondary"/>
@@ -323,7 +343,7 @@
                                 BorderBrush="{DynamicResource ControlElevationBorderBrush}"
                                 BorderThickness="0,0,0,1">
                             <StackPanel Orientation="Horizontal">
-                                <ui:SymbolIcon Symbol="BrainCircuit24" FontSize="20" Margin="0,0,8,0"/>
+                                <ui:SymbolIcon Symbol="Brain24" FontSize="20" Margin="0,0,8,0"/>
                                 <TextBlock Text="AI 분석"
                                            FontSize="16"
                                            FontWeight="SemiBold"
@@ -374,7 +394,7 @@
                                                    FontWeight="SemiBold"
                                                    Margin="0,0,0,8"/>
                                         <StackPanel Orientation="Horizontal">
-                                            <ui:SymbolIcon Symbol="Calendar24" FontSize="16" Margin="0,0,8,0"/>
+                                            <ui:SymbolIcon Symbol="CalendarLtr24" FontSize="16" Margin="0,0,8,0"/>
                                             <TextBlock Text="{Binding SelectedEmail.Deadline, StringFormat='{}{0:yyyy-MM-dd}'}"
                                                        VerticalAlignment="Center"/>
                                         </StackPanel>
@@ -414,6 +434,7 @@
                                HorizontalAlignment="Center"/>
                 </StackPanel>
             </Border>
+        </Grid>
         </Grid>
     </Grid>
 </ui:FluentWindow>

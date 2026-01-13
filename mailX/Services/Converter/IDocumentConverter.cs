@@ -12,9 +12,19 @@ namespace mailX.Services.Converter
     public interface IDocumentConverter
     {
         /// <summary>
-        /// 변환기 이름
+        /// 변환기 고유 이름 (코드용)
         /// </summary>
         string Name { get; }
+
+        /// <summary>
+        /// UI 표시 이름
+        /// </summary>
+        string DisplayName { get; }
+
+        /// <summary>
+        /// 우선순위 (낮을수록 우선, 기본값 100)
+        /// </summary>
+        int Priority { get; }
 
         /// <summary>
         /// 지원하는 파일 확장자 목록 (.hwp, .docx 등)

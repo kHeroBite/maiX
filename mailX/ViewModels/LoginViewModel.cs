@@ -7,6 +7,7 @@ using CommunityToolkit.Mvvm.Input;
 using Microsoft.EntityFrameworkCore;
 using mailX.Data;
 using mailX.Models;
+using mailX.Utils;
 
 namespace mailX.ViewModels;
 
@@ -60,9 +61,9 @@ public partial class LoginViewModel : ViewModelBase
     public bool CanLoginWithSaved => SelectedAccount != null && !IsLoading;
 
     /// <summary>
-    /// 로그인 성공 이벤트
+    /// 로그인 성공 이벤트 (View에서 DialogResult 설정용)
     /// </summary>
-    public event EventHandler<Account>? LoginSucceeded;
+    public event Action? LoginSucceeded;
 
     /// <summary>
     /// SavedAccounts 변경 시 computed 속성 알림
@@ -104,15 +105,19 @@ public partial class LoginViewModel : ViewModelBase
     [RelayCommand]
     private async Task LoginAsync()
     {
+        Log4.Debug("LoginAsync 시작");
         await ExecuteAsync(async () =>
         {
+            Log4.Debug("ExecuteAsync 내부 시작");
             HasError = false;
 
             // TODO: MSAL 대화형 로그인 구현
             // var result = await _msalClient.AcquireTokenInteractive(scopes).ExecuteAsync();
 
             // 임시: 로그인 시뮬레이션
+            Log4.Debug("로그인 시뮬레이션 시작 (1초 대기)");
             await Task.Delay(1000);
+            Log4.Debug("로그인 시뮬레이션 완료");
 
             // 로그인 성공 시 계정 저장 및 이벤트 발생
             var account = new Account
@@ -122,27 +127,44 @@ public partial class LoginViewModel : ViewModelBase
                 LastLoginAt = DateTime.Now,
                 IsDefault = true
             };
+            Log4.Debug($"계정 객체 생성: {account.Email}");
 
             // 기존 계정 확인
+            Log4.Debug("DB에서 기존 계정 조회 시작");
             var existing = await _dbContext.Accounts.FindAsync(account.Email);
+            Log4.Debug($"DB 조회 완료 - existing: {(existing != null ? "있음" : "없음")}");
+
             if (existing != null)
             {
+                Log4.Debug("기존 계정 업데이트");
                 existing.LastLoginAt = DateTime.Now;
                 existing.DisplayName = account.DisplayName;
             }
             else
             {
+                Log4.Debug("새 계정 추가");
                 await _dbContext.Accounts.AddAsync(account);
             }
-            await _dbContext.SaveChangesAsync();
 
-            LoginSucceeded?.Invoke(this, account);
+            Log4.Debug("DB SaveChangesAsync 시작");
+            await _dbContext.SaveChangesAsync();
+            Log4.Debug("DB SaveChangesAsync 완료");
+
+            Log4.Debug("LoginSucceeded 이벤트 발생 직전");
+            LoginSucceeded?.Invoke();
+            Log4.Debug("LoginSucceeded 이벤트 발생 완료");
+
         }, "로그인 실패");
+
+        Log4.Debug($"ExecuteAsync 완료 - ErrorMessage: {ErrorMessage ?? "(null)"}");
 
         if (ErrorMessage != null)
         {
+            Log4.Debug("에러 발생 - HasError = true 설정");
             HasError = true;
         }
+
+        Log4.Debug("LoginAsync 종료");
     }
 
     /// <summary>
@@ -168,7 +190,7 @@ public partial class LoginViewModel : ViewModelBase
             SelectedAccount.LastLoginAt = DateTime.Now;
             await _dbContext.SaveChangesAsync();
 
-            LoginSucceeded?.Invoke(this, SelectedAccount);
+            LoginSucceeded?.Invoke();
         }, "자동 로그인 실패");
 
         if (ErrorMessage != null)

@@ -79,6 +79,11 @@ public class MailXDbContext : DbContext
     /// </summary>
     public DbSet<OneNotePage> OneNotePages { get; set; } = null!;
 
+    /// <summary>
+    /// 문서 변환기 설정 테이블
+    /// </summary>
+    public DbSet<ConverterSetting> ConverterSettings { get; set; } = null!;
+
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         base.OnModelCreating(modelBuilder);
@@ -163,6 +168,15 @@ public class MailXDbContext : DbContext
                 .WithOne(e => e.ContractInfo)
                 .HasForeignKey<ContractInfo>(c => c.EmailId)
                 .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        // ===== ConverterSetting 인덱스 =====
+        modelBuilder.Entity<ConverterSetting>(entity =>
+        {
+            // Extension unique 인덱스
+            entity.HasIndex(c => c.Extension)
+                .IsUnique()
+                .HasDatabaseName("IX_ConverterSetting_Extension");
         });
     }
 }

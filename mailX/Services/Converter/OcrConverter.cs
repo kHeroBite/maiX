@@ -36,7 +36,17 @@ namespace mailX.Services.Converter
         /// <summary>
         /// 변환기 이름
         /// </summary>
-        public string Name => "OcrConverter";
+        public string Name => "Tesseract";
+
+        /// <summary>
+        /// UI 표시 이름
+        /// </summary>
+        public string DisplayName => "Tesseract OCR";
+
+        /// <summary>
+        /// 우선순위 (낮을수록 우선)
+        /// </summary>
+        public int Priority => 100;
 
         /// <summary>
         /// 지원 확장자 목록
