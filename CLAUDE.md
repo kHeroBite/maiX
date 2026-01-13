@@ -53,8 +53,19 @@ ntfy_알림: |
 
 Git_작업:
   1. git add .
-  2. git commit -m "커밋 메시지"
+  2. git commit -m "이모지 타입: 커밋 메시지"
   3. git push
+
+Git_커밋_이모지:
+  - "✨ feat:" 새 기능
+  - "🐛 fix:" 버그 수정
+  - "📝 docs:" 문서
+  - "♻️ refactor:" 리팩토링
+  - "🎨 style:" 코드 스타일
+  - "✅ test:" 테스트
+  - "🔧 chore:" 기타 작업
+  - "🚀 deploy:" 배포
+  - "🗑️ remove:" 삭제
 
 스크린샷: curl -X POST http://localhost:5858/api/screenshot
 
