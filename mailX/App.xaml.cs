@@ -1,11 +1,23 @@
 using System;
 using System.IO;
+using System.Linq;
+using System.Text.Json;
 using System.Windows;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Serilog;
 using mailX.Data;
+using mailX.Services.AI;
+using mailX.Services.Analysis;
+using mailX.Services.Cloud;
+using mailX.Services.Converter;
+using mailX.Services.Graph;
+using mailX.Services.Notification;
+using mailX.Services.Search;
+using mailX.Services.Storage;
+using mailX.Services.Sync;
 using mailX.ViewModels;
 using mailX.Views;
 
@@ -35,10 +47,18 @@ public partial class App : Application
     /// </summary>
     public static string DatabasePath { get; } = Path.Combine(AppDataPath, "mailX.db");
 
+    /// <summary>
+    /// 설정 파일 경로
+    /// </summary>
+    public static string SettingsPath { get; } = Path.Combine(AppDataPath, "appsettings.json");
+
     public App()
     {
         // 앱 데이터 폴더 생성
         EnsureDirectoriesExist();
+
+        // 기본 설정 파일 생성
+        EnsureSettingsExist();
 
         // Serilog 설정
         ConfigureSerilog();
@@ -46,9 +66,13 @@ public partial class App : Application
         // Host 빌더 구성
         _host = Host.CreateDefaultBuilder()
             .UseSerilog()
+            .ConfigureAppConfiguration((context, config) =>
+            {
+                config.AddJsonFile(SettingsPath, optional: true, reloadOnChange: true);
+            })
             .ConfigureServices((context, services) =>
             {
-                ConfigureServices(services);
+                ConfigureServices(services, context.Configuration);
             })
             .Build();
     }
@@ -60,6 +84,89 @@ public partial class App : Application
     {
         Directory.CreateDirectory(AppDataPath);
         Directory.CreateDirectory(LogPath);
+    }
+
+    /// <summary>
+    /// 기본 설정 파일 생성
+    /// </summary>
+    private static void EnsureSettingsExist()
+    {
+        if (!File.Exists(SettingsPath))
+        {
+            var defaultSettings = new
+            {
+                ConnectionStrings = new
+                {
+                    DefaultConnection = $"Data Source={DatabasePath}"
+                },
+                AzureAd = new
+                {
+                    ClientId = "YOUR_CLIENT_ID_HERE",
+                    TenantId = "common",
+                    Scopes = new[] { "User.Read", "Mail.Read", "Mail.Send", "Mail.ReadWrite", "Files.Read.All", "Sites.Read.All" }
+                },
+                AIProviders = new
+                {
+                    DefaultProvider = "Claude",
+                    Claude = new
+                    {
+                        ApiKey = "",
+                        Model = "claude-sonnet-4-20250514",
+                        BaseUrl = "https://api.anthropic.com"
+                    },
+                    OpenAI = new
+                    {
+                        ApiKey = "",
+                        Model = "gpt-4o",
+                        BaseUrl = "https://api.openai.com/v1"
+                    },
+                    Gemini = new
+                    {
+                        ApiKey = "",
+                        Model = "gemini-2.0-flash-exp",
+                        BaseUrl = "https://generativelanguage.googleapis.com/v1beta"
+                    },
+                    Ollama = new
+                    {
+                        Model = "llama3.3",
+                        BaseUrl = "http://localhost:11434"
+                    },
+                    LMStudio = new
+                    {
+                        Model = "local-model",
+                        BaseUrl = "http://localhost:1234/v1"
+                    }
+                },
+                Notification = new
+                {
+                    NtfyServerUrl = "https://ntfy.sh",
+                    NtfyTopic = "mailX",
+                    NtfyAuthToken = "",
+                    EnableNewMailNotification = true,
+                    EnableImportantMailNotification = true,
+                    EnableDeadlineReminder = true,
+                    MinPriorityForNotification = 70,
+                    DeadlineReminderDays = 3,
+                    QuietHoursStart = "22:00",
+                    QuietHoursEnd = "07:00",
+                    EnableQuietHours = true,
+                    BatchIntervalMinutes = 5,
+                    MaxBatchSize = 10,
+                    ExcludeNonBusinessMail = true
+                },
+                Sync = new
+                {
+                    IntervalMinutes = 5,
+                    MaxMessagesPerSync = 100
+                }
+            };
+
+            var json = JsonSerializer.Serialize(defaultSettings, new JsonSerializerOptions
+            {
+                WriteIndented = true
+            });
+            File.WriteAllText(SettingsPath, json);
+        }
     }
 
     /// <summary>
@@ -82,13 +189,130 @@ public partial class App : Application
     /// <summary>
     /// 서비스 등록 (DI 컨테이너 구성)
     /// </summary>
-    private static void ConfigureServices(IServiceCollection services)
+    private static void ConfigureServices(IServiceCollection services, IConfiguration configuration)
     {
+        // 설정 바인딩
+        services.AddSingleton(configuration);
+
         // DbContext 등록 (SQLite)
         services.AddDbContext<MailXDbContext>(options =>
         {
             options.UseSqlite($"Data Source={DatabasePath}");
         });
+
+        // Graph 서비스 등록
+        services.AddSingleton<GraphAuthService>();
+        services.AddScoped<GraphMailService>();
+
+        // AI Provider 등록 (Singleton - 상태 유지)
+        services.AddSingleton<ClaudeProvider>();
+        services.AddSingleton<OpenAIProvider>();
+        services.AddSingleton<GeminiProvider>();
+        services.AddSingleton<OllamaProvider>();
+        services.AddSingleton<LMStudioProvider>();
+
+        // AI 서비스 등록 (Singleton - Provider 관리)
+        services.AddSingleton<AIService>(sp =>
+        {
+            var aiService = new AIService();
+
+            // 설정에서 API 키 로드 및 구성
+            var aiConfig = configuration.GetSection("AIProviders");
+            var defaultProvider = aiConfig.GetValue<string>("DefaultProvider") ?? "Claude";
+
+            // Claude 설정
+            var claudeKey = aiConfig.GetValue<string>("Claude:ApiKey");
+            var claudeModel = aiConfig.GetValue<string>("Claude:Model");
+            if (!string.IsNullOrEmpty(claudeKey))
+            {
+                aiService.ConfigureProvider("Claude", claudeKey, null, claudeModel);
+            }
+
+            // OpenAI 설정
+            var openAiKey = aiConfig.GetValue<string>("OpenAI:ApiKey");
+            var openAiModel = aiConfig.GetValue<string>("OpenAI:Model");
+            if (!string.IsNullOrEmpty(openAiKey))
+            {
+                aiService.ConfigureProvider("OpenAI", openAiKey, null, openAiModel);
+            }
+
+            // Gemini 설정
+            var geminiKey = aiConfig.GetValue<string>("Gemini:ApiKey");
+            var geminiModel = aiConfig.GetValue<string>("Gemini:Model");
+            if (!string.IsNullOrEmpty(geminiKey))
+            {
+                aiService.ConfigureProvider("Gemini", geminiKey, null, geminiModel);
+            }
+
+            // Ollama 설정 (로컬 - API 키 불필요)
+            var ollamaUrl = aiConfig.GetValue<string>("Ollama:BaseUrl");
+            var ollamaModel = aiConfig.GetValue<string>("Ollama:Model");
+            if (!string.IsNullOrEmpty(ollamaUrl))
+            {
+                aiService.ConfigureProvider("Ollama", "", ollamaUrl, ollamaModel);
+            }
+
+            // LMStudio 설정 (로컬 - API 키 불필요)
+            var lmStudioUrl = aiConfig.GetValue<string>("LMStudio:BaseUrl");
+            var lmStudioModel = aiConfig.GetValue<string>("LMStudio:Model");
+            if (!string.IsNullOrEmpty(lmStudioUrl))
+            {
+                aiService.ConfigureProvider("LMStudio", "", lmStudioUrl, lmStudioModel);
+            }
+
+            // 기본 Provider 설정
+            aiService.SetCurrentProvider(defaultProvider);
+
+            return aiService;
+        });
+
+        // Prompt 서비스 등록
+        services.AddScoped<PromptService>();
+
+        // 분석 서비스 등록
+        services.AddSingleton<PriorityCalculator>();
+        services.AddSingleton<ContractExtractor>();
+        services.AddSingleton<TodoExtractor>();
+        services.AddScoped<EmailAnalyzer>();
+
+        // 문서 변환 서비스 등록
+        services.AddSingleton<HwpConverter>();
+        services.AddSingleton<PandocConverter>();
+        services.AddSingleton<OcrConverter>();
+        services.AddSingleton<AttachmentProcessor>();
+        services.AddSingleton<CloudLinkDownloader>();
+
+        // 검색 서비스 등록
+        services.AddScoped<EmailSearchService>();
+
+        // 알림 서비스 등록
+        services.AddSingleton(sp =>
+        {
+            var notifyConfig = configuration.GetSection("Notification");
+            return new NotificationSettings
+            {
+                NtfyServerUrl = notifyConfig.GetValue<string>("NtfyServerUrl") ?? "https://ntfy.sh",
+                NtfyTopic = notifyConfig.GetValue<string>("NtfyTopic") ?? "mailX",
+                NtfyAuthToken = notifyConfig.GetValue<string>("NtfyAuthToken"),
+                EnableNewMailNotification = notifyConfig.GetValue<bool>("EnableNewMailNotification", true),
+                EnableImportantMailNotification = notifyConfig.GetValue<bool>("EnableImportantMailNotification", true),
+                EnableDeadlineReminder = notifyConfig.GetValue<bool>("EnableDeadlineReminder", true),
+                MinPriorityForNotification = notifyConfig.GetValue<int>("MinPriorityForNotification", 70),
+                DeadlineReminderDays = notifyConfig.GetValue<int>("DeadlineReminderDays", 3),
+                QuietHoursStart = TimeSpan.TryParse(notifyConfig.GetValue<string>("QuietHoursStart"), out var start) ? start : new TimeSpan(22, 0, 0),
+                QuietHoursEnd = TimeSpan.TryParse(notifyConfig.GetValue<string>("QuietHoursEnd"), out var end) ? end : new TimeSpan(7, 0, 0),
+                EnableQuietHours = notifyConfig.GetValue<bool>("EnableQuietHours", true),
+                BatchIntervalMinutes = notifyConfig.GetValue<int>("BatchIntervalMinutes", 5),
+                MaxBatchSize = notifyConfig.GetValue<int>("MaxBatchSize", 10),
+                ExcludeNonBusinessMail = notifyConfig.GetValue<bool>("ExcludeNonBusinessMail", true)
+            };
+        });
+        services.AddSingleton<NotificationService>();
+
+        // 백그라운드 동기화 서비스 등록 (IHostedService)
+        services.AddHostedService<BackgroundSyncService>();
+        services.AddSingleton<BackgroundSyncService>(sp =>
+            sp.GetServices<IHostedService>().OfType<BackgroundSyncService>().First());
 
         // ViewModels 등록
         services.AddTransient<MainViewModel>();
@@ -97,10 +321,6 @@ public partial class App : Application
         // Views 등록
         services.AddTransient<MainWindow>();
         services.AddTransient<LoginWindow>();
-
-        // TODO: 서비스 등록 (GraphService, AIService 등)
-        // services.AddSingleton<IGraphService, GraphService>();
-        // services.AddSingleton<IAIService, AIService>();
     }
 
     /// <summary>

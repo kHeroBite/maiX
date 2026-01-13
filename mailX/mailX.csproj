@@ -11,6 +11,7 @@
   <ItemGroup>
     <!-- MVVM -->
     <PackageReference Include="CommunityToolkit.Mvvm" Version="8.4.0" />
+    <PackageReference Include="OpenMcdf" Version="2.3.1" />
 
     <!-- WPF UI (Fluent Design) -->
     <PackageReference Include="WPF-UI" Version="4.1.0" />
