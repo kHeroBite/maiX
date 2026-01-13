@@ -1,0 +1,25 @@
+#!/bin/sh
+# 커밋 메시지 첫 줄에 [코덱스] 프리픽스를 보장합니다.
+
+msg_file="$1"
+if [ ! -f "$msg_file" ]; then
+  exit 0
+fi
+
+first_line="$(sed -n '1p' "$msg_file")"
+rest_lines="$(sed '1d' "$msg_file")"
+
+case "$first_line" in
+  "[코덱스]"*)
+    # 이미 프리픽스가 있음
+    exit 0
+    ;;
+  *)
+    printf "[코덱스] %s\n" "$first_line" > "$msg_file"
+    if [ -n "$rest_lines" ]; then
+      printf "%s\n" "$rest_lines" >> "$msg_file"
+    fi
+    ;;
+esac
+
+exit 0

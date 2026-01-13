@@ -1,0 +1,53 @@
+root = true
+
+[*]
+charset = utf-8
+end_of_line = crlf
+
+[*.cs]
+csharp_space_between_method_declaration_name_and_open_parenthesis = false
+
+# ============================================
+# 코드 분석 경고 설정
+# ============================================
+
+# SPELL 경고 비활성화 (프로젝트 전용 용어: cspms, Evalution, yyyy 등)
+dotnet_diagnostic.SPELL.severity = none
+
+# IDE1006: 명명 규칙 - 한글 이벤트 핸들러 허용
+dotnet_naming_rule.event_handler_should_be_pascal_case.severity = suggestion
+dotnet_naming_rule.event_handler_should_be_pascal_case.symbols = event_handlers
+dotnet_naming_rule.event_handler_should_be_pascal_case.style = pascal_case_style
+
+dotnet_naming_symbols.event_handlers.applicable_kinds = method
+dotnet_naming_symbols.event_handlers.applicable_accessibilities = private
+dotnet_naming_symbols.event_handlers.required_modifiers =
+
+dotnet_naming_style.pascal_case_style.capitalization = pascal_case
+
+# CA1822: static으로 표시 가능 - 경고 수준 낮춤 (이벤트 핸들러 제외 위해)
+dotnet_diagnostic.CA1822.severity = suggestion
+
+# IDE0090: new 식 단순화 - 활성화
+dotnet_diagnostic.IDE0090.severity = suggestion
+
+# IDE0028: 컬렉션 초기화 단순화 - 활성화
+dotnet_diagnostic.IDE0028.severity = suggestion
+
+# IDE0300: 컬렉션 초기화 단순화 - 활성화
+dotnet_diagnostic.IDE0300.severity = suggestion
+
+# IDE0044: readonly 필드 - 활성화
+dotnet_diagnostic.IDE0044.severity = suggestion
+
+# IDE0063: using 문 단순화 - 활성화
+dotnet_diagnostic.IDE0063.severity = suggestion
+
+# IDE0031: null 검사 단순화 - 활성화
+dotnet_diagnostic.IDE0031.severity = suggestion
+
+# CA1854: TryGetValue 사용 권장 - 활성화
+dotnet_diagnostic.CA1854.severity = suggestion
+
+# CA1847: string.Contains(char) 사용 - 활성화
+dotnet_diagnostic.CA1847.severity = suggestion

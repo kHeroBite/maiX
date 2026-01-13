@@ -1,0 +1,6 @@
+{
+  "statusLine": {
+    "type": "command",
+    "command": "powershell -NoProfile -ExecutionPolicy Bypass -Command \"$ErrorActionPreference = 'SilentlyContinue'; $input = $input | ConvertFrom-Json; $model = $input.model.display_name; $style = $input.output_style.name; $cwd = $input.workspace.current_dir; $time = Get-Date -Format 'HH:mm:ss'; $currentDir = Split-Path $cwd -Leaf; try { $null = git rev-parse --git-dir 2>$null; if ($LASTEXITCODE -eq 0) { $branch = git symbolic-ref --short HEAD 2>$null; if (-not $branch) { $branch = git rev-parse --short HEAD 2>$null; $branch = \\\"($branch)\\\" }; $status = git status --porcelain 2>$null; if ($status) { $gitInfo = \\\"$branch*\\\" } else { $gitInfo = \\\"$branch\\\" } } else { $gitInfo = 'no git' } } catch { $gitInfo = 'no git' }; Write-Host \\\"$model | $style | $currentDir | $gitInfo | $time\\\" -NoNewline\""
+  }
+}

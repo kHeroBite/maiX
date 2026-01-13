@@ -1,0 +1,20 @@
+*           text=auto eol=crlf
+
+# 소스/설정 파일은 작업 트리에서 UTF-8로 유지
+*.cs        working-tree-encoding=UTF-8
+*.csproj    working-tree-encoding=UTF-8
+*.sln       working-tree-encoding=UTF-8
+*.config    working-tree-encoding=UTF-8
+*.resx      working-tree-encoding=UTF-8
+*.xml       working-tree-encoding=UTF-8
+*.json      working-tree-encoding=UTF-8
+*.md        working-tree-encoding=UTF-8
+*.ps1       working-tree-encoding=UTF-8
+*.bat       working-tree-encoding=UTF-8
+*.cmd       working-tree-encoding=UTF-8
+*.yml       working-tree-encoding=UTF-8
+*.yaml      working-tree-encoding=UTF-8
+*.txt       working-tree-encoding=UTF-8
+.editorconfig working-tree-encoding=UTF-8
+.gitattributes working-tree-encoding=UTF-8
+.gitignore  working-tree-encoding=UTF-8
