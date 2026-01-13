@@ -19,6 +19,8 @@ using mailX.Services.Search;
 using mailX.Services.Storage;
 using mailX.Services.Sync;
 using mailX.ViewModels;
+using mailX.Services.Api;
+using mailX.Utils;
 using mailX.Views;
 
 namespace mailX;
@@ -29,6 +31,7 @@ namespace mailX;
 public partial class App : Application
 {
     private readonly IHost _host;
+    private RestApiServer? _restApiServer;
 
     /// <summary>
     /// 애플리케이션 데이터 폴더 경로
@@ -59,6 +62,9 @@ public partial class App : Application
 
         // 기본 설정 파일 생성
         EnsureSettingsExist();
+
+        // Log4 초기화 (MARS 스타일 로깅)
+        Log4.Initialize();
 
         // Serilog 설정
         ConfigureSerilog();
@@ -328,27 +334,68 @@ public partial class App : Application
     /// </summary>
     protected override async void OnStartup(StartupEventArgs e)
     {
+        Log4.Debug("OnStartup 시작");
         await _host.StartAsync();
+        Log4.Debug("Host 시작 완료");
 
         try
         {
             // 데이터베이스 마이그레이션 실행
+            Log4.Debug("DB 마이그레이션 시작");
             using var scope = _host.Services.CreateScope();
             var dbContext = scope.ServiceProvider.GetRequiredService<MailXDbContext>();
 
             Log.Information("데이터베이스 마이그레이션 시작");
             await dbContext.Database.MigrateAsync();
             Log.Information("데이터베이스 마이그레이션 완료");
+            Log4.Debug("DB 마이그레이션 완료");
 
-            // 메인 윈도우 표시
-            // TODO: 로그인 상태에 따라 LoginWindow 또는 MainWindow 표시
-            var mainWindow = _host.Services.GetRequiredService<MainWindow>();
-            mainWindow.Show();
+            // 로그인 창 먼저 표시
+            Log4.Debug("LoginWindow 생성 시작");
+            var loginWindow = _host.Services.GetRequiredService<LoginWindow>();
+            Log4.Debug("LoginWindow 생성 완료");
 
-            Log.Information("메인 윈도우 표시 완료");
+            Log4.Debug("LoginWindow.ShowDialog() 호출 직전");
+            var loginResult = loginWindow.ShowDialog();
+            Log4.Debug($"LoginWindow.ShowDialog() 완료 - result: {loginResult}");
+
+            if (loginResult == true)
+            {
+                // 로그인 성공 시 메인 윈도우 표시
+                Log4.Debug("MainWindow 생성 시작");
+                var mainWindow = _host.Services.GetRequiredService<MainWindow>();
+                Log4.Debug("MainWindow 생성 완료");
+
+                Log4.Debug("MainWindow.Show() 호출 직전");
+                mainWindow.Show();
+                Log4.Debug("MainWindow.Show() 완료");
+                Log.Information("메인 윈도우 표시 완료");
+
+                // REST API 서버 시작
+                try
+                {
+                    Log4.Debug("REST API 서버 시작");
+                    _restApiServer = new RestApiServer(5858);
+                    _restApiServer.MainWindow = mainWindow;
+                    _restApiServer.Start();
+                }
+                catch (Exception apiEx)
+                {
+                    Log4.Error($"[RestAPI] 서버 시작 실패: {apiEx.Message}");
+                }
+            }
+            else
+            {
+                // 로그인 취소/실패 시 앱 종료
+                Log4.Debug("로그인 취소/실패 - 앱 종료");
+                Log.Information("로그인 취소 - 앱 종료");
+                Shutdown();
+                return;
+            }
         }
         catch (Exception ex)
         {
+            Log4.Fatal(ex);
             Log.Fatal(ex, "애플리케이션 시작 중 치명적 오류 발생");
             MessageBox.Show(
                 $"애플리케이션을 시작할 수 없습니다.\n\n{ex.Message}",
@@ -358,6 +405,7 @@ public partial class App : Application
             Shutdown(1);
         }
 
+        Log4.Debug("OnStartup 완료");
         base.OnStartup(e);
     }
 
@@ -366,7 +414,11 @@ public partial class App : Application
     /// </summary>
     protected override async void OnExit(ExitEventArgs e)
     {
+        Log4.Info("mailX 애플리케이션 종료");
         Log.Information("mailX 애플리케이션 종료");
+
+        // REST API 서버 종료
+        _restApiServer?.Stop();
 
         await _host.StopAsync();
         _host.Dispose();
