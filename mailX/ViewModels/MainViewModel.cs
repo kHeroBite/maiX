@@ -26,6 +26,10 @@ public partial class MainViewModel : ViewModelBase
         // 동기화 상태 변경 이벤트 구독
         _syncService.PausedChanged += OnSyncPausedChanged;
 
+        // 폴더/메일 동기화 완료 이벤트 구독
+        _syncService.FoldersSynced += OnFoldersSynced;
+        _syncService.EmailsSynced += OnEmailsSynced;
+
         // 초기 상태 동기화
         _isSyncPaused = _syncService.IsPaused;
     }
@@ -91,6 +95,30 @@ public partial class MainViewModel : ViewModelBase
     }
 
     /// <summary>
+    /// 폴더 동기화 완료 이벤트 핸들러
+    /// </summary>
+    private async void OnFoldersSynced()
+    {
+        await LoadFoldersAsync();
+    }
+
+    /// <summary>
+    /// 메일 동기화 완료 이벤트 핸들러
+    /// </summary>
+    private async void OnEmailsSynced(int newCount)
+    {
+        if (SelectedFolder != null)
+        {
+            await LoadEmailsAsync();
+        }
+
+        if (newCount > 0)
+        {
+            StatusMessage = $"{newCount}개 새 메일 동기화됨";
+        }
+    }
+
+    /// <summary>
     /// IsSyncPaused 변경 시 관련 프로퍼티 알림
     /// </summary>
     partial void OnIsSyncPausedChanged(bool value)
@@ -128,6 +156,16 @@ public partial class MainViewModel : ViewModelBase
             Folders = await _dbContext.Folders
                 .OrderBy(f => f.DisplayName)
                 .ToListAsync();
+
+            // 받은편지함 자동 선택 (선택된 폴더가 없는 경우)
+            if (SelectedFolder == null && Folders.Count > 0)
+            {
+                var inbox = Folders.FirstOrDefault(f =>
+                    f.DisplayName.Contains("받은편지함") ||
+                    f.DisplayName.Equals("Inbox", StringComparison.OrdinalIgnoreCase));
+
+                SelectedFolder = inbox ?? Folders.First();
+            }
 
             StatusMessage = $"{Folders.Count}개 폴더 로드됨";
         }, "폴더 로드 실패");

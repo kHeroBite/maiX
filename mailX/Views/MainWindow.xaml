@@ -188,6 +188,7 @@
                                         <Grid.ColumnDefinitions>
                                             <ColumnDefinition Width="*"/>
                                             <ColumnDefinition Width="Auto"/>
+                                            <ColumnDefinition Width="Auto"/>
                                         </Grid.ColumnDefinitions>
 
                                         <TextBlock Grid.Column="0"
@@ -195,7 +196,16 @@
                                                    FontWeight="{Binding IsRead, Converter={StaticResource BoolToFontWeightConverter}, FallbackValue=Normal}"
                                                    TextTrimming="CharacterEllipsis"/>
 
-                                        <TextBlock Grid.Column="1"
+                                        <!-- AI 분석 완료 아이콘 -->
+                                        <ui:SymbolIcon Grid.Column="1"
+                                                       Symbol="Brain24"
+                                                       FontSize="14"
+                                                       Foreground="{DynamicResource SystemAccentColorPrimaryBrush}"
+                                                       Margin="6,0,0,0"
+                                                       ToolTip="AI 분석 완료"
+                                                       Visibility="{Binding AnalysisStatus, Converter={StaticResource StringEqualsToVisibilityConverter}, ConverterParameter=completed}"/>
+
+                                        <TextBlock Grid.Column="2"
                                                    Text="{Binding ReceivedDateTime, StringFormat='{}{0:MM/dd HH:mm}'}"
                                                    Foreground="{DynamicResource TextFillColorSecondaryBrush}"
                                                    FontSize="11"

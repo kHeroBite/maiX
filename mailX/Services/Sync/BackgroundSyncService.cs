@@ -43,6 +43,16 @@ public class BackgroundSyncService : BackgroundService
     /// </summary>
     public event Action<bool>? PausedChanged;
 
+    /// <summary>
+    /// 폴더 동기화 완료 이벤트
+    /// </summary>
+    public event Action? FoldersSynced;
+
+    /// <summary>
+    /// 메일 동기화 완료 이벤트 (새 메일 개수 전달)
+    /// </summary>
+    public event Action<int>? EmailsSynced;
+
     public BackgroundSyncService(IServiceProvider serviceProvider)
     {
         _serviceProvider = serviceProvider ?? throw new ArgumentNullException(nameof(serviceProvider));
@@ -78,6 +88,9 @@ public class BackgroundSyncService : BackgroundService
     {
         _logger.Information("백그라운드 동기화 서비스 시작 - 주기: {Interval}분", SyncIntervalMinutes);
 
+        // 시작 시 폴더 먼저 동기화
+        await SyncFoldersAsync(stoppingToken);
+
         // 시작 시 즉시 1회 동기화
         await SyncAllAccountsAsync(stoppingToken);
 
@@ -95,6 +108,10 @@ public class BackgroundSyncService : BackgroundService
                     continue;
                 }
 
+                // 폴더 동기화
+                await SyncFoldersAsync(stoppingToken);
+
+                // 메일 동기화
                 await SyncAllAccountsAsync(stoppingToken);
             }
         }
@@ -169,29 +186,40 @@ public class BackgroundSyncService : BackgroundService
         var emailAnalyzer = scope.ServiceProvider.GetRequiredService<EmailAnalyzer>();
         var notificationService = scope.ServiceProvider.GetRequiredService<NotificationService>();
 
-        // 폴더별 동기화 상태 조회
-        var syncStates = await dbContext.SyncStates
-            .Where(s => s.AccountEmail == accountEmail)
-            .ToListAsync(ct);
+        // DB에서 받은편지함 폴더 ID 조회 (DisplayName으로 매칭)
+        var inboxFolder = await dbContext.Folders
+            .FirstOrDefaultAsync(f => f.AccountEmail == accountEmail &&
+                (f.DisplayName.Contains("받은편지함") || f.DisplayName.ToLower() == "inbox"), ct);
 
-        // 받은편지함 기본 동기화 상태 확인
-        var inboxSyncState = syncStates.FirstOrDefault(s => s.FolderId == null || s.FolderId == "Inbox");
+        if (inboxFolder == null)
+        {
+            _logger.Warning("받은편지함 폴더를 찾을 수 없음 - 동기화 생략");
+            return;
+        }
+
+        var inboxFolderId = inboxFolder.Id;
+        _logger.Debug("받은편지함 폴더 ID: {FolderId}", inboxFolderId);
+
+        // 폴더별 동기화 상태 조회
+        var inboxSyncState = await dbContext.SyncStates
+            .FirstOrDefaultAsync(s => s.AccountEmail == accountEmail && s.FolderId == inboxFolderId, ct);
 
         if (inboxSyncState == null)
         {
             inboxSyncState = new SyncState
             {
                 AccountEmail = accountEmail,
-                FolderId = "Inbox"
+                FolderId = inboxFolderId
             };
             dbContext.SyncStates.Add(inboxSyncState);
             await dbContext.SaveChangesAsync(ct);
         }
 
-        // Delta Query 또는 일반 조회
+        // 실제 폴더 ID로 메일 조회
         var newEmails = await FetchNewEmailsAsync(
             graphMailService,
             inboxSyncState,
+            inboxFolderId,
             ct);
 
         if (newEmails.Count == 0)
@@ -202,12 +230,15 @@ public class BackgroundSyncService : BackgroundService
 
         _logger.Information("새 메일 발견: {Email} - {Count}건", accountEmail, newEmails.Count);
 
-        // DB에 저장
-        var savedEmails = await SaveEmailsAsync(dbContext, newEmails, accountEmail, ct);
+        // DB에 저장 (폴더 ID 전달)
+        var savedEmails = await SaveEmailsAsync(dbContext, newEmails, accountEmail, inboxFolderId, ct);
 
         // 동기화 상태 업데이트
         inboxSyncState.LastSyncedAt = DateTime.UtcNow;
         await dbContext.SaveChangesAsync(ct);
+
+        // 메일 동기화 완료 이벤트 발생 (분석 전 UI 업데이트를 위해)
+        EmailsSynced?.Invoke(savedEmails.Count);
 
         // 분석 파이프라인 실행
         await AnalyzeAndNotifyAsync(emailAnalyzer, notificationService, savedEmails, ct);
@@ -219,15 +250,15 @@ public class BackgroundSyncService : BackgroundService
     private async Task<List<Message>> FetchNewEmailsAsync(
         GraphMailService mailService,
         SyncState syncState,
+        string folderId,
         CancellationToken ct)
     {
         var messages = new List<Message>();
 
         try
         {
-            // Delta Link가 있으면 변경분만 조회 (향후 Graph SDK Delta 지원 시 활용)
-            // 현재는 마지막 동기화 시간 이후 메일만 조회
-            var allMessages = await mailService.GetMessagesAsync("Inbox", MaxMessagesPerSync);
+            // 실제 폴더 ID로 메일 조회
+            var allMessages = await mailService.GetMessagesAsync(folderId, MaxMessagesPerSync);
 
             if (syncState.LastSyncedAt.HasValue)
             {
@@ -257,6 +288,7 @@ public class BackgroundSyncService : BackgroundService
         MailXDbContext dbContext,
         List<Message> messages,
         string accountEmail,
+        string folderId,
         CancellationToken ct)
     {
         var savedEmails = new List<Email>();
@@ -289,7 +321,7 @@ public class BackgroundSyncService : BackgroundService
                     IsRead = message.IsRead ?? false,
                     Importance = message.Importance?.ToString()?.ToLower(),
                     HasAttachments = message.HasAttachments ?? false,
-                    ParentFolderId = message.ParentFolderId,
+                    ParentFolderId = folderId,  // 실제 폴더 ID 사용
                     AccountEmail = accountEmail,
                     AnalysisStatus = "pending"
                 };
@@ -390,6 +422,9 @@ public class BackgroundSyncService : BackgroundService
         }
 
         await dbContext.SaveChangesAsync(ct);
+
+        // 분석 완료 후 UI 업데이트를 위해 이벤트 발생 (0건으로 새 메일 없음을 알림)
+        EmailsSynced?.Invoke(0);
     }
 
     /// <summary>
@@ -445,6 +480,73 @@ public class BackgroundSyncService : BackgroundService
     {
         _logger.Information("수동 동기화 요청됨: {Email}", accountEmail);
         await SyncAccountAsync(accountEmail, ct);
+    }
+
+    /// <summary>
+    /// 폴더 목록 동기화 (Graph API → DB)
+    /// </summary>
+    public async Task SyncFoldersAsync(CancellationToken ct = default)
+    {
+        _logger.Information("폴더 동기화 시작");
+
+        try
+        {
+            using var scope = _serviceProvider.CreateScope();
+            var graphMailService = scope.ServiceProvider.GetRequiredService<GraphMailService>();
+            var dbContext = scope.ServiceProvider.GetRequiredService<MailXDbContext>();
+            var graphAuthService = scope.ServiceProvider.GetRequiredService<GraphAuthService>();
+
+            if (!graphAuthService.IsLoggedIn || string.IsNullOrEmpty(graphAuthService.CurrentUserEmail))
+            {
+                _logger.Information("로그인된 계정 없음 - 폴더 동기화 생략");
+                return;
+            }
+
+            var folders = (await graphMailService.GetFoldersAsync()).ToList();
+            _logger.Information("Graph API에서 {Count}개 폴더 조회됨", folders.Count);
+
+            var accountEmail = graphAuthService.CurrentUserEmail;
+            var syncedCount = 0;
+
+            foreach (var folder in folders)
+            {
+                if (string.IsNullOrEmpty(folder.Id))
+                    continue;
+
+                var existing = await dbContext.Folders.FindAsync([folder.Id], ct);
+
+                if (existing == null)
+                {
+                    var newFolder = new Models.Folder
+                    {
+                        Id = folder.Id,
+                        DisplayName = folder.DisplayName ?? "(이름 없음)",
+                        ParentFolderId = folder.ParentFolderId,
+                        TotalItemCount = folder.TotalItemCount ?? 0,
+                        UnreadItemCount = folder.UnreadItemCount ?? 0,
+                        AccountEmail = accountEmail
+                    };
+                    dbContext.Folders.Add(newFolder);
+                    syncedCount++;
+                }
+                else
+                {
+                    existing.DisplayName = folder.DisplayName ?? "(이름 없음)";
+                    existing.TotalItemCount = folder.TotalItemCount ?? 0;
+                    existing.UnreadItemCount = folder.UnreadItemCount ?? 0;
+                }
+            }
+
+            await dbContext.SaveChangesAsync(ct);
+            _logger.Information("폴더 동기화 완료: {Count}개 신규 폴더", syncedCount);
+
+            // 폴더 동기화 완료 이벤트 발생
+            FoldersSynced?.Invoke();
+        }
+        catch (Exception ex)
+        {
+            _logger.Error(ex, "폴더 동기화 실패");
+        }
     }
 
     /// <summary>

@@ -18,6 +18,7 @@
             <converters:NullToVisibilityConverter x:Key="NullToVisibilityConverter"/>
             <converters:BoolToFontWeightConverter x:Key="BoolToFontWeightConverter"/>
             <converters:StringToInitialConverter x:Key="StringToInitialConverter"/>
+            <converters:StringEqualsToVisibilityConverter x:Key="StringEqualsToVisibilityConverter"/>
         </ResourceDictionary>
     </Application.Resources>
 </Application>
