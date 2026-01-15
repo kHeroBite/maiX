@@ -52,9 +52,9 @@ ntfy_알림: |
   rm /tmp/ntfy.json
 
 Git_작업:
+  필수: commit 시 항상 push까지 함께 실행
   1. git add .
-  2. git commit -m "이모지 타입: 커밋 메시지"
-  3. git push
+  2. git commit -m "이모지 타입: 커밋 메시지" && git push
 
 Git_커밋_이모지:
   - "✨ feat:" 새 기능
