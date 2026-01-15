@@ -34,8 +34,14 @@ public class BackgroundSyncService : BackgroundService
     // 상태
     private DateTime _lastSyncTime = DateTime.MinValue;
     private bool _isSyncing;
+    private bool _isPaused;
     private int _syncCount;
     private int _errorCount;
+
+    /// <summary>
+    /// 동기화 일시정지/재개 이벤트
+    /// </summary>
+    public event Action<bool>? PausedChanged;
 
     public BackgroundSyncService(IServiceProvider serviceProvider)
     {
@@ -52,6 +58,11 @@ public class BackgroundSyncService : BackgroundService
     /// 현재 동기화 중 여부
     /// </summary>
     public bool IsSyncing => _isSyncing;
+
+    /// <summary>
+    /// 동기화 일시정지 여부
+    /// </summary>
+    public bool IsPaused => _isPaused;
 
     /// <summary>
     /// 총 동기화 횟수
@@ -77,6 +88,13 @@ public class BackgroundSyncService : BackgroundService
         {
             while (await timer.WaitForNextTickAsync(stoppingToken))
             {
+                // 일시정지 상태면 건너뜀
+                if (_isPaused)
+                {
+                    _logger.Debug("동기화 일시정지 상태 - 건너뜀");
+                    continue;
+                }
+
                 await SyncAllAccountsAsync(stoppingToken);
             }
         }
@@ -375,6 +393,43 @@ public class BackgroundSyncService : BackgroundService
     }
 
     /// <summary>
+    /// 동기화 일시정지
+    /// </summary>
+    public void Pause()
+    {
+        if (!_isPaused)
+        {
+            _isPaused = true;
+            _logger.Information("동기화 일시정지됨");
+            PausedChanged?.Invoke(true);
+        }
+    }
+
+    /// <summary>
+    /// 동기화 재개
+    /// </summary>
+    public void Resume()
+    {
+        if (_isPaused)
+        {
+            _isPaused = false;
+            _logger.Information("동기화 재개됨");
+            PausedChanged?.Invoke(false);
+        }
+    }
+
+    /// <summary>
+    /// 동기화 일시정지/재개 토글
+    /// </summary>
+    public void TogglePause()
+    {
+        if (_isPaused)
+            Resume();
+        else
+            Pause();
+    }
+
+    /// <summary>
     /// 수동 즉시 동기화 트리거
     /// </summary>
     public async Task TriggerSyncAsync(CancellationToken ct = default)
@@ -400,6 +455,7 @@ public class BackgroundSyncService : BackgroundService
         return new SyncStatus
         {
             IsSyncing = _isSyncing,
+            IsPaused = _isPaused,
             LastSyncTime = _lastSyncTime,
             SyncCount = _syncCount,
             ErrorCount = _errorCount,
@@ -417,6 +473,11 @@ public class SyncStatus
     /// 현재 동기화 중 여부
     /// </summary>
     public bool IsSyncing { get; set; }
+
+    /// <summary>
+    /// 동기화 일시정지 여부
+    /// </summary>
+    public bool IsPaused { get; set; }
 
     /// <summary>
     /// 마지막 동기화 시간

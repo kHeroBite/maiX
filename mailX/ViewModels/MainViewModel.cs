@@ -6,6 +6,7 @@ using CommunityToolkit.Mvvm.Input;
 using Microsoft.EntityFrameworkCore;
 using mailX.Data;
 using mailX.Models;
+using mailX.Services.Sync;
 
 namespace mailX.ViewModels;
 
@@ -15,10 +16,18 @@ namespace mailX.ViewModels;
 public partial class MainViewModel : ViewModelBase
 {
     private readonly MailXDbContext _dbContext;
+    private readonly BackgroundSyncService _syncService;
 
-    public MainViewModel(MailXDbContext dbContext)
+    public MainViewModel(MailXDbContext dbContext, BackgroundSyncService syncService)
     {
         _dbContext = dbContext;
+        _syncService = syncService;
+
+        // 동기화 상태 변경 이벤트 구독
+        _syncService.PausedChanged += OnSyncPausedChanged;
+
+        // 초기 상태 동기화
+        _isSyncPaused = _syncService.IsPaused;
     }
 
     /// <summary>
@@ -56,6 +65,39 @@ public partial class MainViewModel : ViewModelBase
     /// </summary>
     [ObservableProperty]
     private Email? _selectedEmail;
+
+    /// <summary>
+    /// 동기화 일시정지 상태
+    /// </summary>
+    [ObservableProperty]
+    private bool _isSyncPaused;
+
+    /// <summary>
+    /// 동기화 버튼 아이콘 (▶ 또는 ■)
+    /// </summary>
+    public string SyncButtonIcon => IsSyncPaused ? "▶" : "■";
+
+    /// <summary>
+    /// 동기화 버튼 툴팁
+    /// </summary>
+    public string SyncButtonTooltip => IsSyncPaused ? "동기화 시작" : "동기화 중지";
+
+    /// <summary>
+    /// 동기화 상태 변경 이벤트 핸들러
+    /// </summary>
+    private void OnSyncPausedChanged(bool isPaused)
+    {
+        IsSyncPaused = isPaused;
+    }
+
+    /// <summary>
+    /// IsSyncPaused 변경 시 관련 프로퍼티 알림
+    /// </summary>
+    partial void OnIsSyncPausedChanged(bool value)
+    {
+        OnPropertyChanged(nameof(SyncButtonIcon));
+        OnPropertyChanged(nameof(SyncButtonTooltip));
+    }
 
     /// <summary>
     /// 선택된 폴더 변경 시 이메일 목록 자동 로드
@@ -114,5 +156,15 @@ public partial class MainViewModel : ViewModelBase
 
             StatusMessage = $"{Emails.Count}개 이메일 로드됨";
         }, "이메일 로드 실패");
+    }
+
+    /// <summary>
+    /// 동기화 일시정지/재개 토글
+    /// </summary>
+    [RelayCommand]
+    private void ToggleSync()
+    {
+        _syncService.TogglePause();
+        StatusMessage = IsSyncPaused ? "동기화 재개됨" : "동기화 중지됨";
     }
 }

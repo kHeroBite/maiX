@@ -148,12 +148,20 @@
                                        VerticalAlignment="Center"/>
                         </StackPanel>
 
-                        <!-- 새로고침 버튼 -->
-                        <ui:Button Grid.Column="1"
-                                   Icon="{ui:SymbolIcon ArrowClockwise24}"
-                                   Command="{Binding LoadEmailsCommand}"
-                                   ToolTip="새로고침"
-                                   Appearance="Secondary"/>
+                        <!-- 새로고침 / 동기화 토글 버튼 -->
+                        <StackPanel Grid.Column="1" Orientation="Horizontal">
+                            <ui:Button Icon="{ui:SymbolIcon ArrowClockwise24}"
+                                       Command="{Binding LoadEmailsCommand}"
+                                       ToolTip="새로고침"
+                                       Appearance="Secondary"
+                                       Margin="0,0,4,0"/>
+                            <ui:Button Content="{Binding SyncButtonIcon}"
+                                       Command="{Binding ToggleSyncCommand}"
+                                       ToolTip="{Binding SyncButtonTooltip}"
+                                       Appearance="Secondary"
+                                       FontSize="12"
+                                       Width="36"/>
+                        </StackPanel>
                     </Grid>
                 </Border>
 
