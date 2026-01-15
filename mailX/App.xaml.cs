@@ -282,6 +282,12 @@ public partial class App : Application
 
             if (loginResult == true)
             {
+                // 로그인 직후 폴더 먼저 동기화
+                Log4.Debug("로그인 후 폴더 동기화 시작");
+                var syncService = _host.Services.GetRequiredService<BackgroundSyncService>();
+                await syncService.SyncFoldersAsync();
+                Log4.Debug("로그인 후 폴더 동기화 완료");
+
                 // 로그인 성공 시 메인 윈도우 표시
                 Log4.Debug("MainWindow 생성 시작");
                 var mainWindow = _host.Services.GetRequiredService<MainWindow>();
