@@ -103,35 +103,28 @@ public class BackgroundSyncService : BackgroundService
         try
         {
             using var scope = _serviceProvider.CreateScope();
-            var dbContext = scope.ServiceProvider.GetRequiredService<MailXDbContext>();
+            var graphAuthService = scope.ServiceProvider.GetRequiredService<GraphAuthService>();
 
-            // 활성 계정 조회 (토큰이 있는 계정만)
-            var accounts = await dbContext.Accounts
-                .Where(a => a.Tokens != null)
-                .ToListAsync(ct);
-
-            if (accounts.Count == 0)
+            // MSAL로 로그인된 계정 확인
+            if (!graphAuthService.IsLoggedIn || string.IsNullOrEmpty(graphAuthService.CurrentUserEmail))
             {
-                _logger.Information("활성 계정 없음 - 동기화 생략");
+                _logger.Information("로그인된 계정 없음 - 동기화 생략");
                 return;
             }
 
-            foreach (var account in accounts)
+            try
             {
-                try
-                {
-                    await SyncAccountAsync(account.Email, ct);
-                }
-                catch (Exception ex)
-                {
-                    Interlocked.Increment(ref _errorCount);
-                    _logger.Error(ex, "계정 동기화 실패: {Email}", account.Email);
-                }
+                await SyncAccountAsync(graphAuthService.CurrentUserEmail, ct);
+            }
+            catch (Exception ex)
+            {
+                Interlocked.Increment(ref _errorCount);
+                _logger.Error(ex, "계정 동기화 실패: {Email}", graphAuthService.CurrentUserEmail);
             }
 
             _lastSyncTime = DateTime.UtcNow;
             Interlocked.Increment(ref _syncCount);
-            _logger.Information("전체 계정 동기화 완료: {Count}개 계정", accounts.Count);
+            _logger.Information("계정 동기화 완료: {Email}", graphAuthService.CurrentUserEmail);
         }
         catch (Exception ex)
         {
@@ -327,8 +320,8 @@ public class BackgroundSyncService : BackgroundService
         {
             try
             {
-                // 새 메일 알림 (분석 전)
-                await notificationService.NotifyNewEmailAsync(email);
+                // TODO: 메일 알림 임시 비활성화 - ntfy rate limit 문제로 인해 주석 처리
+                // await notificationService.NotifyNewEmailAsync(email);
 
                 // AI 분석
                 var result = await analyzer.AnalyzeEmailAsync(email, ct);
@@ -344,17 +337,17 @@ public class BackgroundSyncService : BackgroundService
                     email.Deadline = result.Deadline;
                     email.AnalysisStatus = "completed";
 
-                    // 중요 메일 알림
-                    if (email.PriorityScore >= 70)
-                    {
-                        await notificationService.NotifyImportantEmailAsync(email);
-                    }
+                    // TODO: 중요 메일 알림 임시 비활성화
+                    // if (email.PriorityScore >= 70)
+                    // {
+                    //     await notificationService.NotifyImportantEmailAsync(email);
+                    // }
 
-                    // 마감일 알림
-                    if (email.Deadline.HasValue)
-                    {
-                        await notificationService.NotifyDeadlineReminderAsync(email);
-                    }
+                    // TODO: 마감일 알림 임시 비활성화
+                    // if (email.Deadline.HasValue)
+                    // {
+                    //     await notificationService.NotifyDeadlineReminderAsync(email);
+                    // }
                 }
                 else
                 {

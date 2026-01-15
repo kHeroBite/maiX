@@ -12,7 +12,8 @@ public class MailXDbContext : DbContext
     {
     }
 
-    // ===== DbSet 정의 (13개) =====
+    // ===== DbSet 정의 (12개) =====
+    // Note: Account는 DB에 저장하지 않고 로컬 XML 파일로 관리 (%APPDATA%\mailX\conf\autologin.xml)
 
     /// <summary>
     /// 이메일 테이블
@@ -48,11 +49,6 @@ public class MailXDbContext : DbContext
     /// 동기화 상태 테이블
     /// </summary>
     public DbSet<SyncState> SyncStates { get; set; } = null!;
-
-    /// <summary>
-    /// 계정 테이블
-    /// </summary>
-    public DbSet<Account> Accounts { get; set; } = null!;
 
     /// <summary>
     /// 서명 테이블

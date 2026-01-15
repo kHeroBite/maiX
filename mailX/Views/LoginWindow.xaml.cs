@@ -35,8 +35,17 @@ public partial class LoginWindow : Window
     private async void LoginWindow_Loaded(object sender, RoutedEventArgs e)
     {
         Log4.Debug("LoginWindow_Loaded 시작");
-        // 저장된 계정 목록 로드
-        await _viewModel.LoadSavedAccountsAsync();
+        // 저장된 로그인 설정 로드
+        _viewModel.LoadSavedSettings();
+        Log4.Debug($"LoginWindow_Loaded - ShouldAutoLogin: {_viewModel.ShouldAutoLogin}");
+
+        // 자동 로그인 활성화 시 바로 로그인 시도
+        if (_viewModel.ShouldAutoLogin)
+        {
+            Log4.Debug("자동 로그인 시작");
+            await _viewModel.LoginWithSavedAccountCommand.ExecuteAsync(null);
+        }
+
         Log4.Debug("LoginWindow_Loaded 완료");
     }
 

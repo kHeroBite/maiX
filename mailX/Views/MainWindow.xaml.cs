@@ -29,6 +29,7 @@ public partial class MainWindow : FluentWindow
         };
 
         Loaded += MainWindow_Loaded;
+        Closed += MainWindow_Closed;
         Log4.Debug("MainWindow 생성자 완료");
     }
 
@@ -38,5 +39,12 @@ public partial class MainWindow : FluentWindow
         // 폴더 목록 초기 로드
         await _viewModel.LoadFoldersCommand.ExecuteAsync(null);
         Log4.Debug("MainWindow_Loaded 완료");
+    }
+
+    private void MainWindow_Closed(object? sender, System.EventArgs e)
+    {
+        Log4.Debug("MainWindow_Closed - 애플리케이션 종료");
+        // OnExplicitShutdown 모드에서는 명시적으로 종료 호출 필요
+        Application.Current.Shutdown();
     }
 }

@@ -17,8 +17,6 @@
  */
 
 using System;
-using System.Drawing;
-using System.Drawing.Imaging;
 using System.IO;
 using System.Net;
 using System.Text;
@@ -383,15 +381,18 @@ public class RestApiServer
                     int width = (int)(bounds.Width * dpiX / 96.0);
                     int height = (int)(bounds.Height * dpiY / 96.0);
 
-                    using var bitmap = new Bitmap(width, height);
-                    using var graphics = Graphics.FromImage(bitmap);
-                    graphics.CopyFromScreen(
-                        (int)(bounds.Left * dpiX / 96.0),
-                        (int)(bounds.Top * dpiY / 96.0),
-                        0, 0,
-                        new System.Drawing.Size(width, height));
+                    // WPF RenderTargetBitmap 사용
+                    var renderTarget = new RenderTargetBitmap(
+                        width, height,
+                        dpiX, dpiY,
+                        PixelFormats.Pbgra32);
+                    renderTarget.Render(MainWindow);
 
-                    bitmap.Save(filePath, ImageFormat.Png);
+                    var encoder = new PngBitmapEncoder();
+                    encoder.Frames.Add(BitmapFrame.Create(renderTarget));
+
+                    using var stream = new FileStream(filePath, FileMode.Create);
+                    encoder.Save(stream);
                     Log4.Info($"[RestAPI] 스크린샷 저장 완료: {filePath}");
                 }
                 catch (Exception ex)
