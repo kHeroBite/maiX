@@ -88,26 +88,26 @@
 
                     <!-- Column 1: 메뉴바 (타이틀바로 이동) -->
                     <Menu Grid.Column="1" VerticalAlignment="Center" Background="Transparent" Margin="0,0,16,0">
-                        <MenuItem Padding="8,4">
+                        <MenuItem Padding="4,4">
                             <MenuItem.Header>
                                 <StackPanel Orientation="Horizontal">
                                     <ui:SymbolIcon Symbol="PlugConnected24" FontSize="12" Margin="0,0,4,0"/>
                                     <TextBlock Text="접속" VerticalAlignment="Center"/>
                                 </StackPanel>
                             </MenuItem.Header>
-                            <MenuItem Header="🔄 재로그인" Click="MenuRelogin_Click"/>
-                            <MenuItem Header="🚪 로그아웃" Click="MenuLogout_Click"/>
+                            <MenuItem Header="🔄 재로그인" Padding="12,6" Click="MenuRelogin_Click"/>
+                            <MenuItem Header="🚪 로그아웃" Padding="12,6" Click="MenuLogout_Click"/>
                             <Separator/>
-                            <MenuItem Header="❌ 종료" Click="MenuExit_Click"/>
+                            <MenuItem Header="❌ 종료" Padding="12,6" Click="MenuExit_Click"/>
                         </MenuItem>
-                        <MenuItem Padding="8,4">
+                        <MenuItem Padding="4,4">
                             <MenuItem.Header>
                                 <StackPanel Orientation="Horizontal">
                                     <ui:SymbolIcon Symbol="Mail24" FontSize="12" Margin="0,0,4,0"/>
                                     <TextBlock Text="메일" VerticalAlignment="Center"/>
                                 </StackPanel>
                             </MenuItem.Header>
-                            <MenuItem x:Name="MenuSyncPeriod">
+                            <MenuItem x:Name="MenuSyncPeriod" Padding="12,6">
                                 <MenuItem.Header>
                                     <StackPanel Orientation="Horizontal">
                                         <TextBlock Text="📧 동기화 기간" VerticalAlignment="Center"/>
@@ -115,48 +115,48 @@
                                     </StackPanel>
                                 </MenuItem.Header>
                                 <!-- 현재 설정 표시 -->
-                                <MenuItem x:Name="MenuSyncPeriodCurrent" Header="현재: 1주일" IsEnabled="False" FontStyle="Italic"/>
+                                <MenuItem x:Name="MenuSyncPeriodCurrent" Header="현재: 1주일" Padding="12,6" IsEnabled="False" FontStyle="Italic"/>
                                 <Separator/>
-                                <MenuItem x:Name="MenuMailSync100" Header="📋 100건" Click="MenuMailSync100_Click"/>
-                                <MenuItem x:Name="MenuMailSyncDay" Header="📅 하루" Click="MenuMailSyncDay_Click"/>
-                                <MenuItem x:Name="MenuMailSyncWeek" Header="📆 1주일" Click="MenuMailSyncWeek_Click"/>
-                                <MenuItem x:Name="MenuMailSyncMonth" Header="🗓️ 1달" Click="MenuMailSyncMonth_Click"/>
-                                <MenuItem x:Name="MenuMailSyncYear" Header="📅 1년" Click="MenuMailSyncYear_Click"/>
-                                <MenuItem x:Name="MenuMailSyncAll" Header="♾️ 전체" Click="MenuMailSyncAll_Click"/>
+                                <MenuItem x:Name="MenuMailSync100" Header="📋 100건" Padding="12,6" Click="MenuMailSync100_Click"/>
+                                <MenuItem x:Name="MenuMailSyncDay" Header="📅 하루" Padding="12,6" Click="MenuMailSyncDay_Click"/>
+                                <MenuItem x:Name="MenuMailSyncWeek" Header="📆 1주일" Padding="12,6" Click="MenuMailSyncWeek_Click"/>
+                                <MenuItem x:Name="MenuMailSyncMonth" Header="🗓️ 1달" Padding="12,6" Click="MenuMailSyncMonth_Click"/>
+                                <MenuItem x:Name="MenuMailSyncYear" Header="📅 1년" Padding="12,6" Click="MenuMailSyncYear_Click"/>
+                                <MenuItem x:Name="MenuMailSyncAll" Header="♾️ 전체" Padding="12,6" Click="MenuMailSyncAll_Click"/>
                             </MenuItem>
                         </MenuItem>
-                        <MenuItem Padding="8,4">
+                        <MenuItem Padding="4,4">
                             <MenuItem.Header>
                                 <StackPanel Orientation="Horizontal">
                                     <TextBlock Text="✨" FontSize="10" Margin="0,0,4,0" VerticalAlignment="Center"/>
                                     <TextBlock Text="Ai" VerticalAlignment="Center"/>
                                 </StackPanel>
                             </MenuItem.Header>
-                            <MenuItem x:Name="MenuAISyncPause2" Header="⏸️ 분석 일시정지" Click="MenuAISyncPause_Click" Visibility="Collapsed"/>
-                            <MenuItem x:Name="MenuAISyncResume2" Header="▶️ 분석 시작" Click="MenuAISyncResume_Click"/>
+                            <MenuItem x:Name="MenuAISyncPause2" Header="⏸️ 분석 일시정지" Padding="12,6" Click="MenuAISyncPause_Click" Visibility="Collapsed"/>
+                            <MenuItem x:Name="MenuAISyncResume2" Header="▶️ 분석 시작" Padding="12,6" Click="MenuAISyncResume_Click"/>
                         </MenuItem>
-                        <MenuItem Padding="8,4">
+                        <MenuItem Padding="4,4">
                             <MenuItem.Header>
                                 <StackPanel Orientation="Horizontal">
                                     <ui:SymbolIcon Symbol="Settings24" FontSize="12" Margin="0,0,4,0"/>
                                     <TextBlock Text="시스템" VerticalAlignment="Center"/>
                                 </StackPanel>
                             </MenuItem.Header>
-                            <MenuItem Header="🔑 API 관리" Click="MenuApiSettings_Click"/>
-                            <MenuItem Header="✍️ 서명 관리" Click="MenuSignatureSettings_Click"/>
+                            <MenuItem Header="🔑 API 관리" Padding="12,6" Click="MenuApiSettings_Click"/>
+                            <MenuItem Header="✍️ 서명 관리" Padding="12,6" Click="MenuSignatureSettings_Click"/>
                             <Separator/>
-                            <MenuItem>
+                            <MenuItem Padding="12,6">
                                 <MenuItem.Header>
                                     <StackPanel Orientation="Horizontal">
                                         <TextBlock Text="🎨 테마" VerticalAlignment="Center"/>
                                         <TextBlock Text=" ▶" FontSize="10" VerticalAlignment="Center" Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
                                     </StackPanel>
                                 </MenuItem.Header>
-                                <MenuItem x:Name="MenuThemeDark2" Header="🌙 다크 모드" Click="MenuThemeDark_Click"/>
-                                <MenuItem x:Name="MenuThemeLight2" Header="☀️ 라이트 모드" Click="MenuThemeLight_Click"/>
+                                <MenuItem x:Name="MenuThemeDark2" Header="🌙 다크 모드" Padding="12,6" Click="MenuThemeDark_Click"/>
+                                <MenuItem x:Name="MenuThemeLight2" Header="☀️ 라이트 모드" Padding="12,6" Click="MenuThemeLight_Click"/>
                             </MenuItem>
                             <Separator/>
-                            <MenuItem x:Name="MenuGpuMode2" Click="MenuGpuMode_Click">
+                            <MenuItem x:Name="MenuGpuMode2" Padding="12,6" Click="MenuGpuMode_Click">
                                 <MenuItem.Header>
                                     <StackPanel Orientation="Horizontal">
                                         <TextBlock x:Name="GpuModeCheckMark" Text="✓" FontWeight="Bold" Margin="0,0,8,0" VerticalAlignment="Center" Visibility="Collapsed"/>
