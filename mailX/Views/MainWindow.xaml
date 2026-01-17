@@ -88,13 +88,13 @@
 
                     <!-- Column 1: 메뉴바 (타이틀바로 이동) -->
                     <Menu Grid.Column="1" VerticalAlignment="Center" Background="Transparent" Margin="0,0,16,0">
-                        <MenuItem Header="접속">
+                        <MenuItem Header="🔌 접속">
                             <MenuItem Header="🔄 재로그인" Padding="12,6" Click="MenuRelogin_Click"/>
                             <MenuItem Header="🚪 로그아웃" Padding="12,6" Click="MenuLogout_Click"/>
                             <Separator/>
                             <MenuItem Header="❌ 종료" Padding="12,6" Click="MenuExit_Click"/>
                         </MenuItem>
-                        <MenuItem Header="메일">
+                        <MenuItem Header="📧 메일">
                             <MenuItem x:Name="MenuSyncPeriod" Padding="12,6">
                                 <MenuItem.Header>
                                     <StackPanel Orientation="Horizontal">
@@ -113,11 +113,11 @@
                                 <MenuItem x:Name="MenuMailSyncAll" Header="♾️ 전체" Padding="12,6" Click="MenuMailSyncAll_Click"/>
                             </MenuItem>
                         </MenuItem>
-                        <MenuItem Header="Ai">
+                        <MenuItem Header="✨ Ai">
                             <MenuItem x:Name="MenuAISyncPause2" Header="⏸️ 분석 일시정지" Padding="12,6" Click="MenuAISyncPause_Click" Visibility="Collapsed"/>
                             <MenuItem x:Name="MenuAISyncResume2" Header="▶️ 분석 시작" Padding="12,6" Click="MenuAISyncResume_Click"/>
                         </MenuItem>
-                        <MenuItem Header="시스템">
+                        <MenuItem Header="⚙️ 시스템">
                             <MenuItem Header="🔑 API 관리" Padding="12,6" Click="MenuApiSettings_Click"/>
                             <MenuItem Header="✍️ 서명 관리" Padding="12,6" Click="MenuSignatureSettings_Click"/>
                             <Separator/>
