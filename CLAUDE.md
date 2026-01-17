@@ -311,3 +311,82 @@ BackgroundSyncService:
   - CalendarSyncProgress: 캘린더 동기화 진행 (current, total, stepName)
   - CalendarSynced: 캘린더 동기화 완료 (일정 수)
 ```
+
+### Graph API 실시간 동기화 (mailX ↔ Outlook)
+```yaml
+읽음_상태_동기화:
+  mailX_to_Outlook: MainViewModel.UpdateReadStatusAsync() → GraphMailService.UpdateMessageReadStatusAsync()
+  Outlook_to_mailX: BackgroundSyncService (5분 주기, deltaLink 사용)
+
+삭제_동기화:
+  mailX_to_Outlook: MainViewModel.DeleteEmailAsync() → GraphMailService.MoveMessageAsync() (휴지통) 또는 DeleteMessageAsync() (영구삭제)
+  Outlook_to_mailX: BackgroundSyncService (5분 주기)
+
+폴더_이동_동기화:
+  mailX_to_Outlook: GraphMailService.MoveMessageAsync(messageId, destinationFolderId)
+  Outlook_to_mailX: BackgroundSyncService (5분 주기)
+
+플래그_동기화:
+  mailX_to_Outlook: MainViewModel.UpdateFlagStatusAsync() → GraphMailService.UpdateMessageFlagAsync()
+  상태값: flagged, complete, notFlagged
+  Outlook_to_mailX: BackgroundSyncService (5분 주기)
+
+핀_기능:
+  로컬_전용: IsPinned, PinnedAt 컬럼 (Graph API 미지원)
+  정렬: 핀 메일 상단 고정 (PinnedAt DESC)
+```
+
+### UI 애니메이션 패턴
+```yaml
+AI_분석_버튼:
+  진행중: 노랑색 별 3개 (✦) 각기 다른 속도로 깜빡임
+    - 큰별: #FFD700, 0.8초 주기
+    - 중간별: #FFC125, 0.5초 주기, 0.2초 지연
+    - 작은별: #FFDF00, 0.3초 주기, 0.4초 지연
+  중지중: 회색 별 3개 (#888888, #999999, #AAAAAA) 고정
+
+메일_동기화_버튼:
+  동기화중: 열린 편지 (MailRead24) + 문서(📄) 나가는 애니메이션
+    - 1.5초 주기
+    - QuadraticEase EaseOut
+  중지중: 회색 닫힌 편지 (Mail24) 고정
+
+AI_분석_패널_헤더:
+  위치: 메일 본문 상단 "AI 분석" 텍스트 앞
+  구현: AI 분석 버튼과 동일한 3색 별 애니메이션
+
+애니메이션_구현_위치:
+  - MainWindow.xaml: 라인 1193-1322 (동기화 버튼들)
+  - MainWindow.xaml: 라인 2309-2365 (AI 분석 패널 헤더)
+```
+
+### Converters 목록
+```yaml
+위치: mailX/Converters/
+
+BoolToVisibilityConverter:
+  - True → Visible, False → Collapsed
+  - ConverterParameter="Invert" 시 반전
+
+BoolToAppearanceConverter:
+  - True → Primary, False → Secondary
+  - 토글 버튼 상태 표시용
+
+BoolToForegroundConverter:
+  - 핀 버튼 등 상태별 색상 변경
+
+FlagStatusToAppearanceConverter:
+  - flagged → Primary, 그 외 → Secondary
+
+FlagStatusToVisibilityConverter:
+  - 플래그 상태에 따른 아이콘 표시
+
+CategoryToColorConverter:
+  - 카테고리명 → 색상 매핑
+
+ImportanceToVisibilityConverter:
+  - high → Visible, 그 외 → Collapsed
+
+SortByToAppearanceConverter:
+  - 정렬 버튼 활성 상태 표시
+```
