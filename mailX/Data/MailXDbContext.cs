@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Diagnostics;
 using mailX.Models;
 
 namespace mailX.Data;
@@ -10,6 +11,15 @@ public class MailXDbContext : DbContext
 {
     public MailXDbContext(DbContextOptions<MailXDbContext> options) : base(options)
     {
+    }
+
+    protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
+    {
+        base.OnConfiguring(optionsBuilder);
+
+        // PendingModelChangesWarning 경고 무시 (마이그레이션 적용 전 경고)
+        optionsBuilder.ConfigureWarnings(warnings =>
+            warnings.Ignore(RelationalEventId.PendingModelChangesWarning));
     }
 
     // ===== DbSet 정의 (12개) =====

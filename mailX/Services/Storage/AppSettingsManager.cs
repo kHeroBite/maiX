@@ -17,6 +17,7 @@ public class AppSettingsManager
     private readonly XmlSettingsService<SyncSettings> _syncService;
     private readonly XmlSettingsService<DatabaseSettings> _databaseService;
     private readonly XmlSettingsService<LoggingSettings> _loggingService;
+    private readonly XmlSettingsService<UserPreferencesSettings> _userPreferencesService;
 
     /// <summary>
     /// 로그인 + Azure AD 설정
@@ -48,6 +49,11 @@ public class AppSettingsManager
     /// </summary>
     public LoggingSettings Logging { get; private set; } = new();
 
+    /// <summary>
+    /// 사용자 환경 설정 (테마 등)
+    /// </summary>
+    public UserPreferencesSettings UserPreferences { get; private set; } = new();
+
     public AppSettingsManager()
     {
         _loginService = new XmlSettingsService<LoginSettings>("autologin.xml");
@@ -56,6 +62,7 @@ public class AppSettingsManager
         _syncService = new XmlSettingsService<SyncSettings>("sync.xml");
         _databaseService = new XmlSettingsService<DatabaseSettings>("database.xml");
         _loggingService = new XmlSettingsService<LoggingSettings>("logging.xml");
+        _userPreferencesService = new XmlSettingsService<UserPreferencesSettings>("preferences.xml");
     }
 
     /// <summary>
@@ -73,6 +80,7 @@ public class AppSettingsManager
             Sync = _syncService.Load();
             Database = _databaseService.Load();
             Logging = _loggingService.Load();
+            UserPreferences = _userPreferencesService.Load();
 
             Log4.Info("[AppSettingsManager] 모든 설정 로드 완료");
         }
@@ -97,6 +105,7 @@ public class AppSettingsManager
             _syncService.Save(Sync);
             _databaseService.Save(Database);
             _loggingService.Save(Logging);
+            _userPreferencesService.Save(UserPreferences);
 
             Log4.Info("[AppSettingsManager] 모든 설정 저장 완료");
         }
@@ -148,6 +157,14 @@ public class AppSettingsManager
     }
 
     /// <summary>
+    /// 사용자 환경 설정만 저장
+    /// </summary>
+    public void SaveUserPreferences()
+    {
+        _userPreferencesService.Save(UserPreferences);
+    }
+
+    /// <summary>
     /// 로그인 설정 초기화 (파일 삭제)
     /// </summary>
     public void ClearLogin()
@@ -190,6 +207,12 @@ public class AppSettingsManager
         {
             _loggingService.Save(new LoggingSettings());
             Log4.Debug("[AppSettingsManager] 기본 로깅 설정 생성");
+        }
+
+        if (!_userPreferencesService.Exists)
+        {
+            _userPreferencesService.Save(new UserPreferencesSettings());
+            Log4.Debug("[AppSettingsManager] 기본 사용자 환경 설정 생성");
         }
     }
 }

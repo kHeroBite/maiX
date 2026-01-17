@@ -7,6 +7,7 @@ using System.Text.Json;
 using System.Threading;
 using System.Threading.Channels;
 using System.Threading.Tasks;
+using Microsoft.Graph.Models;
 using Serilog;
 using mailX.Models;
 
@@ -52,7 +53,7 @@ public class NotificationService : IDisposable
         }
 
         // 알림 큐 생성
-        _notificationQueue = Channel.CreateBounded<NotificationMessage>(
+        _notificationQueue = System.Threading.Channels.Channel.CreateBounded<NotificationMessage>(
             new BoundedChannelOptions(1000)
             {
                 FullMode = BoundedChannelFullMode.DropOldest,
@@ -221,6 +222,119 @@ public class NotificationService : IDisposable
         };
 
         await SendNotificationAsync(notification);
+    }
+
+    /// <summary>
+    /// 캘린더 일정 임박 알림 발송
+    /// </summary>
+    /// <param name="calendarEvent">캘린더 이벤트</param>
+    /// <param name="minutesBefore">몇 분 전 알림인지</param>
+    public async Task NotifyUpcomingEventAsync(Event calendarEvent, int minutesBefore)
+    {
+        if (!_settings.EnableCalendarReminder)
+            return;
+
+        if (calendarEvent == null || string.IsNullOrEmpty(calendarEvent.Subject))
+            return;
+
+        // 방해 금지 시간에는 긴급 알림만 허용
+        if (_settings.IsQuietHoursNow() && minutesBefore > 5)
+        {
+            _logger.Debug("방해 금지 시간 - 일정 알림 생략: {Subject}", calendarEvent.Subject);
+            return;
+        }
+
+        var priority = minutesBefore switch
+        {
+            <= 5 => NotificationPriority.Urgent,
+            <= 15 => NotificationPriority.High,
+            _ => NotificationPriority.Default
+        };
+
+        var timeText = minutesBefore switch
+        {
+            0 => "지금 시작!",
+            1 => "1분 후 시작",
+            < 60 => $"{minutesBefore}분 후 시작",
+            60 => "1시간 후 시작",
+            _ => $"{minutesBefore / 60}시간 후 시작"
+        };
+
+        // 시작 시간 파싱
+        string startTimeText = "";
+        if (calendarEvent.Start?.DateTime != null)
+        {
+            var startDt = DateTime.Parse(calendarEvent.Start.DateTime);
+            startTimeText = startDt.ToString("HH:mm");
+        }
+
+        // 장소 정보
+        var locationText = !string.IsNullOrEmpty(calendarEvent.Location?.DisplayName)
+            ? $"\n장소: {calendarEvent.Location.DisplayName}"
+            : "";
+
+        // 온라인 회의 정보
+        var onlineMeetingText = (calendarEvent.IsOnlineMeeting ?? false)
+            ? "\n🔗 Teams 온라인 회의"
+            : "";
+
+        var message = new NotificationMessage
+        {
+            Title = $"📅 {timeText}: {TruncateText(calendarEvent.Subject, 40)}",
+            Message = $"시작: {startTimeText}{locationText}{onlineMeetingText}",
+            Priority = priority,
+            Tags = new List<string> { "calendar", "bell" }
+        };
+
+        // 온라인 회의 링크가 있으면 클릭 URL로 설정
+        if (calendarEvent.IsOnlineMeeting ?? false)
+        {
+            message.Tags.Add("video_camera");
+            if (!string.IsNullOrEmpty(calendarEvent.OnlineMeeting?.JoinUrl))
+            {
+                message.ClickUrl = calendarEvent.OnlineMeeting.JoinUrl;
+            }
+        }
+
+        await SendNotificationAsync(message);
+        _logger.Information("일정 알림 발송: {Subject} ({Minutes}분 전)", calendarEvent.Subject, minutesBefore);
+    }
+
+    /// <summary>
+    /// 여러 일정에 대한 일괄 알림 확인 및 발송
+    /// </summary>
+    /// <param name="events">확인할 일정 목록</param>
+    /// <param name="reminderMinutes">알림 시간 목록 (분 단위, 예: [15, 60])</param>
+    public async Task CheckAndNotifyUpcomingEventsAsync(IEnumerable<Event> events, List<int>? reminderMinutes = null)
+    {
+        if (!_settings.EnableCalendarReminder)
+            return;
+
+        reminderMinutes ??= _settings.ReminderMinutesBefore ?? new List<int> { 15, 60 };
+        var now = DateTime.Now;
+
+        foreach (var evt in events)
+        {
+            if (evt.Start?.DateTime == null)
+                continue;
+
+            var startTime = DateTime.Parse(evt.Start.DateTime);
+            var minutesUntilStart = (int)(startTime - now).TotalMinutes;
+
+            // 이미 시작한 일정은 제외
+            if (minutesUntilStart < 0)
+                continue;
+
+            // 설정된 알림 시간과 매칭되는지 확인 (±2분 허용)
+            foreach (var reminderMin in reminderMinutes)
+            {
+                if (Math.Abs(minutesUntilStart - reminderMin) <= 2)
+                {
+                    await NotifyUpcomingEventAsync(evt, minutesUntilStart);
+                    break; // 하나의 알림 시간에만 발송
+                }
+            }
+        }
     }
 
     /// <summary>

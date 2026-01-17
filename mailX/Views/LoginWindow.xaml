@@ -30,8 +30,8 @@
             <!-- 좌측: 브랜드 패널 -->
             <Border Grid.Column="0" Background="#285032">
                 <Grid>
-                    <!-- 장식용 원형 도형들 -->
-                    <Canvas>
+                    <!-- 장식용 원형 도형들 (수직 중앙 정렬) -->
+                    <Canvas VerticalAlignment="Center" Height="280" Margin="0,-80,0,0">
                         <Ellipse Canvas.Left="50" Canvas.Top="20" Width="150" Height="150"
                                  Fill="#3C7850" Opacity="0.5"/>
                         <Ellipse Canvas.Left="200" Canvas.Top="80" Width="120" Height="120"
@@ -42,10 +42,16 @@
 
                     <!-- 로고 및 환영 메시지 -->
                     <StackPanel VerticalAlignment="Bottom" Margin="30,0,30,50">
-                        <TextBlock Text="mailX"
-                                   FontSize="28"
-                                   FontWeight="Bold"
-                                   Foreground="White"/>
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock Text="m" FontSize="28" FontWeight="Bold" Foreground="White"/>
+                            <TextBlock Text="Ai" FontSize="28" FontWeight="Bold" Foreground="#FF4444"/>
+                            <TextBlock Text="l" FontSize="28" FontWeight="Bold" Foreground="White"/>
+                            <TextBlock Text="X" FontSize="28" FontWeight="Bold" FontStyle="Italic" Foreground="White">
+                                <TextBlock.Effect>
+                                    <DropShadowEffect ShadowDepth="1" Color="White" Opacity="0.8" BlurRadius="3"/>
+                                </TextBlock.Effect>
+                            </TextBlock>
+                        </StackPanel>
                         <TextBlock Text="AI 기반 이메일 관리 시스템"
                                    FontSize="12"
                                    Foreground="#B4D4BC"

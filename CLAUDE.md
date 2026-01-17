@@ -4,6 +4,35 @@
 
 ---
 
+## 필수 규칙 (Critical Rules)
+
+### Bash 명령어 단일 실행 원칙 (최우선)
+```yaml
+금지:
+  - "&&" 연산자 사용 금지
+  - "||" 연산자 사용 금지
+  - ";" 연산자 사용 금지
+  - "|" 파이프 연산자 사용 금지 (예외: grep 필터링)
+
+필수:
+  - 각 명령어를 별도의 Bash 호출로 분리
+  - 한 번에 하나의 명령어만 실행
+```
+
+### 앱 종료 원칙 (필수)
+```yaml
+필수:
+  - 항상 REST API로 종료: curl -X POST http://localhost:5858/api/shutdown -H "Content-Type: application/json" -d '{"force":false}'
+  - taskkill, Stop-Process 등 강제 종료 명령 사용 금지
+
+이유:
+  - REST API 종료는 앱의 정상적인 종료 프로세스를 보장
+  - 데이터 저장, 리소스 정리 등이 올바르게 수행됨
+  - 강제 종료는 데이터 손실 위험이 있음
+```
+
+---
+
 ## 언어 정책 (Language Policy)
 
 **필수 규칙**: 모든 대화는 한국어로 진행
@@ -39,6 +68,8 @@ Claude_Code_대화:
 빌드: dotnet build "C:\DATA\Project\mailX\mailX\mailX.csproj"
 
 실행: "C:\DATA\Project\mailX\mailX\bin\Debug\net10.0-windows\mailX.exe" > /dev/null 2>&1 &
+
+프로세스_확인: tasklist | grep -i mailX
 
 종료: curl -X POST http://localhost:5858/api/shutdown -H "Content-Type: application/json" -d '{"force":false}'
 
@@ -211,9 +242,72 @@ Read "$APPDATA/mailX/screenshots/screenshot_*.png"
 ## 주의사항
 
 ### Bash 명령어 단일 실행 원칙
-- `&&`, `||`, `;`, `|` 연산자 사용 금지
+- `&&`, `||`, `;` 연산자 사용 금지
+- **한 번의 Bash 호출에 하나의 명령만 실행**
+- 예: 로그 삭제 후 앱 실행 → 로그 삭제 Bash 호출 + 앱 실행 Bash 호출 (별도)
 - 각 명령어를 별도의 Bash 호출로 분리
 
 ### 사용자 확인 정책
 - "확인해주세요", "테스트해주세요" 등 절대 금지
 - AI가 직접 3단계 테스트로 검증
+
+---
+
+## 주요 기능 구현 현황
+
+### 캘린더/일정 관리 기능
+```yaml
+구현_완료:
+  - 좌측 아이콘바 (메일/캘린더 모드 전환)
+  - 월간 캘린더 뷰 (아웃룩 스타일)
+  - 일정 CRUD (생성/조회/수정/삭제)
+  - 일정 알림 (ntfy 푸시)
+  - 우측 세부일정 패널
+
+관련_파일:
+  - Views/CalendarView (MainWindow.xaml 내 CalendarViewBorder)
+  - Views/Dialogs/EventEditDialog.xaml
+  - Services/Graph/GraphCalendarService.cs
+  - ViewModels/CalendarViewModel.cs
+
+Azure_AD_권한_필요:
+  - Calendars.Read
+  - Calendars.ReadWrite
+  # Azure Portal에서 앱 등록에 권한 추가 필요
+```
+
+### 인증 시스템 (MSAL)
+```yaml
+토큰_캐시_경로: "%LocalAppData%/mailX/msal_token_cache.bin"
+설정_파일: "%APPDATA%/mailX/conf/autologin.xml"
+
+권한_변경_시:
+  1. GraphAuthService.cs DefaultScopes 수정
+  2. appsettings.json Scopes 수정
+  3. Azure Portal 앱 등록에서 권한 추가
+  4. 토큰 캐시 삭제 후 재로그인
+
+현재_권한:
+  - User.Read
+  - Mail.Read, Mail.Send, Mail.ReadWrite
+  - Files.Read.All, Sites.Read.All
+  - Calendars.Read, Calendars.ReadWrite
+```
+
+### 동기화 시스템
+```yaml
+BackgroundSyncService:
+  주기: 5분
+  동기화_순서:
+    1. 폴더 동기화 (SyncFoldersAsync)
+    2. 메일 동기화 (SyncAllAccountsAsync)
+    3. 캘린더 동기화 (SyncCalendarAsync)
+    4. 캘린더 알림 체크 (CheckCalendarRemindersAsync)
+
+이벤트:
+  - FoldersSynced: 폴더 동기화 완료
+  - EmailsSynced: 메일 동기화 완료 (새 메일 수)
+  - CalendarSyncStarted: 캘린더 동기화 시작
+  - CalendarSyncProgress: 캘린더 동기화 진행 (current, total, stepName)
+  - CalendarSynced: 캘린더 동기화 완료 (일정 수)
+```

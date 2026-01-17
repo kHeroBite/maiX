@@ -65,6 +65,31 @@ public class AIProvidersSettings
         Model = "local-model",
         BaseUrl = "http://localhost:1234/v1"
     };
+
+    /// <summary>
+    /// TinyMCE 에디터 설정
+    /// </summary>
+    [XmlElement("TinyMCE")]
+    public TinyMCEConfig TinyMCE { get; set; } = new();
+}
+
+/// <summary>
+/// TinyMCE 에디터 설정
+/// </summary>
+[Serializable]
+public class TinyMCEConfig
+{
+    /// <summary>
+    /// TinyMCE API 키
+    /// </summary>
+    [XmlElement("ApiKey")]
+    public string? ApiKey { get; set; }
+
+    /// <summary>
+    /// API 키가 설정되었는지 확인
+    /// </summary>
+    [XmlIgnore]
+    public bool HasApiKey => !string.IsNullOrEmpty(ApiKey);
 }
 
 /// <summary>

@@ -20,14 +20,102 @@ namespace mailX.Services.Graph
         }
 
         /// <summary>
-        /// 메일 폴더 목록 조회
+        /// 메일 폴더 목록 조회 (하위 폴더 포함, 페이징 처리)
         /// </summary>
-        /// <returns>폴더 목록</returns>
+        /// <returns>모든 폴더 목록 (최상위 + 하위 폴더)</returns>
         public async Task<IEnumerable<MailFolder>> GetFoldersAsync()
         {
             var client = _authService.GetGraphClient();
-            var response = await client.Me.MailFolders.GetAsync();
-            return response?.Value ?? new List<MailFolder>();
+            var allFolders = new List<MailFolder>();
+
+            // 최상위 폴더 조회 (페이징 처리)
+            var response = await client.Me.MailFolders.GetAsync(config =>
+            {
+                config.QueryParameters.Top = 100; // 한 번에 최대 100개
+            });
+
+            // 모든 최상위 폴더 수집 (페이징)
+            var topLevelFolders = new List<MailFolder>();
+            while (response != null)
+            {
+                if (response.Value != null)
+                {
+                    topLevelFolders.AddRange(response.Value);
+                }
+
+                // 다음 페이지가 있으면 계속 조회
+                if (!string.IsNullOrEmpty(response.OdataNextLink))
+                {
+                    response = await client.Me.MailFolders
+                        .WithUrl(response.OdataNextLink)
+                        .GetAsync();
+                }
+                else
+                {
+                    break;
+                }
+            }
+
+            // 각 폴더와 하위 폴더 재귀 수집
+            foreach (var folder in topLevelFolders)
+            {
+                allFolders.Add(folder);
+
+                // 하위 폴더 재귀 조회
+                if (folder.Id != null)
+                {
+                    await GetChildFoldersRecursiveAsync(client, folder.Id, allFolders);
+                }
+            }
+
+            return allFolders;
+        }
+
+        /// <summary>
+        /// 하위 폴더 재귀 조회 (페이징 처리)
+        /// </summary>
+        private async Task GetChildFoldersRecursiveAsync(GraphServiceClient client, string parentFolderId, List<MailFolder> allFolders)
+        {
+            try
+            {
+                var response = await client.Me.MailFolders[parentFolderId].ChildFolders.GetAsync(config =>
+                {
+                    config.QueryParameters.Top = 100;
+                });
+
+                // 페이징 처리
+                while (response != null)
+                {
+                    var childFolders = response.Value ?? new List<MailFolder>();
+
+                    foreach (var child in childFolders)
+                    {
+                        allFolders.Add(child);
+
+                        // 모든 폴더에 대해 하위 폴더 조회 시도
+                        if (child.Id != null)
+                        {
+                            await GetChildFoldersRecursiveAsync(client, child.Id, allFolders);
+                        }
+                    }
+
+                    // 다음 페이지가 있으면 계속 조회
+                    if (!string.IsNullOrEmpty(response.OdataNextLink))
+                    {
+                        response = await client.Me.MailFolders[parentFolderId].ChildFolders
+                            .WithUrl(response.OdataNextLink)
+                            .GetAsync();
+                    }
+                    else
+                    {
+                        break;
+                    }
+                }
+            }
+            catch
+            {
+                // 하위 폴더 조회 실패 시 무시 (권한 없는 폴더 등)
+            }
         }
 
         /// <summary>
@@ -96,6 +184,104 @@ namespace mailX.Services.Graph
             });
         }
 
+
+        /// <summary>
+        /// 메시지의 플래그 상태 업데이트
+        /// </summary>
+        /// <param name="messageId">메시지 ID (EntryId)</param>
+        /// <param name="flagStatus">플래그 상태 (flagged, complete, notFlagged)</param>
+        public async Task UpdateMessageFlagAsync(string messageId, string flagStatus)
+        {
+            if (string.IsNullOrEmpty(messageId))
+            {
+                throw new ArgumentNullException(nameof(messageId));
+            }
+
+            var client = _authService.GetGraphClient();
+
+            var flagType = flagStatus?.ToLowerInvariant() switch
+            {
+                "flagged" => Microsoft.Graph.Models.FollowupFlagStatus.Flagged,
+                "complete" => Microsoft.Graph.Models.FollowupFlagStatus.Complete,
+                _ => Microsoft.Graph.Models.FollowupFlagStatus.NotFlagged
+            };
+
+            await client.Me.Messages[messageId].PatchAsync(new Message
+            {
+                Flag = new FollowupFlag
+                {
+                    FlagStatus = flagType
+                }
+            });
+        }
+
+        /// <summary>
+        /// 메시지의 읽음 상태 업데이트
+        /// </summary>
+        /// <param name="messageId">메시지 ID (EntryId)</param>
+        /// <param name="isRead">읽음 여부</param>
+        public async Task UpdateMessageReadStatusAsync(string messageId, bool isRead)
+        {
+            if (string.IsNullOrEmpty(messageId))
+            {
+                throw new ArgumentNullException(nameof(messageId));
+            }
+
+            var client = _authService.GetGraphClient();
+
+            await client.Me.Messages[messageId].PatchAsync(new Message
+            {
+                IsRead = isRead
+            });
+        }
+
+        /// <summary>
+        /// 메시지의 카테고리 업데이트
+        /// </summary>
+        /// <param name="messageId">메시지 ID (EntryId)</param>
+        /// <param name="categories">카테고리 목록</param>
+        public async Task UpdateMessageCategoriesAsync(string messageId, List<string> categories)
+        {
+            if (string.IsNullOrEmpty(messageId))
+            {
+                throw new ArgumentNullException(nameof(messageId));
+            }
+
+            var client = _authService.GetGraphClient();
+
+            await client.Me.Messages[messageId].PatchAsync(new Message
+            {
+                Categories = categories ?? new List<string>()
+            });
+        }
+
+        /// <summary>
+        /// 메시지의 중요도 업데이트
+        /// </summary>
+        /// <param name="messageId">메시지 ID (EntryId)</param>
+        /// <param name="importance">중요도 (low, normal, high)</param>
+        public async Task UpdateMessageImportanceAsync(string messageId, string importance)
+        {
+            if (string.IsNullOrEmpty(messageId))
+            {
+                throw new ArgumentNullException(nameof(messageId));
+            }
+
+            var client = _authService.GetGraphClient();
+
+            var importanceLevel = importance?.ToLowerInvariant() switch
+            {
+                "high" => Microsoft.Graph.Models.Importance.High,
+                "low" => Microsoft.Graph.Models.Importance.Low,
+                _ => Microsoft.Graph.Models.Importance.Normal
+            };
+
+            await client.Me.Messages[messageId].PatchAsync(new Message
+            {
+                Importance = importanceLevel
+            });
+        }
+
         /// <summary>
         /// 메일 이동
         /// </summary>
@@ -136,5 +322,99 @@ namespace mailX.Services.Graph
             var client = _authService.GetGraphClient();
             await client.Me.Messages[messageId].DeleteAsync();
         }
+
+        #region Phase 2: 폴더 CRUD
+
+        /// <summary>
+        /// 폴더 생성
+        /// </summary>
+        /// <param name="folderName">폴더 이름</param>
+        /// <param name="parentFolderId">상위 폴더 ID (null이면 루트에 생성)</param>
+        /// <returns>생성된 폴더</returns>
+        public async Task<MailFolder?> CreateFolderAsync(string folderName, string? parentFolderId = null)
+        {
+            if (string.IsNullOrEmpty(folderName))
+            {
+                throw new ArgumentNullException(nameof(folderName));
+            }
+
+            var client = _authService.GetGraphClient();
+            var newFolder = new MailFolder
+            {
+                DisplayName = folderName
+            };
+
+            if (string.IsNullOrEmpty(parentFolderId))
+            {
+                // 루트 레벨에 생성
+                return await client.Me.MailFolders.PostAsync(newFolder);
+            }
+            else
+            {
+                // 지정된 부모 폴더 아래에 생성
+                return await client.Me.MailFolders[parentFolderId].ChildFolders.PostAsync(newFolder);
+            }
+        }
+
+        /// <summary>
+        /// 폴더 이름 변경
+        /// </summary>
+        /// <param name="folderId">폴더 ID</param>
+        /// <param name="newName">새 이름</param>
+        /// <returns>성공 여부</returns>
+        public async Task<bool> RenameFolderAsync(string folderId, string newName)
+        {
+            if (string.IsNullOrEmpty(folderId))
+            {
+                throw new ArgumentNullException(nameof(folderId));
+            }
+
+            if (string.IsNullOrEmpty(newName))
+            {
+                throw new ArgumentNullException(nameof(newName));
+            }
+
+            try
+            {
+                var client = _authService.GetGraphClient();
+                await client.Me.MailFolders[folderId].PatchAsync(new MailFolder
+                {
+                    DisplayName = newName
+                });
+                return true;
+            }
+            catch (Exception ex)
+            {
+                Utils.Log4.Error($"폴더 이름 변경 실패: {ex.Message}");
+                return false;
+            }
+        }
+
+        /// <summary>
+        /// 폴더 삭제
+        /// </summary>
+        /// <param name="folderId">폴더 ID</param>
+        /// <returns>성공 여부</returns>
+        public async Task<bool> DeleteFolderAsync(string folderId)
+        {
+            if (string.IsNullOrEmpty(folderId))
+            {
+                throw new ArgumentNullException(nameof(folderId));
+            }
+
+            try
+            {
+                var client = _authService.GetGraphClient();
+                await client.Me.MailFolders[folderId].DeleteAsync();
+                return true;
+            }
+            catch (Exception ex)
+            {
+                Utils.Log4.Error($"폴더 삭제 실패: {ex.Message}");
+                return false;
+            }
+        }
+
+        #endregion
     }
 }

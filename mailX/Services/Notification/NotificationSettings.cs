@@ -81,6 +81,18 @@ public class NotificationSettings
     public bool ExcludeNonBusinessMail { get; set; } = true;
 
     /// <summary>
+    /// 캘린더 일정 알림 활성화
+    /// </summary>
+    public bool EnableCalendarReminder { get; set; } = true;
+
+    /// <summary>
+    /// 캘린더 알림 시간 목록 (분 단위)
+    /// 일정 시작 전 몇 분에 알림을 발송할지 설정
+    /// 예: [15, 60] - 15분 전, 60분(1시간) 전
+    /// </summary>
+    public List<int>? ReminderMinutesBefore { get; set; } = new List<int> { 15, 60 };
+
+    /// <summary>
     /// 현재 시간이 방해 금지 시간인지 확인
     /// </summary>
     public bool IsQuietHoursNow()

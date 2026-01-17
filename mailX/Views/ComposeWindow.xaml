@@ -1,0 +1,273 @@
+<ui:FluentWindow x:Class="mailX.Views.ComposeWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
+        xmlns:wv2="clr-namespace:Microsoft.Web.WebView2.Wpf;assembly=Microsoft.Web.WebView2.Wpf"
+        xmlns:local="clr-namespace:mailX.Views"
+        xmlns:vm="clr-namespace:mailX.ViewModels"
+        mc:Ignorable="d"
+        Title="{Binding WindowTitle}"
+        Height="700" Width="900"
+        MinHeight="500" MinWidth="700"
+        WindowStartupLocation="CenterScreen"
+        ExtendsContentIntoTitleBar="True"
+        WindowBackdropType="Mica"
+        Closing="Window_Closing"
+        d:DataContext="{d:DesignInstance Type=vm:ComposeViewModel, IsDesignTimeCreatable=False}">
+
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+
+        <!-- 타이틀바 -->
+        <ui:TitleBar
+            x:Name="TitleBar"
+            Grid.Row="0"
+            ShowMaximize="True"
+            ShowMinimize="True"
+            ShowClose="True"
+            CanMaximize="True">
+            <ui:TitleBar.Icon>
+                <ui:ImageIcon Width="24" Height="24"
+                              RenderOptions.BitmapScalingMode="Fant"
+                              UseLayoutRounding="True"
+                              SnapsToDevicePixels="True">
+                    <ui:ImageIcon.Source>
+                        <BitmapImage UriSource="pack://application:,,,/Assets/icon.png"
+                                     DecodePixelWidth="256"
+                                     DecodePixelHeight="256"
+                                     CacheOption="OnLoad"/>
+                    </ui:ImageIcon.Source>
+                </ui:ImageIcon>
+            </ui:TitleBar.Icon>
+            <ui:TitleBar.Header>
+                <TextBlock VerticalAlignment="Center" Text="{Binding WindowTitle}"
+                           Foreground="{DynamicResource TextFillColorPrimaryBrush}"/>
+            </ui:TitleBar.Header>
+        </ui:TitleBar>
+
+        <!-- 수신자 정보 영역 -->
+        <Border Grid.Row="1"
+                Background="{DynamicResource ControlFillColorDefaultBrush}"
+                BorderBrush="{DynamicResource ControlElevationBorderBrush}"
+                BorderThickness="0,0,0,1"
+                Padding="16,12">
+            <Grid>
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="Auto"/>
+                </Grid.RowDefinitions>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="80"/>
+                    <ColumnDefinition Width="*"/>
+                </Grid.ColumnDefinitions>
+
+                <!-- 받는 사람 -->
+                <TextBlock Grid.Row="0" Grid.Column="0"
+                           Text="받는 사람:"
+                           VerticalAlignment="Center"
+                           Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                           Margin="0,0,8,8"/>
+                <Grid Grid.Row="0" Grid.Column="1" Margin="0,0,0,8">
+                    <ui:TextBox x:Name="ToTextBox"
+                               Text="{Binding To, UpdateSourceTrigger=PropertyChanged}"
+                               PlaceholderText="이메일 주소 입력 (여러 주소는 세미콜론으로 구분)"
+                               PreviewKeyDown="EmailTextBox_PreviewKeyDown"/>
+                    <Popup x:Name="ToSuggestionPopup"
+                           PlacementTarget="{Binding ElementName=ToTextBox}"
+                           Placement="Bottom"
+                           StaysOpen="False"
+                           AllowsTransparency="True">
+                        <Border Background="{DynamicResource ControlFillColorDefaultBrush}"
+                                BorderBrush="{DynamicResource ControlStrokeColorDefaultBrush}"
+                                BorderThickness="1" CornerRadius="4"
+                                Padding="4">
+                            <ListBox x:Name="ToSuggestionList"
+                                     MaxHeight="200" MinWidth="300"
+                                     Background="Transparent"
+                                     BorderThickness="0"
+                                     SelectionChanged="SuggestionList_SelectionChanged"
+                                     MouseDoubleClick="SuggestionList_MouseDoubleClick"
+                                     KeyDown="SuggestionList_KeyDown"/>
+                        </Border>
+                    </Popup>
+                </Grid>
+
+                <!-- 참조 -->
+                <TextBlock Grid.Row="1" Grid.Column="0"
+                           Text="참조(Cc):"
+                           VerticalAlignment="Center"
+                           Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                           Margin="0,0,8,8"/>
+                <Grid Grid.Row="1" Grid.Column="1" Margin="0,0,0,8">
+                    <ui:TextBox x:Name="CcTextBox"
+                               Text="{Binding Cc, UpdateSourceTrigger=PropertyChanged}"
+                               PlaceholderText="참조할 이메일 주소"
+                               PreviewKeyDown="EmailTextBox_PreviewKeyDown"/>
+                    <Popup x:Name="CcSuggestionPopup"
+                           PlacementTarget="{Binding ElementName=CcTextBox}"
+                           Placement="Bottom"
+                           StaysOpen="False"
+                           AllowsTransparency="True">
+                        <Border Background="{DynamicResource ControlFillColorDefaultBrush}"
+                                BorderBrush="{DynamicResource ControlStrokeColorDefaultBrush}"
+                                BorderThickness="1" CornerRadius="4"
+                                Padding="4">
+                            <ListBox x:Name="CcSuggestionList"
+                                     MaxHeight="200" MinWidth="300"
+                                     Background="Transparent"
+                                     BorderThickness="0"
+                                     SelectionChanged="SuggestionList_SelectionChanged"
+                                     MouseDoubleClick="SuggestionList_MouseDoubleClick"
+                                     KeyDown="SuggestionList_KeyDown"/>
+                        </Border>
+                    </Popup>
+                </Grid>
+
+                <!-- 숨은 참조 -->
+                <TextBlock Grid.Row="2" Grid.Column="0"
+                           Text="숨은참조:"
+                           VerticalAlignment="Center"
+                           Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                           Margin="0,0,8,8"/>
+                <Grid Grid.Row="2" Grid.Column="1" Margin="0,0,0,8">
+                    <ui:TextBox x:Name="BccTextBox"
+                               Text="{Binding Bcc, UpdateSourceTrigger=PropertyChanged}"
+                               PlaceholderText="숨은 참조 이메일 주소"
+                               PreviewKeyDown="EmailTextBox_PreviewKeyDown"/>
+                    <Popup x:Name="BccSuggestionPopup"
+                           PlacementTarget="{Binding ElementName=BccTextBox}"
+                           Placement="Bottom"
+                           StaysOpen="False"
+                           AllowsTransparency="True">
+                        <Border Background="{DynamicResource ControlFillColorDefaultBrush}"
+                                BorderBrush="{DynamicResource ControlStrokeColorDefaultBrush}"
+                                BorderThickness="1" CornerRadius="4"
+                                Padding="4">
+                            <ListBox x:Name="BccSuggestionList"
+                                     MaxHeight="200" MinWidth="300"
+                                     Background="Transparent"
+                                     BorderThickness="0"
+                                     SelectionChanged="SuggestionList_SelectionChanged"
+                                     MouseDoubleClick="SuggestionList_MouseDoubleClick"
+                                     KeyDown="SuggestionList_KeyDown"/>
+                        </Border>
+                    </Popup>
+                </Grid>
+
+                <!-- 제목 -->
+                <TextBlock Grid.Row="3" Grid.Column="0"
+                           Text="제목:"
+                           VerticalAlignment="Center"
+                           Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                           Margin="0,0,8,0"/>
+                <ui:TextBox Grid.Row="3" Grid.Column="1"
+                           x:Name="SubjectTextBox"
+                           Text="{Binding Subject, UpdateSourceTrigger=PropertyChanged}"
+                           PlaceholderText="메일 제목을 입력하세요"/>
+            </Grid>
+        </Border>
+
+        <!-- 메일 본문 에디터 (WebView2 + TinyMCE) -->
+        <Border Grid.Row="2"
+                Background="{DynamicResource ControlFillColorDefaultBrush}"
+                Margin="0">
+            <Grid>
+                <!-- 로딩 인디케이터 -->
+                <StackPanel x:Name="LoadingPanel"
+                            HorizontalAlignment="Center"
+                            VerticalAlignment="Center"
+                            Visibility="Visible">
+                    <ui:ProgressRing IsIndeterminate="True" Width="48" Height="48"/>
+                    <TextBlock Text="에디터 로딩 중..."
+                               HorizontalAlignment="Center"
+                               Margin="0,16,0,0"
+                               Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
+                </StackPanel>
+
+                <!-- TinyMCE 에디터 -->
+                <wv2:WebView2 x:Name="EditorWebView"
+                              DefaultBackgroundColor="Transparent"
+                              Visibility="Collapsed"/>
+            </Grid>
+        </Border>
+
+        <!-- 첨부파일 및 버튼 영역 -->
+        <Border Grid.Row="3"
+                Background="{DynamicResource ControlFillColorDefaultBrush}"
+                BorderBrush="{DynamicResource ControlElevationBorderBrush}"
+                BorderThickness="0,1,0,0"
+                Padding="16,12">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
+                </Grid.ColumnDefinitions>
+
+                <!-- 첨부파일 영역 -->
+                <StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center">
+                    <ui:Button x:Name="AttachButton"
+                              Icon="{ui:SymbolIcon Attach24}"
+                              Content="첨부"
+                              Appearance="Secondary"
+                              Click="AttachButton_Click"
+                              Margin="0,0,8,0"/>
+
+                    <ItemsControl x:Name="AttachmentsItemsControl"
+                                  ItemsSource="{Binding Attachments}">
+                        <ItemsControl.ItemsPanel>
+                            <ItemsPanelTemplate>
+                                <WrapPanel Orientation="Horizontal"/>
+                            </ItemsPanelTemplate>
+                        </ItemsControl.ItemsPanel>
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate>
+                                <Border Background="{DynamicResource ControlFillColorSecondaryBrush}"
+                                        CornerRadius="4"
+                                        Padding="8,4"
+                                        Margin="4,0">
+                                    <StackPanel Orientation="Horizontal">
+                                        <TextBlock Text="{Binding FileName}"
+                                                   VerticalAlignment="Center"
+                                                   Foreground="{DynamicResource TextFillColorPrimaryBrush}"/>
+                                        <ui:Button Icon="{ui:SymbolIcon Dismiss12}"
+                                                   Appearance="Transparent"
+                                                   Padding="4"
+                                                   Margin="4,0,0,0"
+                                                   Command="{Binding DataContext.RemoveAttachmentCommand, RelativeSource={RelativeSource AncestorType=Window}}"
+                                                   CommandParameter="{Binding}"/>
+                                    </StackPanel>
+                                </Border>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                </StackPanel>
+
+                <!-- 버튼 영역 -->
+                <StackPanel Grid.Column="1" Orientation="Horizontal">
+                    <ui:Button x:Name="CancelButton"
+                              Content="취소"
+                              Appearance="Secondary"
+                              Click="CancelButton_Click"
+                              Margin="0,0,8,0"
+                              MinWidth="80"/>
+
+                    <ui:Button x:Name="SendButton"
+                              Icon="{ui:SymbolIcon Send24}"
+                              Content="보내기"
+                              Appearance="Primary"
+                              Click="SendButton_Click"
+                              MinWidth="100"/>
+                </StackPanel>
+            </Grid>
+        </Border>
+    </Grid>
+</ui:FluentWindow>

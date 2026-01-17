@@ -19,6 +19,90 @@
             <converters:BoolToFontWeightConverter x:Key="BoolToFontWeightConverter"/>
             <converters:StringToInitialConverter x:Key="StringToInitialConverter"/>
             <converters:StringEqualsToVisibilityConverter x:Key="StringEqualsToVisibilityConverter"/>
+            <converters:BoolToForegroundConverter x:Key="BoolToForegroundConverter"/>
+            <!-- 아웃룩 스타일 컨버터 -->
+            <converters:ImportanceToVisibilityConverter x:Key="ImportanceToVisibilityConverter"/>
+            <converters:FlagStatusToVisibilityConverter x:Key="FlagStatusToVisibilityConverter"/>
+            <converters:CategoryToColorConverter x:Key="CategoryToColorConverter"/>
+            <converters:CategoryToVisibilityConverter x:Key="CategoryToVisibilityConverter"/>
+            <!-- Phase 1: 정렬/뷰 토글 컨버터 -->
+            <converters:SortByToAppearanceConverter x:Key="SortByToAppearanceConverter"/>
+            <converters:BoolToAppearanceConverter x:Key="BoolToAppearanceConverter"/>
+            <converters:FlagStatusToAppearanceConverter x:Key="FlagStatusToAppearanceConverter"/>
+
+            <!-- 좌측 네비게이션 아이콘바 스타일 -->
+            <Style x:Key="NavIconRadioButtonStyle" TargetType="RadioButton">
+                <Setter Property="Width" Value="48"/>
+                <Setter Property="Height" Value="48"/>
+                <Setter Property="Margin" Value="2"/>
+                <Setter Property="Padding" Value="4"/>
+                <Setter Property="Background" Value="Transparent"/>
+                <Setter Property="Foreground" Value="{DynamicResource TextFillColorSecondaryBrush}"/>
+                <Setter Property="HorizontalContentAlignment" Value="Center"/>
+                <Setter Property="VerticalContentAlignment" Value="Center"/>
+                <Setter Property="Cursor" Value="Hand"/>
+                <Setter Property="Template">
+                    <Setter.Value>
+                        <ControlTemplate TargetType="RadioButton">
+                            <Border x:Name="Border"
+                                    Background="{TemplateBinding Background}"
+                                    CornerRadius="8"
+                                    Width="{TemplateBinding Width}"
+                                    Height="{TemplateBinding Height}">
+                                <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                            </Border>
+                            <ControlTemplate.Triggers>
+                                <Trigger Property="IsMouseOver" Value="True">
+                                    <Setter TargetName="Border" Property="Background" Value="{DynamicResource SubtleFillColorSecondaryBrush}"/>
+                                </Trigger>
+                                <Trigger Property="IsChecked" Value="True">
+                                    <Setter TargetName="Border" Property="Background" Value="{DynamicResource SystemAccentColorSecondaryBrush}"/>
+                                    <!-- 라이트/다크 모드 모두 선택 시 흰색 -->
+                                    <Setter Property="Foreground" Value="White"/>
+                                </Trigger>
+                            </ControlTemplate.Triggers>
+                        </ControlTemplate>
+                    </Setter.Value>
+                </Setter>
+            </Style>
+
+            <!-- 메뉴 아이템 스타일 (여백 및 서브메뉴 화살표) -->
+            <Style TargetType="MenuItem">
+                <Setter Property="Padding" Value="12,8"/>
+                <Setter Property="MinWidth" Value="140"/>
+            </Style>
+
+            <Style x:Key="NavIconButtonStyle" TargetType="Button">
+                <Setter Property="Width" Value="44"/>
+                <Setter Property="Height" Value="44"/>
+                <Setter Property="Margin" Value="4,2"/>
+                <Setter Property="Background" Value="Transparent"/>
+                <Setter Property="Foreground" Value="{DynamicResource TextFillColorSecondaryBrush}"/>
+                <Setter Property="HorizontalContentAlignment" Value="Center"/>
+                <Setter Property="VerticalContentAlignment" Value="Center"/>
+                <Setter Property="Cursor" Value="Hand"/>
+                <Setter Property="Template">
+                    <Setter.Value>
+                        <ControlTemplate TargetType="Button">
+                            <Border x:Name="Border"
+                                    Background="{TemplateBinding Background}"
+                                    CornerRadius="8"
+                                    Width="{TemplateBinding Width}"
+                                    Height="{TemplateBinding Height}">
+                                <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                            </Border>
+                            <ControlTemplate.Triggers>
+                                <Trigger Property="IsMouseOver" Value="True">
+                                    <Setter TargetName="Border" Property="Background" Value="{DynamicResource SubtleFillColorSecondaryBrush}"/>
+                                </Trigger>
+                                <Trigger Property="IsPressed" Value="True">
+                                    <Setter TargetName="Border" Property="Background" Value="{DynamicResource SubtleFillColorTertiaryBrush}"/>
+                                </Trigger>
+                            </ControlTemplate.Triggers>
+                        </ControlTemplate>
+                    </Setter.Value>
+                </Setter>
+            </Style>
         </ResourceDictionary>
     </Application.Resources>
 </Application>

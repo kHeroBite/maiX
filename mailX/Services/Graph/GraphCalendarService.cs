@@ -88,8 +88,9 @@ public class GraphCalendarService
         }
         catch (Exception ex)
         {
-            _logger.Error(ex, "일정 조회 실패: {Start} ~ {End}", startDate, endDate);
-            throw;
+            _logger.Error(ex, "일정 조회 실패: {Start} ~ {End}, 오류: {Message}", startDate, endDate, ex.Message);
+            // 오류가 발생해도 빈 목록 반환 (UI가 깨지지 않도록)
+            return new List<Event>();
         }
     }
 
@@ -317,6 +318,169 @@ public class GraphCalendarService
         }
     }
 
+    #region 일정 CRUD
+
+    /// <summary>
+    /// 새 일정 생성
+    /// </summary>
+    public async Task<Event?> CreateEventAsync(EventCreateRequest request)
+    {
+        if (request == null)
+            throw new ArgumentNullException(nameof(request));
+
+        try
+        {
+            var client = _authService.GetGraphClient();
+
+            var newEvent = new Event
+            {
+                Subject = request.Subject,
+                Location = !string.IsNullOrEmpty(request.Location) ? new Location { DisplayName = request.Location } : null,
+                Start = new DateTimeTimeZone
+                {
+                    DateTime = request.IsAllDay
+                        ? request.StartDateTime.Date.ToString("yyyy-MM-ddT00:00:00")
+                        : request.StartDateTime.ToString("yyyy-MM-ddTHH:mm:ss"),
+                    TimeZone = "Korea Standard Time"
+                },
+                End = new DateTimeTimeZone
+                {
+                    DateTime = request.IsAllDay
+                        ? request.EndDateTime.Date.AddDays(1).ToString("yyyy-MM-ddT00:00:00")
+                        : request.EndDateTime.ToString("yyyy-MM-ddTHH:mm:ss"),
+                    TimeZone = "Korea Standard Time"
+                },
+                IsAllDay = request.IsAllDay,
+                Body = !string.IsNullOrEmpty(request.Body) ? new ItemBody
+                {
+                    ContentType = BodyType.Text,
+                    Content = request.Body
+                } : null,
+                IsOnlineMeeting = request.IsOnlineMeeting,
+                OnlineMeetingProvider = request.IsOnlineMeeting ? OnlineMeetingProviderType.TeamsForBusiness : null,
+                ReminderMinutesBeforeStart = request.ReminderMinutesBefore,
+                Categories = request.Categories
+            };
+
+            // 참석자 추가
+            if (request.Attendees?.Any() == true)
+            {
+                newEvent.Attendees = request.Attendees.Select(email => new Attendee
+                {
+                    EmailAddress = new EmailAddress { Address = email },
+                    Type = AttendeeType.Required
+                }).ToList();
+            }
+
+            var createdEvent = await client.Me.Calendar.Events.PostAsync(newEvent);
+            _logger.Information("일정 생성 완료: {Subject} ({Start})", request.Subject, request.StartDateTime);
+            return createdEvent;
+        }
+        catch (Exception ex)
+        {
+            _logger.Error(ex, "일정 생성 실패: {Subject}", request.Subject);
+            throw;
+        }
+    }
+
+    /// <summary>
+    /// 일정 수정
+    /// </summary>
+    public async Task<Event?> UpdateEventAsync(string eventId, EventCreateRequest request)
+    {
+        if (string.IsNullOrEmpty(eventId))
+            throw new ArgumentNullException(nameof(eventId));
+        if (request == null)
+            throw new ArgumentNullException(nameof(request));
+
+        try
+        {
+            var client = _authService.GetGraphClient();
+
+            var updatedEvent = new Event
+            {
+                Subject = request.Subject,
+                Location = !string.IsNullOrEmpty(request.Location) ? new Location { DisplayName = request.Location } : null,
+                Start = new DateTimeTimeZone
+                {
+                    DateTime = request.IsAllDay
+                        ? request.StartDateTime.Date.ToString("yyyy-MM-ddT00:00:00")
+                        : request.StartDateTime.ToString("yyyy-MM-ddTHH:mm:ss"),
+                    TimeZone = "Korea Standard Time"
+                },
+                End = new DateTimeTimeZone
+                {
+                    DateTime = request.IsAllDay
+                        ? request.EndDateTime.Date.AddDays(1).ToString("yyyy-MM-ddT00:00:00")
+                        : request.EndDateTime.ToString("yyyy-MM-ddTHH:mm:ss"),
+                    TimeZone = "Korea Standard Time"
+                },
+                IsAllDay = request.IsAllDay,
+                Body = !string.IsNullOrEmpty(request.Body) ? new ItemBody
+                {
+                    ContentType = BodyType.Text,
+                    Content = request.Body
+                } : null,
+                ReminderMinutesBeforeStart = request.ReminderMinutesBefore,
+                Categories = request.Categories
+            };
+
+            var result = await client.Me.Calendar.Events[eventId].PatchAsync(updatedEvent);
+            _logger.Information("일정 수정 완료: {EventId} - {Subject}", eventId, request.Subject);
+            return result;
+        }
+        catch (Exception ex)
+        {
+            _logger.Error(ex, "일정 수정 실패: {EventId}", eventId);
+            throw;
+        }
+    }
+
+    /// <summary>
+    /// 일정 삭제
+    /// </summary>
+    public async Task<bool> DeleteEventAsync(string eventId)
+    {
+        if (string.IsNullOrEmpty(eventId))
+            throw new ArgumentNullException(nameof(eventId));
+
+        try
+        {
+            var client = _authService.GetGraphClient();
+            await client.Me.Calendar.Events[eventId].DeleteAsync();
+            _logger.Information("일정 삭제 완료: {EventId}", eventId);
+            return true;
+        }
+        catch (Exception ex)
+        {
+            _logger.Error(ex, "일정 삭제 실패: {EventId}", eventId);
+            return false;
+        }
+    }
+
+    /// <summary>
+    /// 일정 상세 조회
+    /// </summary>
+    public async Task<Event?> GetEventByIdAsync(string eventId)
+    {
+        if (string.IsNullOrEmpty(eventId))
+            throw new ArgumentNullException(nameof(eventId));
+
+        try
+        {
+            var client = _authService.GetGraphClient();
+            var evt = await client.Me.Calendar.Events[eventId].GetAsync();
+            return evt;
+        }
+        catch (Exception ex)
+        {
+            _logger.Error(ex, "일정 조회 실패: {EventId}", eventId);
+            return null;
+        }
+    }
+
+    #endregion
+
     /// <summary>
     /// 이메일 본문에서 일정 정보 추출 및 생성
     /// </summary>
@@ -478,4 +642,22 @@ public class AttendeeInfo
     public string? Email { get; set; }
     public string? Name { get; set; }
     public string? ResponseStatus { get; set; }
+}
+
+/// <summary>
+/// 일정 생성/수정용 DTO
+/// </summary>
+public class EventCreateRequest
+{
+    public string Subject { get; set; } = string.Empty;
+    public string? Location { get; set; }
+    public DateTime StartDateTime { get; set; }
+    public DateTime EndDateTime { get; set; }
+    public bool IsAllDay { get; set; }
+    public string? Body { get; set; }
+    public bool IsOnlineMeeting { get; set; }
+    public List<string>? Attendees { get; set; }
+    public int ReminderMinutesBefore { get; set; } = 15;
+    public string? RecurrencePattern { get; set; } // None, Daily, Weekly, Monthly, Yearly
+    public List<string>? Categories { get; set; }
 }

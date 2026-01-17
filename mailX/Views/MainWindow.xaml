@@ -19,7 +19,6 @@
     <Grid>
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto"/>
-            <RowDefinition Height="Auto"/>
             <RowDefinition Height="*"/>
             <RowDefinition Height="Auto"/>
         </Grid.RowDefinitions>
@@ -33,14 +32,15 @@
             ShowClose="True"
             CanMaximize="True">
             <ui:TitleBar.Icon>
-                <ui:ImageIcon Width="24" Height="24"
-                              RenderOptions.BitmapScalingMode="Fant"
+                <ui:ImageIcon Width="18" Height="18"
+                              Margin="0,-1,0,0"
+                              RenderOptions.BitmapScalingMode="HighQuality"
                               UseLayoutRounding="True"
                               SnapsToDevicePixels="True">
                     <ui:ImageIcon.Source>
                         <BitmapImage UriSource="pack://application:,,,/Assets/icon.png"
-                                     DecodePixelWidth="256"
-                                     DecodePixelHeight="256"
+                                     DecodePixelWidth="36"
+                                     DecodePixelHeight="36"
                                      CacheOption="OnLoad"/>
                     </ui:ImageIcon.Source>
                 </ui:ImageIcon>
@@ -49,48 +49,194 @@
                 <Grid>
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="Auto"/>
+                        <ColumnDefinition Width="Auto"/>
                         <ColumnDefinition Width="*"/>
                         <ColumnDefinition Width="Auto"/>
                     </Grid.ColumnDefinitions>
 
-                    <!-- 좌측: 앱 이름 -->
-                    <TextBlock Grid.Column="0" VerticalAlignment="Center" Margin="0,0,20,0">
-                        <Run Text="m" Foreground="{DynamicResource TextFillColorPrimaryBrush}"/><Run Text="Ai" Foreground="#FFD700" FontWeight="Bold"/><Run Text="lX" Foreground="{DynamicResource TextFillColorPrimaryBrush}"/>
-                    </TextBlock>
+                    <!-- Column 0: 로고 (Ai 하늘색, X 도트 디자인) -->
+                    <StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center" Margin="0,0,16,0">
+                        <TextBlock Text="m" FontSize="16" FontWeight="Bold"
+                                   Foreground="{DynamicResource TextFillColorPrimaryBrush}"/>
+                        <TextBlock Text="Ai" FontSize="16" FontWeight="Bold" Foreground="#5DADE2"/>
+                        <TextBlock Text="l" FontSize="16" FontWeight="Bold"
+                                   Foreground="{DynamicResource TextFillColorPrimaryBrush}"/>
+                        <!-- X: 도트 디자인 (3D 입체감) -->
+                        <Canvas Width="14" Height="16" Margin="1,0,0,0">
+                            <!-- 그림자 도트 (오프셋) -->
+                            <Rectangle Canvas.Left="1" Canvas.Top="1" Width="3" Height="3" Fill="#666666"/>
+                            <Rectangle Canvas.Left="11" Canvas.Top="1" Width="3" Height="3" Fill="#666666"/>
+                            <Rectangle Canvas.Left="4" Canvas.Top="4" Width="3" Height="3" Fill="#555555"/>
+                            <Rectangle Canvas.Left="8" Canvas.Top="4" Width="3" Height="3" Fill="#555555"/>
+                            <Rectangle Canvas.Left="6" Canvas.Top="7" Width="3" Height="3" Fill="#444444"/>
+                            <Rectangle Canvas.Left="4" Canvas.Top="10" Width="3" Height="3" Fill="#555555"/>
+                            <Rectangle Canvas.Left="8" Canvas.Top="10" Width="3" Height="3" Fill="#555555"/>
+                            <Rectangle Canvas.Left="1" Canvas.Top="13" Width="3" Height="3" Fill="#666666"/>
+                            <Rectangle Canvas.Left="11" Canvas.Top="13" Width="3" Height="3" Fill="#666666"/>
+                            <!-- 메인 도트 -->
+                            <Rectangle Canvas.Left="0" Canvas.Top="0" Width="3" Height="3" Fill="{DynamicResource TextFillColorPrimaryBrush}"/>
+                            <Rectangle Canvas.Left="10" Canvas.Top="0" Width="3" Height="3" Fill="{DynamicResource TextFillColorPrimaryBrush}"/>
+                            <Rectangle Canvas.Left="3" Canvas.Top="3" Width="3" Height="3" Fill="{DynamicResource TextFillColorPrimaryBrush}"/>
+                            <Rectangle Canvas.Left="7" Canvas.Top="3" Width="3" Height="3" Fill="{DynamicResource TextFillColorPrimaryBrush}"/>
+                            <Rectangle Canvas.Left="5" Canvas.Top="6" Width="3" Height="3" Fill="{DynamicResource TextFillColorPrimaryBrush}"/>
+                            <Rectangle Canvas.Left="3" Canvas.Top="9" Width="3" Height="3" Fill="{DynamicResource TextFillColorPrimaryBrush}"/>
+                            <Rectangle Canvas.Left="7" Canvas.Top="9" Width="3" Height="3" Fill="{DynamicResource TextFillColorPrimaryBrush}"/>
+                            <Rectangle Canvas.Left="0" Canvas.Top="12" Width="3" Height="3" Fill="{DynamicResource TextFillColorPrimaryBrush}"/>
+                            <Rectangle Canvas.Left="10" Canvas.Top="12" Width="3" Height="3" Fill="{DynamicResource TextFillColorPrimaryBrush}"/>
+                        </Canvas>
+                    </StackPanel>
 
-                    <!-- 중앙: 검색창 -->
-                    <Border Grid.Column="1"
-                            HorizontalAlignment="Center"
-                            VerticalAlignment="Center"
-                            MaxWidth="400"
-                            MinWidth="200">
-                        <Grid>
-                            <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="*"/>
-                                <ColumnDefinition Width="Auto"/>
-                            </Grid.ColumnDefinitions>
-                            <ui:TextBox x:Name="TitleBarSearchBox"
-                                        Grid.Column="0"
-                                        PlaceholderText="🔍 메일 검색 (Ctrl+K)"
-                                        Text="{Binding SearchKeyword, UpdateSourceTrigger=PropertyChanged}"
-                                        Height="30"
-                                        FontSize="12"
-                                        Margin="0,0,4,0"
-                                        KeyDown="TitleBarSearchBox_KeyDown"/>
-                            <ui:Button Grid.Column="1"
-                                        Icon="{ui:SymbolIcon Search24}"
-                                        Command="{Binding SearchCommand}"
-                                        ToolTip="검색"
-                                        Appearance="Transparent"
-                                        Height="30" Width="30"
-                                        Padding="0"/>
-                        </Grid>
-                    </Border>
+                    <!-- Column 1: 메뉴바 (타이틀바로 이동) -->
+                    <Menu Grid.Column="1" VerticalAlignment="Center" Background="Transparent" Margin="0,0,16,0">
+                        <MenuItem Padding="8,4">
+                            <MenuItem.Header>
+                                <StackPanel Orientation="Horizontal">
+                                    <ui:SymbolIcon Symbol="PlugConnected24" FontSize="12" Margin="0,0,4,0"/>
+                                    <TextBlock Text="접속" VerticalAlignment="Center"/>
+                                </StackPanel>
+                            </MenuItem.Header>
+                            <MenuItem Header="🔄 재로그인" Click="MenuRelogin_Click"/>
+                            <MenuItem Header="🚪 로그아웃" Click="MenuLogout_Click"/>
+                            <Separator/>
+                            <MenuItem Header="❌ 종료" Click="MenuExit_Click"/>
+                        </MenuItem>
+                        <MenuItem Padding="8,4">
+                            <MenuItem.Header>
+                                <StackPanel Orientation="Horizontal">
+                                    <ui:SymbolIcon Symbol="Mail24" FontSize="12" Margin="0,0,4,0"/>
+                                    <TextBlock Text="메일" VerticalAlignment="Center"/>
+                                </StackPanel>
+                            </MenuItem.Header>
+                            <MenuItem x:Name="MenuSyncPeriod">
+                                <MenuItem.Header>
+                                    <StackPanel Orientation="Horizontal">
+                                        <TextBlock Text="📧 동기화 기간" VerticalAlignment="Center"/>
+                                        <TextBlock Text=" ▶" FontSize="10" VerticalAlignment="Center" Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
+                                    </StackPanel>
+                                </MenuItem.Header>
+                                <!-- 현재 설정 표시 -->
+                                <MenuItem x:Name="MenuSyncPeriodCurrent" Header="현재: 1주일" IsEnabled="False" FontStyle="Italic"/>
+                                <Separator/>
+                                <MenuItem x:Name="MenuMailSync100" Header="📋 100건" Click="MenuMailSync100_Click"/>
+                                <MenuItem x:Name="MenuMailSyncDay" Header="📅 하루" Click="MenuMailSyncDay_Click"/>
+                                <MenuItem x:Name="MenuMailSyncWeek" Header="📆 1주일" Click="MenuMailSyncWeek_Click"/>
+                                <MenuItem x:Name="MenuMailSyncMonth" Header="🗓️ 1달" Click="MenuMailSyncMonth_Click"/>
+                                <MenuItem x:Name="MenuMailSyncYear" Header="📅 1년" Click="MenuMailSyncYear_Click"/>
+                                <MenuItem x:Name="MenuMailSyncAll" Header="♾️ 전체" Click="MenuMailSyncAll_Click"/>
+                            </MenuItem>
+                        </MenuItem>
+                        <MenuItem Padding="8,4">
+                            <MenuItem.Header>
+                                <StackPanel Orientation="Horizontal">
+                                    <TextBlock Text="✨" FontSize="10" Margin="0,0,4,0" VerticalAlignment="Center"/>
+                                    <TextBlock Text="Ai" VerticalAlignment="Center"/>
+                                </StackPanel>
+                            </MenuItem.Header>
+                            <MenuItem x:Name="MenuAISyncPause2" Header="⏸️ 분석 일시정지" Click="MenuAISyncPause_Click" Visibility="Collapsed"/>
+                            <MenuItem x:Name="MenuAISyncResume2" Header="▶️ 분석 시작" Click="MenuAISyncResume_Click"/>
+                        </MenuItem>
+                        <MenuItem Padding="8,4">
+                            <MenuItem.Header>
+                                <StackPanel Orientation="Horizontal">
+                                    <ui:SymbolIcon Symbol="Settings24" FontSize="12" Margin="0,0,4,0"/>
+                                    <TextBlock Text="시스템" VerticalAlignment="Center"/>
+                                </StackPanel>
+                            </MenuItem.Header>
+                            <MenuItem Header="🔑 API 관리" Click="MenuApiSettings_Click"/>
+                            <MenuItem Header="✍️ 서명 관리" Click="MenuSignatureSettings_Click"/>
+                            <Separator/>
+                            <MenuItem>
+                                <MenuItem.Header>
+                                    <StackPanel Orientation="Horizontal">
+                                        <TextBlock Text="🎨 테마" VerticalAlignment="Center"/>
+                                        <TextBlock Text=" ▶" FontSize="10" VerticalAlignment="Center" Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
+                                    </StackPanel>
+                                </MenuItem.Header>
+                                <MenuItem x:Name="MenuThemeDark2" Header="🌙 다크 모드" Click="MenuThemeDark_Click"/>
+                                <MenuItem x:Name="MenuThemeLight2" Header="☀️ 라이트 모드" Click="MenuThemeLight_Click"/>
+                            </MenuItem>
+                            <Separator/>
+                            <MenuItem x:Name="MenuGpuMode2" Click="MenuGpuMode_Click">
+                                <MenuItem.Header>
+                                    <StackPanel Orientation="Horizontal">
+                                        <TextBlock x:Name="GpuModeCheckMark" Text="✓" FontWeight="Bold" Margin="0,0,8,0" VerticalAlignment="Center" Visibility="Collapsed"/>
+                                        <TextBlock Text="GPU 모드" VerticalAlignment="Center"/>
+                                    </StackPanel>
+                                </MenuItem.Header>
+                            </MenuItem>
+                        </MenuItem>
+                    </Menu>
 
-                    <!-- 우측: 알림/설정 버튼 -->
-                    <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center" Margin="20,0,0,0">
+                    <!-- Column 2: 검색 영역 (폴더선택 + 검색창 + 고급검색) -->
+                    <Grid Grid.Column="2" HorizontalAlignment="Center" VerticalAlignment="Center">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto"/>
+                            <ColumnDefinition Width="Auto"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+
+                        <!-- 폴더 선택 드롭다운 (모든 폴더, 기본 폴더들) -->
+                        <ComboBox x:Name="SearchFolderComboBox"
+                                  Grid.Column="0"
+                                  Width="140"
+                                  Height="32"
+                                  Padding="8,2"
+                                  Margin="0,0,4,0"
+                                  VerticalContentAlignment="Center"
+                                  ItemsSource="{Binding SearchFolderOptions}"
+                                  SelectedItem="{Binding SelectedSearchFolderOption}"
+                                  ToolTip="검색 대상 폴더">
+                            <ComboBox.ItemTemplate>
+                                <DataTemplate>
+                                    <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                                        <TextBlock Text="{Binding Icon}" FontSize="12" Margin="0,0,4,0" VerticalAlignment="Center"/>
+                                        <TextBlock Text="{Binding DisplayName}" FontSize="12" VerticalAlignment="Center"/>
+                                    </StackPanel>
+                                </DataTemplate>
+                            </ComboBox.ItemTemplate>
+                        </ComboBox>
+
+                        <!-- 검색창 (너비 2배 확장: 600px) -->
+                        <ui:TextBox x:Name="TitleBarSearchBox"
+                                    Grid.Column="1"
+                                    PlaceholderText="🔍 메일 검색 (Ctrl+K)"
+                                    Text="{Binding SearchKeyword, UpdateSourceTrigger=PropertyChanged}"
+                                    Height="32"
+                                    Width="500"
+                                    FontSize="12"
+                                    Margin="0,0,4,0"
+                                    KeyDown="TitleBarSearchBox_KeyDown"
+                                    GotFocus="TitleBarSearchBox_GotFocus"
+                                    LostFocus="TitleBarSearchBox_LostFocus"/>
+
+                        <!-- 고급 검색 버튼 -->
+                        <ui:Button x:Name="AdvancedSearchButton"
+                                   Grid.Column="2"
+                                   ToolTip="고급 검색"
+                                   Appearance="Transparent"
+                                   Height="30" Width="30"
+                                   Padding="0"
+                                   Margin="0,0,4,0"
+                                   Click="AdvancedSearchButton_Click">
+                            <ui:SymbolIcon Symbol="ChevronDown24" FontSize="14"/>
+                        </ui:Button>
+                    </Grid>
+
+                    <!-- Column 3: 우측 버튼들 (테마토글 + 알림 + 설정) -->
+                    <StackPanel Grid.Column="3" Orientation="Horizontal" VerticalAlignment="Center" Margin="16,0,0,0">
+                        <!-- 테마 토글 버튼 -->
+                        <ui:Button x:Name="ThemeToggleButton"
+                                   ToolTip="테마 전환"
+                                   Appearance="Transparent"
+                                   Height="30" Width="30"
+                                   Padding="0"
+                                   Margin="0,0,4,0"
+                                   Click="ThemeToggleButton_Click">
+                            <ui:SymbolIcon x:Name="ThemeIcon" Symbol="WeatherSunny24" FontSize="16"/>
+                        </ui:Button>
                         <!-- 알림 버튼 -->
-                        <ui:Button ToolTip="알림"
+                        <ui:Button x:Name="NotificationButton"
+                                   ToolTip="알림"
                                    Appearance="Transparent"
                                    Height="30" Width="30"
                                    Padding="0"
@@ -98,8 +244,8 @@
                                    Click="NotificationButton_Click">
                             <ui:SymbolIcon Symbol="Alert24" FontSize="16"/>
                         </ui:Button>
-                        <!-- 설정 버튼 -->
-                        <ui:Button ToolTip="설정"
+                        <!-- 설정 버튼 (동기화 설정으로 연결) -->
+                        <ui:Button ToolTip="동기화 설정"
                                    Appearance="Transparent"
                                    Height="30" Width="30"
                                    Padding="0"
@@ -109,213 +255,319 @@
                     </StackPanel>
                 </Grid>
             </ui:TitleBar.Header>
+
         </ui:TitleBar>
 
-        <!-- 메뉴바 -->
-        <Menu Grid.Row="1"
-              Background="{DynamicResource ApplicationBackgroundBrush}"
-              Padding="8,2">
-            <Menu.Resources>
-                <!-- 서브메뉴 아이템용 간단한 스타일 (아이콘 영역 없음) -->
-                <Style x:Key="SimpleSubMenuItemStyle" TargetType="MenuItem">
-                    <Setter Property="Background" Value="Transparent"/>
-                    <Setter Property="Foreground" Value="{DynamicResource TextFillColorPrimaryBrush}"/>
-                    <Setter Property="Padding" Value="12,8"/>
-                    <Setter Property="Template">
-                        <Setter.Value>
-                            <ControlTemplate TargetType="MenuItem">
-                                <Grid>
-                                    <Border x:Name="Border"
-                                            Background="{TemplateBinding Background}"
-                                            CornerRadius="4"
-                                            Padding="{TemplateBinding Padding}">
-                                        <Grid>
-                                            <Grid.ColumnDefinitions>
-                                                <ColumnDefinition Width="*"/>
-                                                <ColumnDefinition Width="Auto"/>
-                                            </Grid.ColumnDefinitions>
-                                            <ContentPresenter Grid.Column="0"
-                                                              ContentSource="Header"
-                                                              RecognizesAccessKey="True"
-                                                              VerticalAlignment="Center"/>
-                                            <!-- 서브메뉴 화살표 (▶) -->
-                                            <TextBlock x:Name="SubMenuArrow"
-                                                       Grid.Column="1"
-                                                       Text="▶"
-                                                       FontSize="8"
-                                                       VerticalAlignment="Center"
-                                                       Margin="20,0,0,0"
-                                                       Foreground="{DynamicResource TextFillColorSecondaryBrush}"
-                                                       Visibility="Collapsed"/>
-                                        </Grid>
-                                    </Border>
-                                    <!-- 서브메뉴 Popup -->
-                                    <Popup x:Name="PART_Popup"
-                                           AllowsTransparency="True"
-                                           Focusable="False"
-                                           IsOpen="{Binding IsSubmenuOpen, RelativeSource={RelativeSource TemplatedParent}}"
-                                           Placement="Right"
-                                           PopupAnimation="{DynamicResource {x:Static SystemParameters.MenuPopupAnimationKey}}"
-                                           HorizontalOffset="-4">
-                                        <Border x:Name="SubMenuBorder"
-                                                Background="{DynamicResource ApplicationBackgroundBrush}"
-                                                BorderBrush="{DynamicResource ControlElevationBorderBrush}"
-                                                BorderThickness="1"
-                                                CornerRadius="8"
-                                                Padding="4"
-                                                Margin="8">
-                                            <Border.Effect>
-                                                <DropShadowEffect BlurRadius="12" Opacity="0.3" ShadowDepth="4"/>
-                                            </Border.Effect>
-                                            <ItemsPresenter x:Name="ItemsPresenter"
-                                                            KeyboardNavigation.DirectionalNavigation="Cycle"
-                                                            KeyboardNavigation.TabNavigation="Cycle"
-                                                            SnapsToDevicePixels="{TemplateBinding SnapsToDevicePixels}"/>
+        <!-- 고급 검색 팝업 (Window 레벨) -->
+        <Popup x:Name="AdvancedSearchPopup"
+               PlacementTarget="{Binding ElementName=AdvancedSearchButton}"
+               Placement="Bottom"
+               StaysOpen="False"
+               AllowsTransparency="True">
+            <Border Background="{DynamicResource ApplicationBackgroundBrush}"
+                    BorderBrush="{DynamicResource ControlElevationBorderBrush}"
+                    BorderThickness="1"
+                    CornerRadius="8"
+                    Padding="16"
+                    Margin="0,4,0,0">
+                <Border.Effect>
+                    <DropShadowEffect BlurRadius="16" ShadowDepth="4" Opacity="0.2"/>
+                </Border.Effect>
+                <StackPanel Width="380">
+                    <TextBlock Text="고급 검색" FontWeight="SemiBold" FontSize="14" Margin="0,0,0,12"/>
+
+                    <TextBlock Text="발신자" FontSize="11" Foreground="{DynamicResource TextFillColorSecondaryBrush}" Margin="0,0,0,4"/>
+                    <ui:TextBox PlaceholderText="보낸 사람 이메일 또는 이름"
+                                Text="{Binding AdvancedSearchFrom, UpdateSourceTrigger=PropertyChanged}"
+                                Height="32" Margin="0,0,0,8"/>
+
+                    <TextBlock Text="수신자" FontSize="11" Foreground="{DynamicResource TextFillColorSecondaryBrush}" Margin="0,0,0,4"/>
+                    <ui:TextBox PlaceholderText="받는 사람 이메일 또는 이름"
+                                Text="{Binding AdvancedSearchTo, UpdateSourceTrigger=PropertyChanged}"
+                                Height="32" Margin="0,0,0,8"/>
+
+                    <TextBlock Text="제목" FontSize="11" Foreground="{DynamicResource TextFillColorSecondaryBrush}" Margin="0,0,0,4"/>
+                    <ui:TextBox PlaceholderText="제목에 포함된 텍스트"
+                                Text="{Binding AdvancedSearchSubject, UpdateSourceTrigger=PropertyChanged}"
+                                Height="32" Margin="0,0,0,8"/>
+
+                    <TextBlock Text="본문" FontSize="11" Foreground="{DynamicResource TextFillColorSecondaryBrush}" Margin="0,0,0,4"/>
+                    <ui:TextBox PlaceholderText="본문에 포함된 텍스트"
+                                Text="{Binding AdvancedSearchBody, UpdateSourceTrigger=PropertyChanged}"
+                                Height="32" Margin="0,0,0,8"/>
+
+                    <TextBlock Text="날짜 범위" FontSize="11" Foreground="{DynamicResource TextFillColorSecondaryBrush}" Margin="0,0,0,4"/>
+                    <StackPanel Orientation="Horizontal" Margin="0,0,0,8">
+                        <DatePicker x:Name="DateFromPicker" SelectedDate="{Binding AdvancedSearchDateFrom}" Width="175"
+                                    Loaded="DatePicker_Loaded"/>
+                        <TextBlock Text="~" VerticalAlignment="Center" Margin="8,0"/>
+                        <DatePicker x:Name="DateToPicker" SelectedDate="{Binding AdvancedSearchDateTo}" Width="175"
+                                    Loaded="DatePicker_Loaded"/>
+                    </StackPanel>
+
+                    <CheckBox Content="첨부파일 있는 메일만"
+                              IsChecked="{Binding AdvancedSearchHasAttachment}"
+                              Margin="0,0,0,12"/>
+
+                    <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
+                        <ui:Button Content="초기화"
+                                   Appearance="Secondary"
+                                   Margin="0,0,8,0"
+                                   Click="AdvancedSearchClear_Click"/>
+                        <ui:Button Content="검색"
+                                   Appearance="Primary"
+                                   Click="AdvancedSearch_Click"/>
+                    </StackPanel>
+                </StackPanel>
+            </Border>
+        </Popup>
+
+        <!-- 알림 패널 팝업 (Window 레벨) -->
+        <Popup x:Name="NotificationPopup"
+               PlacementTarget="{Binding ElementName=NotificationButton}"
+               Placement="Bottom"
+               StaysOpen="False"
+               AllowsTransparency="True">
+            <Border Background="{DynamicResource ApplicationBackgroundBrush}"
+                    BorderBrush="{DynamicResource ControlElevationBorderBrush}"
+                    BorderThickness="1"
+                    CornerRadius="8"
+                    Width="360"
+                    MaxHeight="500"
+                    Margin="0,4,0,0">
+                <Border.Effect>
+                    <DropShadowEffect BlurRadius="16" ShadowDepth="4" Opacity="0.2"/>
+                </Border.Effect>
+                <Grid>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="*"/>
+                    </Grid.RowDefinitions>
+
+                    <!-- 알림 패널 헤더 -->
+                    <Border Grid.Row="0" Padding="16,12"
+                            BorderBrush="{DynamicResource ControlElevationBorderBrush}"
+                            BorderThickness="0,0,0,1">
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
+                            <TextBlock Grid.Column="0"
+                                       Text="알림"
+                                       FontSize="18"
+                                       FontWeight="SemiBold"/>
+                            <StackPanel Grid.Column="1" Orientation="Horizontal">
+                                <ui:Button Appearance="Transparent"
+                                           ToolTip="필터"
+                                           Width="28" Height="28"
+                                           Padding="0"
+                                           Margin="0,0,4,0">
+                                    <ui:SymbolIcon Symbol="Filter24" FontSize="14"/>
+                                </ui:Button>
+                                <ui:Button Appearance="Transparent"
+                                           ToolTip="알림 설정"
+                                           Width="28" Height="28"
+                                           Padding="0"
+                                           Margin="0,0,4,0">
+                                    <ui:SymbolIcon Symbol="Settings24" FontSize="14"/>
+                                </ui:Button>
+                                <ui:Button Appearance="Transparent"
+                                           ToolTip="닫기"
+                                           Width="28" Height="28"
+                                           Padding="0"
+                                           Click="CloseNotificationPopup_Click">
+                                    <ui:SymbolIcon Symbol="Dismiss24" FontSize="14"/>
+                                </ui:Button>
+                            </StackPanel>
+                        </Grid>
+                    </Border>
+
+                    <!-- 알림 목록 또는 빈 상태 -->
+                    <ScrollViewer Grid.Row="1" Padding="16"
+                                  VerticalScrollBarVisibility="Auto"
+                                  MaxHeight="400">
+                        <StackPanel x:Name="NotificationListContent">
+                            <!-- 알림 없을 때 기본 상태 -->
+                            <StackPanel HorizontalAlignment="Center" Margin="0,48">
+                                <ui:SymbolIcon Symbol="Alert24" FontSize="48"
+                                               Foreground="{DynamicResource TextFillColorTertiaryBrush}"
+                                               HorizontalAlignment="Center"
+                                               Margin="0,0,0,16"/>
+                                <TextBlock Text="모두 확인했습니다!"
+                                           FontSize="14"
+                                           FontWeight="SemiBold"
+                                           HorizontalAlignment="Center"
+                                           Margin="0,0,0,8"/>
+                                <TextBlock Text="새 알림이 없습니다."
+                                           FontSize="12"
+                                           Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                                           HorizontalAlignment="Center"/>
+                            </StackPanel>
+                            <!-- 알림이 있을 경우 동적으로 추가됨 -->
+                        </StackPanel>
+                    </ScrollViewer>
+                </Grid>
+            </Border>
+        </Popup>
+
+        <!-- 검색 자동완성 팝업 (Window 레벨) -->
+        <Popup x:Name="SearchAutocompletePopup"
+               PlacementTarget="{Binding ElementName=TitleBarSearchBox}"
+               Placement="Bottom"
+               StaysOpen="True"
+               AllowsTransparency="True">
+            <Border Background="{DynamicResource ApplicationBackgroundBrush}"
+                    BorderBrush="{DynamicResource ControlElevationBorderBrush}"
+                    BorderThickness="1"
+                    CornerRadius="8"
+                    Width="500"
+                    MaxHeight="400"
+                    Margin="0,4,0,0">
+                <Border.Effect>
+                    <DropShadowEffect BlurRadius="16" ShadowDepth="4" Opacity="0.2"/>
+                </Border.Effect>
+                <Grid>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="*"/>
+                    </Grid.RowDefinitions>
+
+                    <!-- 검색 헤더 (뒤로가기 + 검색) -->
+                    <Border Grid.Row="0" Padding="12,8"
+                            BorderBrush="{DynamicResource ControlElevationBorderBrush}"
+                            BorderThickness="0,0,0,1">
+                        <StackPanel Orientation="Horizontal">
+                            <ui:Button Appearance="Transparent"
+                                       Width="24" Height="24"
+                                       Padding="0"
+                                       Margin="0,0,8,0"
+                                       Click="SearchAutocompleteBack_Click">
+                                <ui:SymbolIcon Symbol="ArrowLeft24" FontSize="14"/>
+                            </ui:Button>
+                            <TextBlock Text="검색"
+                                       FontSize="14"
+                                       FontWeight="SemiBold"
+                                       VerticalAlignment="Center"/>
+                        </StackPanel>
+                    </Border>
+
+                    <!-- 검색 탭 (모두 | 메일 | 사람) -->
+                    <Border Grid.Row="1" Padding="12,8"
+                            BorderBrush="{DynamicResource ControlElevationBorderBrush}"
+                            BorderThickness="0,0,0,1">
+                        <StackPanel Orientation="Horizontal">
+                            <ui:Button x:Name="SearchTabAll"
+                                       Content="모두"
+                                       Appearance="Primary"
+                                       Height="26"
+                                       Padding="12,4"
+                                       Margin="0,0,4,0"
+                                       Click="SearchTab_Click"/>
+                            <ui:Button x:Name="SearchTabMail"
+                                       Content="메일"
+                                       Appearance="Secondary"
+                                       Height="26"
+                                       Padding="12,4"
+                                       Margin="0,0,4,0"
+                                       Click="SearchTab_Click"/>
+                            <ui:Button x:Name="SearchTabPerson"
+                                       Content="사람"
+                                       Appearance="Secondary"
+                                       Height="26"
+                                       Padding="12,4"
+                                       Click="SearchTab_Click"/>
+                        </StackPanel>
+                    </Border>
+
+                    <!-- 검색 히스토리 및 제안 목록 -->
+                    <ScrollViewer Grid.Row="2" Padding="8"
+                                  VerticalScrollBarVisibility="Auto"
+                                  MaxHeight="280">
+                        <StackPanel x:Name="SearchSuggestionsList">
+                            <!-- 최근 검색 -->
+                            <TextBlock Text="최근 검색"
+                                       FontSize="11"
+                                       Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                                       Margin="8,8,8,4"/>
+
+                            <!-- 최근 검색 항목들 (동적 추가) -->
+                            <ItemsControl x:Name="RecentSearchItems">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate>
+                                        <Border Background="Transparent"
+                                                Padding="8,6"
+                                                Cursor="Hand"
+                                                MouseLeftButtonUp="RecentSearchItem_Click"
+                                                Tag="{Binding}">
+                                            <Grid>
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="*"/>
+                                                    <ColumnDefinition Width="Auto"/>
+                                                </Grid.ColumnDefinitions>
+                                                <StackPanel Grid.Column="0" Orientation="Horizontal">
+                                                    <ui:SymbolIcon Symbol="History24" FontSize="14"
+                                                                   Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                                                                   Margin="0,0,8,0"/>
+                                                    <TextBlock Text="{Binding}"
+                                                               VerticalAlignment="Center"/>
+                                                </StackPanel>
+                                                <Button Grid.Column="1"
+                                                        Content="✕"
+                                                        FontSize="10"
+                                                        Padding="4,2"
+                                                        Background="Transparent"
+                                                        BorderThickness="0"
+                                                        Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                                                        Cursor="Hand"
+                                                        Click="RemoveRecentSearch_Click"
+                                                        Tag="{Binding}"
+                                                        ToolTip="검색어 삭제"/>
+                                            </Grid>
                                         </Border>
-                                    </Popup>
-                                </Grid>
-                                <ControlTemplate.Triggers>
-                                    <Trigger Property="IsHighlighted" Value="True">
-                                        <Setter TargetName="Border" Property="Background"
-                                                Value="{DynamicResource SubtleFillColorSecondaryBrush}"/>
-                                    </Trigger>
-                                    <Trigger Property="IsMouseOver" Value="True">
-                                        <Setter TargetName="Border" Property="Background"
-                                                Value="{DynamicResource SubtleFillColorSecondaryBrush}"/>
-                                    </Trigger>
-                                    <!-- 서브메뉴가 있으면 화살표 표시 -->
-                                    <Trigger Property="HasItems" Value="True">
-                                        <Setter TargetName="SubMenuArrow" Property="Visibility" Value="Visible"/>
-                                    </Trigger>
-                                </ControlTemplate.Triggers>
-                            </ControlTemplate>
-                        </Setter.Value>
-                    </Setter>
-                </Style>
-                <!-- 최상위 메뉴용 스타일 -->
-                <Style TargetType="MenuItem" BasedOn="{StaticResource {x:Type MenuItem}}">
-                    <Setter Property="Background" Value="Transparent"/>
-                    <Setter Property="Foreground" Value="{DynamicResource TextFillColorPrimaryBrush}"/>
-                    <Style.Triggers>
-                        <Trigger Property="IsMouseOver" Value="True">
-                            <Setter Property="Background" Value="{DynamicResource SubtleFillColorSecondaryBrush}"/>
-                        </Trigger>
-                        <Trigger Property="IsHighlighted" Value="True">
-                            <Setter Property="Background" Value="{DynamicResource SubtleFillColorSecondaryBrush}"/>
-                        </Trigger>
-                        <Trigger Property="IsSubmenuOpen" Value="True">
-                            <Setter Property="Background" Value="{DynamicResource SubtleFillColorSecondaryBrush}"/>
-                        </Trigger>
-                    </Style.Triggers>
-                </Style>
-            </Menu.Resources>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
 
-            <!-- 접속 메뉴 -->
-            <MenuItem Header="접속">
-                <MenuItem x:Name="MenuAutoLogin" Header="자동 로그인" Click="MenuAutoLogin_Click"
-                          IsCheckable="True" IsChecked="False"
-                          Style="{StaticResource SimpleSubMenuItemStyle}"/>
-                <Separator/>
-                <MenuItem Header="🚪 로그아웃" Click="MenuLogout_Click"
-                          Style="{StaticResource SimpleSubMenuItemStyle}"/>
-            </MenuItem>
+                            <!-- 연락처 제안 -->
+                            <TextBlock Text="연락처"
+                                       FontSize="11"
+                                       Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                                       Margin="8,12,8,4"
+                                       x:Name="ContactSuggestionsHeader"
+                                       Visibility="Collapsed"/>
 
-            <!-- 메일 메뉴 -->
-            <MenuItem Header="메일">
-                <MenuItem Header="📧 새로고침" Click="MenuRefresh_Click"
-                          Style="{StaticResource SimpleSubMenuItemStyle}"/>
-                <Separator/>
-                <MenuItem x:Name="MenuSyncPause" Header="⏸️ 동기화 일시정지" Click="MenuSyncPause_Click"
-                          Style="{StaticResource SimpleSubMenuItemStyle}"/>
-                <MenuItem x:Name="MenuSyncResume" Header="▶️ 동기화 시작" Click="MenuSyncResume_Click"
-                          Style="{StaticResource SimpleSubMenuItemStyle}" Visibility="Collapsed"/>
-                <Separator/>
-                <!-- 메일 동기화 기간 설정 -->
-                <MenuItem Header="📥 기간설정" Style="{StaticResource SimpleSubMenuItemStyle}">
-                    <!-- 현재 설정 표시 -->
-                    <MenuItem x:Name="MenuMailCurrentPeriod" IsEnabled="False" Style="{StaticResource SimpleSubMenuItemStyle}">
-                        <MenuItem.Header>
-                            <TextBlock>
-                                <Run Text="✓ 현재: "/>
-                                <Run Text="{Binding MailSyncPeriodText, Mode=OneWay}" FontWeight="SemiBold"/>
-                            </TextBlock>
-                        </MenuItem.Header>
-                    </MenuItem>
-                    <Separator/>
-                    <MenuItem Header="📋 100건" Click="MenuMailSync100_Click"
-                              Style="{StaticResource SimpleSubMenuItemStyle}" Tag="100"/>
-                    <MenuItem Header="📅 하루" Click="MenuMailSyncDay_Click"
-                              Style="{StaticResource SimpleSubMenuItemStyle}" Tag="day"/>
-                    <MenuItem Header="📆 1주일" Click="MenuMailSyncWeek_Click"
-                              Style="{StaticResource SimpleSubMenuItemStyle}" Tag="week"/>
-                    <MenuItem Header="🗓️ 1달" Click="MenuMailSyncMonth_Click"
-                              Style="{StaticResource SimpleSubMenuItemStyle}" Tag="month"/>
-                    <MenuItem Header="📅 1년" Click="MenuMailSyncYear_Click"
-                              Style="{StaticResource SimpleSubMenuItemStyle}" Tag="year"/>
-                    <MenuItem Header="♾️ 전체" Click="MenuMailSyncAll_Click"
-                              Style="{StaticResource SimpleSubMenuItemStyle}" Tag="all"/>
-                    <Separator/>
-                    <MenuItem Header="⚙️ 상세 설정..." Click="MenuSyncSettings_Click"
-                              Style="{StaticResource SimpleSubMenuItemStyle}"/>
-                </MenuItem>
-            </MenuItem>
-
-            <!-- Ai 메뉴 -->
-            <MenuItem Header="Ai">
-                <MenuItem x:Name="MenuAISyncPause" Header="⏸️ 분석 일시정지" Click="MenuAISyncPause_Click"
-                          Style="{StaticResource SimpleSubMenuItemStyle}" Visibility="Collapsed"/>
-                <MenuItem x:Name="MenuAISyncResume" Header="▶️ 분석 시작" Click="MenuAISyncResume_Click"
-                          Style="{StaticResource SimpleSubMenuItemStyle}"/>
-                <Separator/>
-                <!-- AI 분석 기간 설정 -->
-                <MenuItem Header="🤖 기간설정" Style="{StaticResource SimpleSubMenuItemStyle}">
-                    <!-- 현재 설정 표시 -->
-                    <MenuItem x:Name="MenuAiCurrentPeriod" IsEnabled="False" Style="{StaticResource SimpleSubMenuItemStyle}">
-                        <MenuItem.Header>
-                            <TextBlock>
-                                <Run Text="✓ 현재: "/>
-                                <Run Text="{Binding AiAnalysisPeriodText, Mode=OneWay}" FontWeight="SemiBold"/>
-                            </TextBlock>
-                        </MenuItem.Header>
-                    </MenuItem>
-                    <Separator/>
-                    <MenuItem Header="📋 100건" Click="MenuAIAnalysis100_Click"
-                              Style="{StaticResource SimpleSubMenuItemStyle}" Tag="100"/>
-                    <MenuItem Header="📅 하루" Click="MenuAIAnalysisDay_Click"
-                              Style="{StaticResource SimpleSubMenuItemStyle}" Tag="day"/>
-                    <MenuItem Header="📆 1주일" Click="MenuAIAnalysisWeek_Click"
-                              Style="{StaticResource SimpleSubMenuItemStyle}" Tag="week"/>
-                    <MenuItem Header="🗓️ 1달" Click="MenuAIAnalysisMonth_Click"
-                              Style="{StaticResource SimpleSubMenuItemStyle}" Tag="month"/>
-                    <MenuItem Header="📅 1년" Click="MenuAIAnalysisYear_Click"
-                              Style="{StaticResource SimpleSubMenuItemStyle}" Tag="year"/>
-                    <MenuItem Header="♾️ 전체" Click="MenuAIAnalysisAll_Click"
-                              Style="{StaticResource SimpleSubMenuItemStyle}" Tag="all"/>
-                    <Separator/>
-                    <MenuItem Header="⚙️ 상세 설정..." Click="MenuSyncSettings_Click"
-                              Style="{StaticResource SimpleSubMenuItemStyle}"/>
-                </MenuItem>
-            </MenuItem>
-
-            <!-- 시스템 메뉴 -->
-            <MenuItem Header="시스템">
-                <MenuItem Header="🔑 API 관리" Click="MenuApiSettings_Click" MinWidth="120"/>
-                <MenuItem Header="✍️ 서명 관리" Click="MenuSignatureSettings_Click" MinWidth="120"/>
-                <Separator/>
-                <MenuItem Header="🎨 테마" Style="{StaticResource SimpleSubMenuItemStyle}" MinWidth="120">
-                    <MenuItem x:Name="MenuThemeDark" Header="🌙 다크 모드" Click="MenuThemeDark_Click"
-                              Style="{StaticResource SimpleSubMenuItemStyle}"/>
-                    <MenuItem x:Name="MenuThemeLight" Header="☀️ 라이트 모드" Click="MenuThemeLight_Click"
-                              Style="{StaticResource SimpleSubMenuItemStyle}"/>
-                </MenuItem>
-                <Separator/>
-                <MenuItem x:Name="MenuGpuMode" Header="   GPU 모드" Click="MenuGpuMode_Click"
-                          Style="{StaticResource SimpleSubMenuItemStyle}"/>
-            </MenuItem>
-        </Menu>
+                            <ItemsControl x:Name="ContactSuggestionItems">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate>
+                                        <Border Background="Transparent"
+                                                Padding="8,6"
+                                                Cursor="Hand">
+                                            <StackPanel Orientation="Horizontal">
+                                                <Ellipse Width="28" Height="28"
+                                                         Fill="{DynamicResource SystemAccentColorSecondaryBrush}"
+                                                         Margin="0,0,8,0"/>
+                                                <StackPanel>
+                                                    <TextBlock Text="{Binding Name}"
+                                                               FontWeight="Medium"/>
+                                                    <TextBlock Text="{Binding Email}"
+                                                               FontSize="11"
+                                                               Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
+                                                </StackPanel>
+                                            </StackPanel>
+                                        </Border>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                        </StackPanel>
+                    </ScrollViewer>
+                </Grid>
+            </Border>
+        </Popup>
 
         <!-- 메인 콘텐츠 -->
-        <Grid x:Name="MainContentGrid" Grid.Row="2">
+        <Grid x:Name="MainContentGrid" Grid.Row="1">
         <Grid.ColumnDefinitions>
             <!-- 좌측 네비게이션 아이콘바 -->
             <ColumnDefinition x:Name="NavBarColumn" Width="52"/>
@@ -355,7 +607,7 @@
                                  Style="{StaticResource NavIconRadioButtonStyle}"
                                  Checked="NavMailButton_Checked"
                                  ToolTip="메일">
-                        <ui:SymbolIcon Symbol="Mail24" FontSize="20"/>
+                        <ui:SymbolIcon Symbol="Mail24" FontSize="20" VerticalAlignment="Center" HorizontalAlignment="Center"/>
                     </RadioButton>
 
                     <!-- 캘린더 아이콘 -->
@@ -364,7 +616,7 @@
                                  Style="{StaticResource NavIconRadioButtonStyle}"
                                  Checked="NavCalendarButton_Checked"
                                  ToolTip="일정">
-                        <ui:SymbolIcon Symbol="CalendarLtr24" FontSize="20"/>
+                        <ui:SymbolIcon Symbol="CalendarLtr24" FontSize="20" VerticalAlignment="Center" HorizontalAlignment="Center"/>
                     </RadioButton>
                 </StackPanel>
 
@@ -374,7 +626,7 @@
                             Style="{StaticResource NavIconButtonStyle}"
                             Click="NavSettingsButton_Click"
                             ToolTip="설정">
-                        <ui:SymbolIcon Symbol="Settings24" FontSize="20"/>
+                        <ui:SymbolIcon Symbol="Settings24" FontSize="20" VerticalAlignment="Center" HorizontalAlignment="Center"/>
                     </Button>
                 </StackPanel>
             </Grid>
@@ -403,24 +655,13 @@
                     </StackPanel>
                 </Border>
 
-                <!-- 즐겨찾기 섹션 -->
+                <!-- 즐겨찾기 섹션 (라벨 없이 폴더만 표시) -->
                 <Border Grid.Row="1"
                         BorderBrush="{DynamicResource ControlElevationBorderBrush}"
                         BorderThickness="0,0,0,1"
-                        Margin="0,0,0,8"
+                        Margin="0,0,0,4"
                         x:Name="FavoriteSection">
                     <StackPanel>
-                        <!-- 즐겨찾기 헤더 -->
-                        <Border Padding="16,8,16,4">
-                            <StackPanel Orientation="Horizontal">
-                                <ui:SymbolIcon Symbol="Star24" FontSize="14" Margin="0,0,6,0"
-                                               Foreground="{DynamicResource FavoriteStarBrush}"/>
-                                <TextBlock Text="즐겨찾기" FontSize="12" FontWeight="SemiBold"
-                                           Foreground="{DynamicResource TextFillColorSecondaryBrush}"
-                                           VerticalAlignment="Center"/>
-                            </StackPanel>
-                        </Border>
-
                         <!-- 즐겨찾기 폴더 목록 (드래그&드롭 순서 변경 지원) -->
                         <ListBox x:Name="FavoriteListBox"
                                  ItemsSource="{Binding FavoriteFolders}"
@@ -902,8 +1143,6 @@
             <Grid>
                 <Grid.RowDefinitions>
                     <RowDefinition Height="Auto"/>
-                    <RowDefinition Height="Auto"/>
-                    <RowDefinition Height="Auto"/>
                     <RowDefinition Height="*"/>
                 </Grid.RowDefinitions>
 
@@ -916,15 +1155,22 @@
                         </Grid.ColumnDefinitions>
 
                         <StackPanel Grid.Column="0" Orientation="Horizontal">
-                            <ui:SymbolIcon Symbol="Mail24" FontSize="20" Margin="0,0,8,0"/>
-                            <TextBlock Text="{Binding SelectedFolder.DisplayName, FallbackValue='메일'}"
+                            <!-- 검색 모드 아이콘 -->
+                            <ui:SymbolIcon Symbol="Search24" FontSize="20" Margin="0,0,8,0"
+                                           Visibility="{Binding IsSearchMode, Converter={StaticResource BoolToVisibilityConverter}}"/>
+                            <!-- 기본 메일 아이콘 -->
+                            <ui:SymbolIcon Symbol="Mail24" FontSize="20" Margin="0,0,8,0"
+                                           Visibility="{Binding IsSearchMode, Converter={StaticResource BoolToVisibilityConverter}, ConverterParameter=Invert}"/>
+                            <!-- 검색 모드: 검색 결과 -->
+                            <TextBlock Text="검색 결과"
                                        FontSize="16" FontWeight="SemiBold"
-                                       VerticalAlignment="Center"/>
-                            <!-- 검색 모드 표시 -->
-                            <TextBlock Text=" - 검색 결과" FontSize="14" FontWeight="Normal"
-                                       Foreground="{DynamicResource TextFillColorSecondaryBrush}"
                                        VerticalAlignment="Center"
                                        Visibility="{Binding IsSearchMode, Converter={StaticResource BoolToVisibilityConverter}}"/>
+                            <!-- 일반 모드: 폴더 이름 -->
+                            <TextBlock Text="{Binding SelectedFolder.DisplayName, FallbackValue='메일'}"
+                                       FontSize="16" FontWeight="SemiBold"
+                                       VerticalAlignment="Center"
+                                       Visibility="{Binding IsSearchMode, Converter={StaticResource BoolToVisibilityConverter}, ConverterParameter=Invert}"/>
                         </StackPanel>
 
                         <!-- 새 메일 / 새로고침 / AI분석 / 메일동기화 버튼 -->
@@ -944,113 +1190,142 @@
                                        Width="34" Height="34"
                                        Padding="0"
                                        Margin="0,0,4,0"/>
-                            <!-- AI 분석 버튼 (일시정지 시 빨간 슬래시 오버레이) -->
-                            <ui:Button Command="{Binding ToggleAISyncCommand}"
+                            <!-- AI 분석 버튼 (진행중: 노란색 별 깜빡임, 중지중: 회색 고정) -->
+                            <ui:Button x:Name="AISyncButton"
+                                       Command="{Binding ToggleAISyncCommand}"
                                        ToolTip="{Binding AISyncButtonTooltip}"
                                        Appearance="Secondary"
                                        Width="34" Height="34"
                                        Padding="0"
                                        Margin="0,0,4,0">
                                 <Grid>
-                                    <TextBlock Text="🤖" FontSize="14" HorizontalAlignment="Center" VerticalAlignment="Center"/>
-                                    <!-- 일시정지 상태일 때 빨간 슬래시 오버레이 -->
-                                    <TextBlock Text="/" FontSize="20" FontWeight="Bold" Foreground="#FF4444"
-                                               HorizontalAlignment="Center" VerticalAlignment="Center"
-                                               Margin="0,-2,0,0"
-                                               Visibility="{Binding IsAISyncPaused, Converter={StaticResource BoolToVisibilityConverter}}"/>
+                                    <!-- 진행중일 때: 노란색 별 3개 (Grid 레이아웃, 패널 헤더와 동일) -->
+                                    <Grid HorizontalAlignment="Center" VerticalAlignment="Center" Margin="0,2,0,0"
+                                          Visibility="{Binding IsAISyncPaused, Converter={StaticResource BoolToVisibilityConverter}, ConverterParameter=Invert}">
+                                        <TextBlock Text="✦" FontSize="12" Foreground="#FFD700" Margin="0,0,0,0">
+                                            <TextBlock.Style>
+                                                <Style TargetType="TextBlock">
+                                                    <Style.Triggers>
+                                                        <EventTrigger RoutedEvent="Loaded">
+                                                            <BeginStoryboard>
+                                                                <Storyboard RepeatBehavior="Forever">
+                                                                    <DoubleAnimation Storyboard.TargetProperty="Opacity"
+                                                                                     From="1" To="0.3" Duration="0:0:0.8"
+                                                                                     AutoReverse="True"/>
+                                                                </Storyboard>
+                                                            </BeginStoryboard>
+                                                        </EventTrigger>
+                                                    </Style.Triggers>
+                                                </Style>
+                                            </TextBlock.Style>
+                                        </TextBlock>
+                                        <TextBlock Text="✦" FontSize="8" Foreground="#FFC125" Margin="6,-5,0,0">
+                                            <TextBlock.Style>
+                                                <Style TargetType="TextBlock">
+                                                    <Style.Triggers>
+                                                        <EventTrigger RoutedEvent="Loaded">
+                                                            <BeginStoryboard>
+                                                                <Storyboard RepeatBehavior="Forever" BeginTime="0:0:0.2">
+                                                                    <DoubleAnimation Storyboard.TargetProperty="Opacity"
+                                                                                     From="1" To="0.3" Duration="0:0:0.5"
+                                                                                     AutoReverse="True"/>
+                                                                </Storyboard>
+                                                            </BeginStoryboard>
+                                                        </EventTrigger>
+                                                    </Style.Triggers>
+                                                </Style>
+                                            </TextBlock.Style>
+                                        </TextBlock>
+                                        <TextBlock Text="✦" FontSize="6" Foreground="#FFDF00" Margin="10,3,0,0">
+                                            <TextBlock.Style>
+                                                <Style TargetType="TextBlock">
+                                                    <Style.Triggers>
+                                                        <EventTrigger RoutedEvent="Loaded">
+                                                            <BeginStoryboard>
+                                                                <Storyboard RepeatBehavior="Forever" BeginTime="0:0:0.4">
+                                                                    <DoubleAnimation Storyboard.TargetProperty="Opacity"
+                                                                                     From="1" To="0.3" Duration="0:0:0.3"
+                                                                                     AutoReverse="True"/>
+                                                                </Storyboard>
+                                                            </BeginStoryboard>
+                                                        </EventTrigger>
+                                                    </Style.Triggers>
+                                                </Style>
+                                            </TextBlock.Style>
+                                        </TextBlock>
+                                    </Grid>
+                                    <!-- 중지중일 때: 회색 별 3개 (애니메이션 없음, Grid 레이아웃) -->
+                                    <Grid HorizontalAlignment="Center" VerticalAlignment="Center" Margin="0,2,0,0"
+                                          Visibility="{Binding IsAISyncPaused, Converter={StaticResource BoolToVisibilityConverter}}">
+                                        <TextBlock Text="✦" FontSize="12" Foreground="#888888" Margin="0,0,0,0"/>
+                                        <TextBlock Text="✦" FontSize="8" Foreground="#999999" Margin="6,-5,0,0"/>
+                                        <TextBlock Text="✦" FontSize="6" Foreground="#AAAAAA" Margin="10,3,0,0"/>
+                                    </Grid>
                                 </Grid>
                             </ui:Button>
-                            <ui:Button Content="{Binding SyncButtonIcon}"
+                            <!-- 메일 동기화 버튼 (동기화중: 편지 꺼내기 애니메이션, 중지중: 회색 고정) -->
+                            <ui:Button x:Name="SyncButton"
                                        Command="{Binding ToggleSyncCommand}"
                                        ToolTip="{Binding SyncButtonTooltip}"
                                        Appearance="Secondary"
-                                       FontSize="12"
                                        Width="34" Height="34"
-                                       Padding="0"/>
+                                       Padding="0">
+                                <Grid>
+                                    <!-- 동기화 중일 때: 열린 편지 + 나가는 문서 애니메이션 -->
+                                    <Grid HorizontalAlignment="Center" VerticalAlignment="Center"
+                                          Visibility="{Binding IsSyncPaused, Converter={StaticResource BoolToVisibilityConverter}, ConverterParameter=Invert}">
+                                        <!-- 열린 편지봉투 (MailRead) -->
+                                        <ui:SymbolIcon Symbol="MailRead24" FontSize="14" Foreground="#2196F3"/>
+                                        <!-- 위로 날아가는 문서 -->
+                                        <TextBlock Text="📄" FontSize="8" HorizontalAlignment="Center" RenderTransformOrigin="0.5,0.5">
+                                            <TextBlock.RenderTransform>
+                                                <TranslateTransform x:Name="DocTranslate"/>
+                                            </TextBlock.RenderTransform>
+                                            <TextBlock.Style>
+                                                <Style TargetType="TextBlock">
+                                                    <Style.Triggers>
+                                                        <EventTrigger RoutedEvent="Loaded">
+                                                            <BeginStoryboard>
+                                                                <Storyboard RepeatBehavior="Forever">
+                                                                    <!-- 위로 이동 (1.5초 주기) -->
+                                                                    <DoubleAnimationUsingKeyFrames Storyboard.TargetProperty="(UIElement.RenderTransform).(TranslateTransform.Y)">
+                                                                        <EasingDoubleKeyFrame KeyTime="0:0:0" Value="2"/>
+                                                                        <EasingDoubleKeyFrame KeyTime="0:0:1.0" Value="-10">
+                                                                            <EasingDoubleKeyFrame.EasingFunction>
+                                                                                <QuadraticEase EasingMode="EaseOut"/>
+                                                                            </EasingDoubleKeyFrame.EasingFunction>
+                                                                        </EasingDoubleKeyFrame>
+                                                                        <EasingDoubleKeyFrame KeyTime="0:0:1.5" Value="2"/>
+                                                                    </DoubleAnimationUsingKeyFrames>
+                                                                    <!-- 투명도 -->
+                                                                    <DoubleAnimationUsingKeyFrames Storyboard.TargetProperty="Opacity">
+                                                                        <DiscreteDoubleKeyFrame KeyTime="0:0:0" Value="0"/>
+                                                                        <EasingDoubleKeyFrame KeyTime="0:0:0.2" Value="1"/>
+                                                                        <EasingDoubleKeyFrame KeyTime="0:0:0.8" Value="1"/>
+                                                                        <EasingDoubleKeyFrame KeyTime="0:0:1.0" Value="0"/>
+                                                                        <DiscreteDoubleKeyFrame KeyTime="0:0:1.5" Value="0"/>
+                                                                    </DoubleAnimationUsingKeyFrames>
+                                                                </Storyboard>
+                                                            </BeginStoryboard>
+                                                        </EventTrigger>
+                                                    </Style.Triggers>
+                                                </Style>
+                                            </TextBlock.Style>
+                                        </TextBlock>
+                                    </Grid>
+                                    <!-- 중지 중일 때: 회색 닫힌 편지 아이콘 -->
+                                    <Grid HorizontalAlignment="Center" VerticalAlignment="Center"
+                                          Visibility="{Binding IsSyncPaused, Converter={StaticResource BoolToVisibilityConverter}}">
+                                        <ui:SymbolIcon Symbol="Mail24" FontSize="14" Foreground="#888888"/>
+                                    </Grid>
+                                </Grid>
+                            </ui:Button>
                         </StackPanel>
                     </Grid>
                 </Border>
 
-                <!-- 검색바 (Row 1) -->
-                <Border Grid.Row="1" Padding="16,0,16,8">
-                    <Grid>
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="*"/>
-                            <ColumnDefinition Width="Auto"/>
-                        </Grid.ColumnDefinitions>
-
-                        <!-- 검색 입력 -->
-                        <ui:TextBox x:Name="SearchTextBox"
-                                    Grid.Column="0"
-                                    PlaceholderText="메일 검색... (제목, 본문, 발신자)"
-                                    Text="{Binding SearchKeyword, UpdateSourceTrigger=PropertyChanged}"
-                                    Icon="{ui:SymbolIcon Search24}"
-                                    Height="36"
-                                    Margin="0,0,8,0"
-                                    KeyDown="SearchTextBox_KeyDown"/>
-
-                        <!-- 검색/필터 버튼 -->
-                        <StackPanel Grid.Column="1" Orientation="Horizontal">
-                            <ui:Button Icon="{ui:SymbolIcon Search24}"
-                                       Command="{Binding SearchCommand}"
-                                       ToolTip="검색"
-                                       Appearance="Primary"
-                                       Width="36" Height="36"
-                                       Padding="0"
-                                       Margin="0,0,4,0"/>
-                            <ui:Button Icon="{ui:SymbolIcon Filter24}"
-                                       Command="{Binding ToggleFilterPanelCommand}"
-                                       ToolTip="필터"
-                                       Appearance="Secondary"
-                                       Width="36" Height="36"
-                                       Padding="0"
-                                       Margin="0,0,4,0"/>
-                            <ui:Button Icon="{ui:SymbolIcon Dismiss24}"
-                                       Command="{Binding ClearSearchCommand}"
-                                       ToolTip="검색 초기화"
-                                       Appearance="Secondary"
-                                       Width="36" Height="36"
-                                       Padding="0"
-                                       Visibility="{Binding IsSearchMode, Converter={StaticResource BoolToVisibilityConverter}}"/>
-                        </StackPanel>
-                    </Grid>
-                </Border>
-
-                <!-- 필터 패널 (Row 2) -->
-                <Border Grid.Row="2" Padding="16,0,16,8"
-                        Visibility="{Binding IsFilterPanelVisible, Converter={StaticResource BoolToVisibilityConverter}}">
-                    <Border Background="{DynamicResource SubtleFillColorSecondaryBrush}"
-                            CornerRadius="8" Padding="12">
-                        <Grid>
-                            <Grid.RowDefinitions>
-                                <RowDefinition Height="Auto"/>
-                                <RowDefinition Height="Auto"/>
-                            </Grid.RowDefinitions>
-
-                            <!-- 체크박스 필터 (수직 배치로 변경 - 좁은 화면 대응) -->
-                            <StackPanel Grid.Row="0" Orientation="Vertical" Margin="0,0,0,8">
-                                <CheckBox Content="읽지않음만" IsChecked="{Binding FilterUnreadOnly}" Margin="0,0,0,4"/>
-                                <CheckBox Content="첨부파일 있음" IsChecked="{Binding FilterHasAttachments}" Margin="0,0,0,4"/>
-                                <CheckBox Content="플래그됨" IsChecked="{Binding FilterFlaggedOnly}" Margin="0"/>
-                            </StackPanel>
-
-                            <!-- 날짜 필터 (수직 배치) -->
-                            <StackPanel Grid.Row="1" Orientation="Vertical">
-                                <StackPanel Orientation="Horizontal" Margin="0,0,0,4">
-                                    <TextBlock Text="시작일:" VerticalAlignment="Center" FontSize="11" Width="45"/>
-                                    <DatePicker SelectedDate="{Binding FilterFromDate}" Width="120"/>
-                                </StackPanel>
-                                <StackPanel Orientation="Horizontal">
-                                    <TextBlock Text="종료일:" VerticalAlignment="Center" FontSize="11" Width="45"/>
-                                    <DatePicker SelectedDate="{Binding FilterToDate}" Width="120"/>
-                                </StackPanel>
-                            </StackPanel>
-                        </Grid>
-                    </Border>
-                </Border>
-
-                <!-- 정렬/뷰 토글 바 (Row 3 위에 추가되는 부분) - 아웃룩 스타일 -->
-                <Border Grid.Row="3" VerticalAlignment="Top" Padding="12,4,12,4"
+                <!-- 정렬/뷰 토글 바 (Row 1) - 아웃룩 스타일 -->
+                <Border Grid.Row="1" VerticalAlignment="Top" Padding="12,4,12,4"
                         Background="{DynamicResource SubtleFillColorTertiaryBrush}">
                     <Grid>
                         <Grid.ColumnDefinitions>
@@ -1128,7 +1403,7 @@
                 </Border>
 
                 <!-- 메일 리스트 -->
-                <ListBox Grid.Row="3"
+                <ListBox Grid.Row="1"
                          x:Name="EmailListBox"
                          Margin="0,36,0,0"
                          ItemsSource="{Binding Emails}"
@@ -1206,6 +1481,28 @@
                                 </MenuItem.Template>
                             </MenuItem>
                             <MenuItem Click="EmailForward_Click" Header="➡️ 전달"
+                                      Foreground="{DynamicResource TextFillColorPrimaryBrush}">
+                                <MenuItem.Template>
+                                    <ControlTemplate TargetType="MenuItem">
+                                        <Border x:Name="Border"
+                                                Background="Transparent"
+                                                CornerRadius="4"
+                                                Padding="12,8">
+                                            <TextBlock Text="{TemplateBinding Header}"
+                                                       Foreground="{DynamicResource TextFillColorPrimaryBrush}"/>
+                                        </Border>
+                                        <ControlTemplate.Triggers>
+                                            <Trigger Property="IsHighlighted" Value="True">
+                                                <Setter TargetName="Border" Property="Background"
+                                                        Value="{DynamicResource SubtleFillColorSecondaryBrush}"/>
+                                            </Trigger>
+                                        </ControlTemplate.Triggers>
+                                    </ControlTemplate>
+                                </MenuItem.Template>
+                            </MenuItem>
+                            <Separator Background="{DynamicResource ControlElevationBorderBrush}" Margin="8,4"/>
+                            <!-- 핀고정 메뉴 -->
+                            <MenuItem Click="EmailTogglePin_Click" Header="📌 고정/해제"
                                       Foreground="{DynamicResource TextFillColorPrimaryBrush}">
                                 <MenuItem.Template>
                                     <ControlTemplate TargetType="MenuItem">
@@ -1421,6 +1718,12 @@
 
                                     <!-- 아이콘 영역 -->
                                     <StackPanel Grid.Column="1" Orientation="Vertical" VerticalAlignment="Center" Margin="0,0,6,0">
+                                        <!-- 고정(Pin) 아이콘 -->
+                                        <ui:SymbolIcon Symbol="Pin24"
+                                                       FontSize="14"
+                                                       Foreground="{DynamicResource AccentFillColorDefaultBrush}"
+                                                       ToolTip="고정됨"
+                                                       Visibility="{Binding IsPinned, Converter={StaticResource BoolToVisibilityConverter}}"/>
                                         <!-- 중요도 높음 아이콘 -->
                                         <ui:SymbolIcon Symbol="Important24"
                                                        FontSize="14"
@@ -1505,14 +1808,13 @@
                                                        TextTrimming="CharacterEllipsis"
                                                        Visibility="{Binding SummaryOneline, Converter={StaticResource NullToVisibilityConverter}}"/>
 
-                                            <!-- AI 분석 완료 아이콘 -->
-                                            <ui:SymbolIcon Grid.Column="1"
-                                                           Symbol="Brain24"
-                                                           FontSize="12"
-                                                           Foreground="{DynamicResource SystemAccentColorPrimaryBrush}"
-                                                           ToolTip="AI 분석 완료"
-                                                           Margin="4,0,0,0"
-                                                           Visibility="{Binding AnalysisStatus, Converter={StaticResource StringEqualsToVisibilityConverter}, ConverterParameter=completed}"/>
+                                            <!-- AI 분석 완료 아이콘 (✨ 이모지 모티프) -->
+                                            <TextBlock Grid.Column="1"
+                                                       Text="✨"
+                                                       FontSize="12"
+                                                       ToolTip="AI 분석 완료"
+                                                       Margin="4,0,0,0"
+                                                       Visibility="{Binding AnalysisStatus, Converter={StaticResource StringEqualsToVisibilityConverter}, ConverterParameter=completed}"/>
                                         </Grid>
                                     </Grid>
                                 </Grid>
@@ -1601,15 +1903,16 @@
                                    Click="DeleteButton_Click">
                             <ui:SymbolIcon Symbol="Delete24" FontSize="16"/>
                         </ui:Button>
-                        <!-- 플래그 버튼 -->
+                        <!-- 플래그 버튼 (상태 기반 하이라이팅) -->
                         <ui:Button x:Name="FlagButton"
                                    ToolTip="플래그 설정/해제"
-                                   Appearance="Secondary"
+                                   Appearance="{Binding SelectedEmail.FlagStatus, Converter={StaticResource FlagStatusToAppearanceConverter}}"
                                    Width="36" Height="36"
                                    Padding="0"
                                    Margin="0,0,4,0"
                                    Click="FlagButton_Click">
-                            <ui:SymbolIcon Symbol="Flag24" FontSize="16"/>
+                            <ui:SymbolIcon Symbol="Flag24" FontSize="16"
+                                           Foreground="{Binding SelectedEmail.FlagStatus, Converter={StaticResource BoolToForegroundConverter}}"/>
                         </ui:Button>
                         <!-- 읽음/안읽음 토글 버튼 -->
                         <ui:Button x:Name="ReadUnreadButton"
@@ -1617,8 +1920,19 @@
                                    Appearance="Secondary"
                                    Width="36" Height="36"
                                    Padding="0"
+                                   Margin="0,0,4,0"
                                    Click="ReadUnreadButton_Click">
                             <ui:SymbolIcon Symbol="MailRead24" FontSize="16"/>
+                        </ui:Button>
+                        <!-- 고정(Pin) 버튼 (상태 기반 하이라이팅) -->
+                        <ui:Button x:Name="PinButton"
+                                   ToolTip="고정/해제"
+                                   Appearance="{Binding SelectedEmail.IsPinned, Converter={StaticResource BoolToAppearanceConverter}}"
+                                   Width="36" Height="36"
+                                   Padding="0"
+                                   Command="{Binding TogglePinnedCommand}">
+                            <ui:SymbolIcon Symbol="Pin24" FontSize="16"
+                                           Foreground="{Binding SelectedEmail.IsPinned, Converter={StaticResource BoolToForegroundConverter}}"/>
                         </ui:Button>
                     </StackPanel>
 
@@ -2003,7 +2317,63 @@
                         BorderBrush="{DynamicResource ControlElevationBorderBrush}"
                         BorderThickness="0,0,0,1">
                     <StackPanel Orientation="Horizontal">
-                        <ui:SymbolIcon Symbol="Brain24" FontSize="20" Margin="0,0,8,0"/>
+                        <!-- 반짝이는 ✨ 아이콘 (3개 별, 각기 다른 노란색, 크기에 반비례하는 속도) -->
+                        <Grid Margin="0,3,8,0" VerticalAlignment="Center">
+                            <!-- 큰 별 (골드, 느린 속도 0.8초) -->
+                            <TextBlock Text="✦" FontSize="14" Foreground="#FFD700" Margin="0,0,0,0">
+                                <TextBlock.Style>
+                                    <Style TargetType="TextBlock">
+                                        <Style.Triggers>
+                                            <EventTrigger RoutedEvent="Loaded">
+                                                <BeginStoryboard>
+                                                    <Storyboard RepeatBehavior="Forever">
+                                                        <DoubleAnimation Storyboard.TargetProperty="Opacity"
+                                                                         From="1" To="0.3" Duration="0:0:0.8"
+                                                                         AutoReverse="True"/>
+                                                    </Storyboard>
+                                                </BeginStoryboard>
+                                            </EventTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </TextBlock.Style>
+                            </TextBlock>
+                            <!-- 중간 별 (황금색, 중간 속도 0.5초) -->
+                            <TextBlock Text="✦" FontSize="10" Foreground="#FFC125" Margin="8,-6,0,0">
+                                <TextBlock.Style>
+                                    <Style TargetType="TextBlock">
+                                        <Style.Triggers>
+                                            <EventTrigger RoutedEvent="Loaded">
+                                                <BeginStoryboard>
+                                                    <Storyboard RepeatBehavior="Forever" BeginTime="0:0:0.2">
+                                                        <DoubleAnimation Storyboard.TargetProperty="Opacity"
+                                                                         From="1" To="0.3" Duration="0:0:0.5"
+                                                                         AutoReverse="True"/>
+                                                    </Storyboard>
+                                                </BeginStoryboard>
+                                            </EventTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </TextBlock.Style>
+                            </TextBlock>
+                            <!-- 작은 별 (카나리아, 빠른 속도 0.3초) -->
+                            <TextBlock Text="✦" FontSize="7" Foreground="#FFDF00" Margin="12,4,0,0">
+                                <TextBlock.Style>
+                                    <Style TargetType="TextBlock">
+                                        <Style.Triggers>
+                                            <EventTrigger RoutedEvent="Loaded">
+                                                <BeginStoryboard>
+                                                    <Storyboard RepeatBehavior="Forever" BeginTime="0:0:0.4">
+                                                        <DoubleAnimation Storyboard.TargetProperty="Opacity"
+                                                                         From="1" To="0.3" Duration="0:0:0.3"
+                                                                         AutoReverse="True"/>
+                                                    </Storyboard>
+                                                </BeginStoryboard>
+                                            </EventTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </TextBlock.Style>
+                            </TextBlock>
+                        </Grid>
                         <TextBlock Text="AI 분석"
                                    FontSize="16"
                                    FontWeight="SemiBold"
@@ -2085,34 +2455,19 @@
                 Background="{DynamicResource ControlOnImageFillColorDefaultBrush}"
                 BorderBrush="{DynamicResource ControlElevationBorderBrush}"
                 BorderThickness="1,0,0,0">
-            <Grid>
-                <Grid.RowDefinitions>
-                    <RowDefinition Height="Auto"/>
-                    <RowDefinition Height="*"/>
-                </Grid.RowDefinitions>
+            <TabControl x:Name="CalendarTabControl">
+                <!-- 일정 탭 -->
+                <TabItem Header="일정">
+                    <Grid>
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="*"/>
+                        </Grid.RowDefinitions>
 
-                <!-- 캘린더 패널 헤더 -->
-                <Border Grid.Row="0"
-                        Padding="16,12"
-                        BorderBrush="{DynamicResource ControlElevationBorderBrush}"
-                        BorderThickness="0,0,0,1">
-                    <StackPanel Orientation="Horizontal">
-                        <ui:SymbolIcon Symbol="CalendarLtr24" FontSize="20" Margin="0,0,8,0"/>
-                        <TextBlock x:Name="CalDetailHeaderText"
-                                   Text="일정 상세"
-                                   FontSize="16"
-                                   FontWeight="SemiBold"
-                                   VerticalAlignment="Center"/>
-                    </StackPanel>
-                </Border>
-
-                <!-- 캘린더 세부 내용 -->
-                <ScrollViewer Grid.Row="1"
-                              Padding="16"
-                              VerticalScrollBarVisibility="Auto">
-                    <StackPanel x:Name="CalendarDetailContent">
-                        <!-- 선택된 날짜 표시 -->
-                        <Border Margin="0,0,0,16">
+                        <!-- 날짜 헤더 -->
+                        <Border Grid.Row="0" Padding="16,12"
+                                BorderBrush="{DynamicResource ControlElevationBorderBrush}"
+                                BorderThickness="0,0,0,1">
                             <StackPanel>
                                 <TextBlock x:Name="CalDetailDateText"
                                            Text="2026년 1월 17일"
@@ -2126,7 +2481,12 @@
                             </StackPanel>
                         </Border>
 
-                        <!-- 일정 목록 헤더 -->
+                        <!-- 캘린더 세부 내용 -->
+                        <ScrollViewer Grid.Row="1"
+                                      Padding="16"
+                                      VerticalScrollBarVisibility="Auto">
+                            <StackPanel x:Name="CalendarDetailContent">
+                                <!-- 일정 목록 헤더 -->
                         <Border Margin="0,0,0,12">
                             <Grid>
                                 <Grid.ColumnDefinitions>
@@ -2187,16 +2547,71 @@
                                     <TextBlock x:Name="CalDetailWeekTotalText"
                                                Grid.Column="1" Text="0건" FontWeight="SemiBold"/>
                                 </Grid>
+                                </StackPanel>
+                            </Border>
                             </StackPanel>
+                        </ScrollViewer>
+                    </Grid>
+                </TabItem>
+
+                <!-- TODO 탭 -->
+                <TabItem Header="To Do">
+                    <Grid>
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="*"/>
+                        </Grid.RowDefinitions>
+
+                        <!-- TODO 헤더 -->
+                        <Border Grid.Row="0" Padding="16,12"
+                                BorderBrush="{DynamicResource ControlElevationBorderBrush}"
+                                BorderThickness="0,0,0,1">
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                </Grid.ColumnDefinitions>
+                                <StackPanel Grid.Column="0" Orientation="Horizontal">
+                                    <ui:SymbolIcon Symbol="TaskListLtr24" FontSize="20" Margin="0,0,8,0"/>
+                                    <TextBlock Text="할 일 목록"
+                                               FontSize="16"
+                                               FontWeight="SemiBold"
+                                               VerticalAlignment="Center"/>
+                                </StackPanel>
+                                <ui:Button Grid.Column="1"
+                                           Appearance="Secondary"
+                                           ToolTip="새 할 일 추가"
+                                           Width="28" Height="28"
+                                           Padding="0"
+                                           Click="AddTodoButton_Click">
+                                    <ui:SymbolIcon Symbol="Add24" FontSize="14"/>
+                                </ui:Button>
+                            </Grid>
                         </Border>
-                    </StackPanel>
-                </ScrollViewer>
-            </Grid>
+
+                        <!-- TODO 목록 -->
+                        <ScrollViewer Grid.Row="1"
+                                      Padding="16"
+                                      VerticalScrollBarVisibility="Auto">
+                            <StackPanel x:Name="TodoListContent">
+                                <!-- TODO 항목 없을 때 -->
+                                <TextBlock x:Name="NoTodoText"
+                                           Text="할 일이 없습니다."
+                                           FontSize="12"
+                                           Foreground="{DynamicResource TextFillColorTertiaryBrush}"
+                                           HorizontalAlignment="Center"
+                                           Margin="0,32"/>
+                                <!-- TODO 항목들이 동적으로 추가됨 -->
+                            </StackPanel>
+                        </ScrollViewer>
+                    </Grid>
+                </TabItem>
+            </TabControl>
         </Border>
         </Grid>
 
-        <!-- ========== 하단 상태바 (Row 3) - 7컬럼 구조로 메인 콘텐츠와 동기화 ========== -->
-        <Border Grid.Row="3"
+        <!-- ========== 하단 상태바 (Row 2) - 7컬럼 구조로 메인 콘텐츠와 동기화 ========== -->
+        <Border Grid.Row="2"
                 Background="{DynamicResource ControlFillColorDefaultBrush}"
                 BorderBrush="{DynamicResource ControlElevationBorderBrush}"
                 BorderThickness="0,1,0,0"

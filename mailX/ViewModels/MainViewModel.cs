@@ -1100,6 +1100,143 @@ public partial class MainViewModel : ViewModelBase
     [ObservableProperty]
     private DateTime? _filterToDate;
 
+    #region 고급 검색
+
+    /// <summary>
+    /// 고급 검색: 발신자
+    /// </summary>
+    [ObservableProperty]
+    private string _advancedSearchFrom = string.Empty;
+
+    /// <summary>
+    /// 고급 검색: 수신자
+    /// </summary>
+    [ObservableProperty]
+    private string _advancedSearchTo = string.Empty;
+
+    /// <summary>
+    /// 고급 검색: 제목
+    /// </summary>
+    [ObservableProperty]
+    private string _advancedSearchSubject = string.Empty;
+
+    /// <summary>
+    /// 고급 검색: 본문
+    /// </summary>
+    [ObservableProperty]
+    private string _advancedSearchBody = string.Empty;
+
+    /// <summary>
+    /// 고급 검색: 시작 날짜
+    /// </summary>
+    [ObservableProperty]
+    private DateTime? _advancedSearchDateFrom;
+
+    /// <summary>
+    /// 고급 검색: 종료 날짜
+    /// </summary>
+    [ObservableProperty]
+    private DateTime? _advancedSearchDateTo;
+
+    /// <summary>
+    /// 고급 검색: 첨부파일 여부
+    /// </summary>
+    [ObservableProperty]
+    private bool _advancedSearchHasAttachment;
+
+    /// <summary>
+    /// 검색 대상 폴더
+    /// </summary>
+    [ObservableProperty]
+    private Folder? _searchTargetFolder;
+
+    /// <summary>
+    /// 검색 폴더 옵션 (모든 폴더, 기본 폴더들, 사용자 폴더)
+    /// </summary>
+    [ObservableProperty]
+    private ObservableCollection<SearchFolderItem> _searchFolderOptions = new();
+
+    /// <summary>
+    /// 선택된 검색 폴더 옵션
+    /// </summary>
+    [ObservableProperty]
+    private SearchFolderItem? _selectedSearchFolderOption;
+
+    /// <summary>
+    /// 검색 폴더 옵션 초기화
+    /// </summary>
+    public void InitializeSearchFolderOptions()
+    {
+        SearchFolderOptions.Clear();
+
+        // 기본 옵션
+        SearchFolderOptions.Add(new SearchFolderItem { FolderId = null, DisplayName = "모든 폴더", Icon = "📂" });
+        SearchFolderOptions.Add(new SearchFolderItem { FolderId = "inbox", DisplayName = "받은 편지함", Icon = "📥" });
+        SearchFolderOptions.Add(new SearchFolderItem { FolderId = "drafts", DisplayName = "임시 보관함", Icon = "📝" });
+        SearchFolderOptions.Add(new SearchFolderItem { FolderId = "sentitems", DisplayName = "보낸 편지함", Icon = "📤" });
+        SearchFolderOptions.Add(new SearchFolderItem { FolderId = "outbox", DisplayName = "보낼 편지함", Icon = "📮" });
+        SearchFolderOptions.Add(new SearchFolderItem { FolderId = "deleteditems", DisplayName = "지운 편지함", Icon = "🗑️" });
+        SearchFolderOptions.Add(new SearchFolderItem { FolderId = "archive", DisplayName = "보관", Icon = "📦" });
+        SearchFolderOptions.Add(new SearchFolderItem { FolderId = "junkemail", DisplayName = "정크 메일", Icon = "🚫" });
+
+        // 기본 선택: 모든 폴더
+        SelectedSearchFolderOption = SearchFolderOptions.FirstOrDefault();
+    }
+
+    partial void OnSelectedSearchFolderOptionChanged(SearchFolderItem? value)
+    {
+        if (value != null && value.Folder != null)
+        {
+            SearchTargetFolder = value.Folder;
+        }
+        else
+        {
+            SearchTargetFolder = null;
+        }
+    }
+
+    /// <summary>
+    /// 고급 검색 실행
+    /// </summary>
+    [RelayCommand]
+    private async Task ExecuteAdvancedSearchAsync()
+    {
+        Log4.Info("고급 검색 실행");
+
+        // 고급 검색 필드를 기본 필터로 적용
+        if (!string.IsNullOrWhiteSpace(AdvancedSearchFrom))
+            SearchKeyword = $"from:{AdvancedSearchFrom}";
+        else if (!string.IsNullOrWhiteSpace(AdvancedSearchSubject))
+            SearchKeyword = AdvancedSearchSubject;
+        else if (!string.IsNullOrWhiteSpace(AdvancedSearchBody))
+            SearchKeyword = AdvancedSearchBody;
+
+        FilterFromDate = AdvancedSearchDateFrom;
+        FilterToDate = AdvancedSearchDateTo;
+        FilterHasAttachments = AdvancedSearchHasAttachment;
+
+        await SearchAsync();
+    }
+
+    /// <summary>
+    /// 고급 검색 초기화
+    /// </summary>
+    [RelayCommand]
+    private void ClearAdvancedSearch()
+    {
+        Log4.Info("고급 검색 초기화");
+        AdvancedSearchFrom = string.Empty;
+        AdvancedSearchTo = string.Empty;
+        AdvancedSearchSubject = string.Empty;
+        AdvancedSearchBody = string.Empty;
+        AdvancedSearchDateFrom = null;
+        AdvancedSearchDateTo = null;
+        AdvancedSearchHasAttachment = false;
+        SearchTargetFolder = null;
+    }
+
+    #endregion
+
     /// <summary>
     /// 필터 패널 토글
     /// </summary>
@@ -1128,10 +1265,35 @@ public partial class MainViewModel : ViewModelBase
             IsSearchMode = true;
             StatusMessage = "검색 중...";
 
+            // 검색 대상 폴더 ID 결정 (콤보박스 선택 기준)
+            string? searchFolderId = null;
+            if (SelectedSearchFolderOption != null && !string.IsNullOrEmpty(SelectedSearchFolderOption.FolderId))
+            {
+                // FolderId로 표시 이름 매핑하여 실제 폴더 찾기
+                var folderDisplayName = SelectedSearchFolderOption.FolderId switch
+                {
+                    "inbox" => "받은 편지함",
+                    "drafts" => "임시 보관함",
+                    "sentitems" => "보낸 편지함",
+                    "outbox" => "보낼 편지함",
+                    "deleteditems" => "지운 편지함",
+                    "archive" => "보관",
+                    "junkemail" => "정크 메일",
+                    _ => null
+                };
+
+                if (folderDisplayName != null)
+                {
+                    var targetFolder = await _dbContext.Folders
+                        .FirstOrDefaultAsync(f => f.DisplayName == folderDisplayName);
+                    searchFolderId = targetFolder?.Id;
+                }
+            }
+
             var query = new SearchQuery
             {
                 Keywords = SearchKeyword,
-                FolderId = SelectedFolder?.Id,
+                FolderId = searchFolderId, // 콤보박스 선택 폴더 기준
                 IsRead = FilterUnreadOnly ? false : null,
                 HasAttachments = FilterHasAttachments ? true : null,
                 FromDate = FilterFromDate,
@@ -1666,6 +1828,74 @@ public partial class MainViewModel : ViewModelBase
                 Log4.Info($"폴더 삭제: {folder.DisplayName}");
             }
         }, "폴더 삭제 실패");
+    }
+
+    /// <summary>
+    /// 메일 고정/해제 토글
+    /// </summary>
+    [RelayCommand]
+    private async Task TogglePinnedAsync(Email? email = null)
+    {
+        var targetEmail = email ?? SelectedEmail;
+        if (targetEmail == null) return;
+
+        await ExecuteAsync(async () =>
+        {
+            // Pin 상태 토글
+            targetEmail.IsPinned = !targetEmail.IsPinned;
+            targetEmail.PinnedAt = targetEmail.IsPinned ? DateTime.Now : null;
+
+            // DB 업데이트
+            var dbEmail = await _dbContext.Emails.FindAsync(targetEmail.Id);
+            if (dbEmail != null)
+            {
+                dbEmail.IsPinned = targetEmail.IsPinned;
+                dbEmail.PinnedAt = targetEmail.PinnedAt;
+                await _dbContext.SaveChangesAsync();
+            }
+
+            // 리스트 정렬 다시 적용 (고정된 메일 상단)
+            ApplySortingWithPin();
+
+            var action = targetEmail.IsPinned ? "고정" : "고정 해제";
+            StatusMessage = $"메일 {action}됨";
+            Log4.Info($"메일 {action}: {targetEmail.Subject}");
+        }, "메일 고정 상태 변경 실패");
+    }
+
+    /// <summary>
+    /// 고정된 메일을 상단에 정렬
+    /// </summary>
+    private void ApplySortingWithPin()
+    {
+        if (Emails == null || Emails.Count == 0) return;
+
+        // 고정 메일과 일반 메일 분리
+        var pinned = Emails.Where(e => e.IsPinned)
+                                  .OrderByDescending(e => e.PinnedAt)
+                                  .ToList();
+        var unpinned = Emails.Where(e => !e.IsPinned).ToList();
+
+        // 현재 정렬 기준 적용 (일반 메일에만)
+        IEnumerable<Email> sortedUnpinned = SortBy switch
+        {
+            "date_desc" => unpinned.OrderByDescending(e => e.ReceivedDateTime),
+            "date_asc" => unpinned.OrderBy(e => e.ReceivedDateTime),
+            "sender_asc" => unpinned.OrderBy(e => e.From),
+            "sender_desc" => unpinned.OrderByDescending(e => e.From),
+            "subject_asc" => unpinned.OrderBy(e => e.Subject),
+            "subject_desc" => unpinned.OrderByDescending(e => e.Subject),
+            _ => unpinned.OrderByDescending(e => e.ReceivedDateTime)
+        };
+
+        // 고정 메일 + 정렬된 일반 메일
+        var combined = pinned.Concat(sortedUnpinned).ToList();
+
+        Emails.Clear();
+        foreach (var email in combined)
+        {
+            Emails.Add(email);
+        }
     }
 
     #endregion

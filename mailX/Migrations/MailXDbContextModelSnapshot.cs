@@ -206,6 +206,9 @@ namespace mailX.Migrations
                     b.Property<string>("Body")
                         .HasColumnType("TEXT");
 
+                    b.Property<string>("Categories")
+                        .HasColumnType("TEXT");
+
                     b.Property<string>("Cc")
                         .HasColumnType("TEXT");
 
@@ -218,6 +221,10 @@ namespace mailX.Migrations
 
                     b.Property<string>("EntryId")
                         .HasMaxLength(500)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("FlagStatus")
+                        .HasMaxLength(20)
                         .HasColumnType("TEXT");
 
                     b.Property<string>("From")
@@ -236,11 +243,23 @@ namespace mailX.Migrations
                         .HasMaxLength(500)
                         .HasColumnType("TEXT");
 
+                    b.Property<bool>("IsHtml")
+                        .HasColumnType("INTEGER");
+
                     b.Property<bool>("IsNonBusiness")
                         .HasColumnType("INTEGER");
 
                     b.Property<bool>("IsRead")
                         .HasColumnType("INTEGER");
+
+                    b.Property<bool>("IsStarred")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<bool>("IsPinned")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<DateTime?>("PinnedAt")
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("Keywords")
                         .HasColumnType("TEXT");
@@ -321,6 +340,12 @@ namespace mailX.Migrations
                         .IsRequired()
                         .HasMaxLength(200)
                         .HasColumnType("TEXT");
+
+                    b.Property<int>("FavoriteOrder")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<bool>("IsFavorite")
+                        .HasColumnType("INTEGER");
 
                     b.Property<string>("ParentFolderId")
                         .HasMaxLength(500)

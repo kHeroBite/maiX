@@ -1,4 +1,6 @@
+using System.Collections.ObjectModel;
 using System.ComponentModel.DataAnnotations;
+using System.ComponentModel.DataAnnotations.Schema;
 
 namespace mailX.Models;
 
@@ -43,4 +45,32 @@ public class Folder
     [Required]
     [MaxLength(500)]
     public string AccountEmail { get; set; } = string.Empty;
+
+    /// <summary>
+    /// 하위 폴더 컬렉션 (트리 구조용, DB 비저장)
+    /// </summary>
+    [NotMapped]
+    public ObservableCollection<Folder> Children { get; set; } = new();
+
+    /// <summary>
+    /// 폴더 깊이 (트리 표시용, DB 비저장)
+    /// </summary>
+    [NotMapped]
+    public int Depth { get; set; }
+
+    /// <summary>
+    /// 확장 여부 (TreeView용, DB 비저장)
+    /// </summary>
+    [NotMapped]
+    public bool IsExpanded { get; set; } = true;
+
+    /// <summary>
+    /// 즐겨찾기 여부 (DB 저장)
+    /// </summary>
+    public bool IsFavorite { get; set; }
+
+    /// <summary>
+    /// 즐겨찾기 순서 (DB 저장, 낮을수록 위쪽)
+    /// </summary>
+    public int FavoriteOrder { get; set; }
 }

@@ -53,6 +53,21 @@ public class BackgroundSyncService : BackgroundService
     /// </summary>
     public event Action<int>? EmailsSynced;
 
+    /// <summary>
+    /// 캘린더 동기화 시작 이벤트
+    /// </summary>
+    public event Action? CalendarSyncStarted;
+
+    /// <summary>
+    /// 캘린더 동기화 진행 이벤트 (현재, 전체, 단계명)
+    /// </summary>
+    public event Action<int, int, string>? CalendarSyncProgress;
+
+    /// <summary>
+    /// 캘린더 동기화 완료 이벤트 (일정 개수 전달)
+    /// </summary>
+    public event Action<int>? CalendarSynced;
+
     public BackgroundSyncService(IServiceProvider serviceProvider)
     {
         _serviceProvider = serviceProvider ?? throw new ArgumentNullException(nameof(serviceProvider));
@@ -94,6 +109,9 @@ public class BackgroundSyncService : BackgroundService
         // 시작 시 즉시 1회 동기화
         await SyncAllAccountsAsync(stoppingToken);
 
+        // 시작 시 캘린더 동기화
+        await SyncCalendarAsync(stoppingToken);
+
         // 주기적 동기화
         using var timer = new PeriodicTimer(TimeSpan.FromMinutes(SyncIntervalMinutes));
 
@@ -113,6 +131,12 @@ public class BackgroundSyncService : BackgroundService
 
                 // 메일 동기화
                 await SyncAllAccountsAsync(stoppingToken);
+
+                // 캘린더 동기화
+                await SyncCalendarAsync(stoppingToken);
+
+                // 캘린더 알림 체크
+                await CheckCalendarRemindersAsync(stoppingToken);
             }
         }
         catch (OperationCanceledException)
@@ -186,10 +210,11 @@ public class BackgroundSyncService : BackgroundService
         var emailAnalyzer = scope.ServiceProvider.GetRequiredService<EmailAnalyzer>();
         var notificationService = scope.ServiceProvider.GetRequiredService<NotificationService>();
 
-        // DB에서 받은편지함 폴더 ID 조회 (DisplayName으로 매칭)
+        // DB에서 받은편지함 폴더 ID 조회 (시스템 Inbox 폴더 우선)
+        // "받은 편지함" (시스템) vs "#받은편지함" (커스텀) 구분
         var inboxFolder = await dbContext.Folders
             .FirstOrDefaultAsync(f => f.AccountEmail == accountEmail &&
-                (f.DisplayName.Contains("받은편지함") || f.DisplayName.ToLower() == "inbox"), ct);
+                (f.DisplayName == "받은 편지함" || f.DisplayName.ToLower() == "inbox"), ct);
 
         if (inboxFolder == null)
         {
@@ -314,6 +339,7 @@ public class BackgroundSyncService : BackgroundService
                     ConversationId = message.ConversationId,
                     Subject = message.Subject ?? "(제목 없음)",
                     Body = message.Body?.Content,
+                    IsHtml = message.Body?.ContentType == Microsoft.Graph.Models.BodyType.Html,
                     From = message.From?.EmailAddress?.Address ?? "unknown",
                     To = SerializeRecipients(message.ToRecipients),
                     Cc = SerializeRecipients(message.CcRecipients),
@@ -546,6 +572,112 @@ public class BackgroundSyncService : BackgroundService
         catch (Exception ex)
         {
             _logger.Error(ex, "폴더 동기화 실패");
+        }
+    }
+
+    /// <summary>
+    /// 캘린더 일정 동기화
+    /// Graph API에서 이번 달 + 다음 달 일정 가져오기
+    /// </summary>
+    public async Task SyncCalendarAsync(CancellationToken ct = default)
+    {
+        _logger.Information("캘린더 동기화 시작");
+
+        try
+        {
+            using var scope = _serviceProvider.CreateScope();
+            var graphAuthService = scope.ServiceProvider.GetRequiredService<GraphAuthService>();
+
+            // 로그인 상태 확인
+            if (!graphAuthService.IsLoggedIn || string.IsNullOrEmpty(graphAuthService.CurrentUserEmail))
+            {
+                _logger.Information("로그인된 계정 없음 - 캘린더 동기화 생략");
+                return;
+            }
+
+            var calendarService = scope.ServiceProvider.GetRequiredService<GraphCalendarService>();
+
+            // 동기화 시작 이벤트
+            CalendarSyncStarted?.Invoke();
+
+            // 진행 상태 알림: 1/3 - 이번 달 일정 조회
+            CalendarSyncProgress?.Invoke(1, 3, "이번 달 일정 조회 중...");
+
+            var today = DateTime.Today;
+            var firstDayThisMonth = new DateTime(today.Year, today.Month, 1);
+            var lastDayThisMonth = firstDayThisMonth.AddMonths(1).AddDays(-1);
+
+            var thisMonthEvents = await calendarService.GetEventsAsync(firstDayThisMonth, lastDayThisMonth.AddDays(1));
+            var thisMonthCount = thisMonthEvents?.Count() ?? 0;
+            _logger.Debug("이번 달 일정: {Count}건", thisMonthCount);
+
+            // 진행 상태 알림: 2/3 - 다음 달 일정 조회
+            CalendarSyncProgress?.Invoke(2, 3, "다음 달 일정 조회 중...");
+
+            var firstDayNextMonth = firstDayThisMonth.AddMonths(1);
+            var lastDayNextMonth = firstDayNextMonth.AddMonths(1).AddDays(-1);
+
+            var nextMonthEvents = await calendarService.GetEventsAsync(firstDayNextMonth, lastDayNextMonth.AddDays(1));
+            var nextMonthCount = nextMonthEvents?.Count() ?? 0;
+            _logger.Debug("다음 달 일정: {Count}건", nextMonthCount);
+
+            // 진행 상태 알림: 3/3 - 동기화 완료
+            CalendarSyncProgress?.Invoke(3, 3, "캘린더 동기화 완료");
+
+            var totalCount = thisMonthCount + nextMonthCount;
+            _logger.Information("캘린더 동기화 완료: 총 {Count}건 (이번 달 {This}건, 다음 달 {Next}건)",
+                totalCount, thisMonthCount, nextMonthCount);
+
+            // 동기화 완료 이벤트
+            CalendarSynced?.Invoke(totalCount);
+        }
+        catch (Exception ex)
+        {
+            _logger.Error(ex, "캘린더 동기화 실패");
+            CalendarSyncProgress?.Invoke(0, 0, "캘린더 동기화 실패");
+        }
+    }
+
+    /// <summary>
+    /// 캘린더 알림 체크
+    /// 임박한 일정에 대해 ntfy 푸시 알림 발송
+    /// </summary>
+    private async Task CheckCalendarRemindersAsync(CancellationToken ct = default)
+    {
+        try
+        {
+            using var scope = _serviceProvider.CreateScope();
+            var graphAuthService = scope.ServiceProvider.GetRequiredService<GraphAuthService>();
+
+            // 로그인 상태 확인
+            if (!graphAuthService.IsLoggedIn || string.IsNullOrEmpty(graphAuthService.CurrentUserEmail))
+            {
+                return;
+            }
+
+            var calendarService = scope.ServiceProvider.GetRequiredService<GraphCalendarService>();
+            var notificationService = scope.ServiceProvider.GetRequiredService<NotificationService>();
+
+            // 향후 2시간 이내 일정 조회
+            var now = DateTime.Now;
+            var until = now.AddHours(2);
+
+            _logger.Debug("캘린더 알림 체크: {Start} ~ {End}", now, until);
+
+            var events = await calendarService.GetEventsAsync(now, until);
+            if (events == null || !events.Any())
+            {
+                return;
+            }
+
+            _logger.Debug("임박한 일정 {Count}건 발견", events.Count());
+
+            // 알림 발송
+            await notificationService.CheckAndNotifyUpcomingEventsAsync(events);
+        }
+        catch (Exception ex)
+        {
+            _logger.Warning(ex, "캘린더 알림 체크 실패");
         }
     }
 

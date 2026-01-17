@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Collections.ObjectModel;
 using System.Linq;
 using System.Net;
 using System.Windows;
@@ -30,6 +31,10 @@ public partial class MainWindow : FluentWindow
     private Point _dragStartPoint;
     private Folder? _draggedFolder;
 
+    // 최근 검색어 (최대 10개)
+    private readonly ObservableCollection<string> _recentSearches = new();
+    private const int MaxRecentSearches = 10;
+
     public MainWindow(MainViewModel viewModel)
     {
         Log4.Debug("MainWindow 생성자 시작");
@@ -37,6 +42,13 @@ public partial class MainWindow : FluentWindow
         DataContext = viewModel;
 
         InitializeComponent();
+
+        // 검색 폴더 옵션 초기화
+        _viewModel.InitializeSearchFolderOptions();
+
+        // 최근 검색어 로드 및 바인딩
+        LoadRecentSearches();
+        RecentSearchItems.ItemsSource = _recentSearches;
 
         // 타이틀바 설정
         TitleBar.CloseClicked += (_, _) =>
@@ -238,12 +250,61 @@ public partial class MainWindow : FluentWindow
         // GPU 모드 체크마크 초기화
         UpdateGpuModeCheckmark();
 
+        // 동기화 기간 현재 설정 표시 초기화
+        UpdateSyncPeriodCurrentDisplay();
+
         // 자동 로그인 메뉴 상태 초기화
         InitializeAutoLoginMenu();
+
+        // 검색 자동완성 팝업 닫기를 위한 전역 클릭 이벤트
+        PreviewMouseDown += MainWindow_PreviewMouseDown;
+
+        // 윈도우 비활성화 시 팝업 닫기
+        Deactivated += (s, args) => SearchAutocompletePopup.IsOpen = false;
 
         // 폴더 목록 초기 로드
         await _viewModel.LoadFoldersCommand.ExecuteAsync(null);
         Log4.Debug("MainWindow_Loaded 완료");
+    }
+
+    /// <summary>
+    /// 전역 마우스 클릭 시 검색 자동완성 팝업 닫기
+    /// </summary>
+    private void MainWindow_PreviewMouseDown(object sender, MouseButtonEventArgs e)
+    {
+        // 검색창 또는 팝업 내부 클릭이 아니면 팝업 닫기
+        if (SearchAutocompletePopup.IsOpen)
+        {
+            var clickedElement = e.OriginalSource as DependencyObject;
+
+            // 검색창 내부 클릭인지 확인
+            if (IsDescendantOf(clickedElement, TitleBarSearchBox))
+                return;
+
+            // 팝업 내부 클릭인지 확인
+            if (IsDescendantOf(clickedElement, SearchAutocompletePopup.Child))
+                return;
+
+            SearchAutocompletePopup.IsOpen = false;
+        }
+    }
+
+    /// <summary>
+    /// 요소가 부모의 자손인지 확인
+    /// </summary>
+    private static bool IsDescendantOf(DependencyObject? element, DependencyObject? parent)
+    {
+        if (element == null || parent == null)
+            return false;
+
+        var current = element;
+        while (current != null)
+        {
+            if (current == parent)
+                return true;
+            current = VisualTreeHelper.GetParent(current) ?? LogicalTreeHelper.GetParent(current);
+        }
+        return false;
     }
 
     private void MainWindow_Closed(object? sender, System.EventArgs e)
@@ -750,10 +811,6 @@ public partial class MainWindow : FluentWindow
     {
         Log4.Info("메뉴: 동기화 일시정지 클릭");
         _viewModel.PauseSyncCommand.Execute(null);
-
-        // 메뉴 토글
-        MenuSyncPause.Visibility = Visibility.Collapsed;
-        MenuSyncResume.Visibility = Visibility.Visible;
     }
 
     /// <summary>
@@ -763,10 +820,6 @@ public partial class MainWindow : FluentWindow
     {
         Log4.Info("메뉴: 동기화 시작 클릭");
         _viewModel.ResumeSyncCommand.Execute(null);
-
-        // 메뉴 토글
-        MenuSyncResume.Visibility = Visibility.Collapsed;
-        MenuSyncPause.Visibility = Visibility.Visible;
     }
 
     /// <summary>
@@ -777,9 +830,9 @@ public partial class MainWindow : FluentWindow
         Log4.Info("메뉴: AI 분석 일시정지 클릭");
         _viewModel.PauseAISyncCommand.Execute(null);
 
-        // 메뉴 토글
-        MenuAISyncPause.Visibility = Visibility.Collapsed;
-        MenuAISyncResume.Visibility = Visibility.Visible;
+        // 타이틀바 메뉴 토글
+        MenuAISyncPause2.Visibility = Visibility.Collapsed;
+        MenuAISyncResume2.Visibility = Visibility.Visible;
     }
 
     /// <summary>
@@ -790,9 +843,9 @@ public partial class MainWindow : FluentWindow
         Log4.Info("메뉴: AI 분석 시작 클릭");
         _viewModel.ResumeAISyncCommand.Execute(null);
 
-        // 메뉴 토글
-        MenuAISyncResume.Visibility = Visibility.Collapsed;
-        MenuAISyncPause.Visibility = Visibility.Visible;
+        // 타이틀바 메뉴 토글
+        MenuAISyncResume2.Visibility = Visibility.Collapsed;
+        MenuAISyncPause2.Visibility = Visibility.Visible;
     }
 
     #endregion
@@ -956,10 +1009,8 @@ public partial class MainWindow : FluentWindow
     /// </summary>
     private void UpdateAutoLoginMenuState(bool isEnabled)
     {
-        if (MenuAutoLogin != null)
-        {
-            MenuAutoLogin.IsChecked = isEnabled;
-        }
+        // 메뉴바가 타이틀바로 이동되어 더 이상 MenuAutoLogin 컨트롤이 없음
+        // 필요시 타이틀바 메뉴에 추가
     }
 
     /// <summary>
@@ -967,9 +1018,7 @@ public partial class MainWindow : FluentWindow
     /// </summary>
     private void InitializeAutoLoginMenu()
     {
-        var loginSettings = _loginSettingsService.Load();
-        var isAutoLoginEnabled = loginSettings?.AutoLogin ?? false;
-        UpdateAutoLoginMenuState(isAutoLoginEnabled);
+        // 자동 로그인 상태는 LoginWindow에서 관리
     }
 
     #endregion
@@ -1014,8 +1063,11 @@ public partial class MainWindow : FluentWindow
     private void UpdateGpuModeCheckmark()
     {
         var isGpuMode = Services.Theme.RenderModeService.Instance.IsGpuMode;
-        // Header 텍스트에 체크마크 표시
-        MenuGpuMode.Header = isGpuMode ? "✓ GPU 모드" : "   GPU 모드";
+        // 체크마크 표시/숨김
+        if (GpuModeCheckMark != null)
+        {
+            GpuModeCheckMark.Visibility = isGpuMode ? Visibility.Visible : Visibility.Collapsed;
+        }
     }
 
     /// <summary>
@@ -1077,6 +1129,19 @@ public partial class MainWindow : FluentWindow
         _viewModel.MailSyncPeriodSettings = settings;
         Log4.Info($"메일 동기화 기간 설정: {settings.ToDisplayString()}");
         _viewModel.StatusMessage = $"메일 동기화 기간: {settings.ToDisplayString()}";
+        UpdateSyncPeriodCurrentDisplay(settings);
+    }
+
+    /// <summary>
+    /// 동기화 기간 현재 설정 표시 업데이트
+    /// </summary>
+    private void UpdateSyncPeriodCurrentDisplay(SyncPeriodSettings? settings = null)
+    {
+        settings ??= _viewModel.MailSyncPeriodSettings ?? SyncPeriodSettings.Default;
+        if (MenuSyncPeriodCurrent != null)
+        {
+            MenuSyncPeriodCurrent.Header = $"현재: {settings.ToDisplayString()}";
+        }
     }
 
     // AI 분석 기간 설정
@@ -1228,6 +1293,23 @@ public partial class MainWindow : FluentWindow
         {
             Log4.Info($"플래그 해제: {selectedEmails.Count}건");
             await _viewModel.UpdateFlagStatusAsync(selectedEmails, "notFlagged");
+        }
+    }
+
+    /// <summary>
+    /// 핀 고정/해제 토글 (컨텍스트 메뉴)
+    /// </summary>
+    private void EmailTogglePin_Click(object sender, RoutedEventArgs e)
+    {
+        var selectedEmails = EmailListBox.SelectedItems.Cast<Email>().ToList();
+        if (selectedEmails.Count > 0)
+        {
+            foreach (var email in selectedEmails)
+            {
+                email.IsPinned = !email.IsPinned;
+            }
+            _viewModel.TogglePinnedCommand.Execute(null);
+            Log4.Info($"핀 고정 토글: {selectedEmails.Count}건");
         }
     }
 
@@ -1742,7 +1824,7 @@ public partial class MainWindow : FluentWindow
         base.OnKeyDown(e);
 
         // 검색 텍스트 박스에 포커스가 있으면 단축키 처리 안함
-        if (SearchTextBox.IsFocused)
+        if (TitleBarSearchBox.IsFocused)
             return;
 
         // Ctrl 키 조합
@@ -1761,7 +1843,7 @@ public partial class MainWindow : FluentWindow
 
                 case Key.F:
                     // Ctrl+F: 검색 텍스트 박스로 포커스
-                    SearchTextBox.Focus();
+                    TitleBarSearchBox.Focus();
                     e.Handled = true;
                     break;
 
@@ -1861,26 +1943,29 @@ public partial class MainWindow : FluentWindow
     }
 
     /// <summary>
-    /// 타이틀바 설정 버튼 클릭
+    /// 타이틀바 설정 버튼 클릭 (동기화 설정으로 연결)
     /// </summary>
     private void SettingsButton_Click(object sender, RoutedEventArgs e)
     {
-        Log4.Info("타이틀바: 설정");
-        MenuApiSettings_Click(sender, e);
+        Log4.Info("타이틀바: 동기화 설정");
+        MenuSyncSettings_Click(sender, e);
     }
 
     /// <summary>
-    /// 알림 버튼 클릭
+    /// 알림 버튼 클릭 - 알림 패널 팝업 열기
     /// </summary>
     private void NotificationButton_Click(object sender, RoutedEventArgs e)
     {
-        Log4.Info("타이틀바: 알림");
-        // 알림 패널 표시 (향후 구현)
-        System.Windows.MessageBox.Show(
-            "알림 기능은 추후 구현 예정입니다.",
-            "알림",
-            System.Windows.MessageBoxButton.OK,
-            System.Windows.MessageBoxImage.Information);
+        Log4.Info("타이틀바: 알림 패널 열기");
+        NotificationPopup.IsOpen = !NotificationPopup.IsOpen;
+    }
+
+    /// <summary>
+    /// 알림 패널 닫기 버튼 클릭
+    /// </summary>
+    private void CloseNotificationPopup_Click(object sender, RoutedEventArgs e)
+    {
+        NotificationPopup.IsOpen = false;
     }
 
     /// <summary>
@@ -1890,15 +1975,86 @@ public partial class MainWindow : FluentWindow
     {
         if (e.Key == Key.Enter)
         {
+            var searchText = TitleBarSearchBox.Text?.Trim();
+            if (!string.IsNullOrEmpty(searchText))
+            {
+                AddRecentSearch(searchText);
+            }
             _viewModel.SearchCommand.Execute(null);
+            SearchAutocompletePopup.IsOpen = false;
             e.Handled = true;
         }
         else if (e.Key == Key.Escape)
         {
             _viewModel.ClearSearchCommand.Execute(null);
             TitleBarSearchBox.Text = "";
+            SearchAutocompletePopup.IsOpen = false;
             e.Handled = true;
         }
+    }
+
+    /// <summary>
+    /// 검색창 포커스 시 자동완성 팝업 열기
+    /// </summary>
+    private void TitleBarSearchBox_GotFocus(object sender, RoutedEventArgs e)
+    {
+        SearchAutocompletePopup.IsOpen = true;
+    }
+
+    /// <summary>
+    /// 검색창 포커스 해제 시 자동완성 팝업 닫기
+    /// </summary>
+    private void TitleBarSearchBox_LostFocus(object sender, RoutedEventArgs e)
+    {
+        // 포커스가 팝업 내부로 이동한 경우는 닫지 않음
+        Dispatcher.BeginInvoke(new Action(() =>
+        {
+            var focusedElement = Keyboard.FocusedElement as DependencyObject;
+            if (focusedElement != null)
+            {
+                // 포커스가 팝업 내부에 있는지 확인
+                var parent = focusedElement;
+                while (parent != null)
+                {
+                    if (parent == SearchAutocompletePopup.Child)
+                        return;
+                    parent = VisualTreeHelper.GetParent(parent);
+                }
+            }
+
+            // 검색창 자체에 포커스가 있으면 닫지 않음
+            if (TitleBarSearchBox.IsFocused || TitleBarSearchBox.IsKeyboardFocusWithin)
+                return;
+
+            SearchAutocompletePopup.IsOpen = false;
+        }), System.Windows.Threading.DispatcherPriority.Background);
+    }
+
+    /// <summary>
+    /// 검색 자동완성 뒤로가기 버튼
+    /// </summary>
+    private void SearchAutocompleteBack_Click(object sender, RoutedEventArgs e)
+    {
+        SearchAutocompletePopup.IsOpen = false;
+    }
+
+    /// <summary>
+    /// 검색 탭 클릭 (모두/메일/사람)
+    /// </summary>
+    private void SearchTab_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is not Wpf.Ui.Controls.Button clickedTab) return;
+
+        // 모든 탭 버튼을 Secondary로 변경
+        SearchTabAll.Appearance = Wpf.Ui.Controls.ControlAppearance.Secondary;
+        SearchTabMail.Appearance = Wpf.Ui.Controls.ControlAppearance.Secondary;
+        SearchTabPerson.Appearance = Wpf.Ui.Controls.ControlAppearance.Secondary;
+
+        // 클릭한 탭을 Primary로 변경
+        clickedTab.Appearance = Wpf.Ui.Controls.ControlAppearance.Primary;
+
+        // TODO: 탭에 따라 검색 결과 필터링
+        Log4.Info($"검색 탭 변경: {clickedTab.Content}");
     }
 
     /// <summary>
@@ -2658,6 +2814,16 @@ public partial class MainWindow : FluentWindow
     }
 
     /// <summary>
+    /// TODO 추가 버튼 클릭 (캘린더 패널 To Do 탭)
+    /// </summary>
+    private void AddTodoButton_Click(object sender, RoutedEventArgs e)
+    {
+        // TODO: Graph API Tasks 연동하여 할 일 추가 다이얼로그 열기
+        Log4.Info("TODO 추가 버튼 클릭");
+        _viewModel.StatusMessage = "할 일 추가 기능은 추후 지원 예정입니다.";
+    }
+
+    /// <summary>
     /// 미니 캘린더 그리드 업데이트
     /// </summary>
     private void UpdateMiniCalendarGrid()
@@ -2720,6 +2886,245 @@ public partial class MainWindow : FluentWindow
             _currentCalendarDate = date;
             UpdateCalendarDisplay();
             Log4.Info($"미니 캘린더 날짜 선택: {date:yyyy-MM-dd}");
+        }
+    }
+
+    #endregion
+
+    #region 새로운 타이틀바 기능 (테마 토글, 고급 검색, 재로그인)
+
+    /// <summary>
+    /// 테마 토글 버튼 클릭
+    /// </summary>
+    private void ThemeToggleButton_Click(object sender, RoutedEventArgs e)
+    {
+        Log4.Info("타이틀바: 테마 토글");
+        var themeService = Services.Theme.ThemeService.Instance;
+        themeService.ToggleTheme();
+        UpdateThemeIcon();
+    }
+
+    /// <summary>
+    /// 테마 아이콘 업데이트
+    /// </summary>
+    private void UpdateThemeIcon()
+    {
+        var themeService = Services.Theme.ThemeService.Instance;
+        ThemeIcon.Symbol = themeService.IsDarkMode
+            ? Wpf.Ui.Controls.SymbolRegular.WeatherMoon24
+            : Wpf.Ui.Controls.SymbolRegular.WeatherSunny24;
+    }
+
+    /// <summary>
+    /// 고급 검색 버튼 클릭
+    /// </summary>
+    private void AdvancedSearchButton_Click(object sender, RoutedEventArgs e)
+    {
+        Log4.Info("타이틀바: 고급 검색 토글");
+        AdvancedSearchPopup.IsOpen = !AdvancedSearchPopup.IsOpen;
+    }
+
+    /// <summary>
+    /// 고급 검색 실행
+    /// </summary>
+    private void AdvancedSearch_Click(object sender, RoutedEventArgs e)
+    {
+        Log4.Info("고급 검색 실행");
+        AdvancedSearchPopup.IsOpen = false;
+        _viewModel.ExecuteAdvancedSearchCommand.Execute(null);
+    }
+
+    /// <summary>
+    /// 고급 검색 초기화
+    /// </summary>
+    private void AdvancedSearchClear_Click(object sender, RoutedEventArgs e)
+    {
+        Log4.Info("고급 검색 초기화");
+        _viewModel.ClearAdvancedSearchCommand.Execute(null);
+    }
+
+    /// <summary>
+    /// DatePicker 로드 시 날짜 형식 설정 (yyyy년 MM월 dd일)
+    /// </summary>
+    private void DatePicker_Loaded(object sender, RoutedEventArgs e)
+    {
+        if (sender is DatePicker datePicker)
+        {
+            // DatePicker 내부의 TextBox를 찾아서 형식 적용
+            datePicker.SelectedDateChanged += (s, args) =>
+            {
+                ApplyDateFormat(datePicker);
+            };
+            ApplyDateFormat(datePicker);
+        }
+    }
+
+    /// <summary>
+    /// DatePicker에 커스텀 날짜 형식 적용
+    /// </summary>
+    private void ApplyDateFormat(DatePicker datePicker)
+    {
+        if (datePicker.SelectedDate.HasValue)
+        {
+            var textBox = FindChild<System.Windows.Controls.Primitives.DatePickerTextBox>(datePicker);
+            if (textBox != null)
+            {
+                textBox.Text = datePicker.SelectedDate.Value.ToString("yyyy년 MM월 dd일");
+            }
+        }
+    }
+
+    /// <summary>
+    /// 시각적 트리에서 자식 요소 찾기
+    /// </summary>
+    private static T? FindChild<T>(DependencyObject parent) where T : DependencyObject
+    {
+        for (int i = 0; i < VisualTreeHelper.GetChildrenCount(parent); i++)
+        {
+            var child = VisualTreeHelper.GetChild(parent, i);
+            if (child is T typedChild)
+                return typedChild;
+            var result = FindChild<T>(child);
+            if (result != null)
+                return result;
+        }
+        return null;
+    }
+
+    /// <summary>
+    /// 재로그인 메뉴 클릭
+    /// </summary>
+    private void MenuRelogin_Click(object sender, RoutedEventArgs e)
+    {
+        Log4.Info("메뉴: 재로그인");
+        // 로그아웃 후 다시 로그인
+        MenuLogout_Click(sender, e);
+    }
+
+    /// <summary>
+    /// 종료 메뉴 클릭
+    /// </summary>
+    private void MenuExit_Click(object sender, RoutedEventArgs e)
+    {
+        Log4.Info("메뉴: 종료");
+        Application.Current.Shutdown();
+    }
+
+    #endregion
+
+    #region 최근 검색어 관리
+
+    /// <summary>
+    /// 최근 검색어 파일 경로
+    /// </summary>
+    private static string RecentSearchesFilePath => System.IO.Path.Combine(
+        Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
+        "mailX", "recent_searches.json");
+
+    /// <summary>
+    /// 최근 검색어 로드 (JSON 파일에서)
+    /// </summary>
+    private void LoadRecentSearches()
+    {
+        try
+        {
+            if (System.IO.File.Exists(RecentSearchesFilePath))
+            {
+                var json = System.IO.File.ReadAllText(RecentSearchesFilePath);
+                var searches = System.Text.Json.JsonSerializer.Deserialize<List<string>>(json);
+                if (searches != null)
+                {
+                    _recentSearches.Clear();
+                    foreach (var search in searches.Take(MaxRecentSearches))
+                    {
+                        _recentSearches.Add(search);
+                    }
+                }
+            }
+            Log4.Debug($"최근 검색어 로드: {_recentSearches.Count}개");
+        }
+        catch (Exception ex)
+        {
+            Log4.Error($"최근 검색어 로드 실패: {ex.Message}");
+        }
+    }
+
+    /// <summary>
+    /// 최근 검색어 저장
+    /// </summary>
+    private void SaveRecentSearches()
+    {
+        try
+        {
+            var dir = System.IO.Path.GetDirectoryName(RecentSearchesFilePath);
+            if (!string.IsNullOrEmpty(dir) && !System.IO.Directory.Exists(dir))
+            {
+                System.IO.Directory.CreateDirectory(dir);
+            }
+            var json = System.Text.Json.JsonSerializer.Serialize(_recentSearches.ToList());
+            System.IO.File.WriteAllText(RecentSearchesFilePath, json);
+            Log4.Debug($"최근 검색어 저장: {_recentSearches.Count}개");
+        }
+        catch (Exception ex)
+        {
+            Log4.Error($"최근 검색어 저장 실패: {ex.Message}");
+        }
+    }
+
+    /// <summary>
+    /// 검색어 추가 (중복 제거, 최신 항목 맨 위)
+    /// </summary>
+    private void AddRecentSearch(string searchText)
+    {
+        if (string.IsNullOrWhiteSpace(searchText))
+            return;
+
+        var trimmed = searchText.Trim();
+
+        // 중복 제거
+        if (_recentSearches.Contains(trimmed))
+        {
+            _recentSearches.Remove(trimmed);
+        }
+
+        // 맨 앞에 추가
+        _recentSearches.Insert(0, trimmed);
+
+        // 최대 개수 초과 시 뒤에서 제거
+        while (_recentSearches.Count > MaxRecentSearches)
+        {
+            _recentSearches.RemoveAt(_recentSearches.Count - 1);
+        }
+
+        SaveRecentSearches();
+    }
+
+    /// <summary>
+    /// 최근 검색어 항목 클릭
+    /// </summary>
+    private void RecentSearchItem_Click(object sender, MouseButtonEventArgs e)
+    {
+        if (sender is FrameworkElement element && element.Tag is string searchText)
+        {
+            TitleBarSearchBox.Text = searchText;
+            _viewModel.SearchKeyword = searchText;
+            SearchAutocompletePopup.IsOpen = false;
+            _viewModel.SearchCommand.Execute(null);
+            AddRecentSearch(searchText);
+        }
+    }
+
+    /// <summary>
+    /// 최근 검색어 삭제 버튼 클릭
+    /// </summary>
+    private void RemoveRecentSearch_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is System.Windows.Controls.Button button && button.Tag is string searchText)
+        {
+            _recentSearches.Remove(searchText);
+            SaveRecentSearches();
+            Log4.Debug($"검색어 삭제: {searchText}");
+            e.Handled = true; // 부모 Border의 클릭 이벤트 전파 방지
         }
     }
 

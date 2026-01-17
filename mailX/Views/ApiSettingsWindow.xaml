@@ -1,0 +1,380 @@
+<ui:FluentWindow x:Class="mailX.Views.ApiSettingsWindow"
+                 xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                 xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+                 xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
+                 Title="API 관리"
+                 Height="700" Width="750"
+                 WindowStartupLocation="CenterOwner"
+                 ResizeMode="NoResize"
+                 ExtendsContentIntoTitleBar="True"
+                 WindowBackdropType="Mica">
+
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+
+        <!-- 타이틀바 -->
+        <ui:TitleBar Grid.Row="0"
+                     Title="API 관리"
+                     ShowMaximize="False"
+                     ShowMinimize="False"/>
+
+        <!-- 메인 콘텐츠 -->
+        <ScrollViewer Grid.Row="1" Padding="24,16">
+            <StackPanel>
+                <!-- 기본 Provider 선택 -->
+                <Border Margin="0,0,0,16" Padding="16"
+                        Background="{DynamicResource ControlFillColorDefaultBrush}"
+                        CornerRadius="8">
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="120"/>
+                            <ColumnDefinition Width="*"/>
+                        </Grid.ColumnDefinitions>
+
+                        <TextBlock Text="기본 Provider"
+                                   VerticalAlignment="Center"
+                                   FontWeight="SemiBold"/>
+
+                        <ComboBox x:Name="DefaultProviderComboBox"
+                                  Grid.Column="1"
+                                  Width="200"
+                                  HorizontalAlignment="Left"
+                                  SelectionChanged="DefaultProviderComboBox_SelectionChanged">
+                            <ComboBoxItem Content="Claude" Tag="Claude"/>
+                            <ComboBoxItem Content="OpenAI" Tag="OpenAI"/>
+                            <ComboBoxItem Content="Gemini" Tag="Gemini"/>
+                            <ComboBoxItem Content="Ollama" Tag="Ollama"/>
+                            <ComboBoxItem Content="LM Studio" Tag="LMStudio"/>
+                        </ComboBox>
+                    </Grid>
+                </Border>
+
+                <!-- Claude 설정 -->
+                <Border x:Name="ClaudeBorder" Margin="0,0,0,12" Padding="16"
+                        Background="{DynamicResource ControlFillColorDefaultBrush}"
+                        CornerRadius="8">
+                    <Expander IsExpanded="True">
+                        <Expander.Header>
+                            <StackPanel Orientation="Horizontal">
+                                <TextBlock Text="🤖" FontSize="18" Margin="0,0,8,0"/>
+                                <TextBlock Text="Claude (Anthropic)" FontWeight="SemiBold" FontSize="14"/>
+                                <TextBlock x:Name="ClaudeStatusText" Text="" Margin="12,0,0,0"
+                                           VerticalAlignment="Center" FontSize="12"/>
+                            </StackPanel>
+                        </Expander.Header>
+                        <StackPanel Margin="0,12,0,0">
+                            <Grid Margin="0,0,0,8">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="100"/>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                </Grid.ColumnDefinitions>
+                                <TextBlock Text="API Key" VerticalAlignment="Center"/>
+                                <ui:PasswordBox x:Name="ClaudeApiKeyBox" Grid.Column="1"
+                                               PlaceholderText="sk-ant-..."
+                                               RevealButtonEnabled="True"/>
+                                <ui:Button x:Name="ClaudeTestButton" Grid.Column="2"
+                                           Content="테스트" Margin="8,0,0,0"
+                                           Width="70" Click="ClaudeTestButton_Click"/>
+                            </Grid>
+                            <Grid Margin="0,0,0,8">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="100"/>
+                                    <ColumnDefinition Width="*"/>
+                                </Grid.ColumnDefinitions>
+                                <TextBlock Text="Model" VerticalAlignment="Center"/>
+                                <ComboBox x:Name="ClaudeModelComboBox" Grid.Column="1"
+                                          IsEnabled="False"
+                                          />
+                            </Grid>
+                            <!-- 고급 설정 -->
+                            <Expander IsExpanded="False" Margin="0,4,0,0">
+                                <Expander.Header>
+                                    <TextBlock Text="고급 설정" FontSize="12" Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
+                                </Expander.Header>
+                                <Grid Margin="0,8,0,0">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="100"/>
+                                        <ColumnDefinition Width="*"/>
+                                    </Grid.ColumnDefinitions>
+                                    <TextBlock Text="Base URL" VerticalAlignment="Center"/>
+                                    <ui:TextBox x:Name="ClaudeBaseUrlBox" Grid.Column="1"
+                                               Text="https://api.anthropic.com"/>
+                                </Grid>
+                            </Expander>
+                        </StackPanel>
+                    </Expander>
+                </Border>
+
+                <!-- OpenAI 설정 -->
+                <Border x:Name="OpenAIBorder" Margin="0,0,0,12" Padding="16"
+                        Background="{DynamicResource ControlFillColorDefaultBrush}"
+                        CornerRadius="8">
+                    <Expander IsExpanded="False">
+                        <Expander.Header>
+                            <StackPanel Orientation="Horizontal">
+                                <TextBlock Text="💬" FontSize="18" Margin="0,0,8,0"/>
+                                <TextBlock Text="OpenAI" FontWeight="SemiBold" FontSize="14"/>
+                                <TextBlock x:Name="OpenAIStatusText" Text="" Margin="12,0,0,0"
+                                           VerticalAlignment="Center" FontSize="12"/>
+                            </StackPanel>
+                        </Expander.Header>
+                        <StackPanel Margin="0,12,0,0">
+                            <Grid Margin="0,0,0,8">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="100"/>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                </Grid.ColumnDefinitions>
+                                <TextBlock Text="API Key" VerticalAlignment="Center"/>
+                                <ui:PasswordBox x:Name="OpenAIApiKeyBox" Grid.Column="1"
+                                               PlaceholderText="sk-..."
+                                               RevealButtonEnabled="True"/>
+                                <ui:Button x:Name="OpenAITestButton" Grid.Column="2"
+                                           Content="테스트" Margin="8,0,0,0"
+                                           Width="70" Click="OpenAITestButton_Click"/>
+                            </Grid>
+                            <Grid Margin="0,0,0,8">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="100"/>
+                                    <ColumnDefinition Width="*"/>
+                                </Grid.ColumnDefinitions>
+                                <TextBlock Text="Model" VerticalAlignment="Center"/>
+                                <ComboBox x:Name="OpenAIModelComboBox" Grid.Column="1"
+                                          IsEnabled="False"
+                                          />
+                            </Grid>
+                            <!-- 고급 설정 -->
+                            <Expander IsExpanded="False" Margin="0,4,0,0">
+                                <Expander.Header>
+                                    <TextBlock Text="고급 설정" FontSize="12" Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
+                                </Expander.Header>
+                                <Grid Margin="0,8,0,0">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="100"/>
+                                        <ColumnDefinition Width="*"/>
+                                    </Grid.ColumnDefinitions>
+                                    <TextBlock Text="Base URL" VerticalAlignment="Center"/>
+                                    <ui:TextBox x:Name="OpenAIBaseUrlBox" Grid.Column="1"
+                                               Text="https://api.openai.com/v1"/>
+                                </Grid>
+                            </Expander>
+                        </StackPanel>
+                    </Expander>
+                </Border>
+
+                <!-- Gemini 설정 -->
+                <Border x:Name="GeminiBorder" Margin="0,0,0,12" Padding="16"
+                        Background="{DynamicResource ControlFillColorDefaultBrush}"
+                        CornerRadius="8">
+                    <Expander IsExpanded="False">
+                        <Expander.Header>
+                            <StackPanel Orientation="Horizontal">
+                                <TextBlock Text="✨" FontSize="18" Margin="0,0,8,0"/>
+                                <TextBlock Text="Google Gemini" FontWeight="SemiBold" FontSize="14"/>
+                                <TextBlock x:Name="GeminiStatusText" Text="" Margin="12,0,0,0"
+                                           VerticalAlignment="Center" FontSize="12"/>
+                            </StackPanel>
+                        </Expander.Header>
+                        <StackPanel Margin="0,12,0,0">
+                            <Grid Margin="0,0,0,8">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="100"/>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                </Grid.ColumnDefinitions>
+                                <TextBlock Text="API Key" VerticalAlignment="Center"/>
+                                <ui:PasswordBox x:Name="GeminiApiKeyBox" Grid.Column="1"
+                                               PlaceholderText="AIzaSy..."
+                                               RevealButtonEnabled="True"/>
+                                <ui:Button x:Name="GeminiTestButton" Grid.Column="2"
+                                           Content="테스트" Margin="8,0,0,0"
+                                           Width="70" Click="GeminiTestButton_Click"/>
+                            </Grid>
+                            <Grid Margin="0,0,0,8">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="100"/>
+                                    <ColumnDefinition Width="*"/>
+                                </Grid.ColumnDefinitions>
+                                <TextBlock Text="Model" VerticalAlignment="Center"/>
+                                <ComboBox x:Name="GeminiModelComboBox" Grid.Column="1"
+                                          IsEnabled="False"
+                                          />
+                            </Grid>
+                            <!-- 고급 설정 -->
+                            <Expander IsExpanded="False" Margin="0,4,0,0">
+                                <Expander.Header>
+                                    <TextBlock Text="고급 설정" FontSize="12" Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
+                                </Expander.Header>
+                                <Grid Margin="0,8,0,0">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="100"/>
+                                        <ColumnDefinition Width="*"/>
+                                    </Grid.ColumnDefinitions>
+                                    <TextBlock Text="Base URL" VerticalAlignment="Center"/>
+                                    <ui:TextBox x:Name="GeminiBaseUrlBox" Grid.Column="1"
+                                               Text="https://generativelanguage.googleapis.com/v1beta"/>
+                                </Grid>
+                            </Expander>
+                        </StackPanel>
+                    </Expander>
+                </Border>
+
+                <!-- Ollama 설정 -->
+                <Border x:Name="OllamaBorder" Margin="0,0,0,12" Padding="16"
+                        Background="{DynamicResource ControlFillColorDefaultBrush}"
+                        CornerRadius="8">
+                    <Expander IsExpanded="False">
+                        <Expander.Header>
+                            <StackPanel Orientation="Horizontal">
+                                <TextBlock Text="🦙" FontSize="18" Margin="0,0,8,0"/>
+                                <TextBlock Text="Ollama (로컬)" FontWeight="SemiBold" FontSize="14"/>
+                                <TextBlock x:Name="OllamaStatusText" Text="" Margin="12,0,0,0"
+                                           VerticalAlignment="Center" FontSize="12"/>
+                            </StackPanel>
+                        </Expander.Header>
+                        <StackPanel Margin="0,12,0,0">
+                            <Grid Margin="0,0,0,8">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="100"/>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                </Grid.ColumnDefinitions>
+                                <TextBlock Text="Base URL" VerticalAlignment="Center"/>
+                                <ui:TextBox x:Name="OllamaBaseUrlBox" Grid.Column="1"
+                                           Text="http://localhost:11434"/>
+                                <ui:Button x:Name="OllamaTestButton" Grid.Column="2"
+                                           Content="테스트" Margin="8,0,0,0"
+                                           Width="70" Click="OllamaTestButton_Click"/>
+                            </Grid>
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="100"/>
+                                    <ColumnDefinition Width="*"/>
+                                </Grid.ColumnDefinitions>
+                                <TextBlock Text="Model" VerticalAlignment="Center"/>
+                                <ComboBox x:Name="OllamaModelComboBox" Grid.Column="1"
+                                          IsEnabled="False"
+                                          />
+                            </Grid>
+                        </StackPanel>
+                    </Expander>
+                </Border>
+
+                <!-- LM Studio 설정 -->
+                <Border x:Name="LMStudioBorder" Margin="0,0,0,12" Padding="16"
+                        Background="{DynamicResource ControlFillColorDefaultBrush}"
+                        CornerRadius="8">
+                    <Expander IsExpanded="False">
+                        <Expander.Header>
+                            <StackPanel Orientation="Horizontal">
+                                <TextBlock Text="🖥️" FontSize="18" Margin="0,0,8,0"/>
+                                <TextBlock Text="LM Studio (로컬)" FontWeight="SemiBold" FontSize="14"/>
+                                <TextBlock x:Name="LMStudioStatusText" Text="" Margin="12,0,0,0"
+                                           VerticalAlignment="Center" FontSize="12"/>
+                            </StackPanel>
+                        </Expander.Header>
+                        <StackPanel Margin="0,12,0,0">
+                            <Grid Margin="0,0,0,8">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="100"/>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                </Grid.ColumnDefinitions>
+                                <TextBlock Text="Base URL" VerticalAlignment="Center"/>
+                                <ui:TextBox x:Name="LMStudioBaseUrlBox" Grid.Column="1"
+                                           Text="http://localhost:1234/v1"/>
+                                <ui:Button x:Name="LMStudioTestButton" Grid.Column="2"
+                                           Content="테스트" Margin="8,0,0,0"
+                                           Width="70" Click="LMStudioTestButton_Click"/>
+                            </Grid>
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="100"/>
+                                    <ColumnDefinition Width="*"/>
+                                </Grid.ColumnDefinitions>
+                                <TextBlock Text="Model" VerticalAlignment="Center"/>
+                                <ComboBox x:Name="LMStudioModelComboBox" Grid.Column="1"
+                                          IsEnabled="False"
+                                          />
+                            </Grid>
+                        </StackPanel>
+                    </Expander>
+                </Border>
+
+                <!-- TinyMCE 에디터 설정 -->
+                <Border x:Name="TinyMCEBorder" Margin="0,0,0,12" Padding="16"
+                        Background="{DynamicResource ControlFillColorDefaultBrush}"
+                        CornerRadius="8">
+                    <Expander IsExpanded="False">
+                        <Expander.Header>
+                            <StackPanel Orientation="Horizontal">
+                                <TextBlock Text="📝" FontSize="18" Margin="0,0,8,0"/>
+                                <TextBlock Text="TinyMCE 에디터" FontWeight="SemiBold" FontSize="14"/>
+                                <TextBlock x:Name="TinyMCEStatusText" Text="" Margin="12,0,0,0"
+                                           VerticalAlignment="Center" FontSize="12"/>
+                            </StackPanel>
+                        </Expander.Header>
+                        <StackPanel Margin="0,12,0,0">
+                            <TextBlock Text="메일 작성 시 사용하는 TinyMCE 리치 텍스트 에디터의 API 키입니다."
+                                       TextWrapping="Wrap"
+                                       Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                                       Margin="0,0,0,12" FontSize="12"/>
+                            <Grid Margin="0,0,0,8">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="100"/>
+                                    <ColumnDefinition Width="*"/>
+                                </Grid.ColumnDefinitions>
+                                <TextBlock Text="API Key" VerticalAlignment="Center"/>
+                                <ui:PasswordBox x:Name="TinyMCEApiKeyBox" Grid.Column="1"
+                                               PlaceholderText="your-api-key..."
+                                               RevealButtonEnabled="True"/>
+                            </Grid>
+                            <TextBlock Margin="100,0,0,0">
+                                <Hyperlink NavigateUri="https://www.tiny.cloud/auth/signup/"
+                                           RequestNavigate="TinyMCEGetKeyLink_RequestNavigate">
+                                    <Run Text="API 키 발급받기 (tiny.cloud)"/>
+                                </Hyperlink>
+                            </TextBlock>
+                        </StackPanel>
+                    </Expander>
+                </Border>
+            </StackPanel>
+        </ScrollViewer>
+
+        <!-- 하단 버튼 -->
+        <Border Grid.Row="2" Padding="24,12"
+                Background="{DynamicResource ControlFillColorDefaultBrush}"
+                BorderBrush="{DynamicResource ControlElevationBorderBrush}"
+                BorderThickness="0,1,0,0">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
+                </Grid.ColumnDefinitions>
+
+                <TextBlock x:Name="SaveStatusText"
+                           VerticalAlignment="Center"
+                           Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                           FontSize="12"/>
+
+                <StackPanel Grid.Column="1" Orientation="Horizontal">
+                    <ui:Button Content="취소"
+                               Appearance="Secondary"
+                               Width="100"
+                               Margin="0,0,8,0"
+                               Click="CancelButton_Click"/>
+                    <ui:Button x:Name="SaveButton" Content="저장"
+                               Appearance="Primary"
+                               Width="100"
+                               IsEnabled="False"
+                               Click="SaveButton_Click"/>
+                </StackPanel>
+            </Grid>
+        </Border>
+    </Grid>
+</ui:FluentWindow>

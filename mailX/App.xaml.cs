@@ -56,6 +56,41 @@ public partial class App : Application
     /// </summary>
     public static AppSettingsManager Settings { get; private set; } = new();
 
+    /// <summary>
+    /// GraphMailService 인스턴스 접근 (ComposeWindow에서 사용)
+    /// </summary>
+    public GraphMailService? GraphMailService
+    {
+        get
+        {
+            try
+            {
+                using var scope = _host.Services.CreateScope();
+                return scope.ServiceProvider.GetService<GraphMailService>();
+            }
+            catch
+            {
+                return null;
+            }
+        }
+    }
+
+    /// <summary>
+    /// DI 컨테이너에서 서비스 가져오기
+    /// </summary>
+    public T? GetService<T>() where T : class
+    {
+        try
+        {
+            using var scope = _host.Services.CreateScope();
+            return scope.ServiceProvider.GetService<T>();
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
     public App()
     {
         // 앱 데이터 폴더 생성
@@ -143,6 +178,7 @@ public partial class App : Application
         // Graph 서비스 등록
         services.AddSingleton<GraphAuthService>();
         services.AddScoped<GraphMailService>();
+        services.AddScoped<GraphCalendarService>();
 
         // AI Provider 등록 (Singleton - 상태 유지)
         services.AddSingleton<ClaudeProvider>();
@@ -255,9 +291,35 @@ public partial class App : Application
     /// </summary>
     protected override async void OnStartup(StartupEventArgs e)
     {
+        // 명령줄 인수 파싱 (--gpumode=true/false)
+        bool? gpuModeOverride = null;
+        foreach (var arg in e.Args)
+        {
+            if (arg.StartsWith("--gpumode=", StringComparison.OrdinalIgnoreCase))
+            {
+                var value = arg.Substring("--gpumode=".Length);
+                if (bool.TryParse(value, out bool gpuMode))
+                {
+                    gpuModeOverride = gpuMode;
+                    Log4.Info($"명령줄 GPU 모드 강제 지정: {gpuMode}");
+                }
+            }
+        }
+
+        // 렌더링 모드 서비스 설정 및 적용 (앱 시작 시점에 적용해야 효과적)
+        Services.Theme.RenderModeService.Instance.SettingsManager = Settings;
+        Services.Theme.RenderModeService.Instance.LoadSavedRenderMode(gpuModeOverride);
+
         Log4.Debug("OnStartup 시작");
         await _host.StartAsync();
         Log4.Debug("Host 시작 완료");
+
+        // 테마 서비스에 설정 매니저 연결 및 저장된 테마 로드
+        Services.Theme.ThemeService.Instance.SettingsManager = Settings;
+        Services.Theme.ThemeService.Instance.LoadSavedTheme();
+
+        // 테마 리소스 초기화
+        Services.Theme.ThemeService.Instance.InitializeThemeResources();
 
         try
         {
@@ -282,33 +344,51 @@ public partial class App : Application
 
             if (loginResult == true)
             {
-                // 로그인 직후 폴더 먼저 동기화
-                Log4.Debug("로그인 후 폴더 동기화 시작");
-                var syncService = _host.Services.GetRequiredService<BackgroundSyncService>();
-                await syncService.SyncFoldersAsync();
-                Log4.Debug("로그인 후 폴더 동기화 완료");
+                // 로딩 화면 표시
+                Log4.Debug("로딩 화면 표시");
+                var loadingWindow = new LoadingWindow();
+                loadingWindow.Show();
 
-                // 로그인 성공 시 메인 윈도우 표시
-                Log4.Debug("MainWindow 생성 시작");
-                var mainWindow = _host.Services.GetRequiredService<MainWindow>();
-                Log4.Debug("MainWindow 생성 완료");
-
-                Log4.Debug("MainWindow.Show() 호출 직전");
-                mainWindow.Show();
-                Log4.Debug("MainWindow.Show() 완료");
-                Log.Information("메인 윈도우 표시 완료");
-
-                // REST API 서버 시작
                 try
                 {
-                    Log4.Debug("REST API 서버 시작");
-                    _restApiServer = new RestApiServer(5858);
-                    _restApiServer.MainWindow = mainWindow;
-                    _restApiServer.Start();
+                    // 폴더 동기화
+                    loadingWindow.UpdateStatus("폴더를 동기화하는 중...");
+                    Log4.Debug("로그인 후 폴더 동기화 시작");
+                    var syncService = _host.Services.GetRequiredService<BackgroundSyncService>();
+                    await syncService.SyncFoldersAsync();
+                    Log4.Debug("로그인 후 폴더 동기화 완료");
+
+                    // 메인 윈도우 준비
+                    loadingWindow.UpdateStatus("메인 화면을 준비하는 중...");
+                    Log4.Debug("MainWindow 생성 시작");
+                    var mainWindow = _host.Services.GetRequiredService<MainWindow>();
+                    Log4.Debug("MainWindow 생성 완료");
+
+                    // 로딩 화면 닫기 및 메인 윈도우 표시
+                    loadingWindow.Close();
+
+                    Log4.Debug("MainWindow.Show() 호출 직전");
+                    mainWindow.Show();
+                    Log4.Debug("MainWindow.Show() 완료");
+                    Log.Information("메인 윈도우 표시 완료");
+
+                    // REST API 서버 시작
+                    try
+                    {
+                        Log4.Debug("REST API 서버 시작");
+                        _restApiServer = new RestApiServer(5858);
+                        _restApiServer.MainWindow = mainWindow;
+                        _restApiServer.Start();
+                    }
+                    catch (Exception apiEx)
+                    {
+                        Log4.Error($"[RestAPI] 서버 시작 실패: {apiEx.Message}");
+                    }
                 }
-                catch (Exception apiEx)
+                catch (Exception loadingEx)
                 {
-                    Log4.Error($"[RestAPI] 서버 시작 실패: {apiEx.Message}");
+                    loadingWindow.Close();
+                    throw loadingEx;
                 }
             }
             else

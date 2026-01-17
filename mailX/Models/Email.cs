@@ -44,6 +44,11 @@ public class Email
     public string? Body { get; set; }
 
     /// <summary>
+    /// HTML 본문 여부
+    /// </summary>
+    public bool IsHtml { get; set; }
+
+    /// <summary>
     /// 발신자 이메일 주소
     /// </summary>
     [Required]
@@ -80,6 +85,32 @@ public class Email
     /// </summary>
     [MaxLength(20)]
     public string? Importance { get; set; }
+
+    /// <summary>
+    /// 플래그 상태 (flagged, complete, notFlagged)
+    /// </summary>
+    [MaxLength(20)]
+    public string? FlagStatus { get; set; }
+
+    /// <summary>
+    /// 카테고리 목록 (JSON 배열)
+    /// </summary>
+    public string? Categories { get; set; }
+
+    /// <summary>
+    /// 사용자 별표 (즐겨찾기)
+    /// </summary>
+    public bool IsStarred { get; set; }
+
+    /// <summary>
+    /// 메일 고정 (Pin) 여부
+    /// </summary>
+    public bool IsPinned { get; set; }
+
+    /// <summary>
+    /// 메일 고정 시간
+    /// </summary>
+    public DateTime? PinnedAt { get; set; }
 
     /// <summary>
     /// 첨부파일 존재 여부

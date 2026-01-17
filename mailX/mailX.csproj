@@ -80,4 +80,11 @@
     <Resource Include="Assets\mailX.ico" />
   </ItemGroup>
 
+  <!-- TinyMCE 에디터 파일 (출력 디렉토리에 복사) -->
+  <ItemGroup>
+    <Content Include="Assets\tinymce\**\*">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+  </ItemGroup>
+
 </Project>
