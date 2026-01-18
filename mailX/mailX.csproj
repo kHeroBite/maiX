@@ -12,59 +12,60 @@
   <ItemGroup>
     <!-- MVVM -->
     <PackageReference Include="CommunityToolkit.Mvvm" Version="8.4.0" />
-    <PackageReference Include="OpenMcdf" Version="2.3.1" />
+    <PackageReference Include="OpenMcdf" Version="3.1.0" />
+    <PackageReference Include="SixLabors.ImageSharp" Version="3.1.12" />
 
     <!-- WPF UI (Fluent Design) -->
-    <PackageReference Include="WPF-UI" Version="4.1.0" />
+    <PackageReference Include="WPF-UI" Version="4.2.0" />
 
     <!-- WebView2 (메일 본문 렌더링) -->
-    <PackageReference Include="Microsoft.Web.WebView2" Version="1.0.3124.44" />
+    <PackageReference Include="Microsoft.Web.WebView2" Version="1.0.3650.58" />
 
     <!-- MS Graph API -->
-    <PackageReference Include="Microsoft.Graph" Version="5.77.0" />
-    <PackageReference Include="Azure.Identity" Version="1.14.1" />
-    <PackageReference Include="Microsoft.Identity.Client" Version="4.71.1" />
+    <PackageReference Include="Microsoft.Graph" Version="5.100.0" />
+    <PackageReference Include="Azure.Identity" Version="1.17.1" />
+    <PackageReference Include="Microsoft.Identity.Client" Version="4.81.0" />
 
     <!-- SQLite + EF Core -->
-    <PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" Version="9.0.1" />
-    <PackageReference Include="Microsoft.EntityFrameworkCore.Design" Version="9.0.1">
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" Version="10.0.2" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Design" Version="10.0.2">
       <PrivateAssets>all</PrivateAssets>
       <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
     </PackageReference>
 
     <!-- OCR + 문서 처리 -->
     <PackageReference Include="Tesseract" Version="5.2.0" />
-    <PackageReference Include="MsgReader" Version="5.6.2" />
-    <PackageReference Include="MimeKit" Version="4.10.0" />
+    <PackageReference Include="MsgReader" Version="6.0.6" />
+    <PackageReference Include="MimeKit" Version="4.14.0" />
 
     <!-- HWP 처리 -->
     <PackageReference Include="HwpSharp" Version="1.0.0" />
 
     <!-- 문서 변환기 추가 옵션 -->
-    <PackageReference Include="NPOI" Version="2.7.2" />
-    <PackageReference Include="DocumentFormat.OpenXml" Version="3.2.0" />
-    <PackageReference Include="ClosedXML" Version="0.104.2" />
-    <PackageReference Include="PdfPig" Version="0.1.9" />
+    <PackageReference Include="NPOI" Version="2.7.5" />
+    <PackageReference Include="DocumentFormat.OpenXml" Version="3.4.1" />
+    <PackageReference Include="ClosedXML" Version="0.105.0" />
+    <PackageReference Include="PdfPig" Version="0.1.13" />
 
     <!-- 로깅 -->
-    <PackageReference Include="Serilog" Version="4.2.0" />
-    <PackageReference Include="Serilog.Sinks.File" Version="6.0.0" />
-    <PackageReference Include="Serilog.Extensions.Hosting" Version="8.0.0" />
-    <PackageReference Include="log4net" Version="3.0.3" />
+    <PackageReference Include="Serilog" Version="4.3.0" />
+    <PackageReference Include="Serilog.Sinks.File" Version="7.0.0" />
+    <PackageReference Include="Serilog.Extensions.Hosting" Version="10.0.0" />
+    <PackageReference Include="log4net" Version="3.2.0" />
 
     <!-- DI -->
-    <PackageReference Include="Microsoft.Extensions.DependencyInjection" Version="9.0.1" />
-    <PackageReference Include="Microsoft.Extensions.Hosting" Version="9.0.1" />
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection" Version="10.0.2" />
+    <PackageReference Include="Microsoft.Extensions.Hosting" Version="10.0.2" />
 
     <!-- JSON -->
-    <PackageReference Include="Newtonsoft.Json" Version="13.0.3" />
+    <PackageReference Include="Newtonsoft.Json" Version="13.0.4" />
 
     <!-- System.Drawing for screenshot -->
-    <PackageReference Include="System.Drawing.Common" Version="9.0.1" />
+    <PackageReference Include="System.Drawing.Common" Version="10.0.2" />
 
     <!-- 클라우드 다운로드 (Google Drive) -->
-    <PackageReference Include="Google.Apis.Drive.v3" Version="1.69.0.3674" />
-    <PackageReference Include="Google.Apis.Auth" Version="1.69.0" />
+    <PackageReference Include="Google.Apis.Drive.v3" Version="1.73.0.3996" />
+    <PackageReference Include="Google.Apis.Auth" Version="1.73.0" />
   </ItemGroup>
 
   <!-- log4net.config 파일을 출력 디렉토리에 복사 -->
