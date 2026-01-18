@@ -27,9 +27,10 @@ public class BackgroundSyncService : BackgroundService
     private readonly ILogger _logger;
 
     // 동기화 설정
-    private const int SyncIntervalSeconds = 30;  // 30초 동기화 주기
+    private int _syncIntervalSeconds = 300;  // 기본값: 5분 (300초)
     private const int MaxMessagesPerSync = 5;
     private const int MaxRetryCount = 3;
+    private CancellationTokenSource? _intervalChangeCts;  // 주기 변경 시 타이머 재시작용
 
     // 상태
     private DateTime _lastSyncTime = DateTime.MinValue;
@@ -42,6 +43,16 @@ public class BackgroundSyncService : BackgroundService
     /// 동기화 일시정지/재개 이벤트
     /// </summary>
     public event Action<bool>? PausedChanged;
+
+    /// <summary>
+    /// 동기화 주기 변경 이벤트 (초 단위)
+    /// </summary>
+    public event Action<int>? SyncIntervalChanged;
+
+    /// <summary>
+    /// 현재 동기화 주기 (초)
+    /// </summary>
+    public int SyncIntervalSeconds => _syncIntervalSeconds;
 
     /// <summary>
     /// 폴더 동기화 완료 이벤트
@@ -116,7 +127,7 @@ public class BackgroundSyncService : BackgroundService
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
-        _logger.Information("백그라운드 동기화 서비스 시작 - 주기: {Interval}초 (Delta Query)", SyncIntervalSeconds);
+        _logger.Information("백그라운드 동기화 서비스 시작 - 주기: {Interval}초 (Delta Query)", _syncIntervalSeconds);
 
         // 시작 시 폴더 먼저 동기화
         await SyncFoldersAsync(stoppingToken);
@@ -127,38 +138,57 @@ public class BackgroundSyncService : BackgroundService
         // 시작 시 캘린더 동기화
         await SyncCalendarAsync(stoppingToken);
 
-        // 주기적 동기화 (30초)
-        using var timer = new PeriodicTimer(TimeSpan.FromSeconds(SyncIntervalSeconds));
-
-        try
+        // 주기적 동기화 (주기 변경 지원)
+        while (!stoppingToken.IsCancellationRequested)
         {
-            while (await timer.WaitForNextTickAsync(stoppingToken))
+            try
             {
-                // 일시정지 상태면 건너뜀
-                if (_isPaused)
+                // 주기 변경 감지용 CancellationToken 생성
+                _intervalChangeCts = CancellationTokenSource.CreateLinkedTokenSource(stoppingToken);
+                
+                using var timer = new PeriodicTimer(TimeSpan.FromSeconds(_syncIntervalSeconds));
+                _logger.Debug("타이머 생성 - 주기: {Interval}초", _syncIntervalSeconds);
+                
+                while (await timer.WaitForNextTickAsync(_intervalChangeCts.Token))
                 {
-                    _logger.Debug("동기화 일시정지 상태 - 건너뜀");
-                    continue;
-                }
+                    // 일시정지 상태면 건너뜀
+                    if (_isPaused)
+                    {
+                        _logger.Debug("동기화 일시정지 상태 - 건너뜀");
+                        continue;
+                    }
 
-                // 폴더 동기화 (5분마다 한 번)
-                if (_syncCount % 10 == 0)
-                {
-                    await SyncFoldersAsync(stoppingToken);
-                }
+                    // 폴더 동기화 (5분마다 한 번 - 주기에 따라 조정)
+                    var folderSyncInterval = Math.Max(1, 300 / _syncIntervalSeconds);  // 5분마다
+                    if (_syncCount % folderSyncInterval == 0)
+                    {
+                        await SyncFoldersAsync(stoppingToken);
+                    }
 
-                // 메일 동기화 (Delta Query로 변경분만)
-                await SyncAllAccountsAsync(stoppingToken);
+                    // 메일 동기화 (Delta Query로 변경분만)
+                    await SyncAllAccountsAsync(stoppingToken);
 
-                // 캘린더 동기화 (5분마다 한 번)
-                if (_syncCount % 10 == 0)
-                {
-                    await SyncCalendarAsync(stoppingToken);
+                    // 캘린더 동기화 (5분마다 한 번)
+                    if (_syncCount % folderSyncInterval == 0)
+                    {
+                        await SyncCalendarAsync(stoppingToken);
 
-                    // 캘린더 알림 체크
-                    await CheckCalendarRemindersAsync(stoppingToken);
+                        // 캘린더 알림 체크
+                        await CheckCalendarRemindersAsync(stoppingToken);
+                    }
                 }
             }
+            catch (OperationCanceledException) when (!stoppingToken.IsCancellationRequested)
+            {
+                // 주기 변경으로 인한 취소 - 새 주기로 타이머 재시작
+                _logger.Information("동기화 주기 변경으로 타이머 재시작 - 새 주기: {Interval}초", _syncIntervalSeconds);
+                continue;
+            }
+        }
+        
+        try
+        {
+            // 서비스 종료
         }
         catch (OperationCanceledException)
         {
@@ -449,9 +479,10 @@ public class BackgroundSyncService : BackgroundService
 
                 if (existingEmail != null)
                 {
-                    // 기존 메일의 상태 업데이트 (IsRead, FlagStatus, Importance 등)
+                    // 기존 메일의 상태 업데이트 (IsRead, FlagStatus, Importance, Categories, ParentFolderId 등)
                     bool updated = false;
 
+                    // 읽음 상태 동기화
                     if (existingEmail.IsRead != (message.IsRead ?? false))
                     {
                         _logger.Debug("메일 읽음 상태 변경: {Subject} ({OldValue} -> {NewValue})",
@@ -460,29 +491,64 @@ public class BackgroundSyncService : BackgroundService
                         updated = true;
                     }
 
+                    // 플래그 상태 동기화
                     var newFlagStatus = message.Flag?.FlagStatus?.ToString()?.ToLower();
                     if (existingEmail.FlagStatus != newFlagStatus)
                     {
+                        _logger.Debug("메일 플래그 상태 변경: {Subject} ({OldValue} -> {NewValue})",
+                            existingEmail.Subject, existingEmail.FlagStatus, newFlagStatus);
                         existingEmail.FlagStatus = newFlagStatus;
                         updated = true;
                     }
 
+                    // 중요도 동기화
                     var newImportance = message.Importance?.ToString()?.ToLower();
                     if (existingEmail.Importance != newImportance)
                     {
+                        _logger.Debug("메일 중요도 변경: {Subject} ({OldValue} -> {NewValue})",
+                            existingEmail.Subject, existingEmail.Importance, newImportance);
                         existingEmail.Importance = newImportance;
+                        updated = true;
+                    }
+
+                    // 카테고리 동기화
+                    var newCategories = message.Categories?.Count > 0
+                        ? System.Text.Json.JsonSerializer.Serialize(message.Categories)
+                        : null;
+                    if (existingEmail.Categories != newCategories)
+                    {
+                        _logger.Debug("메일 카테고리 변경: {Subject} ({OldValue} -> {NewValue})",
+                            existingEmail.Subject, existingEmail.Categories, newCategories);
+                        existingEmail.Categories = newCategories;
+                        updated = true;
+                    }
+
+                    // 폴더 이동 동기화 (parentFolderId가 변경된 경우)
+                    var newParentFolderId = message.ParentFolderId;
+                    if (!string.IsNullOrEmpty(newParentFolderId) && existingEmail.ParentFolderId != newParentFolderId)
+                    {
+                        _logger.Debug("메일 폴더 변경: {Subject} ({OldFolder} -> {NewFolder})",
+                            existingEmail.Subject, existingEmail.ParentFolderId, newParentFolderId);
+                        existingEmail.ParentFolderId = newParentFolderId;
+                        
+                        // 폴더 이동 시 EntryId도 변경될 수 있음
+                        if (!string.IsNullOrEmpty(message.Id) && existingEmail.EntryId != message.Id)
+                        {
+                            existingEmail.EntryId = message.Id;
+                        }
                         updated = true;
                     }
 
                     if (updated)
                     {
                         await dbContext.SaveChangesAsync(ct);
-                        _logger.Debug("기존 메일 상태 업데이트: {Subject} (IsRead={IsRead})",
-                            existingEmail.Subject, existingEmail.IsRead);
+                        _logger.Debug("기존 메일 상태 업데이트: {Subject} (IsRead={IsRead}, Flag={Flag}, Categories={Categories})",
+                            existingEmail.Subject, existingEmail.IsRead, existingEmail.FlagStatus, existingEmail.Categories);
                     }
                     continue;
                 }
 
+                // 새 메일 생성
                 var email = new Email
                 {
                     InternetMessageId = message.InternetMessageId,
@@ -494,12 +560,18 @@ public class BackgroundSyncService : BackgroundService
                     From = message.From?.EmailAddress?.Address ?? "unknown",
                     To = SerializeRecipients(message.ToRecipients),
                     Cc = SerializeRecipients(message.CcRecipients),
+                    Bcc = SerializeRecipients(message.BccRecipients),
                     ReceivedDateTime = message.ReceivedDateTime?.UtcDateTime,
                     IsRead = message.IsRead ?? false,
                     FlagStatus = message.Flag?.FlagStatus?.ToString()?.ToLower(),
                     Importance = message.Importance?.ToString()?.ToLower(),
                     HasAttachments = message.HasAttachments ?? false,
-                    ParentFolderId = folderId,  // 실제 폴더 ID 사용
+                    Categories = message.Categories?.Count > 0
+                        ? System.Text.Json.JsonSerializer.Serialize(message.Categories)
+                        : null,
+                    ParentFolderId = !string.IsNullOrEmpty(message.ParentFolderId) 
+                        ? message.ParentFolderId 
+                        : folderId,  // 서버에서 받은 폴더 ID 사용, 없으면 현재 동기화 중인 폴더 ID
                     AccountEmail = accountEmail,
                     AnalysisStatus = "pending"
                 };
@@ -754,6 +826,26 @@ public class BackgroundSyncService : BackgroundService
     }
 
     /// <summary>
+    /// 동기화 주기 설정 (초 단위)
+    /// </summary>
+    public void SetSyncInterval(int seconds)
+    {
+        if (seconds < 1) seconds = 1;  // 최소 1초
+        if (seconds > 3600) seconds = 3600;  // 최대 1시간
+
+        var oldInterval = _syncIntervalSeconds;
+        _syncIntervalSeconds = seconds;
+        
+        _logger.Information("동기화 주기 변경: {Old}초 → {New}초", oldInterval, seconds);
+        
+        // 주기 변경 시 현재 타이머 취소 (새 주기로 재시작하도록)
+        _intervalChangeCts?.Cancel();
+        
+        // 이벤트 발생
+        SyncIntervalChanged?.Invoke(seconds);
+    }
+
+    /// <summary>
     /// 수동 즉시 동기화 트리거
     /// </summary>
     public async Task TriggerSyncAsync(CancellationToken ct = default)
@@ -769,6 +861,50 @@ public class BackgroundSyncService : BackgroundService
     {
         _logger.Information("수동 동기화 요청됨: {Email}", accountEmail);
         await SyncAccountAsync(accountEmail, ct);
+    }
+
+
+    /// <summary>
+    /// 보낸편지함 즉시 동기화 (메일 발송 후 호출용)
+    /// </summary>
+    public async Task SyncSentItemsAsync(string accountEmail, CancellationToken ct = default)
+    {
+        _logger.Information("보낸편지함 동기화 요청: {Email}", accountEmail);
+
+        using var scope = _serviceProvider.CreateScope();
+        var dbContext = scope.ServiceProvider.GetRequiredService<MailXDbContext>();
+        var graphMailService = scope.ServiceProvider.GetRequiredService<GraphMailService>();
+
+        // 보낸편지함 폴더 찾기
+        var sentFolder = await dbContext.Folders
+            .FirstOrDefaultAsync(f => f.AccountEmail == accountEmail &&
+                (f.DisplayName == "보낸 편지함" ||
+                 f.DisplayName.Equals("Sent Items", StringComparison.OrdinalIgnoreCase) ||
+                 f.DisplayName.Equals("SentItems", StringComparison.OrdinalIgnoreCase)), ct);
+
+        if (sentFolder == null)
+        {
+            _logger.Warning("보낸편지함 폴더를 찾을 수 없음: {Email}", accountEmail);
+            return;
+        }
+
+        try
+        {
+            var (changed, deleted, savedEmails) = await SyncFolderAsync(
+                dbContext, graphMailService, accountEmail, sentFolder, ct);
+
+            if (changed > 0 || deleted > 0)
+            {
+                EmailsSynced?.Invoke(savedEmails.Count);
+                MailSyncCompleted?.Invoke();
+            }
+
+            _logger.Information("보낸편지함 동기화 완료: 변경 {Changed}건, 삭제 {Deleted}건", changed, deleted);
+        }
+        catch (Exception ex)
+        {
+            _logger.Error(ex, "보낸편지함 동기화 실패");
+        }
     }
 
     /// <summary>
@@ -1035,7 +1171,7 @@ public class BackgroundSyncService : BackgroundService
             LastSyncTime = _lastSyncTime,
             SyncCount = _syncCount,
             ErrorCount = _errorCount,
-            NextSyncTime = _lastSyncTime.AddSeconds(SyncIntervalSeconds)
+            NextSyncTime = _lastSyncTime.AddSeconds(_syncIntervalSeconds)
         };
     }
 }

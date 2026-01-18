@@ -76,6 +76,24 @@ public partial class App : Application
     }
 
     /// <summary>
+    /// BackgroundSyncService 인스턴스 접근 (보낸메일 즉시 동기화용)
+    /// </summary>
+    public BackgroundSyncService? BackgroundSyncService
+    {
+        get
+        {
+            try
+            {
+                return _host.Services.GetService<BackgroundSyncService>();
+            }
+            catch
+            {
+                return null;
+            }
+        }
+    }
+
+    /// <summary>
     /// DI 컨테이너에서 서비스 가져오기
     /// </summary>
     public T? GetService<T>() where T : class

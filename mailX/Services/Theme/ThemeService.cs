@@ -2,6 +2,7 @@ using System;
 using System.Windows;
 using System.Windows.Media;
 using Wpf.Ui.Appearance;
+using Wpf.Ui.Controls;
 using mailX.Services.Storage;
 using mailX.Utils;
 
@@ -41,13 +42,25 @@ public class ThemeService
     public AppSettingsManager? SettingsManager { get; set; }
 
     /// <summary>
+    /// 테마 적용 (Mica 백드롭 유지)
+    /// </summary>
+    private void ApplyThemeWithMica(ApplicationTheme theme)
+    {
+        ApplicationThemeManager.Apply(
+            theme,
+            WindowBackdropType.Mica,
+            updateAccent: true
+        );
+    }
+
+    /// <summary>
     /// 다크 모드로 변경
     /// </summary>
     public void SetDarkMode()
     {
         Log4.Info("테마 변경: 다크 모드");
         CurrentTheme = ApplicationTheme.Dark;
-        ApplicationThemeManager.Apply(ApplicationTheme.Dark, updateAccent: true);
+        ApplyThemeWithMica(ApplicationTheme.Dark);
         UpdateThemeResources(ApplicationTheme.Dark);
         SaveThemeSetting();
         ThemeChanged?.Invoke(this, ApplicationTheme.Dark);
@@ -60,7 +73,7 @@ public class ThemeService
     {
         Log4.Info("테마 변경: 라이트 모드");
         CurrentTheme = ApplicationTheme.Light;
-        ApplicationThemeManager.Apply(ApplicationTheme.Light, updateAccent: true);
+        ApplyThemeWithMica(ApplicationTheme.Light);
         UpdateThemeResources(ApplicationTheme.Light);
         SaveThemeSetting();
         ThemeChanged?.Invoke(this, ApplicationTheme.Light);
@@ -92,13 +105,13 @@ public class ThemeService
             if (savedTheme == "Light")
             {
                 CurrentTheme = ApplicationTheme.Light;
-                ApplicationThemeManager.Apply(ApplicationTheme.Light, updateAccent: true);
+                ApplyThemeWithMica(ApplicationTheme.Light);
                 UpdateThemeResources(ApplicationTheme.Light);
             }
             else
             {
                 CurrentTheme = ApplicationTheme.Dark;
-                ApplicationThemeManager.Apply(ApplicationTheme.Dark, updateAccent: true);
+                ApplyThemeWithMica(ApplicationTheme.Dark);
                 UpdateThemeResources(ApplicationTheme.Dark);
             }
         }

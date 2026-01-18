@@ -57,11 +57,15 @@ public partial class MainWindow : FluentWindow
             Close();
         };
 
-        // 테마 변경 시 메일 목록 새로고침 (글자색 업데이트) + WebView2 테마 갱신
+        // 테마 변경 시 메일 목록 새로고침 (글자색 업데이트) + WebView2 테마 갱신 + Mica 백드롭 재적용
         Services.Theme.ThemeService.Instance.ThemeChanged += (_, _) =>
         {
             Dispatcher.Invoke(() =>
             {
+                // Mica 백드롭 재적용 (테마 전환 시 유지되도록)
+                WindowBackdrop.RemoveBackground(this);
+                WindowBackdrop.ApplyBackdrop(this, WindowBackdropType.Mica);
+
                 // CollectionView 새로고침으로 컨버터 재평가
                 if (EmailListBox.ItemsSource != null)
                 {
@@ -152,6 +156,7 @@ public partial class MainWindow : FluentWindow
             MailBodyWebView.CoreWebView2.Settings.IsScriptEnabled = true;
             MailBodyWebView.CoreWebView2.Settings.AreDefaultContextMenusEnabled = true;
             MailBodyWebView.CoreWebView2.Settings.IsZoomControlEnabled = true;
+            MailBodyWebView.CoreWebView2.Settings.IsSwipeNavigationEnabled = false;
 
             Log4.Debug("WebView2 초기화 완료");
 
@@ -188,6 +193,9 @@ public partial class MainWindow : FluentWindow
             var isDark = theme == Wpf.Ui.Appearance.ApplicationTheme.Dark;
             var bgColor = isDark ? "#1e1e1e" : "#ffffff";
             var textColor = isDark ? "#e0e0e0" : "#1e1e1e";
+            var scrollbarThumbColor = isDark ? "#555555" : "#c0c0c0";
+            var scrollbarThumbHoverColor = isDark ? "#777777" : "#a0a0a0";
+            var scrollbarTrackColor = isDark ? "#2d2d2d" : "#f0f0f0";
 
             string htmlContent;
             if (email.IsHtml)
@@ -223,6 +231,11 @@ public partial class MainWindow : FluentWindow
         a {{ color: #0078d4; }}
         table {{ border-collapse: collapse; }}
         td, th {{ padding: 8px; }}
+        /* 스크롤바 스타일 (Webkit 브라우저용) */
+        ::-webkit-scrollbar {{ width: 12px; height: 12px; }}
+        ::-webkit-scrollbar-track {{ background: {scrollbarTrackColor}; border-radius: 6px; }}
+        ::-webkit-scrollbar-thumb {{ background: {scrollbarThumbColor}; border-radius: 6px; }}
+        ::-webkit-scrollbar-thumb:hover {{ background: {scrollbarThumbHoverColor}; }}
         {darkModeOverride}
     </style>
 </head>
@@ -256,6 +269,11 @@ public partial class MainWindow : FluentWindow
             font-family: inherit;
             margin: 0;
         }}
+        /* 스크롤바 스타일 (Webkit 브라우저용) */
+        ::-webkit-scrollbar {{ width: 12px; height: 12px; }}
+        ::-webkit-scrollbar-track {{ background: {scrollbarTrackColor}; border-radius: 6px; }}
+        ::-webkit-scrollbar-thumb {{ background: {scrollbarThumbColor}; border-radius: 6px; }}
+        ::-webkit-scrollbar-thumb:hover {{ background: {scrollbarThumbHoverColor}; }}
     </style>
 </head>
 <body>
@@ -840,7 +858,7 @@ public partial class MainWindow : FluentWindow
     }
 
     /// <summary>
-    /// 동기화 일시정지 메뉴 클릭
+    /// 동기화 일시정지 메뉴 클릭 (기존 - 사용 안함)
     /// </summary>
     private void MenuSyncPause_Click(object sender, RoutedEventArgs e)
     {
@@ -849,12 +867,32 @@ public partial class MainWindow : FluentWindow
     }
 
     /// <summary>
-    /// 동기화 시작 메뉴 클릭
+    /// 동기화 시작 메뉴 클릭 (기존 - 사용 안함)
     /// </summary>
     private void MenuSyncResume_Click(object sender, RoutedEventArgs e)
     {
         Log4.Info("메뉴: 동기화 시작 클릭");
         _viewModel.ResumeSyncCommand.Execute(null);
+    }
+
+    /// <summary>
+    /// 메일 동기화 중지 메뉴 클릭
+    /// </summary>
+    private void MenuMailSyncPause_Click(object sender, RoutedEventArgs e)
+    {
+        Log4.Info("메뉴: 메일 동기화 중지 클릭");
+        _viewModel.PauseSyncCommand.Execute(null);
+        // 바인딩으로 자동 처리됨
+    }
+
+    /// <summary>
+    /// 메일 동기화 시작 메뉴 클릭
+    /// </summary>
+    private void MenuMailSyncResume_Click(object sender, RoutedEventArgs e)
+    {
+        Log4.Info("메뉴: 메일 동기화 시작 클릭");
+        _viewModel.ResumeSyncCommand.Execute(null);
+        // 바인딩으로 자동 처리됨
     }
 
     /// <summary>
@@ -864,10 +902,7 @@ public partial class MainWindow : FluentWindow
     {
         Log4.Info("메뉴: AI 분석 일시정지 클릭");
         _viewModel.PauseAISyncCommand.Execute(null);
-
-        // 타이틀바 메뉴 토글
-        MenuAISyncPause2.Visibility = Visibility.Collapsed;
-        MenuAISyncResume2.Visibility = Visibility.Visible;
+        // 바인딩으로 자동 처리됨
     }
 
     /// <summary>
@@ -877,10 +912,7 @@ public partial class MainWindow : FluentWindow
     {
         Log4.Info("메뉴: AI 분석 시작 클릭");
         _viewModel.ResumeAISyncCommand.Execute(null);
-
-        // 타이틀바 메뉴 토글
-        MenuAISyncResume2.Visibility = Visibility.Collapsed;
-        MenuAISyncPause2.Visibility = Visibility.Visible;
+        // 바인딩으로 자동 처리됨
     }
 
     #endregion
@@ -1193,6 +1225,89 @@ public partial class MainWindow : FluentWindow
         _viewModel.AiAnalysisPeriodSettings = settings;
         Log4.Info($"AI 분석 기간 설정: {settings.ToDisplayString()}");
         _viewModel.StatusMessage = $"AI 분석 기간: {settings.ToDisplayString()}";
+        UpdateAIAnalysisPeriodCurrentDisplay(settings);
+    }
+
+    /// <summary>
+    /// AI 분석 기간 현재 설정 표시 업데이트
+    /// </summary>
+    private void UpdateAIAnalysisPeriodCurrentDisplay(SyncPeriodSettings? settings = null)
+    {
+        settings ??= _viewModel.AiAnalysisPeriodSettings ?? SyncPeriodSettings.Default;
+        if (MenuAIAnalysisPeriodCurrent != null)
+        {
+            MenuAIAnalysisPeriodCurrent.Header = $"현재: {settings.ToDisplayString()}";
+        }
+    }
+
+    // 메일 동기화 주기 설정
+    private void MenuSyncInterval1s_Click(object sender, RoutedEventArgs e) => SetSyncInterval(1);
+    private void MenuSyncInterval5s_Click(object sender, RoutedEventArgs e) => SetSyncInterval(5);
+    private void MenuSyncInterval10s_Click(object sender, RoutedEventArgs e) => SetSyncInterval(10);
+    private void MenuSyncInterval30s_Click(object sender, RoutedEventArgs e) => SetSyncInterval(30);
+    private void MenuSyncInterval1m_Click(object sender, RoutedEventArgs e) => SetSyncInterval(60);
+    private void MenuSyncInterval5m_Click(object sender, RoutedEventArgs e) => SetSyncInterval(300);
+    private void MenuSyncInterval10m_Click(object sender, RoutedEventArgs e) => SetSyncInterval(600);
+    private void MenuSyncInterval30m_Click(object sender, RoutedEventArgs e) => SetSyncInterval(1800);
+    private void MenuSyncInterval1h_Click(object sender, RoutedEventArgs e) => SetSyncInterval(3600);
+
+    private void SetSyncInterval(int seconds)
+    {
+        _viewModel.SetSyncInterval(seconds);
+        var displayText = GetIntervalDisplayText(seconds);
+        Log4.Info($"동기화 주기 설정: {displayText}");
+        _viewModel.StatusMessage = $"동기화 주기: {displayText}";
+        UpdateSyncIntervalCurrentDisplay(seconds);
+    }
+
+    private void UpdateSyncIntervalCurrentDisplay(int? seconds = null)
+    {
+        seconds ??= _viewModel.SyncIntervalSeconds;
+        if (MenuSyncIntervalCurrent != null)
+        {
+            MenuSyncIntervalCurrent.Header = $"현재: {GetIntervalDisplayText(seconds.Value)}";
+        }
+    }
+
+    // AI 분석 주기 설정
+    private void MenuAIInterval1s_Click(object sender, RoutedEventArgs e) => SetAIAnalysisInterval(1);
+    private void MenuAIInterval5s_Click(object sender, RoutedEventArgs e) => SetAIAnalysisInterval(5);
+    private void MenuAIInterval10s_Click(object sender, RoutedEventArgs e) => SetAIAnalysisInterval(10);
+    private void MenuAIInterval30s_Click(object sender, RoutedEventArgs e) => SetAIAnalysisInterval(30);
+    private void MenuAIInterval1m_Click(object sender, RoutedEventArgs e) => SetAIAnalysisInterval(60);
+    private void MenuAIInterval5m_Click(object sender, RoutedEventArgs e) => SetAIAnalysisInterval(300);
+    private void MenuAIInterval10m_Click(object sender, RoutedEventArgs e) => SetAIAnalysisInterval(600);
+    private void MenuAIInterval30m_Click(object sender, RoutedEventArgs e) => SetAIAnalysisInterval(1800);
+    private void MenuAIInterval1h_Click(object sender, RoutedEventArgs e) => SetAIAnalysisInterval(3600);
+
+    private void SetAIAnalysisInterval(int seconds)
+    {
+        _viewModel.SetAIAnalysisInterval(seconds);
+        var displayText = GetIntervalDisplayText(seconds);
+        Log4.Info($"AI 분석 주기 설정: {displayText}");
+        _viewModel.StatusMessage = $"AI 분석 주기: {displayText}";
+        UpdateAIAnalysisIntervalCurrentDisplay(seconds);
+    }
+
+    private void UpdateAIAnalysisIntervalCurrentDisplay(int? seconds = null)
+    {
+        seconds ??= _viewModel.AIAnalysisIntervalSeconds;
+        if (MenuAIAnalysisIntervalCurrent != null)
+        {
+            MenuAIAnalysisIntervalCurrent.Header = $"현재: {GetIntervalDisplayText(seconds.Value)}";
+        }
+    }
+
+    private static string GetIntervalDisplayText(int seconds)
+    {
+        return seconds switch
+        {
+            < 60 => $"{seconds}초",
+            60 => "1분",
+            < 3600 => $"{seconds / 60}분",
+            3600 => "1시간",
+            _ => $"{seconds / 3600}시간"
+        };
     }
 
     /// <summary>
@@ -1224,6 +1339,27 @@ public partial class MainWindow : FluentWindow
                 _viewModel.AiAnalysisPeriodSettings = dialog.AiAnalysisSettings;
 
             _viewModel.StatusMessage = "동기화 설정이 저장되었습니다.";
+        }
+    }
+
+    /// <summary>
+    /// 전체 재동기화 메뉴 클릭
+    /// </summary>
+    private async void MenuForceResync_Click(object sender, RoutedEventArgs e)
+    {
+        Log4.Info("메뉴: 전체 재동기화 클릭");
+        _viewModel.StatusMessage = "전체 재동기화 시작...";
+
+        try
+        {
+            // BackgroundSyncService를 통해 강제 동기화
+            await _viewModel.ForceResyncAllAsync();
+            _viewModel.StatusMessage = "전체 재동기화 완료";
+        }
+        catch (Exception ex)
+        {
+            Log4.Error($"전체 재동기화 실패: {ex.Message}");
+            _viewModel.StatusMessage = $"재동기화 실패: {ex.Message}";
         }
     }
 
@@ -1618,7 +1754,9 @@ public partial class MainWindow : FluentWindow
                 return;
             }
 
-            var viewModel = new ViewModels.ComposeViewModel(graphMailService, mode, originalEmail);
+            // 보낸메일 즉시 동기화를 위해 BackgroundSyncService도 전달
+            var syncService = (App.Current as App)?.BackgroundSyncService;
+            var viewModel = new ViewModels.ComposeViewModel(graphMailService, syncService, mode, originalEmail);
             var composeWindow = new ComposeWindow(viewModel);
             composeWindow.Owner = this;
             composeWindow.ShowDialog();
@@ -2958,7 +3096,7 @@ public partial class MainWindow : FluentWindow
     }
 
     /// <summary>
-    /// AI 분석 별 색상 업데이트 (테마에 따라)
+    /// AI 분석 별 색상 및 메뉴 아이콘 색상 업데이트 (테마에 따라)
     /// </summary>
     private void UpdateAISyncStarColors(bool isDarkMode)
     {
@@ -2971,6 +3109,18 @@ public partial class MainWindow : FluentWindow
                 (System.Windows.Media.Color)System.Windows.Media.ColorConverter.ConvertFromString("#FFDF00"));
             AISyncStar3.Foreground = new System.Windows.Media.SolidColorBrush(
                 (System.Windows.Media.Color)System.Windows.Media.ColorConverter.ConvertFromString("#FFC125"));
+
+            // AI 메뉴 아이콘 색상 (다크모드)
+            MenuAISyncPauseIcon.Foreground = new System.Windows.Media.SolidColorBrush(
+                (System.Windows.Media.Color)System.Windows.Media.ColorConverter.ConvertFromString("#FFD700")); // 분석 중지: 노랑
+            MenuAISyncResumeIcon.Foreground = new System.Windows.Media.SolidColorBrush(
+                (System.Windows.Media.Color)System.Windows.Media.ColorConverter.ConvertFromString("#888888")); // 분석 시작: 회색
+
+            // 메일 동기화 메뉴 아이콘 색상 (다크모드)
+            MenuMailSyncPauseIcon.Foreground = new System.Windows.Media.SolidColorBrush(
+                (System.Windows.Media.Color)System.Windows.Media.ColorConverter.ConvertFromString("#2196F3")); // 동기화 중지: 파랑
+            MenuMailSyncResumeIcon.Foreground = new System.Windows.Media.SolidColorBrush(
+                (System.Windows.Media.Color)System.Windows.Media.ColorConverter.ConvertFromString("#888888")); // 동기화 시작: 회색
         }
         else
         {
@@ -2981,6 +3131,18 @@ public partial class MainWindow : FluentWindow
                 (System.Windows.Media.Color)System.Windows.Media.ColorConverter.ConvertFromString("#D98C00"));
             AISyncStar3.Foreground = new System.Windows.Media.SolidColorBrush(
                 (System.Windows.Media.Color)System.Windows.Media.ColorConverter.ConvertFromString("#CC7A00"));
+
+            // AI 메뉴 아이콘 색상 (라이트모드: 진한 색상)
+            MenuAISyncPauseIcon.Foreground = new System.Windows.Media.SolidColorBrush(
+                (System.Windows.Media.Color)System.Windows.Media.ColorConverter.ConvertFromString("#E69500")); // 분석 중지: 진한 주황
+            MenuAISyncResumeIcon.Foreground = new System.Windows.Media.SolidColorBrush(
+                (System.Windows.Media.Color)System.Windows.Media.ColorConverter.ConvertFromString("#555555")); // 분석 시작: 진한 회색
+
+            // 메일 동기화 메뉴 아이콘 색상 (라이트모드: 진한 색상)
+            MenuMailSyncPauseIcon.Foreground = new System.Windows.Media.SolidColorBrush(
+                (System.Windows.Media.Color)System.Windows.Media.ColorConverter.ConvertFromString("#1565C0")); // 동기화 중지: 진한 파랑
+            MenuMailSyncResumeIcon.Foreground = new System.Windows.Media.SolidColorBrush(
+                (System.Windows.Media.Color)System.Windows.Media.ColorConverter.ConvertFromString("#555555")); // 동기화 시작: 진한 회색
         }
     }
 

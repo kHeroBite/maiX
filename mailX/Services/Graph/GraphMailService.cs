@@ -174,11 +174,11 @@ namespace mailX.Services.Graph
 
             try
             {
-                // 필요한 필드 명시적 선택
+                // 필요한 필드 명시적 선택 (categories, parentFolderId 추가)
                 var selectFields = new[] {
                     "id", "internetMessageId", "conversationId", "subject", "body",
-                    "from", "toRecipients", "ccRecipients", "receivedDateTime",
-                    "isRead", "flag", "importance", "hasAttachments"
+                    "from", "toRecipients", "ccRecipients", "bccRecipients", "receivedDateTime",
+                    "isRead", "flag", "importance", "hasAttachments", "categories", "parentFolderId"
                 };
 
                 Microsoft.Graph.Me.MailFolders.Item.Messages.Delta.DeltaGetResponse? response;

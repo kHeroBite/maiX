@@ -856,6 +856,36 @@ public partial class MainViewModel : ViewModelBase
     }
 
     /// <summary>
+    /// 현재 동기화 주기 (초)
+    /// </summary>
+    public int SyncIntervalSeconds => _syncService.SyncIntervalSeconds;
+
+    /// <summary>
+    /// 동기화 주기 설정
+    /// </summary>
+    public void SetSyncInterval(int seconds)
+    {
+        _syncService.SetSyncInterval(seconds);
+    }
+
+    /// <summary>
+    /// 현재 AI 분석 주기 (초)
+    /// </summary>
+    private int _aiAnalysisIntervalSeconds = 300;  // 기본값: 5분
+    public int AIAnalysisIntervalSeconds => _aiAnalysisIntervalSeconds;
+
+    /// <summary>
+    /// AI 분석 주기 설정
+    /// </summary>
+    public void SetAIAnalysisInterval(int seconds)
+    {
+        if (seconds < 1) seconds = 1;
+        if (seconds > 3600) seconds = 3600;
+        _aiAnalysisIntervalSeconds = seconds;
+        Log4.Info($"AI 분석 주기 변경: {seconds}초");
+    }
+
+    /// <summary>
     /// 메일 목록 새로고침
     /// </summary>
     [RelayCommand]
@@ -1831,13 +1861,19 @@ public partial class MainViewModel : ViewModelBase
 
                 try
                 {
-                    // Graph API로 메일 이동
-                    await _graphMailService.MoveMessageAsync(email.EntryId, targetFolder.Id);
+                    // Graph API로 메일 이동 (이동 후 새 EntryId 반환됨)
+                    var movedMessage = await _graphMailService.MoveMessageAsync(email.EntryId, targetFolder.Id);
 
-                    // 로컬 DB 업데이트
+                    // 로컬 DB 업데이트 (새 EntryId와 폴더 ID)
                     var dbEmail = await _dbContext.Emails.FindAsync(email.Id);
                     if (dbEmail != null)
                     {
+                        // 이동하면 EntryId가 변경됨 - 새 ID로 업데이트
+                        if (movedMessage != null && !string.IsNullOrEmpty(movedMessage.Id))
+                        {
+                            dbEmail.EntryId = movedMessage.Id;
+                            email.EntryId = movedMessage.Id; // 메모리 상 객체도 업데이트
+                        }
                         dbEmail.ParentFolderId = targetFolder.Id;
                         await _dbContext.SaveChangesAsync();
                     }
@@ -1861,6 +1897,34 @@ public partial class MainViewModel : ViewModelBase
                 : $"'{targetFolder.DisplayName}'으로 {completed}건 이동 완료";
             Log4.Info($"메일 이동 완료: {completed}건 → {targetFolder.DisplayName}");
         }, "메일 이동 실패");
+    }
+
+    /// <summary>
+    /// 전체 폴더 강제 재동기화
+    /// </summary>
+    public async Task ForceResyncAllAsync()
+    {
+        Log4.Info("전체 재동기화 시작");
+        StatusMessage = "전체 폴더 재동기화 중...";
+
+        try
+        {
+            // BackgroundSyncService를 통해 강제 동기화
+            await _syncService.SyncFoldersAsync();
+            await _syncService.SyncAllAccountsAsync();
+
+            // 현재 폴더 목록 새로고침
+            await LoadFoldersCommand.ExecuteAsync(null);
+
+            StatusMessage = "전체 재동기화 완료";
+            Log4.Info("전체 재동기화 완료");
+        }
+        catch (Exception ex)
+        {
+            Log4.Error($"전체 재동기화 실패: {ex.Message}");
+            StatusMessage = $"재동기화 실패: {ex.Message}";
+            throw;
+        }
     }
 
     /// <summary>

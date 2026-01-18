@@ -4,6 +4,7 @@ using CommunityToolkit.Mvvm.Input;
 using Microsoft.Graph.Models;
 using mailX.Models;
 using mailX.Services.Graph;
+using mailX.Services.Sync;
 using mailX.Utils;
 
 namespace mailX.ViewModels;
@@ -40,6 +41,7 @@ public partial class AttachmentItem : ObservableObject
 public partial class ComposeViewModel : ViewModelBase
 {
     private readonly GraphMailService _graphMailService;
+    private readonly BackgroundSyncService? _syncService;
     private readonly ComposeMode _mode;
     private readonly Models.Email? _originalEmail;
 
@@ -98,9 +100,14 @@ public partial class ComposeViewModel : ViewModelBase
     /// <summary>
     /// 생성자
     /// </summary>
-    public ComposeViewModel(GraphMailService graphMailService, ComposeMode mode = ComposeMode.New, Models.Email? originalEmail = null)
+    public ComposeViewModel(
+        GraphMailService graphMailService, 
+        BackgroundSyncService? syncService = null,
+        ComposeMode mode = ComposeMode.New, 
+        Models.Email? originalEmail = null)
     {
         _graphMailService = graphMailService;
+        _syncService = syncService;
         _mode = mode;
         _originalEmail = originalEmail;
 
@@ -285,6 +292,24 @@ public partial class ComposeViewModel : ViewModelBase
             await _graphMailService.SendMessageAsync(message);
 
             Log4.Info($"메일 발송 성공: To={To}, Subject={Subject}");
+
+            // 보낸편지함 즉시 동기화 (비동기로 백그라운드 실행)
+            if (_syncService != null && _originalEmail != null)
+            {
+                _ = Task.Run(async () =>
+                {
+                    try
+                    {
+                        await Task.Delay(1000); // 서버 반영 대기
+                        await _syncService.SyncSentItemsAsync(_originalEmail.AccountEmail);
+                    }
+                    catch (Exception ex)
+                    {
+                        Log4.Warn($"보낸편지함 동기화 실패: {ex.Message}");
+                    }
+                });
+            }
+
             return true;
         }
         catch (Exception ex)

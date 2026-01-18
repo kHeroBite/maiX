@@ -107,9 +107,30 @@
                                     <TextBlock Text="메일" VerticalAlignment="Center"/>
                                 </StackPanel>
                             </MenuItem.Header>
+                            <MenuItem x:Name="MenuMailSyncPause" Click="MenuMailSyncPause_Click"
+                                      Visibility="{Binding IsSyncPaused, Converter={StaticResource BoolToVisibilityConverter}, ConverterParameter=Invert}">
+                                <MenuItem.Header>
+                                    <StackPanel Orientation="Horizontal">
+                                        <TextBlock x:Name="MenuMailSyncPauseIcon" Text="📩" Foreground="#2196F3" VerticalAlignment="Center" Margin="0,0,6,0"/>
+                                        <TextBlock Text="동기화 중지" VerticalAlignment="Center"/>
+                                    </StackPanel>
+                                </MenuItem.Header>
+                            </MenuItem>
+                            <MenuItem x:Name="MenuMailSyncResume" Click="MenuMailSyncResume_Click"
+                                      Visibility="{Binding IsSyncPaused, Converter={StaticResource BoolToVisibilityConverter}}">
+                                <MenuItem.Header>
+                                    <StackPanel Orientation="Horizontal">
+                                        <TextBlock x:Name="MenuMailSyncResumeIcon" Text="📩" Foreground="#888888" VerticalAlignment="Center" Margin="0,0,6,0"/>
+                                        <TextBlock Text="동기화 시작" VerticalAlignment="Center"/>
+                                    </StackPanel>
+                                </MenuItem.Header>
+                            </MenuItem>
                             <MenuItem x:Name="MenuSyncPeriod">
                                 <MenuItem.Header>
-                                    <TextBlock Text="📧 동기화 기간" VerticalAlignment="Center" Margin="0,0,20,0"/>
+                                    <StackPanel Orientation="Horizontal">
+                                        <TextBlock Text="📧" VerticalAlignment="Center" Margin="0,0,6,0"/>
+                                        <TextBlock Text="동기화 기간" VerticalAlignment="Center"/>
+                                    </StackPanel>
                                 </MenuItem.Header>
                                 <!-- 현재 설정 표시 -->
                                 <MenuItem x:Name="MenuSyncPeriodCurrent" Header="현재: 최근 5건" IsEnabled="False" FontStyle="Italic"/>
@@ -123,6 +144,34 @@
                                 <Separator/>
                                 <MenuItem Header="⚙️ 동기화 기간 상세설정" Click="MenuSyncSettings_Click"/>
                             </MenuItem>
+                            <MenuItem x:Name="MenuSyncInterval">
+                                <MenuItem.Header>
+                                    <StackPanel Orientation="Horizontal">
+                                        <TextBlock Text="⏱️" VerticalAlignment="Center" Margin="0,0,6,0"/>
+                                        <TextBlock Text="동기화 주기" VerticalAlignment="Center"/>
+                                    </StackPanel>
+                                </MenuItem.Header>
+                                <!-- 현재 설정 표시 -->
+                                <MenuItem x:Name="MenuSyncIntervalCurrent" Header="현재: 5분" IsEnabled="False" FontStyle="Italic"/>
+                                <Separator/>
+                                <MenuItem x:Name="MenuSyncInterval1s" Header="⚡ 1초" Click="MenuSyncInterval1s_Click"/>
+                                <MenuItem x:Name="MenuSyncInterval5s" Header="⚡ 5초" Click="MenuSyncInterval5s_Click"/>
+                                <MenuItem x:Name="MenuSyncInterval10s" Header="⚡ 10초" Click="MenuSyncInterval10s_Click"/>
+                                <MenuItem x:Name="MenuSyncInterval30s" Header="⏱️ 30초" Click="MenuSyncInterval30s_Click"/>
+                                <MenuItem x:Name="MenuSyncInterval1m" Header="⏱️ 1분" Click="MenuSyncInterval1m_Click"/>
+                                <MenuItem x:Name="MenuSyncInterval5m" Header="⏱️ 5분" Click="MenuSyncInterval5m_Click"/>
+                                <MenuItem x:Name="MenuSyncInterval10m" Header="⏱️ 10분" Click="MenuSyncInterval10m_Click"/>
+                                <MenuItem x:Name="MenuSyncInterval30m" Header="🕐 30분" Click="MenuSyncInterval30m_Click"/>
+                                <MenuItem x:Name="MenuSyncInterval1h" Header="🕐 1시간" Click="MenuSyncInterval1h_Click"/>
+                            </MenuItem>
+                            <MenuItem Click="MenuForceResync_Click">
+                                <MenuItem.Header>
+                                    <StackPanel Orientation="Horizontal">
+                                        <TextBlock Text="🔄" VerticalAlignment="Center" Margin="0,0,6,0"/>
+                                        <TextBlock Text="전체 재동기화" VerticalAlignment="Center"/>
+                                    </StackPanel>
+                                </MenuItem.Header>
+                            </MenuItem>
                         </MenuItem>
                         <MenuItem Padding="8,4">
                             <MenuItem.Header>
@@ -131,18 +180,20 @@
                                     <TextBlock Text="Ai" VerticalAlignment="Center"/>
                                 </StackPanel>
                             </MenuItem.Header>
-                            <MenuItem x:Name="MenuAISyncPause2" Click="MenuAISyncPause_Click" Visibility="Collapsed">
+                            <MenuItem x:Name="MenuAISyncPause2" Click="MenuAISyncPause_Click"
+                                      Visibility="{Binding IsAISyncPaused, Converter={StaticResource BoolToVisibilityConverter}, ConverterParameter=Invert}">
                                 <MenuItem.Header>
                                     <StackPanel Orientation="Horizontal">
-                                        <TextBlock Text="✨" Foreground="#888888" VerticalAlignment="Center" Margin="0,0,6,0"/>
+                                        <TextBlock x:Name="MenuAISyncPauseIcon" Text="✨" Foreground="#FFD700" VerticalAlignment="Center" Margin="0,0,6,0"/>
                                         <TextBlock Text="분석 중지" VerticalAlignment="Center"/>
                                     </StackPanel>
                                 </MenuItem.Header>
                             </MenuItem>
-                            <MenuItem x:Name="MenuAISyncResume2" Click="MenuAISyncResume_Click">
+                            <MenuItem x:Name="MenuAISyncResume2" Click="MenuAISyncResume_Click"
+                                      Visibility="{Binding IsAISyncPaused, Converter={StaticResource BoolToVisibilityConverter}}">
                                 <MenuItem.Header>
                                     <StackPanel Orientation="Horizontal">
-                                        <TextBlock Text="✨" Foreground="#FFD700" VerticalAlignment="Center" Margin="0,0,6,0"/>
+                                        <TextBlock x:Name="MenuAISyncResumeIcon" Text="✨" Foreground="#888888" VerticalAlignment="Center" Margin="0,0,6,0"/>
                                         <TextBlock Text="분석 시작" VerticalAlignment="Center"/>
                                     </StackPanel>
                                 </MenuItem.Header>
@@ -164,7 +215,27 @@
                                 <MenuItem x:Name="MenuAIAnalysisYear" Header="📅 1년" Click="MenuAIAnalysisYear_Click"/>
                                 <MenuItem x:Name="MenuAIAnalysisAll" Header="♾️ 전체" Click="MenuAIAnalysisAll_Click"/>
                                 <Separator/>
-                                <MenuItem Header="⚙️ 동기화 기간 상세설정" Click="MenuSyncSettings_Click"/>
+                                <MenuItem Header="⚙️ 분석 기간 상세설정" Click="MenuSyncSettings_Click"/>
+                            </MenuItem>
+                            <MenuItem x:Name="MenuAIAnalysisInterval">
+                                <MenuItem.Header>
+                                    <StackPanel Orientation="Horizontal">
+                                        <TextBlock Text="⏱️" VerticalAlignment="Center" Margin="0,0,6,0"/>
+                                        <TextBlock Text="분석 주기" VerticalAlignment="Center"/>
+                                    </StackPanel>
+                                </MenuItem.Header>
+                                <!-- 현재 설정 표시 -->
+                                <MenuItem x:Name="MenuAIAnalysisIntervalCurrent" Header="현재: 5분" IsEnabled="False" FontStyle="Italic"/>
+                                <Separator/>
+                                <MenuItem x:Name="MenuAIInterval1s" Header="⚡ 1초" Click="MenuAIInterval1s_Click"/>
+                                <MenuItem x:Name="MenuAIInterval5s" Header="⚡ 5초" Click="MenuAIInterval5s_Click"/>
+                                <MenuItem x:Name="MenuAIInterval10s" Header="⚡ 10초" Click="MenuAIInterval10s_Click"/>
+                                <MenuItem x:Name="MenuAIInterval30s" Header="⏱️ 30초" Click="MenuAIInterval30s_Click"/>
+                                <MenuItem x:Name="MenuAIInterval1m" Header="⏱️ 1분" Click="MenuAIInterval1m_Click"/>
+                                <MenuItem x:Name="MenuAIInterval5m" Header="⏱️ 5분" Click="MenuAIInterval5m_Click"/>
+                                <MenuItem x:Name="MenuAIInterval10m" Header="⏱️ 10분" Click="MenuAIInterval10m_Click"/>
+                                <MenuItem x:Name="MenuAIInterval30m" Header="🕐 30분" Click="MenuAIInterval30m_Click"/>
+                                <MenuItem x:Name="MenuAIInterval1h" Header="🕐 1시간" Click="MenuAIInterval1h_Click"/>
                             </MenuItem>
                         </MenuItem>
                         <MenuItem Padding="8,4">
