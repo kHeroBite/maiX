@@ -84,4 +84,28 @@ public class UserPreferencesSettings
     /// </summary>
     [XmlElement("IsAiAnalysisPaused")]
     public bool IsAiAnalysisPaused { get; set; } = false;
+
+    /// <summary>
+    /// 즐겨찾기 메일 동기화 주기 (초 단위) - 기본 30초
+    /// </summary>
+    [XmlElement("FavoriteSyncIntervalSeconds")]
+    public int FavoriteSyncIntervalSeconds { get; set; } = 30;
+
+    /// <summary>
+    /// 전체메일 동기화 주기 (초 단위) - 기본 5분(300초)
+    /// </summary>
+    [XmlElement("FullSyncIntervalSeconds")]
+    public int FullSyncIntervalSeconds { get; set; } = 300;
+
+    /// <summary>
+    /// 즐겨찾기 AI 분석 주기 (초 단위) - 기본 30초
+    /// </summary>
+    [XmlElement("FavoriteAnalysisIntervalSeconds")]
+    public int FavoriteAnalysisIntervalSeconds { get; set; } = 30;
+
+    /// <summary>
+    /// 전체메일 AI 분석 주기 (초 단위) - 기본 5분(300초)
+    /// </summary>
+    [XmlElement("FullAnalysisIntervalSeconds")]
+    public int FullAnalysisIntervalSeconds { get; set; } = 300;
 }

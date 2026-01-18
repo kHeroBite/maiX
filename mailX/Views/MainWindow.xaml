@@ -188,30 +188,46 @@
                                 <Separator/>
                                 <MenuItem Header="상세설정" Click="MenuSyncSettings_Click"/>
                             </MenuItem>
-                            <MenuItem x:Name="MenuSyncInterval">
+                            <!-- 즐겨찾기 동기화 주기 -->
+                            <MenuItem x:Name="MenuFavoriteSyncInterval">
                                 <MenuItem.Header>
-                                    <Grid MinWidth="100">
+                                    <Grid MinWidth="130">
                                         <Grid.ColumnDefinitions>
                                             <ColumnDefinition Width="20"/>
                                             <ColumnDefinition Width="*"/>
-                                            <ColumnDefinition Width="30"/>
                                         </Grid.ColumnDefinitions>
-                                        <ui:SymbolIcon Grid.Column="0" Symbol="Clock24" FontSize="12" HorizontalAlignment="Left"/>
-                                        <TextBlock Grid.Column="1" Text="동기화 주기" VerticalAlignment="Center"/>
+                                        <ui:SymbolIcon Grid.Column="0" Symbol="Star24" FontSize="12" HorizontalAlignment="Left"/>
+                                        <TextBlock Grid.Column="1" Text="즐겨찾기 동기화 주기" VerticalAlignment="Center"/>
                                     </Grid>
                                 </MenuItem.Header>
-                                <!-- 현재 설정 표시 -->
-                                <MenuItem x:Name="MenuSyncIntervalCurrent" Header="현재: 5분" IsEnabled="False" FontStyle="Italic"/>
+                                <MenuItem x:Name="MenuFavoriteSyncIntervalCurrent" Header="현재: 5초" IsEnabled="False" FontStyle="Italic"/>
                                 <Separator/>
-                                <MenuItem x:Name="MenuSyncInterval1s" Header="1초" Click="MenuSyncInterval1s_Click"/>
-                                <MenuItem x:Name="MenuSyncInterval5s" Header="5초" Click="MenuSyncInterval5s_Click"/>
-                                <MenuItem x:Name="MenuSyncInterval10s" Header="10초" Click="MenuSyncInterval10s_Click"/>
-                                <MenuItem x:Name="MenuSyncInterval30s" Header="30초" Click="MenuSyncInterval30s_Click"/>
-                                <MenuItem x:Name="MenuSyncInterval1m" Header="1분" Click="MenuSyncInterval1m_Click"/>
-                                <MenuItem x:Name="MenuSyncInterval5m" Header="5분" Click="MenuSyncInterval5m_Click"/>
-                                <MenuItem x:Name="MenuSyncInterval10m" Header="10분" Click="MenuSyncInterval10m_Click"/>
-                                <MenuItem x:Name="MenuSyncInterval30m" Header="30분" Click="MenuSyncInterval30m_Click"/>
-                                <MenuItem x:Name="MenuSyncInterval1h" Header="1시간" Click="MenuSyncInterval1h_Click"/>
+                                <MenuItem x:Name="MenuFavoriteSyncInterval1s" Header="1초" Click="MenuFavoriteSyncInterval_Click" Tag="1"/>
+                                <MenuItem x:Name="MenuFavoriteSyncInterval5s" Header="5초" Click="MenuFavoriteSyncInterval_Click" Tag="5"/>
+                                <MenuItem x:Name="MenuFavoriteSyncInterval10s" Header="10초" Click="MenuFavoriteSyncInterval_Click" Tag="10"/>
+                                <MenuItem x:Name="MenuFavoriteSyncInterval30s" Header="30초" Click="MenuFavoriteSyncInterval_Click" Tag="30"/>
+                                <MenuItem x:Name="MenuFavoriteSyncInterval1m" Header="1분" Click="MenuFavoriteSyncInterval_Click" Tag="60"/>
+                                <MenuItem x:Name="MenuFavoriteSyncInterval5m" Header="5분" Click="MenuFavoriteSyncInterval_Click" Tag="300"/>
+                            </MenuItem>
+                            <!-- 전체메일 동기화 주기 -->
+                            <MenuItem x:Name="MenuFullSyncInterval">
+                                <MenuItem.Header>
+                                    <Grid MinWidth="130">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="20"/>
+                                            <ColumnDefinition Width="*"/>
+                                        </Grid.ColumnDefinitions>
+                                        <ui:SymbolIcon Grid.Column="0" Symbol="Clock24" FontSize="12" HorizontalAlignment="Left"/>
+                                        <TextBlock Grid.Column="1" Text="전체메일 동기화 주기" VerticalAlignment="Center"/>
+                                    </Grid>
+                                </MenuItem.Header>
+                                <MenuItem x:Name="MenuFullSyncIntervalCurrent" Header="현재: 5분" IsEnabled="False" FontStyle="Italic"/>
+                                <Separator/>
+                                <MenuItem x:Name="MenuFullSyncInterval1m" Header="1분" Click="MenuFullSyncInterval_Click" Tag="60"/>
+                                <MenuItem x:Name="MenuFullSyncInterval5m" Header="5분" Click="MenuFullSyncInterval_Click" Tag="300"/>
+                                <MenuItem x:Name="MenuFullSyncInterval10m" Header="10분" Click="MenuFullSyncInterval_Click" Tag="600"/>
+                                <MenuItem x:Name="MenuFullSyncInterval30m" Header="30분" Click="MenuFullSyncInterval_Click" Tag="1800"/>
+                                <MenuItem x:Name="MenuFullSyncInterval1h" Header="1시간" Click="MenuFullSyncInterval_Click" Tag="3600"/>
                             </MenuItem>
                             <MenuItem Click="MenuForceResync_Click">
                                 <MenuItem.Header>
@@ -283,30 +299,46 @@
                                 <Separator/>
                                 <MenuItem Header="상세설정" Click="MenuSyncSettings_Click"/>
                             </MenuItem>
-                            <MenuItem x:Name="MenuAIAnalysisInterval">
+                            <!-- 즐겨찾기 분석 주기 -->
+                            <MenuItem x:Name="MenuFavoriteAnalysisInterval">
                                 <MenuItem.Header>
-                                    <Grid MinWidth="100">
+                                    <Grid MinWidth="130">
                                         <Grid.ColumnDefinitions>
                                             <ColumnDefinition Width="20"/>
                                             <ColumnDefinition Width="*"/>
-                                            <ColumnDefinition Width="30"/>
                                         </Grid.ColumnDefinitions>
-                                        <ui:SymbolIcon Grid.Column="0" Symbol="Clock24" FontSize="12" HorizontalAlignment="Left"/>
-                                        <TextBlock Grid.Column="1" Text="분석 주기" VerticalAlignment="Center"/>
+                                        <ui:SymbolIcon Grid.Column="0" Symbol="Star24" FontSize="12" HorizontalAlignment="Left"/>
+                                        <TextBlock Grid.Column="1" Text="즐겨찾기 분석 주기" VerticalAlignment="Center"/>
                                     </Grid>
                                 </MenuItem.Header>
-                                <!-- 현재 설정 표시 -->
-                                <MenuItem x:Name="MenuAIAnalysisIntervalCurrent" Header="현재: 5분" IsEnabled="False" FontStyle="Italic"/>
+                                <MenuItem x:Name="MenuFavoriteAnalysisIntervalCurrent" Header="현재: 5초" IsEnabled="False" FontStyle="Italic"/>
                                 <Separator/>
-                                <MenuItem x:Name="MenuAIInterval1s" Header="1초" Click="MenuAIInterval1s_Click"/>
-                                <MenuItem x:Name="MenuAIInterval5s" Header="5초" Click="MenuAIInterval5s_Click"/>
-                                <MenuItem x:Name="MenuAIInterval10s" Header="10초" Click="MenuAIInterval10s_Click"/>
-                                <MenuItem x:Name="MenuAIInterval30s" Header="30초" Click="MenuAIInterval30s_Click"/>
-                                <MenuItem x:Name="MenuAIInterval1m" Header="1분" Click="MenuAIInterval1m_Click"/>
-                                <MenuItem x:Name="MenuAIInterval5m" Header="5분" Click="MenuAIInterval5m_Click"/>
-                                <MenuItem x:Name="MenuAIInterval10m" Header="10분" Click="MenuAIInterval10m_Click"/>
-                                <MenuItem x:Name="MenuAIInterval30m" Header="30분" Click="MenuAIInterval30m_Click"/>
-                                <MenuItem x:Name="MenuAIInterval1h" Header="1시간" Click="MenuAIInterval1h_Click"/>
+                                <MenuItem x:Name="MenuFavoriteAnalysisInterval1s" Header="1초" Click="MenuFavoriteAnalysisInterval_Click" Tag="1"/>
+                                <MenuItem x:Name="MenuFavoriteAnalysisInterval5s" Header="5초" Click="MenuFavoriteAnalysisInterval_Click" Tag="5"/>
+                                <MenuItem x:Name="MenuFavoriteAnalysisInterval10s" Header="10초" Click="MenuFavoriteAnalysisInterval_Click" Tag="10"/>
+                                <MenuItem x:Name="MenuFavoriteAnalysisInterval30s" Header="30초" Click="MenuFavoriteAnalysisInterval_Click" Tag="30"/>
+                                <MenuItem x:Name="MenuFavoriteAnalysisInterval1m" Header="1분" Click="MenuFavoriteAnalysisInterval_Click" Tag="60"/>
+                                <MenuItem x:Name="MenuFavoriteAnalysisInterval5m" Header="5분" Click="MenuFavoriteAnalysisInterval_Click" Tag="300"/>
+                            </MenuItem>
+                            <!-- 전체메일 분석 주기 -->
+                            <MenuItem x:Name="MenuFullAnalysisInterval">
+                                <MenuItem.Header>
+                                    <Grid MinWidth="130">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="20"/>
+                                            <ColumnDefinition Width="*"/>
+                                        </Grid.ColumnDefinitions>
+                                        <ui:SymbolIcon Grid.Column="0" Symbol="Clock24" FontSize="12" HorizontalAlignment="Left"/>
+                                        <TextBlock Grid.Column="1" Text="전체메일 분석 주기" VerticalAlignment="Center"/>
+                                    </Grid>
+                                </MenuItem.Header>
+                                <MenuItem x:Name="MenuFullAnalysisIntervalCurrent" Header="현재: 5분" IsEnabled="False" FontStyle="Italic"/>
+                                <Separator/>
+                                <MenuItem x:Name="MenuFullAnalysisInterval1m" Header="1분" Click="MenuFullAnalysisInterval_Click" Tag="60"/>
+                                <MenuItem x:Name="MenuFullAnalysisInterval5m" Header="5분" Click="MenuFullAnalysisInterval_Click" Tag="300"/>
+                                <MenuItem x:Name="MenuFullAnalysisInterval10m" Header="10분" Click="MenuFullAnalysisInterval_Click" Tag="600"/>
+                                <MenuItem x:Name="MenuFullAnalysisInterval30m" Header="30분" Click="MenuFullAnalysisInterval_Click" Tag="1800"/>
+                                <MenuItem x:Name="MenuFullAnalysisInterval1h" Header="1시간" Click="MenuFullAnalysisInterval_Click" Tag="3600"/>
                             </MenuItem>
                         </MenuItem>
                         <MenuItem Padding="8,4">

@@ -886,12 +886,12 @@ public partial class MainViewModel : ViewModelBase
     }
 
     /// <summary>
-    /// 현재 동기화 주기 (초)
+    /// 현재 동기화 주기 (초) - 하위 호환용
     /// </summary>
     public int SyncIntervalSeconds => _syncService.SyncIntervalSeconds;
 
     /// <summary>
-    /// 동기화 주기 설정
+    /// 동기화 주기 설정 - 하위 호환용
     /// </summary>
     public void SetSyncInterval(int seconds)
     {
@@ -899,13 +899,39 @@ public partial class MainViewModel : ViewModelBase
     }
 
     /// <summary>
-    /// 현재 AI 분석 주기 (초)
+    /// 즐겨찾기 동기화 주기 (초)
+    /// </summary>
+    public int FavoriteSyncIntervalSeconds => _syncService.FavoriteSyncIntervalSeconds;
+
+    /// <summary>
+    /// 전체 동기화 주기 (초)
+    /// </summary>
+    public int FullSyncIntervalSeconds => _syncService.FullSyncIntervalSeconds;
+
+    /// <summary>
+    /// 즐겨찾기 동기화 주기 설정
+    /// </summary>
+    public void SetFavoriteSyncInterval(int seconds)
+    {
+        _syncService.SetFavoriteSyncInterval(seconds);
+    }
+
+    /// <summary>
+    /// 전체 동기화 주기 설정
+    /// </summary>
+    public void SetFullSyncInterval(int seconds)
+    {
+        _syncService.SetFullSyncInterval(seconds);
+    }
+
+    /// <summary>
+    /// 현재 AI 분석 주기 (초) - 하위 호환용
     /// </summary>
     private int _aiAnalysisIntervalSeconds = 300;  // 기본값: 5분
     public int AIAnalysisIntervalSeconds => _aiAnalysisIntervalSeconds;
 
     /// <summary>
-    /// AI 분석 주기 설정
+    /// AI 분석 주기 설정 - 하위 호환용
     /// </summary>
     public void SetAIAnalysisInterval(int seconds)
     {
@@ -913,6 +939,40 @@ public partial class MainViewModel : ViewModelBase
         if (seconds > 3600) seconds = 3600;
         _aiAnalysisIntervalSeconds = seconds;
         Log4.Info($"AI 분석 주기 변경: {seconds}초");
+    }
+
+    /// <summary>
+    /// 즐겨찾기 AI 분석 주기 (초)
+    /// </summary>
+    private int _favoriteAnalysisIntervalSeconds = 30;  // 기본값: 30초
+    public int FavoriteAnalysisIntervalSeconds => _favoriteAnalysisIntervalSeconds;
+
+    /// <summary>
+    /// 전체 AI 분석 주기 (초)
+    /// </summary>
+    private int _fullAnalysisIntervalSeconds = 300;  // 기본값: 5분
+    public int FullAnalysisIntervalSeconds => _fullAnalysisIntervalSeconds;
+
+    /// <summary>
+    /// 즐겨찾기 AI 분석 주기 설정
+    /// </summary>
+    public void SetFavoriteAnalysisInterval(int seconds)
+    {
+        if (seconds < 1) seconds = 1;
+        if (seconds > 3600) seconds = 3600;
+        _favoriteAnalysisIntervalSeconds = seconds;
+        Log4.Info($"즐겨찾기 AI 분석 주기 변경: {seconds}초");
+    }
+
+    /// <summary>
+    /// 전체 AI 분석 주기 설정
+    /// </summary>
+    public void SetFullAnalysisInterval(int seconds)
+    {
+        if (seconds < 1) seconds = 1;
+        if (seconds > 3600) seconds = 3600;
+        _fullAnalysisIntervalSeconds = seconds;
+        Log4.Info($"전체 AI 분석 주기 변경: {seconds}초");
     }
 
     /// <summary>
@@ -1296,14 +1356,49 @@ public partial class MainViewModel : ViewModelBase
             // 메모리 상 데이터 업데이트
             email.IsRead = true;
 
-            // UI 갱신
-            OnPropertyChanged(nameof(Emails));
+            // UI 즉시 갱신: 컬렉션을 새로 설정하여 바인딩 갱신
+            Emails = new List<Email>(Emails);
+
+            // 폴더 안읽은 메일 수 업데이트
+            await UpdateFolderUnreadCountAsync(email.ParentFolderId);
 
             Log4.Debug($"메일 자동 읽음 처리: {email.Subject}");
         }
         catch (Exception ex)
         {
             Log4.Error($"자동 읽음 처리 실패: {ex.Message}");
+        }
+    }
+
+    /// <summary>
+    /// 폴더 안읽은 메일 수 업데이트
+    /// </summary>
+    private async Task UpdateFolderUnreadCountAsync(string? folderId)
+    {
+        if (string.IsNullOrEmpty(folderId)) return;
+
+        try
+        {
+            // 해당 폴더의 안읽은 메일 수 계산
+            var unreadCount = await _dbContext.Emails
+                .Where(e => e.ParentFolderId == folderId && !e.IsRead)
+                .CountAsync();
+
+            // 폴더 목록에서 해당 폴더 찾아서 업데이트
+            var folder = Folders.FirstOrDefault(f => f.Id == folderId);
+            if (folder != null)
+            {
+                folder.UnreadItemCount = unreadCount;
+
+                // UI 갱신: 폴더 목록 다시 설정
+                Folders = new List<Folder>(Folders);
+
+                Log4.Debug($"폴더 안읽은 메일 수 업데이트: {folder.DisplayName} = {unreadCount}");
+            }
+        }
+        catch (Exception ex)
+        {
+            Log4.Error($"폴더 안읽은 메일 수 업데이트 실패: {ex.Message}");
         }
     }
 

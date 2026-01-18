@@ -14,6 +14,7 @@ using mailX.Models;
 using mailX.Services.Analysis;
 using mailX.Services.Graph;
 using mailX.Services.Notification;
+using mailX.Utils;
 
 namespace mailX.Services.Sync;
 
@@ -26,17 +27,28 @@ public class BackgroundSyncService : BackgroundService
     private readonly IServiceProvider _serviceProvider;
     private readonly ILogger _logger;
 
-    // 동기화 설정
+    // 동기화 설정 (기존 - 하위 호환용)
     private int _syncIntervalSeconds = 300;  // 기본값: 5분 (300초)
     private const int MaxMessagesPerSync = 5;
     private const int MaxRetryCount = 3;
     private CancellationTokenSource? _intervalChangeCts;  // 주기 변경 시 타이머 재시작용
 
+    // 즐겨찾기/전체 동기화 분리 설정
+    private int _favoriteSyncIntervalSeconds = 30;   // 기본값: 30초
+    private int _fullSyncIntervalSeconds = 300;      // 기본값: 5분 (300초)
+    private CancellationTokenSource? _favoriteIntervalChangeCts;  // 즐겨찾기 주기 변경용
+    private CancellationTokenSource? _fullIntervalChangeCts;      // 전체 주기 변경용
+
     // 상태
     private DateTime _lastSyncTime = DateTime.MinValue;
+    private DateTime _lastFavoriteSyncTime = DateTime.MinValue;
+    private DateTime _lastFullSyncTime = DateTime.MinValue;
     private bool _isSyncing;
+    private bool _isFavoriteSyncing;
     private bool _isPaused;
     private int _syncCount;
+    private int _favoriteSyncCount;
+    private int _fullSyncCount;
     private int _errorCount;
 
     /// <summary>
@@ -50,9 +62,29 @@ public class BackgroundSyncService : BackgroundService
     public event Action<int>? SyncIntervalChanged;
 
     /// <summary>
+    /// 즐겨찾기 동기화 주기 변경 이벤트 (초 단위)
+    /// </summary>
+    public event Action<int>? FavoriteSyncIntervalChanged;
+
+    /// <summary>
+    /// 전체 동기화 주기 변경 이벤트 (초 단위)
+    /// </summary>
+    public event Action<int>? FullSyncIntervalChanged;
+
+    /// <summary>
     /// 현재 동기화 주기 (초)
     /// </summary>
     public int SyncIntervalSeconds => _syncIntervalSeconds;
+
+    /// <summary>
+    /// 즐겨찾기 동기화 주기 (초)
+    /// </summary>
+    public int FavoriteSyncIntervalSeconds => _favoriteSyncIntervalSeconds;
+
+    /// <summary>
+    /// 전체 동기화 주기 (초)
+    /// </summary>
+    public int FullSyncIntervalSeconds => _fullSyncIntervalSeconds;
 
     /// <summary>
     /// 폴더 동기화 완료 이벤트
@@ -127,72 +159,254 @@ public class BackgroundSyncService : BackgroundService
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
-        _logger.Information("백그라운드 동기화 서비스 시작 - 주기: {Interval}초 (Delta Query)", _syncIntervalSeconds);
+        Log4.Info($"[BackgroundSyncService] 백그라운드 동기화 서비스 시작 - 즐겨찾기: {_favoriteSyncIntervalSeconds}초, 전체: {_fullSyncIntervalSeconds}초");
+        _logger.Information("백그라운드 동기화 서비스 시작 - 즐겨찾기: {Favorite}초, 전체: {Full}초",
+            _favoriteSyncIntervalSeconds, _fullSyncIntervalSeconds);
 
-        // 시작 시 폴더 먼저 동기화
-        await SyncFoldersAsync(stoppingToken);
+        try
+        {
+            // 시작 시 폴더 먼저 동기화
+            Log4.Debug("[BackgroundSyncService] 초기 폴더 동기화 시작");
+            await SyncFoldersAsync(stoppingToken);
+            Log4.Debug("[BackgroundSyncService] 초기 폴더 동기화 완료");
 
-        // 시작 시 즉시 1회 동기화
-        await SyncAllAccountsAsync(stoppingToken);
+            // 시작 시 즉시 1회 동기화
+            Log4.Debug("[BackgroundSyncService] 초기 메일 동기화 시작");
+            await SyncAllAccountsAsync(stoppingToken);
+            Log4.Debug("[BackgroundSyncService] 초기 메일 동기화 완료");
 
-        // 시작 시 캘린더 동기화
-        await SyncCalendarAsync(stoppingToken);
+            // 시작 시 캘린더 동기화
+            Log4.Debug("[BackgroundSyncService] 초기 캘린더 동기화 시작");
+            await SyncCalendarAsync(stoppingToken);
+            Log4.Debug("[BackgroundSyncService] 초기 캘린더 동기화 완료");
+        }
+        catch (Exception ex)
+        {
+            Log4.Error($"[BackgroundSyncService] 초기 동기화 실패: {ex.Message}");
+            _logger.Error(ex, "초기 동기화 실패");
+        }
 
-        // 주기적 동기화 (주기 변경 지원)
+        // 2개의 독립적인 동기화 루프 실행
+        var favoriteTask = RunFavoriteSyncLoopAsync(stoppingToken);
+        var fullTask = RunFullSyncLoopAsync(stoppingToken);
+
+        // 두 Task가 모두 완료될 때까지 대기
+        await Task.WhenAll(favoriteTask, fullTask);
+
+        _logger.Information("백그라운드 동기화 서비스 중지됨");
+    }
+
+    /// <summary>
+    /// 즐겨찾기 폴더 동기화 루프 (빠른 주기)
+    /// </summary>
+    private async Task RunFavoriteSyncLoopAsync(CancellationToken stoppingToken)
+    {
+        Log4.Info($"[BackgroundSyncService] 즐겨찾기 동기화 루프 시작 - 주기: {_favoriteSyncIntervalSeconds}초");
+
         while (!stoppingToken.IsCancellationRequested)
         {
             try
             {
-                // 주기 변경 감지용 CancellationToken 생성
-                _intervalChangeCts = CancellationTokenSource.CreateLinkedTokenSource(stoppingToken);
-                
-                using var timer = new PeriodicTimer(TimeSpan.FromSeconds(_syncIntervalSeconds));
-                _logger.Debug("타이머 생성 - 주기: {Interval}초", _syncIntervalSeconds);
-                
-                while (await timer.WaitForNextTickAsync(_intervalChangeCts.Token))
+                _favoriteIntervalChangeCts = CancellationTokenSource.CreateLinkedTokenSource(stoppingToken);
+
+                using var timer = new PeriodicTimer(TimeSpan.FromSeconds(_favoriteSyncIntervalSeconds));
+                Log4.Debug($"[BackgroundSyncService] 즐겨찾기 타이머 생성 - 주기: {_favoriteSyncIntervalSeconds}초");
+
+                while (await timer.WaitForNextTickAsync(_favoriteIntervalChangeCts.Token))
                 {
-                    // 일시정지 상태면 건너뜀
                     if (_isPaused)
                     {
-                        _logger.Debug("동기화 일시정지 상태 - 건너뜀");
+                        Log4.Debug("[BackgroundSyncService] 즐겨찾기 동기화 일시정지 상태 - 건너뜀");
                         continue;
                     }
 
-                    // 폴더 동기화 (5분마다 한 번 - 주기에 따라 조정)
-                    var folderSyncInterval = Math.Max(1, 300 / _syncIntervalSeconds);  // 5분마다
-                    if (_syncCount % folderSyncInterval == 0)
+                    Log4.Debug($"[BackgroundSyncService] 즐겨찾기 동기화 시작 (#{_favoriteSyncCount + 1})");
+
+                    try
                     {
-                        await SyncFoldersAsync(stoppingToken);
+                        await SyncFavoriteFoldersAsync(stoppingToken);
+                        _lastFavoriteSyncTime = DateTime.UtcNow;
+                        Interlocked.Increment(ref _favoriteSyncCount);
+                    }
+                    catch (Exception ex)
+                    {
+                        Log4.Error($"[BackgroundSyncService] 즐겨찾기 동기화 실패: {ex.Message}");
+                        _logger.Error(ex, "즐겨찾기 동기화 실패");
                     }
 
-                    // 메일 동기화 (Delta Query로 변경분만)
-                    await SyncAllAccountsAsync(stoppingToken);
-
-                    // 캘린더 동기화 (5분마다 한 번)
-                    if (_syncCount % folderSyncInterval == 0)
-                    {
-                        await SyncCalendarAsync(stoppingToken);
-
-                        // 캘린더 알림 체크
-                        await CheckCalendarRemindersAsync(stoppingToken);
-                    }
+                    Log4.Debug($"[BackgroundSyncService] 즐겨찾기 동기화 완료 (#{_favoriteSyncCount})");
                 }
             }
             catch (OperationCanceledException) when (!stoppingToken.IsCancellationRequested)
             {
-                // 주기 변경으로 인한 취소 - 새 주기로 타이머 재시작
-                _logger.Information("동기화 주기 변경으로 타이머 재시작 - 새 주기: {Interval}초", _syncIntervalSeconds);
+                Log4.Info($"[BackgroundSyncService] 즐겨찾기 동기화 주기 변경으로 타이머 재시작 - 새 주기: {_favoriteSyncIntervalSeconds}초");
+                _logger.Information("즐겨찾기 동기화 주기 변경으로 타이머 재시작 - 새 주기: {Interval}초", _favoriteSyncIntervalSeconds);
                 continue;
             }
         }
-        
+    }
+
+    /// <summary>
+    /// 전체 폴더 동기화 루프 (느린 주기)
+    /// </summary>
+    private async Task RunFullSyncLoopAsync(CancellationToken stoppingToken)
+    {
+        Log4.Info($"[BackgroundSyncService] 전체 동기화 루프 시작 - 주기: {_fullSyncIntervalSeconds}초");
+
+        while (!stoppingToken.IsCancellationRequested)
+        {
+            try
+            {
+                _fullIntervalChangeCts = CancellationTokenSource.CreateLinkedTokenSource(stoppingToken);
+
+                using var timer = new PeriodicTimer(TimeSpan.FromSeconds(_fullSyncIntervalSeconds));
+                Log4.Debug($"[BackgroundSyncService] 전체 타이머 생성 - 주기: {_fullSyncIntervalSeconds}초");
+
+                while (await timer.WaitForNextTickAsync(_fullIntervalChangeCts.Token))
+                {
+                    if (_isPaused)
+                    {
+                        Log4.Debug("[BackgroundSyncService] 전체 동기화 일시정지 상태 - 건너뜀");
+                        continue;
+                    }
+
+                    Log4.Debug($"[BackgroundSyncService] 전체 동기화 시작 (#{_fullSyncCount + 1})");
+
+                    try
+                    {
+                        // 폴더 동기화
+                        await SyncFoldersAsync(stoppingToken);
+
+                        // 전체 메일 동기화 (Delta Query)
+                        await SyncAllAccountsAsync(stoppingToken);
+
+                        // 캘린더 동기화
+                        await SyncCalendarAsync(stoppingToken);
+
+                        // 캘린더 알림 체크
+                        await CheckCalendarRemindersAsync(stoppingToken);
+
+                        _lastFullSyncTime = DateTime.UtcNow;
+                        _lastSyncTime = DateTime.UtcNow;  // 하위 호환용
+                        Interlocked.Increment(ref _fullSyncCount);
+                        Interlocked.Increment(ref _syncCount);  // 하위 호환용
+                    }
+                    catch (Exception ex)
+                    {
+                        Log4.Error($"[BackgroundSyncService] 전체 동기화 실패: {ex.Message}");
+                        _logger.Error(ex, "전체 동기화 실패");
+                        Interlocked.Increment(ref _errorCount);
+                    }
+
+                    Log4.Debug($"[BackgroundSyncService] 전체 동기화 완료 (#{_fullSyncCount})");
+                }
+            }
+            catch (OperationCanceledException) when (!stoppingToken.IsCancellationRequested)
+            {
+                Log4.Info($"[BackgroundSyncService] 전체 동기화 주기 변경으로 타이머 재시작 - 새 주기: {_fullSyncIntervalSeconds}초");
+                _logger.Information("전체 동기화 주기 변경으로 타이머 재시작 - 새 주기: {Interval}초", _fullSyncIntervalSeconds);
+                continue;
+            }
+        }
+    }
+
+    /// <summary>
+    /// 즐겨찾기 폴더만 동기화 (IsFavorite == true인 폴더)
+    /// </summary>
+    public async Task SyncFavoriteFoldersAsync(CancellationToken ct = default)
+    {
+        if (_isFavoriteSyncing)
+        {
+            _logger.Warning("이미 즐겨찾기 동기화 진행 중 - 건너뜀");
+            return;
+        }
+
+        _isFavoriteSyncing = true;
+        _logger.Debug("즐겨찾기 폴더 동기화 시작");
+
         try
         {
-            // 서비스 종료
+            using var scope = _serviceProvider.CreateScope();
+            var dbContext = scope.ServiceProvider.GetRequiredService<MailXDbContext>();
+            var graphAuthService = scope.ServiceProvider.GetRequiredService<GraphAuthService>();
+            var graphMailService = scope.ServiceProvider.GetRequiredService<GraphMailService>();
+            var emailAnalyzer = scope.ServiceProvider.GetRequiredService<EmailAnalyzer>();
+            var notificationService = scope.ServiceProvider.GetRequiredService<NotificationService>();
+
+            if (!graphAuthService.IsLoggedIn || string.IsNullOrEmpty(graphAuthService.CurrentUserEmail))
+            {
+                _logger.Debug("로그인된 계정 없음 - 즐겨찾기 동기화 생략");
+                return;
+            }
+
+            var accountEmail = graphAuthService.CurrentUserEmail;
+
+            // 즐겨찾기 폴더만 조회
+            var favoriteFolders = await dbContext.Folders
+                .Where(f => f.AccountEmail == accountEmail && f.IsFavorite)
+                .ToListAsync(ct);
+
+            if (favoriteFolders.Count == 0)
+            {
+                _logger.Debug("즐겨찾기 폴더 없음 - 동기화 생략");
+                return;
+            }
+
+            _logger.Information("즐겨찾기 폴더 동기화: {Count}개 폴더", favoriteFolders.Count);
+
+            int totalChanged = 0;
+            int totalDeleted = 0;
+            var allSavedEmails = new List<Email>();
+
+            foreach (var folder in favoriteFolders)
+            {
+                try
+                {
+                    var (changed, deleted, savedEmails) = await SyncFolderAsync(
+                        dbContext, graphMailService, accountEmail, folder, ct);
+
+                    totalChanged += changed;
+                    totalDeleted += deleted;
+                    allSavedEmails.AddRange(savedEmails);
+                }
+                catch (Exception ex)
+                {
+                    _logger.Warning(ex, "즐겨찾기 폴더 동기화 실패: {FolderName}", folder.DisplayName);
+                }
+            }
+
+            // 새 메일이 있으면 이벤트 발생
+            if (allSavedEmails.Count > 0)
+            {
+                EmailsSynced?.Invoke(allSavedEmails.Count);
+
+                // 분석 파이프라인 실행 (받은편지함 메일만)
+                var inboxEmails = allSavedEmails.Where(e =>
+                    e.ParentFolderId != null &&
+                    favoriteFolders.Any(f => f.Id == e.ParentFolderId &&
+                        (f.DisplayName == "받은 편지함" || f.DisplayName.ToLower() == "inbox")))
+                    .ToList();
+
+                if (inboxEmails.Count > 0)
+                {
+                    await AnalyzeAndNotifyAsync(emailAnalyzer, notificationService, inboxEmails, ct);
+                }
+            }
+
+            _lastFavoriteSyncTime = DateTime.UtcNow;
+            _logger.Information("즐겨찾기 폴더 동기화 완료: 변경 {Changed}건, 삭제 {Deleted}건",
+                totalChanged, totalDeleted);
+
+            // 동기화 완료 이벤트 (UI 갱신용)
+            MailSyncCompleted?.Invoke();
         }
-        catch (OperationCanceledException)
+        catch (Exception ex)
         {
-            _logger.Information("백그라운드 동기화 서비스 중지 요청됨");
+            _logger.Error(ex, "즐겨찾기 폴더 동기화 실패");
+        }
+        finally
+        {
+            _isFavoriteSyncing = false;
         }
     }
 
@@ -275,14 +489,21 @@ public class BackgroundSyncService : BackgroundService
             return;
         }
 
-        _logger.Information("전체 폴더 동기화: {Count}개 폴더", folders.Count);
+        // 우선순위 폴더: 받은 편지함, 보낸 편지함을 먼저 동기화
+        var priorityFolderNames = new[] { "받은 편지함", "Inbox", "보낸 편지함", "Sent Items" };
+        var orderedFolders = folders
+            .OrderByDescending(f => priorityFolderNames.Contains(f.DisplayName, StringComparer.OrdinalIgnoreCase))
+            .ThenBy(f => f.DisplayName)
+            .ToList();
+
+        _logger.Information("전체 폴더 동기화: {Count}개 폴더 (받은 편지함 우선)", orderedFolders.Count);
 
         int totalChanged = 0;
         int totalDeleted = 0;
         var allSavedEmails = new List<Email>();
 
-        // 각 폴더별 동기화
-        foreach (var folder in folders)
+        // 각 폴더별 동기화 (우선순위 폴더부터)
+        foreach (var folder in orderedFolders)
         {
             try
             {
@@ -826,7 +1047,7 @@ public class BackgroundSyncService : BackgroundService
     }
 
     /// <summary>
-    /// 동기화 주기 설정 (초 단위)
+    /// 동기화 주기 설정 (초 단위) - 하위 호환용
     /// </summary>
     public void SetSyncInterval(int seconds)
     {
@@ -835,14 +1056,56 @@ public class BackgroundSyncService : BackgroundService
 
         var oldInterval = _syncIntervalSeconds;
         _syncIntervalSeconds = seconds;
-        
+
         _logger.Information("동기화 주기 변경: {Old}초 → {New}초", oldInterval, seconds);
-        
+
         // 주기 변경 시 현재 타이머 취소 (새 주기로 재시작하도록)
         _intervalChangeCts?.Cancel();
-        
+
         // 이벤트 발생
         SyncIntervalChanged?.Invoke(seconds);
+    }
+
+    /// <summary>
+    /// 즐겨찾기 동기화 주기 설정 (초 단위)
+    /// </summary>
+    public void SetFavoriteSyncInterval(int seconds)
+    {
+        if (seconds < 1) seconds = 1;  // 최소 1초
+        if (seconds > 3600) seconds = 3600;  // 최대 1시간
+
+        var oldInterval = _favoriteSyncIntervalSeconds;
+        _favoriteSyncIntervalSeconds = seconds;
+
+        Log4.Info($"[BackgroundSyncService] 즐겨찾기 동기화 주기 변경: {oldInterval}초 → {seconds}초");
+        _logger.Information("즐겨찾기 동기화 주기 변경: {Old}초 → {New}초", oldInterval, seconds);
+
+        // 주기 변경 시 현재 타이머 취소 (새 주기로 재시작하도록)
+        _favoriteIntervalChangeCts?.Cancel();
+
+        // 이벤트 발생
+        FavoriteSyncIntervalChanged?.Invoke(seconds);
+    }
+
+    /// <summary>
+    /// 전체 동기화 주기 설정 (초 단위)
+    /// </summary>
+    public void SetFullSyncInterval(int seconds)
+    {
+        if (seconds < 1) seconds = 1;  // 최소 1초
+        if (seconds > 3600) seconds = 3600;  // 최대 1시간
+
+        var oldInterval = _fullSyncIntervalSeconds;
+        _fullSyncIntervalSeconds = seconds;
+
+        Log4.Info($"[BackgroundSyncService] 전체 동기화 주기 변경: {oldInterval}초 → {seconds}초");
+        _logger.Information("전체 동기화 주기 변경: {Old}초 → {New}초", oldInterval, seconds);
+
+        // 주기 변경 시 현재 타이머 취소 (새 주기로 재시작하도록)
+        _fullIntervalChangeCts?.Cancel();
+
+        // 이벤트 발생
+        FullSyncIntervalChanged?.Invoke(seconds);
     }
 
     /// <summary>

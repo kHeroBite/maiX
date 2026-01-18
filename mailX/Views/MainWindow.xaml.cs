@@ -308,9 +308,11 @@ public partial class MainWindow : FluentWindow
 
         // 동기화/분석 기간 및 주기 현재 설정 표시 초기화
         UpdateSyncPeriodCurrentDisplay();
-        UpdateSyncIntervalCurrentDisplay();
+        UpdateFavoriteSyncIntervalCurrentDisplay();
+        UpdateFullSyncIntervalCurrentDisplay();
         UpdateAIAnalysisPeriodCurrentDisplay();
-        UpdateAIAnalysisIntervalCurrentDisplay();
+        UpdateFavoriteAnalysisIntervalCurrentDisplay();
+        UpdateFullAnalysisIntervalCurrentDisplay();
 
         // 자동 로그인 메뉴 상태 초기화
         InitializeAutoLoginMenu();
@@ -1139,7 +1141,7 @@ public partial class MainWindow : FluentWindow
             Log4.Debug($"AI 분석 기간 로드: {aiSettings.ToDisplayString()}");
         }
 
-        // 동기화 주기 로드 (초 단위 우선, 없으면 분 단위 사용)
+        // 동기화 주기 로드 (초 단위 우선, 없으면 분 단위 사용) - 하위 호환용
         if (prefs.MailSyncIntervalSeconds > 0)
         {
             _viewModel.SetSyncInterval(prefs.MailSyncIntervalSeconds);
@@ -1151,6 +1153,22 @@ public partial class MainWindow : FluentWindow
             Log4.Debug($"동기화 주기 로드: {prefs.MailSyncIntervalMinutes}분 (하위 호환)");
         }
 
+        // 즐겨찾기 동기화 주기 로드
+        if (prefs.FavoriteSyncIntervalSeconds > 0)
+        {
+            _viewModel.SetFavoriteSyncInterval(prefs.FavoriteSyncIntervalSeconds);
+            UpdateFavoriteSyncIntervalCurrentDisplay(prefs.FavoriteSyncIntervalSeconds);
+            Log4.Debug($"즐겨찾기 동기화 주기 로드: {prefs.FavoriteSyncIntervalSeconds}초");
+        }
+
+        // 전체 동기화 주기 로드
+        if (prefs.FullSyncIntervalSeconds > 0)
+        {
+            _viewModel.SetFullSyncInterval(prefs.FullSyncIntervalSeconds);
+            UpdateFullSyncIntervalCurrentDisplay(prefs.FullSyncIntervalSeconds);
+            Log4.Debug($"전체 동기화 주기 로드: {prefs.FullSyncIntervalSeconds}초");
+        }
+
         // 메일 동기화 일시정지 상태 로드
         if (prefs.IsMailSyncPaused)
         {
@@ -1158,11 +1176,27 @@ public partial class MainWindow : FluentWindow
             Log4.Debug("메일 동기화 일시정지 상태 로드");
         }
 
-        // AI 분석 주기 로드 (초 단위)
+        // AI 분석 주기 로드 (초 단위) - 하위 호환용
         if (prefs.AiAnalysisIntervalSeconds > 0)
         {
             _viewModel.SetAIAnalysisInterval(prefs.AiAnalysisIntervalSeconds);
             Log4.Debug($"AI 분석 주기 로드: {prefs.AiAnalysisIntervalSeconds}초");
+        }
+
+        // 즐겨찾기 AI 분석 주기 로드
+        if (prefs.FavoriteAnalysisIntervalSeconds > 0)
+        {
+            _viewModel.SetFavoriteAnalysisInterval(prefs.FavoriteAnalysisIntervalSeconds);
+            UpdateFavoriteAnalysisIntervalCurrentDisplay(prefs.FavoriteAnalysisIntervalSeconds);
+            Log4.Debug($"즐겨찾기 AI 분석 주기 로드: {prefs.FavoriteAnalysisIntervalSeconds}초");
+        }
+
+        // 전체 AI 분석 주기 로드
+        if (prefs.FullAnalysisIntervalSeconds > 0)
+        {
+            _viewModel.SetFullAnalysisInterval(prefs.FullAnalysisIntervalSeconds);
+            UpdateFullAnalysisIntervalCurrentDisplay(prefs.FullAnalysisIntervalSeconds);
+            Log4.Debug($"전체 AI 분석 주기 로드: {prefs.FullAnalysisIntervalSeconds}초");
         }
 
         // AI 분석 일시정지 상태 로드
@@ -1373,107 +1407,198 @@ public partial class MainWindow : FluentWindow
         }
     }
 
-    // 메일 동기화 주기 설정
-    private void MenuSyncInterval1s_Click(object sender, RoutedEventArgs e) => SetSyncInterval(1);
-    private void MenuSyncInterval5s_Click(object sender, RoutedEventArgs e) => SetSyncInterval(5);
-    private void MenuSyncInterval10s_Click(object sender, RoutedEventArgs e) => SetSyncInterval(10);
-    private void MenuSyncInterval30s_Click(object sender, RoutedEventArgs e) => SetSyncInterval(30);
-    private void MenuSyncInterval1m_Click(object sender, RoutedEventArgs e) => SetSyncInterval(60);
-    private void MenuSyncInterval5m_Click(object sender, RoutedEventArgs e) => SetSyncInterval(300);
-    private void MenuSyncInterval10m_Click(object sender, RoutedEventArgs e) => SetSyncInterval(600);
-    private void MenuSyncInterval30m_Click(object sender, RoutedEventArgs e) => SetSyncInterval(1800);
-    private void MenuSyncInterval1h_Click(object sender, RoutedEventArgs e) => SetSyncInterval(3600);
-
-    private void SetSyncInterval(int seconds)
+    // 즐겨찾기 메일 동기화 주기 설정
+    private void MenuFavoriteSyncInterval_Click(object sender, RoutedEventArgs e)
     {
-        _viewModel.SetSyncInterval(seconds);
-        var displayText = GetIntervalDisplayText(seconds);
-        Log4.Info($"동기화 주기 설정: {displayText}");
-        _viewModel.StatusMessage = $"동기화 주기: {displayText}";
-        UpdateSyncIntervalCurrentDisplay(seconds);
+        if (sender is System.Windows.Controls.MenuItem menuItem && menuItem.Tag is string tagStr && int.TryParse(tagStr, out int seconds))
+        {
+            SetFavoriteSyncInterval(seconds);
+        }
+    }
 
-        // 설정 저장 (초 단위로 저장 - 1분 미만도 지원)
-        App.Settings.UserPreferences.MailSyncIntervalSeconds = seconds;
-        App.Settings.UserPreferences.MailSyncIntervalMinutes = seconds / 60; // 하위 호환용
+    private void SetFavoriteSyncInterval(int seconds)
+    {
+        _viewModel.SetFavoriteSyncInterval(seconds);
+        var displayText = GetIntervalDisplayText(seconds);
+        Log4.Info($"즐겨찾기 동기화 주기 설정: {displayText}");
+        _viewModel.StatusMessage = $"즐겨찾기 동기화 주기: {displayText}";
+        UpdateFavoriteSyncIntervalCurrentDisplay(seconds);
+
+        // 설정 저장
+        App.Settings.UserPreferences.FavoriteSyncIntervalSeconds = seconds;
         App.Settings.SaveUserPreferences();
     }
 
-    private void UpdateSyncIntervalCurrentDisplay(int? seconds = null)
+    private void UpdateFavoriteSyncIntervalCurrentDisplay(int? seconds = null)
     {
-        seconds ??= _viewModel.SyncIntervalSeconds;
-        if (MenuSyncIntervalCurrent != null)
+        seconds ??= _viewModel.FavoriteSyncIntervalSeconds;
+        if (MenuFavoriteSyncIntervalCurrent != null)
         {
-            MenuSyncIntervalCurrent.Header = $"현재: {GetIntervalDisplayText(seconds.Value)}";
+            MenuFavoriteSyncIntervalCurrent.Header = $"현재: {GetIntervalDisplayText(seconds.Value)}";
         }
 
-        // 동기화 주기 메뉴 하이라이팅
+        // 즐겨찾기 동기화 주기 메뉴 하이라이팅
         var highlightColor = new System.Windows.Media.SolidColorBrush(
             (System.Windows.Media.Color)System.Windows.Media.ColorConverter.ConvertFromString("#2196F3"));
 
-        var menuItems = new[] { MenuSyncInterval1s, MenuSyncInterval5s, MenuSyncInterval10s, MenuSyncInterval30s, MenuSyncInterval1m, MenuSyncInterval5m, MenuSyncInterval10m, MenuSyncInterval30m, MenuSyncInterval1h };
-        var intervalSeconds = new[] { 1, 5, 10, 30, 60, 300, 600, 1800, 3600 };
+        var menuItems = new System.Windows.Controls.MenuItem?[] { MenuFavoriteSyncInterval1s, MenuFavoriteSyncInterval5s, MenuFavoriteSyncInterval10s, MenuFavoriteSyncInterval30s, MenuFavoriteSyncInterval1m, MenuFavoriteSyncInterval5m };
+        var intervalSeconds = new[] { 1, 5, 10, 30, 60, 300 };
 
         for (int i = 0; i < menuItems.Length; i++)
         {
             if (menuItems[i] != null)
             {
                 bool isSelected = seconds == intervalSeconds[i];
-                // 선택된 항목은 하이라이트, 그 외는 시스템 기본값 사용 (null로 리셋)
-                menuItems[i].ClearValue(System.Windows.Controls.Control.ForegroundProperty);
+                menuItems[i]!.ClearValue(System.Windows.Controls.Control.ForegroundProperty);
                 if (isSelected)
-                    menuItems[i].Foreground = highlightColor;
+                    menuItems[i]!.Foreground = highlightColor;
             }
         }
     }
 
-    // AI 분석 주기 설정
-    private void MenuAIInterval1s_Click(object sender, RoutedEventArgs e) => SetAIAnalysisInterval(1);
-    private void MenuAIInterval5s_Click(object sender, RoutedEventArgs e) => SetAIAnalysisInterval(5);
-    private void MenuAIInterval10s_Click(object sender, RoutedEventArgs e) => SetAIAnalysisInterval(10);
-    private void MenuAIInterval30s_Click(object sender, RoutedEventArgs e) => SetAIAnalysisInterval(30);
-    private void MenuAIInterval1m_Click(object sender, RoutedEventArgs e) => SetAIAnalysisInterval(60);
-    private void MenuAIInterval5m_Click(object sender, RoutedEventArgs e) => SetAIAnalysisInterval(300);
-    private void MenuAIInterval10m_Click(object sender, RoutedEventArgs e) => SetAIAnalysisInterval(600);
-    private void MenuAIInterval30m_Click(object sender, RoutedEventArgs e) => SetAIAnalysisInterval(1800);
-    private void MenuAIInterval1h_Click(object sender, RoutedEventArgs e) => SetAIAnalysisInterval(3600);
-
-    private void SetAIAnalysisInterval(int seconds)
+    // 전체메일 동기화 주기 설정
+    private void MenuFullSyncInterval_Click(object sender, RoutedEventArgs e)
     {
-        _viewModel.SetAIAnalysisInterval(seconds);
-        var displayText = GetIntervalDisplayText(seconds);
-        Log4.Info($"AI 분석 주기 설정: {displayText}");
-        _viewModel.StatusMessage = $"AI 분석 주기: {displayText}";
-        UpdateAIAnalysisIntervalCurrentDisplay(seconds);
+        if (sender is System.Windows.Controls.MenuItem menuItem && menuItem.Tag is string tagStr && int.TryParse(tagStr, out int seconds))
+        {
+            SetFullSyncInterval(seconds);
+        }
+    }
 
-        // 설정 저장 (초 단위)
-        App.Settings.UserPreferences.AiAnalysisIntervalSeconds = seconds;
+    private void SetFullSyncInterval(int seconds)
+    {
+        _viewModel.SetFullSyncInterval(seconds);
+        var displayText = GetIntervalDisplayText(seconds);
+        Log4.Info($"전체메일 동기화 주기 설정: {displayText}");
+        _viewModel.StatusMessage = $"전체메일 동기화 주기: {displayText}";
+        UpdateFullSyncIntervalCurrentDisplay(seconds);
+
+        // 설정 저장
+        App.Settings.UserPreferences.FullSyncIntervalSeconds = seconds;
         App.Settings.SaveUserPreferences();
     }
 
-    private void UpdateAIAnalysisIntervalCurrentDisplay(int? seconds = null)
+    private void UpdateFullSyncIntervalCurrentDisplay(int? seconds = null)
     {
-        seconds ??= _viewModel.AIAnalysisIntervalSeconds;
-        if (MenuAIAnalysisIntervalCurrent != null)
+        seconds ??= _viewModel.FullSyncIntervalSeconds;
+        if (MenuFullSyncIntervalCurrent != null)
         {
-            MenuAIAnalysisIntervalCurrent.Header = $"현재: {GetIntervalDisplayText(seconds.Value)}";
+            MenuFullSyncIntervalCurrent.Header = $"현재: {GetIntervalDisplayText(seconds.Value)}";
         }
 
-        // AI 분석 주기 메뉴 하이라이팅
+        // 전체메일 동기화 주기 메뉴 하이라이팅
         var highlightColor = new System.Windows.Media.SolidColorBrush(
             (System.Windows.Media.Color)System.Windows.Media.ColorConverter.ConvertFromString("#2196F3"));
 
-        var menuItems = new[] { MenuAIInterval1s, MenuAIInterval5s, MenuAIInterval10s, MenuAIInterval30s, MenuAIInterval1m, MenuAIInterval5m, MenuAIInterval10m, MenuAIInterval30m, MenuAIInterval1h };
-        var intervalSeconds = new[] { 1, 5, 10, 30, 60, 300, 600, 1800, 3600 };
+        var menuItems = new System.Windows.Controls.MenuItem?[] { MenuFullSyncInterval1m, MenuFullSyncInterval5m, MenuFullSyncInterval10m, MenuFullSyncInterval30m, MenuFullSyncInterval1h };
+        var intervalSeconds = new[] { 60, 300, 600, 1800, 3600 };
 
         for (int i = 0; i < menuItems.Length; i++)
         {
             if (menuItems[i] != null)
             {
                 bool isSelected = seconds == intervalSeconds[i];
-                // 선택된 항목은 하이라이트, 그 외는 시스템 기본값 사용 (null로 리셋)
-                menuItems[i].ClearValue(System.Windows.Controls.Control.ForegroundProperty);
+                menuItems[i]!.ClearValue(System.Windows.Controls.Control.ForegroundProperty);
                 if (isSelected)
-                    menuItems[i].Foreground = highlightColor;
+                    menuItems[i]!.Foreground = highlightColor;
+            }
+        }
+    }
+
+    // 즐겨찾기 AI 분석 주기 설정
+    private void MenuFavoriteAnalysisInterval_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is System.Windows.Controls.MenuItem menuItem && menuItem.Tag is string tagStr && int.TryParse(tagStr, out int seconds))
+        {
+            SetFavoriteAnalysisInterval(seconds);
+        }
+    }
+
+    private void SetFavoriteAnalysisInterval(int seconds)
+    {
+        _viewModel.SetFavoriteAnalysisInterval(seconds);
+        var displayText = GetIntervalDisplayText(seconds);
+        Log4.Info($"즐겨찾기 AI 분석 주기 설정: {displayText}");
+        _viewModel.StatusMessage = $"즐겨찾기 AI 분석 주기: {displayText}";
+        UpdateFavoriteAnalysisIntervalCurrentDisplay(seconds);
+
+        // 설정 저장
+        App.Settings.UserPreferences.FavoriteAnalysisIntervalSeconds = seconds;
+        App.Settings.SaveUserPreferences();
+    }
+
+    private void UpdateFavoriteAnalysisIntervalCurrentDisplay(int? seconds = null)
+    {
+        seconds ??= _viewModel.FavoriteAnalysisIntervalSeconds;
+        if (MenuFavoriteAnalysisIntervalCurrent != null)
+        {
+            MenuFavoriteAnalysisIntervalCurrent.Header = $"현재: {GetIntervalDisplayText(seconds.Value)}";
+        }
+
+        // 즐겨찾기 AI 분석 주기 메뉴 하이라이팅
+        var highlightColor = new System.Windows.Media.SolidColorBrush(
+            (System.Windows.Media.Color)System.Windows.Media.ColorConverter.ConvertFromString("#2196F3"));
+
+        var menuItems = new System.Windows.Controls.MenuItem?[] { MenuFavoriteAnalysisInterval1s, MenuFavoriteAnalysisInterval5s, MenuFavoriteAnalysisInterval10s, MenuFavoriteAnalysisInterval30s, MenuFavoriteAnalysisInterval1m, MenuFavoriteAnalysisInterval5m };
+        var intervalSeconds = new[] { 1, 5, 10, 30, 60, 300 };
+
+        for (int i = 0; i < menuItems.Length; i++)
+        {
+            if (menuItems[i] != null)
+            {
+                bool isSelected = seconds == intervalSeconds[i];
+                menuItems[i]!.ClearValue(System.Windows.Controls.Control.ForegroundProperty);
+                if (isSelected)
+                    menuItems[i]!.Foreground = highlightColor;
+            }
+        }
+    }
+
+    // 전체메일 AI 분석 주기 설정
+    private void MenuFullAnalysisInterval_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is System.Windows.Controls.MenuItem menuItem && menuItem.Tag is string tagStr && int.TryParse(tagStr, out int seconds))
+        {
+            SetFullAnalysisInterval(seconds);
+        }
+    }
+
+    private void SetFullAnalysisInterval(int seconds)
+    {
+        _viewModel.SetFullAnalysisInterval(seconds);
+        var displayText = GetIntervalDisplayText(seconds);
+        Log4.Info($"전체메일 AI 분석 주기 설정: {displayText}");
+        _viewModel.StatusMessage = $"전체메일 AI 분석 주기: {displayText}";
+        UpdateFullAnalysisIntervalCurrentDisplay(seconds);
+
+        // 설정 저장
+        App.Settings.UserPreferences.FullAnalysisIntervalSeconds = seconds;
+        App.Settings.SaveUserPreferences();
+    }
+
+    private void UpdateFullAnalysisIntervalCurrentDisplay(int? seconds = null)
+    {
+        seconds ??= _viewModel.FullAnalysisIntervalSeconds;
+        if (MenuFullAnalysisIntervalCurrent != null)
+        {
+            MenuFullAnalysisIntervalCurrent.Header = $"현재: {GetIntervalDisplayText(seconds.Value)}";
+        }
+
+        // 전체메일 AI 분석 주기 메뉴 하이라이팅
+        var highlightColor = new System.Windows.Media.SolidColorBrush(
+            (System.Windows.Media.Color)System.Windows.Media.ColorConverter.ConvertFromString("#2196F3"));
+
+        var menuItems = new System.Windows.Controls.MenuItem?[] { MenuFullAnalysisInterval1m, MenuFullAnalysisInterval5m, MenuFullAnalysisInterval10m, MenuFullAnalysisInterval30m, MenuFullAnalysisInterval1h };
+        var intervalSeconds = new[] { 60, 300, 600, 1800, 3600 };
+
+        for (int i = 0; i < menuItems.Length; i++)
+        {
+            if (menuItems[i] != null)
+            {
+                bool isSelected = seconds == intervalSeconds[i];
+                menuItems[i]!.ClearValue(System.Windows.Controls.Control.ForegroundProperty);
+                if (isSelected)
+                    menuItems[i]!.Foreground = highlightColor;
             }
         }
     }
