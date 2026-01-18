@@ -47,7 +47,7 @@ public class ThemeService
     {
         Log4.Info("테마 변경: 다크 모드");
         CurrentTheme = ApplicationTheme.Dark;
-        ApplicationThemeManager.Apply(ApplicationTheme.Dark);
+        ApplicationThemeManager.Apply(ApplicationTheme.Dark, updateAccent: true);
         UpdateThemeResources(ApplicationTheme.Dark);
         SaveThemeSetting();
         ThemeChanged?.Invoke(this, ApplicationTheme.Dark);
@@ -60,7 +60,7 @@ public class ThemeService
     {
         Log4.Info("테마 변경: 라이트 모드");
         CurrentTheme = ApplicationTheme.Light;
-        ApplicationThemeManager.Apply(ApplicationTheme.Light);
+        ApplicationThemeManager.Apply(ApplicationTheme.Light, updateAccent: true);
         UpdateThemeResources(ApplicationTheme.Light);
         SaveThemeSetting();
         ThemeChanged?.Invoke(this, ApplicationTheme.Light);
@@ -92,13 +92,13 @@ public class ThemeService
             if (savedTheme == "Light")
             {
                 CurrentTheme = ApplicationTheme.Light;
-                ApplicationThemeManager.Apply(ApplicationTheme.Light);
+                ApplicationThemeManager.Apply(ApplicationTheme.Light, updateAccent: true);
                 UpdateThemeResources(ApplicationTheme.Light);
             }
             else
             {
                 CurrentTheme = ApplicationTheme.Dark;
-                ApplicationThemeManager.Apply(ApplicationTheme.Dark);
+                ApplicationThemeManager.Apply(ApplicationTheme.Dark, updateAccent: true);
                 UpdateThemeResources(ApplicationTheme.Dark);
             }
         }

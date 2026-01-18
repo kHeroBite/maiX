@@ -2952,6 +2952,36 @@ public partial class MainWindow : FluentWindow
         ThemeIcon.Symbol = themeService.IsDarkMode
             ? Wpf.Ui.Controls.SymbolRegular.WeatherSunny24
             : Wpf.Ui.Controls.SymbolRegular.WeatherMoon24;
+
+        // AI 분석 별 색상 업데이트 (라이트모드: 진한 주황, 다크모드: 밝은 골드)
+        UpdateAISyncStarColors(themeService.IsDarkMode);
+    }
+
+    /// <summary>
+    /// AI 분석 별 색상 업데이트 (테마에 따라)
+    /// </summary>
+    private void UpdateAISyncStarColors(bool isDarkMode)
+    {
+        if (isDarkMode)
+        {
+            // 다크모드: 밝은 골드/노랑 계열
+            AISyncStar1.Foreground = new System.Windows.Media.SolidColorBrush(
+                (System.Windows.Media.Color)System.Windows.Media.ColorConverter.ConvertFromString("#FFD700"));
+            AISyncStar2.Foreground = new System.Windows.Media.SolidColorBrush(
+                (System.Windows.Media.Color)System.Windows.Media.ColorConverter.ConvertFromString("#FFDF00"));
+            AISyncStar3.Foreground = new System.Windows.Media.SolidColorBrush(
+                (System.Windows.Media.Color)System.Windows.Media.ColorConverter.ConvertFromString("#FFC125"));
+        }
+        else
+        {
+            // 라이트모드: 진한 주황/갈색 계열 (더 잘 보임)
+            AISyncStar1.Foreground = new System.Windows.Media.SolidColorBrush(
+                (System.Windows.Media.Color)System.Windows.Media.ColorConverter.ConvertFromString("#E69500"));
+            AISyncStar2.Foreground = new System.Windows.Media.SolidColorBrush(
+                (System.Windows.Media.Color)System.Windows.Media.ColorConverter.ConvertFromString("#D98C00"));
+            AISyncStar3.Foreground = new System.Windows.Media.SolidColorBrush(
+                (System.Windows.Media.Color)System.Windows.Media.ColorConverter.ConvertFromString("#CC7A00"));
+        }
     }
 
     /// <summary>

@@ -244,15 +244,17 @@
                     <ui:Button x:Name="AISyncButton"
                                Command="{Binding ToggleAISyncCommand}"
                                ToolTip="{Binding AISyncButtonTooltip}"
-                               Appearance="Transparent"
-                               Height="30" Width="30"
-                               Padding="0"
-                               Margin="0,0,4,0">
+                               Style="{StaticResource TitleBarTransparentButtonStyle}">
                         <Grid>
-                            <!-- 진행중일 때: 노란색 별 3개 -->
+                            <!-- 진행중일 때: ✨ 스타일 (목표 이미지와 동일하게) -->
                             <Grid HorizontalAlignment="Center" VerticalAlignment="Center"
                                   Visibility="{Binding IsAISyncPaused, Converter={StaticResource BoolToVisibilityConverter}, ConverterParameter=Invert}">
-                                <TextBlock Text="✦" FontSize="12" Foreground="#FFD700" Margin="0,0,0,0">
+                                <!-- 큰 별: 중지상태와 동일한 크기/위치/비율 -->
+                                <TextBlock x:Name="AISyncStar1" Text="✦" FontSize="22" Foreground="#FFD700" Margin="3,-5,0,0"
+                                           RenderTransformOrigin="0.5,0.5">
+                                    <TextBlock.RenderTransform>
+                                        <ScaleTransform ScaleX="0.8" ScaleY="1.0" />
+                                    </TextBlock.RenderTransform>
                                     <TextBlock.Style>
                                         <Style TargetType="TextBlock">
                                             <Style.Triggers>
@@ -260,7 +262,7 @@
                                                     <BeginStoryboard>
                                                         <Storyboard RepeatBehavior="Forever">
                                                             <DoubleAnimation Storyboard.TargetProperty="Opacity"
-                                                                             From="1" To="0.3" Duration="0:0:0.8"
+                                                                             From="1" To="0.3" Duration="0:0:1.6"
                                                                              AutoReverse="True"/>
                                                         </Storyboard>
                                                     </BeginStoryboard>
@@ -269,15 +271,20 @@
                                         </Style>
                                     </TextBlock.Style>
                                 </TextBlock>
-                                <TextBlock Text="✦" FontSize="8" Foreground="#FFC125" Margin="6,-5,0,0">
+                                <!-- 작은 별: 중지상태와 동일한 크기/위치/비율 -->
+                                <TextBlock x:Name="AISyncStar2" Text="✦" FontSize="8" Foreground="#FFDF00" Margin="2,1,0,0"
+                                           RenderTransformOrigin="0.5,0.5">
+                                    <TextBlock.RenderTransform>
+                                        <ScaleTransform ScaleX="0.8" ScaleY="1.0" />
+                                    </TextBlock.RenderTransform>
                                     <TextBlock.Style>
                                         <Style TargetType="TextBlock">
                                             <Style.Triggers>
                                                 <EventTrigger RoutedEvent="Loaded">
                                                     <BeginStoryboard>
-                                                        <Storyboard RepeatBehavior="Forever" BeginTime="0:0:0.2">
+                                                        <Storyboard RepeatBehavior="Forever" BeginTime="0:0:0.8">
                                                             <DoubleAnimation Storyboard.TargetProperty="Opacity"
-                                                                             From="1" To="0.3" Duration="0:0:0.5"
+                                                                             From="1" To="0.3" Duration="0:0:0.6"
                                                                              AutoReverse="True"/>
                                                         </Storyboard>
                                                     </BeginStoryboard>
@@ -286,7 +293,12 @@
                                         </Style>
                                     </TextBlock.Style>
                                 </TextBlock>
-                                <TextBlock Text="✦" FontSize="6" Foreground="#FFDF00" Margin="10,3,0,0">
+                                <!-- 중간 별: 중지상태와 동일한 크기/위치/비율 -->
+                                <TextBlock x:Name="AISyncStar3" Text="✦" FontSize="10" Foreground="#FFC125" Margin="1,9,0,0"
+                                           RenderTransformOrigin="0.5,0.5">
+                                    <TextBlock.RenderTransform>
+                                        <ScaleTransform ScaleX="0.8" ScaleY="1.0" />
+                                    </TextBlock.RenderTransform>
                                     <TextBlock.Style>
                                         <Style TargetType="TextBlock">
                                             <Style.Triggers>
@@ -294,7 +306,7 @@
                                                     <BeginStoryboard>
                                                         <Storyboard RepeatBehavior="Forever" BeginTime="0:0:0.4">
                                                             <DoubleAnimation Storyboard.TargetProperty="Opacity"
-                                                                             From="1" To="0.3" Duration="0:0:0.3"
+                                                                             From="1" To="0.3" Duration="0:0:1.0"
                                                                              AutoReverse="True"/>
                                                         </Storyboard>
                                                     </BeginStoryboard>
@@ -307,9 +319,24 @@
                             <!-- 중지중일 때: 회색 별 3개 -->
                             <Grid HorizontalAlignment="Center" VerticalAlignment="Center"
                                   Visibility="{Binding IsAISyncPaused, Converter={StaticResource BoolToVisibilityConverter}}">
-                                <TextBlock Text="✦" FontSize="12" Foreground="#888888" Margin="0,0,0,0"/>
-                                <TextBlock Text="✦" FontSize="8" Foreground="#999999" Margin="6,-5,0,0"/>
-                                <TextBlock Text="✦" FontSize="6" Foreground="#AAAAAA" Margin="10,3,0,0"/>
+                                <TextBlock Text="✦" FontSize="22" Foreground="#888888" Margin="3,-5,0,0"
+                                           RenderTransformOrigin="0.5,0.5">
+                                    <TextBlock.RenderTransform>
+                                        <ScaleTransform ScaleX="0.8" ScaleY="1.0" />
+                                    </TextBlock.RenderTransform>
+                                </TextBlock>
+                                <TextBlock Text="✦" FontSize="8" Foreground="#AAAAAA" Margin="2,1,0,0"
+                                           RenderTransformOrigin="0.5,0.5">
+                                    <TextBlock.RenderTransform>
+                                        <ScaleTransform ScaleX="0.8" ScaleY="1.0" />
+                                    </TextBlock.RenderTransform>
+                                </TextBlock>
+                                <TextBlock Text="✦" FontSize="10" Foreground="#999999" Margin="1,9,0,0"
+                                           RenderTransformOrigin="0.5,0.5">
+                                    <TextBlock.RenderTransform>
+                                        <ScaleTransform ScaleX="0.8" ScaleY="1.0" />
+                                    </TextBlock.RenderTransform>
+                                </TextBlock>
                             </Grid>
                         </Grid>
                     </ui:Button>
@@ -317,10 +344,7 @@
                     <ui:Button x:Name="SyncButton"
                                Command="{Binding ToggleSyncCommand}"
                                ToolTip="{Binding SyncButtonTooltip}"
-                               Appearance="Transparent"
-                               Height="30" Width="30"
-                               Padding="0"
-                               Margin="0,0,4,0">
+                               Style="{StaticResource TitleBarTransparentButtonStyle}">
                         <Grid>
                             <!-- 동기화 중일 때: 열린 편지 + 나가는 문서 애니메이션 -->
                             <Grid HorizontalAlignment="Center" VerticalAlignment="Center"
@@ -370,28 +394,22 @@
                     <!-- 테마 토글 버튼 -->
                     <ui:Button x:Name="ThemeToggleButton"
                                ToolTip="테마 전환"
-                               Appearance="Transparent"
-                               Height="30" Width="30"
-                               Padding="0"
-                               Margin="0,0,4,0"
+                               Style="{StaticResource TitleBarTransparentButtonStyle}"
                                Click="ThemeToggleButton_Click">
                         <ui:SymbolIcon x:Name="ThemeIcon" Symbol="WeatherSunny24" FontSize="16"/>
                     </ui:Button>
                     <!-- 알림 버튼 -->
                     <ui:Button x:Name="NotificationButton"
                                ToolTip="알림"
-                               Appearance="Transparent"
-                               Height="30" Width="30"
-                               Padding="0"
-                               Margin="0,0,4,0"
+                               Style="{StaticResource TitleBarTransparentButtonStyle}"
                                Click="NotificationButton_Click">
                         <ui:SymbolIcon Symbol="Alert24" FontSize="16"/>
                     </ui:Button>
                     <!-- 설정 버튼 (동기화 설정으로 연결) -->
-                    <ui:Button ToolTip="동기화 설정"
-                               Appearance="Transparent"
-                               Height="30" Width="30"
-                               Padding="0"
+                    <ui:Button x:Name="TitleBarSettingsButton"
+                               ToolTip="동기화 설정"
+                               Style="{StaticResource TitleBarTransparentButtonStyle}"
+                               Margin="0"
                                Click="SettingsButton_Click">
                         <ui:SymbolIcon Symbol="Settings24" FontSize="16"/>
                     </ui:Button>

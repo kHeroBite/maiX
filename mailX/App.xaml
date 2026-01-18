@@ -31,6 +31,40 @@
             <converters:BoolToAppearanceConverter x:Key="BoolToAppearanceConverter"/>
             <converters:FlagStatusToAppearanceConverter x:Key="FlagStatusToAppearanceConverter"/>
 
+            <!-- 타이틀바 투명 버튼 스타일 (라이트/다크 모드 호버 효과 지원) -->
+            <Style x:Key="TitleBarTransparentButtonStyle" TargetType="ui:Button">
+                <Setter Property="Background" Value="Transparent"/>
+                <Setter Property="BorderBrush" Value="Transparent"/>
+                <Setter Property="BorderThickness" Value="0"/>
+                <Setter Property="Padding" Value="0"/>
+                <Setter Property="Height" Value="30"/>
+                <Setter Property="Width" Value="30"/>
+                <Setter Property="Margin" Value="0,0,4,0"/>
+                <Setter Property="Cursor" Value="Hand"/>
+                <Setter Property="Template">
+                    <Setter.Value>
+                        <ControlTemplate TargetType="ui:Button">
+                            <Border x:Name="Border"
+                                    Background="{TemplateBinding Background}"
+                                    BorderBrush="{TemplateBinding BorderBrush}"
+                                    BorderThickness="{TemplateBinding BorderThickness}"
+                                    CornerRadius="4"
+                                    Padding="{TemplateBinding Padding}">
+                                <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                            </Border>
+                            <ControlTemplate.Triggers>
+                                <Trigger Property="IsMouseOver" Value="True">
+                                    <Setter TargetName="Border" Property="Background" Value="{DynamicResource SubtleFillColorSecondaryBrush}"/>
+                                </Trigger>
+                                <Trigger Property="IsPressed" Value="True">
+                                    <Setter TargetName="Border" Property="Background" Value="{DynamicResource SubtleFillColorTertiaryBrush}"/>
+                                </Trigger>
+                            </ControlTemplate.Triggers>
+                        </ControlTemplate>
+                    </Setter.Value>
+                </Setter>
+            </Style>
+
             <!-- 좌측 네비게이션 아이콘바 스타일 -->
             <Style x:Key="NavIconRadioButtonStyle" TargetType="RadioButton">
                 <Setter Property="Width" Value="48"/>
@@ -57,9 +91,10 @@
                                     <Setter TargetName="Border" Property="Background" Value="{DynamicResource SubtleFillColorSecondaryBrush}"/>
                                 </Trigger>
                                 <Trigger Property="IsChecked" Value="True">
-                                    <Setter TargetName="Border" Property="Background" Value="{DynamicResource SystemAccentColorSecondaryBrush}"/>
-                                    <!-- 라이트/다크 모드 모두 선택 시 흰색 -->
-                                    <Setter Property="Foreground" Value="White"/>
+                                    <!-- Primary 버튼(새 메일)과 동일한 색상 사용 -->
+                                    <Setter TargetName="Border" Property="Background" Value="{DynamicResource AccentFillColorDefaultBrush}"/>
+                                    <!-- Primary 버튼과 동일하게 검정색 아이콘 -->
+                                    <Setter Property="Foreground" Value="{DynamicResource TextOnAccentFillColorPrimaryBrush}"/>
                                 </Trigger>
                             </ControlTemplate.Triggers>
                         </ControlTemplate>
