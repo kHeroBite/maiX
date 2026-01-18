@@ -1288,6 +1288,7 @@ public partial class MainWindow : FluentWindow
         // 동기화 기간 메뉴 하이라이팅
         var highlightColor = new System.Windows.Media.SolidColorBrush(
             (System.Windows.Media.Color)System.Windows.Media.ColorConverter.ConvertFromString("#2196F3"));
+        var normalBrush = (System.Windows.Media.Brush)FindResource("TextFillColorPrimaryBrush");
 
         var menuItems = new[] { MenuMailSync5, MenuMailSyncDay, MenuMailSyncWeek, MenuMailSyncMonth, MenuMailSyncYear, MenuMailSyncAll };
         var periodTypes = new[] { (SyncPeriodType.Count, 5), (SyncPeriodType.Days, 1), (SyncPeriodType.Weeks, 1), (SyncPeriodType.Months, 1), (SyncPeriodType.Years, 1), (SyncPeriodType.All, 0) };
@@ -1297,7 +1298,7 @@ public partial class MainWindow : FluentWindow
             if (menuItems[i] != null)
             {
                 bool isSelected = settings.PeriodType == periodTypes[i].Item1 && settings.Value == periodTypes[i].Item2;
-                menuItems[i].Foreground = isSelected ? highlightColor : null;
+                menuItems[i].Foreground = isSelected ? highlightColor : normalBrush;
             }
         }
     }
@@ -1338,6 +1339,7 @@ public partial class MainWindow : FluentWindow
         // AI 분석 기간 메뉴 하이라이팅
         var highlightColor = new System.Windows.Media.SolidColorBrush(
             (System.Windows.Media.Color)System.Windows.Media.ColorConverter.ConvertFromString("#2196F3"));
+        var normalBrush = (System.Windows.Media.Brush)FindResource("TextFillColorPrimaryBrush");
 
         var menuItems = new[] { MenuAIAnalysis5, MenuAIAnalysisDay, MenuAIAnalysisWeek, MenuAIAnalysisMonth, MenuAIAnalysisYear, MenuAIAnalysisAll };
         var periodTypes = new[] { (SyncPeriodType.Count, 5), (SyncPeriodType.Days, 1), (SyncPeriodType.Weeks, 1), (SyncPeriodType.Months, 1), (SyncPeriodType.Years, 1), (SyncPeriodType.All, 0) };
@@ -1347,7 +1349,7 @@ public partial class MainWindow : FluentWindow
             if (menuItems[i] != null)
             {
                 bool isSelected = settings.PeriodType == periodTypes[i].Item1 && settings.Value == periodTypes[i].Item2;
-                menuItems[i].Foreground = isSelected ? highlightColor : null;
+                menuItems[i].Foreground = isSelected ? highlightColor : normalBrush;
             }
         }
     }
@@ -1387,6 +1389,7 @@ public partial class MainWindow : FluentWindow
         // 동기화 주기 메뉴 하이라이팅
         var highlightColor = new System.Windows.Media.SolidColorBrush(
             (System.Windows.Media.Color)System.Windows.Media.ColorConverter.ConvertFromString("#2196F3"));
+        var normalBrush = (System.Windows.Media.Brush)FindResource("TextFillColorPrimaryBrush");
 
         var menuItems = new[] { MenuSyncInterval1s, MenuSyncInterval5s, MenuSyncInterval10s, MenuSyncInterval30s, MenuSyncInterval1m, MenuSyncInterval5m, MenuSyncInterval10m, MenuSyncInterval30m, MenuSyncInterval1h };
         var intervalSeconds = new[] { 1, 5, 10, 30, 60, 300, 600, 1800, 3600 };
@@ -1396,7 +1399,7 @@ public partial class MainWindow : FluentWindow
             if (menuItems[i] != null)
             {
                 bool isSelected = seconds == intervalSeconds[i];
-                menuItems[i].Foreground = isSelected ? highlightColor : null;
+                menuItems[i].Foreground = isSelected ? highlightColor : normalBrush;
             }
         }
     }
@@ -1432,6 +1435,7 @@ public partial class MainWindow : FluentWindow
         // AI 분석 주기 메뉴 하이라이팅
         var highlightColor = new System.Windows.Media.SolidColorBrush(
             (System.Windows.Media.Color)System.Windows.Media.ColorConverter.ConvertFromString("#2196F3"));
+        var normalBrush = (System.Windows.Media.Brush)FindResource("TextFillColorPrimaryBrush");
 
         var menuItems = new[] { MenuAIInterval1s, MenuAIInterval5s, MenuAIInterval10s, MenuAIInterval30s, MenuAIInterval1m, MenuAIInterval5m, MenuAIInterval10m, MenuAIInterval30m, MenuAIInterval1h };
         var intervalSeconds = new[] { 1, 5, 10, 30, 60, 300, 600, 1800, 3600 };
@@ -1441,7 +1445,7 @@ public partial class MainWindow : FluentWindow
             if (menuItems[i] != null)
             {
                 bool isSelected = seconds == intervalSeconds[i];
-                menuItems[i].Foreground = isSelected ? highlightColor : null;
+                menuItems[i].Foreground = isSelected ? highlightColor : normalBrush;
             }
         }
     }
