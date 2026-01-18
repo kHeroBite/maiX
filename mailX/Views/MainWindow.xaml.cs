@@ -1139,11 +1139,16 @@ public partial class MainWindow : FluentWindow
             Log4.Debug($"AI 분석 기간 로드: {aiSettings.ToDisplayString()}");
         }
 
-        // 동기화 주기 로드 (분 -> 초)
-        if (prefs.MailSyncIntervalMinutes > 0)
+        // 동기화 주기 로드 (초 단위 우선, 없으면 분 단위 사용)
+        if (prefs.MailSyncIntervalSeconds > 0)
+        {
+            _viewModel.SetSyncInterval(prefs.MailSyncIntervalSeconds);
+            Log4.Debug($"동기화 주기 로드: {prefs.MailSyncIntervalSeconds}초");
+        }
+        else if (prefs.MailSyncIntervalMinutes > 0)
         {
             _viewModel.SetSyncInterval(prefs.MailSyncIntervalMinutes * 60);
-            Log4.Debug($"동기화 주기 로드: {prefs.MailSyncIntervalMinutes}분");
+            Log4.Debug($"동기화 주기 로드: {prefs.MailSyncIntervalMinutes}분 (하위 호환)");
         }
 
         // 메일 동기화 일시정지 상태 로드
@@ -1151,6 +1156,13 @@ public partial class MainWindow : FluentWindow
         {
             _viewModel.PauseSyncCommand.Execute(null);
             Log4.Debug("메일 동기화 일시정지 상태 로드");
+        }
+
+        // AI 분석 주기 로드 (초 단위)
+        if (prefs.AiAnalysisIntervalSeconds > 0)
+        {
+            _viewModel.SetAIAnalysisInterval(prefs.AiAnalysisIntervalSeconds);
+            Log4.Debug($"AI 분석 주기 로드: {prefs.AiAnalysisIntervalSeconds}초");
         }
 
         // AI 분석 일시정지 상태 로드
@@ -1291,7 +1303,6 @@ public partial class MainWindow : FluentWindow
         // 동기화 기간 메뉴 하이라이팅
         var highlightColor = new System.Windows.Media.SolidColorBrush(
             (System.Windows.Media.Color)System.Windows.Media.ColorConverter.ConvertFromString("#2196F3"));
-        var normalBrush = (System.Windows.Media.Brush)FindResource("TextFillColorPrimaryBrush");
 
         var menuItems = new[] { MenuMailSync5, MenuMailSyncDay, MenuMailSyncWeek, MenuMailSyncMonth, MenuMailSyncYear, MenuMailSyncAll };
         var periodTypes = new[] { (SyncPeriodType.Count, 5), (SyncPeriodType.Days, 1), (SyncPeriodType.Weeks, 1), (SyncPeriodType.Months, 1), (SyncPeriodType.Years, 1), (SyncPeriodType.All, 0) };
@@ -1301,7 +1312,10 @@ public partial class MainWindow : FluentWindow
             if (menuItems[i] != null)
             {
                 bool isSelected = settings.PeriodType == periodTypes[i].Item1 && settings.Value == periodTypes[i].Item2;
-                menuItems[i].Foreground = isSelected ? highlightColor : normalBrush;
+                // 선택된 항목은 하이라이트, 그 외는 시스템 기본값 사용 (null로 리셋)
+                menuItems[i].ClearValue(System.Windows.Controls.Control.ForegroundProperty);
+                if (isSelected)
+                    menuItems[i].Foreground = highlightColor;
             }
         }
     }
@@ -1342,7 +1356,6 @@ public partial class MainWindow : FluentWindow
         // AI 분석 기간 메뉴 하이라이팅
         var highlightColor = new System.Windows.Media.SolidColorBrush(
             (System.Windows.Media.Color)System.Windows.Media.ColorConverter.ConvertFromString("#2196F3"));
-        var normalBrush = (System.Windows.Media.Brush)FindResource("TextFillColorPrimaryBrush");
 
         var menuItems = new[] { MenuAIAnalysis5, MenuAIAnalysisDay, MenuAIAnalysisWeek, MenuAIAnalysisMonth, MenuAIAnalysisYear, MenuAIAnalysisAll };
         var periodTypes = new[] { (SyncPeriodType.Count, 5), (SyncPeriodType.Days, 1), (SyncPeriodType.Weeks, 1), (SyncPeriodType.Months, 1), (SyncPeriodType.Years, 1), (SyncPeriodType.All, 0) };
@@ -1352,7 +1365,10 @@ public partial class MainWindow : FluentWindow
             if (menuItems[i] != null)
             {
                 bool isSelected = settings.PeriodType == periodTypes[i].Item1 && settings.Value == periodTypes[i].Item2;
-                menuItems[i].Foreground = isSelected ? highlightColor : normalBrush;
+                // 선택된 항목은 하이라이트, 그 외는 시스템 기본값 사용 (null로 리셋)
+                menuItems[i].ClearValue(System.Windows.Controls.Control.ForegroundProperty);
+                if (isSelected)
+                    menuItems[i].Foreground = highlightColor;
             }
         }
     }
@@ -1376,8 +1392,9 @@ public partial class MainWindow : FluentWindow
         _viewModel.StatusMessage = $"동기화 주기: {displayText}";
         UpdateSyncIntervalCurrentDisplay(seconds);
 
-        // 설정 저장 (분 단위로 저장)
-        App.Settings.UserPreferences.MailSyncIntervalMinutes = seconds / 60;
+        // 설정 저장 (초 단위로 저장 - 1분 미만도 지원)
+        App.Settings.UserPreferences.MailSyncIntervalSeconds = seconds;
+        App.Settings.UserPreferences.MailSyncIntervalMinutes = seconds / 60; // 하위 호환용
         App.Settings.SaveUserPreferences();
     }
 
@@ -1392,7 +1409,6 @@ public partial class MainWindow : FluentWindow
         // 동기화 주기 메뉴 하이라이팅
         var highlightColor = new System.Windows.Media.SolidColorBrush(
             (System.Windows.Media.Color)System.Windows.Media.ColorConverter.ConvertFromString("#2196F3"));
-        var normalBrush = (System.Windows.Media.Brush)FindResource("TextFillColorPrimaryBrush");
 
         var menuItems = new[] { MenuSyncInterval1s, MenuSyncInterval5s, MenuSyncInterval10s, MenuSyncInterval30s, MenuSyncInterval1m, MenuSyncInterval5m, MenuSyncInterval10m, MenuSyncInterval30m, MenuSyncInterval1h };
         var intervalSeconds = new[] { 1, 5, 10, 30, 60, 300, 600, 1800, 3600 };
@@ -1402,7 +1418,10 @@ public partial class MainWindow : FluentWindow
             if (menuItems[i] != null)
             {
                 bool isSelected = seconds == intervalSeconds[i];
-                menuItems[i].Foreground = isSelected ? highlightColor : normalBrush;
+                // 선택된 항목은 하이라이트, 그 외는 시스템 기본값 사용 (null로 리셋)
+                menuItems[i].ClearValue(System.Windows.Controls.Control.ForegroundProperty);
+                if (isSelected)
+                    menuItems[i].Foreground = highlightColor;
             }
         }
     }
@@ -1425,6 +1444,10 @@ public partial class MainWindow : FluentWindow
         Log4.Info($"AI 분석 주기 설정: {displayText}");
         _viewModel.StatusMessage = $"AI 분석 주기: {displayText}";
         UpdateAIAnalysisIntervalCurrentDisplay(seconds);
+
+        // 설정 저장 (초 단위)
+        App.Settings.UserPreferences.AiAnalysisIntervalSeconds = seconds;
+        App.Settings.SaveUserPreferences();
     }
 
     private void UpdateAIAnalysisIntervalCurrentDisplay(int? seconds = null)
@@ -1438,7 +1461,6 @@ public partial class MainWindow : FluentWindow
         // AI 분석 주기 메뉴 하이라이팅
         var highlightColor = new System.Windows.Media.SolidColorBrush(
             (System.Windows.Media.Color)System.Windows.Media.ColorConverter.ConvertFromString("#2196F3"));
-        var normalBrush = (System.Windows.Media.Brush)FindResource("TextFillColorPrimaryBrush");
 
         var menuItems = new[] { MenuAIInterval1s, MenuAIInterval5s, MenuAIInterval10s, MenuAIInterval30s, MenuAIInterval1m, MenuAIInterval5m, MenuAIInterval10m, MenuAIInterval30m, MenuAIInterval1h };
         var intervalSeconds = new[] { 1, 5, 10, 30, 60, 300, 600, 1800, 3600 };
@@ -1448,7 +1470,10 @@ public partial class MainWindow : FluentWindow
             if (menuItems[i] != null)
             {
                 bool isSelected = seconds == intervalSeconds[i];
-                menuItems[i].Foreground = isSelected ? highlightColor : normalBrush;
+                // 선택된 항목은 하이라이트, 그 외는 시스템 기본값 사용 (null로 리셋)
+                menuItems[i].ClearValue(System.Windows.Controls.Control.ForegroundProperty);
+                if (isSelected)
+                    menuItems[i].Foreground = highlightColor;
             }
         }
     }
@@ -1486,12 +1511,24 @@ public partial class MainWindow : FluentWindow
         // 다이얼로그 표시
         if (dialog.ShowDialog() == true && dialog.IsSaved)
         {
-            // 설정 적용
+            // 메일 동기화 기간 적용 및 저장
             if (dialog.MailSyncSettings != null)
+            {
                 _viewModel.MailSyncPeriodSettings = dialog.MailSyncSettings;
+                App.Settings.UserPreferences.MailSyncPeriodType = dialog.MailSyncSettings.PeriodType.ToString();
+                App.Settings.UserPreferences.MailSyncPeriodValue = dialog.MailSyncSettings.Value;
+            }
 
+            // AI 분석 기간 적용 및 저장
             if (dialog.AiAnalysisSettings != null)
+            {
                 _viewModel.AiAnalysisPeriodSettings = dialog.AiAnalysisSettings;
+                App.Settings.UserPreferences.AiAnalysisPeriodType = dialog.AiAnalysisSettings.PeriodType.ToString();
+                App.Settings.UserPreferences.AiAnalysisPeriodValue = dialog.AiAnalysisSettings.Value;
+            }
+
+            // 설정 파일에 저장
+            App.Settings.SaveUserPreferences();
 
             _viewModel.StatusMessage = "동기화 설정이 저장되었습니다.";
         }

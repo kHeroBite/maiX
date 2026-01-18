@@ -134,55 +134,37 @@ REST_API:
 
 ### 완전자동화 필수 원칙
 - **모든 작업은 완전자동화로 진행** (사용자 확인 없이 처음부터 끝까지 100% 자동 완료)
-- **테스트 통과 필수**: 3단계 테스트 모두 통과해야만 작업 완료
-- **테스트 실패 시**: 1단계 계획부터 다시 시작 → 전체 사이클 반복
+- **테스트 필수**: `/testing` 스킬로 전체 테스트 수행
+- **테스트 실패 시**: 소스 수정 단계로 돌아감 → 전체 사이클 반복
 
-### 3단계 테스트 필수 통과 정책
+### ⚠️ 필수: /testing 스킬 사용 (Critical)
 
-**절대 원칙**: 다음 3가지 테스트를 **순서대로 모두 통과**해야만 작업 완료 인정
+```yaml
+시점: 소스 코드 수정 완료 후 반드시 실행
+방법: /testing 스킬 호출
+내용: 8단계 전체 테스트 자동화 (빌드 → 단위테스트 → 통합테스트)
 
-#### 1단계: 로그 분석 (필수)
-```bash
-# 로그 파일 읽기
-Read "$APPDATA/mailX/logs/YYYYMMDD.log"
+절대_금지:
+  - 수동으로 3단계 테스트만 수행하고 완료 선언
+  - /testing 스킬 없이 작업 완료 선언
+  - 통합테스트(7단계) 생략
 
-# 또는 REST API
-curl -s "http://localhost:5858/api/logs/latest?lines=100"
+필수_준수:
+  - 소스 수정 → /testing 스킬 실행 → 8단계 완료 → 작업 완료
 ```
 
-**통과 조건**:
-- ERROR/WARN/Exception 0건
-- Debug 로그 정상 출력
+### /testing 스킬 테스트 단계
 
-**실패 시**: 계획 수립 단계부터 전체 사이클 재시작
-
-#### 2단계: REST API 테스트 (필수)
-```bash
-curl -s http://localhost:5858/api/health
-curl -s http://localhost:5858/api/status
-```
-
-**통과 조건**:
-- HTTP 200 응답
-- 데이터 정확성 100%
-
-**실패 시**: 계획 수립 단계부터 전체 사이클 재시작
-
-#### 3단계: 스크린샷 검증 (필수)
-```bash
-# 스크린샷 캡처
-curl -X POST http://localhost:5858/api/screenshot
-
-# 이미지 확인
-Read "$APPDATA/mailX/screenshots/screenshot_*.png"
-```
-
-**통과 조건**:
-- 창 정상 표시
-- 한글 텍스트 정상 렌더링
-- UI 컨트롤 배치 정확
-
-**실패 시**: 계획 수립 단계부터 전체 사이클 재시작
+| 단계 | 내용 | 통과 조건 |
+|------|------|----------|
+| 1 | 프로그램 종료 | REST API 종료 성공 |
+| 2 | 빌드 | 오류 0건 |
+| 3 | 프로그램 실행 | health API 응답 |
+| 4 | 로그 확인 | ERROR/WARN 0건 |
+| 5 | REST API 테스트 | HTTP 200 |
+| 6 | 스크린샷 확인 | UI 정상 |
+| 7 | **통합 테스트** | 기능 동작 + UI + 로그 검증 |
+| 8 | 완료 | 모든 단계 통과 |
 
 ---
 
@@ -191,24 +173,17 @@ Read "$APPDATA/mailX/screenshots/screenshot_*.png"
 ### C# 소스 수정 시
 
 ```yaml
-1_프로그램_종료:
-  curl -X POST http://localhost:5858/api/shutdown -H "Content-Type: application/json" -d '{"force":false}'
+1_소스_수정:
+  - 코드 분석 및 수정
+  - 필요한 파일 편집
 
-2_로그_삭제:
-  rm -f "$APPDATA/mailX/logs"/*.log
+2_테스트_실행:
+  - /testing 스킬 호출 (필수!)
+  - 8단계 전체 테스트 수행
 
-3_빌드:
-  dotnet build "C:\DATA\Project\mailX\mailX\mailX.csproj"
-
-4_실행:
-  "C:\DATA\Project\mailX\mailX\bin\Debug\net10.0-windows\mailX.exe" > /dev/null 2>&1 &
-  sleep 3
-  curl -s http://localhost:5858/api/health
-
-5_테스트_3단계:
-  - 1단계: 로그 분석 (ERROR 0건)
-  - 2단계: REST API 테스트 (HTTP 200)
-  - 3단계: 스크린샷 검증 (UI 정상)
+3_완료_조건:
+  - /testing 8단계 모두 통과
+  - 통합테스트(7단계) 포함 필수
 ```
 
 ---

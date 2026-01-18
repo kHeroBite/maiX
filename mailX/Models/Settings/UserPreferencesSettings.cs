@@ -44,10 +44,16 @@ public class UserPreferencesSettings
     public int MailSyncPeriodValue { get; set; } = 5;
 
     /// <summary>
-    /// 메일 동기화 주기 (분 단위)
+    /// 메일 동기화 주기 (분 단위) - 하위 호환용, MailSyncIntervalSeconds 우선
     /// </summary>
     [XmlElement("MailSyncIntervalMinutes")]
     public int MailSyncIntervalMinutes { get; set; } = 5;
+
+    /// <summary>
+    /// 메일 동기화 주기 (초 단위) - 1초~1시간(3600초) 지원
+    /// </summary>
+    [XmlElement("MailSyncIntervalSeconds")]
+    public int MailSyncIntervalSeconds { get; set; } = 0;
 
     /// <summary>
     /// 메일 동기화 일시정지 상태
@@ -66,6 +72,12 @@ public class UserPreferencesSettings
     /// </summary>
     [XmlElement("AiAnalysisPeriodValue")]
     public int AiAnalysisPeriodValue { get; set; } = 5;
+
+    /// <summary>
+    /// AI 분석 주기 (초 단위) - 1초~1시간(3600초) 지원
+    /// </summary>
+    [XmlElement("AiAnalysisIntervalSeconds")]
+    public int AiAnalysisIntervalSeconds { get; set; } = 0;
 
     /// <summary>
     /// AI 분석 일시정지 상태
