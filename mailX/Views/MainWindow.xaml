@@ -125,7 +125,7 @@
                                             <ColumnDefinition Width="20"/>
                                             <ColumnDefinition Width="*"/>
                                         </Grid.ColumnDefinitions>
-                                        <TextBlock Grid.Column="0" Text="❌" VerticalAlignment="Center"/>
+                                        <ui:SymbolIcon Grid.Column="0" Symbol="Dismiss24" FontSize="12" HorizontalAlignment="Left"/>
                                         <TextBlock Grid.Column="1" Text="종료" VerticalAlignment="Center"/>
                                     </Grid>
                                 </MenuItem.Header>
