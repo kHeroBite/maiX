@@ -185,11 +185,11 @@ namespace mailX.Services.Graph
 
                 if (string.IsNullOrEmpty(deltaLink))
                 {
-                    // 초기 동기화: 최근 10개 메일부터 시작 (테스트용)
+                    // 초기 동기화: 최근 50개 메일부터 시작
                     response = await client.Me.MailFolders[folderId].Messages.Delta.GetAsDeltaGetResponseAsync(config =>
                     {
                         config.QueryParameters.Select = selectFields;
-                        config.QueryParameters.Top = 10;
+                        config.QueryParameters.Top = 50;
                     });
                 }
                 else

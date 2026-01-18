@@ -179,6 +179,10 @@ public class BackgroundSyncService : BackgroundService
             Log4.Debug("[BackgroundSyncService] 초기 캘린더 동기화 시작");
             await SyncCalendarAsync(stoppingToken);
             Log4.Debug("[BackgroundSyncService] 초기 캘린더 동기화 완료");
+
+            // 초기 동기화 시간 기록 (주기적 동기화 루프에서 중복 실행 방지)
+            _lastFullSyncTime = DateTime.UtcNow;
+            _lastFavoriteSyncTime = DateTime.UtcNow;
         }
         catch (Exception ex)
         {
@@ -259,6 +263,15 @@ public class BackgroundSyncService : BackgroundService
             {
                 _fullIntervalChangeCts = CancellationTokenSource.CreateLinkedTokenSource(stoppingToken);
 
+                // 주기 변경으로 재시작된 경우, 마지막 실행 후 주기가 지났으면 즉시 실행
+                // _lastFullSyncTime은 클래스 멤버이므로 타이머 재시작 후에도 유지됨
+                var timeSinceLastSync = DateTime.UtcNow - _lastFullSyncTime;
+                if (timeSinceLastSync.TotalSeconds >= _fullSyncIntervalSeconds)
+                {
+                    Log4.Debug($"[BackgroundSyncService] 전체 동기화 주기 경과 ({timeSinceLastSync.TotalSeconds:F0}초) - 즉시 실행");
+                    await ExecuteFullSyncAsync(stoppingToken);
+                }
+
                 using var timer = new PeriodicTimer(TimeSpan.FromSeconds(_fullSyncIntervalSeconds));
                 Log4.Debug($"[BackgroundSyncService] 전체 타이머 생성 - 주기: {_fullSyncIntervalSeconds}초");
 
@@ -270,35 +283,7 @@ public class BackgroundSyncService : BackgroundService
                         continue;
                     }
 
-                    Log4.Debug($"[BackgroundSyncService] 전체 동기화 시작 (#{_fullSyncCount + 1})");
-
-                    try
-                    {
-                        // 폴더 동기화
-                        await SyncFoldersAsync(stoppingToken);
-
-                        // 전체 메일 동기화 (Delta Query)
-                        await SyncAllAccountsAsync(stoppingToken);
-
-                        // 캘린더 동기화
-                        await SyncCalendarAsync(stoppingToken);
-
-                        // 캘린더 알림 체크
-                        await CheckCalendarRemindersAsync(stoppingToken);
-
-                        _lastFullSyncTime = DateTime.UtcNow;
-                        _lastSyncTime = DateTime.UtcNow;  // 하위 호환용
-                        Interlocked.Increment(ref _fullSyncCount);
-                        Interlocked.Increment(ref _syncCount);  // 하위 호환용
-                    }
-                    catch (Exception ex)
-                    {
-                        Log4.Error($"[BackgroundSyncService] 전체 동기화 실패: {ex.Message}");
-                        _logger.Error(ex, "전체 동기화 실패");
-                        Interlocked.Increment(ref _errorCount);
-                    }
-
-                    Log4.Debug($"[BackgroundSyncService] 전체 동기화 완료 (#{_fullSyncCount})");
+                    await ExecuteFullSyncAsync(stoppingToken);
                 }
             }
             catch (OperationCanceledException) when (!stoppingToken.IsCancellationRequested)
@@ -308,6 +293,42 @@ public class BackgroundSyncService : BackgroundService
                 continue;
             }
         }
+    }
+
+    /// <summary>
+    /// 전체 동기화 실행 (폴더, 메일, 캘린더)
+    /// </summary>
+    private async Task ExecuteFullSyncAsync(CancellationToken stoppingToken)
+    {
+        Log4.Debug($"[BackgroundSyncService] 전체 동기화 시작 (#{_fullSyncCount + 1})");
+
+        try
+        {
+            // 폴더 동기화
+            await SyncFoldersAsync(stoppingToken);
+
+            // 전체 메일 동기화 (Delta Query)
+            await SyncAllAccountsAsync(stoppingToken);
+
+            // 캘린더 동기화
+            await SyncCalendarAsync(stoppingToken);
+
+            // 캘린더 알림 체크
+            await CheckCalendarRemindersAsync(stoppingToken);
+
+            _lastFullSyncTime = DateTime.UtcNow;
+            _lastSyncTime = DateTime.UtcNow;  // 하위 호환용
+            Interlocked.Increment(ref _fullSyncCount);
+            Interlocked.Increment(ref _syncCount);  // 하위 호환용
+        }
+        catch (Exception ex)
+        {
+            Log4.Error($"[BackgroundSyncService] 전체 동기화 실패: {ex.Message}");
+            _logger.Error(ex, "전체 동기화 실패");
+            Interlocked.Increment(ref _errorCount);
+        }
+
+        Log4.Debug($"[BackgroundSyncService] 전체 동기화 완료 (#{_fullSyncCount})");
     }
 
     /// <summary>
@@ -616,10 +637,22 @@ public class BackgroundSyncService : BackgroundService
     {
         try
         {
+            // deltaLink가 있고, 마지막 동기화로부터 1시간 이상 지났으면 deltaLink 리셋
+            // (stale deltaLink 문제 해결 - 오래 실행 시 새 메일 감지 안됨 방지)
+            var deltaLinkToUse = syncState.DeltaLink;
+            if (!string.IsNullOrEmpty(deltaLinkToUse) &&
+                syncState.LastSyncedAt.HasValue &&
+                DateTime.UtcNow - syncState.LastSyncedAt.Value > TimeSpan.FromHours(1))
+            {
+                _logger.Warning("deltaLink가 1시간 이상 변경 없음 - 초기 동기화로 리셋 (폴더: {FolderId})", folderId);
+                deltaLinkToUse = null;
+                syncState.DeltaLink = null;  // DB에서도 리셋
+            }
+
             // Delta Query로 변경분만 조회
             var (messages, newDeltaLink, deletedIds) = await mailService.GetMessagesDeltaAsync(
                 folderId,
-                syncState.DeltaLink);
+                deltaLinkToUse);
 
             // 새 deltaLink 저장
             if (!string.IsNullOrEmpty(newDeltaLink))
