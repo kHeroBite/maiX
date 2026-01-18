@@ -112,7 +112,7 @@
                                             <ColumnDefinition Width="20"/>
                                             <ColumnDefinition Width="*"/>
                                         </Grid.ColumnDefinitions>
-                                        <TextBlock Grid.Column="0" Text="🚪" VerticalAlignment="Center"/>
+                                        <ui:SymbolIcon Grid.Column="0" Symbol="SignOut24" FontSize="12" HorizontalAlignment="Left"/>
                                         <TextBlock Grid.Column="1" Text="로그아웃" VerticalAlignment="Center"/>
                                     </Grid>
                                 </MenuItem.Header>
@@ -146,7 +146,7 @@
                                             <ColumnDefinition Width="20"/>
                                             <ColumnDefinition Width="*"/>
                                         </Grid.ColumnDefinitions>
-                                        <TextBlock x:Name="MenuMailSyncPauseIcon" Grid.Column="0" Text="📩" Foreground="#2196F3" VerticalAlignment="Center"/>
+                                        <ui:SymbolIcon x:Name="MenuMailSyncPauseIcon" Grid.Column="0" Symbol="Pause24" FontSize="12" Foreground="#2196F3" HorizontalAlignment="Left"/>
                                         <TextBlock Grid.Column="1" Text="동기화 중지" VerticalAlignment="Center"/>
                                     </Grid>
                                 </MenuItem.Header>
@@ -159,7 +159,7 @@
                                             <ColumnDefinition Width="20"/>
                                             <ColumnDefinition Width="*"/>
                                         </Grid.ColumnDefinitions>
-                                        <TextBlock x:Name="MenuMailSyncResumeIcon" Grid.Column="0" Text="📩" Foreground="#888888" VerticalAlignment="Center"/>
+                                        <ui:SymbolIcon x:Name="MenuMailSyncResumeIcon" Grid.Column="0" Symbol="Play24" FontSize="12" Foreground="#888888" HorizontalAlignment="Left"/>
                                         <TextBlock Grid.Column="1" Text="동기화 시작" VerticalAlignment="Center"/>
                                     </Grid>
                                 </MenuItem.Header>
@@ -172,21 +172,21 @@
                                             <ColumnDefinition Width="*"/>
                                             <ColumnDefinition Width="30"/>
                                         </Grid.ColumnDefinitions>
-                                        <TextBlock Grid.Column="0" Text="📧" VerticalAlignment="Center"/>
+                                        <ui:SymbolIcon Grid.Column="0" Symbol="CalendarLtr24" FontSize="12" HorizontalAlignment="Left"/>
                                         <TextBlock Grid.Column="1" Text="동기화 기간" VerticalAlignment="Center"/>
                                     </Grid>
                                 </MenuItem.Header>
                                 <!-- 현재 설정 표시 -->
                                 <MenuItem x:Name="MenuSyncPeriodCurrent" Header="현재: 최근 5건" IsEnabled="False" FontStyle="Italic"/>
                                 <Separator/>
-                                <MenuItem x:Name="MenuMailSync5" Header="📋 5건" Click="MenuMailSync5_Click"/>
-                                <MenuItem x:Name="MenuMailSyncDay" Header="📅 하루" Click="MenuMailSyncDay_Click"/>
-                                <MenuItem x:Name="MenuMailSyncWeek" Header="📆 1주일" Click="MenuMailSyncWeek_Click"/>
-                                <MenuItem x:Name="MenuMailSyncMonth" Header="🗓️ 1달" Click="MenuMailSyncMonth_Click"/>
-                                <MenuItem x:Name="MenuMailSyncYear" Header="📅 1년" Click="MenuMailSyncYear_Click"/>
-                                <MenuItem x:Name="MenuMailSyncAll" Header="♾️ 전체" Click="MenuMailSyncAll_Click"/>
+                                <MenuItem x:Name="MenuMailSync5" Header="5건" Click="MenuMailSync5_Click"/>
+                                <MenuItem x:Name="MenuMailSyncDay" Header="하루" Click="MenuMailSyncDay_Click"/>
+                                <MenuItem x:Name="MenuMailSyncWeek" Header="1주일" Click="MenuMailSyncWeek_Click"/>
+                                <MenuItem x:Name="MenuMailSyncMonth" Header="1달" Click="MenuMailSyncMonth_Click"/>
+                                <MenuItem x:Name="MenuMailSyncYear" Header="1년" Click="MenuMailSyncYear_Click"/>
+                                <MenuItem x:Name="MenuMailSyncAll" Header="전체" Click="MenuMailSyncAll_Click"/>
                                 <Separator/>
-                                <MenuItem Header="⚙️ 동기화 기간 상세설정" Click="MenuSyncSettings_Click"/>
+                                <MenuItem Header="상세설정" Click="MenuSyncSettings_Click"/>
                             </MenuItem>
                             <MenuItem x:Name="MenuSyncInterval">
                                 <MenuItem.Header>
@@ -196,22 +196,22 @@
                                             <ColumnDefinition Width="*"/>
                                             <ColumnDefinition Width="30"/>
                                         </Grid.ColumnDefinitions>
-                                        <TextBlock Grid.Column="0" Text="⏱️" VerticalAlignment="Center"/>
+                                        <ui:SymbolIcon Grid.Column="0" Symbol="Clock24" FontSize="12" HorizontalAlignment="Left"/>
                                         <TextBlock Grid.Column="1" Text="동기화 주기" VerticalAlignment="Center"/>
                                     </Grid>
                                 </MenuItem.Header>
                                 <!-- 현재 설정 표시 -->
                                 <MenuItem x:Name="MenuSyncIntervalCurrent" Header="현재: 5분" IsEnabled="False" FontStyle="Italic"/>
                                 <Separator/>
-                                <MenuItem x:Name="MenuSyncInterval1s" Header="⚡ 1초" Click="MenuSyncInterval1s_Click"/>
-                                <MenuItem x:Name="MenuSyncInterval5s" Header="⚡ 5초" Click="MenuSyncInterval5s_Click"/>
-                                <MenuItem x:Name="MenuSyncInterval10s" Header="⚡ 10초" Click="MenuSyncInterval10s_Click"/>
-                                <MenuItem x:Name="MenuSyncInterval30s" Header="⏱️ 30초" Click="MenuSyncInterval30s_Click"/>
-                                <MenuItem x:Name="MenuSyncInterval1m" Header="⏱️ 1분" Click="MenuSyncInterval1m_Click"/>
-                                <MenuItem x:Name="MenuSyncInterval5m" Header="⏱️ 5분" Click="MenuSyncInterval5m_Click"/>
-                                <MenuItem x:Name="MenuSyncInterval10m" Header="⏱️ 10분" Click="MenuSyncInterval10m_Click"/>
-                                <MenuItem x:Name="MenuSyncInterval30m" Header="🕐 30분" Click="MenuSyncInterval30m_Click"/>
-                                <MenuItem x:Name="MenuSyncInterval1h" Header="🕐 1시간" Click="MenuSyncInterval1h_Click"/>
+                                <MenuItem x:Name="MenuSyncInterval1s" Header="1초" Click="MenuSyncInterval1s_Click"/>
+                                <MenuItem x:Name="MenuSyncInterval5s" Header="5초" Click="MenuSyncInterval5s_Click"/>
+                                <MenuItem x:Name="MenuSyncInterval10s" Header="10초" Click="MenuSyncInterval10s_Click"/>
+                                <MenuItem x:Name="MenuSyncInterval30s" Header="30초" Click="MenuSyncInterval30s_Click"/>
+                                <MenuItem x:Name="MenuSyncInterval1m" Header="1분" Click="MenuSyncInterval1m_Click"/>
+                                <MenuItem x:Name="MenuSyncInterval5m" Header="5분" Click="MenuSyncInterval5m_Click"/>
+                                <MenuItem x:Name="MenuSyncInterval10m" Header="10분" Click="MenuSyncInterval10m_Click"/>
+                                <MenuItem x:Name="MenuSyncInterval30m" Header="30분" Click="MenuSyncInterval30m_Click"/>
+                                <MenuItem x:Name="MenuSyncInterval1h" Header="1시간" Click="MenuSyncInterval1h_Click"/>
                             </MenuItem>
                             <MenuItem Click="MenuForceResync_Click">
                                 <MenuItem.Header>
@@ -220,7 +220,7 @@
                                             <ColumnDefinition Width="20"/>
                                             <ColumnDefinition Width="*"/>
                                         </Grid.ColumnDefinitions>
-                                        <TextBlock Grid.Column="0" Text="🔄" VerticalAlignment="Center"/>
+                                        <ui:SymbolIcon Grid.Column="0" Symbol="ArrowSync24" FontSize="12" HorizontalAlignment="Left"/>
                                         <TextBlock Grid.Column="1" Text="전체 재동기화" VerticalAlignment="Center"/>
                                     </Grid>
                                 </MenuItem.Header>
@@ -241,7 +241,7 @@
                                             <ColumnDefinition Width="20"/>
                                             <ColumnDefinition Width="*"/>
                                         </Grid.ColumnDefinitions>
-                                        <TextBlock x:Name="MenuAISyncPauseIcon" Grid.Column="0" Text="✨" Foreground="#FFD700" VerticalAlignment="Center"/>
+                                        <ui:SymbolIcon x:Name="MenuAISyncPauseIcon" Grid.Column="0" Symbol="Pause24" FontSize="12" Foreground="#FFD700" HorizontalAlignment="Left"/>
                                         <TextBlock Grid.Column="1" Text="분석 중지" VerticalAlignment="Center"/>
                                     </Grid>
                                 </MenuItem.Header>
@@ -254,7 +254,7 @@
                                             <ColumnDefinition Width="20"/>
                                             <ColumnDefinition Width="*"/>
                                         </Grid.ColumnDefinitions>
-                                        <TextBlock x:Name="MenuAISyncResumeIcon" Grid.Column="0" Text="✨" Foreground="#888888" VerticalAlignment="Center"/>
+                                        <ui:SymbolIcon x:Name="MenuAISyncResumeIcon" Grid.Column="0" Symbol="Play24" FontSize="12" Foreground="#888888" HorizontalAlignment="Left"/>
                                         <TextBlock Grid.Column="1" Text="분석 시작" VerticalAlignment="Center"/>
                                     </Grid>
                                 </MenuItem.Header>
@@ -267,21 +267,21 @@
                                             <ColumnDefinition Width="*"/>
                                             <ColumnDefinition Width="30"/>
                                         </Grid.ColumnDefinitions>
-                                        <TextBlock Grid.Column="0" Text="🤖" VerticalAlignment="Center"/>
+                                        <ui:SymbolIcon Grid.Column="0" Symbol="CalendarLtr24" FontSize="12" HorizontalAlignment="Left"/>
                                         <TextBlock Grid.Column="1" Text="분석 기간" VerticalAlignment="Center"/>
                                     </Grid>
                                 </MenuItem.Header>
                                 <!-- 현재 설정 표시 -->
                                 <MenuItem x:Name="MenuAIAnalysisPeriodCurrent" Header="현재: 최근 5건" IsEnabled="False" FontStyle="Italic"/>
                                 <Separator/>
-                                <MenuItem x:Name="MenuAIAnalysis5" Header="📋 5건" Click="MenuAIAnalysis5_Click"/>
-                                <MenuItem x:Name="MenuAIAnalysisDay" Header="📅 하루" Click="MenuAIAnalysisDay_Click"/>
-                                <MenuItem x:Name="MenuAIAnalysisWeek" Header="📆 1주일" Click="MenuAIAnalysisWeek_Click"/>
-                                <MenuItem x:Name="MenuAIAnalysisMonth" Header="🗓️ 1달" Click="MenuAIAnalysisMonth_Click"/>
-                                <MenuItem x:Name="MenuAIAnalysisYear" Header="📅 1년" Click="MenuAIAnalysisYear_Click"/>
-                                <MenuItem x:Name="MenuAIAnalysisAll" Header="♾️ 전체" Click="MenuAIAnalysisAll_Click"/>
+                                <MenuItem x:Name="MenuAIAnalysis5" Header="5건" Click="MenuAIAnalysis5_Click"/>
+                                <MenuItem x:Name="MenuAIAnalysisDay" Header="하루" Click="MenuAIAnalysisDay_Click"/>
+                                <MenuItem x:Name="MenuAIAnalysisWeek" Header="1주일" Click="MenuAIAnalysisWeek_Click"/>
+                                <MenuItem x:Name="MenuAIAnalysisMonth" Header="1달" Click="MenuAIAnalysisMonth_Click"/>
+                                <MenuItem x:Name="MenuAIAnalysisYear" Header="1년" Click="MenuAIAnalysisYear_Click"/>
+                                <MenuItem x:Name="MenuAIAnalysisAll" Header="전체" Click="MenuAIAnalysisAll_Click"/>
                                 <Separator/>
-                                <MenuItem Header="⚙️ 분석 기간 상세설정" Click="MenuSyncSettings_Click"/>
+                                <MenuItem Header="상세설정" Click="MenuSyncSettings_Click"/>
                             </MenuItem>
                             <MenuItem x:Name="MenuAIAnalysisInterval">
                                 <MenuItem.Header>
@@ -291,22 +291,22 @@
                                             <ColumnDefinition Width="*"/>
                                             <ColumnDefinition Width="30"/>
                                         </Grid.ColumnDefinitions>
-                                        <TextBlock Grid.Column="0" Text="⏱️" VerticalAlignment="Center"/>
+                                        <ui:SymbolIcon Grid.Column="0" Symbol="Clock24" FontSize="12" HorizontalAlignment="Left"/>
                                         <TextBlock Grid.Column="1" Text="분석 주기" VerticalAlignment="Center"/>
                                     </Grid>
                                 </MenuItem.Header>
                                 <!-- 현재 설정 표시 -->
                                 <MenuItem x:Name="MenuAIAnalysisIntervalCurrent" Header="현재: 5분" IsEnabled="False" FontStyle="Italic"/>
                                 <Separator/>
-                                <MenuItem x:Name="MenuAIInterval1s" Header="⚡ 1초" Click="MenuAIInterval1s_Click"/>
-                                <MenuItem x:Name="MenuAIInterval5s" Header="⚡ 5초" Click="MenuAIInterval5s_Click"/>
-                                <MenuItem x:Name="MenuAIInterval10s" Header="⚡ 10초" Click="MenuAIInterval10s_Click"/>
-                                <MenuItem x:Name="MenuAIInterval30s" Header="⏱️ 30초" Click="MenuAIInterval30s_Click"/>
-                                <MenuItem x:Name="MenuAIInterval1m" Header="⏱️ 1분" Click="MenuAIInterval1m_Click"/>
-                                <MenuItem x:Name="MenuAIInterval5m" Header="⏱️ 5분" Click="MenuAIInterval5m_Click"/>
-                                <MenuItem x:Name="MenuAIInterval10m" Header="⏱️ 10분" Click="MenuAIInterval10m_Click"/>
-                                <MenuItem x:Name="MenuAIInterval30m" Header="🕐 30분" Click="MenuAIInterval30m_Click"/>
-                                <MenuItem x:Name="MenuAIInterval1h" Header="🕐 1시간" Click="MenuAIInterval1h_Click"/>
+                                <MenuItem x:Name="MenuAIInterval1s" Header="1초" Click="MenuAIInterval1s_Click"/>
+                                <MenuItem x:Name="MenuAIInterval5s" Header="5초" Click="MenuAIInterval5s_Click"/>
+                                <MenuItem x:Name="MenuAIInterval10s" Header="10초" Click="MenuAIInterval10s_Click"/>
+                                <MenuItem x:Name="MenuAIInterval30s" Header="30초" Click="MenuAIInterval30s_Click"/>
+                                <MenuItem x:Name="MenuAIInterval1m" Header="1분" Click="MenuAIInterval1m_Click"/>
+                                <MenuItem x:Name="MenuAIInterval5m" Header="5분" Click="MenuAIInterval5m_Click"/>
+                                <MenuItem x:Name="MenuAIInterval10m" Header="10분" Click="MenuAIInterval10m_Click"/>
+                                <MenuItem x:Name="MenuAIInterval30m" Header="30분" Click="MenuAIInterval30m_Click"/>
+                                <MenuItem x:Name="MenuAIInterval1h" Header="1시간" Click="MenuAIInterval1h_Click"/>
                             </MenuItem>
                         </MenuItem>
                         <MenuItem Padding="8,4">
@@ -323,7 +323,7 @@
                                             <ColumnDefinition Width="20"/>
                                             <ColumnDefinition Width="*"/>
                                         </Grid.ColumnDefinitions>
-                                        <TextBlock Grid.Column="0" Text="🔑" VerticalAlignment="Center"/>
+                                        <ui:SymbolIcon Grid.Column="0" Symbol="Key24" FontSize="12" HorizontalAlignment="Left"/>
                                         <TextBlock Grid.Column="1" Text="API 관리" VerticalAlignment="Center"/>
                                     </Grid>
                                 </MenuItem.Header>
@@ -335,7 +335,7 @@
                                             <ColumnDefinition Width="20"/>
                                             <ColumnDefinition Width="*"/>
                                         </Grid.ColumnDefinitions>
-                                        <TextBlock Grid.Column="0" Text="✍️" VerticalAlignment="Center"/>
+                                        <ui:SymbolIcon Grid.Column="0" Symbol="Signature24" FontSize="12" HorizontalAlignment="Left"/>
                                         <TextBlock Grid.Column="1" Text="서명 관리" VerticalAlignment="Center"/>
                                     </Grid>
                                 </MenuItem.Header>
@@ -349,7 +349,7 @@
                                             <ColumnDefinition Width="*"/>
                                             <ColumnDefinition Width="30"/>
                                         </Grid.ColumnDefinitions>
-                                        <TextBlock Grid.Column="0" Text="🎨" VerticalAlignment="Center"/>
+                                        <ui:SymbolIcon Grid.Column="0" Symbol="ColorBackground24" FontSize="12" HorizontalAlignment="Left"/>
                                         <TextBlock Grid.Column="1" Text="테마" VerticalAlignment="Center"/>
                                     </Grid>
                                 </MenuItem.Header>
@@ -360,7 +360,7 @@
                                                 <ColumnDefinition Width="20"/>
                                                 <ColumnDefinition Width="*"/>
                                             </Grid.ColumnDefinitions>
-                                            <TextBlock Grid.Column="0" Text="🌙" VerticalAlignment="Center"/>
+                                            <ui:SymbolIcon Grid.Column="0" Symbol="WeatherMoon24" FontSize="12" HorizontalAlignment="Left"/>
                                             <TextBlock Grid.Column="1" Text="다크 모드" VerticalAlignment="Center"/>
                                         </Grid>
                                     </MenuItem.Header>
@@ -372,7 +372,7 @@
                                                 <ColumnDefinition Width="20"/>
                                                 <ColumnDefinition Width="*"/>
                                             </Grid.ColumnDefinitions>
-                                            <TextBlock Grid.Column="0" Text="☀️" VerticalAlignment="Center"/>
+                                            <ui:SymbolIcon Grid.Column="0" Symbol="WeatherSunny24" FontSize="12" HorizontalAlignment="Left"/>
                                             <TextBlock Grid.Column="1" Text="라이트 모드" VerticalAlignment="Center"/>
                                         </Grid>
                                     </MenuItem.Header>
