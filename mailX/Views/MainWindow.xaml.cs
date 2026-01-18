@@ -1151,7 +1151,7 @@ public partial class MainWindow : FluentWindow
     #region 동기화 메뉴 이벤트
 
     // 메일 동기화 기간 설정
-    private void MenuMailSync100_Click(object sender, RoutedEventArgs e) => SetMailSyncPeriod(SyncPeriodType.Count, 100);
+    private void MenuMailSync5_Click(object sender, RoutedEventArgs e) => SetMailSyncPeriod(SyncPeriodType.Count, 5);
     private void MenuMailSyncDay_Click(object sender, RoutedEventArgs e) => SetMailSyncPeriod(SyncPeriodType.Days, 1);
     private void MenuMailSyncWeek_Click(object sender, RoutedEventArgs e) => SetMailSyncPeriod(SyncPeriodType.Weeks, 1);
     private void MenuMailSyncMonth_Click(object sender, RoutedEventArgs e) => SetMailSyncPeriod(SyncPeriodType.Months, 1);

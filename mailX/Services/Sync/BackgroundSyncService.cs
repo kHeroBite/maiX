@@ -28,7 +28,7 @@ public class BackgroundSyncService : BackgroundService
 
     // 동기화 설정
     private const int SyncIntervalSeconds = 30;  // 30초 동기화 주기
-    private const int MaxMessagesPerSync = 100;
+    private const int MaxMessagesPerSync = 5;
     private const int MaxRetryCount = 3;
 
     // 상태

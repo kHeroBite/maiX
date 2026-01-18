@@ -114,7 +114,7 @@
                                 <!-- 현재 설정 표시 -->
                                 <MenuItem x:Name="MenuSyncPeriodCurrent" Header="현재: 1주일" IsEnabled="False" FontStyle="Italic"/>
                                 <Separator/>
-                                <MenuItem x:Name="MenuMailSync100" Header="📋 100건" Click="MenuMailSync100_Click"/>
+                                <MenuItem x:Name="MenuMailSync5" Header="📋 5건" Click="MenuMailSync5_Click"/>
                                 <MenuItem x:Name="MenuMailSyncDay" Header="📅 하루" Click="MenuMailSyncDay_Click"/>
                                 <MenuItem x:Name="MenuMailSyncWeek" Header="📆 1주일" Click="MenuMailSyncWeek_Click"/>
                                 <MenuItem x:Name="MenuMailSyncMonth" Header="🗓️ 1달" Click="MenuMailSyncMonth_Click"/>
