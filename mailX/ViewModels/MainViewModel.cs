@@ -624,8 +624,10 @@ public partial class MainViewModel : ViewModelBase
             await LoadEmailsAsync();
         }
 
+        // 새 메일이 있으면 폴더 목록도 갱신 (UnreadItemCount 업데이트)
         if (newCount > 0)
         {
+            await LoadFoldersAsync();
             StatusMessage = $"{newCount}개 새 메일 동기화됨";
         }
 
