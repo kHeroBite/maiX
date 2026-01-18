@@ -128,12 +128,20 @@ namespace mailX.Services.Graph
         {
             var client = _authService.GetGraphClient();
 
+            // 필요한 필드 명시적 선택 (IsRead, Flag, Importance 포함)
+            var selectFields = new[] {
+                "id", "internetMessageId", "conversationId", "subject", "body",
+                "from", "toRecipients", "ccRecipients", "receivedDateTime",
+                "isRead", "flag", "importance", "hasAttachments"
+            };
+
             if (string.IsNullOrEmpty(folderId))
             {
                 // 받은편지함
                 var response = await client.Me.MailFolders["Inbox"].Messages.GetAsync(config =>
                 {
                     config.QueryParameters.Top = top;
+                    config.QueryParameters.Select = selectFields;
                     config.QueryParameters.Orderby = new[] { "receivedDateTime desc" };
                 });
                 return response?.Value ?? new List<Message>();
@@ -143,10 +151,107 @@ namespace mailX.Services.Graph
                 var response = await client.Me.MailFolders[folderId].Messages.GetAsync(config =>
                 {
                     config.QueryParameters.Top = top;
+                    config.QueryParameters.Select = selectFields;
                     config.QueryParameters.Orderby = new[] { "receivedDateTime desc" };
                 });
                 return response?.Value ?? new List<Message>();
             }
+        }
+
+        /// <summary>
+        /// Delta Query로 변경된 메일만 조회
+        /// </summary>
+        /// <param name="folderId">폴더 ID</param>
+        /// <param name="deltaLink">이전 동기화의 deltaLink (null이면 초기 동기화)</param>
+        /// <returns>변경된 메일 목록, 새 deltaLink, 삭제된 메일 ID 목록</returns>
+        public async Task<(IEnumerable<Message> Messages, string? DeltaLink, IEnumerable<string> DeletedIds)>
+            GetMessagesDeltaAsync(string folderId, string? deltaLink = null)
+        {
+            var client = _authService.GetGraphClient();
+            var messages = new List<Message>();
+            var deletedIds = new List<string>();
+            string? newDeltaLink = null;
+
+            try
+            {
+                // 필요한 필드 명시적 선택
+                var selectFields = new[] {
+                    "id", "internetMessageId", "conversationId", "subject", "body",
+                    "from", "toRecipients", "ccRecipients", "receivedDateTime",
+                    "isRead", "flag", "importance", "hasAttachments"
+                };
+
+                Microsoft.Graph.Me.MailFolders.Item.Messages.Delta.DeltaGetResponse? response;
+
+                if (string.IsNullOrEmpty(deltaLink))
+                {
+                    // 초기 동기화: 최근 10개 메일부터 시작 (테스트용)
+                    response = await client.Me.MailFolders[folderId].Messages.Delta.GetAsDeltaGetResponseAsync(config =>
+                    {
+                        config.QueryParameters.Select = selectFields;
+                        config.QueryParameters.Top = 10;
+                    });
+                }
+                else
+                {
+                    // 이전 deltaLink로 변경분만 조회
+                    response = await client.Me.MailFolders[folderId].Messages.Delta
+                        .WithUrl(deltaLink)
+                        .GetAsDeltaGetResponseAsync();
+                }
+
+                // 페이징 처리
+                while (response != null)
+                {
+                    if (response.Value != null)
+                    {
+                        foreach (var message in response.Value)
+                        {
+                            // 삭제된 항목 확인 (@removed 속성)
+                            if (message.AdditionalData?.ContainsKey("@removed") == true)
+                            {
+                                if (!string.IsNullOrEmpty(message.Id))
+                                    deletedIds.Add(message.Id);
+                            }
+                            else
+                            {
+                                messages.Add(message);
+                            }
+                        }
+                    }
+
+                    // deltaLink 저장 (최종 페이지에 포함됨)
+                    if (!string.IsNullOrEmpty(response.OdataDeltaLink))
+                    {
+                        newDeltaLink = response.OdataDeltaLink;
+                        break;
+                    }
+
+                    // 다음 페이지 조회
+                    if (!string.IsNullOrEmpty(response.OdataNextLink))
+                    {
+                        response = await client.Me.MailFolders[folderId].Messages.Delta
+                            .WithUrl(response.OdataNextLink)
+                            .GetAsDeltaGetResponseAsync();
+                    }
+                    else
+                    {
+                        break;
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                // deltaLink가 만료되었거나 유효하지 않은 경우 초기 동기화로 폴백
+                if (ex.Message.Contains("resync", StringComparison.OrdinalIgnoreCase) ||
+                    ex.Message.Contains("syncStateNotFound", StringComparison.OrdinalIgnoreCase))
+                {
+                    return await GetMessagesDeltaAsync(folderId, null);
+                }
+                throw;
+            }
+
+            return (messages, newDeltaLink, deletedIds);
         }
 
         /// <summary>
