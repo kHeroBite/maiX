@@ -27,6 +27,7 @@
         <ui:TitleBar
             x:Name="TitleBar"
             Grid.Row="0"
+            Height="40"
             ShowMaximize="True"
             ShowMinimize="True"
             ShowClose="True"
@@ -46,12 +47,11 @@
                 </ui:ImageIcon>
             </ui:TitleBar.Icon>
             <ui:TitleBar.Header>
-                <Grid>
+                <Grid HorizontalAlignment="Stretch">
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="Auto"/>
                         <ColumnDefinition Width="Auto"/>
                         <ColumnDefinition Width="*"/>
-                        <ColumnDefinition Width="Auto"/>
                     </Grid.ColumnDefinitions>
 
                     <!-- Column 0: 로고 (Ai 하늘색, X 도트 디자인) -->
@@ -87,76 +87,70 @@
                     </StackPanel>
 
                     <!-- Column 1: 메뉴바 (타이틀바로 이동) -->
-                    <Menu x:Name="TitleBarMenu" Grid.Column="1" VerticalAlignment="Center" Background="Transparent" Margin="0,0,16,0">
-                        <MenuItem Padding="4,4">
+                    <Menu Grid.Column="1" VerticalAlignment="Center" Background="Transparent" Margin="0,0,16,0">
+                        <MenuItem Padding="8,4">
                             <MenuItem.Header>
                                 <StackPanel Orientation="Horizontal">
                                     <ui:SymbolIcon Symbol="PlugConnected24" FontSize="12" Margin="0,0,4,0"/>
                                     <TextBlock Text="접속" VerticalAlignment="Center"/>
                                 </StackPanel>
                             </MenuItem.Header>
-                            <MenuItem Header="🔄 재로그인" Padding="12,6" Click="MenuRelogin_Click"/>
-                            <MenuItem Header="🚪 로그아웃" Padding="12,6" Click="MenuLogout_Click"/>
+                            <MenuItem Header="🔄 재로그인" Click="MenuRelogin_Click"/>
+                            <MenuItem Header="🚪 로그아웃" Click="MenuLogout_Click"/>
                             <Separator/>
-                            <MenuItem Header="❌ 종료" Padding="12,6" Click="MenuExit_Click"/>
+                            <MenuItem Header="❌ 종료" Click="MenuExit_Click"/>
                         </MenuItem>
-                        <MenuItem Padding="4,4">
+                        <MenuItem Padding="8,4">
                             <MenuItem.Header>
                                 <StackPanel Orientation="Horizontal">
                                     <ui:SymbolIcon Symbol="Mail24" FontSize="12" Margin="0,0,4,0"/>
                                     <TextBlock Text="메일" VerticalAlignment="Center"/>
                                 </StackPanel>
                             </MenuItem.Header>
-                            <MenuItem x:Name="MenuSyncPeriod" Padding="12,6">
+                            <MenuItem x:Name="MenuSyncPeriod">
                                 <MenuItem.Header>
-                                    <StackPanel Orientation="Horizontal">
-                                        <TextBlock Text="📧 동기화 기간" VerticalAlignment="Center"/>
-                                        <TextBlock Text=" ▶" FontSize="10" VerticalAlignment="Center" Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
-                                    </StackPanel>
+                                    <TextBlock Text="📧 동기화 기간" VerticalAlignment="Center" Margin="0,0,20,0"/>
                                 </MenuItem.Header>
                                 <!-- 현재 설정 표시 -->
-                                <MenuItem x:Name="MenuSyncPeriodCurrent" Header="현재: 1주일" Padding="12,6" IsEnabled="False" FontStyle="Italic"/>
+                                <MenuItem x:Name="MenuSyncPeriodCurrent" Header="현재: 1주일" IsEnabled="False" FontStyle="Italic"/>
                                 <Separator/>
-                                <MenuItem x:Name="MenuMailSync100" Header="📋 100건" Padding="12,6" Click="MenuMailSync100_Click"/>
-                                <MenuItem x:Name="MenuMailSyncDay" Header="📅 하루" Padding="12,6" Click="MenuMailSyncDay_Click"/>
-                                <MenuItem x:Name="MenuMailSyncWeek" Header="📆 1주일" Padding="12,6" Click="MenuMailSyncWeek_Click"/>
-                                <MenuItem x:Name="MenuMailSyncMonth" Header="🗓️ 1달" Padding="12,6" Click="MenuMailSyncMonth_Click"/>
-                                <MenuItem x:Name="MenuMailSyncYear" Header="📅 1년" Padding="12,6" Click="MenuMailSyncYear_Click"/>
-                                <MenuItem x:Name="MenuMailSyncAll" Header="♾️ 전체" Padding="12,6" Click="MenuMailSyncAll_Click"/>
+                                <MenuItem x:Name="MenuMailSync100" Header="📋 100건" Click="MenuMailSync100_Click"/>
+                                <MenuItem x:Name="MenuMailSyncDay" Header="📅 하루" Click="MenuMailSyncDay_Click"/>
+                                <MenuItem x:Name="MenuMailSyncWeek" Header="📆 1주일" Click="MenuMailSyncWeek_Click"/>
+                                <MenuItem x:Name="MenuMailSyncMonth" Header="🗓️ 1달" Click="MenuMailSyncMonth_Click"/>
+                                <MenuItem x:Name="MenuMailSyncYear" Header="📅 1년" Click="MenuMailSyncYear_Click"/>
+                                <MenuItem x:Name="MenuMailSyncAll" Header="♾️ 전체" Click="MenuMailSyncAll_Click"/>
                             </MenuItem>
                         </MenuItem>
-                        <MenuItem Padding="4,4">
+                        <MenuItem Padding="8,4">
                             <MenuItem.Header>
                                 <StackPanel Orientation="Horizontal">
                                     <TextBlock Text="✨" FontSize="10" Margin="0,0,4,0" VerticalAlignment="Center"/>
                                     <TextBlock Text="Ai" VerticalAlignment="Center"/>
                                 </StackPanel>
                             </MenuItem.Header>
-                            <MenuItem x:Name="MenuAISyncPause2" Header="⏸️ 분석 일시정지" Padding="12,6" Click="MenuAISyncPause_Click" Visibility="Collapsed"/>
-                            <MenuItem x:Name="MenuAISyncResume2" Header="▶️ 분석 시작" Padding="12,6" Click="MenuAISyncResume_Click"/>
+                            <MenuItem x:Name="MenuAISyncPause2" Header="⏸️ 분석 일시정지" Click="MenuAISyncPause_Click" Visibility="Collapsed"/>
+                            <MenuItem x:Name="MenuAISyncResume2" Header="▶️ 분석 시작" Click="MenuAISyncResume_Click"/>
                         </MenuItem>
-                        <MenuItem Padding="4,4">
+                        <MenuItem Padding="8,4">
                             <MenuItem.Header>
                                 <StackPanel Orientation="Horizontal">
                                     <ui:SymbolIcon Symbol="Settings24" FontSize="12" Margin="0,0,4,0"/>
                                     <TextBlock Text="시스템" VerticalAlignment="Center"/>
                                 </StackPanel>
                             </MenuItem.Header>
-                            <MenuItem Header="🔑 API 관리" Padding="12,6" Click="MenuApiSettings_Click"/>
-                            <MenuItem Header="✍️ 서명 관리" Padding="12,6" Click="MenuSignatureSettings_Click"/>
+                            <MenuItem Header="🔑 API 관리" Click="MenuApiSettings_Click"/>
+                            <MenuItem Header="✍️ 서명 관리" Click="MenuSignatureSettings_Click"/>
                             <Separator/>
-                            <MenuItem Padding="12,6">
+                            <MenuItem>
                                 <MenuItem.Header>
-                                    <StackPanel Orientation="Horizontal">
-                                        <TextBlock Text="🎨 테마" VerticalAlignment="Center"/>
-                                        <TextBlock Text=" ▶" FontSize="10" VerticalAlignment="Center" Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
-                                    </StackPanel>
+                                    <TextBlock Text="🎨 테마" VerticalAlignment="Center" Margin="0,0,20,0"/>
                                 </MenuItem.Header>
-                                <MenuItem x:Name="MenuThemeDark2" Header="🌙 다크 모드" Padding="12,6" Click="MenuThemeDark_Click"/>
-                                <MenuItem x:Name="MenuThemeLight2" Header="☀️ 라이트 모드" Padding="12,6" Click="MenuThemeLight_Click"/>
+                                <MenuItem x:Name="MenuThemeDark2" Header="🌙 다크 모드" Click="MenuThemeDark_Click"/>
+                                <MenuItem x:Name="MenuThemeLight2" Header="☀️ 라이트 모드" Click="MenuThemeLight_Click"/>
                             </MenuItem>
                             <Separator/>
-                            <MenuItem x:Name="MenuGpuMode2" Padding="12,6" Click="MenuGpuMode_Click">
+                            <MenuItem x:Name="MenuGpuMode2" Click="MenuGpuMode_Click">
                                 <MenuItem.Header>
                                     <StackPanel Orientation="Horizontal">
                                         <TextBlock x:Name="GpuModeCheckMark" Text="✓" FontWeight="Bold" Margin="0,0,8,0" VerticalAlignment="Center" Visibility="Collapsed"/>
@@ -167,11 +161,11 @@
                         </MenuItem>
                     </Menu>
 
-                    <!-- Column 2: 검색 영역 (폴더선택 + 검색창 + 고급검색) -->
-                    <Grid Grid.Column="2" HorizontalAlignment="Center" VerticalAlignment="Center">
+                    <!-- Column 2: 검색 영역 (폴더선택 + 검색창 + 고급검색) - 창 크기에 따라 축소 -->
+                    <Grid Grid.Column="2" HorizontalAlignment="Stretch" VerticalAlignment="Center" Margin="0,0,8,0">
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="Auto"/>
-                            <ColumnDefinition Width="Auto"/>
+                            <ColumnDefinition Width="*" MinWidth="100"/>
                             <ColumnDefinition Width="Auto"/>
                         </Grid.ColumnDefinitions>
 
@@ -196,13 +190,13 @@
                             </ComboBox.ItemTemplate>
                         </ComboBox>
 
-                        <!-- 검색창 (너비 2배 확장: 600px) -->
+                        <!-- 검색창 (창 크기에 따라 축소/확장, 최소 100px) -->
                         <ui:TextBox x:Name="TitleBarSearchBox"
                                     Grid.Column="1"
                                     PlaceholderText="🔍 메일 검색 (Ctrl+K)"
                                     Text="{Binding SearchKeyword, UpdateSourceTrigger=PropertyChanged}"
                                     Height="32"
-                                    Width="500"
+                                    MinWidth="100"
                                     FontSize="12"
                                     Margin="0,0,4,0"
                                     KeyDown="TitleBarSearchBox_KeyDown"
@@ -222,39 +216,169 @@
                         </ui:Button>
                     </Grid>
 
-                    <!-- Column 3: 우측 버튼들 (테마토글 + 알림 + 설정) -->
-                    <StackPanel Grid.Column="3" Orientation="Horizontal" VerticalAlignment="Center" Margin="16,0,0,0">
-                        <!-- 테마 토글 버튼 -->
-                        <ui:Button x:Name="ThemeToggleButton"
-                                   ToolTip="테마 전환"
-                                   Appearance="Transparent"
-                                   Height="30" Width="30"
-                                   Padding="0"
-                                   Margin="0,0,4,0"
-                                   Click="ThemeToggleButton_Click">
-                            <ui:SymbolIcon x:Name="ThemeIcon" Symbol="WeatherSunny24" FontSize="16"/>
-                        </ui:Button>
-                        <!-- 알림 버튼 -->
-                        <ui:Button x:Name="NotificationButton"
-                                   ToolTip="알림"
-                                   Appearance="Transparent"
-                                   Height="30" Width="30"
-                                   Padding="0"
-                                   Margin="0,0,4,0"
-                                   Click="NotificationButton_Click">
-                            <ui:SymbolIcon Symbol="Alert24" FontSize="16"/>
-                        </ui:Button>
-                        <!-- 설정 버튼 (동기화 설정으로 연결) -->
-                        <ui:Button ToolTip="동기화 설정"
-                                   Appearance="Transparent"
-                                   Height="30" Width="30"
-                                   Padding="0"
-                                   Click="SettingsButton_Click">
-                            <ui:SymbolIcon Symbol="Settings24" FontSize="16"/>
-                        </ui:Button>
-                    </StackPanel>
                 </Grid>
             </ui:TitleBar.Header>
+
+            <!-- 우측 버튼들 (최소화 버튼 왼쪽) -->
+            <ui:TitleBar.TrailingContent>
+                <StackPanel Orientation="Horizontal" VerticalAlignment="Center" HorizontalAlignment="Right" Margin="0,0,8,0">
+                    <!-- AI 분석 버튼 (진행중: 노란색 별 깜빡임, 중지중: 회색 고정) -->
+                    <ui:Button x:Name="AISyncButton"
+                               Command="{Binding ToggleAISyncCommand}"
+                               ToolTip="{Binding AISyncButtonTooltip}"
+                               Appearance="Transparent"
+                               Height="30" Width="30"
+                               Padding="0"
+                               Margin="0,0,4,0">
+                        <Grid>
+                            <!-- 진행중일 때: 노란색 별 3개 -->
+                            <Grid HorizontalAlignment="Center" VerticalAlignment="Center"
+                                  Visibility="{Binding IsAISyncPaused, Converter={StaticResource BoolToVisibilityConverter}, ConverterParameter=Invert}">
+                                <TextBlock Text="✦" FontSize="12" Foreground="#FFD700" Margin="0,0,0,0">
+                                    <TextBlock.Style>
+                                        <Style TargetType="TextBlock">
+                                            <Style.Triggers>
+                                                <EventTrigger RoutedEvent="Loaded">
+                                                    <BeginStoryboard>
+                                                        <Storyboard RepeatBehavior="Forever">
+                                                            <DoubleAnimation Storyboard.TargetProperty="Opacity"
+                                                                             From="1" To="0.3" Duration="0:0:0.8"
+                                                                             AutoReverse="True"/>
+                                                        </Storyboard>
+                                                    </BeginStoryboard>
+                                                </EventTrigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </TextBlock.Style>
+                                </TextBlock>
+                                <TextBlock Text="✦" FontSize="8" Foreground="#FFC125" Margin="6,-5,0,0">
+                                    <TextBlock.Style>
+                                        <Style TargetType="TextBlock">
+                                            <Style.Triggers>
+                                                <EventTrigger RoutedEvent="Loaded">
+                                                    <BeginStoryboard>
+                                                        <Storyboard RepeatBehavior="Forever" BeginTime="0:0:0.2">
+                                                            <DoubleAnimation Storyboard.TargetProperty="Opacity"
+                                                                             From="1" To="0.3" Duration="0:0:0.5"
+                                                                             AutoReverse="True"/>
+                                                        </Storyboard>
+                                                    </BeginStoryboard>
+                                                </EventTrigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </TextBlock.Style>
+                                </TextBlock>
+                                <TextBlock Text="✦" FontSize="6" Foreground="#FFDF00" Margin="10,3,0,0">
+                                    <TextBlock.Style>
+                                        <Style TargetType="TextBlock">
+                                            <Style.Triggers>
+                                                <EventTrigger RoutedEvent="Loaded">
+                                                    <BeginStoryboard>
+                                                        <Storyboard RepeatBehavior="Forever" BeginTime="0:0:0.4">
+                                                            <DoubleAnimation Storyboard.TargetProperty="Opacity"
+                                                                             From="1" To="0.3" Duration="0:0:0.3"
+                                                                             AutoReverse="True"/>
+                                                        </Storyboard>
+                                                    </BeginStoryboard>
+                                                </EventTrigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </TextBlock.Style>
+                                </TextBlock>
+                            </Grid>
+                            <!-- 중지중일 때: 회색 별 3개 -->
+                            <Grid HorizontalAlignment="Center" VerticalAlignment="Center"
+                                  Visibility="{Binding IsAISyncPaused, Converter={StaticResource BoolToVisibilityConverter}}">
+                                <TextBlock Text="✦" FontSize="12" Foreground="#888888" Margin="0,0,0,0"/>
+                                <TextBlock Text="✦" FontSize="8" Foreground="#999999" Margin="6,-5,0,0"/>
+                                <TextBlock Text="✦" FontSize="6" Foreground="#AAAAAA" Margin="10,3,0,0"/>
+                            </Grid>
+                        </Grid>
+                    </ui:Button>
+                    <!-- 메일 동기화 버튼 (동기화중: 편지 꺼내기 애니메이션, 중지중: 회색 고정) -->
+                    <ui:Button x:Name="SyncButton"
+                               Command="{Binding ToggleSyncCommand}"
+                               ToolTip="{Binding SyncButtonTooltip}"
+                               Appearance="Transparent"
+                               Height="30" Width="30"
+                               Padding="0"
+                               Margin="0,0,4,0">
+                        <Grid>
+                            <!-- 동기화 중일 때: 열린 편지 + 나가는 문서 애니메이션 -->
+                            <Grid HorizontalAlignment="Center" VerticalAlignment="Center"
+                                  Visibility="{Binding IsSyncPaused, Converter={StaticResource BoolToVisibilityConverter}, ConverterParameter=Invert}">
+                                <ui:SymbolIcon Symbol="MailRead24" FontSize="14" Foreground="#2196F3"/>
+                                <TextBlock Text="📄" FontSize="8" HorizontalAlignment="Center" RenderTransformOrigin="0.5,0.5">
+                                    <TextBlock.RenderTransform>
+                                        <TranslateTransform x:Name="DocTranslate"/>
+                                    </TextBlock.RenderTransform>
+                                    <TextBlock.Style>
+                                        <Style TargetType="TextBlock">
+                                            <Style.Triggers>
+                                                <EventTrigger RoutedEvent="Loaded">
+                                                    <BeginStoryboard>
+                                                        <Storyboard RepeatBehavior="Forever">
+                                                            <DoubleAnimationUsingKeyFrames Storyboard.TargetProperty="(UIElement.RenderTransform).(TranslateTransform.Y)">
+                                                                <EasingDoubleKeyFrame KeyTime="0:0:0" Value="2"/>
+                                                                <EasingDoubleKeyFrame KeyTime="0:0:1.0" Value="-10">
+                                                                    <EasingDoubleKeyFrame.EasingFunction>
+                                                                        <QuadraticEase EasingMode="EaseOut"/>
+                                                                    </EasingDoubleKeyFrame.EasingFunction>
+                                                                </EasingDoubleKeyFrame>
+                                                                <EasingDoubleKeyFrame KeyTime="0:0:1.5" Value="2"/>
+                                                            </DoubleAnimationUsingKeyFrames>
+                                                            <DoubleAnimationUsingKeyFrames Storyboard.TargetProperty="Opacity">
+                                                                <DiscreteDoubleKeyFrame KeyTime="0:0:0" Value="0"/>
+                                                                <EasingDoubleKeyFrame KeyTime="0:0:0.2" Value="1"/>
+                                                                <EasingDoubleKeyFrame KeyTime="0:0:0.8" Value="1"/>
+                                                                <EasingDoubleKeyFrame KeyTime="0:0:1.0" Value="0"/>
+                                                                <DiscreteDoubleKeyFrame KeyTime="0:0:1.5" Value="0"/>
+                                                            </DoubleAnimationUsingKeyFrames>
+                                                        </Storyboard>
+                                                    </BeginStoryboard>
+                                                </EventTrigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </TextBlock.Style>
+                                </TextBlock>
+                            </Grid>
+                            <!-- 중지 중일 때: 회색 닫힌 편지 아이콘 -->
+                            <Grid HorizontalAlignment="Center" VerticalAlignment="Center"
+                                  Visibility="{Binding IsSyncPaused, Converter={StaticResource BoolToVisibilityConverter}}">
+                                <ui:SymbolIcon Symbol="Mail24" FontSize="14" Foreground="#888888"/>
+                            </Grid>
+                        </Grid>
+                    </ui:Button>
+                    <!-- 테마 토글 버튼 -->
+                    <ui:Button x:Name="ThemeToggleButton"
+                               ToolTip="테마 전환"
+                               Appearance="Transparent"
+                               Height="30" Width="30"
+                               Padding="0"
+                               Margin="0,0,4,0"
+                               Click="ThemeToggleButton_Click">
+                        <ui:SymbolIcon x:Name="ThemeIcon" Symbol="WeatherSunny24" FontSize="16"/>
+                    </ui:Button>
+                    <!-- 알림 버튼 -->
+                    <ui:Button x:Name="NotificationButton"
+                               ToolTip="알림"
+                               Appearance="Transparent"
+                               Height="30" Width="30"
+                               Padding="0"
+                               Margin="0,0,4,0"
+                               Click="NotificationButton_Click">
+                        <ui:SymbolIcon Symbol="Alert24" FontSize="16"/>
+                    </ui:Button>
+                    <!-- 설정 버튼 (동기화 설정으로 연결) -->
+                    <ui:Button ToolTip="동기화 설정"
+                               Appearance="Transparent"
+                               Height="30" Width="30"
+                               Padding="0"
+                               Click="SettingsButton_Click">
+                        <ui:SymbolIcon Symbol="Settings24" FontSize="16"/>
+                    </ui:Button>
+                </StackPanel>
+            </ui:TitleBar.TrailingContent>
 
         </ui:TitleBar>
 
@@ -1184,142 +1308,12 @@
                                        Margin="0,0,8,0"
                                        Click="NewMailButton_Click"/>
                             <ui:Button Icon="{ui:SymbolIcon ArrowClockwise24}"
-                                       Command="{Binding LoadEmailsCommand}"
-                                       ToolTip="새로고침"
+                                       Command="{Binding RefreshMailsCommand}"
+                                       ToolTip="새로고침 (서버 동기화)"
                                        Appearance="Secondary"
                                        Width="34" Height="34"
                                        Padding="0"
                                        Margin="0,0,4,0"/>
-                            <!-- AI 분석 버튼 (진행중: 노란색 별 깜빡임, 중지중: 회색 고정) -->
-                            <ui:Button x:Name="AISyncButton"
-                                       Command="{Binding ToggleAISyncCommand}"
-                                       ToolTip="{Binding AISyncButtonTooltip}"
-                                       Appearance="Secondary"
-                                       Width="34" Height="34"
-                                       Padding="0"
-                                       Margin="0,0,4,0">
-                                <Grid>
-                                    <!-- 진행중일 때: 노란색 별 3개 (Grid 레이아웃, 패널 헤더와 동일) -->
-                                    <Grid HorizontalAlignment="Center" VerticalAlignment="Center" Margin="0,2,0,0"
-                                          Visibility="{Binding IsAISyncPaused, Converter={StaticResource BoolToVisibilityConverter}, ConverterParameter=Invert}">
-                                        <TextBlock Text="✦" FontSize="12" Foreground="#FFD700" Margin="0,0,0,0">
-                                            <TextBlock.Style>
-                                                <Style TargetType="TextBlock">
-                                                    <Style.Triggers>
-                                                        <EventTrigger RoutedEvent="Loaded">
-                                                            <BeginStoryboard>
-                                                                <Storyboard RepeatBehavior="Forever">
-                                                                    <DoubleAnimation Storyboard.TargetProperty="Opacity"
-                                                                                     From="1" To="0.3" Duration="0:0:0.8"
-                                                                                     AutoReverse="True"/>
-                                                                </Storyboard>
-                                                            </BeginStoryboard>
-                                                        </EventTrigger>
-                                                    </Style.Triggers>
-                                                </Style>
-                                            </TextBlock.Style>
-                                        </TextBlock>
-                                        <TextBlock Text="✦" FontSize="8" Foreground="#FFC125" Margin="6,-5,0,0">
-                                            <TextBlock.Style>
-                                                <Style TargetType="TextBlock">
-                                                    <Style.Triggers>
-                                                        <EventTrigger RoutedEvent="Loaded">
-                                                            <BeginStoryboard>
-                                                                <Storyboard RepeatBehavior="Forever" BeginTime="0:0:0.2">
-                                                                    <DoubleAnimation Storyboard.TargetProperty="Opacity"
-                                                                                     From="1" To="0.3" Duration="0:0:0.5"
-                                                                                     AutoReverse="True"/>
-                                                                </Storyboard>
-                                                            </BeginStoryboard>
-                                                        </EventTrigger>
-                                                    </Style.Triggers>
-                                                </Style>
-                                            </TextBlock.Style>
-                                        </TextBlock>
-                                        <TextBlock Text="✦" FontSize="6" Foreground="#FFDF00" Margin="10,3,0,0">
-                                            <TextBlock.Style>
-                                                <Style TargetType="TextBlock">
-                                                    <Style.Triggers>
-                                                        <EventTrigger RoutedEvent="Loaded">
-                                                            <BeginStoryboard>
-                                                                <Storyboard RepeatBehavior="Forever" BeginTime="0:0:0.4">
-                                                                    <DoubleAnimation Storyboard.TargetProperty="Opacity"
-                                                                                     From="1" To="0.3" Duration="0:0:0.3"
-                                                                                     AutoReverse="True"/>
-                                                                </Storyboard>
-                                                            </BeginStoryboard>
-                                                        </EventTrigger>
-                                                    </Style.Triggers>
-                                                </Style>
-                                            </TextBlock.Style>
-                                        </TextBlock>
-                                    </Grid>
-                                    <!-- 중지중일 때: 회색 별 3개 (애니메이션 없음, Grid 레이아웃) -->
-                                    <Grid HorizontalAlignment="Center" VerticalAlignment="Center" Margin="0,2,0,0"
-                                          Visibility="{Binding IsAISyncPaused, Converter={StaticResource BoolToVisibilityConverter}}">
-                                        <TextBlock Text="✦" FontSize="12" Foreground="#888888" Margin="0,0,0,0"/>
-                                        <TextBlock Text="✦" FontSize="8" Foreground="#999999" Margin="6,-5,0,0"/>
-                                        <TextBlock Text="✦" FontSize="6" Foreground="#AAAAAA" Margin="10,3,0,0"/>
-                                    </Grid>
-                                </Grid>
-                            </ui:Button>
-                            <!-- 메일 동기화 버튼 (동기화중: 편지 꺼내기 애니메이션, 중지중: 회색 고정) -->
-                            <ui:Button x:Name="SyncButton"
-                                       Command="{Binding ToggleSyncCommand}"
-                                       ToolTip="{Binding SyncButtonTooltip}"
-                                       Appearance="Secondary"
-                                       Width="34" Height="34"
-                                       Padding="0">
-                                <Grid>
-                                    <!-- 동기화 중일 때: 열린 편지 + 나가는 문서 애니메이션 -->
-                                    <Grid HorizontalAlignment="Center" VerticalAlignment="Center"
-                                          Visibility="{Binding IsSyncPaused, Converter={StaticResource BoolToVisibilityConverter}, ConverterParameter=Invert}">
-                                        <!-- 열린 편지봉투 (MailRead) -->
-                                        <ui:SymbolIcon Symbol="MailRead24" FontSize="14" Foreground="#2196F3"/>
-                                        <!-- 위로 날아가는 문서 -->
-                                        <TextBlock Text="📄" FontSize="8" HorizontalAlignment="Center" RenderTransformOrigin="0.5,0.5">
-                                            <TextBlock.RenderTransform>
-                                                <TranslateTransform x:Name="DocTranslate"/>
-                                            </TextBlock.RenderTransform>
-                                            <TextBlock.Style>
-                                                <Style TargetType="TextBlock">
-                                                    <Style.Triggers>
-                                                        <EventTrigger RoutedEvent="Loaded">
-                                                            <BeginStoryboard>
-                                                                <Storyboard RepeatBehavior="Forever">
-                                                                    <!-- 위로 이동 (1.5초 주기) -->
-                                                                    <DoubleAnimationUsingKeyFrames Storyboard.TargetProperty="(UIElement.RenderTransform).(TranslateTransform.Y)">
-                                                                        <EasingDoubleKeyFrame KeyTime="0:0:0" Value="2"/>
-                                                                        <EasingDoubleKeyFrame KeyTime="0:0:1.0" Value="-10">
-                                                                            <EasingDoubleKeyFrame.EasingFunction>
-                                                                                <QuadraticEase EasingMode="EaseOut"/>
-                                                                            </EasingDoubleKeyFrame.EasingFunction>
-                                                                        </EasingDoubleKeyFrame>
-                                                                        <EasingDoubleKeyFrame KeyTime="0:0:1.5" Value="2"/>
-                                                                    </DoubleAnimationUsingKeyFrames>
-                                                                    <!-- 투명도 -->
-                                                                    <DoubleAnimationUsingKeyFrames Storyboard.TargetProperty="Opacity">
-                                                                        <DiscreteDoubleKeyFrame KeyTime="0:0:0" Value="0"/>
-                                                                        <EasingDoubleKeyFrame KeyTime="0:0:0.2" Value="1"/>
-                                                                        <EasingDoubleKeyFrame KeyTime="0:0:0.8" Value="1"/>
-                                                                        <EasingDoubleKeyFrame KeyTime="0:0:1.0" Value="0"/>
-                                                                        <DiscreteDoubleKeyFrame KeyTime="0:0:1.5" Value="0"/>
-                                                                    </DoubleAnimationUsingKeyFrames>
-                                                                </Storyboard>
-                                                            </BeginStoryboard>
-                                                        </EventTrigger>
-                                                    </Style.Triggers>
-                                                </Style>
-                                            </TextBlock.Style>
-                                        </TextBlock>
-                                    </Grid>
-                                    <!-- 중지 중일 때: 회색 닫힌 편지 아이콘 -->
-                                    <Grid HorizontalAlignment="Center" VerticalAlignment="Center"
-                                          Visibility="{Binding IsSyncPaused, Converter={StaticResource BoolToVisibilityConverter}}">
-                                        <ui:SymbolIcon Symbol="Mail24" FontSize="14" Foreground="#888888"/>
-                                    </Grid>
-                                </Grid>
-                            </ui:Button>
                         </StackPanel>
                     </Grid>
                 </Border>
@@ -1763,7 +1757,7 @@
                                             <TextBlock Grid.Column="0"
                                                        Text="{Binding From}"
                                                        FontWeight="{Binding IsRead, Converter={StaticResource BoolToFontWeightConverter}, FallbackValue=Normal}"
-                                                       Foreground="{Binding IsRead, Converter={StaticResource BoolToForegroundConverter}}"
+                                                       Foreground="{Binding IsRead, Converter={StaticResource IsReadToForegroundConverter}}"
                                                        TextTrimming="CharacterEllipsis"
                                                        FontSize="13"/>
 
@@ -1788,7 +1782,7 @@
                                         <TextBlock Grid.Row="1"
                                                    Text="{Binding Subject}"
                                                    FontWeight="{Binding IsRead, Converter={StaticResource BoolToFontWeightConverter}, FallbackValue=Normal}"
-                                                   Foreground="{Binding IsRead, Converter={StaticResource BoolToForegroundConverter}}"
+                                                   Foreground="{Binding IsRead, Converter={StaticResource IsReadToForegroundConverter}}"
                                                    TextTrimming="CharacterEllipsis"
                                                    FontSize="12"
                                                    Margin="0,3,0,0"/>
@@ -2610,137 +2604,82 @@
         </Border>
         </Grid>
 
-        <!-- ========== 하단 상태바 (Row 2) - 7컬럼 구조로 메인 콘텐츠와 동기화 ========== -->
+        <!-- ========== 하단 상태바 (Row 2) - 좌측 정렬된 동기화 상태 표시 ========== -->
         <Border Grid.Row="2"
                 Background="{DynamicResource ControlFillColorDefaultBrush}"
                 BorderBrush="{DynamicResource ControlElevationBorderBrush}"
                 BorderThickness="0,1,0,0"
+                Height="28"
                 Padding="0,4">
             <Grid>
                 <Grid.ColumnDefinitions>
-                    <!-- 폴더 영역 - 메인 콘텐츠 FolderColumn과 동기화 -->
-                    <ColumnDefinition Width="{Binding ElementName=FolderColumn, Path=ActualWidth}"/>
-                    <!-- Splitter 1 공간 -->
-                    <ColumnDefinition Width="4"/>
-                    <!-- 메일 리스트 영역 - 메인 콘텐츠 MailListColumn과 동기화 -->
-                    <ColumnDefinition Width="{Binding ElementName=MailListColumn, Path=ActualWidth}"/>
-                    <!-- Splitter 2 공간 -->
-                    <ColumnDefinition Width="4"/>
-                    <!-- 본문 영역 - 유동 너비 -->
+                    <ColumnDefinition Width="Auto"/>
                     <ColumnDefinition Width="*"/>
-                    <!-- Splitter 3 공간 -->
-                    <ColumnDefinition Width="4"/>
-                    <!-- AI 패널 영역 - 메인 콘텐츠 AIColumn과 동기화 -->
-                    <ColumnDefinition Width="{Binding ElementName=AIColumn, Path=ActualWidth}"/>
+                    <ColumnDefinition Width="Auto"/>
                 </Grid.ColumnDefinitions>
 
-                <!-- Column 0: 폴더 트리 아래 - 메일 동기화 상태 -->
+                <!-- Column 0: 좌측 - 동기화 상태 (탭별 표시) -->
                 <StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center" Margin="12,0,0,0">
-                    <!-- 동기화 중일 때 ProgressRing -->
-                    <ui:ProgressRing Width="14" Height="14"
-                                     IsIndeterminate="True"
-                                     Visibility="{Binding IsSyncing, Converter={StaticResource BoolToVisibilityConverter}}"
-                                     Margin="0,0,6,0"/>
-                    <!-- 메일 아이콘 -->
-                    <ui:SymbolIcon Symbol="Mail24" FontSize="14" Margin="0,0,6,0"
-                                   Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
-                    <!-- 메일 진행률 텍스트 -->
-                    <TextBlock Text="{Binding MailSyncProgressText}"
+                    <!-- 동기화 진행 중일 때 -->
+                    <StackPanel Orientation="Horizontal"
+                                Visibility="{Binding IsMailSyncProgressVisible, Converter={StaticResource BoolToVisibilityConverter}}">
+                        <!-- 진행 중 아이콘 -->
+                        <ui:ProgressRing Width="14" Height="14"
+                                         IsIndeterminate="True"
+                                         Margin="0,0,6,0"/>
+                        <!-- 진행률 텍스트: 완료/전체 (%) -->
+                        <TextBlock Text="{Binding MailSyncProgressText}"
+                                   Foreground="{DynamicResource SystemAccentColorPrimaryBrush}"
+                                   FontSize="11"
+                                   FontWeight="SemiBold"
+                                   VerticalAlignment="Center"/>
+                        <!-- 프로그레스바 -->
+                        <ProgressBar Value="{Binding MailSyncProgress, Mode=OneWay}"
+                                     Minimum="0" Maximum="100"
+                                     Width="80" Height="6"
+                                     Margin="8,0,0,0"
+                                     Foreground="{DynamicResource SystemAccentColorPrimaryBrush}"
+                                     Background="{DynamicResource ControlFillColorSecondaryBrush}"/>
+                    </StackPanel>
+                    <!-- 마지막 동기화 시간 (탭별 분기 - 진행 중이 아닐 때만 표시) -->
+                    <TextBlock Text="{Binding CurrentSyncTimeText}"
+                               Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                               FontSize="11"
+                               VerticalAlignment="Center"
+                               Visibility="{Binding IsMailSyncProgressVisible, Converter={StaticResource BoolToVisibilityConverter}, ConverterParameter=Invert}"/>
+                    <!-- 이메일 개수 -->
+                    <TextBlock Text="{Binding EmailCount, StringFormat=' | {0}개 메일'}"
+                               Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                               FontSize="11"
+                               Margin="8,0,0,0"
+                               VerticalAlignment="Center"/>
+                </StackPanel>
+
+                <!-- Column 2: 우측 - AI 분석 상태 및 동기화 토글 -->
+                <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center" Margin="0,0,12,0">
+                    <!-- AI 아이콘 -->
+                    <TextBlock Text="🤖" FontSize="14" Margin="0,0,6,0" VerticalAlignment="Center"/>
+                    <!-- AI 진행률 텍스트 -->
+                    <TextBlock Text="{Binding AiAnalysisProgressText}"
                                Foreground="{DynamicResource TextFillColorSecondaryBrush}"
                                FontSize="11"
                                VerticalAlignment="Center"/>
-                    <!-- 메일 프로그레스바 -->
-                    <ProgressBar Value="{Binding MailSyncProgress, Mode=OneWay}"
+                    <!-- AI 프로그레스바 -->
+                    <ProgressBar Value="{Binding AiAnalysisProgress, Mode=OneWay}"
                                  Minimum="0" Maximum="100"
                                  Width="60" Height="6"
                                  Margin="6,0,0,0"
-                                 Foreground="{DynamicResource SystemAccentColorPrimaryBrush}"
+                                 Foreground="#4CAF50"
                                  Background="{DynamicResource ControlFillColorSecondaryBrush}"/>
-                </StackPanel>
-
-                <!-- Column 1: Splitter 1 공간 -->
-                <Rectangle Grid.Column="1" Width="4"/>
-
-                <!-- Column 2: 메일 리스트 아래 - 이메일 개수 -->
-                <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center" Margin="8,0,0,0">
-                    <TextBlock Text="{Binding EmailCount, StringFormat='{}{0}개의 이메일이 로드되었습니다'}"
-                               Foreground="{DynamicResource TextFillColorSecondaryBrush}"
-                               FontSize="11"
-                               VerticalAlignment="Center"/>
-                </StackPanel>
-
-                <!-- Column 3: Splitter 2 공간 -->
-                <Rectangle Grid.Column="3" Width="4"/>
-
-                <!-- Column 4: 본문 영역 아래 - 캘린더 동기화 상태 + 마지막 동기화 시간 -->
-                <StackPanel Grid.Column="4" Orientation="Horizontal" HorizontalAlignment="Center" VerticalAlignment="Center">
-                    <!-- 캘린더 동기화 중일 때 ProgressRing -->
-                    <ui:ProgressRing Width="14" Height="14"
-                                     IsIndeterminate="True"
-                                     Visibility="{Binding IsCalendarSyncing, Converter={StaticResource BoolToVisibilityConverter}}"
-                                     Margin="0,0,6,0"/>
-                    <!-- 캘린더 아이콘 -->
-                    <ui:SymbolIcon Symbol="CalendarLtr24" FontSize="14" Margin="0,0,6,0"
-                                   Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
-                    <!-- 캘린더 진행률 텍스트 -->
-                    <TextBlock Text="{Binding CalendarSyncProgressText}"
-                               Foreground="{DynamicResource TextFillColorSecondaryBrush}"
-                               FontSize="11"
-                               VerticalAlignment="Center"/>
-                    <!-- 캘린더 프로그레스바 -->
-                    <ProgressBar Value="{Binding CalendarSyncProgress, Mode=OneWay}"
-                                 Minimum="0" Maximum="100"
-                                 Width="60" Height="6"
-                                 Margin="6,0,12,0"
-                                 Foreground="#2196F3"
-                                 Background="{DynamicResource ControlFillColorSecondaryBrush}"/>
-                    <!-- 구분선 -->
-                    <Rectangle Width="1" Height="12" Fill="{DynamicResource ControlElevationBorderBrush}" Margin="0,0,12,0"/>
-                    <!-- 마지막 동기화 시간 -->
-                    <TextBlock Text="{Binding LastSyncTimeText}"
-                               Foreground="{DynamicResource TextFillColorTertiaryBrush}"
-                               FontSize="10"
-                               VerticalAlignment="Center"/>
-                </StackPanel>
-
-                <!-- Column 5: Splitter 3 공간 -->
-                <Rectangle Grid.Column="5" Width="4"/>
-
-                <!-- Column 6: AI 패널 아래 - AI 분석 상태 -->
-                <Grid Grid.Column="6" Margin="8,0,12,0">
-                    <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="*"/>
-                        <ColumnDefinition Width="Auto"/>
-                    </Grid.ColumnDefinitions>
-
-                    <!-- AI 분석 진행상황 -->
-                    <StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center">
-                        <!-- AI 아이콘 -->
-                        <TextBlock Text="🤖" FontSize="14" Margin="0,0,6,0" VerticalAlignment="Center"/>
-                        <!-- AI 진행률 텍스트 -->
-                        <TextBlock Text="{Binding AiAnalysisProgressText}"
-                                   Foreground="{DynamicResource TextFillColorSecondaryBrush}"
-                                   FontSize="11"
-                                   VerticalAlignment="Center"/>
-                        <!-- AI 프로그레스바 -->
-                        <ProgressBar Value="{Binding AiAnalysisProgress, Mode=OneWay}"
-                                     Minimum="0" Maximum="100"
-                                     Width="60" Height="6"
-                                     Margin="6,0,0,0"
-                                     Foreground="#4CAF50"
-                                     Background="{DynamicResource ControlFillColorSecondaryBrush}"/>
-                    </StackPanel>
-
                     <!-- 동기화 토글 버튼 -->
-                    <ui:Button Grid.Column="1"
-                               Content="{Binding SyncButtonIcon}"
+                    <ui:Button Content="{Binding SyncButtonIcon}"
                                Command="{Binding ToggleSyncCommand}"
                                ToolTip="{Binding SyncButtonTooltip}"
                                Appearance="Secondary"
                                FontSize="10"
                                Width="28" Height="22"
                                Margin="8,0,0,0"/>
-                </Grid>
+                </StackPanel>
             </Grid>
         </Border>
     </Grid>

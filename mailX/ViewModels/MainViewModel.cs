@@ -4,6 +4,7 @@ using System.Collections.ObjectModel;
 using System.ComponentModel;
 using System.Linq;
 using System.Threading.Tasks;
+using System.Windows;
 using System.Windows.Data;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
@@ -39,6 +40,11 @@ public partial class MainViewModel : ViewModelBase
         _syncService.FoldersSynced += OnFoldersSynced;
         _syncService.EmailsSynced += OnEmailsSynced;
 
+        // 메일 동기화 진행률 이벤트 구독
+        _syncService.MailSyncStarted += OnMailSyncStarted;
+        _syncService.MailSyncProgress += OnMailSyncProgress;
+        _syncService.MailSyncCompleted += OnMailSyncCompleted;
+
         // 캘린더 동기화 이벤트 구독
         _syncService.CalendarSyncStarted += OnCalendarSyncStarted;
         _syncService.CalendarSyncProgress += OnCalendarSyncProgress;
@@ -47,6 +53,40 @@ public partial class MainViewModel : ViewModelBase
         // 초기 상태 동기화
         _isSyncPaused = _syncService.IsPaused;
         UpdateSyncStatus();
+    }
+
+    /// <summary>
+    /// 메일 동기화 시작 이벤트 핸들러
+    /// </summary>
+    private void OnMailSyncStarted(int total)
+    {
+        System.Windows.Application.Current?.Dispatcher.Invoke(() =>
+        {
+            ShowSyncProgress(total);
+        });
+    }
+
+    /// <summary>
+    /// 메일 동기화 진행 이벤트 핸들러
+    /// </summary>
+    private void OnMailSyncProgress(int completed)
+    {
+        System.Windows.Application.Current?.Dispatcher.Invoke(() =>
+        {
+            UpdateSyncProgress(completed);
+        });
+    }
+
+    /// <summary>
+    /// 메일 동기화 완료 이벤트 핸들러
+    /// </summary>
+    private void OnMailSyncCompleted()
+    {
+        System.Windows.Application.Current?.Dispatcher.Invoke(() =>
+        {
+            HideSyncProgressAfterDelay();
+            UpdateSyncStatus();
+        });
     }
 
     /// <summary>
@@ -78,6 +118,9 @@ public partial class MainViewModel : ViewModelBase
         IsCalendarSyncing = false;
         LastCalendarEventCount = eventCount;
         CalendarSyncStatusText = $"일정 {eventCount}건 동기화됨";
+        
+        // 캘린더 동기화 시간 업데이트
+        LastCalendarSyncTime = DateTime.UtcNow;
 
         // 캘린더 뷰 새로고침 이벤트 발생 (UI에서 구독)
         CalendarDataUpdated?.Invoke();
@@ -186,9 +229,49 @@ public partial class MainViewModel : ViewModelBase
     /// <summary>
     /// 마지막 동기화 시간 표시 텍스트
     /// </summary>
-    public string LastSyncTimeText => LastSyncTime.HasValue
-        ? $"마지막 동기화: {LastSyncTime.Value:HH:mm:ss}"
-        : "동기화 기록 없음";
+    /// <summary>
+    /// 마지막 메일 동기화 시간 표시 텍스트
+    /// </summary>
+    public string LastMailSyncTimeText => LastSyncTime.HasValue
+        ? $"마지막 메일 동기화: {LastSyncTime.Value.ToLocalTime():HH:mm:ss}"
+        : "메일 동기화 기록 없음";
+
+    /// <summary>
+    /// 마지막 캘린더 동기화 시간
+    /// </summary>
+    [ObservableProperty]
+    private DateTime? _lastCalendarSyncTime;
+
+    /// <summary>
+    /// 마지막 캘린더 동기화 시간 표시 텍스트
+    /// </summary>
+    public string LastCalendarSyncTimeText => LastCalendarSyncTime.HasValue
+        ? $"마지막 캘린더 동기화: {LastCalendarSyncTime.Value.ToLocalTime():HH:mm:ss}"
+        : "캘린더 동기화 기록 없음";
+
+    /// <summary>
+    /// 캘린더 뷰 활성화 여부
+    /// </summary>
+    [ObservableProperty]
+    private bool _isCalendarViewActive;
+
+    /// <summary>
+    /// 현재 탭에 맞는 동기화 시간 텍스트
+    /// </summary>
+    public string CurrentSyncTimeText => IsCalendarViewActive
+        ? LastCalendarSyncTimeText
+        : LastMailSyncTimeText;
+
+    partial void OnIsCalendarViewActiveChanged(bool value)
+    {
+        OnPropertyChanged(nameof(CurrentSyncTimeText));
+    }
+
+    partial void OnLastCalendarSyncTimeChanged(DateTime? value)
+    {
+        OnPropertyChanged(nameof(LastCalendarSyncTimeText));
+        OnPropertyChanged(nameof(CurrentSyncTimeText));
+    }
 
     #region 메일 동기화 진행상황
 
@@ -205,6 +288,17 @@ public partial class MainViewModel : ViewModelBase
     private int _mailSyncTotal;
 
     /// <summary>
+    /// 메일 동기화 진행률 표시 여부
+    /// </summary>
+    [ObservableProperty]
+    private bool _isMailSyncProgressVisible;
+
+    /// <summary>
+    /// 진행률 숨김 타이머
+    /// </summary>
+    private System.Timers.Timer? _syncProgressHideTimer;
+
+    /// <summary>
     /// 메일 동기화 진행률 (0-100)
     /// </summary>
     public double MailSyncProgress => MailSyncTotal > 0 ? (double)MailSyncCompleted / MailSyncTotal * 100 : 0;
@@ -213,8 +307,8 @@ public partial class MainViewModel : ViewModelBase
     /// 메일 동기화 진행률 텍스트
     /// </summary>
     public string MailSyncProgressText => MailSyncTotal > 0
-        ? $"메일: {MailSyncCompleted}/{MailSyncTotal} ({MailSyncProgress:F0}%)"
-        : "메일: 대기 중";
+        ? $"{MailSyncCompleted}/{MailSyncTotal} ({MailSyncProgress:F0}%)"
+        : "";
 
     partial void OnMailSyncCompletedChanged(int value)
     {
@@ -226,6 +320,48 @@ public partial class MainViewModel : ViewModelBase
     {
         OnPropertyChanged(nameof(MailSyncProgress));
         OnPropertyChanged(nameof(MailSyncProgressText));
+    }
+
+    /// <summary>
+    /// 동기화 진행률 표시 시작
+    /// </summary>
+    public void ShowSyncProgress(int total)
+    {
+        // 타이머 중지
+        _syncProgressHideTimer?.Stop();
+
+        MailSyncCompleted = 0;
+        MailSyncTotal = total;
+        IsMailSyncProgressVisible = true;
+    }
+
+    /// <summary>
+    /// 동기화 진행률 업데이트
+    /// </summary>
+    public void UpdateSyncProgress(int completed)
+    {
+        MailSyncCompleted = completed;
+    }
+
+    /// <summary>
+    /// 동기화 완료 후 3초 뒤 숨김
+    /// </summary>
+    public void HideSyncProgressAfterDelay()
+    {
+        _syncProgressHideTimer?.Stop();
+        _syncProgressHideTimer = new System.Timers.Timer(3000);
+        _syncProgressHideTimer.Elapsed += (s, e) =>
+        {
+            _syncProgressHideTimer?.Stop();
+            System.Windows.Application.Current?.Dispatcher.Invoke(() =>
+            {
+                IsMailSyncProgressVisible = false;
+                MailSyncCompleted = 0;
+                MailSyncTotal = 0;
+            });
+        };
+        _syncProgressHideTimer.AutoReset = false;
+        _syncProgressHideTimer.Start();
     }
 
     #endregion
@@ -333,7 +469,7 @@ public partial class MainViewModel : ViewModelBase
     /// 캘린더 동기화 상태 텍스트
     /// </summary>
     [ObservableProperty]
-    private string _calendarSyncStatusText = "동기화 기록 없음";
+    private string _calendarSyncStatusText = "일정: 대기 중";
 
     /// <summary>
     /// 캘린더 동기화 진행률 (0-100)
@@ -481,7 +617,8 @@ public partial class MainViewModel : ViewModelBase
     /// </summary>
     partial void OnLastSyncTimeChanged(DateTime? value)
     {
-        OnPropertyChanged(nameof(LastSyncTimeText));
+        OnPropertyChanged(nameof(LastMailSyncTimeText));
+        OnPropertyChanged(nameof(CurrentSyncTimeText));
     }
 
     /// <summary>
@@ -556,6 +693,9 @@ public partial class MainViewModel : ViewModelBase
             }
 
             StatusMessage = $"{Folders.Count}개 폴더 로드됨";
+
+            // 초기 로딩 시 동기화 상태 업데이트 (서비스에서 이미 동기화 완료된 경우 반영)
+            UpdateSyncStatus();
         }, "폴더 로드 실패");
     }
 
@@ -630,7 +770,9 @@ public partial class MainViewModel : ViewModelBase
         {
             StatusMessage = "이메일 로딩 중...";
 
+            // AsNoTracking()으로 캐시된 엔티티가 아닌 DB에서 최신 데이터 로드
             Emails = await _dbContext.Emails
+                .AsNoTracking()
                 .Where(e => e.ParentFolderId == SelectedFolder.Id)
                 .OrderByDescending(e => e.ReceivedDateTime)
                 .ToListAsync();
@@ -725,13 +867,34 @@ public partial class MainViewModel : ViewModelBase
             return;
         }
 
+        // 확인창 표시
+        var result = MessageBox.Show(
+            "전체 새로고침을 실행하면 선택된 폴더의 모든 메일을 다시 가져옵니다.\n" +
+            "이 작업은 시간이 걸릴 수 있습니다.\n\n" +
+            "계속하시겠습니까?",
+            "전체 새로고침",
+            MessageBoxButton.YesNo,
+            MessageBoxImage.Question);
+
+        if (result != MessageBoxResult.Yes)
+        {
+            return;
+        }
+
         await ExecuteAsync(async () =>
         {
-            StatusMessage = "메일 새로고침 중...";
-            await _syncService.TriggerSyncAsync();
+            StatusMessage = "전체 새로고침 중...";
+            Log4.Info($"전체 새로고침 시작: {SelectedFolder.DisplayName}");
+            
+            await _syncService.ForceRefreshFolderAsync(
+                SelectedFolder.AccountEmail,
+                SelectedFolder.Id);
             await LoadEmailsAsync();
-            StatusMessage = "메일 새로고침 완료";
-        }, "메일 새로고침 실패");
+            
+            UpdateSyncStatus();
+            StatusMessage = "전체 새로고침 완료";
+            Log4.Info($"전체 새로고침 완료: {SelectedFolder.DisplayName}");
+        }, "전체 새로고침 실패");
     }
 
     /// <summary>

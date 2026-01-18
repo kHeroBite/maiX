@@ -67,7 +67,8 @@ Claude_Code_대화:
 ```yaml
 빌드: dotnet build "C:\DATA\Project\mailX\mailX\mailX.csproj"
 
-실행: "C:\DATA\Project\mailX\mailX\bin\Debug\net10.0-windows\mailX.exe" > /dev/null 2>&1 &
+실행: start "" "C:/DATA/Project/mailX/mailX/bin/Debug/net10.0-windows/mailX.exe"
+# 주의: 반드시 start 명령어 사용! 다른 방식은 Permission denied 에러 발생
 
 프로세스_확인: tasklist | grep -i mailX
 

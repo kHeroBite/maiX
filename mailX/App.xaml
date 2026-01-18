@@ -20,6 +20,7 @@
             <converters:StringToInitialConverter x:Key="StringToInitialConverter"/>
             <converters:StringEqualsToVisibilityConverter x:Key="StringEqualsToVisibilityConverter"/>
             <converters:BoolToForegroundConverter x:Key="BoolToForegroundConverter"/>
+            <converters:IsReadToForegroundConverter x:Key="IsReadToForegroundConverter"/>
             <!-- 아웃룩 스타일 컨버터 -->
             <converters:ImportanceToVisibilityConverter x:Key="ImportanceToVisibilityConverter"/>
             <converters:FlagStatusToVisibilityConverter x:Key="FlagStatusToVisibilityConverter"/>
@@ -68,8 +69,7 @@
 
             <!-- 메뉴 아이템 스타일 (여백 및 서브메뉴 화살표) -->
             <Style TargetType="MenuItem">
-                <Setter Property="Padding" Value="12,8"/>
-                <Setter Property="MinWidth" Value="140"/>
+                <Setter Property="Padding" Value="50,8"/>
             </Style>
 
             <Style x:Key="NavIconButtonStyle" TargetType="Button">

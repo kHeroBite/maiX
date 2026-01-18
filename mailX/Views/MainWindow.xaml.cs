@@ -106,7 +106,36 @@ public partial class MainWindow : FluentWindow
 
         Loaded += MainWindow_Loaded;
         Closed += MainWindow_Closed;
+        SizeChanged += MainWindow_SizeChanged;
         Log4.Debug("MainWindow 생성자 완료");
+    }
+
+    /// <summary>
+    /// 창 크기 변경 시 검색창 너비 조절
+    /// </summary>
+    private void MainWindow_SizeChanged(object sender, SizeChangedEventArgs e)
+    {
+        UpdateSearchBoxWidth();
+    }
+
+    /// <summary>
+    /// 검색창 너비를 창 크기에 맞게 조절
+    /// </summary>
+    private void UpdateSearchBoxWidth()
+    {
+        // 타이틀바 고정 요소들의 너비 합계
+        // 아이콘(18) + 로고(80) + 메뉴(250) + 폴더콤보(144) + 고급검색버튼(34) + 우측버튼들(5*34=170) + 창버튼(138) + 여백(86)
+        const double fixedWidth = 920;
+        const double minSearchWidth = 100;
+        const double maxSearchWidth = 300;
+
+        double availableWidth = ActualWidth - fixedWidth;
+        double searchWidth = Math.Max(minSearchWidth, Math.Min(maxSearchWidth, availableWidth));
+
+        if (TitleBarSearchBox != null)
+        {
+            TitleBarSearchBox.Width = searchWidth;
+        }
     }
 
     /// <summary>
@@ -255,6 +284,12 @@ public partial class MainWindow : FluentWindow
 
         // 자동 로그인 메뉴 상태 초기화
         InitializeAutoLoginMenu();
+
+        // 테마 아이콘 초기화
+        UpdateThemeIcon();
+
+        // 검색창 초기 크기 설정
+        UpdateSearchBoxWidth();
 
         // 검색 자동완성 팝업 닫기를 위한 전역 클릭 이벤트
         PreviewMouseDown += MainWindow_PreviewMouseDown;
@@ -2077,6 +2112,7 @@ public partial class MainWindow : FluentWindow
         if (CalendarDetailPanel != null) CalendarDetailPanel.Visibility = Visibility.Collapsed;
 
         _viewModel.StatusMessage = "메일";
+        _viewModel.IsCalendarViewActive = false;
     }
 
     /// <summary>
@@ -2099,6 +2135,7 @@ public partial class MainWindow : FluentWindow
         if (CalendarDetailPanel != null) CalendarDetailPanel.Visibility = Visibility.Visible;
 
         _viewModel.StatusMessage = "일정";
+        _viewModel.IsCalendarViewActive = true;
 
         // 캘린더 데이터 로드
         LoadCalendarDataAsync();
@@ -2910,9 +2947,11 @@ public partial class MainWindow : FluentWindow
     private void UpdateThemeIcon()
     {
         var themeService = Services.Theme.ThemeService.Instance;
+        // 다크모드일 때 해(Sun) 아이콘 = "라이트모드로 전환"
+        // 라이트모드일 때 달(Moon) 아이콘 = "다크모드로 전환"
         ThemeIcon.Symbol = themeService.IsDarkMode
-            ? Wpf.Ui.Controls.SymbolRegular.WeatherMoon24
-            : Wpf.Ui.Controls.SymbolRegular.WeatherSunny24;
+            ? Wpf.Ui.Controls.SymbolRegular.WeatherSunny24
+            : Wpf.Ui.Controls.SymbolRegular.WeatherMoon24;
     }
 
     /// <summary>
