@@ -1290,6 +1290,7 @@ public partial class MainViewModel : ViewModelBase
             if (folderChanges.Count > 0)
             {
                 Folders = new List<Folder>(Folders);
+                LoadFavoriteFolders(); // 즐겨찾기 폴더 목록도 갱신
             }
 
             StatusMessage = $"{statusText} 표시 완료 ({completed}/{emails.Count})";
@@ -1405,6 +1406,7 @@ public partial class MainViewModel : ViewModelBase
                 {
                     folder.UnreadItemCount = Math.Max(0, folder.UnreadItemCount - 1);
                     Folders = new List<Folder>(Folders);
+                    LoadFavoriteFolders(); // 즐겨찾기 폴더 목록도 갱신
                     Log4.Debug($"폴더 안읽은 메일 수 업데이트: {folder.DisplayName} = {folder.UnreadItemCount} (delta: -1)");
                 }
             }
