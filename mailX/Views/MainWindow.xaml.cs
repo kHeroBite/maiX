@@ -1284,6 +1284,22 @@ public partial class MainWindow : FluentWindow
         {
             MenuSyncPeriodCurrent.Header = $"현재: {settings.ToDisplayString()}";
         }
+
+        // 동기화 기간 메뉴 하이라이팅
+        var highlightColor = new System.Windows.Media.SolidColorBrush(
+            (System.Windows.Media.Color)System.Windows.Media.ColorConverter.ConvertFromString("#2196F3"));
+
+        var menuItems = new[] { MenuMailSync5, MenuMailSyncDay, MenuMailSyncWeek, MenuMailSyncMonth, MenuMailSyncYear, MenuMailSyncAll };
+        var periodTypes = new[] { (SyncPeriodType.Count, 5), (SyncPeriodType.Days, 1), (SyncPeriodType.Weeks, 1), (SyncPeriodType.Months, 1), (SyncPeriodType.Years, 1), (SyncPeriodType.All, 0) };
+
+        for (int i = 0; i < menuItems.Length; i++)
+        {
+            if (menuItems[i] != null)
+            {
+                bool isSelected = settings.PeriodType == periodTypes[i].Item1 && settings.Value == periodTypes[i].Item2;
+                menuItems[i].Foreground = isSelected ? highlightColor : null;
+            }
+        }
     }
 
     // AI 분석 기간 설정
@@ -1318,6 +1334,22 @@ public partial class MainWindow : FluentWindow
         {
             MenuAIAnalysisPeriodCurrent.Header = $"현재: {settings.ToDisplayString()}";
         }
+
+        // AI 분석 기간 메뉴 하이라이팅
+        var highlightColor = new System.Windows.Media.SolidColorBrush(
+            (System.Windows.Media.Color)System.Windows.Media.ColorConverter.ConvertFromString("#2196F3"));
+
+        var menuItems = new[] { MenuAIAnalysis5, MenuAIAnalysisDay, MenuAIAnalysisWeek, MenuAIAnalysisMonth, MenuAIAnalysisYear, MenuAIAnalysisAll };
+        var periodTypes = new[] { (SyncPeriodType.Count, 5), (SyncPeriodType.Days, 1), (SyncPeriodType.Weeks, 1), (SyncPeriodType.Months, 1), (SyncPeriodType.Years, 1), (SyncPeriodType.All, 0) };
+
+        for (int i = 0; i < menuItems.Length; i++)
+        {
+            if (menuItems[i] != null)
+            {
+                bool isSelected = settings.PeriodType == periodTypes[i].Item1 && settings.Value == periodTypes[i].Item2;
+                menuItems[i].Foreground = isSelected ? highlightColor : null;
+            }
+        }
     }
 
     // 메일 동기화 주기 설정
@@ -1351,6 +1383,22 @@ public partial class MainWindow : FluentWindow
         {
             MenuSyncIntervalCurrent.Header = $"현재: {GetIntervalDisplayText(seconds.Value)}";
         }
+
+        // 동기화 주기 메뉴 하이라이팅
+        var highlightColor = new System.Windows.Media.SolidColorBrush(
+            (System.Windows.Media.Color)System.Windows.Media.ColorConverter.ConvertFromString("#2196F3"));
+
+        var menuItems = new[] { MenuSyncInterval1s, MenuSyncInterval5s, MenuSyncInterval10s, MenuSyncInterval30s, MenuSyncInterval1m, MenuSyncInterval5m, MenuSyncInterval10m, MenuSyncInterval30m, MenuSyncInterval1h };
+        var intervalSeconds = new[] { 1, 5, 10, 30, 60, 300, 600, 1800, 3600 };
+
+        for (int i = 0; i < menuItems.Length; i++)
+        {
+            if (menuItems[i] != null)
+            {
+                bool isSelected = seconds == intervalSeconds[i];
+                menuItems[i].Foreground = isSelected ? highlightColor : null;
+            }
+        }
     }
 
     // AI 분석 주기 설정
@@ -1379,6 +1427,22 @@ public partial class MainWindow : FluentWindow
         if (MenuAIAnalysisIntervalCurrent != null)
         {
             MenuAIAnalysisIntervalCurrent.Header = $"현재: {GetIntervalDisplayText(seconds.Value)}";
+        }
+
+        // AI 분석 주기 메뉴 하이라이팅
+        var highlightColor = new System.Windows.Media.SolidColorBrush(
+            (System.Windows.Media.Color)System.Windows.Media.ColorConverter.ConvertFromString("#2196F3"));
+
+        var menuItems = new[] { MenuAIInterval1s, MenuAIInterval5s, MenuAIInterval10s, MenuAIInterval30s, MenuAIInterval1m, MenuAIInterval5m, MenuAIInterval10m, MenuAIInterval30m, MenuAIInterval1h };
+        var intervalSeconds = new[] { 1, 5, 10, 30, 60, 300, 600, 1800, 3600 };
+
+        for (int i = 0; i < menuItems.Length; i++)
+        {
+            if (menuItems[i] != null)
+            {
+                bool isSelected = seconds == intervalSeconds[i];
+                menuItems[i].Foreground = isSelected ? highlightColor : null;
+            }
         }
     }
 
@@ -3180,6 +3244,31 @@ public partial class MainWindow : FluentWindow
 
         // AI 분석 별 색상 업데이트 (라이트모드: 진한 주황, 다크모드: 밝은 골드)
         UpdateAISyncStarColors(themeService.IsDarkMode);
+
+        // 테마 메뉴 하이라이팅 업데이트
+        UpdateThemeMenuHighlight(themeService.IsDarkMode);
+    }
+
+    /// <summary>
+    /// 테마 메뉴 하이라이팅 업데이트
+    /// </summary>
+    private void UpdateThemeMenuHighlight(bool isDarkMode)
+    {
+        var highlightColor = new System.Windows.Media.SolidColorBrush(
+            (System.Windows.Media.Color)System.Windows.Media.ColorConverter.ConvertFromString("#2196F3"));
+        var normalBrush = (System.Windows.Media.Brush)FindResource("TextFillColorPrimaryBrush");
+
+        if (MenuThemeDarkIcon != null && MenuThemeDarkText != null)
+        {
+            MenuThemeDarkIcon.Foreground = isDarkMode ? highlightColor : normalBrush;
+            MenuThemeDarkText.Foreground = isDarkMode ? highlightColor : normalBrush;
+        }
+
+        if (MenuThemeLightIcon != null && MenuThemeLightText != null)
+        {
+            MenuThemeLightIcon.Foreground = isDarkMode ? normalBrush : highlightColor;
+            MenuThemeLightText.Foreground = isDarkMode ? normalBrush : highlightColor;
+        }
     }
 
     /// <summary>

@@ -360,8 +360,8 @@
                                                 <ColumnDefinition Width="20"/>
                                                 <ColumnDefinition Width="*"/>
                                             </Grid.ColumnDefinitions>
-                                            <ui:SymbolIcon Grid.Column="0" Symbol="WeatherMoon24" FontSize="12" HorizontalAlignment="Left"/>
-                                            <TextBlock Grid.Column="1" Text="다크 모드" VerticalAlignment="Center"/>
+                                            <ui:SymbolIcon x:Name="MenuThemeDarkIcon" Grid.Column="0" Symbol="WeatherMoon24" FontSize="12" HorizontalAlignment="Left"/>
+                                            <TextBlock x:Name="MenuThemeDarkText" Grid.Column="1" Text="다크 모드" VerticalAlignment="Center"/>
                                         </Grid>
                                     </MenuItem.Header>
                                 </MenuItem>
@@ -372,8 +372,8 @@
                                                 <ColumnDefinition Width="20"/>
                                                 <ColumnDefinition Width="*"/>
                                             </Grid.ColumnDefinitions>
-                                            <ui:SymbolIcon Grid.Column="0" Symbol="WeatherSunny24" FontSize="12" HorizontalAlignment="Left"/>
-                                            <TextBlock Grid.Column="1" Text="라이트 모드" VerticalAlignment="Center"/>
+                                            <ui:SymbolIcon x:Name="MenuThemeLightIcon" Grid.Column="0" Symbol="WeatherSunny24" FontSize="12" HorizontalAlignment="Left"/>
+                                            <TextBlock x:Name="MenuThemeLightText" Grid.Column="1" Text="라이트 모드" VerticalAlignment="Center"/>
                                         </Grid>
                                     </MenuItem.Header>
                                 </MenuItem>
