@@ -114,15 +114,14 @@
                                 <!-- 현재 설정 표시 -->
                                 <MenuItem x:Name="MenuSyncPeriodCurrent" Header="현재: 최근 5건" IsEnabled="False" FontStyle="Italic"/>
                                 <Separator/>
-                                <!-- 동기화 기간 설정 서브메뉴 -->
-                                <MenuItem Header="⚙️ 동기화 기간 설정">
-                                    <MenuItem x:Name="MenuMailSync5" Header="📋 5건" Click="MenuMailSync5_Click"/>
-                                    <MenuItem x:Name="MenuMailSyncDay" Header="📅 하루" Click="MenuMailSyncDay_Click"/>
-                                    <MenuItem x:Name="MenuMailSyncWeek" Header="📆 1주일" Click="MenuMailSyncWeek_Click"/>
-                                    <MenuItem x:Name="MenuMailSyncMonth" Header="🗓️ 1달" Click="MenuMailSyncMonth_Click"/>
-                                    <MenuItem x:Name="MenuMailSyncYear" Header="📅 1년" Click="MenuMailSyncYear_Click"/>
-                                    <MenuItem x:Name="MenuMailSyncAll" Header="♾️ 전체" Click="MenuMailSyncAll_Click"/>
-                                </MenuItem>
+                                <MenuItem x:Name="MenuMailSync5" Header="📋 5건" Click="MenuMailSync5_Click"/>
+                                <MenuItem x:Name="MenuMailSyncDay" Header="📅 하루" Click="MenuMailSyncDay_Click"/>
+                                <MenuItem x:Name="MenuMailSyncWeek" Header="📆 1주일" Click="MenuMailSyncWeek_Click"/>
+                                <MenuItem x:Name="MenuMailSyncMonth" Header="🗓️ 1달" Click="MenuMailSyncMonth_Click"/>
+                                <MenuItem x:Name="MenuMailSyncYear" Header="📅 1년" Click="MenuMailSyncYear_Click"/>
+                                <MenuItem x:Name="MenuMailSyncAll" Header="♾️ 전체" Click="MenuMailSyncAll_Click"/>
+                                <Separator/>
+                                <MenuItem Header="⚙️ 동기화 기간 상세설정" Click="MenuSyncSettings_Click"/>
                             </MenuItem>
                         </MenuItem>
                         <MenuItem Padding="8,4">
@@ -134,6 +133,22 @@
                             </MenuItem.Header>
                             <MenuItem x:Name="MenuAISyncPause2" Header="⏸️ 분석 일시정지" Click="MenuAISyncPause_Click" Visibility="Collapsed"/>
                             <MenuItem x:Name="MenuAISyncResume2" Header="▶️ 분석 시작" Click="MenuAISyncResume_Click"/>
+                            <MenuItem x:Name="MenuAIAnalysisPeriod">
+                                <MenuItem.Header>
+                                    <TextBlock Text="🤖 분석 기간" VerticalAlignment="Center" Margin="0,0,20,0"/>
+                                </MenuItem.Header>
+                                <!-- 현재 설정 표시 -->
+                                <MenuItem x:Name="MenuAIAnalysisPeriodCurrent" Header="현재: 최근 5건" IsEnabled="False" FontStyle="Italic"/>
+                                <Separator/>
+                                <MenuItem x:Name="MenuAIAnalysis5" Header="📋 5건" Click="MenuAIAnalysis5_Click"/>
+                                <MenuItem x:Name="MenuAIAnalysisDay" Header="📅 하루" Click="MenuAIAnalysisDay_Click"/>
+                                <MenuItem x:Name="MenuAIAnalysisWeek" Header="📆 1주일" Click="MenuAIAnalysisWeek_Click"/>
+                                <MenuItem x:Name="MenuAIAnalysisMonth" Header="🗓️ 1달" Click="MenuAIAnalysisMonth_Click"/>
+                                <MenuItem x:Name="MenuAIAnalysisYear" Header="📅 1년" Click="MenuAIAnalysisYear_Click"/>
+                                <MenuItem x:Name="MenuAIAnalysisAll" Header="♾️ 전체" Click="MenuAIAnalysisAll_Click"/>
+                                <Separator/>
+                                <MenuItem Header="⚙️ 동기화 기간 상세설정" Click="MenuSyncSettings_Click"/>
+                            </MenuItem>
                         </MenuItem>
                         <MenuItem Padding="8,4">
                             <MenuItem.Header>
@@ -2314,63 +2329,24 @@
                         BorderBrush="{DynamicResource ControlElevationBorderBrush}"
                         BorderThickness="0,0,0,1">
                     <StackPanel Orientation="Horizontal">
-                        <!-- 반짝이는 ✨ 아이콘 (3개 별, 각기 다른 노란색, 크기에 반비례하는 속도) -->
-                        <Grid Margin="0,3,8,0" VerticalAlignment="Center">
-                            <!-- 큰 별 (골드, 느린 속도 0.8초) -->
-                            <TextBlock Text="✦" FontSize="14" Foreground="#FFD700" Margin="0,0,0,0">
-                                <TextBlock.Style>
-                                    <Style TargetType="TextBlock">
-                                        <Style.Triggers>
-                                            <EventTrigger RoutedEvent="Loaded">
-                                                <BeginStoryboard>
-                                                    <Storyboard RepeatBehavior="Forever">
-                                                        <DoubleAnimation Storyboard.TargetProperty="Opacity"
-                                                                         From="1" To="0.3" Duration="0:0:0.8"
-                                                                         AutoReverse="True"/>
-                                                    </Storyboard>
-                                                </BeginStoryboard>
-                                            </EventTrigger>
-                                        </Style.Triggers>
-                                    </Style>
-                                </TextBlock.Style>
-                            </TextBlock>
-                            <!-- 중간 별 (황금색, 중간 속도 0.5초) -->
-                            <TextBlock Text="✦" FontSize="10" Foreground="#FFC125" Margin="8,-6,0,0">
-                                <TextBlock.Style>
-                                    <Style TargetType="TextBlock">
-                                        <Style.Triggers>
-                                            <EventTrigger RoutedEvent="Loaded">
-                                                <BeginStoryboard>
-                                                    <Storyboard RepeatBehavior="Forever" BeginTime="0:0:0.2">
-                                                        <DoubleAnimation Storyboard.TargetProperty="Opacity"
-                                                                         From="1" To="0.3" Duration="0:0:0.5"
-                                                                         AutoReverse="True"/>
-                                                    </Storyboard>
-                                                </BeginStoryboard>
-                                            </EventTrigger>
-                                        </Style.Triggers>
-                                    </Style>
-                                </TextBlock.Style>
-                            </TextBlock>
-                            <!-- 작은 별 (카나리아, 빠른 속도 0.3초) -->
-                            <TextBlock Text="✦" FontSize="7" Foreground="#FFDF00" Margin="12,4,0,0">
-                                <TextBlock.Style>
-                                    <Style TargetType="TextBlock">
-                                        <Style.Triggers>
-                                            <EventTrigger RoutedEvent="Loaded">
-                                                <BeginStoryboard>
-                                                    <Storyboard RepeatBehavior="Forever" BeginTime="0:0:0.4">
-                                                        <DoubleAnimation Storyboard.TargetProperty="Opacity"
-                                                                         From="1" To="0.3" Duration="0:0:0.3"
-                                                                         AutoReverse="True"/>
-                                                    </Storyboard>
-                                                </BeginStoryboard>
-                                            </EventTrigger>
-                                        </Style.Triggers>
-                                    </Style>
-                                </TextBlock.Style>
-                            </TextBlock>
-                        </Grid>
+                        <!-- ✨ 이모지 스타일 애니메이션 -->
+                        <TextBlock Text="✨" FontSize="16" Margin="0,0,6,0" VerticalAlignment="Center">
+                            <TextBlock.Style>
+                                <Style TargetType="TextBlock">
+                                    <Style.Triggers>
+                                        <EventTrigger RoutedEvent="Loaded">
+                                            <BeginStoryboard>
+                                                <Storyboard RepeatBehavior="Forever">
+                                                    <DoubleAnimation Storyboard.TargetProperty="Opacity"
+                                                                     From="1" To="0.5" Duration="0:0:0.6"
+                                                                     AutoReverse="True"/>
+                                                </Storyboard>
+                                            </BeginStoryboard>
+                                        </EventTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </TextBlock.Style>
+                        </TextBlock>
                         <TextBlock Text="AI 분석"
                                    FontSize="16"
                                    FontWeight="SemiBold"

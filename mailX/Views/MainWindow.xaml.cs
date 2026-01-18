@@ -1180,7 +1180,7 @@ public partial class MainWindow : FluentWindow
     }
 
     // AI 분석 기간 설정
-    private void MenuAIAnalysis100_Click(object sender, RoutedEventArgs e) => SetAiAnalysisPeriod(SyncPeriodType.Count, 100);
+    private void MenuAIAnalysis5_Click(object sender, RoutedEventArgs e) => SetAiAnalysisPeriod(SyncPeriodType.Count, 5);
     private void MenuAIAnalysisDay_Click(object sender, RoutedEventArgs e) => SetAiAnalysisPeriod(SyncPeriodType.Days, 1);
     private void MenuAIAnalysisWeek_Click(object sender, RoutedEventArgs e) => SetAiAnalysisPeriod(SyncPeriodType.Weeks, 1);
     private void MenuAIAnalysisMonth_Click(object sender, RoutedEventArgs e) => SetAiAnalysisPeriod(SyncPeriodType.Months, 1);
