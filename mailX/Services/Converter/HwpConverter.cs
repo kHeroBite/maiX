@@ -139,22 +139,20 @@ namespace mailX.Services.Converter
 
             try
             {
-                // OpenMcdf로 OLE Compound File 열기
-                using var cf = new CompoundFile(filePath);
+                // OpenMcdf 3.x로 OLE Compound File 열기
+                using var rootStorage = RootStorage.OpenRead(filePath);
 
                 // HWP 파일의 BodyText 스트림 찾기
                 // HWP 5.0 형식의 본문 텍스트는 BodyText/SectionN 스트림에 저장됨
-                var storage = cf.RootStorage;
 
                 // BodyText 스토리지 찾기
-                if (TryGetStorage(storage, "BodyText", out var bodyTextStorage) && bodyTextStorage != null)
+                if (TryGetStorage(rootStorage, "BodyText", out var bodyTextStorage) && bodyTextStorage != null)
                 {
                     // 각 섹션 스트림에서 텍스트 추출
                     int sectionIndex = 0;
-                    while (TryGetStream(bodyTextStorage, $"Section{sectionIndex}", out var sectionStream) && sectionStream != null)
+                    while (TryGetStream(bodyTextStorage, $"Section{sectionIndex}", out var sectionData) && sectionData != null)
                     {
-                        var data = sectionStream.GetData();
-                        var text = ExtractTextFromSectionData(data);
+                        var text = ExtractTextFromSectionData(sectionData);
                         if (!string.IsNullOrWhiteSpace(text))
                         {
                             sb.AppendLine(text);
@@ -165,15 +163,12 @@ namespace mailX.Services.Converter
                 }
 
                 // PrvText 스트림에서 미리보기 텍스트 추출 시도
-                if (sb.Length == 0 && TryGetStream(storage, "PrvText", out var prvTextStream) && prvTextStream != null)
+                if (sb.Length == 0 && TryGetStream(rootStorage, "PrvText", out var prvTextData) && prvTextData != null)
                 {
-                    var data = prvTextStream.GetData();
                     // PrvText는 UTF-16 LE 인코딩
-                    var text = Encoding.Unicode.GetString(data).TrimEnd('\0');
+                    var text = Encoding.Unicode.GetString(prvTextData).TrimEnd('\0');
                     sb.Append(text);
                 }
-
-                cf.Close();
             }
             catch (Exception ex)
             {
@@ -266,13 +261,13 @@ namespace mailX.Services.Converter
         }
 
         /// <summary>
-        /// 스토리지 안전하게 가져오기
+        /// 스토리지 안전하게 가져오기 (OpenMcdf 3.x)
         /// </summary>
-        private bool TryGetStorage(CFStorage parent, string name, out CFStorage? storage)
+        private bool TryGetStorage(OpenMcdf.Storage parent, string name, out OpenMcdf.Storage? storage)
         {
             try
             {
-                storage = parent.GetStorage(name);
+                storage = parent.OpenStorage(name);
                 return storage != null;
             }
             catch
@@ -283,18 +278,21 @@ namespace mailX.Services.Converter
         }
 
         /// <summary>
-        /// 스트림 안전하게 가져오기
+        /// 스트림 안전하게 가져오기 (OpenMcdf 3.x) - 바이트 배열 반환
         /// </summary>
-        private bool TryGetStream(CFStorage storage, string name, out CFStream? stream)
+        private bool TryGetStream(OpenMcdf.Storage storage, string name, out byte[]? data)
         {
             try
             {
-                stream = storage.GetStream(name);
-                return stream != null;
+                using var stream = storage.OpenStream(name);
+                using var ms = new MemoryStream();
+                stream.CopyTo(ms);
+                data = ms.ToArray();
+                return data != null && data.Length > 0;
             }
             catch
             {
-                stream = null;
+                data = null;
                 return false;
             }
         }

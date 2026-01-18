@@ -131,11 +131,28 @@
                                     <TextBlock Text="Ai" VerticalAlignment="Center"/>
                                 </StackPanel>
                             </MenuItem.Header>
-                            <MenuItem x:Name="MenuAISyncPause2" Header="⏸️ 분석 일시정지" Click="MenuAISyncPause_Click" Visibility="Collapsed"/>
-                            <MenuItem x:Name="MenuAISyncResume2" Header="▶️ 분석 시작" Click="MenuAISyncResume_Click"/>
+                            <MenuItem x:Name="MenuAISyncPause2" Click="MenuAISyncPause_Click" Visibility="Collapsed">
+                                <MenuItem.Header>
+                                    <StackPanel Orientation="Horizontal">
+                                        <TextBlock Text="✨" Foreground="#888888" VerticalAlignment="Center" Margin="0,0,6,0"/>
+                                        <TextBlock Text="분석 중지" VerticalAlignment="Center"/>
+                                    </StackPanel>
+                                </MenuItem.Header>
+                            </MenuItem>
+                            <MenuItem x:Name="MenuAISyncResume2" Click="MenuAISyncResume_Click">
+                                <MenuItem.Header>
+                                    <StackPanel Orientation="Horizontal">
+                                        <TextBlock Text="✨" Foreground="#FFD700" VerticalAlignment="Center" Margin="0,0,6,0"/>
+                                        <TextBlock Text="분석 시작" VerticalAlignment="Center"/>
+                                    </StackPanel>
+                                </MenuItem.Header>
+                            </MenuItem>
                             <MenuItem x:Name="MenuAIAnalysisPeriod">
                                 <MenuItem.Header>
-                                    <TextBlock Text="🤖 분석 기간" VerticalAlignment="Center" Margin="0,0,20,0"/>
+                                    <StackPanel Orientation="Horizontal">
+                                        <TextBlock Text="🤖" VerticalAlignment="Center" Margin="0,0,6,0"/>
+                                        <TextBlock Text="분석 기간" VerticalAlignment="Center"/>
+                                    </StackPanel>
                                 </MenuItem.Header>
                                 <!-- 현재 설정 표시 -->
                                 <MenuItem x:Name="MenuAIAnalysisPeriodCurrent" Header="현재: 최근 5건" IsEnabled="False" FontStyle="Italic"/>
