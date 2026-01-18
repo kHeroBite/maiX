@@ -1254,6 +1254,30 @@ public partial class MainViewModel : ViewModelBase
             // UI 갱신을 위해 목록 다시 설정
             Emails = new List<Email>(Emails);
 
+            // 폴더별 안읽은 메일 수 업데이트 (빠른 메모리 계산 방식)
+            var folderChanges = emails
+                .Where(e => !string.IsNullOrEmpty(e.ParentFolderId))
+                .GroupBy(e => e.ParentFolderId)
+                .ToList();
+
+            foreach (var group in folderChanges)
+            {
+                var folder = Folders.FirstOrDefault(f => f.Id == group.Key);
+                if (folder != null)
+                {
+                    // 읽음으로 표시 → 안읽은 개수 감소, 읽지않음으로 표시 → 안읽은 개수 증가
+                    int delta = isRead ? -group.Count() : group.Count();
+                    folder.UnreadItemCount = Math.Max(0, folder.UnreadItemCount + delta);
+                    Log4.Debug($"폴더 안읽은 메일 수 업데이트: {folder.DisplayName} = {folder.UnreadItemCount} (delta: {delta})");
+                }
+            }
+
+            // UI 갱신: 폴더 목록 한 번만 갱신
+            if (folderChanges.Count > 0)
+            {
+                Folders = new List<Folder>(Folders);
+            }
+
             StatusMessage = $"{statusText} 표시 완료 ({completed}/{emails.Count})";
             Log4.Info($"{statusText} 표시 완료: {completed}건");
         }, $"{(isRead ? "읽음" : "읽지 않음")} 표시 실패");
@@ -1359,46 +1383,23 @@ public partial class MainViewModel : ViewModelBase
             // UI 즉시 갱신: 컬렉션을 새로 설정하여 바인딩 갱신
             Emails = new List<Email>(Emails);
 
-            // 폴더 안읽은 메일 수 업데이트
-            await UpdateFolderUnreadCountAsync(email.ParentFolderId);
+            // 폴더 안읽은 메일 수 즉시 업데이트 (빠른 메모리 계산)
+            if (!string.IsNullOrEmpty(email.ParentFolderId))
+            {
+                var folder = Folders.FirstOrDefault(f => f.Id == email.ParentFolderId);
+                if (folder != null)
+                {
+                    folder.UnreadItemCount = Math.Max(0, folder.UnreadItemCount - 1);
+                    Folders = new List<Folder>(Folders);
+                    Log4.Debug($"폴더 안읽은 메일 수 업데이트: {folder.DisplayName} = {folder.UnreadItemCount} (delta: -1)");
+                }
+            }
 
             Log4.Debug($"메일 자동 읽음 처리: {email.Subject}");
         }
         catch (Exception ex)
         {
             Log4.Error($"자동 읽음 처리 실패: {ex.Message}");
-        }
-    }
-
-    /// <summary>
-    /// 폴더 안읽은 메일 수 업데이트
-    /// </summary>
-    private async Task UpdateFolderUnreadCountAsync(string? folderId)
-    {
-        if (string.IsNullOrEmpty(folderId)) return;
-
-        try
-        {
-            // 해당 폴더의 안읽은 메일 수 계산
-            var unreadCount = await _dbContext.Emails
-                .Where(e => e.ParentFolderId == folderId && !e.IsRead)
-                .CountAsync();
-
-            // 폴더 목록에서 해당 폴더 찾아서 업데이트
-            var folder = Folders.FirstOrDefault(f => f.Id == folderId);
-            if (folder != null)
-            {
-                folder.UnreadItemCount = unreadCount;
-
-                // UI 갱신: 폴더 목록 다시 설정
-                Folders = new List<Folder>(Folders);
-
-                Log4.Debug($"폴더 안읽은 메일 수 업데이트: {folder.DisplayName} = {unreadCount}");
-            }
-        }
-        catch (Exception ex)
-        {
-            Log4.Error($"폴더 안읽은 메일 수 업데이트 실패: {ex.Message}");
         }
     }
 
