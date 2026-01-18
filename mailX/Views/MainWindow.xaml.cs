@@ -297,6 +297,9 @@ public partial class MainWindow : FluentWindow
         // GPU 모드 체크마크 초기화
         UpdateGpuModeCheckmark();
 
+        // 저장된 동기화 설정 로드
+        LoadSavedSyncSettings();
+
         // 동기화 기간 현재 설정 표시 초기화
         UpdateSyncPeriodCurrentDisplay();
 
@@ -882,7 +885,10 @@ public partial class MainWindow : FluentWindow
     {
         Log4.Info("메뉴: 메일 동기화 중지 클릭");
         _viewModel.PauseSyncCommand.Execute(null);
-        // 바인딩으로 자동 처리됨
+
+        // 설정 저장
+        App.Settings.UserPreferences.IsMailSyncPaused = true;
+        App.Settings.SaveUserPreferences();
     }
 
     /// <summary>
@@ -892,7 +898,10 @@ public partial class MainWindow : FluentWindow
     {
         Log4.Info("메뉴: 메일 동기화 시작 클릭");
         _viewModel.ResumeSyncCommand.Execute(null);
-        // 바인딩으로 자동 처리됨
+
+        // 설정 저장
+        App.Settings.UserPreferences.IsMailSyncPaused = false;
+        App.Settings.SaveUserPreferences();
     }
 
     /// <summary>
@@ -902,7 +911,10 @@ public partial class MainWindow : FluentWindow
     {
         Log4.Info("메뉴: AI 분석 일시정지 클릭");
         _viewModel.PauseAISyncCommand.Execute(null);
-        // 바인딩으로 자동 처리됨
+
+        // 설정 저장
+        App.Settings.UserPreferences.IsAiAnalysisPaused = true;
+        App.Settings.SaveUserPreferences();
     }
 
     /// <summary>
@@ -912,7 +924,10 @@ public partial class MainWindow : FluentWindow
     {
         Log4.Info("메뉴: AI 분석 시작 클릭");
         _viewModel.ResumeAISyncCommand.Execute(null);
-        // 바인딩으로 자동 처리됨
+
+        // 설정 저장
+        App.Settings.UserPreferences.IsAiAnalysisPaused = false;
+        App.Settings.SaveUserPreferences();
     }
 
     #endregion
@@ -1076,8 +1091,10 @@ public partial class MainWindow : FluentWindow
     /// </summary>
     private void UpdateAutoLoginMenuState(bool isEnabled)
     {
-        // 메뉴바가 타이틀바로 이동되어 더 이상 MenuAutoLogin 컨트롤이 없음
-        // 필요시 타이틀바 메뉴에 추가
+        if (AutoLoginCheckIcon != null)
+        {
+            AutoLoginCheckIcon.Visibility = isEnabled ? Visibility.Visible : Visibility.Collapsed;
+        }
     }
 
     /// <summary>
@@ -1085,7 +1102,54 @@ public partial class MainWindow : FluentWindow
     /// </summary>
     private void InitializeAutoLoginMenu()
     {
-        // 자동 로그인 상태는 LoginWindow에서 관리
+        var loginSettings = _loginSettingsService.Load();
+        var isAutoLoginEnabled = loginSettings?.AutoLogin ?? false;
+        UpdateAutoLoginMenuState(isAutoLoginEnabled);
+    }
+
+    /// <summary>
+    /// 저장된 동기화 설정 로드 및 적용
+    /// </summary>
+    private void LoadSavedSyncSettings()
+    {
+        var prefs = App.Settings.UserPreferences;
+
+        // 메일 동기화 기간 설정 로드
+        if (Enum.TryParse<SyncPeriodType>(prefs.MailSyncPeriodType, out var mailPeriodType))
+        {
+            var mailSettings = new SyncPeriodSettings { PeriodType = mailPeriodType, Value = prefs.MailSyncPeriodValue };
+            _viewModel.MailSyncPeriodSettings = mailSettings;
+            Log4.Debug($"메일 동기화 기간 로드: {mailSettings.ToDisplayString()}");
+        }
+
+        // AI 분석 기간 설정 로드
+        if (Enum.TryParse<SyncPeriodType>(prefs.AiAnalysisPeriodType, out var aiPeriodType))
+        {
+            var aiSettings = new SyncPeriodSettings { PeriodType = aiPeriodType, Value = prefs.AiAnalysisPeriodValue };
+            _viewModel.AiAnalysisPeriodSettings = aiSettings;
+            Log4.Debug($"AI 분석 기간 로드: {aiSettings.ToDisplayString()}");
+        }
+
+        // 동기화 주기 로드 (분 -> 초)
+        if (prefs.MailSyncIntervalMinutes > 0)
+        {
+            _viewModel.SetSyncInterval(prefs.MailSyncIntervalMinutes * 60);
+            Log4.Debug($"동기화 주기 로드: {prefs.MailSyncIntervalMinutes}분");
+        }
+
+        // 메일 동기화 일시정지 상태 로드
+        if (prefs.IsMailSyncPaused)
+        {
+            _viewModel.PauseSyncCommand.Execute(null);
+            Log4.Debug("메일 동기화 일시정지 상태 로드");
+        }
+
+        // AI 분석 일시정지 상태 로드
+        if (prefs.IsAiAnalysisPaused)
+        {
+            _viewModel.PauseAISyncCommand.Execute(null);
+            Log4.Debug("AI 분석 일시정지 상태 로드");
+        }
     }
 
     #endregion
@@ -1197,6 +1261,11 @@ public partial class MainWindow : FluentWindow
         Log4.Info($"메일 동기화 기간 설정: {settings.ToDisplayString()}");
         _viewModel.StatusMessage = $"메일 동기화 기간: {settings.ToDisplayString()}";
         UpdateSyncPeriodCurrentDisplay(settings);
+
+        // 설정 저장
+        App.Settings.UserPreferences.MailSyncPeriodType = periodType.ToString();
+        App.Settings.UserPreferences.MailSyncPeriodValue = value;
+        App.Settings.SaveUserPreferences();
     }
 
     /// <summary>
@@ -1226,6 +1295,11 @@ public partial class MainWindow : FluentWindow
         Log4.Info($"AI 분석 기간 설정: {settings.ToDisplayString()}");
         _viewModel.StatusMessage = $"AI 분석 기간: {settings.ToDisplayString()}";
         UpdateAIAnalysisPeriodCurrentDisplay(settings);
+
+        // 설정 저장
+        App.Settings.UserPreferences.AiAnalysisPeriodType = periodType.ToString();
+        App.Settings.UserPreferences.AiAnalysisPeriodValue = value;
+        App.Settings.SaveUserPreferences();
     }
 
     /// <summary>
@@ -1258,6 +1332,10 @@ public partial class MainWindow : FluentWindow
         Log4.Info($"동기화 주기 설정: {displayText}");
         _viewModel.StatusMessage = $"동기화 주기: {displayText}";
         UpdateSyncIntervalCurrentDisplay(seconds);
+
+        // 설정 저장 (분 단위로 저장)
+        App.Settings.UserPreferences.MailSyncIntervalMinutes = seconds / 60;
+        App.Settings.SaveUserPreferences();
     }
 
     private void UpdateSyncIntervalCurrentDisplay(int? seconds = null)
@@ -2251,6 +2329,7 @@ public partial class MainWindow : FluentWindow
 
         _viewModel.StatusMessage = "메일";
         _viewModel.IsCalendarViewActive = false;
+        _viewModel.IsCalendarMode = false;
     }
 
     /// <summary>
@@ -2274,6 +2353,7 @@ public partial class MainWindow : FluentWindow
 
         _viewModel.StatusMessage = "일정";
         _viewModel.IsCalendarViewActive = true;
+        _viewModel.IsCalendarMode = true;
 
         // 캘린더 데이터 로드
         LoadCalendarDataAsync();
@@ -2442,6 +2522,7 @@ public partial class MainWindow : FluentWindow
                 Log4.Info($"캘린더 일정 조회 시작: {firstDay:yyyy-MM-dd} ~ {lastDay.AddDays(1):yyyy-MM-dd}");
                 var events = await calendarService.GetEventsAsync(firstDay, lastDay.AddDays(1));
                 _currentMonthEvents = events?.ToList();
+                _viewModel.CurrentMonthEventCount = _currentMonthEvents?.Count ?? 0;
                 Log4.Info($"캘린더 일정 로드 완료: {_currentMonthEvents?.Count ?? 0}건 ({month:yyyy-MM})");
             }
             else

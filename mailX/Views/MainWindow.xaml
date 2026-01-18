@@ -57,32 +57,32 @@
                     <!-- Column 0: 로고 (Ai 하늘색, X 도트 디자인) -->
                     <StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center" Margin="0,0,16,0">
                         <TextBlock Text="m" FontSize="16" FontWeight="Bold"
-                                   Foreground="{DynamicResource TextFillColorPrimaryBrush}"/>
-                        <TextBlock Text="Ai" FontSize="16" FontWeight="Bold" Foreground="#5DADE2"/>
+                                   Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
+                        <TextBlock Text="Ai" FontSize="16" FontWeight="Bold" Foreground="#7FB8D8"/>
                         <TextBlock Text="l" FontSize="16" FontWeight="Bold"
-                                   Foreground="{DynamicResource TextFillColorPrimaryBrush}"/>
-                        <!-- X: 도트 디자인 (3D 입체감) -->
-                        <Canvas Width="14" Height="16" Margin="1,0,0,0">
+                                   Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
+                        <!-- X: 도트 디자인 (l과 동일한 높이, 연한 색상) -->
+                        <Canvas Width="12" Height="12" Margin="1,2,0,0">
                             <!-- 그림자 도트 (오프셋) -->
-                            <Rectangle Canvas.Left="1" Canvas.Top="1" Width="3" Height="3" Fill="#666666"/>
-                            <Rectangle Canvas.Left="11" Canvas.Top="1" Width="3" Height="3" Fill="#666666"/>
-                            <Rectangle Canvas.Left="4" Canvas.Top="4" Width="3" Height="3" Fill="#555555"/>
-                            <Rectangle Canvas.Left="8" Canvas.Top="4" Width="3" Height="3" Fill="#555555"/>
-                            <Rectangle Canvas.Left="6" Canvas.Top="7" Width="3" Height="3" Fill="#444444"/>
-                            <Rectangle Canvas.Left="4" Canvas.Top="10" Width="3" Height="3" Fill="#555555"/>
-                            <Rectangle Canvas.Left="8" Canvas.Top="10" Width="3" Height="3" Fill="#555555"/>
-                            <Rectangle Canvas.Left="1" Canvas.Top="13" Width="3" Height="3" Fill="#666666"/>
-                            <Rectangle Canvas.Left="11" Canvas.Top="13" Width="3" Height="3" Fill="#666666"/>
+                            <Rectangle Canvas.Left="1" Canvas.Top="1" Width="2" Height="2" Fill="#777777"/>
+                            <Rectangle Canvas.Left="9" Canvas.Top="1" Width="2" Height="2" Fill="#777777"/>
+                            <Rectangle Canvas.Left="3" Canvas.Top="3" Width="2" Height="2" Fill="#666666"/>
+                            <Rectangle Canvas.Left="7" Canvas.Top="3" Width="2" Height="2" Fill="#666666"/>
+                            <Rectangle Canvas.Left="5" Canvas.Top="5" Width="2" Height="2" Fill="#555555"/>
+                            <Rectangle Canvas.Left="3" Canvas.Top="7" Width="2" Height="2" Fill="#666666"/>
+                            <Rectangle Canvas.Left="7" Canvas.Top="7" Width="2" Height="2" Fill="#666666"/>
+                            <Rectangle Canvas.Left="1" Canvas.Top="9" Width="2" Height="2" Fill="#777777"/>
+                            <Rectangle Canvas.Left="9" Canvas.Top="9" Width="2" Height="2" Fill="#777777"/>
                             <!-- 메인 도트 -->
-                            <Rectangle Canvas.Left="0" Canvas.Top="0" Width="3" Height="3" Fill="{DynamicResource TextFillColorPrimaryBrush}"/>
-                            <Rectangle Canvas.Left="10" Canvas.Top="0" Width="3" Height="3" Fill="{DynamicResource TextFillColorPrimaryBrush}"/>
-                            <Rectangle Canvas.Left="3" Canvas.Top="3" Width="3" Height="3" Fill="{DynamicResource TextFillColorPrimaryBrush}"/>
-                            <Rectangle Canvas.Left="7" Canvas.Top="3" Width="3" Height="3" Fill="{DynamicResource TextFillColorPrimaryBrush}"/>
-                            <Rectangle Canvas.Left="5" Canvas.Top="6" Width="3" Height="3" Fill="{DynamicResource TextFillColorPrimaryBrush}"/>
-                            <Rectangle Canvas.Left="3" Canvas.Top="9" Width="3" Height="3" Fill="{DynamicResource TextFillColorPrimaryBrush}"/>
-                            <Rectangle Canvas.Left="7" Canvas.Top="9" Width="3" Height="3" Fill="{DynamicResource TextFillColorPrimaryBrush}"/>
-                            <Rectangle Canvas.Left="0" Canvas.Top="12" Width="3" Height="3" Fill="{DynamicResource TextFillColorPrimaryBrush}"/>
-                            <Rectangle Canvas.Left="10" Canvas.Top="12" Width="3" Height="3" Fill="{DynamicResource TextFillColorPrimaryBrush}"/>
+                            <Rectangle Canvas.Left="0" Canvas.Top="0" Width="2" Height="2" Fill="{DynamicResource TextFillColorSecondaryBrush}"/>
+                            <Rectangle Canvas.Left="8" Canvas.Top="0" Width="2" Height="2" Fill="{DynamicResource TextFillColorSecondaryBrush}"/>
+                            <Rectangle Canvas.Left="2" Canvas.Top="2" Width="2" Height="2" Fill="{DynamicResource TextFillColorSecondaryBrush}"/>
+                            <Rectangle Canvas.Left="6" Canvas.Top="2" Width="2" Height="2" Fill="{DynamicResource TextFillColorSecondaryBrush}"/>
+                            <Rectangle Canvas.Left="4" Canvas.Top="4" Width="2" Height="2" Fill="{DynamicResource TextFillColorSecondaryBrush}"/>
+                            <Rectangle Canvas.Left="2" Canvas.Top="6" Width="2" Height="2" Fill="{DynamicResource TextFillColorSecondaryBrush}"/>
+                            <Rectangle Canvas.Left="6" Canvas.Top="6" Width="2" Height="2" Fill="{DynamicResource TextFillColorSecondaryBrush}"/>
+                            <Rectangle Canvas.Left="0" Canvas.Top="8" Width="2" Height="2" Fill="{DynamicResource TextFillColorSecondaryBrush}"/>
+                            <Rectangle Canvas.Left="8" Canvas.Top="8" Width="2" Height="2" Fill="{DynamicResource TextFillColorSecondaryBrush}"/>
                         </Canvas>
                     </StackPanel>
 
@@ -95,7 +95,14 @@
                                     <TextBlock Text="접속" VerticalAlignment="Center"/>
                                 </StackPanel>
                             </MenuItem.Header>
-                            <MenuItem Header="🔄 재로그인" Click="MenuRelogin_Click"/>
+                            <MenuItem x:Name="MenuAutoLogin" Click="MenuAutoLogin_Click">
+                                <MenuItem.Header>
+                                    <StackPanel Orientation="Horizontal">
+                                        <ui:SymbolIcon x:Name="AutoLoginCheckIcon" Symbol="Checkmark24" FontSize="12" Margin="0,0,4,0" Visibility="Collapsed"/>
+                                        <TextBlock Text="🔄 자동로그인" VerticalAlignment="Center"/>
+                                    </StackPanel>
+                                </MenuItem.Header>
+                            </MenuItem>
                             <MenuItem Header="🚪 로그아웃" Click="MenuLogout_Click"/>
                             <Separator/>
                             <MenuItem Header="❌ 종료" Click="MenuExit_Click"/>
@@ -2732,8 +2739,8 @@
                                FontSize="11"
                                VerticalAlignment="Center"
                                Visibility="{Binding IsMailSyncProgressVisible, Converter={StaticResource BoolToVisibilityConverter}, ConverterParameter=Invert}"/>
-                    <!-- 이메일 개수 -->
-                    <TextBlock Text="{Binding EmailCount, StringFormat=' | {0}개 메일'}"
+                    <!-- 이메일/일정 개수 (모드에 따라 분기) -->
+                    <TextBlock Text="{Binding StatusBarCountText}"
                                Foreground="{DynamicResource TextFillColorSecondaryBrush}"
                                FontSize="11"
                                Margin="8,0,0,0"

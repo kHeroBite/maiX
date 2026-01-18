@@ -30,4 +30,46 @@ public class UserPreferencesSettings
     /// </summary>
     [XmlElement("UseGpuMode")]
     public bool UseGpuMode { get; set; } = false;
+
+    /// <summary>
+    /// 메일 동기화 기간 타입 (Count, Days, Weeks, Months, Years, All)
+    /// </summary>
+    [XmlElement("MailSyncPeriodType")]
+    public string MailSyncPeriodType { get; set; } = "Count";
+
+    /// <summary>
+    /// 메일 동기화 기간 값
+    /// </summary>
+    [XmlElement("MailSyncPeriodValue")]
+    public int MailSyncPeriodValue { get; set; } = 5;
+
+    /// <summary>
+    /// 메일 동기화 주기 (분 단위)
+    /// </summary>
+    [XmlElement("MailSyncIntervalMinutes")]
+    public int MailSyncIntervalMinutes { get; set; } = 5;
+
+    /// <summary>
+    /// 메일 동기화 일시정지 상태
+    /// </summary>
+    [XmlElement("IsMailSyncPaused")]
+    public bool IsMailSyncPaused { get; set; } = false;
+
+    /// <summary>
+    /// AI 분석 기간 타입 (Count, Days, Weeks, Months, Years, All)
+    /// </summary>
+    [XmlElement("AiAnalysisPeriodType")]
+    public string AiAnalysisPeriodType { get; set; } = "Count";
+
+    /// <summary>
+    /// AI 분석 기간 값
+    /// </summary>
+    [XmlElement("AiAnalysisPeriodValue")]
+    public int AiAnalysisPeriodValue { get; set; } = 5;
+
+    /// <summary>
+    /// AI 분석 일시정지 상태
+    /// </summary>
+    [XmlElement("IsAiAnalysisPaused")]
+    public bool IsAiAnalysisPaused { get; set; } = false;
 }

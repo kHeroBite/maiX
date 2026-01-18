@@ -179,11 +179,12 @@ public partial class MainViewModel : ViewModelBase
     public int EmailCount => Emails?.Count ?? 0;
 
     /// <summary>
-    /// Emails 변경 시 EmailCount도 갱신
+    /// Emails 변경 시 EmailCount와 StatusBarCountText도 갱신
     /// </summary>
     partial void OnEmailsChanged(List<Email> value)
     {
         OnPropertyChanged(nameof(EmailCount));
+        OnPropertyChanged(nameof(StatusBarCountText));
     }
 
     /// <summary>
@@ -490,6 +491,35 @@ public partial class MainViewModel : ViewModelBase
     /// </summary>
     [ObservableProperty]
     private int _lastCalendarEventCount;
+
+    /// <summary>
+    /// 캘린더 모드 여부
+    /// </summary>
+    [ObservableProperty]
+    private bool _isCalendarMode;
+
+    /// <summary>
+    /// 이번 달 일정 수 (캘린더 모드에서 표시)
+    /// </summary>
+    [ObservableProperty]
+    private int _currentMonthEventCount;
+
+    /// <summary>
+    /// 상태바 카운트 텍스트 (메일 모드/캘린더 모드 분기)
+    /// </summary>
+    public string StatusBarCountText => IsCalendarMode
+        ? $" | 이번달 {CurrentMonthEventCount}개 일정"
+        : $" | {EmailCount}개 메일";
+
+    partial void OnIsCalendarModeChanged(bool value)
+    {
+        OnPropertyChanged(nameof(StatusBarCountText));
+    }
+
+    partial void OnCurrentMonthEventCountChanged(int value)
+    {
+        OnPropertyChanged(nameof(StatusBarCountText));
+    }
 
     partial void OnCalendarSyncCompletedChanged(int value)
     {
@@ -1362,15 +1392,13 @@ public partial class MainViewModel : ViewModelBase
     {
         SearchFolderOptions.Clear();
 
-        // 기본 옵션
+        // 기본 옵션 (보관/정크메일 제외)
         SearchFolderOptions.Add(new SearchFolderItem { FolderId = null, DisplayName = "모든 폴더", Icon = "📂" });
         SearchFolderOptions.Add(new SearchFolderItem { FolderId = "inbox", DisplayName = "받은 편지함", Icon = "📥" });
         SearchFolderOptions.Add(new SearchFolderItem { FolderId = "drafts", DisplayName = "임시 보관함", Icon = "📝" });
         SearchFolderOptions.Add(new SearchFolderItem { FolderId = "sentitems", DisplayName = "보낸 편지함", Icon = "📤" });
         SearchFolderOptions.Add(new SearchFolderItem { FolderId = "outbox", DisplayName = "보낼 편지함", Icon = "📮" });
         SearchFolderOptions.Add(new SearchFolderItem { FolderId = "deleteditems", DisplayName = "지운 편지함", Icon = "🗑️" });
-        SearchFolderOptions.Add(new SearchFolderItem { FolderId = "archive", DisplayName = "보관", Icon = "📦" });
-        SearchFolderOptions.Add(new SearchFolderItem { FolderId = "junkemail", DisplayName = "정크 메일", Icon = "🚫" });
 
         // 기본 선택: 모든 폴더
         SelectedSearchFolderOption = SearchFolderOptions.FirstOrDefault();
