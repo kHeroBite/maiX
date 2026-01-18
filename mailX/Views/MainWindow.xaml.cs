@@ -306,8 +306,11 @@ public partial class MainWindow : FluentWindow
         // 저장된 동기화 설정 로드
         LoadSavedSyncSettings();
 
-        // 동기화 기간 현재 설정 표시 초기화
+        // 동기화/분석 기간 및 주기 현재 설정 표시 초기화
         UpdateSyncPeriodCurrentDisplay();
+        UpdateSyncIntervalCurrentDisplay();
+        UpdateAIAnalysisPeriodCurrentDisplay();
+        UpdateAIAnalysisIntervalCurrentDisplay();
 
         // 자동 로그인 메뉴 상태 초기화
         InitializeAutoLoginMenu();
