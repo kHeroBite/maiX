@@ -95,15 +95,41 @@
                             </MenuItem.Header>
                             <MenuItem x:Name="MenuAutoLogin" Click="MenuAutoLogin_Click">
                                 <MenuItem.Header>
-                                    <StackPanel Orientation="Horizontal">
-                                        <ui:SymbolIcon x:Name="AutoLoginCheckIcon" Symbol="Checkmark24" FontSize="12" Margin="0,0,4,0" Visibility="Collapsed"/>
-                                        <TextBlock Text="🔄 자동로그인" VerticalAlignment="Center"/>
-                                    </StackPanel>
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="20"/>
+                                            <ColumnDefinition Width="*"/>
+                                        </Grid.ColumnDefinitions>
+                                        <ui:SymbolIcon x:Name="AutoLoginCheckIcon" Grid.Column="0" Symbol="Checkmark24" FontSize="12" Visibility="Collapsed" HorizontalAlignment="Left"/>
+                                        <TextBlock Grid.Column="1" Text="자동로그인" VerticalAlignment="Center"/>
+                                    </Grid>
                                 </MenuItem.Header>
                             </MenuItem>
-                            <MenuItem Header="🚪 로그아웃" Click="MenuLogout_Click"/>
+                            <MenuItem Click="MenuLogout_Click">
+                                <MenuItem.Header>
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="20"/>
+                                            <ColumnDefinition Width="*"/>
+                                        </Grid.ColumnDefinitions>
+                                        <TextBlock Grid.Column="0" Text="🚪" VerticalAlignment="Center"/>
+                                        <TextBlock Grid.Column="1" Text="로그아웃" VerticalAlignment="Center"/>
+                                    </Grid>
+                                </MenuItem.Header>
+                            </MenuItem>
                             <Separator/>
-                            <MenuItem Header="❌ 종료" Click="MenuExit_Click"/>
+                            <MenuItem Click="MenuExit_Click">
+                                <MenuItem.Header>
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="20"/>
+                                            <ColumnDefinition Width="*"/>
+                                        </Grid.ColumnDefinitions>
+                                        <TextBlock Grid.Column="0" Text="❌" VerticalAlignment="Center"/>
+                                        <TextBlock Grid.Column="1" Text="종료" VerticalAlignment="Center"/>
+                                    </Grid>
+                                </MenuItem.Header>
+                            </MenuItem>
                         </MenuItem>
                         <MenuItem Padding="8,4">
                             <MenuItem.Header>
@@ -115,27 +141,40 @@
                             <MenuItem x:Name="MenuMailSyncPause" Click="MenuMailSyncPause_Click"
                                       Visibility="{Binding IsSyncPaused, Converter={StaticResource BoolToVisibilityConverter}, ConverterParameter=Invert}">
                                 <MenuItem.Header>
-                                    <StackPanel Orientation="Horizontal">
-                                        <TextBlock x:Name="MenuMailSyncPauseIcon" Text="📩" Foreground="#2196F3" VerticalAlignment="Center" Margin="0,0,6,0"/>
-                                        <TextBlock Text="동기화 중지" VerticalAlignment="Center"/>
-                                    </StackPanel>
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="20"/>
+                                            <ColumnDefinition Width="*"/>
+                                        </Grid.ColumnDefinitions>
+                                        <TextBlock x:Name="MenuMailSyncPauseIcon" Grid.Column="0" Text="📩" Foreground="#2196F3" VerticalAlignment="Center"/>
+                                        <TextBlock Grid.Column="1" Text="동기화 중지" VerticalAlignment="Center"/>
+                                    </Grid>
                                 </MenuItem.Header>
                             </MenuItem>
                             <MenuItem x:Name="MenuMailSyncResume" Click="MenuMailSyncResume_Click"
                                       Visibility="{Binding IsSyncPaused, Converter={StaticResource BoolToVisibilityConverter}}">
                                 <MenuItem.Header>
-                                    <StackPanel Orientation="Horizontal">
-                                        <TextBlock x:Name="MenuMailSyncResumeIcon" Text="📩" Foreground="#888888" VerticalAlignment="Center" Margin="0,0,6,0"/>
-                                        <TextBlock Text="동기화 시작" VerticalAlignment="Center"/>
-                                    </StackPanel>
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="20"/>
+                                            <ColumnDefinition Width="*"/>
+                                        </Grid.ColumnDefinitions>
+                                        <TextBlock x:Name="MenuMailSyncResumeIcon" Grid.Column="0" Text="📩" Foreground="#888888" VerticalAlignment="Center"/>
+                                        <TextBlock Grid.Column="1" Text="동기화 시작" VerticalAlignment="Center"/>
+                                    </Grid>
                                 </MenuItem.Header>
                             </MenuItem>
                             <MenuItem x:Name="MenuSyncPeriod">
                                 <MenuItem.Header>
-                                    <StackPanel Orientation="Horizontal">
-                                        <TextBlock Text="📧" VerticalAlignment="Center" Margin="0,0,6,0"/>
-                                        <TextBlock Text="동기화 기간" VerticalAlignment="Center"/>
-                                    </StackPanel>
+                                    <Grid MinWidth="100">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="20"/>
+                                            <ColumnDefinition Width="*"/>
+                                            <ColumnDefinition Width="30"/>
+                                        </Grid.ColumnDefinitions>
+                                        <TextBlock Grid.Column="0" Text="📧" VerticalAlignment="Center"/>
+                                        <TextBlock Grid.Column="1" Text="동기화 기간" VerticalAlignment="Center"/>
+                                    </Grid>
                                 </MenuItem.Header>
                                 <!-- 현재 설정 표시 -->
                                 <MenuItem x:Name="MenuSyncPeriodCurrent" Header="현재: 최근 5건" IsEnabled="False" FontStyle="Italic"/>
@@ -151,10 +190,15 @@
                             </MenuItem>
                             <MenuItem x:Name="MenuSyncInterval">
                                 <MenuItem.Header>
-                                    <StackPanel Orientation="Horizontal">
-                                        <TextBlock Text="⏱️" VerticalAlignment="Center" Margin="0,0,6,0"/>
-                                        <TextBlock Text="동기화 주기" VerticalAlignment="Center"/>
-                                    </StackPanel>
+                                    <Grid MinWidth="100">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="20"/>
+                                            <ColumnDefinition Width="*"/>
+                                            <ColumnDefinition Width="30"/>
+                                        </Grid.ColumnDefinitions>
+                                        <TextBlock Grid.Column="0" Text="⏱️" VerticalAlignment="Center"/>
+                                        <TextBlock Grid.Column="1" Text="동기화 주기" VerticalAlignment="Center"/>
+                                    </Grid>
                                 </MenuItem.Header>
                                 <!-- 현재 설정 표시 -->
                                 <MenuItem x:Name="MenuSyncIntervalCurrent" Header="현재: 5분" IsEnabled="False" FontStyle="Italic"/>
@@ -171,10 +215,14 @@
                             </MenuItem>
                             <MenuItem Click="MenuForceResync_Click">
                                 <MenuItem.Header>
-                                    <StackPanel Orientation="Horizontal">
-                                        <TextBlock Text="🔄" VerticalAlignment="Center" Margin="0,0,6,0"/>
-                                        <TextBlock Text="전체 재동기화" VerticalAlignment="Center"/>
-                                    </StackPanel>
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="20"/>
+                                            <ColumnDefinition Width="*"/>
+                                        </Grid.ColumnDefinitions>
+                                        <TextBlock Grid.Column="0" Text="🔄" VerticalAlignment="Center"/>
+                                        <TextBlock Grid.Column="1" Text="전체 재동기화" VerticalAlignment="Center"/>
+                                    </Grid>
                                 </MenuItem.Header>
                             </MenuItem>
                         </MenuItem>
@@ -188,27 +236,40 @@
                             <MenuItem x:Name="MenuAISyncPause2" Click="MenuAISyncPause_Click"
                                       Visibility="{Binding IsAISyncPaused, Converter={StaticResource BoolToVisibilityConverter}, ConverterParameter=Invert}">
                                 <MenuItem.Header>
-                                    <StackPanel Orientation="Horizontal">
-                                        <TextBlock x:Name="MenuAISyncPauseIcon" Text="✨" Foreground="#FFD700" VerticalAlignment="Center" Margin="0,0,6,0"/>
-                                        <TextBlock Text="분석 중지" VerticalAlignment="Center"/>
-                                    </StackPanel>
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="20"/>
+                                            <ColumnDefinition Width="*"/>
+                                        </Grid.ColumnDefinitions>
+                                        <TextBlock x:Name="MenuAISyncPauseIcon" Grid.Column="0" Text="✨" Foreground="#FFD700" VerticalAlignment="Center"/>
+                                        <TextBlock Grid.Column="1" Text="분석 중지" VerticalAlignment="Center"/>
+                                    </Grid>
                                 </MenuItem.Header>
                             </MenuItem>
                             <MenuItem x:Name="MenuAISyncResume2" Click="MenuAISyncResume_Click"
                                       Visibility="{Binding IsAISyncPaused, Converter={StaticResource BoolToVisibilityConverter}}">
                                 <MenuItem.Header>
-                                    <StackPanel Orientation="Horizontal">
-                                        <TextBlock x:Name="MenuAISyncResumeIcon" Text="✨" Foreground="#888888" VerticalAlignment="Center" Margin="0,0,6,0"/>
-                                        <TextBlock Text="분석 시작" VerticalAlignment="Center"/>
-                                    </StackPanel>
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="20"/>
+                                            <ColumnDefinition Width="*"/>
+                                        </Grid.ColumnDefinitions>
+                                        <TextBlock x:Name="MenuAISyncResumeIcon" Grid.Column="0" Text="✨" Foreground="#888888" VerticalAlignment="Center"/>
+                                        <TextBlock Grid.Column="1" Text="분석 시작" VerticalAlignment="Center"/>
+                                    </Grid>
                                 </MenuItem.Header>
                             </MenuItem>
                             <MenuItem x:Name="MenuAIAnalysisPeriod">
                                 <MenuItem.Header>
-                                    <StackPanel Orientation="Horizontal">
-                                        <TextBlock Text="🤖" VerticalAlignment="Center" Margin="0,0,6,0"/>
-                                        <TextBlock Text="분석 기간" VerticalAlignment="Center"/>
-                                    </StackPanel>
+                                    <Grid MinWidth="100">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="20"/>
+                                            <ColumnDefinition Width="*"/>
+                                            <ColumnDefinition Width="30"/>
+                                        </Grid.ColumnDefinitions>
+                                        <TextBlock Grid.Column="0" Text="🤖" VerticalAlignment="Center"/>
+                                        <TextBlock Grid.Column="1" Text="분석 기간" VerticalAlignment="Center"/>
+                                    </Grid>
                                 </MenuItem.Header>
                                 <!-- 현재 설정 표시 -->
                                 <MenuItem x:Name="MenuAIAnalysisPeriodCurrent" Header="현재: 최근 5건" IsEnabled="False" FontStyle="Italic"/>
@@ -224,10 +285,15 @@
                             </MenuItem>
                             <MenuItem x:Name="MenuAIAnalysisInterval">
                                 <MenuItem.Header>
-                                    <StackPanel Orientation="Horizontal">
-                                        <TextBlock Text="⏱️" VerticalAlignment="Center" Margin="0,0,6,0"/>
-                                        <TextBlock Text="분석 주기" VerticalAlignment="Center"/>
-                                    </StackPanel>
+                                    <Grid MinWidth="100">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="20"/>
+                                            <ColumnDefinition Width="*"/>
+                                            <ColumnDefinition Width="30"/>
+                                        </Grid.ColumnDefinitions>
+                                        <TextBlock Grid.Column="0" Text="⏱️" VerticalAlignment="Center"/>
+                                        <TextBlock Grid.Column="1" Text="분석 주기" VerticalAlignment="Center"/>
+                                    </Grid>
                                 </MenuItem.Header>
                                 <!-- 현재 설정 표시 -->
                                 <MenuItem x:Name="MenuAIAnalysisIntervalCurrent" Header="현재: 5분" IsEnabled="False" FontStyle="Italic"/>
@@ -250,23 +316,79 @@
                                     <TextBlock Text="시스템" VerticalAlignment="Center"/>
                                 </StackPanel>
                             </MenuItem.Header>
-                            <MenuItem Header="🔑 API 관리" Click="MenuApiSettings_Click"/>
-                            <MenuItem Header="✍️ 서명 관리" Click="MenuSignatureSettings_Click"/>
+                            <MenuItem Click="MenuApiSettings_Click">
+                                <MenuItem.Header>
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="20"/>
+                                            <ColumnDefinition Width="*"/>
+                                        </Grid.ColumnDefinitions>
+                                        <TextBlock Grid.Column="0" Text="🔑" VerticalAlignment="Center"/>
+                                        <TextBlock Grid.Column="1" Text="API 관리" VerticalAlignment="Center"/>
+                                    </Grid>
+                                </MenuItem.Header>
+                            </MenuItem>
+                            <MenuItem Click="MenuSignatureSettings_Click">
+                                <MenuItem.Header>
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="20"/>
+                                            <ColumnDefinition Width="*"/>
+                                        </Grid.ColumnDefinitions>
+                                        <TextBlock Grid.Column="0" Text="✍️" VerticalAlignment="Center"/>
+                                        <TextBlock Grid.Column="1" Text="서명 관리" VerticalAlignment="Center"/>
+                                    </Grid>
+                                </MenuItem.Header>
+                            </MenuItem>
                             <Separator/>
                             <MenuItem>
                                 <MenuItem.Header>
-                                    <TextBlock Text="🎨 테마" VerticalAlignment="Center" Margin="0,0,20,0"/>
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="20"/>
+                                            <ColumnDefinition Width="*"/>
+                                            <ColumnDefinition Width="30"/>
+                                        </Grid.ColumnDefinitions>
+                                        <TextBlock Grid.Column="0" Text="🎨" VerticalAlignment="Center"/>
+                                        <TextBlock Grid.Column="1" Text="테마" VerticalAlignment="Center"/>
+                                    </Grid>
                                 </MenuItem.Header>
-                                <MenuItem x:Name="MenuThemeDark2" Header="🌙 다크 모드" Click="MenuThemeDark_Click"/>
-                                <MenuItem x:Name="MenuThemeLight2" Header="☀️ 라이트 모드" Click="MenuThemeLight_Click"/>
+                                <MenuItem x:Name="MenuThemeDark2" Click="MenuThemeDark_Click">
+                                    <MenuItem.Header>
+                                        <Grid>
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="20"/>
+                                                <ColumnDefinition Width="*"/>
+                                            </Grid.ColumnDefinitions>
+                                            <TextBlock Grid.Column="0" Text="🌙" VerticalAlignment="Center"/>
+                                            <TextBlock Grid.Column="1" Text="다크 모드" VerticalAlignment="Center"/>
+                                        </Grid>
+                                    </MenuItem.Header>
+                                </MenuItem>
+                                <MenuItem x:Name="MenuThemeLight2" Click="MenuThemeLight_Click">
+                                    <MenuItem.Header>
+                                        <Grid>
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="20"/>
+                                                <ColumnDefinition Width="*"/>
+                                            </Grid.ColumnDefinitions>
+                                            <TextBlock Grid.Column="0" Text="☀️" VerticalAlignment="Center"/>
+                                            <TextBlock Grid.Column="1" Text="라이트 모드" VerticalAlignment="Center"/>
+                                        </Grid>
+                                    </MenuItem.Header>
+                                </MenuItem>
                             </MenuItem>
                             <Separator/>
                             <MenuItem x:Name="MenuGpuMode2" Click="MenuGpuMode_Click">
                                 <MenuItem.Header>
-                                    <StackPanel Orientation="Horizontal">
-                                        <TextBlock x:Name="GpuModeCheckMark" Text="✓" FontWeight="Bold" Margin="0,0,8,0" VerticalAlignment="Center" Visibility="Collapsed"/>
-                                        <TextBlock Text="GPU 모드" VerticalAlignment="Center"/>
-                                    </StackPanel>
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="20"/>
+                                            <ColumnDefinition Width="*"/>
+                                        </Grid.ColumnDefinitions>
+                                        <ui:SymbolIcon x:Name="GpuModeCheckMark" Grid.Column="0" Symbol="Checkmark24" FontSize="12" Visibility="Collapsed" HorizontalAlignment="Left"/>
+                                        <TextBlock Grid.Column="1" Text="GPU 모드" VerticalAlignment="Center"/>
+                                    </Grid>
                                 </MenuItem.Header>
                             </MenuItem>
                         </MenuItem>

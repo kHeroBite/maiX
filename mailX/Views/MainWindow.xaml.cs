@@ -204,12 +204,18 @@ public partial class MainWindow : FluentWindow
                 // 다크모드일 때 인라인 스타일을 덮어쓰기 위해 !important 사용
                 var darkModeOverride = isDark ? @"
         /* 다크모드: 인라인 스타일 강제 덮어쓰기 */
-        body, p, div, span, td, th, li, h1, h2, h3, h4, h5, h6, font {
+        body, p, div, span, td, th, li, h1, h2, h3, h4, h5, h6, font, blockquote, pre, code {
             color: #e0e0e0 !important;
+            background-color: transparent !important;
         }
+        /* 이미지 배경 제외 (투명하게) */
+        img { background-color: transparent !important; }
         a { color: #6db3f2 !important; }
-        table { border-color: #444444 !important; }
-        td, th { border-color: #444444 !important; }
+        table { border-color: #444444 !important; background-color: transparent !important; }
+        td, th { border-color: #444444 !important; background-color: transparent !important; }
+        /* 강제 배경색 리셋 */
+        [style*='background'] { background-color: transparent !important; background: transparent !important; }
+        [bgcolor] { background-color: transparent !important; }
 " : "";
 
                 htmlContent = $@"
