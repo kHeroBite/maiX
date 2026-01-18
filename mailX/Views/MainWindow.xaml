@@ -54,14 +54,12 @@
                         <ColumnDefinition Width="*"/>
                     </Grid.ColumnDefinitions>
 
-                    <!-- Column 0: 로고 (Ai 하늘색, X 도트 디자인) -->
+                    <!-- Column 0: 로고 (mAiX - Ai 하늘색, X 도트 디자인) -->
                     <StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center" Margin="0,0,16,0">
                         <TextBlock Text="m" FontSize="16" FontWeight="Bold"
                                    Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
                         <TextBlock Text="Ai" FontSize="16" FontWeight="Bold" Foreground="#7FB8D8"/>
-                        <TextBlock Text="l" FontSize="16" FontWeight="Bold"
-                                   Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
-                        <!-- X: 도트 디자인 (l과 동일한 높이, 연한 색상) -->
+                        <!-- X: 도트 디자인 (연한 색상) -->
                         <Canvas Width="12" Height="12" Margin="1,2,0,0">
                             <!-- 그림자 도트 (오프셋) -->
                             <Rectangle Canvas.Left="1" Canvas.Top="1" Width="2" Height="2" Fill="#777777"/>
