@@ -1260,11 +1260,51 @@ public partial class MainViewModel : ViewModelBase
     public bool CanDeleteEmail => SelectedEmail != null;
 
     /// <summary>
-    /// SelectedEmail 변경 시 CanDeleteEmail도 갱신
+    /// SelectedEmail 변경 시 CanDeleteEmail도 갱신 및 자동 읽음 처리
     /// </summary>
     partial void OnSelectedEmailChanged(Email? value)
     {
         OnPropertyChanged(nameof(CanDeleteEmail));
+
+        // 메일 선택 시 읽지 않은 메일이면 자동으로 읽음 처리
+        if (value != null && !value.IsRead)
+        {
+            _ = MarkAsReadOnSelectAsync(value);
+        }
+    }
+
+    /// <summary>
+    /// 메일 선택 시 자동 읽음 처리 (Outlook 실시간 동기화)
+    /// </summary>
+    private async Task MarkAsReadOnSelectAsync(Email email)
+    {
+        if (string.IsNullOrEmpty(email.EntryId)) return;
+
+        try
+        {
+            // Graph API로 읽음 상태 업데이트 (Outlook 실시간 동기화)
+            await _graphMailService.UpdateMessageReadStatusAsync(email.EntryId, true);
+
+            // 로컬 DB 업데이트
+            var dbEmail = await _dbContext.Emails.FindAsync(email.Id);
+            if (dbEmail != null)
+            {
+                dbEmail.IsRead = true;
+                await _dbContext.SaveChangesAsync();
+            }
+
+            // 메모리 상 데이터 업데이트
+            email.IsRead = true;
+
+            // UI 갱신
+            OnPropertyChanged(nameof(Emails));
+
+            Log4.Debug($"메일 자동 읽음 처리: {email.Subject}");
+        }
+        catch (Exception ex)
+        {
+            Log4.Error($"자동 읽음 처리 실패: {ex.Message}");
+        }
     }
 
     #region Phase 1: 검색 기능

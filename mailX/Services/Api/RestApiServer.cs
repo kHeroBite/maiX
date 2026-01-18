@@ -14,10 +14,16 @@
  * - POST /api/shutdown/force - 강제 종료
  * - POST /api/screenshot - 스크린샷 촬영
  * - GET  /api/logs/latest - 최신 로그 조회
+ * - GET  /api/logs/search - 로그 검색
+ * - POST /api/window/maximize - 창 최대화
+ * - POST /api/window/minimize - 창 최소화
+ * - POST /api/window/restore - 창 복원
+ * - POST /api/window/activate - 창 활성화
  */
 
 using System;
 using System.IO;
+using System.Linq;
 using System.Net;
 using System.Text;
 using System.Text.Json;
@@ -203,6 +209,26 @@ public class RestApiServer
 
                 case ("GET", "/api/logs/latest"):
                     HandleLogsLatest(request, response);
+                    break;
+
+                case ("GET", "/api/logs/search"):
+                    HandleLogsSearch(request, response);
+                    break;
+
+                case ("POST", "/api/window/maximize"):
+                    HandleWindowMaximize(response);
+                    break;
+
+                case ("POST", "/api/window/minimize"):
+                    HandleWindowMinimize(response);
+                    break;
+
+                case ("POST", "/api/window/restore"):
+                    HandleWindowRestore(response);
+                    break;
+
+                case ("POST", "/api/window/activate"):
+                    HandleWindowActivate(response);
                     break;
 
                 default:
@@ -467,6 +493,192 @@ public class RestApiServer
         catch (Exception ex)
         {
             SendResponse(response, 500, new { error = "로그 조회 실패", message = ex.Message });
+        }
+    }
+
+    /// <summary>
+    /// GET /api/logs/search - 로그 검색
+    /// </summary>
+    private void HandleLogsSearch(HttpListenerRequest request, HttpListenerResponse response)
+    {
+        try
+        {
+            var queryString = request.QueryString;
+            var searchQuery = queryString["query"] ?? "";
+
+            int lines = 50;
+            if (queryString["lines"] != null && int.TryParse(queryString["lines"], out var parsedLines))
+            {
+                lines = Math.Min(parsedLines, 500);
+            }
+
+            if (string.IsNullOrWhiteSpace(searchQuery))
+            {
+                SendResponse(response, 400, new { error = "검색어(query)가 필요합니다." });
+                return;
+            }
+
+            var logPath = Path.Combine(App.LogPath, $"{DateTime.Now:yyyyMMdd}.log");
+
+            if (!File.Exists(logPath))
+            {
+                SendResponse(response, 404, new { error = "오늘 로그 파일이 없습니다.", path = logPath });
+                return;
+            }
+
+            string[] matchedLines;
+            using (var fs = new FileStream(logPath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite))
+            using (var reader = new StreamReader(fs, Encoding.UTF8))
+            {
+                var allLines = reader.ReadToEnd().Split(new[] { '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries);
+                var filtered = allLines
+                    .Where(line => line.Contains(searchQuery, StringComparison.OrdinalIgnoreCase))
+                    .TakeLast(lines)
+                    .ToArray();
+                matchedLines = filtered;
+            }
+
+            SendResponse(response, 200, new
+            {
+                query = searchQuery,
+                count = matchedLines.Length,
+                logPath = logPath,
+                logs = matchedLines
+            });
+        }
+        catch (Exception ex)
+        {
+            SendResponse(response, 500, new { error = "로그 검색 실패", message = ex.Message });
+        }
+    }
+
+    /// <summary>
+    /// POST /api/window/maximize - 창 최대화
+    /// </summary>
+    private void HandleWindowMaximize(HttpListenerResponse response)
+    {
+        try
+        {
+            if (MainWindow == null)
+            {
+                SendResponse(response, 503, new { error = "메인 창이 아직 초기화되지 않았습니다." });
+                return;
+            }
+
+            _app.Dispatcher.Invoke(() =>
+            {
+                MainWindow.WindowState = WindowState.Maximized;
+            });
+
+            SendResponse(response, 200, new
+            {
+                message = "Window maximized",
+                state = "Maximized"
+            });
+        }
+        catch (Exception ex)
+        {
+            SendResponse(response, 500, new { error = "창 최대화 실패", message = ex.Message });
+        }
+    }
+
+    /// <summary>
+    /// POST /api/window/minimize - 창 최소화
+    /// </summary>
+    private void HandleWindowMinimize(HttpListenerResponse response)
+    {
+        try
+        {
+            if (MainWindow == null)
+            {
+                SendResponse(response, 503, new { error = "메인 창이 아직 초기화되지 않았습니다." });
+                return;
+            }
+
+            _app.Dispatcher.Invoke(() =>
+            {
+                MainWindow.WindowState = WindowState.Minimized;
+            });
+
+            SendResponse(response, 200, new
+            {
+                message = "Window minimized",
+                state = "Minimized"
+            });
+        }
+        catch (Exception ex)
+        {
+            SendResponse(response, 500, new { error = "창 최소화 실패", message = ex.Message });
+        }
+    }
+
+    /// <summary>
+    /// POST /api/window/restore - 창 복원
+    /// </summary>
+    private void HandleWindowRestore(HttpListenerResponse response)
+    {
+        try
+        {
+            if (MainWindow == null)
+            {
+                SendResponse(response, 503, new { error = "메인 창이 아직 초기화되지 않았습니다." });
+                return;
+            }
+
+            _app.Dispatcher.Invoke(() =>
+            {
+                MainWindow.WindowState = WindowState.Normal;
+            });
+
+            SendResponse(response, 200, new
+            {
+                message = "Window restored",
+                state = "Normal"
+            });
+        }
+        catch (Exception ex)
+        {
+            SendResponse(response, 500, new { error = "창 복원 실패", message = ex.Message });
+        }
+    }
+
+    /// <summary>
+    /// POST /api/window/activate - 창 활성화 (포그라운드로 가져오기)
+    /// </summary>
+    private void HandleWindowActivate(HttpListenerResponse response)
+    {
+        try
+        {
+            if (MainWindow == null)
+            {
+                SendResponse(response, 503, new { error = "메인 창이 아직 초기화되지 않았습니다." });
+                return;
+            }
+
+            _app.Dispatcher.Invoke(() =>
+            {
+                // 최소화 상태면 복원
+                if (MainWindow.WindowState == WindowState.Minimized)
+                {
+                    MainWindow.WindowState = WindowState.Normal;
+                }
+
+                // 창을 포그라운드로 가져오기
+                MainWindow.Activate();
+                MainWindow.Topmost = true;
+                MainWindow.Topmost = false;
+                MainWindow.Focus();
+            });
+
+            SendResponse(response, 200, new
+            {
+                message = "Window activated",
+                state = "Active"
+            });
+        }
+        catch (Exception ex)
+        {
+            SendResponse(response, 500, new { error = "창 활성화 실패", message = ex.Message });
         }
     }
 
