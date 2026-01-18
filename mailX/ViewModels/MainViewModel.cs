@@ -707,6 +707,18 @@ public partial class MainViewModel : ViewModelBase
                 .OrderBy(f => f.DisplayName)
                 .ToListAsync();
 
+            // 각 폴더의 UnreadItemCount를 Email 테이블에서 실시간 계산
+            var unreadCounts = await _dbContext.Emails
+                .Where(e => !e.IsRead)
+                .GroupBy(e => e.ParentFolderId)
+                .Select(g => new { FolderId = g.Key, Count = g.Count() })
+                .ToDictionaryAsync(x => x.FolderId ?? "", x => x.Count);
+
+            foreach (var folder in Folders)
+            {
+                folder.UnreadItemCount = unreadCounts.TryGetValue(folder.Id, out var count) ? count : 0;
+            }
+
             // 트리 구조 구성
             BuildFolderTree();
 
