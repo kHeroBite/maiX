@@ -66,6 +66,43 @@
                 </Setter>
             </Style>
 
+            <!-- 타이틀바 닫기 버튼 스타일 (빨간색 호버 효과) -->
+            <Style x:Key="TitleBarCloseButtonStyle" TargetType="ui:Button">
+                <Setter Property="Background" Value="Transparent"/>
+                <Setter Property="BorderBrush" Value="Transparent"/>
+                <Setter Property="BorderThickness" Value="0"/>
+                <Setter Property="Foreground" Value="{DynamicResource TextFillColorPrimaryBrush}"/>
+                <Setter Property="Padding" Value="0"/>
+                <Setter Property="Height" Value="30"/>
+                <Setter Property="Width" Value="30"/>
+                <Setter Property="Margin" Value="0,0,8,0"/>
+                <Setter Property="Cursor" Value="Hand"/>
+                <Setter Property="Template">
+                    <Setter.Value>
+                        <ControlTemplate TargetType="ui:Button">
+                            <Border x:Name="Border"
+                                    Background="{TemplateBinding Background}"
+                                    BorderBrush="{TemplateBinding BorderBrush}"
+                                    BorderThickness="{TemplateBinding BorderThickness}"
+                                    CornerRadius="4"
+                                    Padding="{TemplateBinding Padding}">
+                                <ContentPresenter x:Name="ContentPresenter" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                            </Border>
+                            <ControlTemplate.Triggers>
+                                <Trigger Property="IsMouseOver" Value="True">
+                                    <Setter TargetName="Border" Property="Background" Value="#C42B1C"/>
+                                    <Setter TargetName="ContentPresenter" Property="TextElement.Foreground" Value="White"/>
+                                </Trigger>
+                                <Trigger Property="IsPressed" Value="True">
+                                    <Setter TargetName="Border" Property="Background" Value="#B22518"/>
+                                    <Setter TargetName="ContentPresenter" Property="TextElement.Foreground" Value="White"/>
+                                </Trigger>
+                            </ControlTemplate.Triggers>
+                        </ControlTemplate>
+                    </Setter.Value>
+                </Setter>
+            </Style>
+
             <!-- 좌측 네비게이션 아이콘바 스타일 -->
             <Style x:Key="NavIconRadioButtonStyle" TargetType="RadioButton">
                 <Setter Property="Width" Value="48"/>

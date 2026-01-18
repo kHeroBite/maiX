@@ -2280,6 +2280,41 @@ public partial class MainWindow : FluentWindow
     }
 
     /// <summary>
+    /// 커스텀 최소화 버튼 클릭
+    /// </summary>
+    private void CustomMinimizeButton_Click(object sender, RoutedEventArgs e)
+    {
+        WindowState = WindowState.Minimized;
+    }
+
+    /// <summary>
+    /// 커스텀 최대화/복원 버튼 클릭
+    /// </summary>
+    private void CustomMaximizeButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (WindowState == WindowState.Maximized)
+        {
+            WindowState = WindowState.Normal;
+            MaximizeIcon.Symbol = Wpf.Ui.Controls.SymbolRegular.Maximize24;
+            CustomMaximizeButton.ToolTip = "최대화";
+        }
+        else
+        {
+            WindowState = WindowState.Maximized;
+            MaximizeIcon.Symbol = Wpf.Ui.Controls.SymbolRegular.SquareMultiple24;
+            CustomMaximizeButton.ToolTip = "복원";
+        }
+    }
+
+    /// <summary>
+    /// 커스텀 종료 버튼 클릭
+    /// </summary>
+    private void CustomCloseButton_Click(object sender, RoutedEventArgs e)
+    {
+        Close();
+    }
+
+    /// <summary>
     /// 알림 버튼 클릭 - 알림 패널 팝업 열기
     /// </summary>
     private void NotificationButton_Click(object sender, RoutedEventArgs e)

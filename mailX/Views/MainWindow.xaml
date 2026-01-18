@@ -28,9 +28,9 @@
             x:Name="TitleBar"
             Grid.Row="0"
             Height="40"
-            ShowMaximize="True"
-            ShowMinimize="True"
-            ShowClose="True"
+            ShowMaximize="False"
+            ShowMinimize="False"
+            ShowClose="False"
             CanMaximize="True">
             <ui:TitleBar.Icon>
                 <ui:ImageIcon Width="18" Height="18"
@@ -627,6 +627,35 @@
                                Margin="0"
                                Click="SettingsButton_Click">
                         <ui:SymbolIcon Symbol="Settings24" FontSize="16"/>
+                    </ui:Button>
+                    <!-- 구분선 -->
+                    <Border Width="1" Height="16" Background="{DynamicResource ControlStrokeColorDefaultBrush}" Margin="4,0,0,0" VerticalAlignment="Center"/>
+                    <!-- 커스텀 최소화 버튼 -->
+                    <ui:Button x:Name="CustomMinimizeButton"
+                               ToolTip="최소화"
+                               Style="{StaticResource TitleBarTransparentButtonStyle}"
+                               Width="32" Height="32"
+                               Padding="0" Margin="0"
+                               Click="CustomMinimizeButton_Click">
+                        <ui:SymbolIcon Symbol="Subtract24" FontSize="13"/>
+                    </ui:Button>
+                    <!-- 커스텀 최대화/복원 버튼 -->
+                    <ui:Button x:Name="CustomMaximizeButton"
+                               ToolTip="최대화"
+                               Style="{StaticResource TitleBarTransparentButtonStyle}"
+                               Width="32" Height="32"
+                               Padding="0" Margin="0"
+                               Click="CustomMaximizeButton_Click">
+                        <ui:SymbolIcon x:Name="MaximizeIcon" Symbol="Maximize24" FontSize="13"/>
+                    </ui:Button>
+                    <!-- 커스텀 종료 버튼 -->
+                    <ui:Button x:Name="CustomCloseButton"
+                               ToolTip="닫기"
+                               Style="{StaticResource TitleBarCloseButtonStyle}"
+                               Width="32" Height="32"
+                               Padding="0" Margin="0"
+                               Click="CustomCloseButton_Click">
+                        <ui:SymbolIcon Symbol="Dismiss24" FontSize="13"/>
                     </ui:Button>
                 </StackPanel>
             </ui:TitleBar.TrailingContent>
