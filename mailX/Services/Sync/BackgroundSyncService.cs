@@ -812,6 +812,14 @@ public class BackgroundSyncService : BackgroundService
                     // 기존 메일의 상태 업데이트 (IsRead, FlagStatus, Importance, Categories, ParentFolderId, Subject, ReceivedDateTime 등)
                     bool updated = false;
 
+                    // 디버그: Graph API에서 받아온 flag 값 로그
+                    var graphFlagStatus = message.Flag?.FlagStatus;
+                    _logger.Debug("플래그 비교: {Subject} - Graph API: {GraphFlag} ({GraphFlagRaw}), DB: {DbFlag}",
+                        existingEmail.Subject?.Substring(0, Math.Min(existingEmail.Subject?.Length ?? 0, 20)) ?? "(제목없음)",
+                        graphFlagStatus?.ToString()?.ToLower() ?? "null",
+                        graphFlagStatus?.ToString() ?? "null",
+                        existingEmail.FlagStatus ?? "null");
+
                     // Subject 동기화 (초안에서 제목이 변경된 경우)
                     // 서버에서 Subject가 null이면 기존 제목 유지 (API에서 subject 필드를 select하지 않은 경우)
                     if (!string.IsNullOrEmpty(message.Subject) && existingEmail.Subject != message.Subject)
@@ -842,12 +850,13 @@ public class BackgroundSyncService : BackgroundService
                         updated = true;
                     }
 
-                    // 플래그 상태 동기화
-                    var newFlagStatus = message.Flag?.FlagStatus?.ToString()?.ToLower();
-                    if (existingEmail.FlagStatus != newFlagStatus)
+                    // 플래그 상태 동기화 (null이면 notFlagged로 처리)
+                    var newFlagStatus = message.Flag?.FlagStatus?.ToString()?.ToLower() ?? "notflagged";
+                    var oldFlagStatus = existingEmail.FlagStatus ?? "notflagged";
+                    if (oldFlagStatus != newFlagStatus)
                     {
-                        _logger.Debug("메일 플래그 상태 변경: {Subject} ({OldValue} -> {NewValue})",
-                            existingEmail.Subject, existingEmail.FlagStatus, newFlagStatus);
+                        _logger.Information("메일 플래그 상태 변경: {Subject} ({OldValue} -> {NewValue})",
+                            existingEmail.Subject, oldFlagStatus, newFlagStatus);
                         existingEmail.FlagStatus = newFlagStatus;
                         updated = true;
                     }
@@ -1071,9 +1080,12 @@ public class BackgroundSyncService : BackgroundService
                         updated = true;
                     }
 
-                    var newFlagStatus = message.Flag?.FlagStatus?.ToString()?.ToLower();
-                    if (existingEmail.FlagStatus != newFlagStatus)
+                    var newFlagStatus = message.Flag?.FlagStatus?.ToString()?.ToLower() ?? "notflagged";
+                    var oldFlagStatus = existingEmail.FlagStatus ?? "notflagged";
+                    if (oldFlagStatus != newFlagStatus)
                     {
+                        _logger.Information("메일 플래그 상태 변경 (Delta): {Subject} ({OldValue} -> {NewValue})",
+                            existingEmail.Subject, oldFlagStatus, newFlagStatus);
                         existingEmail.FlagStatus = newFlagStatus;
                         updated = true;
                     }

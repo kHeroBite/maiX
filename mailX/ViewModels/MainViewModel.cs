@@ -131,15 +131,15 @@ public partial class MainViewModel : ViewModelBase
                 .Select(e => e.EntryId)
                 .ToList();
 
-            // DB에서 읽음 상태 조회 (AsNoTracking으로 캐시 무시하고 최신 값 조회)
+            // DB에서 메일 상태 조회 (AsNoTracking으로 캐시 무시하고 최신 값 조회)
             var dbEmails = await _dbContext.Emails
                 .AsNoTracking()
                 .Where(e => e.EntryId != null && entryIds.Contains(e.EntryId))
-                .Select(e => new { e.EntryId, e.IsRead, e.Subject })
+                .Select(e => new { e.EntryId, e.IsRead, e.FlagStatus, e.IsPinned, e.Subject })
                 .ToListAsync();
 
             var dbEntryIds = dbEmails.Select(e => e.EntryId).ToHashSet();
-            var dbReadStatus = dbEmails.ToDictionary(e => e.EntryId!, e => e.IsRead);
+            var dbEmailStatus = dbEmails.ToDictionary(e => e.EntryId!, e => new { e.IsRead, e.FlagStatus, e.IsPinned });
 
             // DB에서 삭제된 메일 찾기 (UI에는 있지만 DB에는 없는 메일)
             var deletedEmails = Emails
@@ -159,18 +159,41 @@ public partial class MainViewModel : ViewModelBase
                 Log4.Info($"[RefreshEmailReadStatus] UI에서 삭제된 메일 {deletedCount}건 제거됨");
             }
 
-            // 읽음 상태 업데이트
+            // 메일 상태 업데이트 (읽음, 플래그, 핀)
             int updatedCount = 0;
             for (int i = 0; i < Emails.Count; i++)
             {
                 var email = Emails[i];
                 if (!string.IsNullOrEmpty(email.EntryId) &&
-                    dbReadStatus.TryGetValue(email.EntryId, out var isRead) &&
-                    email.IsRead != isRead)
+                    dbEmailStatus.TryGetValue(email.EntryId, out var status))
                 {
-                    Log4.Debug($"[RefreshEmailReadStatus] 읽음 상태 변경: {email.Subject} (UI={email.IsRead} → DB={isRead})");
-                    email.IsRead = isRead;
-                    updatedCount++;
+                    bool changed = false;
+
+                    // 읽음 상태 비교
+                    if (email.IsRead != status.IsRead)
+                    {
+                        Log4.Debug($"[RefreshEmailStatus] 읽음 상태 변경: {email.Subject} (UI={email.IsRead} → DB={status.IsRead})");
+                        email.IsRead = status.IsRead;
+                        changed = true;
+                    }
+
+                    // 플래그 상태 비교
+                    if (email.FlagStatus != status.FlagStatus)
+                    {
+                        Log4.Debug($"[RefreshEmailStatus] 플래그 상태 변경: {email.Subject} (UI={email.FlagStatus} → DB={status.FlagStatus})");
+                        email.FlagStatus = status.FlagStatus;
+                        changed = true;
+                    }
+
+                    // 핀 상태 비교
+                    if (email.IsPinned != status.IsPinned)
+                    {
+                        Log4.Debug($"[RefreshEmailStatus] 핀 상태 변경: {email.Subject} (UI={email.IsPinned} → DB={status.IsPinned})");
+                        email.IsPinned = status.IsPinned;
+                        changed = true;
+                    }
+
+                    if (changed) updatedCount++;
                 }
             }
 
@@ -1386,6 +1409,57 @@ public partial class MainViewModel : ViewModelBase
     }
 
     /// <summary>
+    /// 이동된 메일들 복원 (원래 폴더로 되돌리기)
+    /// </summary>
+    public async Task RestoreMovedEmailsAsync(List<Email> emails, Dictionary<int, string> originalFolderIds)
+    {
+        if (emails == null || emails.Count == 0 || originalFolderIds == null) return;
+
+        await ExecuteAsync(async () =>
+        {
+            StatusMessage = $"이동 취소 중... (0/{emails.Count})";
+            int completed = 0;
+
+            foreach (var email in emails)
+            {
+                if (string.IsNullOrEmpty(email.EntryId)) continue;
+                if (!originalFolderIds.TryGetValue(email.Id, out var originalFolderId)) continue;
+
+                try
+                {
+                    // Graph API로 원래 폴더로 이동
+                    var movedMessage = await _graphMailService.MoveMessageAsync(email.EntryId, originalFolderId);
+
+                    // 로컬 DB 업데이트
+                    var dbEmail = await _dbContext.Emails.FindAsync(email.Id);
+                    if (dbEmail != null)
+                    {
+                        if (movedMessage != null && !string.IsNullOrEmpty(movedMessage.Id))
+                        {
+                            dbEmail.EntryId = movedMessage.Id;
+                            email.EntryId = movedMessage.Id;
+                        }
+                        dbEmail.ParentFolderId = originalFolderId;
+                        await _dbContext.SaveChangesAsync();
+                    }
+
+                    completed++;
+                    StatusMessage = $"이동 취소 중... ({completed}/{emails.Count})";
+                }
+                catch (Exception ex)
+                {
+                    Log4.Error($"메일 이동 취소 실패 [{email.Subject}]: {ex.Message}");
+                }
+            }
+
+            // 메일 목록 새로고침
+            await LoadEmailsAsync();
+            StatusMessage = $"이동 취소 완료: {completed}건";
+
+        }, "메일 이동 취소 실패");
+    }
+
+    /// <summary>
     /// 선택된 메일들의 플래그 상태 업데이트
     /// </summary>
     /// <param name="emails">대상 메일 목록</param>
@@ -2510,14 +2584,10 @@ public partial class MainViewModel : ViewModelBase
             _ => unpinned.OrderByDescending(e => e.ReceivedDateTime)
         };
 
-        // 고정 메일 + 정렬된 일반 메일
-        var combined = pinned.Concat(sortedUnpinned).ToList();
+        // 고정 메일 + 정렬된 일반 메일 (새 리스트 할당으로 UI 업데이트)
+        Emails = pinned.Concat(sortedUnpinned).ToList();
 
-        Emails.Clear();
-        foreach (var email in combined)
-        {
-            Emails.Add(email);
-        }
+        Log4.Debug($"[ApplySortingWithPin] 정렬 완료: 고정 {pinned.Count}건, 일반 {unpinned.Count()}건");
     }
 
     #endregion

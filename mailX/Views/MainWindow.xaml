@@ -1992,7 +1992,7 @@
                     </ListBox.ItemContainerStyle>
                     <ListBox.ItemTemplate>
                         <DataTemplate>
-                            <Border Padding="8,6">
+                            <Border x:Name="ItemBorder" Padding="8,6">
                                 <Grid>
                                     <Grid.ColumnDefinitions>
                                         <!-- 카테고리 색상 바 -->
@@ -2001,6 +2001,8 @@
                                         <ColumnDefinition Width="Auto"/>
                                         <!-- 메인 콘텐츠 -->
                                         <ColumnDefinition Width="*"/>
+                                        <!-- 삭제 버튼 영역 (우측 끝 고정) -->
+                                        <ColumnDefinition Width="18"/>
                                     </Grid.ColumnDefinitions>
 
                                     <!-- 카테고리 색상 바 (왼쪽) -->
@@ -2025,18 +2027,6 @@
                                                        Foreground="#E74856"
                                                        ToolTip="중요"
                                                        Visibility="{Binding Importance, Converter={StaticResource ImportanceToVisibilityConverter}}"/>
-                                        <!-- 플래그 아이콘 (flagged) -->
-                                        <ui:SymbolIcon Symbol="Flag24"
-                                                       FontSize="14"
-                                                       Foreground="#FF6B00"
-                                                       ToolTip="플래그 설정됨"
-                                                       Visibility="{Binding FlagStatus, Converter={StaticResource FlagStatusToVisibilityConverter}, ConverterParameter=flagged}"/>
-                                        <!-- 플래그 완료 아이콘 -->
-                                        <ui:SymbolIcon Symbol="CheckmarkCircle24"
-                                                       FontSize="14"
-                                                       Foreground="#0B8A00"
-                                                       ToolTip="플래그 완료"
-                                                       Visibility="{Binding FlagStatus, Converter={StaticResource FlagStatusToVisibilityConverter}, ConverterParameter=complete}"/>
                                     </StackPanel>
 
                                     <!-- 메인 콘텐츠 -->
@@ -2047,49 +2037,94 @@
                                             <RowDefinition Height="Auto"/>
                                         </Grid.RowDefinitions>
 
-                                        <!-- 1행: 발신자, 아이콘들, 날짜 -->
-                                        <Grid Grid.Row="0">
+                                        <!-- 1행: 발신자, 첨부파일, Flag/Pin (우측 고정) -->
+                                        <Grid Grid.Row="0" MinHeight="20">
                                             <Grid.ColumnDefinitions>
                                                 <ColumnDefinition Width="*"/>
                                                 <ColumnDefinition Width="Auto"/>
                                             </Grid.ColumnDefinitions>
 
-                                            <!-- 발신자 -->
-                                            <TextBlock Grid.Column="0"
-                                                       Text="{Binding From}"
-                                                       FontWeight="{Binding IsRead, Converter={StaticResource BoolToFontWeightConverter}, FallbackValue=Normal}"
-                                                       Foreground="{Binding IsRead, Converter={StaticResource IsReadToForegroundConverter}}"
-                                                       TextTrimming="CharacterEllipsis"
-                                                       FontSize="13"/>
-
-                                            <!-- 우측 아이콘 + 날짜 -->
-                                            <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
+                                            <!-- 발신자 + 첨부파일 -->
+                                            <StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center">
+                                                <TextBlock Text="{Binding From}"
+                                                           FontWeight="{Binding IsRead, Converter={StaticResource BoolToFontWeightConverter}, FallbackValue=Normal}"
+                                                           Foreground="{Binding IsRead, Converter={StaticResource IsReadToForegroundConverter}}"
+                                                           TextTrimming="CharacterEllipsis"
+                                                           FontSize="13"
+                                                           MaxWidth="200"/>
                                                 <!-- 첨부파일 아이콘 -->
                                                 <ui:SymbolIcon Symbol="Attach24"
                                                                FontSize="12"
                                                                Foreground="{DynamicResource TextFillColorSecondaryBrush}"
                                                                ToolTip="첨부파일 있음"
-                                                               Margin="0,0,4,0"
+                                                               Margin="4,0,0,0"
                                                                Visibility="{Binding HasAttachments, Converter={StaticResource BoolToVisibilityConverter}}"/>
-                                                <!-- 날짜 -->
-                                                <TextBlock Text="{Binding ReceivedDateTime, StringFormat='{}{0:MM/dd HH:mm}'}"
-                                                           Foreground="{DynamicResource TextFillColorSecondaryBrush}"
-                                                           FontSize="11"
-                                                           VerticalAlignment="Center"/>
                                             </StackPanel>
+
+                                            <!-- Flag/Pin 버튼 영역 (Grid로 위치 고정) -->
+                                            <Grid x:Name="ActionButtons" Grid.Column="1"
+                                                  Margin="4,0,0,0" VerticalAlignment="Center"
+                                                  Width="40">
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="20"/>
+                                                    <ColumnDefinition Width="20"/>
+                                                </Grid.ColumnDefinitions>
+                                                <!-- Flag 버튼 (Column 0 고정) -->
+                                                <ui:Button x:Name="FlagButton" Grid.Column="0"
+                                                           Appearance="Transparent"
+                                                           Padding="0" Width="18" Height="18"
+                                                           HorizontalAlignment="Center"
+                                                           VerticalAlignment="Center"
+                                                           Focusable="False"
+                                                           PreviewMouseLeftButtonDown="EmailFlag_PreviewMouseDown"
+                                                           Tag="{Binding}"
+                                                           ToolTip="플래그"
+                                                           Visibility="Collapsed">
+                                                    <ui:SymbolIcon x:Name="FlagIcon" Symbol="Flag24"
+                                                                   FontSize="12"
+                                                                   Foreground="{Binding FlagStatus, Converter={StaticResource FlagStatusToColorConverter}}"/>
+                                                </ui:Button>
+                                                <!-- Pin 버튼 (Column 1 고정) -->
+                                                <ui:Button x:Name="PinButton" Grid.Column="1"
+                                                           Appearance="Transparent"
+                                                           Padding="0" Width="18" Height="18"
+                                                           HorizontalAlignment="Center"
+                                                           VerticalAlignment="Center"
+                                                           Focusable="False"
+                                                           PreviewMouseLeftButtonDown="EmailPin_PreviewMouseDown"
+                                                           Tag="{Binding}"
+                                                           ToolTip="고정"
+                                                           Visibility="Collapsed">
+                                                    <ui:SymbolIcon x:Name="PinIcon" Symbol="Pin24"
+                                                                   FontSize="12"
+                                                                   Foreground="{Binding IsPinned, Converter={StaticResource BoolToIconColorConverter}}"/>
+                                                </ui:Button>
+                                            </Grid>
                                         </Grid>
 
-                                        <!-- 2행: 제목 -->
-                                        <TextBlock Grid.Row="1"
-                                                   Text="{Binding Subject}"
-                                                   FontWeight="{Binding IsRead, Converter={StaticResource BoolToFontWeightConverter}, FallbackValue=Normal}"
-                                                   Foreground="{Binding IsRead, Converter={StaticResource IsReadToForegroundConverter}}"
-                                                   TextTrimming="CharacterEllipsis"
-                                                   FontSize="12"
-                                                   Margin="0,3,0,0"/>
+                                        <!-- 2행: 제목 + 날짜 (우측 고정) -->
+                                        <Grid Grid.Row="1" Margin="0,3,0,0">
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="*"/>
+                                                <ColumnDefinition Width="Auto"/>
+                                            </Grid.ColumnDefinitions>
+                                            <TextBlock Grid.Column="0"
+                                                       Text="{Binding Subject}"
+                                                       FontWeight="{Binding IsRead, Converter={StaticResource BoolToFontWeightConverter}, FallbackValue=Normal}"
+                                                       Foreground="{Binding IsRead, Converter={StaticResource IsReadToForegroundConverter}}"
+                                                       TextTrimming="CharacterEllipsis"
+                                                       FontSize="12"/>
+                                            <!-- 날짜 (우측) -->
+                                            <TextBlock Grid.Column="1"
+                                                       Text="{Binding ReceivedDateTime, StringFormat='{}{0:MM/dd HH:mm}'}"
+                                                       Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                                                       FontSize="11"
+                                                       Margin="8,0,0,0"
+                                                       VerticalAlignment="Center"/>
+                                        </Grid>
 
-                                        <!-- 3행: AI 요약 + AI 아이콘 -->
-                                        <Grid Grid.Row="2" Margin="0,3,0,0">
+                                        <!-- 3행: AI 요약 + AI 아이콘 (항상 높이 보장) -->
+                                        <Grid Grid.Row="2" Margin="0,3,0,0" MinHeight="16">
                                             <Grid.ColumnDefinitions>
                                                 <ColumnDefinition Width="*"/>
                                                 <ColumnDefinition Width="Auto"/>
@@ -2112,8 +2147,55 @@
                                                        Visibility="{Binding AnalysisStatus, Converter={StaticResource StringEqualsToVisibilityConverter}, ConverterParameter=completed}"/>
                                         </Grid>
                                     </Grid>
+
+                                    <!-- 삭제 버튼 (우측 끝, 세로 중앙 - 아웃룩 스타일) -->
+                                    <ui:Button x:Name="DeleteButton" Grid.Column="3"
+                                               Appearance="Transparent"
+                                               Padding="0" Width="18" Height="18"
+                                               HorizontalAlignment="Right"
+                                               VerticalAlignment="Center"
+                                               Focusable="False"
+                                               PreviewMouseLeftButtonDown="EmailDelete_PreviewMouseDown"
+                                               Tag="{Binding}"
+                                               ToolTip="삭제"
+                                               Visibility="Collapsed">
+                                        <ui:SymbolIcon x:Name="DeleteIcon" Symbol="Delete24" FontSize="12" Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
+                                    </ui:Button>
                                 </Grid>
                             </Border>
+                            <!-- 아웃룩 스타일 트리거: 호버/설정 시 Flag/Pin 버튼 개별 표시 -->
+                            <DataTemplate.Triggers>
+                                <!-- 호버 시: Flag/Pin/Delete 모두 표시 -->
+                                <DataTrigger Binding="{Binding IsMouseOver, RelativeSource={RelativeSource AncestorType=ListBoxItem}}" Value="True">
+                                    <Setter TargetName="FlagButton" Property="Visibility" Value="Visible"/>
+                                    <Setter TargetName="PinButton" Property="Visibility" Value="Visible"/>
+                                    <Setter TargetName="DeleteButton" Property="Visibility" Value="Visible"/>
+                                </DataTrigger>
+                                <!-- 플래그 설정됨: Flag 버튼만 표시 -->
+                                <DataTrigger Binding="{Binding FlagStatus}" Value="flagged">
+                                    <Setter TargetName="FlagButton" Property="Visibility" Value="Visible"/>
+                                </DataTrigger>
+                                <!-- 플래그 완료: Flag 버튼만 표시 -->
+                                <DataTrigger Binding="{Binding FlagStatus}" Value="complete">
+                                    <Setter TargetName="FlagButton" Property="Visibility" Value="Visible"/>
+                                </DataTrigger>
+                                <!-- 핀 설정됨: Pin 버튼만 표시 -->
+                                <DataTrigger Binding="{Binding IsPinned}" Value="True">
+                                    <Setter TargetName="PinButton" Property="Visibility" Value="Visible"/>
+                                </DataTrigger>
+                                <!-- Flag 버튼 호버 시: 선택 상태 색상 (빨강) -->
+                                <DataTrigger Binding="{Binding IsMouseOver, ElementName=FlagButton}" Value="True">
+                                    <Setter TargetName="FlagIcon" Property="Foreground" Value="#E74856"/>
+                                </DataTrigger>
+                                <!-- Pin 버튼 호버 시: 선택 상태 색상 (파랑) -->
+                                <DataTrigger Binding="{Binding IsMouseOver, ElementName=PinButton}" Value="True">
+                                    <Setter TargetName="PinIcon" Property="Foreground" Value="#0078D4"/>
+                                </DataTrigger>
+                                <!-- Delete 버튼 호버 시: 빨간색 -->
+                                <DataTrigger Binding="{Binding IsMouseOver, ElementName=DeleteButton}" Value="True">
+                                    <Setter TargetName="DeleteIcon" Property="Foreground" Value="#E74856"/>
+                                </DataTrigger>
+                            </DataTemplate.Triggers>
                         </DataTemplate>
                     </ListBox.ItemTemplate>
                 </ListBox>
@@ -2134,7 +2216,8 @@
                         <DropShadowEffect Color="Black" Opacity="0.2" BlurRadius="10" ShadowDepth="2"/>
                     </Border.Effect>
                     <StackPanel Orientation="Horizontal">
-                        <TextBlock Text="삭제됨"
+                        <TextBlock x:Name="UndoPopupText"
+                                   Text="삭제됨"
                                    VerticalAlignment="Center"
                                    Foreground="{DynamicResource TextFillColorPrimaryBrush}"
                                    FontSize="13"/>
@@ -2146,7 +2229,7 @@
                                    Padding="8,4"
                                    FontSize="13"
                                    Foreground="{DynamicResource AccentTextFillColorPrimaryBrush}"
-                                   Click="UndoDelete_Click"/>
+                                   Click="UndoAction_Click"/>
                     </StackPanel>
                 </Border>
             </Grid>

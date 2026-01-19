@@ -268,8 +268,8 @@ public partial class ComposeViewModel : ViewModelBase
                     Content = Body
                 },
                 ToRecipients = toRecipients,
-                CcRecipients = ccRecipients.Count > 0 ? ccRecipients : null,
-                BccRecipients = bccRecipients.Count > 0 ? bccRecipients : null
+                CcRecipients = ccRecipients,
+                BccRecipients = bccRecipients
             };
 
             // 첨부파일 추가

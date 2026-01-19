@@ -29,10 +29,13 @@ public partial class MainWindow : FluentWindow
     private Email? _rightClickedEmail;
     private bool _webView2Initialized;
 
-    // 삭제 실행취소용 변수
+    // 실행취소용 변수 (삭제/이동 공통)
     private Email? _lastDeletedEmail;
     private string? _lastDeletedFromFolderId;
+    private List<Email>? _lastMovedEmails;
+    private Dictionary<int, string>? _lastMovedFromFolderIds; // email.Id -> originalFolderId
     private System.Windows.Threading.DispatcherTimer? _undoTimer;
+    private bool _isUndoForMove; // true: 이동 실행취소, false: 삭제 실행취소
 
     // 드래그&드롭용 변수
     private Point _dragStartPoint;
@@ -852,8 +855,15 @@ public partial class MainWindow : FluentWindow
                 var emails = e.Data.GetData("EmailDragData") as List<Email>;
                 if (emails != null && emails.Count > 0)
                 {
+                    // 실행취소를 위해 원래 폴더 정보 저장
+                    _lastMovedEmails = new List<Email>(emails);
+                    _lastMovedFromFolderIds = emails.ToDictionary(em => em.Id, em => em.ParentFolderId ?? string.Empty);
+
                     Log4.Info($"메일 드롭 (즐겨찾기): {emails.Count}건 → {targetFolder.DisplayName}");
                     await _viewModel.MoveEmailsToFolderAsync(emails, targetFolder);
+
+                    // 실행취소 팝업 표시
+                    ShowUndoMovePopup(emails.Count);
                 }
             }
             e.Handled = true;
@@ -1963,14 +1973,16 @@ public partial class MainWindow : FluentWindow
     }
 
     /// <summary>
-    /// 삭제 실행취소 팝업 표시
+    /// 실행취소 팝업 표시 (삭제/이동 공통)
     /// </summary>
-    private void ShowUndoDeletePopup()
+    private void ShowUndoPopup(string message, bool isMove)
     {
-        if (_lastDeletedEmail == null) return;
-
         // 기존 타이머 중지
         _undoTimer?.Stop();
+
+        // 팝업 텍스트 설정
+        UndoPopupText.Text = message;
+        _isUndoForMove = isMove;
 
         // 팝업 표시
         UndoDeletePopup.Visibility = Visibility.Visible;
@@ -1983,46 +1995,84 @@ public partial class MainWindow : FluentWindow
         _undoTimer.Tick += (s, e) =>
         {
             _undoTimer.Stop();
-            HideUndoDeletePopup();
+            HideUndoPopup();
         };
         _undoTimer.Start();
     }
 
     /// <summary>
-    /// 삭제 실행취소 팝업 숨김
+    /// 삭제 실행취소 팝업 표시 (기존 호환용)
     /// </summary>
-    private void HideUndoDeletePopup()
+    private void ShowUndoDeletePopup()
+    {
+        if (_lastDeletedEmail == null) return;
+        ShowUndoPopup("삭제됨", false);
+    }
+
+    /// <summary>
+    /// 이동 실행취소 팝업 표시
+    /// </summary>
+    private void ShowUndoMovePopup(int count)
+    {
+        if (_lastMovedEmails == null || _lastMovedEmails.Count == 0) return;
+        var message = count == 1 ? "이동됨" : $"{count}개 이동됨";
+        ShowUndoPopup(message, true);
+    }
+
+    /// <summary>
+    /// 실행취소 팝업 숨김
+    /// </summary>
+    private void HideUndoPopup()
     {
         UndoDeletePopup.Visibility = Visibility.Collapsed;
         _lastDeletedEmail = null;
         _lastDeletedFromFolderId = null;
+        _lastMovedEmails = null;
+        _lastMovedFromFolderIds = null;
     }
 
     /// <summary>
-    /// 삭제 실행취소 버튼 클릭
+    /// 실행취소 버튼 클릭 (삭제/이동 공통)
     /// </summary>
-    private async void UndoDelete_Click(object sender, RoutedEventArgs e)
+    private async void UndoAction_Click(object sender, RoutedEventArgs e)
     {
         _undoTimer?.Stop();
 
-        // 먼저 값을 로컬 변수에 저장 (HideUndoDeletePopup에서 null로 설정되기 전에)
+        // 팝업 숨기기
+        UndoDeletePopup.Visibility = Visibility.Collapsed;
+
+        if (_isUndoForMove)
+        {
+            // 이동 실행취소
+            await UndoMoveAsync();
+        }
+        else
+        {
+            // 삭제 실행취소
+            await UndoDeleteAsync();
+        }
+    }
+
+    /// <summary>
+    /// 삭제 실행취소
+    /// </summary>
+    private async Task UndoDeleteAsync()
+    {
         var emailToRestore = _lastDeletedEmail;
         var originalFolderId = _lastDeletedFromFolderId;
 
-        // 팝업만 숨기기 (값은 이미 저장됨)
-        UndoDeletePopup.Visibility = Visibility.Collapsed;
+        // 정리
+        _lastDeletedEmail = null;
+        _lastDeletedFromFolderId = null;
 
         if (emailToRestore == null || string.IsNullOrEmpty(originalFolderId))
         {
             Log4.Warn("실행취소할 메일 정보가 없습니다.");
-            _lastDeletedEmail = null;
-            _lastDeletedFromFolderId = null;
             return;
         }
 
         try
         {
-            // 휴지통에서 원래 폴더로 이동
             await _viewModel.RestoreDeletedEmailAsync(emailToRestore, originalFolderId);
             Log4.Info($"메일 복원 완료: {emailToRestore.Subject}");
         }
@@ -2030,11 +2080,164 @@ public partial class MainWindow : FluentWindow
         {
             Log4.Error($"메일 복원 실패: {ex.Message}");
         }
-        finally
+    }
+
+    /// <summary>
+    /// 이동 실행취소
+    /// </summary>
+    private async Task UndoMoveAsync()
+    {
+        var emailsToRestore = _lastMovedEmails;
+        var originalFolderIds = _lastMovedFromFolderIds;
+
+        // 정리
+        _lastMovedEmails = null;
+        _lastMovedFromFolderIds = null;
+
+        if (emailsToRestore == null || emailsToRestore.Count == 0 || originalFolderIds == null)
         {
-            // 복원 완료 후 정리
-            _lastDeletedEmail = null;
-            _lastDeletedFromFolderId = null;
+            Log4.Warn("실행취소할 이동 정보가 없습니다.");
+            return;
+        }
+
+        try
+        {
+            await _viewModel.RestoreMovedEmailsAsync(emailsToRestore, originalFolderIds);
+            Log4.Info($"메일 이동 취소 완료: {emailsToRestore.Count}건");
+        }
+        catch (Exception ex)
+        {
+            Log4.Error($"메일 이동 취소 실패: {ex.Message}");
+        }
+    }
+
+    /// <summary>
+    /// 메일 목록에서 Flag 버튼 클릭
+    /// </summary>
+    private async void EmailFlag_Click(object sender, RoutedEventArgs e)
+    {
+        e.Handled = true; // 이벤트 버블링 방지
+
+        if (sender is FrameworkElement element && element.Tag is Email email)
+        {
+            // 플래그 상태 토글: notFlagged → flagged → complete → notFlagged
+            var newStatus = email.FlagStatus?.ToLower() switch
+            {
+                "flagged" => "complete",
+                "complete" => "notFlagged",
+                _ => "flagged"
+            };
+
+            await _viewModel.UpdateFlagStatusAsync(new List<Email> { email }, newStatus);
+            Log4.Debug($"플래그 변경: {email.Subject} → {newStatus}");
+        }
+    }
+
+    /// <summary>
+    /// 플래그 버튼 PreviewMouseLeftButtonDown (ListBox 클릭 문제 해결용)
+    /// </summary>
+    private async void EmailFlag_PreviewMouseDown(object sender, MouseButtonEventArgs e)
+    {
+        e.Handled = true; // ListBox 선택 방지
+        Serilog.Log.Information("[EmailFlag_PreviewMouseDown] 플래그 버튼 마우스다운 이벤트 발생");
+
+        if (sender is FrameworkElement element && element.Tag is Email email)
+        {
+            // 플래그 상태 토글: notFlagged → flagged → complete → notFlagged
+            var newStatus = email.FlagStatus?.ToLower() switch
+            {
+                "flagged" => "complete",
+                "complete" => "notFlagged",
+                _ => "flagged"
+            };
+
+            Serilog.Log.Information("[EmailFlag_PreviewMouseDown] 플래그 변경 시도: {Subject} → {NewStatus}",
+                email.Subject, newStatus);
+
+            await _viewModel.UpdateFlagStatusAsync(new List<Email> { email }, newStatus);
+        }
+    }
+
+    /// <summary>
+    /// 메일 목록에서 Pin 버튼 클릭
+    /// </summary>
+    private void EmailPin_Click(object sender, RoutedEventArgs e)
+    {
+        e.Handled = true; // 이벤트 버블링 방지
+        Serilog.Log.Information("[EmailPin_Click] 핀 버튼 클릭 이벤트 발생");
+
+        if (sender is FrameworkElement element && element.Tag is Email email)
+        {
+            Serilog.Log.Information("[EmailPin_Click] 핀 토글 시도: {Subject}, CanExecute: {CanExecute}",
+                email.Subject, _viewModel.TogglePinnedCommand.CanExecute(email));
+
+            // TogglePinnedCommand로 핀 상태 토글
+            if (_viewModel.TogglePinnedCommand.CanExecute(email))
+            {
+                _viewModel.TogglePinnedCommand.Execute(email);
+                Serilog.Log.Information("[EmailPin_Click] 핀 토글 명령 실행됨");
+            }
+            Log4.Debug($"핀 토글: {email.Subject}");
+        }
+        else
+        {
+            Serilog.Log.Warning("[EmailPin_Click] sender 또는 Tag가 유효하지 않음");
+        }
+    }
+
+    /// <summary>
+    /// 핀 버튼 PreviewMouseLeftButtonDown (ListBox 클릭 문제 해결용)
+    /// </summary>
+    private void EmailPin_PreviewMouseDown(object sender, MouseButtonEventArgs e)
+    {
+        e.Handled = true; // ListBox 선택 방지
+        Serilog.Log.Information("[EmailPin_PreviewMouseDown] 핀 버튼 마우스다운 이벤트 발생");
+
+        if (sender is FrameworkElement element && element.Tag is Email email)
+        {
+            Serilog.Log.Information("[EmailPin_PreviewMouseDown] 핀 토글 시도: {Subject}", email.Subject);
+
+            // TogglePinnedCommand로 핀 상태 토글
+            if (_viewModel.TogglePinnedCommand.CanExecute(email))
+            {
+                _viewModel.TogglePinnedCommand.Execute(email);
+                Serilog.Log.Information("[EmailPin_PreviewMouseDown] 핀 토글 명령 실행됨: {Subject}, IsPinned: {IsPinned}",
+                    email.Subject, email.IsPinned);
+            }
+        }
+    }
+
+    /// <summary>
+    /// 삭제 버튼 PreviewMouseLeftButtonDown (아웃룩 스타일)
+    /// </summary>
+    private async void EmailDelete_PreviewMouseDown(object sender, MouseButtonEventArgs e)
+    {
+        e.Handled = true; // ListBox 선택 방지
+        Serilog.Log.Information("[EmailDelete_PreviewMouseDown] 삭제 버튼 마우스다운 이벤트 발생");
+
+        if (sender is FrameworkElement element && element.Tag is Email email)
+        {
+            if (string.IsNullOrEmpty(email.EntryId))
+            {
+                Log4.Warn($"EntryId가 없는 메일은 삭제할 수 없습니다: {email.Subject}");
+                return;
+            }
+
+            Serilog.Log.Information("[EmailDelete_PreviewMouseDown] 삭제 시도: {Subject}", email.Subject);
+
+            // 삭제 전 정보 저장 (실행취소용)
+            _lastDeletedEmail = email;
+            _lastDeletedFromFolderId = email.ParentFolderId;
+
+            // DeleteEmailCommand로 삭제
+            if (_viewModel.DeleteEmailCommand.CanExecute(email))
+            {
+                await _viewModel.DeleteEmailCommand.ExecuteAsync(email);
+                Serilog.Log.Information("[EmailDelete_PreviewMouseDown] 삭제 명령 실행됨: {Subject}", email.Subject);
+
+                // 실행취소 팝업 표시
+                ShowUndoDeletePopup();
+            }
         }
     }
 
@@ -2481,8 +2684,15 @@ public partial class MainWindow : FluentWindow
             var emails = e.Data.GetData("EmailDragData") as List<Email>;
             if (emails != null && emails.Count > 0)
             {
+                // 실행취소를 위해 원래 폴더 정보 저장
+                _lastMovedEmails = new List<Email>(emails);
+                _lastMovedFromFolderIds = emails.ToDictionary(em => em.Id, em => em.ParentFolderId ?? string.Empty);
+
                 Log4.Info($"메일 드롭: {emails.Count}건 → {targetFolder.DisplayName}");
                 await _viewModel.MoveEmailsToFolderAsync(emails, targetFolder);
+
+                // 실행취소 팝업 표시
+                ShowUndoMovePopup(emails.Count);
             }
         }
 
@@ -2584,10 +2794,10 @@ public partial class MainWindow : FluentWindow
                     break;
 
                 case Key.Escape:
-                    // Escape: 삭제 취소 팝업이 표시되어 있으면 실행취소
+                    // Escape: 실행취소 팝업이 표시되어 있으면 실행취소
                     if (UndoDeletePopup.Visibility == Visibility.Visible)
                     {
-                        UndoDelete_Click(null!, null!);
+                        UndoAction_Click(null!, null!);
                         e.Handled = true;
                     }
                     // 검색 모드면 검색 초기화
