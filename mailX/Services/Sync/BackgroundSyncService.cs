@@ -386,9 +386,10 @@ public class BackgroundSyncService : BackgroundService
                     // 1단계: 직접 최신 메일 조회 (Delta API 지연 보완)
                     // since 필터 없이 항상 최신 10개 메일을 가져옴
                     // (DB 중복 체크로 새 메일만 저장됨)
+                    // 최근 50개 메일 조회 (새 메일 감지 + 읽음 상태 변경 감지)
                     var latestMessages = await graphMailService.GetLatestMessagesAsync(
                         folder.Id,
-                        count: 10,
+                        count: 50,
                         since: null);
 
                     var latestMessageList = latestMessages.ToList();
@@ -397,12 +398,13 @@ public class BackgroundSyncService : BackgroundService
                         _logger.Debug("직접 조회로 {Count}건 발견 (폴더: {FolderName})",
                             latestMessageList.Count, folder.DisplayName);
 
-                        // 디버그: 조회된 메일 제목과 수신시간 출력
+                        // 디버그: 조회된 메일 제목, 수신시간, 읽음 상태 출력
                         foreach (var msg in latestMessageList.Take(5))
                         {
-                            _logger.Debug("  - [{ReceivedAt}] {Subject}",
+                            _logger.Debug("  - [{ReceivedAt}] {Subject} (IsRead={IsRead})",
                                 msg.ReceivedDateTime?.ToString("yyyy-MM-dd HH:mm:ss") ?? "null",
-                                msg.Subject?.Substring(0, Math.Min(msg.Subject?.Length ?? 0, 30)) ?? "(제목없음)");
+                                msg.Subject?.Substring(0, Math.Min(msg.Subject?.Length ?? 0, 30)) ?? "(제목없음)",
+                                msg.IsRead ?? false);
                         }
 
                         // 직접 조회한 메일 저장 (중복은 SaveEmailsAsync에서 처리)
@@ -425,6 +427,15 @@ public class BackgroundSyncService : BackgroundService
                     totalChanged += newFromDelta.Count;
                     totalDeleted += deleted;
                     allSavedEmails.AddRange(newFromDelta);
+
+                    // 3단계: 읽음 상태 동기화 (최근 7일간 메일)
+                    var readStatusUpdated = await SyncReadStatusAsync(
+                        dbContext, graphMailService, folder.Id, ct);
+                    if (readStatusUpdated > 0)
+                    {
+                        _logger.Information("읽음 상태 동기화: {Count}건 업데이트 (폴더: {FolderName})",
+                            readStatusUpdated, folder.DisplayName);
+                    }
                 }
                 catch (Exception ex)
                 {
@@ -455,6 +466,8 @@ public class BackgroundSyncService : BackgroundService
                 totalChanged, totalDeleted);
 
             // 동기화 완료 이벤트 (UI 갱신용)
+            var handlerCount = MailSyncCompleted?.GetInvocationList().Length ?? 0;
+            _logger.Information("MailSyncCompleted 이벤트 발생: 핸들러 {Count}개, this 해시코드: {Hash}", handlerCount, this.GetHashCode());
             MailSyncCompleted?.Invoke();
         }
         catch (Exception ex)
@@ -800,12 +813,12 @@ public class BackgroundSyncService : BackgroundService
                     bool updated = false;
 
                     // Subject 동기화 (초안에서 제목이 변경된 경우)
-                    var newSubject = message.Subject ?? "(제목 없음)";
-                    if (existingEmail.Subject != newSubject)
+                    // 서버에서 Subject가 null이면 기존 제목 유지 (API에서 subject 필드를 select하지 않은 경우)
+                    if (!string.IsNullOrEmpty(message.Subject) && existingEmail.Subject != message.Subject)
                     {
                         _logger.Debug("메일 제목 변경: {OldSubject} -> {NewSubject}",
-                            existingEmail.Subject, newSubject);
-                        existingEmail.Subject = newSubject;
+                            existingEmail.Subject, message.Subject);
+                        existingEmail.Subject = message.Subject;
                         updated = true;
                     }
 
@@ -927,6 +940,88 @@ public class BackgroundSyncService : BackgroundService
 
         _logger.Information("메일 저장 완료: {Count}건", savedEmails.Count);
         return savedEmails;
+    }
+
+    /// <summary>
+    /// 읽음 상태 동기화 (최근 N일간 메일)
+    /// Delta Query가 읽음 상태 변경을 반환하지 않는 경우를 보완
+    /// </summary>
+    /// <param name="dbContext">DB 컨텍스트</param>
+    /// <param name="graphMailService">Graph 메일 서비스</param>
+    /// <param name="folderId">폴더 ID</param>
+    /// <param name="ct">취소 토큰</param>
+    /// <returns>업데이트된 메일 수</returns>
+    private async Task<int> SyncReadStatusAsync(
+        MailXDbContext dbContext,
+        GraphMailService graphMailService,
+        string folderId,
+        CancellationToken ct)
+    {
+        try
+        {
+            // 서버에서 최근 7일간 메일의 읽음 상태 조회
+            var serverReadStatus = await graphMailService.GetMessagesReadStatusAsync(folderId, days: 7);
+            var serverStatusList = serverReadStatus.ToList();
+            var serverStatusDict = serverStatusList.ToDictionary(x => x.Id, x => x.IsRead);
+
+            _logger.Debug("읽음 상태 조회: 서버 {ServerCount}건 (폴더: {FolderId})",
+                serverStatusDict.Count, folderId.Substring(0, Math.Min(folderId.Length, 20)));
+
+            if (serverStatusDict.Count == 0)
+            {
+                return 0;
+            }
+
+            // DB에서 해당 폴더의 메일 조회 (EntryId 기준)
+            var dbEmails = await dbContext.Emails
+                .Where(e => e.ParentFolderId == folderId && e.EntryId != null)
+                .Select(e => new { e.Id, e.EntryId, e.IsRead, e.Subject })
+                .ToListAsync(ct);
+
+            _logger.Debug("읽음 상태 비교: DB {DbCount}건 vs 서버 {ServerCount}건",
+                dbEmails.Count, serverStatusDict.Count);
+
+            int updatedCount = 0;
+            int matchedCount = 0;
+
+            foreach (var dbEmail in dbEmails)
+            {
+                if (dbEmail.EntryId == null) continue;
+
+                // 서버에서 해당 메일의 읽음 상태 확인
+                if (serverStatusDict.TryGetValue(dbEmail.EntryId, out var serverIsRead))
+                {
+                    matchedCount++;
+                    // 읽음 상태가 다르면 업데이트
+                    if (dbEmail.IsRead != serverIsRead)
+                    {
+                        var email = await dbContext.Emails.FindAsync(new object[] { dbEmail.Id }, ct);
+                        if (email != null)
+                        {
+                            _logger.Debug("읽음 상태 동기화: {Subject} ({OldValue} -> {NewValue})",
+                                dbEmail.Subject, dbEmail.IsRead, serverIsRead);
+                            email.IsRead = serverIsRead;
+                            updatedCount++;
+                        }
+                    }
+                }
+            }
+
+            _logger.Debug("읽음 상태 매칭: {MatchedCount}건 중 {UpdatedCount}건 변경",
+                matchedCount, updatedCount);
+
+            if (updatedCount > 0)
+            {
+                await dbContext.SaveChangesAsync(ct);
+            }
+
+            return updatedCount;
+        }
+        catch (Exception ex)
+        {
+            _logger.Warning(ex, "읽음 상태 동기화 실패 (폴더: {FolderId})", folderId);
+            return 0;
+        }
     }
 
     /// <summary>

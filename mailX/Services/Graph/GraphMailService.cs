@@ -294,6 +294,62 @@ namespace mailX.Services.Graph
         }
 
         /// <summary>
+        /// 최근 N일간 메일의 읽음 상태만 조회 (경량 동기화용)
+        /// id와 isRead만 가져와서 API 호출 비용 최소화
+        /// </summary>
+        /// <param name="folderId">폴더 ID</param>
+        /// <param name="days">조회할 일수 (기본 7일)</param>
+        /// <returns>메일 ID와 읽음 상태 목록</returns>
+        public async Task<IEnumerable<(string Id, bool IsRead)>> GetMessagesReadStatusAsync(
+            string folderId,
+            int days = 7)
+        {
+            var client = _authService.GetGraphClient();
+            var result = new List<(string Id, bool IsRead)>();
+
+            var sinceDate = DateTime.UtcNow.AddDays(-days).ToString("yyyy-MM-ddTHH:mm:ssZ");
+
+            var response = await client.Me.MailFolders[folderId].Messages
+                .GetAsync(config =>
+                {
+                    // 최소한의 필드만 선택 (id, isRead)
+                    config.QueryParameters.Select = new[] { "id", "isRead" };
+                    config.QueryParameters.Top = 100;  // 한 번에 최대 100개
+                    config.QueryParameters.Filter = $"receivedDateTime ge {sinceDate}";
+                    config.QueryParameters.Orderby = new[] { "receivedDateTime desc" };
+                });
+
+            // 페이징 처리
+            while (response != null)
+            {
+                if (response.Value != null)
+                {
+                    foreach (var msg in response.Value)
+                    {
+                        if (!string.IsNullOrEmpty(msg.Id))
+                        {
+                            result.Add((msg.Id, msg.IsRead ?? false));
+                        }
+                    }
+                }
+
+                // 다음 페이지 조회
+                if (!string.IsNullOrEmpty(response.OdataNextLink))
+                {
+                    response = await client.Me.MailFolders[folderId].Messages
+                        .WithUrl(response.OdataNextLink)
+                        .GetAsync();
+                }
+                else
+                {
+                    break;
+                }
+            }
+
+            return result;
+        }
+
+        /// <summary>
         /// 단일 메일 조회
         /// </summary>
         /// <param name="messageId">메일 ID</param>

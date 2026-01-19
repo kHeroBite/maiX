@@ -24,6 +24,7 @@ namespace mailX.Views;
 public partial class MainWindow : FluentWindow
 {
     private readonly MainViewModel _viewModel;
+    private readonly Services.Sync.BackgroundSyncService _syncService;
     private Folder? _rightClickedFolder;
     private bool _webView2Initialized;
 
@@ -35,8 +36,9 @@ public partial class MainWindow : FluentWindow
     private readonly ObservableCollection<string> _recentSearches = new();
     private const int MaxRecentSearches = 10;
 
-    public MainWindow(MainViewModel viewModel)
+    public MainWindow(MainViewModel viewModel, Services.Sync.BackgroundSyncService syncService)
     {
+        _syncService = syncService;
         Log4.Debug("MainWindow 생성자 시작");
         _viewModel = viewModel;
         DataContext = viewModel;
@@ -108,10 +110,28 @@ public partial class MainWindow : FluentWindow
         // WebView2 초기화
         InitializeWebView2Async();
 
+        // MailSyncCompleted 이벤트 직접 구독 (MainViewModel 우회)
+        // MainViewModel의 이벤트 핸들러가 호출되지 않는 문제 해결
+        _syncService.MailSyncCompleted += OnMailSyncCompletedFromWindow;
+        Log4.Info("[MainWindow] MailSyncCompleted 이벤트 구독 완료");
+
         Loaded += MainWindow_Loaded;
         Closed += MainWindow_Closed;
         SizeChanged += MainWindow_SizeChanged;
         Log4.Debug("MainWindow 생성자 완료");
+    }
+
+    /// <summary>
+    /// 메일 동기화 완료 시 UI 갱신 (MainWindow에서 직접 처리)
+    /// </summary>
+    private void OnMailSyncCompletedFromWindow()
+    {
+        Log4.Info("[MainWindow] OnMailSyncCompletedFromWindow 이벤트 수신");
+        Dispatcher.InvokeAsync(async () =>
+        {
+            Log4.Info("[MainWindow] Dispatcher에서 읽음 상태 갱신 호출");
+            await _viewModel.RefreshEmailReadStatusAsync();
+        });
     }
 
     /// <summary>
@@ -377,6 +397,10 @@ public partial class MainWindow : FluentWindow
     private void MainWindow_Closed(object? sender, System.EventArgs e)
     {
         Log4.Debug("MainWindow_Closed - 애플리케이션 종료");
+
+        // 이벤트 구독 해제
+        _syncService.MailSyncCompleted -= OnMailSyncCompletedFromWindow;
+
         // OnExplicitShutdown 모드에서는 명시적으로 종료 호출 필요
         Application.Current.Shutdown();
     }

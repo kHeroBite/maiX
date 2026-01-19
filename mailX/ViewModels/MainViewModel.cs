@@ -29,9 +29,14 @@ public partial class MainViewModel : ViewModelBase
 
     public MainViewModel(MailXDbContext dbContext, BackgroundSyncService syncService, GraphMailService graphMailService)
     {
-        _dbContext = dbContext;
-        _syncService = syncService;
-        _graphMailService = graphMailService;
+        try
+        {
+            System.Diagnostics.Debug.WriteLine("[MainViewModel] 생성자 시작");
+            _dbContext = dbContext;
+            _syncService = syncService;
+            _graphMailService = graphMailService;
+
+            Log4.Info($"[MainViewModel] 생성됨, syncService 해시코드: {syncService.GetHashCode()}");
 
         // 동기화 상태 변경 이벤트 구독
         _syncService.PausedChanged += OnSyncPausedChanged;
@@ -45,6 +50,8 @@ public partial class MainViewModel : ViewModelBase
         _syncService.MailSyncProgress += OnMailSyncProgress;
         _syncService.MailSyncCompleted += OnMailSyncCompleted;
 
+        Log4.Info("[MainViewModel] MailSyncCompleted 이벤트 구독 완료");
+
         // 캘린더 동기화 이벤트 구독
         _syncService.CalendarSyncStarted += OnCalendarSyncStarted;
         _syncService.CalendarSyncProgress += OnCalendarSyncProgress;
@@ -53,6 +60,12 @@ public partial class MainViewModel : ViewModelBase
         // 초기 상태 동기화
         _isSyncPaused = _syncService.IsPaused;
         UpdateSyncStatus();
+        }
+        catch (Exception ex)
+        {
+            Log4.Error($"[MainViewModel] 생성자 예외: {ex.Message}");
+            throw;
+        }
     }
 
     /// <summary>
@@ -82,11 +95,125 @@ public partial class MainViewModel : ViewModelBase
     /// </summary>
     private void OnMailSyncCompleted()
     {
-        System.Windows.Application.Current?.Dispatcher.Invoke(() =>
+        Log4.Info("[MainViewModel] OnMailSyncCompleted 이벤트 수신");
+
+        var app = System.Windows.Application.Current;
+        if (app == null)
         {
+            Log4.Warn("[MainViewModel] Application.Current is null");
+            return;
+        }
+
+        app.Dispatcher.InvokeAsync(async () =>
+        {
+            Log4.Info("[MainViewModel] Dispatcher에서 읽음 상태 갱신 시작");
             HideSyncProgressAfterDelay();
             UpdateSyncStatus();
+
+            // 현재 표시 중인 메일 목록의 읽음 상태 갱신
+            await RefreshEmailReadStatusAsync();
         });
+    }
+
+    /// <summary>
+    /// 현재 표시 중인 메일 목록의 읽음 상태만 DB에서 다시 로드
+    /// MainWindow에서 직접 호출 가능하도록 public으로 변경
+    /// </summary>
+    public async Task RefreshEmailReadStatusAsync()
+    {
+        if (Emails == null || Emails.Count == 0) return;
+
+        try
+        {
+            // 현재 표시 중인 메일의 EntryId 목록 (ID보다 EntryId가 더 안정적인 식별자)
+            var entryIds = Emails
+                .Where(e => !string.IsNullOrEmpty(e.EntryId))
+                .Select(e => e.EntryId)
+                .ToList();
+
+            Log4.Info($"[RefreshEmailReadStatus] UI 메일 {Emails.Count}건 중 EntryId 있는 메일 {entryIds.Count}건");
+
+            // DB에서 읽음 상태 조회 (AsNoTracking으로 캐시 무시하고 최신 값 조회)
+            var dbEmails = await _dbContext.Emails
+                .AsNoTracking()
+                .Where(e => e.EntryId != null && entryIds.Contains(e.EntryId))
+                .Select(e => new { e.EntryId, e.IsRead, e.Subject })
+                .ToListAsync();
+
+            Log4.Info($"[RefreshEmailReadStatus] DB에서 {dbEmails.Count}건 조회됨");
+
+            var dbReadStatus = dbEmails.ToDictionary(e => e.EntryId!, e => e.IsRead);
+
+            // UI 메일 목록 업데이트
+            int updatedCount = 0;
+            for (int i = 0; i < Emails.Count; i++)
+            {
+                var email = Emails[i];
+                if (!string.IsNullOrEmpty(email.EntryId) &&
+                    dbReadStatus.TryGetValue(email.EntryId, out var isRead) &&
+                    email.IsRead != isRead)
+                {
+                    Log4.Debug($"[RefreshEmailReadStatus] 읽음 상태 변경: {email.Subject} (UI={email.IsRead} → DB={isRead})");
+                    // IsRead 값 변경
+                    email.IsRead = isRead;
+                    updatedCount++;
+                }
+            }
+
+            if (updatedCount > 0)
+            {
+                Log4.Info($"[RefreshEmailReadStatus] 총 {updatedCount}건 읽음 상태 UI 갱신됨");
+                // CollectionView 강제 새로고침으로 UI 갱신 (같은 객체 재할당으로는 변경 감지 안됨)
+                var view = System.Windows.Data.CollectionViewSource.GetDefaultView(Emails);
+                view?.Refresh();
+
+                // 폴더의 안읽은 메일 수도 함께 갱신
+                await RefreshFolderUnreadCountsAsync();
+            }
+        }
+        catch (Exception ex)
+        {
+            Log4.Warn($"[MainViewModel] 메일 읽음 상태 갱신 실패: {ex.Message}");
+        }
+    }
+
+    /// <summary>
+    /// 폴더의 안읽은 메일 수를 DB에서 다시 계산하여 갱신
+    /// </summary>
+    private async Task RefreshFolderUnreadCountsAsync()
+    {
+        try
+        {
+            // DB에서 폴더별 안읽은 메일 수 계산
+            var unreadCounts = await _dbContext.Emails
+                .AsNoTracking()
+                .Where(e => !e.IsRead)
+                .GroupBy(e => e.ParentFolderId)
+                .Select(g => new { FolderId = g.Key, Count = g.Count() })
+                .ToDictionaryAsync(x => x.FolderId ?? "", x => x.Count);
+
+            // 폴더 목록 갱신
+            foreach (var folder in Folders)
+            {
+                folder.UnreadItemCount = unreadCounts.TryGetValue(folder.Id, out var count) ? count : 0;
+            }
+
+            // 즐겨찾기 폴더 목록도 갱신
+            foreach (var folder in FavoriteFolders)
+            {
+                folder.UnreadItemCount = unreadCounts.TryGetValue(folder.Id, out var count) ? count : 0;
+            }
+
+            // UI 갱신을 위해 컬렉션을 새로 할당 (Folder가 INotifyPropertyChanged 미구현)
+            Folders = new List<Folder>(Folders);
+            FavoriteFolders = new ObservableCollection<Folder>(FavoriteFolders);
+
+            Log4.Debug("[RefreshFolderUnreadCounts] 폴더 안읽은 메일 수 갱신 완료");
+        }
+        catch (Exception ex)
+        {
+            Log4.Warn($"[RefreshFolderUnreadCounts] 폴더 갱신 실패: {ex.Message}");
+        }
     }
 
     /// <summary>
