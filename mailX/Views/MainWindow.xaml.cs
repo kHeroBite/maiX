@@ -26,7 +26,13 @@ public partial class MainWindow : FluentWindow
     private readonly MainViewModel _viewModel;
     private readonly Services.Sync.BackgroundSyncService _syncService;
     private Folder? _rightClickedFolder;
+    private Email? _rightClickedEmail;
     private bool _webView2Initialized;
+
+    // 삭제 실행취소용 변수
+    private Email? _lastDeletedEmail;
+    private string? _lastDeletedFromFolderId;
+    private System.Windows.Threading.DispatcherTimer? _undoTimer;
 
     // 드래그&드롭용 변수
     private Point _dragStartPoint;
@@ -1739,19 +1745,39 @@ public partial class MainWindow : FluentWindow
     #region 메일 컨텍스트 메뉴 이벤트
 
     /// <summary>
-    /// 메일 리스트 우클릭 시 선택 처리
+    /// 메일 컨텍스트 메뉴 열릴 때 - 선택된 메일 저장
+    /// </summary>
+    private void EmailContextMenu_Opened(object sender, RoutedEventArgs e)
+    {
+        // 선택된 메일을 우클릭 메일로 저장
+        _rightClickedEmail = EmailListBox.SelectedItem as Email ?? _viewModel.SelectedEmail;
+        Log4.Info($"컨텍스트 메뉴 열림 - 선택된 메일: {_rightClickedEmail?.Subject ?? "null"} (EntryId: {_rightClickedEmail?.EntryId ?? "null"})");
+    }
+
+    /// <summary>
+    /// 메일 리스트 우클릭 시 선택 처리 및 우클릭 메일 저장
     /// </summary>
     private void EmailListBox_PreviewMouseRightButtonDown(object sender, System.Windows.Input.MouseButtonEventArgs e)
     {
+        Log4.Debug($"EmailListBox 우클릭 - OriginalSource: {e.OriginalSource?.GetType().Name}");
+
         // 우클릭한 항목이 선택되어 있지 않으면 해당 항목만 선택
         if (e.OriginalSource is FrameworkElement element)
         {
             var email = FindParentDataContext<Email>(element);
+            _rightClickedEmail = email;  // 우클릭한 메일 저장
+
+            Log4.Debug($"우클릭 메일 저장: {email?.Subject ?? "null"} (EntryId: {email?.EntryId ?? "null"})");
+
             if (email != null && !EmailListBox.SelectedItems.Contains(email))
             {
                 EmailListBox.SelectedItems.Clear();
                 EmailListBox.SelectedItems.Add(email);
             }
+        }
+        else
+        {
+            Log4.Debug("우클릭 - OriginalSource가 FrameworkElement가 아님");
         }
     }
 
@@ -1852,15 +1878,163 @@ public partial class MainWindow : FluentWindow
     }
 
     /// <summary>
-    /// 선택된 메일 삭제
+    /// 선택된 메일 삭제 (공통 메서드)
+    /// </summary>
+    private async Task DeleteSelectedEmailAsync()
+    {
+        Log4.Info("DeleteSelectedEmailAsync 호출됨");
+
+        // 우클릭한 메일이 있으면 우선 사용, 없으면 선택된 메일 사용
+        var targetEmail = _rightClickedEmail ?? _viewModel.SelectedEmail ?? EmailListBox.SelectedItem as Email;
+
+        Log4.Debug($"삭제 시도 - 우클릭: {_rightClickedEmail?.Subject ?? "null"}, 선택: {_viewModel.SelectedEmail?.Subject ?? "null"}");
+
+        if (targetEmail == null)
+        {
+            Log4.Warn("삭제할 메일이 없습니다.");
+            _rightClickedEmail = null;
+            return;
+        }
+
+        if (string.IsNullOrEmpty(targetEmail.EntryId))
+        {
+            Log4.Warn($"EntryId가 없는 메일은 삭제할 수 없습니다: {targetEmail.Subject}");
+            _rightClickedEmail = null;
+            return;
+        }
+
+        // 삭제 전 정보 저장 (실행취소용)
+        _lastDeletedEmail = targetEmail;
+        _lastDeletedFromFolderId = targetEmail.ParentFolderId;
+
+        Log4.Info($"메일 삭제 요청: {targetEmail.Subject} (EntryId: {targetEmail.EntryId})");
+
+        try
+        {
+            await _viewModel.DeleteEmailCommand.ExecuteAsync(targetEmail);
+        }
+        catch (Exception ex)
+        {
+            Log4.Error($"DeleteEmailCommand 실행 실패: {ex}");
+            return;
+        }
+
+        // 실행취소 팝업 표시
+        ShowUndoDeletePopup();
+
+        _rightClickedEmail = null;
+    }
+
+    /// <summary>
+    /// 선택된 메일 삭제 (이벤트 핸들러)
     /// </summary>
     private async void EmailDelete_Click(object sender, RoutedEventArgs e)
     {
-        var selectedEmail = EmailListBox.SelectedItem as Email;
-        if (selectedEmail != null)
+        Log4.Info("=== EmailDelete_Click 호출됨 ===");
+        await DeleteSelectedEmailAsync();
+    }
+
+    /// <summary>
+    /// 삭제 버튼 클릭 이벤트 핸들러 (Button 사용)
+    /// </summary>
+    private async void EmailDelete_Button_Click(object sender, RoutedEventArgs e)
+    {
+        Log4.Info("=== EmailDelete_Button_Click 호출됨 ===");
+        Log4.Debug($"_rightClickedEmail: {_rightClickedEmail?.Subject ?? "null"}");
+        Log4.Debug($"_viewModel.SelectedEmail: {_viewModel.SelectedEmail?.Subject ?? "null"}");
+        Log4.Debug($"EmailListBox.SelectedItem: {(EmailListBox.SelectedItem as Email)?.Subject ?? "null"}");
+
+        try
         {
-            Log4.Info($"메일 삭제: {selectedEmail.Subject}");
-            await _viewModel.DeleteEmailCommand.ExecuteAsync(selectedEmail);
+            // ContextMenu 닫기
+            if (EmailListBox.ContextMenu != null)
+            {
+                EmailListBox.ContextMenu.IsOpen = false;
+            }
+
+            await DeleteSelectedEmailAsync();
+            Log4.Info("삭제 완료");
+        }
+        catch (Exception ex)
+        {
+            Log4.Error($"EmailDelete_Button_Click 예외: {ex.Message}");
+            Log4.Error($"스택: {ex.StackTrace}");
+        }
+    }
+
+    /// <summary>
+    /// 삭제 실행취소 팝업 표시
+    /// </summary>
+    private void ShowUndoDeletePopup()
+    {
+        if (_lastDeletedEmail == null) return;
+
+        // 기존 타이머 중지
+        _undoTimer?.Stop();
+
+        // 팝업 표시
+        UndoDeletePopup.Visibility = Visibility.Visible;
+
+        // 5초 후 자동 숨김
+        _undoTimer = new System.Windows.Threading.DispatcherTimer
+        {
+            Interval = TimeSpan.FromSeconds(5)
+        };
+        _undoTimer.Tick += (s, e) =>
+        {
+            _undoTimer.Stop();
+            HideUndoDeletePopup();
+        };
+        _undoTimer.Start();
+    }
+
+    /// <summary>
+    /// 삭제 실행취소 팝업 숨김
+    /// </summary>
+    private void HideUndoDeletePopup()
+    {
+        UndoDeletePopup.Visibility = Visibility.Collapsed;
+        _lastDeletedEmail = null;
+        _lastDeletedFromFolderId = null;
+    }
+
+    /// <summary>
+    /// 삭제 실행취소 버튼 클릭
+    /// </summary>
+    private async void UndoDelete_Click(object sender, RoutedEventArgs e)
+    {
+        _undoTimer?.Stop();
+
+        // 먼저 값을 로컬 변수에 저장 (HideUndoDeletePopup에서 null로 설정되기 전에)
+        var emailToRestore = _lastDeletedEmail;
+        var originalFolderId = _lastDeletedFromFolderId;
+
+        // 팝업만 숨기기 (값은 이미 저장됨)
+        UndoDeletePopup.Visibility = Visibility.Collapsed;
+
+        if (emailToRestore == null || string.IsNullOrEmpty(originalFolderId))
+        {
+            Log4.Warn("실행취소할 메일 정보가 없습니다.");
+            _lastDeletedEmail = null;
+            _lastDeletedFromFolderId = null;
+            return;
+        }
+
+        try
+        {
+            // 휴지통에서 원래 폴더로 이동
+            await _viewModel.RestoreDeletedEmailAsync(emailToRestore, originalFolderId);
+            Log4.Info($"메일 복원 완료: {emailToRestore.Subject}");
+        }
+        catch (Exception ex)
+        {
+            Log4.Error($"메일 복원 실패: {ex.Message}");
+        }
+        finally
+        {
+            // 복원 완료 후 정리
+            _lastDeletedEmail = null;
+            _lastDeletedFromFolderId = null;
         }
     }
 
@@ -2398,12 +2572,9 @@ public partial class MainWindow : FluentWindow
             switch (e.Key)
             {
                 case Key.Delete:
-                    // Delete: 선택된 메일 삭제
-                    if (_viewModel.SelectedEmail != null)
-                    {
-                        _viewModel.DeleteEmailCommand.Execute(_viewModel.SelectedEmail);
-                        e.Handled = true;
-                    }
+                    // Delete: 선택된 메일 삭제 (실행취소 팝업 포함)
+                    _ = DeleteSelectedEmailAsync();
+                    e.Handled = true;
                     break;
 
                 case Key.F5:
@@ -2413,8 +2584,14 @@ public partial class MainWindow : FluentWindow
                     break;
 
                 case Key.Escape:
-                    // Escape: 검색 초기화
-                    if (_viewModel.IsSearchMode)
+                    // Escape: 삭제 취소 팝업이 표시되어 있으면 실행취소
+                    if (UndoDeletePopup.Visibility == Visibility.Visible)
+                    {
+                        UndoDelete_Click(null!, null!);
+                        e.Handled = true;
+                    }
+                    // 검색 모드면 검색 초기화
+                    else if (_viewModel.IsSearchMode)
                     {
                         _viewModel.ClearSearchCommand.Execute(null);
                         e.Handled = true;

@@ -1717,6 +1717,7 @@
                          SelectionMode="Extended"
                          BorderThickness="0"
                          Background="Transparent"
+                         FocusVisualStyle="{x:Null}"
                          ScrollViewer.HorizontalScrollBarVisibility="Disabled"
                          PreviewMouseRightButtonDown="EmailListBox_PreviewMouseRightButtonDown"
                          PreviewMouseLeftButtonDown="EmailListBox_PreviewMouseLeftButtonDown"
@@ -1724,7 +1725,8 @@
                     <ListBox.ContextMenu>
                         <ContextMenu Background="{DynamicResource ApplicationBackgroundBrush}"
                                      BorderBrush="{DynamicResource ControlElevationBorderBrush}"
-                                     Padding="4">
+                                     Padding="4"
+                                     Opened="EmailContextMenu_Opened">
                             <MenuItem Click="EmailAIReanalyze_Click" Header="🤖 AI 재분석"
                                       Foreground="{DynamicResource TextFillColorPrimaryBrush}">
                                 <MenuItem.Template>
@@ -1933,26 +1935,13 @@
                                 </MenuItem.Template>
                             </MenuItem>
                             <Separator Background="{DynamicResource ControlElevationBorderBrush}" Margin="8,4"/>
-                            <MenuItem Click="EmailDelete_Click" Header="🗑️ 삭제"
-                                      Foreground="{DynamicResource TextFillColorPrimaryBrush}">
-                                <MenuItem.Template>
-                                    <ControlTemplate TargetType="MenuItem">
-                                        <Border x:Name="Border"
-                                                Background="Transparent"
-                                                CornerRadius="4"
-                                                Padding="12,8">
-                                            <TextBlock Text="{TemplateBinding Header}"
-                                                       Foreground="{DynamicResource TextFillColorPrimaryBrush}"/>
-                                        </Border>
-                                        <ControlTemplate.Triggers>
-                                            <Trigger Property="IsHighlighted" Value="True">
-                                                <Setter TargetName="Border" Property="Background"
-                                                        Value="{DynamicResource SystemFillColorCriticalBackgroundBrush}"/>
-                                            </Trigger>
-                                        </ControlTemplate.Triggers>
-                                    </ControlTemplate>
-                                </MenuItem.Template>
-                            </MenuItem>
+                            <!-- 삭제 메뉴 - 기본 MenuItem 스타일 + Click 이벤트 -->
+                            <MenuItem x:Name="DeleteMenuItem"
+                                      Header="🗑️ 삭제"
+                                      Click="EmailDelete_Click"
+                                      Foreground="{DynamicResource TextFillColorPrimaryBrush}"
+                                      Background="Transparent"
+                                      Padding="12,8"/>
                         </ContextMenu>
                     </ListBox.ContextMenu>
                     <ListBox.ItemContainerStyle>
@@ -2128,6 +2117,38 @@
                         </DataTemplate>
                     </ListBox.ItemTemplate>
                 </ListBox>
+
+                <!-- 삭제 실행취소 팝업 (메일 목록 하단) -->
+                <Border x:Name="UndoDeletePopup"
+                        Grid.Row="1"
+                        VerticalAlignment="Bottom"
+                        HorizontalAlignment="Center"
+                        Margin="0,0,0,12"
+                        Padding="16,10"
+                        CornerRadius="8"
+                        Background="{DynamicResource SystemFillColorSolidNeutralBackgroundBrush}"
+                        BorderBrush="{DynamicResource ControlElevationBorderBrush}"
+                        BorderThickness="1"
+                        Visibility="Collapsed">
+                    <Border.Effect>
+                        <DropShadowEffect Color="Black" Opacity="0.2" BlurRadius="10" ShadowDepth="2"/>
+                    </Border.Effect>
+                    <StackPanel Orientation="Horizontal">
+                        <TextBlock Text="삭제됨"
+                                   VerticalAlignment="Center"
+                                   Foreground="{DynamicResource TextFillColorPrimaryBrush}"
+                                   FontSize="13"/>
+                        <Border Width="1"
+                                Margin="12,0"
+                                Background="{DynamicResource ControlElevationBorderBrush}"/>
+                        <ui:Button Content="실행 취소"
+                                   Appearance="Transparent"
+                                   Padding="8,4"
+                                   FontSize="13"
+                                   Foreground="{DynamicResource AccentTextFillColorPrimaryBrush}"
+                                   Click="UndoDelete_Click"/>
+                    </StackPanel>
+                </Border>
             </Grid>
         </Border>
 

@@ -131,8 +131,6 @@ public partial class MainViewModel : ViewModelBase
                 .Select(e => e.EntryId)
                 .ToList();
 
-            Log4.Info($"[RefreshEmailReadStatus] UI 메일 {Emails.Count}건 중 EntryId 있는 메일 {entryIds.Count}건");
-
             // DB에서 읽음 상태 조회 (AsNoTracking으로 캐시 무시하고 최신 값 조회)
             var dbEmails = await _dbContext.Emails
                 .AsNoTracking()
@@ -140,11 +138,28 @@ public partial class MainViewModel : ViewModelBase
                 .Select(e => new { e.EntryId, e.IsRead, e.Subject })
                 .ToListAsync();
 
-            Log4.Info($"[RefreshEmailReadStatus] DB에서 {dbEmails.Count}건 조회됨");
-
+            var dbEntryIds = dbEmails.Select(e => e.EntryId).ToHashSet();
             var dbReadStatus = dbEmails.ToDictionary(e => e.EntryId!, e => e.IsRead);
 
-            // UI 메일 목록 업데이트
+            // DB에서 삭제된 메일 찾기 (UI에는 있지만 DB에는 없는 메일)
+            var deletedEmails = Emails
+                .Where(e => !string.IsNullOrEmpty(e.EntryId) && !dbEntryIds.Contains(e.EntryId))
+                .ToList();
+
+            // UI 메일 목록에서 삭제된 메일 제거
+            int deletedCount = 0;
+            if (deletedEmails.Count > 0)
+            {
+                foreach (var deleted in deletedEmails)
+                {
+                    Log4.Debug($"[RefreshEmailReadStatus] 삭제된 메일 UI에서 제거: {deleted.Subject}");
+                }
+                Emails = Emails.Where(e => string.IsNullOrEmpty(e.EntryId) || dbEntryIds.Contains(e.EntryId)).ToList();
+                deletedCount = deletedEmails.Count;
+                Log4.Info($"[RefreshEmailReadStatus] UI에서 삭제된 메일 {deletedCount}건 제거됨");
+            }
+
+            // 읽음 상태 업데이트
             int updatedCount = 0;
             for (int i = 0; i < Emails.Count; i++)
             {
@@ -154,16 +169,17 @@ public partial class MainViewModel : ViewModelBase
                     email.IsRead != isRead)
                 {
                     Log4.Debug($"[RefreshEmailReadStatus] 읽음 상태 변경: {email.Subject} (UI={email.IsRead} → DB={isRead})");
-                    // IsRead 값 변경
                     email.IsRead = isRead;
                     updatedCount++;
                 }
             }
 
-            if (updatedCount > 0)
+            // 변경이 있으면 UI 갱신
+            if (updatedCount > 0 || deletedCount > 0)
             {
-                Log4.Info($"[RefreshEmailReadStatus] 총 {updatedCount}건 읽음 상태 UI 갱신됨");
-                // CollectionView 강제 새로고침으로 UI 갱신 (같은 객체 재할당으로는 변경 감지 안됨)
+                Log4.Info($"[RefreshEmailReadStatus] UI 갱신: 읽음상태 변경 {updatedCount}건, 삭제 {deletedCount}건");
+
+                // CollectionView 강제 새로고침으로 UI 갱신
                 var view = System.Windows.Data.CollectionViewSource.GetDefaultView(Emails);
                 view?.Refresh();
 
@@ -1238,8 +1254,11 @@ public partial class MainViewModel : ViewModelBase
     [RelayCommand]
     private async Task DeleteEmailAsync(Email? email)
     {
+        Log4.Info($"=== DeleteEmailAsync 호출됨 === email: {email?.Subject ?? "null"}, EntryId: {email?.EntryId ?? "null"}");
+
         if (email == null || string.IsNullOrEmpty(email.EntryId))
         {
+            Log4.Warn($"삭제 실패 - email null: {email == null}, EntryId empty: {string.IsNullOrEmpty(email?.EntryId)}");
             StatusMessage = "삭제할 메일을 선택해주세요.";
             return;
         }
@@ -1247,19 +1266,28 @@ public partial class MainViewModel : ViewModelBase
         await ExecuteAsync(async () =>
         {
             StatusMessage = "메일 삭제 중...";
+            Log4.Debug("ExecuteAsync 내부 시작");
 
             try
             {
                 // 휴지통(DeletedItems) 폴더 ID 찾기
                 var deletedItemsFolder = await _dbContext.Folders
                     .FirstOrDefaultAsync(f => f.DisplayName == "지운 편지함" ||
-                                              f.DisplayName.Equals("Deleted Items", StringComparison.OrdinalIgnoreCase) ||
-                                              f.DisplayName.Equals("DeletedItems", StringComparison.OrdinalIgnoreCase));
+                                              f.DisplayName.ToLower() == "deleted items" ||
+                                              f.DisplayName.ToLower() == "deleteditems");
 
                 if (deletedItemsFolder != null && !string.IsNullOrEmpty(deletedItemsFolder.Id))
                 {
-                    // Graph API로 휴지통으로 이동
-                    await _graphMailService.MoveMessageAsync(email.EntryId, deletedItemsFolder.Id);
+                    // Graph API로 휴지통으로 이동 (새 메시지 ID 반환)
+                    var movedMessage = await _graphMailService.MoveMessageAsync(email.EntryId, deletedItemsFolder.Id);
+
+                    // 실행취소를 위해 새로운 EntryId로 업데이트 (휴지통에서의 ID)
+                    if (movedMessage != null && !string.IsNullOrEmpty(movedMessage.Id))
+                    {
+                        email.EntryId = movedMessage.Id;
+                        Log4.Debug($"메일 EntryId 업데이트: {movedMessage.Id}");
+                    }
+
                     Log4.Info($"메일 휴지통으로 이동: {email.Subject}");
                 }
                 else
@@ -1296,6 +1324,66 @@ public partial class MainViewModel : ViewModelBase
         }, "메일 삭제 실패");
     }
 
+    /// <summary>
+    /// 삭제된 메일 복원 (휴지통에서 원래 폴더로 이동)
+    /// </summary>
+    /// <param name="email">복원할 메일</param>
+    /// <param name="originalFolderId">원래 폴더 ID</param>
+    public async Task RestoreDeletedEmailAsync(Email email, string originalFolderId)
+    {
+        if (email == null || string.IsNullOrEmpty(email.EntryId))
+        {
+            Log4.Warn("복원할 메일이 없거나 EntryId가 없습니다.");
+            return;
+        }
+
+        if (string.IsNullOrEmpty(originalFolderId))
+        {
+            Log4.Warn("원래 폴더 ID가 없습니다.");
+            return;
+        }
+
+        await ExecuteAsync(async () =>
+        {
+            StatusMessage = "메일 복원 중...";
+
+            try
+            {
+                // Graph API로 원래 폴더로 이동 (새 메시지 ID 반환)
+                var restoredMessage = await _graphMailService.MoveMessageAsync(email.EntryId, originalFolderId);
+                Log4.Info($"메일 복원 완료: {email.Subject} → 폴더 {originalFolderId}");
+
+                // 새로운 EntryId로 업데이트
+                if (restoredMessage != null && !string.IsNullOrEmpty(restoredMessage.Id))
+                {
+                    email.EntryId = restoredMessage.Id;
+                }
+
+                // 로컬 DB에 다시 추가 (새 레코드로)
+                email.ParentFolderId = originalFolderId;
+                email.Id = 0; // EF Core가 새 레코드로 인식하도록 ID 초기화
+                _dbContext.Emails.Add(email);
+                await _dbContext.SaveChangesAsync();
+
+                // 현재 선택된 폴더가 원래 폴더면 메일 목록에 추가
+                if (SelectedFolder?.Id == originalFolderId)
+                {
+                    var updatedList = new List<Email>(Emails) { email };
+                    // 날짜순 정렬 유지
+                    updatedList = updatedList.OrderByDescending(e => e.ReceivedDateTime).ToList();
+                    Emails = updatedList;
+                }
+
+                StatusMessage = "메일이 복원되었습니다.";
+            }
+            catch (Exception ex)
+            {
+                Log4.Error($"메일 복원 실패: {ex.Message}");
+                StatusMessage = $"메일 복원 실패: {ex.Message}";
+                throw;
+            }
+        }, "메일 복원 실패");
+    }
 
     /// <summary>
     /// 선택된 메일들의 플래그 상태 업데이트
