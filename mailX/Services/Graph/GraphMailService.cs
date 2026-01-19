@@ -255,6 +255,45 @@ namespace mailX.Services.Graph
         }
 
         /// <summary>
+        /// 최신 메일 직접 조회 (Delta API 지연 보완용)
+        /// receivedDateTime 내림차순으로 최근 N개 메일 조회
+        /// </summary>
+        /// <param name="folderId">폴더 ID</param>
+        /// <param name="count">조회할 메일 수 (기본 5개)</param>
+        /// <param name="since">이 시간 이후 메일만 조회 (null이면 전체)</param>
+        /// <returns>최신 메일 목록</returns>
+        public async Task<IEnumerable<Message>> GetLatestMessagesAsync(
+            string folderId,
+            int count = 5,
+            DateTime? since = null)
+        {
+            var client = _authService.GetGraphClient();
+
+            var response = await client.Me.MailFolders[folderId].Messages
+                .GetAsync(config =>
+                {
+                    config.QueryParameters.Select = new[]
+                    {
+                        "id", "internetMessageId", "conversationId", "subject",
+                        "from", "toRecipients", "ccRecipients", "bccRecipients",
+                        "receivedDateTime", "isRead", "flag", "importance",
+                        "hasAttachments", "categories", "parentFolderId", "body"
+                    };
+                    config.QueryParameters.Top = count;
+                    config.QueryParameters.Orderby = new[] { "receivedDateTime desc" };
+
+                    // since 파라미터가 있으면 해당 시간 이후 메일만 조회
+                    if (since.HasValue)
+                    {
+                        var sinceUtc = since.Value.ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ssZ");
+                        config.QueryParameters.Filter = $"receivedDateTime ge {sinceUtc}";
+                    }
+                });
+
+            return response?.Value ?? new List<Message>();
+        }
+
+        /// <summary>
         /// 단일 메일 조회
         /// </summary>
         /// <param name="messageId">메일 ID</param>

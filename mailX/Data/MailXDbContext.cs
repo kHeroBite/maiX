@@ -97,9 +97,14 @@ public class MailXDbContext : DbContext
         // ===== Email 인덱스 =====
         modelBuilder.Entity<Email>(entity =>
         {
-            // InternetMessageId unique 인덱스
-            entity.HasIndex(e => e.InternetMessageId)
+            // InternetMessageId + ParentFolderId 복합 유니크 인덱스
+            // (같은 메일이 보낸편지함/받은편지함에 모두 있을 수 있음)
+            entity.HasIndex(e => new { e.InternetMessageId, e.ParentFolderId })
                 .IsUnique()
+                .HasDatabaseName("IX_Email_InternetMessageId_ParentFolderId");
+
+            // InternetMessageId 인덱스 (검색용, 유니크 아님)
+            entity.HasIndex(e => e.InternetMessageId)
                 .HasDatabaseName("IX_Email_InternetMessageId");
 
             // ConversationId 인덱스 (스레드 조회용)

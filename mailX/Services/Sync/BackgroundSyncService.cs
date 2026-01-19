@@ -383,12 +383,48 @@ public class BackgroundSyncService : BackgroundService
             {
                 try
                 {
+                    // 1단계: 직접 최신 메일 조회 (Delta API 지연 보완)
+                    // since 필터 없이 항상 최신 10개 메일을 가져옴
+                    // (DB 중복 체크로 새 메일만 저장됨)
+                    var latestMessages = await graphMailService.GetLatestMessagesAsync(
+                        folder.Id,
+                        count: 10,
+                        since: null);
+
+                    var latestMessageList = latestMessages.ToList();
+                    if (latestMessageList.Count > 0)
+                    {
+                        _logger.Debug("직접 조회로 {Count}건 발견 (폴더: {FolderName})",
+                            latestMessageList.Count, folder.DisplayName);
+
+                        // 디버그: 조회된 메일 제목과 수신시간 출력
+                        foreach (var msg in latestMessageList.Take(5))
+                        {
+                            _logger.Debug("  - [{ReceivedAt}] {Subject}",
+                                msg.ReceivedDateTime?.ToString("yyyy-MM-dd HH:mm:ss") ?? "null",
+                                msg.Subject?.Substring(0, Math.Min(msg.Subject?.Length ?? 0, 30)) ?? "(제목없음)");
+                        }
+
+                        // 직접 조회한 메일 저장 (중복은 SaveEmailsAsync에서 처리)
+                        var directSavedEmails = await SaveEmailsAsync(
+                            dbContext, latestMessageList, accountEmail, folder.Id, ct);
+
+                        allSavedEmails.AddRange(directSavedEmails);
+                        totalChanged += directSavedEmails.Count;
+                    }
+
+                    // 2단계: Delta Query 실행 (상태 변경 감지 및 삭제 처리)
                     var (changed, deleted, savedEmails) = await SyncFolderAsync(
                         dbContext, graphMailService, accountEmail, folder, ct);
 
-                    totalChanged += changed;
+                    // Delta Query에서 저장된 메일 중 직접 조회와 중복 제거
+                    var newFromDelta = savedEmails
+                        .Where(e => !allSavedEmails.Any(a => a.InternetMessageId == e.InternetMessageId))
+                        .ToList();
+
+                    totalChanged += newFromDelta.Count;
                     totalDeleted += deleted;
-                    allSavedEmails.AddRange(savedEmails);
+                    allSavedEmails.AddRange(newFromDelta);
                 }
                 catch (Exception ex)
                 {
@@ -715,26 +751,74 @@ public class BackgroundSyncService : BackgroundService
         {
             try
             {
-                // 기존 메일 확인 (InternetMessageId 또는 EntryId로 검색)
+                // 기존 메일 확인 (EntryId 우선, 없으면 InternetMessageId + ParentFolderId로 검색)
+                // 같은 InternetMessageId라도 다른 폴더(보낸편지함/받은편지함)에 있으면 별도 메일로 처리
                 Email? existingEmail = null;
-                
-                if (!string.IsNullOrEmpty(message.InternetMessageId))
-                {
-                    existingEmail = await dbContext.Emails
-                        .FirstOrDefaultAsync(e => e.InternetMessageId == message.InternetMessageId, ct);
-                }
-                
-                // InternetMessageId로 못 찾으면 EntryId로 검색
-                if (existingEmail == null && !string.IsNullOrEmpty(message.Id))
+                string foundBy = "";
+
+                // 1. EntryId로 먼저 검색 (가장 정확한 식별자)
+                if (!string.IsNullOrEmpty(message.Id))
                 {
                     existingEmail = await dbContext.Emails
                         .FirstOrDefaultAsync(e => e.EntryId == message.Id, ct);
+                    if (existingEmail != null) foundBy = "EntryId";
+                }
+
+                // 2. EntryId로 못 찾으면 InternetMessageId + ParentFolderId로 검색
+                //    (같은 메일이 다른 폴더에 있을 수 있음: 보낸편지함/받은편지함)
+                if (existingEmail == null && !string.IsNullOrEmpty(message.InternetMessageId))
+                {
+                    var parentFolderId = message.ParentFolderId ?? folderId;
+                    existingEmail = await dbContext.Emails
+                        .FirstOrDefaultAsync(e => e.InternetMessageId == message.InternetMessageId
+                            && e.ParentFolderId == parentFolderId, ct);
+                    if (existingEmail != null) foundBy = "InternetMessageId+FolderId";
+                }
+
+                // 디버그: 새 메일 감지 여부 로깅
+                if (existingEmail == null)
+                {
+                    _logger.Debug("새 메일 감지: [{ReceivedAt}] {Subject} (InternetMessageId: {InternetMessageId})",
+                        message.ReceivedDateTime?.ToString("yyyy-MM-dd HH:mm:ss") ?? "null",
+                        message.Subject?.Substring(0, Math.Min(message.Subject?.Length ?? 0, 30)) ?? "(제목없음)",
+                        message.InternetMessageId ?? "(null)");
+                }
+                else
+                {
+                    // 디버그: 중복 메일 발견 시 상세 로깅
+                    _logger.Debug("기존 메일 발견: [{NewReceivedAt}] {NewSubject} → 기존: [{OldReceivedAt}] {OldSubject} (FoundBy: {FoundBy})",
+                        message.ReceivedDateTime?.ToString("yyyy-MM-dd HH:mm:ss") ?? "null",
+                        message.Subject?.Substring(0, Math.Min(message.Subject?.Length ?? 0, 20)) ?? "(제목없음)",
+                        existingEmail.ReceivedDateTime?.ToString("yyyy-MM-dd HH:mm:ss") ?? "null",
+                        existingEmail.Subject?.Substring(0, Math.Min(existingEmail.Subject?.Length ?? 0, 20)) ?? "(제목없음)",
+                        foundBy);
                 }
 
                 if (existingEmail != null)
                 {
-                    // 기존 메일의 상태 업데이트 (IsRead, FlagStatus, Importance, Categories, ParentFolderId 등)
+                    // 기존 메일의 상태 업데이트 (IsRead, FlagStatus, Importance, Categories, ParentFolderId, Subject, ReceivedDateTime 등)
                     bool updated = false;
+
+                    // Subject 동기화 (초안에서 제목이 변경된 경우)
+                    var newSubject = message.Subject ?? "(제목 없음)";
+                    if (existingEmail.Subject != newSubject)
+                    {
+                        _logger.Debug("메일 제목 변경: {OldSubject} -> {NewSubject}",
+                            existingEmail.Subject, newSubject);
+                        existingEmail.Subject = newSubject;
+                        updated = true;
+                    }
+
+                    // ReceivedDateTime 동기화 (서버에서 수정된 경우)
+                    var newReceivedDateTime = message.ReceivedDateTime?.UtcDateTime;
+                    if (newReceivedDateTime != null && existingEmail.ReceivedDateTime != newReceivedDateTime)
+                    {
+                        _logger.Debug("메일 수신시간 변경: {OldTime} -> {NewTime}",
+                            existingEmail.ReceivedDateTime?.ToString("yyyy-MM-dd HH:mm:ss"),
+                            newReceivedDateTime?.ToString("yyyy-MM-dd HH:mm:ss"));
+                        existingEmail.ReceivedDateTime = newReceivedDateTime;
+                        updated = true;
+                    }
 
                     // 읽음 상태 동기화
                     if (existingEmail.IsRead != (message.IsRead ?? false))
@@ -862,20 +946,23 @@ public class BackgroundSyncService : BackgroundService
         {
             try
             {
-                // 기존 메일 확인 (InternetMessageId 또는 EntryId로 검색)
+                // 기존 메일 확인 (EntryId 우선, 없으면 InternetMessageId + ParentFolderId로 검색)
                 Email? existingEmail = null;
 
-                if (!string.IsNullOrEmpty(message.InternetMessageId))
-                {
-                    existingEmail = await dbContext.Emails
-                        .FirstOrDefaultAsync(e => e.InternetMessageId == message.InternetMessageId, ct);
-                }
-
-                // InternetMessageId로 못 찾으면 EntryId로 검색
-                if (existingEmail == null && !string.IsNullOrEmpty(message.Id))
+                // 1. EntryId로 먼저 검색 (가장 정확한 식별자)
+                if (!string.IsNullOrEmpty(message.Id))
                 {
                     existingEmail = await dbContext.Emails
                         .FirstOrDefaultAsync(e => e.EntryId == message.Id, ct);
+                }
+
+                // 2. EntryId로 못 찾으면 InternetMessageId + ParentFolderId로 검색
+                if (existingEmail == null && !string.IsNullOrEmpty(message.InternetMessageId))
+                {
+                    var parentFolderId = message.ParentFolderId ?? folderId;
+                    existingEmail = await dbContext.Emails
+                        .FirstOrDefaultAsync(e => e.InternetMessageId == message.InternetMessageId
+                            && e.ParentFolderId == parentFolderId, ct);
                 }
 
                 if (existingEmail != null)
