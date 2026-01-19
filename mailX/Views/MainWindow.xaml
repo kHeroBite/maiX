@@ -2046,7 +2046,7 @@
 
                                             <!-- 발신자 + 첨부파일 -->
                                             <StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center">
-                                                <TextBlock Text="{Binding From}"
+                                                <TextBlock Text="{Binding From, Converter={StaticResource EmailToDisplayNameConverter}}"
                                                            FontWeight="{Binding IsRead, Converter={StaticResource BoolToFontWeightConverter}, FallbackValue=Normal}"
                                                            Foreground="{Binding IsRead, Converter={StaticResource IsReadToForegroundConverter}}"
                                                            TextTrimming="CharacterEllipsis"

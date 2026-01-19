@@ -330,12 +330,43 @@ public partial class ComposeViewModel : ViewModelBase
         var addresses = input.Split(new[] { ';', ',' }, StringSplitOptions.RemoveEmptyEntries);
         foreach (var addr in addresses)
         {
-            var email = addr.Trim();
+            var trimmed = addr.Trim();
+            if (string.IsNullOrEmpty(trimmed)) continue;
+
+            string? name = null;
+            string? email = null;
+
+            // "이름 <주소>" 형식 파싱
+            var bracketStart = trimmed.IndexOf('<');
+            var bracketEnd = trimmed.IndexOf('>');
+
+            if (bracketStart > 0 && bracketEnd > bracketStart)
+            {
+                // "이름 <주소>" 형식
+                name = trimmed.Substring(0, bracketStart).Trim();
+                email = trimmed.Substring(bracketStart + 1, bracketEnd - bracketStart - 1).Trim();
+            }
+            else if (trimmed.Contains('@'))
+            {
+                // 이메일 주소만 있는 경우
+                email = trimmed;
+            }
+            else
+            {
+                // 이메일 형식이 아닌 경우 (이름만 있는 경우) - 스킵
+                Log4.Warn($"유효하지 않은 이메일 주소 형식: {trimmed}");
+                continue;
+            }
+
             if (!string.IsNullOrEmpty(email))
             {
                 result.Add(new Recipient
                 {
-                    EmailAddress = new EmailAddress { Address = email }
+                    EmailAddress = new EmailAddress
+                    {
+                        Address = email,
+                        Name = name
+                    }
                 });
             }
         }

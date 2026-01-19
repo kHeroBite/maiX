@@ -841,6 +841,22 @@ public class BackgroundSyncService : BackgroundService
                         updated = true;
                     }
 
+                    // From 필드 동기화 (구 형식 "이름"을 새 형식 "이름 <이메일>"로 업데이트)
+                    var newFrom = GetDisplayName(message.From?.EmailAddress);
+                    if (!string.IsNullOrEmpty(newFrom) && existingEmail.From != newFrom)
+                    {
+                        // 기존 From이 이메일을 포함하지 않고 새 From이 이메일을 포함하는 경우에만 업데이트
+                        if (!string.IsNullOrEmpty(existingEmail.From) &&
+                            !existingEmail.From.Contains("@") &&
+                            newFrom.Contains("@"))
+                        {
+                            _logger.Debug("메일 발신자 업데이트: {OldFrom} -> {NewFrom}",
+                                existingEmail.From, newFrom);
+                            existingEmail.From = newFrom;
+                            updated = true;
+                        }
+                    }
+
                     // 읽음 상태 동기화
                     if (existingEmail.IsRead != (message.IsRead ?? false))
                     {
@@ -917,7 +933,7 @@ public class BackgroundSyncService : BackgroundService
                     Subject = message.Subject ?? "(제목 없음)",
                     Body = message.Body?.Content,
                     IsHtml = message.Body?.ContentType == Microsoft.Graph.Models.BodyType.Html,
-                    From = message.From?.EmailAddress?.Address ?? "unknown",
+                    From = GetDisplayName(message.From?.EmailAddress),
                     To = SerializeRecipients(message.ToRecipients),
                     Cc = SerializeRecipients(message.CcRecipients),
                     Bcc = SerializeRecipients(message.BccRecipients),
@@ -1071,8 +1087,23 @@ public class BackgroundSyncService : BackgroundService
 
                 if (existingEmail != null)
                 {
-                    // 기존 메일의 상태 업데이트 (IsRead, FlagStatus, Importance 등)
+                    // 기존 메일의 상태 업데이트 (IsRead, FlagStatus, Importance, From 등)
                     bool updated = false;
+
+                    // From 필드 동기화 (구 형식 "이름"을 새 형식 "이름 <이메일>"로 업데이트)
+                    var newFrom = GetDisplayName(message.From?.EmailAddress);
+                    if (!string.IsNullOrEmpty(newFrom) && existingEmail.From != newFrom)
+                    {
+                        if (!string.IsNullOrEmpty(existingEmail.From) &&
+                            !existingEmail.From.Contains("@") &&
+                            newFrom.Contains("@"))
+                        {
+                            _logger.Debug("메일 발신자 업데이트 (Delta): {OldFrom} -> {NewFrom}",
+                                existingEmail.From, newFrom);
+                            existingEmail.From = newFrom;
+                            updated = true;
+                        }
+                    }
 
                     if (existingEmail.IsRead != (message.IsRead ?? false))
                     {
@@ -1112,7 +1143,7 @@ public class BackgroundSyncService : BackgroundService
                         Subject = message.Subject ?? "(제목 없음)",
                         Body = message.Body?.Content,
                         IsHtml = message.Body?.ContentType == Microsoft.Graph.Models.BodyType.Html,
-                        From = message.From?.EmailAddress?.Address ?? "unknown",
+                        From = GetDisplayName(message.From?.EmailAddress),
                         To = SerializeRecipients(message.ToRecipients),
                         Cc = SerializeRecipients(message.CcRecipients),
                         ReceivedDateTime = message.ReceivedDateTime?.UtcDateTime,
@@ -1152,12 +1183,31 @@ public class BackgroundSyncService : BackgroundService
         if (recipients == null || !recipients.Any())
             return null;
 
-        var addresses = recipients
+        var displayNames = recipients
             .Where(r => r.EmailAddress != null)
-            .Select(r => r.EmailAddress!.Address)
+            .Select(r => GetDisplayName(r.EmailAddress))
             .ToList();
 
-        return JsonSerializer.Serialize(addresses);
+        return JsonSerializer.Serialize(displayNames);
+    }
+
+    /// <summary>
+    /// 이메일 주소에서 "이름 &lt;주소&gt;" 형식 문자열 생성
+    /// 이름이 없으면 주소만 반환
+    /// </summary>
+    private string GetDisplayName(EmailAddress? emailAddress)
+    {
+        if (emailAddress == null)
+            return "unknown";
+
+        var address = emailAddress.Address ?? "unknown";
+        var name = emailAddress.Name;
+
+        // 이름이 있으면 "이름 <주소>" 형식, 없으면 주소만
+        if (!string.IsNullOrWhiteSpace(name) && name != address)
+            return $"{name} <{address}>";
+
+        return address;
     }
 
     /// <summary>
