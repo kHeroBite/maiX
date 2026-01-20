@@ -57,6 +57,11 @@ public partial class App : Application
     public static AppSettingsManager Settings { get; private set; } = new();
 
     /// <summary>
+    /// DI 컨테이너 ServiceProvider 접근 (Scoped 서비스 생성용)
+    /// </summary>
+    public IServiceProvider ServiceProvider => _host.Services;
+
+    /// <summary>
     /// GraphMailService 인스턴스 접근 (ComposeWindow에서 사용)
     /// </summary>
     public GraphMailService? GraphMailService
@@ -197,6 +202,10 @@ public partial class App : Application
         services.AddSingleton<GraphAuthService>();
         services.AddScoped<GraphMailService>();
         services.AddScoped<GraphCalendarService>();
+        services.AddScoped<GraphContactService>();
+
+        // 연락처 검색 서비스 등록
+        services.AddScoped<ContactSearchService>();
 
         // AI Provider 등록 (Singleton - 상태 유지)
         services.AddSingleton<ClaudeProvider>();

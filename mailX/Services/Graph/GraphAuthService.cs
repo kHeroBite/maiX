@@ -34,7 +34,9 @@ namespace mailX.Services.Graph
             "Mail.Send",
             "Mail.ReadWrite",
             "Files.Read.All",
-            "Sites.Read.All"
+            "Sites.Read.All",
+            "Calendars.Read",
+            "Calendars.ReadWrite"
         };
 
         /// <summary>

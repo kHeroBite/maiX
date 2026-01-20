@@ -90,6 +90,16 @@ public class MailXDbContext : DbContext
     /// </summary>
     public DbSet<ConverterSetting> ConverterSettings { get; set; } = null!;
 
+    /// <summary>
+    /// 캘린더 이벤트 테이블
+    /// </summary>
+    public DbSet<CalendarEvent> CalendarEvents { get; set; } = null!;
+
+    /// <summary>
+    /// 캘린더 동기화 상태 테이블
+    /// </summary>
+    public DbSet<CalendarSyncState> CalendarSyncStates { get; set; } = null!;
+
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         base.OnModelCreating(modelBuilder);
@@ -188,6 +198,43 @@ public class MailXDbContext : DbContext
             entity.HasIndex(c => c.Extension)
                 .IsUnique()
                 .HasDatabaseName("IX_ConverterSetting_Extension");
+        });
+
+        // ===== CalendarEvent 인덱스 =====
+        modelBuilder.Entity<CalendarEvent>(entity =>
+        {
+            // GraphId 인덱스 (Graph API ID로 빠른 조회)
+            entity.HasIndex(e => e.GraphId)
+                .HasDatabaseName("IX_CalendarEvent_GraphId");
+
+            // AccountEmail + CalendarId 복합 인덱스
+            entity.HasIndex(e => new { e.AccountEmail, e.CalendarId })
+                .HasDatabaseName("IX_CalendarEvent_AccountEmail_CalendarId");
+
+            // 시작일시 인덱스 (날짜 범위 조회)
+            entity.HasIndex(e => e.StartDateTime)
+                .HasDatabaseName("IX_CalendarEvent_StartDateTime");
+
+            // AccountEmail + StartDateTime 복합 인덱스 (계정별 날짜 조회)
+            entity.HasIndex(e => new { e.AccountEmail, e.StartDateTime })
+                .HasDatabaseName("IX_CalendarEvent_AccountEmail_StartDateTime");
+
+            // ICalUId 인덱스 (반복 일정 조회)
+            entity.HasIndex(e => e.ICalUId)
+                .HasDatabaseName("IX_CalendarEvent_ICalUId");
+
+            // SeriesMasterId 인덱스 (반복 일정 인스턴스 조회)
+            entity.HasIndex(e => e.SeriesMasterId)
+                .HasDatabaseName("IX_CalendarEvent_SeriesMasterId");
+        });
+
+        // ===== CalendarSyncState 인덱스 =====
+        modelBuilder.Entity<CalendarSyncState>(entity =>
+        {
+            // AccountEmail + CalendarId unique 복합 인덱스
+            entity.HasIndex(s => new { s.AccountEmail, s.CalendarId })
+                .IsUnique()
+                .HasDatabaseName("IX_CalendarSyncState_AccountEmail_CalendarId");
         });
     }
 }

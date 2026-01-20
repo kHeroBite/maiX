@@ -1,10 +1,15 @@
 using System;
+using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Linq;
 using System.Threading.Tasks;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Graph.Models;
+using mailX.Data;
+using mailX.Models;
 using mailX.Services.Graph;
 using Serilog;
 
@@ -12,15 +17,18 @@ using Serilog;
 using MailXTodo = mailX.Models.Todo;
 using MailXEmail = mailX.Models.Email;
 using MailXMeetingInfo = mailX.Services.Graph.MeetingInfo;
+using MailXCalendarEvent = mailX.Models.CalendarEvent;
 
 namespace mailX.ViewModels;
 
 /// <summary>
 /// Calendar 뷰모델 - 일정 관리 및 마감일 연동
+/// DB 캐싱 및 Graph API 동기화 지원
 /// </summary>
 public partial class CalendarViewModel : ViewModelBase
 {
     private readonly GraphCalendarService _calendarService;
+    private readonly IServiceProvider _serviceProvider;
     private readonly ILogger _logger;
 
     /// <summary>
@@ -64,9 +72,10 @@ public partial class CalendarViewModel : ViewModelBase
     /// </summary>
     public int TodayEventCount => Events.Count(e => e.StartDateTime?.Date == DateTime.Today);
 
-    public CalendarViewModel(GraphCalendarService calendarService)
+    public CalendarViewModel(GraphCalendarService calendarService, IServiceProvider serviceProvider)
     {
         _calendarService = calendarService ?? throw new ArgumentNullException(nameof(calendarService));
+        _serviceProvider = serviceProvider ?? throw new ArgumentNullException(nameof(serviceProvider));
         _logger = Log.ForContext<CalendarViewModel>();
     }
 
@@ -87,46 +96,179 @@ public partial class CalendarViewModel : ViewModelBase
     }
 
     /// <summary>
-    /// 일정 목록 로드
+    /// 일정 목록 로드 (DB 우선, 필요시 API)
     /// </summary>
     [RelayCommand]
     public async Task LoadEventsAsync()
     {
         await ExecuteAsync(async () =>
         {
-            IEnumerable<Event> events;
+            // 먼저 DB에서 로드 시도
+            var dbEvents = await LoadEventsFromDbAsync();
 
-            switch (ViewMode)
+            if (dbEvents.Count > 0)
             {
-                case CalendarViewMode.Today:
-                    events = await _calendarService.GetTodayEventsAsync();
-                    break;
+                // DB에서 로드 성공
+                Events.Clear();
+                foreach (var evt in dbEvents)
+                {
+                    Events.Add(evt);
+                }
 
-                case CalendarViewMode.Week:
-                    events = await _calendarService.GetThisWeekEventsAsync();
-                    break;
-
-                case CalendarViewMode.Month:
-                    var startOfMonth = new DateTime(SelectedDate.Year, SelectedDate.Month, 1);
-                    var endOfMonth = startOfMonth.AddMonths(1);
-                    events = await _calendarService.GetEventsAsync(startOfMonth, endOfMonth);
-                    break;
-
-                default:
-                    events = await _calendarService.GetThisWeekEventsAsync();
-                    break;
+                OnPropertyChanged(nameof(TodayEventCount));
+                _logger.Information("일정 {Count}개 DB에서 로드 완료 (모드: {Mode})", Events.Count, ViewMode);
             }
-
-            Events.Clear();
-            foreach (var evt in events)
+            else
             {
-                var eventItem = MapToEventItem(evt);
-                Events.Add(eventItem);
+                // DB에 없으면 API에서 로드
+                await LoadEventsFromApiAsync();
             }
-
-            OnPropertyChanged(nameof(TodayEventCount));
-            _logger.Information("일정 {Count}개 로드 완료 (모드: {Mode})", Events.Count, ViewMode);
         }, "일정 로드 실패");
+    }
+
+    /// <summary>
+    /// DB에서 일정 로드
+    /// </summary>
+    private async Task<List<EventItemViewModel>> LoadEventsFromDbAsync()
+    {
+        using var scope = _serviceProvider.CreateScope();
+        var dbContext = scope.ServiceProvider.GetRequiredService<MailXDbContext>();
+        var graphAuthService = scope.ServiceProvider.GetRequiredService<GraphAuthService>();
+
+        if (!graphAuthService.IsLoggedIn || string.IsNullOrEmpty(graphAuthService.CurrentUserEmail))
+        {
+            return new List<EventItemViewModel>();
+        }
+
+        var accountEmail = graphAuthService.CurrentUserEmail;
+
+        DateTime startDate, endDate;
+        switch (ViewMode)
+        {
+            case CalendarViewMode.Today:
+                startDate = DateTime.Today;
+                endDate = DateTime.Today.AddDays(1);
+                break;
+
+            case CalendarViewMode.Week:
+                startDate = SelectedDate.AddDays(-(int)SelectedDate.DayOfWeek);
+                endDate = startDate.AddDays(7);
+                break;
+
+            case CalendarViewMode.Month:
+                startDate = new DateTime(SelectedDate.Year, SelectedDate.Month, 1);
+                endDate = startDate.AddMonths(1);
+                break;
+
+            default:
+                startDate = DateTime.Today.AddDays(-(int)DateTime.Today.DayOfWeek);
+                endDate = startDate.AddDays(7);
+                break;
+        }
+
+        var dbEvents = await dbContext.CalendarEvents
+            .Where(e => e.AccountEmail == accountEmail
+                && !e.IsDeleted
+                && e.StartDateTime >= startDate
+                && e.StartDateTime < endDate)
+            .OrderBy(e => e.StartDateTime)
+            .ThenBy(e => e.Subject)
+            .ThenBy(e => e.Id)
+            .ToListAsync();
+
+        return dbEvents.Select(MapFromDbEvent).ToList();
+    }
+
+    /// <summary>
+    /// API에서 일정 로드 (폴백)
+    /// </summary>
+    private async Task LoadEventsFromApiAsync()
+    {
+        IEnumerable<Event> events;
+
+        switch (ViewMode)
+        {
+            case CalendarViewMode.Today:
+                events = await _calendarService.GetTodayEventsAsync();
+                break;
+
+            case CalendarViewMode.Week:
+                events = await _calendarService.GetThisWeekEventsAsync();
+                break;
+
+            case CalendarViewMode.Month:
+                var startOfMonth = new DateTime(SelectedDate.Year, SelectedDate.Month, 1);
+                var endOfMonth = startOfMonth.AddMonths(1);
+                events = await _calendarService.GetEventsAsync(startOfMonth, endOfMonth);
+                break;
+
+            default:
+                events = await _calendarService.GetThisWeekEventsAsync();
+                break;
+        }
+
+        Events.Clear();
+        foreach (var evt in events)
+        {
+            var eventItem = MapToEventItem(evt);
+            Events.Add(eventItem);
+        }
+
+        OnPropertyChanged(nameof(TodayEventCount));
+        _logger.Information("일정 {Count}개 API에서 로드 완료 (모드: {Mode})", Events.Count, ViewMode);
+    }
+
+    /// <summary>
+    /// 동기화 완료 시 UI 새로고침
+    /// </summary>
+    public void OnCalendarEventsSynced(int added, int updated, int deleted)
+    {
+        _logger.Information("캘린더 동기화 완료: 추가 {Added}, 수정 {Updated}, 삭제 {Deleted}", added, updated, deleted);
+
+        // UI 스레드에서 새로고침
+        System.Windows.Application.Current.Dispatcher.InvokeAsync(async () =>
+        {
+            await LoadEventsAsync();
+        });
+    }
+
+    /// <summary>
+    /// DB CalendarEvent를 EventItemViewModel로 변환
+    /// </summary>
+    private EventItemViewModel MapFromDbEvent(MailXCalendarEvent dbEvent)
+    {
+        var categories = new List<string>();
+        if (!string.IsNullOrEmpty(dbEvent.Categories))
+        {
+            try
+            {
+                categories = System.Text.Json.JsonSerializer.Deserialize<List<string>>(dbEvent.Categories) ?? new List<string>();
+            }
+            catch
+            {
+                // JSON 파싱 실패 시 빈 목록
+            }
+        }
+
+        return new EventItemViewModel
+        {
+            Id = dbEvent.GraphId ?? dbEvent.Id.ToString(),
+            Subject = dbEvent.Subject,
+            Location = dbEvent.Location,
+            StartDateTime = dbEvent.StartDateTime,
+            EndDateTime = dbEvent.EndDateTime,
+            IsAllDay = dbEvent.IsAllDay,
+            Importance = dbEvent.Importance ?? "Normal",
+            OrganizerName = dbEvent.OrganizerName,
+            OrganizerEmail = dbEvent.OrganizerEmail,
+            BodyPreview = dbEvent.Body?.Length > 200 ? dbEvent.Body.Substring(0, 200) + "..." : dbEvent.Body,
+            WebLink = dbEvent.WebLink,
+            IsOnlineMeeting = dbEvent.IsOnlineMeeting,
+            OnlineMeetingUrl = dbEvent.OnlineMeetingUrl,
+            Categories = categories,
+            ResponseStatus = dbEvent.ResponseStatus,
+            IsRecurring = dbEvent.IsRecurring
+        };
     }
 
     /// <summary>
@@ -478,6 +620,12 @@ public partial class EventItemViewModel : ObservableObject
     /// </summary>
     [ObservableProperty]
     private bool _isTodo;
+
+    /// <summary>
+    /// 반복 일정인지 여부
+    /// </summary>
+    [ObservableProperty]
+    private bool _isRecurring;
 
     /// <summary>
     /// 시간 표시 문자열

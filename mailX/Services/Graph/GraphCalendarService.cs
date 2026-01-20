@@ -332,35 +332,59 @@ public class GraphCalendarService
         {
             var client = _authService.GetGraphClient();
 
+            // 타임존 (한국 표준시)
+            const string timeZone = "Asia/Seoul";
+
             var newEvent = new Event
             {
                 Subject = request.Subject,
-                Location = !string.IsNullOrEmpty(request.Location) ? new Location { DisplayName = request.Location } : null,
                 Start = new DateTimeTimeZone
                 {
                     DateTime = request.IsAllDay
-                        ? request.StartDateTime.Date.ToString("yyyy-MM-ddT00:00:00")
+                        ? request.StartDateTime.Date.ToString("yyyy-MM-dd")
                         : request.StartDateTime.ToString("yyyy-MM-ddTHH:mm:ss"),
-                    TimeZone = "Korea Standard Time"
+                    TimeZone = timeZone
                 },
                 End = new DateTimeTimeZone
                 {
                     DateTime = request.IsAllDay
-                        ? request.EndDateTime.Date.AddDays(1).ToString("yyyy-MM-ddT00:00:00")
+                        ? request.EndDateTime.Date.AddDays(1).ToString("yyyy-MM-dd")
                         : request.EndDateTime.ToString("yyyy-MM-ddTHH:mm:ss"),
-                    TimeZone = "Korea Standard Time"
+                    TimeZone = timeZone
                 },
                 IsAllDay = request.IsAllDay,
-                Body = !string.IsNullOrEmpty(request.Body) ? new ItemBody
+                ReminderMinutesBeforeStart = request.ReminderMinutesBefore > 0 ? request.ReminderMinutesBefore : 15,
+                IsReminderOn = request.ReminderMinutesBefore > 0
+            };
+
+            // 장소 설정 (값이 있을 때만)
+            if (!string.IsNullOrEmpty(request.Location))
+            {
+                newEvent.Location = new Location { DisplayName = request.Location };
+            }
+
+            // 본문 설정 (값이 있을 때만)
+            if (!string.IsNullOrEmpty(request.Body))
+            {
+                newEvent.Body = new ItemBody
                 {
                     ContentType = BodyType.Text,
                     Content = request.Body
-                } : null,
-                IsOnlineMeeting = request.IsOnlineMeeting,
-                OnlineMeetingProvider = request.IsOnlineMeeting ? OnlineMeetingProviderType.TeamsForBusiness : null,
-                ReminderMinutesBeforeStart = request.ReminderMinutesBefore,
-                Categories = request.Categories
-            };
+                };
+            }
+
+            // 카테고리 설정 (null이 아닌 경우에만)
+            if (request.Categories?.Any() == true)
+            {
+                newEvent.Categories = request.Categories;
+            }
+
+            // 온라인 회의 설정 (true일 때만 설정, false면 null 유지)
+            if (request.IsOnlineMeeting)
+            {
+                newEvent.IsOnlineMeeting = true;
+                newEvent.OnlineMeetingProvider = OnlineMeetingProviderType.TeamsForBusiness;
+            }
 
             // 참석자 추가
             if (request.Attendees?.Any() == true)
@@ -372,13 +396,22 @@ public class GraphCalendarService
                 }).ToList();
             }
 
+            _logger.Debug("일정 생성 API 호출: Subject={Subject}, Start={Start}, End={End}, IsAllDay={IsAllDay}",
+                request.Subject, request.StartDateTime, request.EndDateTime, request.IsAllDay);
+
             var createdEvent = await client.Me.Calendar.Events.PostAsync(newEvent);
             _logger.Information("일정 생성 완료: {Subject} ({Start})", request.Subject, request.StartDateTime);
             return createdEvent;
         }
+        catch (Microsoft.Graph.Models.ODataErrors.ODataError odataEx)
+        {
+            _logger.Error(odataEx, "일정 생성 Graph API 오류: {Subject}, Code={Code}, Message={Message}",
+                request.Subject, odataEx.Error?.Code, odataEx.Error?.Message);
+            throw new Exception($"Graph API 오류: {odataEx.Error?.Message ?? odataEx.Message}");
+        }
         catch (Exception ex)
         {
-            _logger.Error(ex, "일정 생성 실패: {Subject}", request.Subject);
+            _logger.Error(ex, "일정 생성 실패: {Subject}, Type={Type}", request.Subject, ex.GetType().Name);
             throw;
         }
     }
@@ -397,41 +430,68 @@ public class GraphCalendarService
         {
             var client = _authService.GetGraphClient();
 
+            // 타임존 (한국 표준시)
+            const string timeZone = "Asia/Seoul";
+
             var updatedEvent = new Event
             {
                 Subject = request.Subject,
-                Location = !string.IsNullOrEmpty(request.Location) ? new Location { DisplayName = request.Location } : null,
                 Start = new DateTimeTimeZone
                 {
                     DateTime = request.IsAllDay
-                        ? request.StartDateTime.Date.ToString("yyyy-MM-ddT00:00:00")
+                        ? request.StartDateTime.Date.ToString("yyyy-MM-dd")
                         : request.StartDateTime.ToString("yyyy-MM-ddTHH:mm:ss"),
-                    TimeZone = "Korea Standard Time"
+                    TimeZone = timeZone
                 },
                 End = new DateTimeTimeZone
                 {
                     DateTime = request.IsAllDay
-                        ? request.EndDateTime.Date.AddDays(1).ToString("yyyy-MM-ddT00:00:00")
+                        ? request.EndDateTime.Date.AddDays(1).ToString("yyyy-MM-dd")
                         : request.EndDateTime.ToString("yyyy-MM-ddTHH:mm:ss"),
-                    TimeZone = "Korea Standard Time"
+                    TimeZone = timeZone
                 },
                 IsAllDay = request.IsAllDay,
-                Body = !string.IsNullOrEmpty(request.Body) ? new ItemBody
+                ReminderMinutesBeforeStart = request.ReminderMinutesBefore > 0 ? request.ReminderMinutesBefore : 15,
+                IsReminderOn = request.ReminderMinutesBefore > 0
+            };
+
+            // 장소 설정 (값이 있을 때만)
+            if (!string.IsNullOrEmpty(request.Location))
+            {
+                updatedEvent.Location = new Location { DisplayName = request.Location };
+            }
+
+            // 본문 설정 (값이 있을 때만)
+            if (!string.IsNullOrEmpty(request.Body))
+            {
+                updatedEvent.Body = new ItemBody
                 {
                     ContentType = BodyType.Text,
                     Content = request.Body
-                } : null,
-                ReminderMinutesBeforeStart = request.ReminderMinutesBefore,
-                Categories = request.Categories
-            };
+                };
+            }
+
+            // 카테고리 설정 (null이 아닌 경우에만)
+            if (request.Categories?.Any() == true)
+            {
+                updatedEvent.Categories = request.Categories;
+            }
+
+            _logger.Debug("일정 수정 API 호출: EventId={EventId}, Subject={Subject}", eventId, request.Subject);
 
             var result = await client.Me.Calendar.Events[eventId].PatchAsync(updatedEvent);
             _logger.Information("일정 수정 완료: {EventId} - {Subject}", eventId, request.Subject);
             return result;
         }
+        catch (Microsoft.Graph.Models.ODataErrors.ODataError odataEx)
+        {
+            _logger.Error(odataEx, "일정 수정 Graph API 오류: {EventId}, Code={Code}, Message={Message}",
+                eventId, odataEx.Error?.Code, odataEx.Error?.Message);
+            throw new Exception($"Graph API 오류: {odataEx.Error?.Message ?? odataEx.Message}");
+        }
         catch (Exception ex)
         {
-            _logger.Error(ex, "일정 수정 실패: {EventId}", eventId);
+            _logger.Error(ex, "일정 수정 실패: {EventId}, Type={Type}", eventId, ex.GetType().Name);
             throw;
         }
     }
@@ -614,6 +674,515 @@ public class GraphCalendarService
     }
 
     #endregion
+
+    #region Delta Query 및 캘린더 동기화
+
+    /// <summary>
+    /// 사용자의 모든 캘린더 목록 조회
+    /// </summary>
+    /// <returns>캘린더 목록</returns>
+    public async Task<List<CalendarInfo>> GetCalendarsAsync()
+    {
+        try
+        {
+            var client = _authService.GetGraphClient();
+            var response = await client.Me.Calendars.GetAsync(config =>
+            {
+                config.QueryParameters.Select = new[]
+                {
+                    "id", "name", "color", "isDefaultCalendar",
+                    "canEdit", "owner"
+                };
+            });
+
+            var calendars = response?.Value?.Select(c => new CalendarInfo
+            {
+                Id = c.Id ?? string.Empty,
+                Name = c.Name ?? "이름 없음",
+                Color = c.Color?.ToString(),
+                IsDefaultCalendar = c.IsDefaultCalendar ?? false,
+                CanEdit = c.CanEdit ?? false,
+                Owner = c.Owner?.Address
+            }).ToList() ?? new List<CalendarInfo>();
+
+            _logger.Debug("캘린더 {Count}개 조회", calendars.Count);
+            return calendars;
+        }
+        catch (Exception ex)
+        {
+            _logger.Error(ex, "캘린더 목록 조회 실패");
+            return new List<CalendarInfo>();
+        }
+    }
+
+    /// <summary>
+    /// Delta Query로 변경된 이벤트 조회
+    /// </summary>
+    /// <param name="deltaLink">이전 Delta 링크 (null이면 전체 동기화)</param>
+    /// <param name="startDate">동기화 시작 날짜</param>
+    /// <param name="endDate">동기화 종료 날짜</param>
+    /// <returns>변경된 이벤트 목록과 새 Delta 링크</returns>
+    public async Task<CalendarDeltaResult> GetEventsDeltaAsync(
+        string? deltaLink = null,
+        DateTime? startDate = null,
+        DateTime? endDate = null)
+    {
+        var result = new CalendarDeltaResult();
+
+        try
+        {
+            var client = _authService.GetGraphClient();
+
+            // 기본 동기화 범위: 과거 3개월 ~ 미래 6개월
+            var syncStart = startDate ?? DateTime.Today.AddMonths(-3);
+            var syncEnd = endDate ?? DateTime.Today.AddMonths(6);
+
+            if (!string.IsNullOrEmpty(deltaLink))
+            {
+                // Delta 링크로 변경분 조회
+                result = await GetDeltaWithLinkAsync(client, deltaLink);
+            }
+            else
+            {
+                // 초기 동기화 - CalendarView 사용
+                result = await GetInitialEventsAsync(client, syncStart, syncEnd);
+            }
+
+            _logger.Information("캘린더 Delta 조회: 추가={Added}, 수정={Updated}, 삭제={Deleted}",
+                result.AddedCount, result.UpdatedCount, result.DeletedCount);
+
+            return result;
+        }
+        catch (Exception ex)
+        {
+            _logger.Error(ex, "캘린더 Delta 조회 실패");
+            throw;
+        }
+    }
+
+    /// <summary>
+    /// Delta 링크로 변경분 조회
+    /// </summary>
+    private async Task<CalendarDeltaResult> GetDeltaWithLinkAsync(GraphServiceClient client, string deltaLink)
+    {
+        var result = new CalendarDeltaResult();
+        var allEvents = new List<Event>();
+        var deletedIds = new List<string>();
+
+        try
+        {
+            // Delta 링크 파싱 및 요청
+            var request = new Microsoft.Graph.Me.CalendarView.Delta.DeltaRequestBuilder(deltaLink, client.RequestAdapter);
+            var response = await request.GetAsDeltaGetResponseAsync();
+
+            while (response != null)
+            {
+                if (response.Value != null)
+                {
+                    foreach (var evt in response.Value)
+                    {
+                        // @removed가 있으면 삭제된 이벤트
+                        if (evt.AdditionalData?.ContainsKey("@removed") == true)
+                        {
+                            if (!string.IsNullOrEmpty(evt.Id))
+                            {
+                                deletedIds.Add(evt.Id);
+                            }
+                        }
+                        else
+                        {
+                            allEvents.Add(evt);
+                        }
+                    }
+                }
+
+                // 다음 페이지가 있으면 계속
+                if (response.OdataNextLink != null)
+                {
+                    request = new Microsoft.Graph.Me.CalendarView.Delta.DeltaRequestBuilder(response.OdataNextLink, client.RequestAdapter);
+                    response = await request.GetAsDeltaGetResponseAsync();
+                }
+                else
+                {
+                    // Delta 링크 저장
+                    result.DeltaLink = response.OdataDeltaLink;
+                    break;
+                }
+            }
+
+            result.Events = allEvents;
+            result.DeletedEventIds = deletedIds;
+            result.AddedCount = allEvents.Count;
+            result.DeletedCount = deletedIds.Count;
+
+            return result;
+        }
+        catch (Exception ex)
+        {
+            _logger.Warning(ex, "Delta 링크로 조회 실패, 전체 동기화로 폴백");
+            // Delta 링크가 만료된 경우 전체 동기화로 폴백
+            return await GetInitialEventsAsync(client, DateTime.Today.AddMonths(-3), DateTime.Today.AddMonths(6));
+        }
+    }
+
+    /// <summary>
+    /// 초기 전체 이벤트 조회 (CalendarView 사용)
+    /// </summary>
+    private async Task<CalendarDeltaResult> GetInitialEventsAsync(
+        GraphServiceClient client,
+        DateTime startDate,
+        DateTime endDate)
+    {
+        var result = new CalendarDeltaResult();
+        var allEvents = new List<Event>();
+
+        try
+        {
+            var startDateTime = startDate.ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ssZ");
+            var endDateTime = endDate.ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ssZ");
+
+            // Delta를 지원하는 CalendarView 사용
+            var response = await client.Me.CalendarView.Delta.GetAsDeltaGetResponseAsync(config =>
+            {
+                config.QueryParameters.StartDateTime = startDateTime;
+                config.QueryParameters.EndDateTime = endDateTime;
+                // Select를 명시적으로 지정
+                config.QueryParameters.Select = new[]
+                {
+                    "id", "subject", "body", "bodyPreview", "start", "end",
+                    "location", "organizer", "attendees", "isAllDay",
+                    "importance", "sensitivity", "showAs", "type",
+                    "recurrence", "iCalUId", "seriesMasterId",
+                    "isOnlineMeeting", "onlineMeeting", "onlineMeetingProvider",
+                    "reminderMinutesBeforeStart", "isReminderOn",
+                    "categories", "webLink", "createdDateTime", "lastModifiedDateTime",
+                    "responseStatus", "isCancelled"
+                };
+            });
+
+            while (response != null)
+            {
+                if (response.Value != null)
+                {
+                    allEvents.AddRange(response.Value);
+                }
+
+                // 다음 페이지가 있으면 계속
+                if (response.OdataNextLink != null)
+                {
+                    var request = new Microsoft.Graph.Me.CalendarView.Delta.DeltaRequestBuilder(
+                        response.OdataNextLink, client.RequestAdapter);
+                    response = await request.GetAsDeltaGetResponseAsync();
+                }
+                else
+                {
+                    // Delta 링크 저장
+                    result.DeltaLink = response.OdataDeltaLink;
+                    break;
+                }
+            }
+
+            result.Events = allEvents;
+            result.AddedCount = allEvents.Count;
+
+            _logger.Debug("초기 동기화 완료: {Count}개 이벤트 ({Start} ~ {End})",
+                allEvents.Count, startDate.ToShortDateString(), endDate.ToShortDateString());
+
+            return result;
+        }
+        catch (Exception ex)
+        {
+            _logger.Error(ex, "초기 이벤트 동기화 실패");
+            throw;
+        }
+    }
+
+    /// <summary>
+    /// 특정 캘린더의 이벤트 Delta 조회
+    /// </summary>
+    /// <param name="calendarId">캘린더 ID</param>
+    /// <param name="deltaLink">이전 Delta 링크</param>
+    /// <param name="startDate">동기화 시작 날짜</param>
+    /// <param name="endDate">동기화 종료 날짜</param>
+    /// <returns>변경된 이벤트 목록</returns>
+    public async Task<CalendarDeltaResult> GetCalendarEventsDeltaAsync(
+        string calendarId,
+        string? deltaLink = null,
+        DateTime? startDate = null,
+        DateTime? endDate = null)
+    {
+        var result = new CalendarDeltaResult();
+
+        try
+        {
+            var client = _authService.GetGraphClient();
+
+            var syncStart = startDate ?? DateTime.Today.AddMonths(-3);
+            var syncEnd = endDate ?? DateTime.Today.AddMonths(6);
+
+            if (!string.IsNullOrEmpty(deltaLink))
+            {
+                // 특정 캘린더의 Delta 조회
+                result = await GetCalendarDeltaWithLinkAsync(client, calendarId, deltaLink);
+            }
+            else
+            {
+                // 특정 캘린더의 초기 동기화
+                result = await GetCalendarInitialEventsAsync(client, calendarId, syncStart, syncEnd);
+            }
+
+            return result;
+        }
+        catch (Exception ex)
+        {
+            _logger.Error(ex, "캘린더 {CalendarId} Delta 조회 실패", calendarId);
+            throw;
+        }
+    }
+
+    /// <summary>
+    /// 특정 캘린더의 Delta 링크로 변경분 조회
+    /// </summary>
+    private async Task<CalendarDeltaResult> GetCalendarDeltaWithLinkAsync(
+        GraphServiceClient client,
+        string calendarId,
+        string deltaLink)
+    {
+        var result = new CalendarDeltaResult();
+        var allEvents = new List<Event>();
+        var deletedIds = new List<string>();
+
+        try
+        {
+            var request = new Microsoft.Graph.Me.Calendars.Item.CalendarView.Delta.DeltaRequestBuilder(
+                deltaLink, client.RequestAdapter);
+            var response = await request.GetAsDeltaGetResponseAsync();
+
+            while (response != null)
+            {
+                if (response.Value != null)
+                {
+                    foreach (var evt in response.Value)
+                    {
+                        if (evt.AdditionalData?.ContainsKey("@removed") == true)
+                        {
+                            if (!string.IsNullOrEmpty(evt.Id))
+                            {
+                                deletedIds.Add(evt.Id);
+                            }
+                        }
+                        else
+                        {
+                            allEvents.Add(evt);
+                        }
+                    }
+                }
+
+                if (response.OdataNextLink != null)
+                {
+                    request = new Microsoft.Graph.Me.Calendars.Item.CalendarView.Delta.DeltaRequestBuilder(
+                        response.OdataNextLink, client.RequestAdapter);
+                    response = await request.GetAsDeltaGetResponseAsync();
+                }
+                else
+                {
+                    result.DeltaLink = response.OdataDeltaLink;
+                    break;
+                }
+            }
+
+            result.Events = allEvents;
+            result.DeletedEventIds = deletedIds;
+            result.AddedCount = allEvents.Count;
+            result.DeletedCount = deletedIds.Count;
+
+            return result;
+        }
+        catch (Exception ex)
+        {
+            _logger.Warning(ex, "캘린더 {CalendarId} Delta 링크 조회 실패", calendarId);
+            return await GetCalendarInitialEventsAsync(client, calendarId,
+                DateTime.Today.AddMonths(-3), DateTime.Today.AddMonths(6));
+        }
+    }
+
+    /// <summary>
+    /// 특정 캘린더의 초기 이벤트 조회
+    /// </summary>
+    private async Task<CalendarDeltaResult> GetCalendarInitialEventsAsync(
+        GraphServiceClient client,
+        string calendarId,
+        DateTime startDate,
+        DateTime endDate)
+    {
+        var result = new CalendarDeltaResult();
+        var allEvents = new List<Event>();
+
+        try
+        {
+            var startDateTime = startDate.ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ssZ");
+            var endDateTime = endDate.ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ssZ");
+
+            var response = await client.Me.Calendars[calendarId].CalendarView.Delta.GetAsDeltaGetResponseAsync(config =>
+            {
+                config.QueryParameters.StartDateTime = startDateTime;
+                config.QueryParameters.EndDateTime = endDateTime;
+            });
+
+            while (response != null)
+            {
+                if (response.Value != null)
+                {
+                    allEvents.AddRange(response.Value);
+                }
+
+                if (response.OdataNextLink != null)
+                {
+                    var request = new Microsoft.Graph.Me.Calendars.Item.CalendarView.Delta.DeltaRequestBuilder(
+                        response.OdataNextLink, client.RequestAdapter);
+                    response = await request.GetAsDeltaGetResponseAsync();
+                }
+                else
+                {
+                    result.DeltaLink = response.OdataDeltaLink;
+                    break;
+                }
+            }
+
+            result.Events = allEvents;
+            result.AddedCount = allEvents.Count;
+
+            return result;
+        }
+        catch (Exception ex)
+        {
+            _logger.Error(ex, "캘린더 {CalendarId} 초기 동기화 실패", calendarId);
+            throw;
+        }
+    }
+
+    /// <summary>
+    /// 반복 일정의 인스턴스 조회
+    /// </summary>
+    /// <param name="seriesMasterId">반복 일정 마스터 ID</param>
+    /// <param name="startDate">시작 날짜</param>
+    /// <param name="endDate">종료 날짜</param>
+    /// <returns>인스턴스 목록</returns>
+    public async Task<List<Event>> GetRecurringEventInstancesAsync(
+        string seriesMasterId,
+        DateTime startDate,
+        DateTime endDate)
+    {
+        try
+        {
+            var client = _authService.GetGraphClient();
+
+            var startDateTime = startDate.ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ssZ");
+            var endDateTime = endDate.ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ssZ");
+
+            var response = await client.Me.Calendar.Events[seriesMasterId].Instances.GetAsync(config =>
+            {
+                config.QueryParameters.StartDateTime = startDateTime;
+                config.QueryParameters.EndDateTime = endDateTime;
+            });
+
+            var instances = response?.Value?.ToList() ?? new List<Event>();
+
+            _logger.Debug("반복 일정 {SeriesMasterId} 인스턴스 {Count}개 조회",
+                seriesMasterId, instances.Count);
+
+            return instances;
+        }
+        catch (Exception ex)
+        {
+            _logger.Error(ex, "반복 일정 인스턴스 조회 실패: {SeriesMasterId}", seriesMasterId);
+            return new List<Event>();
+        }
+    }
+
+    /// <summary>
+    /// Graph API Event를 CalendarEvent 모델로 변환
+    /// </summary>
+    /// <param name="graphEvent">Graph API Event</param>
+    /// <param name="accountEmail">계정 이메일</param>
+    /// <param name="calendarId">캘린더 ID (선택)</param>
+    /// <param name="calendarName">캘린더 이름 (선택)</param>
+    /// <returns>CalendarEvent 모델</returns>
+    public mailX.Models.CalendarEvent ConvertToCalendarEvent(
+        Event graphEvent,
+        string accountEmail,
+        string? calendarId = null,
+        string? calendarName = null)
+    {
+        var calendarEvent = new mailX.Models.CalendarEvent
+        {
+            GraphId = graphEvent.Id,
+            ICalUId = graphEvent.ICalUId,
+            SeriesMasterId = graphEvent.SeriesMasterId,
+            Subject = graphEvent.Subject ?? string.Empty,
+            Body = graphEvent.Body?.Content,
+            BodyContentType = graphEvent.Body?.ContentType?.ToString(),
+            Location = graphEvent.Location?.DisplayName,
+            StartDateTime = ParseDateTimeTimeZone(graphEvent.Start) ?? DateTime.UtcNow,
+            EndDateTime = ParseDateTimeTimeZone(graphEvent.End) ?? DateTime.UtcNow.AddHours(1),
+            StartTimeZone = graphEvent.Start?.TimeZone,
+            EndTimeZone = graphEvent.End?.TimeZone,
+            IsAllDay = graphEvent.IsAllDay ?? false,
+            IsRecurring = graphEvent.Recurrence != null,
+            ShowAs = graphEvent.ShowAs?.ToString(),
+            ResponseStatus = graphEvent.ResponseStatus?.Response?.ToString(),
+            Importance = graphEvent.Importance?.ToString(),
+            Sensitivity = graphEvent.Sensitivity?.ToString(),
+            IsOnlineMeeting = graphEvent.IsOnlineMeeting ?? false,
+            OnlineMeetingUrl = graphEvent.OnlineMeeting?.JoinUrl,
+            OnlineMeetingProvider = graphEvent.OnlineMeetingProvider?.ToString(),
+            ReminderMinutesBeforeStart = graphEvent.ReminderMinutesBeforeStart ?? 15,
+            IsReminderOn = graphEvent.IsReminderOn ?? true,
+            OrganizerEmail = graphEvent.Organizer?.EmailAddress?.Address,
+            OrganizerName = graphEvent.Organizer?.EmailAddress?.Name,
+            CalendarId = calendarId,
+            CalendarName = calendarName,
+            AccountEmail = accountEmail,
+            WebLink = graphEvent.WebLink,
+            LastModifiedDateTime = graphEvent.LastModifiedDateTime?.UtcDateTime,
+            CreatedDateTime = graphEvent.CreatedDateTime?.UtcDateTime,
+            IsCancelled = graphEvent.IsCancelled ?? false,
+            EventType = graphEvent.Type?.ToString(),
+            SyncedAt = DateTime.UtcNow
+        };
+
+        // 반복 패턴 JSON 변환
+        if (graphEvent.Recurrence != null)
+        {
+            calendarEvent.RecurrencePattern = System.Text.Json.JsonSerializer.Serialize(
+                graphEvent.Recurrence.Pattern);
+            calendarEvent.RecurrenceRange = System.Text.Json.JsonSerializer.Serialize(
+                graphEvent.Recurrence.Range);
+        }
+
+        // 참석자 JSON 변환
+        if (graphEvent.Attendees?.Any() == true)
+        {
+            var attendeesList = graphEvent.Attendees.Select(a => new
+            {
+                email = a.EmailAddress?.Address,
+                name = a.EmailAddress?.Name,
+                type = a.Type?.ToString(),
+                status = a.Status?.Response?.ToString()
+            });
+            calendarEvent.Attendees = System.Text.Json.JsonSerializer.Serialize(attendeesList);
+        }
+
+        // 카테고리 JSON 변환
+        if (graphEvent.Categories?.Any() == true)
+        {
+            calendarEvent.Categories = System.Text.Json.JsonSerializer.Serialize(graphEvent.Categories);
+        }
+
+        return calendarEvent;
+    }
+
+    #endregion
 }
 
 /// <summary>
@@ -660,4 +1229,30 @@ public class EventCreateRequest
     public int ReminderMinutesBefore { get; set; } = 15;
     public string? RecurrencePattern { get; set; } // None, Daily, Weekly, Monthly, Yearly
     public List<string>? Categories { get; set; }
+}
+
+/// <summary>
+/// Delta Query 결과
+/// </summary>
+public class CalendarDeltaResult
+{
+    public List<Event> Events { get; set; } = new();
+    public List<string> DeletedEventIds { get; set; } = new();
+    public string? DeltaLink { get; set; }
+    public int AddedCount { get; set; }
+    public int UpdatedCount { get; set; }
+    public int DeletedCount { get; set; }
+}
+
+/// <summary>
+/// 캘린더 정보 DTO
+/// </summary>
+public class CalendarInfo
+{
+    public string Id { get; set; } = string.Empty;
+    public string Name { get; set; } = string.Empty;
+    public string? Color { get; set; }
+    public bool IsDefaultCalendar { get; set; }
+    public bool CanEdit { get; set; }
+    public string? Owner { get; set; }
 }

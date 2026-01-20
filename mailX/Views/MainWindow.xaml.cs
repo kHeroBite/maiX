@@ -8,11 +8,13 @@ using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Media;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Web.WebView2.Core;
 using Wpf.Ui;
 using Wpf.Ui.Controls;
 using mailX.Models;
 using mailX.Models.Settings;
+using mailX.Services.Search;
 using mailX.Utils;
 using mailX.ViewModels;
 using mailX.Views.Dialogs;
@@ -153,6 +155,10 @@ public partial class MainWindow : FluentWindow
         _syncService.MailSyncCompleted += OnMailSyncCompletedFromWindow;
         Log4.Info("[MainWindow] MailSyncCompleted 이벤트 구독 완료");
 
+        // CalendarEventsSynced 이벤트 구독 (캘린더 동기화 완료 시 UI 갱신)
+        _syncService.CalendarEventsSynced += OnCalendarEventsSyncedFromWindow;
+        Log4.Info("[MainWindow] CalendarEventsSynced 이벤트 구독 완료");
+
         Loaded += MainWindow_Loaded;
         Closed += MainWindow_Closed;
         SizeChanged += MainWindow_SizeChanged;
@@ -169,6 +175,35 @@ public partial class MainWindow : FluentWindow
         {
             Log4.Info("[MainWindow] Dispatcher에서 읽음 상태 갱신 호출");
             await _viewModel.RefreshEmailReadStatusAsync();
+        });
+    }
+
+    /// <summary>
+    /// 캘린더 동기화 완료 시 UI 갱신 (MainWindow에서 직접 처리)
+    /// </summary>
+    private void OnCalendarEventsSyncedFromWindow(int added, int updated, int deleted)
+    {
+        Log4.Info($"[MainWindow] OnCalendarEventsSyncedFromWindow 이벤트 수신: 추가 {added}, 수정 {updated}, 삭제 {deleted}");
+
+        // 변경이 없으면 UI 새로고침 생략
+        if (added == 0 && updated == 0 && deleted == 0)
+        {
+            Log4.Debug("[MainWindow] 캘린더 변경 없음 - UI 새로고침 생략");
+            return;
+        }
+
+        Dispatcher.InvokeAsync(async () =>
+        {
+            // 캘린더 뷰가 표시 중일 때만 새로고침
+            if (CalendarViewBorder?.Visibility == Visibility.Visible)
+            {
+                Log4.Info("[MainWindow] 캘린더 동기화 완료 - DB에서 뷰 새로고침");
+                await LoadMonthEventsFromDbAsync(_currentCalendarDate);
+                UpdateCalendarDisplay();
+            }
+
+            // CalendarViewModel이 있으면 새로고침 (추후 사용을 위해 유지)
+            _viewModel.CalendarViewModel?.OnCalendarEventsSynced(added, updated, deleted);
         });
     }
 
@@ -1010,6 +1045,7 @@ public partial class MainWindow : FluentWindow
 
         // 이벤트 구독 해제
         _syncService.MailSyncCompleted -= OnMailSyncCompletedFromWindow;
+        _syncService.CalendarEventsSynced -= OnCalendarEventsSyncedFromWindow;
 
         // OnExplicitShutdown 모드에서는 명시적으로 종료 호출 필요
         Application.Current.Shutdown();
@@ -1810,6 +1846,14 @@ public partial class MainWindow : FluentWindow
             Log4.Debug($"전체 동기화 주기 로드: {prefs.FullSyncIntervalSeconds}초");
         }
 
+        // 캘린더 동기화 주기 로드
+        if (prefs.CalendarSyncIntervalSeconds > 0)
+        {
+            _viewModel.SetCalendarSyncInterval(prefs.CalendarSyncIntervalSeconds);
+            UpdateCalendarSyncIntervalCurrentDisplay(prefs.CalendarSyncIntervalSeconds);
+            Log4.Debug($"캘린더 동기화 주기 로드: {prefs.CalendarSyncIntervalSeconds}초");
+        }
+
         // 메일 동기화 일시정지 상태 로드
         if (prefs.IsMailSyncPaused)
         {
@@ -2133,6 +2177,55 @@ public partial class MainWindow : FluentWindow
 
         var menuItems = new System.Windows.Controls.MenuItem?[] { MenuFullSyncInterval1m, MenuFullSyncInterval5m, MenuFullSyncInterval10m, MenuFullSyncInterval30m, MenuFullSyncInterval1h };
         var intervalSeconds = new[] { 60, 300, 600, 1800, 3600 };
+
+        for (int i = 0; i < menuItems.Length; i++)
+        {
+            if (menuItems[i] != null)
+            {
+                bool isSelected = seconds == intervalSeconds[i];
+                menuItems[i]!.ClearValue(System.Windows.Controls.Control.ForegroundProperty);
+                if (isSelected)
+                    menuItems[i]!.Foreground = highlightColor;
+            }
+        }
+    }
+
+    // 캘린더 동기화 주기 설정
+    private void MenuCalendarSyncInterval_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is System.Windows.Controls.MenuItem menuItem && menuItem.Tag is string tagStr && int.TryParse(tagStr, out int seconds))
+        {
+            SetCalendarSyncInterval(seconds);
+        }
+    }
+
+    private void SetCalendarSyncInterval(int seconds)
+    {
+        _viewModel.SetCalendarSyncInterval(seconds);
+        var displayText = GetIntervalDisplayText(seconds);
+        Log4.Info($"캘린더 동기화 주기 설정: {displayText}");
+        _viewModel.StatusMessage = $"캘린더 동기화 주기: {displayText}";
+        UpdateCalendarSyncIntervalCurrentDisplay(seconds);
+
+        // 설정 저장
+        App.Settings.UserPreferences.CalendarSyncIntervalSeconds = seconds;
+        App.Settings.SaveUserPreferences();
+    }
+
+    private void UpdateCalendarSyncIntervalCurrentDisplay(int? seconds = null)
+    {
+        seconds ??= _viewModel.CalendarSyncIntervalSeconds;
+        if (MenuCalendarSyncIntervalCurrent != null)
+        {
+            MenuCalendarSyncIntervalCurrent.Header = $"현재: {GetIntervalDisplayText(seconds.Value)}";
+        }
+
+        // 캘린더 동기화 주기 메뉴 하이라이팅
+        var highlightColor = new System.Windows.Media.SolidColorBrush(
+            (System.Windows.Media.Color)System.Windows.Media.ColorConverter.ConvertFromString("#2196F3"));
+
+        var menuItems = new System.Windows.Controls.MenuItem?[] { MenuCalendarSyncInterval1s, MenuCalendarSyncInterval5s, MenuCalendarSyncInterval10s, MenuCalendarSyncInterval30s, MenuCalendarSyncInterval1m, MenuCalendarSyncInterval5m, MenuCalendarSyncInterval10m };
+        var intervalSeconds = new[] { 1, 5, 10, 30, 60, 300, 600 };
 
         for (int i = 0; i < menuItems.Length; i++)
         {
@@ -3628,6 +3721,20 @@ public partial class MainWindow : FluentWindow
     }
 
     /// <summary>
+    /// 타이틀바 검색창 텍스트 변경 - 실시간 연락처 검색
+    /// </summary>
+    private async void TitleBarSearchBox_TextChanged(object sender, TextChangedEventArgs e)
+    {
+        var searchText = TitleBarSearchBox.Text?.Trim() ?? "";
+
+        // "모두" 또는 "사람" 탭일 때만 연락처 검색
+        if (_currentSearchTab == "모두" || _currentSearchTab == "사람")
+        {
+            await SearchContactsAsync(searchText);
+        }
+    }
+
+    /// <summary>
     /// 검색창 포커스 시 자동완성 팝업 열기
     /// </summary>
     private void TitleBarSearchBox_GotFocus(object sender, RoutedEventArgs e)
@@ -3672,10 +3779,15 @@ public partial class MainWindow : FluentWindow
         SearchAutocompletePopup.IsOpen = false;
     }
 
+    // 연락처 검색용 필드
+    private ContactSearchService? _contactSearchService;
+    private CancellationTokenSource? _contactSearchCts;
+    private string _currentSearchTab = "모두";
+
     /// <summary>
     /// 검색 탭 클릭 (모두/메일/사람)
     /// </summary>
-    private void SearchTab_Click(object sender, RoutedEventArgs e)
+    private async void SearchTab_Click(object sender, RoutedEventArgs e)
     {
         if (sender is not Wpf.Ui.Controls.Button clickedTab) return;
 
@@ -3687,8 +3799,144 @@ public partial class MainWindow : FluentWindow
         // 클릭한 탭을 Primary로 변경
         clickedTab.Appearance = Wpf.Ui.Controls.ControlAppearance.Primary;
 
-        // TODO: 탭에 따라 검색 결과 필터링
-        Log4.Info($"검색 탭 변경: {clickedTab.Content}");
+        _currentSearchTab = clickedTab.Content?.ToString() ?? "모두";
+        Log4.Info($"검색 탭 변경: {_currentSearchTab}");
+
+        // 탭에 따라 검색 결과 필터링
+        var searchText = TitleBarSearchBox.Text?.Trim() ?? "";
+
+        if (_currentSearchTab == "사람")
+        {
+            // 연락처만 표시
+            RecentSearchItems.Visibility = Visibility.Collapsed;
+            await SearchContactsAsync(searchText);
+        }
+        else
+        {
+            // 최근 검색 표시
+            RecentSearchItems.Visibility = Visibility.Visible;
+
+            if (_currentSearchTab == "모두" && !string.IsNullOrEmpty(searchText))
+            {
+                // 모두 탭: 연락처도 함께 표시
+                await SearchContactsAsync(searchText);
+            }
+            else
+            {
+                // 메일 탭: 연락처 숨김
+                ContactSuggestionsHeader.Visibility = Visibility.Collapsed;
+                ContactSuggestionItems.ItemsSource = null;
+            }
+        }
+    }
+
+    /// <summary>
+    /// 연락처 검색
+    /// </summary>
+    private async Task SearchContactsAsync(string query)
+    {
+        // 2자 미만이면 연락처 숨김
+        if (string.IsNullOrEmpty(query) || query.Length < 2)
+        {
+            ContactSuggestionsHeader.Visibility = Visibility.Collapsed;
+            ContactSuggestionItems.ItemsSource = null;
+            return;
+        }
+
+        try
+        {
+            // ContactSearchService 가져오기
+            if (_contactSearchService == null)
+            {
+                _contactSearchService = ((App)Application.Current).GetService<ContactSearchService>();
+            }
+
+            if (_contactSearchService == null)
+            {
+                Log4.Warn("ContactSearchService를 사용할 수 없습니다.");
+                return;
+            }
+
+            // 이전 검색 취소
+            _contactSearchCts?.Cancel();
+            _contactSearchCts = new CancellationTokenSource();
+
+            // 디바운싱 (300ms)
+            await Task.Delay(300, _contactSearchCts.Token);
+
+            // 검색 실행
+            var contacts = await _contactSearchService.SearchContactsAsync(query, _contactSearchCts.Token);
+
+            if (_contactSearchCts.Token.IsCancellationRequested)
+                return;
+
+            // 결과 표시
+            if (contacts.Count > 0)
+            {
+                ContactSuggestionsHeader.Visibility = Visibility.Visible;
+                ContactSuggestionItems.ItemsSource = contacts;
+            }
+            else
+            {
+                ContactSuggestionsHeader.Visibility = Visibility.Collapsed;
+                ContactSuggestionItems.ItemsSource = null;
+            }
+        }
+        catch (TaskCanceledException)
+        {
+            // 취소됨 - 정상
+        }
+        catch (Exception ex)
+        {
+            Log4.Warn($"연락처 검색 실패: {ex.Message}");
+        }
+    }
+
+    /// <summary>
+    /// 연락처 제안 클릭 - 해당 연락처로 메일 작성
+    /// </summary>
+    private void ContactSuggestionItem_Click(object sender, MouseButtonEventArgs e)
+    {
+        if (sender is not Border border) return;
+        if (border.Tag is not ContactSuggestion contact) return;
+
+        // 검색 팝업 닫기
+        SearchAutocompletePopup.IsOpen = false;
+        TitleBarSearchBox.Text = "";
+
+        // 해당 연락처로 메일 작성
+        OpenComposeWindowWithRecipient(contact);
+    }
+
+    /// <summary>
+    /// 연락처를 받는 사람으로 메일 작성 창 열기
+    /// </summary>
+    private void OpenComposeWindowWithRecipient(ContactSuggestion contact)
+    {
+        try
+        {
+            var graphMailService = ((App)Application.Current).GetService<Services.Graph.GraphMailService>();
+            if (graphMailService == null)
+            {
+                Log4.Error("GraphMailService를 사용할 수 없습니다.");
+                return;
+            }
+
+            var composeVm = new ComposeViewModel(graphMailService, _syncService);
+            composeVm.To = contact.FormattedAddress;
+
+            var composeWindow = new ComposeWindow(composeVm)
+            {
+                Owner = this
+            };
+
+            Log4.Info($"연락처로 메일 작성: {contact.Email}");
+            composeWindow.Show();
+        }
+        catch (Exception ex)
+        {
+            Log4.Error($"메일 작성 창 열기 실패: {ex.Message}");
+        }
     }
 
     /// <summary>
@@ -3922,6 +4170,145 @@ public partial class MainWindow : FluentWindow
     }
 
     /// <summary>
+    /// 월별 일정 로드 (DB에서)
+    /// BackgroundSyncService에서 동기화된 캘린더 이벤트를 DB에서 조회
+    /// </summary>
+    private async Task LoadMonthEventsFromDbAsync(DateTime month)
+    {
+        try
+        {
+            var firstDay = new DateTime(month.Year, month.Month, 1);
+            var lastDay = firstDay.AddMonths(1).AddDays(-1);
+
+            Log4.Info($"[DB] 캘린더 일정 조회 시작: {firstDay:yyyy-MM-dd} ~ {lastDay:yyyy-MM-dd}");
+
+            var app = (App)Application.Current;
+            using var scope = app.ServiceProvider.CreateScope();
+            var dbContext = scope.ServiceProvider.GetRequiredService<Data.MailXDbContext>();
+
+            // DB에서 해당 월의 캘린더 이벤트 조회 (삭제되지 않은 것만)
+            var dbEvents = await dbContext.CalendarEvents
+                .Where(e => !e.IsDeleted && !e.IsCancelled)
+                .Where(e => e.StartDateTime.Date <= lastDay.Date && e.EndDateTime.Date >= firstDay.Date)
+                .OrderBy(e => e.StartDateTime)
+                .ThenBy(e => e.Subject)
+                .ThenBy(e => e.Id)
+                .ToListAsync();
+
+            // CalendarEvent → Microsoft.Graph.Models.Event 변환
+            _currentMonthEvents = dbEvents.Select(ConvertToGraphEvent).ToList();
+            _viewModel.CurrentMonthEventCount = _currentMonthEvents.Count;
+
+            Log4.Info($"[DB] 캘린더 일정 로드 완료: {_currentMonthEvents.Count}건 ({month:yyyy-MM})");
+        }
+        catch (Exception ex)
+        {
+            Log4.Error($"[DB] 월별 일정 로드 실패: {ex.Message}\n{ex.StackTrace}");
+            _currentMonthEvents = new List<Microsoft.Graph.Models.Event>();
+        }
+    }
+
+    /// <summary>
+    /// CalendarEvent (DB 모델) → Microsoft.Graph.Models.Event 변환
+    /// 기존 UI 코드와의 호환성을 위해 Graph 모델로 변환
+    /// </summary>
+    private static Microsoft.Graph.Models.Event ConvertToGraphEvent(CalendarEvent dbEvent)
+    {
+        var graphEvent = new Microsoft.Graph.Models.Event
+        {
+            Id = dbEvent.GraphId,
+            ICalUId = dbEvent.ICalUId,
+            Subject = dbEvent.Subject,
+            Start = new Microsoft.Graph.Models.DateTimeTimeZone
+            {
+                DateTime = dbEvent.StartDateTime.ToString("yyyy-MM-ddTHH:mm:ss"),
+                TimeZone = dbEvent.StartTimeZone ?? "Asia/Seoul"
+            },
+            End = new Microsoft.Graph.Models.DateTimeTimeZone
+            {
+                DateTime = dbEvent.EndDateTime.ToString("yyyy-MM-ddTHH:mm:ss"),
+                TimeZone = dbEvent.EndTimeZone ?? "Asia/Seoul"
+            },
+            IsAllDay = dbEvent.IsAllDay,
+            Location = new Microsoft.Graph.Models.Location
+            {
+                DisplayName = dbEvent.Location
+            },
+            IsOnlineMeeting = dbEvent.IsOnlineMeeting,
+            OnlineMeetingUrl = dbEvent.OnlineMeetingUrl,
+            IsReminderOn = dbEvent.IsReminderOn,
+            ReminderMinutesBeforeStart = dbEvent.ReminderMinutesBeforeStart,
+            WebLink = dbEvent.WebLink
+        };
+
+        // 본문 설정
+        if (!string.IsNullOrEmpty(dbEvent.Body))
+        {
+            graphEvent.Body = new Microsoft.Graph.Models.ItemBody
+            {
+                Content = dbEvent.Body,
+                ContentType = dbEvent.BodyContentType == "html"
+                    ? Microsoft.Graph.Models.BodyType.Html
+                    : Microsoft.Graph.Models.BodyType.Text
+            };
+        }
+
+        // 주최자 설정
+        if (!string.IsNullOrEmpty(dbEvent.OrganizerEmail))
+        {
+            graphEvent.Organizer = new Microsoft.Graph.Models.Recipient
+            {
+                EmailAddress = new Microsoft.Graph.Models.EmailAddress
+                {
+                    Address = dbEvent.OrganizerEmail,
+                    Name = dbEvent.OrganizerName
+                }
+            };
+        }
+
+        // 중요도 설정
+        if (!string.IsNullOrEmpty(dbEvent.Importance))
+        {
+            graphEvent.Importance = dbEvent.Importance.ToLower() switch
+            {
+                "low" => Microsoft.Graph.Models.Importance.Low,
+                "high" => Microsoft.Graph.Models.Importance.High,
+                _ => Microsoft.Graph.Models.Importance.Normal
+            };
+        }
+
+        // 상태 표시 설정
+        if (!string.IsNullOrEmpty(dbEvent.ShowAs))
+        {
+            graphEvent.ShowAs = dbEvent.ShowAs.ToLower() switch
+            {
+                "free" => Microsoft.Graph.Models.FreeBusyStatus.Free,
+                "tentative" => Microsoft.Graph.Models.FreeBusyStatus.Tentative,
+                "busy" => Microsoft.Graph.Models.FreeBusyStatus.Busy,
+                "oof" => Microsoft.Graph.Models.FreeBusyStatus.Oof,
+                "workingelsewhere" => Microsoft.Graph.Models.FreeBusyStatus.WorkingElsewhere,
+                _ => Microsoft.Graph.Models.FreeBusyStatus.Unknown
+            };
+        }
+
+        // 카테고리 설정
+        if (!string.IsNullOrEmpty(dbEvent.Categories))
+        {
+            try
+            {
+                var categories = System.Text.Json.JsonSerializer.Deserialize<List<string>>(dbEvent.Categories);
+                if (categories != null)
+                {
+                    graphEvent.Categories = categories;
+                }
+            }
+            catch { /* JSON 파싱 실패 무시 */ }
+        }
+
+        return graphEvent;
+    }
+
+    /// <summary>
     /// 캘린더 표시 업데이트
     /// </summary>
     private void UpdateCalendarDisplay()
@@ -3946,6 +4333,9 @@ public partial class MainWindow : FluentWindow
         var dayEvents = _currentMonthEvents?
             .Where(e => e.Start?.DateTime != null &&
                         DateTime.Parse(e.Start.DateTime).Date == targetDate.Date)
+            .OrderBy(e => e.Start?.DateTime)
+            .ThenBy(e => e.Subject)
+            .ThenBy(e => e.Id)
             .ToList() ?? new List<Microsoft.Graph.Models.Event>();
 
         UpdateSelectedDateEventsPanel(targetDate, dayEvents);
@@ -3998,6 +4388,9 @@ public partial class MainWindow : FluentWindow
         var dayEvents = _currentMonthEvents?
             .Where(e => e.Start?.DateTime != null &&
                         DateTime.Parse(e.Start.DateTime).Date == date.Date)
+            .OrderBy(e => e.Start?.DateTime)
+            .ThenBy(e => e.Subject)
+            .ThenBy(e => e.Id)
             .ToList() ?? new List<Microsoft.Graph.Models.Event>();
 
         var cell = new Border
@@ -4137,8 +4530,8 @@ public partial class MainWindow : FluentWindow
         if (NoEventsText != null)
             NoEventsText.Visibility = events.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
 
-        // 일정 아이템 추가
-        foreach (var evt in events.OrderBy(e => e.Start?.DateTime))
+        // 일정 아이템 추가 (시작시간 → 제목 → ID 순으로 정렬)
+        foreach (var evt in events.OrderBy(e => e.Start?.DateTime).ThenBy(e => e.Subject).ThenBy(e => e.Id))
         {
             var capturedEvent = evt;
             var eventCard = CreateEventCard(evt);
@@ -4147,7 +4540,7 @@ public partial class MainWindow : FluentWindow
                 e.Handled = true;
                 await OpenEventEditDialogAsync(capturedEvent, null);
             };
-            SelectedDateEventsPanel.Children.Insert(0, eventCard);
+            SelectedDateEventsPanel.Children.Add(eventCard);
         }
     }
 
@@ -4262,8 +4655,8 @@ public partial class MainWindow : FluentWindow
             if (CalDetailNoEventsText != null)
                 CalDetailNoEventsText.Visibility = events.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
 
-            // 일정 카드 추가
-            foreach (var evt in events.OrderBy(e => e.Start?.DateTime))
+            // 일정 카드 추가 (시작시간 → 제목 → ID 순으로 정렬)
+            foreach (var evt in events.OrderBy(e => e.Start?.DateTime).ThenBy(e => e.Subject).ThenBy(e => e.Id))
             {
                 var capturedEvent = evt;
                 var eventCard = CreateDetailEventCard(evt);
@@ -4272,7 +4665,7 @@ public partial class MainWindow : FluentWindow
                     e.Handled = true;
                     await OpenEventEditDialogAsync(capturedEvent, null);
                 };
-                CalDetailEventsList.Children.Insert(CalDetailEventsList.Children.Count - 1, eventCard);
+                CalDetailEventsList.Children.Add(eventCard);
             }
         }
 

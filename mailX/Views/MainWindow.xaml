@@ -229,6 +229,28 @@
                                 <MenuItem x:Name="MenuFullSyncInterval30m" Header="30분" Click="MenuFullSyncInterval_Click" Tag="1800"/>
                                 <MenuItem x:Name="MenuFullSyncInterval1h" Header="1시간" Click="MenuFullSyncInterval_Click" Tag="3600"/>
                             </MenuItem>
+                            <!-- 캘린더 동기화 주기 -->
+                            <MenuItem x:Name="MenuCalendarSyncInterval">
+                                <MenuItem.Header>
+                                    <Grid MinWidth="130">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="20"/>
+                                            <ColumnDefinition Width="*"/>
+                                        </Grid.ColumnDefinitions>
+                                        <ui:SymbolIcon Grid.Column="0" Symbol="CalendarLtr24" FontSize="12" HorizontalAlignment="Left"/>
+                                        <TextBlock Grid.Column="1" Text="캘린더 동기화 주기" VerticalAlignment="Center"/>
+                                    </Grid>
+                                </MenuItem.Header>
+                                <MenuItem x:Name="MenuCalendarSyncIntervalCurrent" Header="현재: 1분" IsEnabled="False" FontStyle="Italic"/>
+                                <Separator/>
+                                <MenuItem x:Name="MenuCalendarSyncInterval1s" Header="1초" Click="MenuCalendarSyncInterval_Click" Tag="1"/>
+                                <MenuItem x:Name="MenuCalendarSyncInterval5s" Header="5초" Click="MenuCalendarSyncInterval_Click" Tag="5"/>
+                                <MenuItem x:Name="MenuCalendarSyncInterval10s" Header="10초" Click="MenuCalendarSyncInterval_Click" Tag="10"/>
+                                <MenuItem x:Name="MenuCalendarSyncInterval30s" Header="30초" Click="MenuCalendarSyncInterval_Click" Tag="30"/>
+                                <MenuItem x:Name="MenuCalendarSyncInterval1m" Header="1분" Click="MenuCalendarSyncInterval_Click" Tag="60"/>
+                                <MenuItem x:Name="MenuCalendarSyncInterval5m" Header="5분" Click="MenuCalendarSyncInterval_Click" Tag="300"/>
+                                <MenuItem x:Name="MenuCalendarSyncInterval10m" Header="10분" Click="MenuCalendarSyncInterval_Click" Tag="600"/>
+                            </MenuItem>
                             <MenuItem Click="MenuForceResync_Click">
                                 <MenuItem.Header>
                                     <Grid>
@@ -465,6 +487,7 @@
                                     FontSize="12"
                                     Margin="0,0,4,0"
                                     KeyDown="TitleBarSearchBox_KeyDown"
+                                    TextChanged="TitleBarSearchBox_TextChanged"
                                     GotFocus="TitleBarSearchBox_GotFocus"
                                     LostFocus="TitleBarSearchBox_LostFocus"/>
 
@@ -979,19 +1002,67 @@
                                     <DataTemplate>
                                         <Border Background="Transparent"
                                                 Padding="8,6"
-                                                Cursor="Hand">
-                                            <StackPanel Orientation="Horizontal">
-                                                <Ellipse Width="28" Height="28"
-                                                         Fill="{DynamicResource SystemAccentColorSecondaryBrush}"
-                                                         Margin="0,0,8,0"/>
-                                                <StackPanel>
-                                                    <TextBlock Text="{Binding Name}"
-                                                               FontWeight="Medium"/>
-                                                    <TextBlock Text="{Binding Email}"
-                                                               FontSize="11"
-                                                               Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
+                                                Cursor="Hand"
+                                                CornerRadius="4"
+                                                MouseLeftButtonUp="ContactSuggestionItem_Click"
+                                                Tag="{Binding}">
+                                            <Border.Style>
+                                                <Style TargetType="Border">
+                                                    <Style.Triggers>
+                                                        <Trigger Property="IsMouseOver" Value="True">
+                                                            <Setter Property="Background" Value="{DynamicResource ControlFillColorSecondaryBrush}"/>
+                                                        </Trigger>
+                                                    </Style.Triggers>
+                                                </Style>
+                                            </Border.Style>
+                                            <Grid>
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="Auto"/>
+                                                    <ColumnDefinition Width="*"/>
+                                                    <ColumnDefinition Width="Auto"/>
+                                                </Grid.ColumnDefinitions>
+
+                                                <!-- 이니셜 아바타 -->
+                                                <Border Grid.Column="0"
+                                                        Width="32" Height="32"
+                                                        CornerRadius="16"
+                                                        Background="{DynamicResource SystemAccentColorSecondaryBrush}"
+                                                        Margin="0,0,10,0">
+                                                    <TextBlock Text="{Binding Initials}"
+                                                               FontSize="12"
+                                                               FontWeight="SemiBold"
+                                                               Foreground="White"
+                                                               HorizontalAlignment="Center"
+                                                               VerticalAlignment="Center"/>
+                                                </Border>
+
+                                                <!-- 이름 및 이메일 -->
+                                                <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                                                    <TextBlock Text="{Binding DisplayName}"
+                                                               FontWeight="Medium"
+                                                               Foreground="{DynamicResource TextFillColorPrimaryBrush}"
+                                                               TextTrimming="CharacterEllipsis"/>
+                                                    <TextBlock FontSize="11"
+                                                               Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                                                               TextTrimming="CharacterEllipsis">
+                                                        <Run Text="{Binding Email, Mode=OneWay}"/>
+                                                        <Run Text="{Binding PositionString, Mode=OneWay, StringFormat=' • {0}'}"
+                                                             Foreground="{DynamicResource TextFillColorTertiaryBrush}"/>
+                                                    </TextBlock>
                                                 </StackPanel>
-                                            </StackPanel>
+
+                                                <!-- 소스 라벨 -->
+                                                <Border Grid.Column="2"
+                                                        Background="{DynamicResource ControlFillColorTertiaryBrush}"
+                                                        CornerRadius="4"
+                                                        Padding="6,2"
+                                                        VerticalAlignment="Center"
+                                                        Margin="8,0,0,0">
+                                                    <TextBlock Text="{Binding SourceLabel}"
+                                                               FontSize="10"
+                                                               Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
+                                                </Border>
+                                            </Grid>
                                         </Border>
                                     </DataTemplate>
                                 </ItemsControl.ItemTemplate>

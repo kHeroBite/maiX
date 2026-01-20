@@ -108,4 +108,10 @@ public class UserPreferencesSettings
     /// </summary>
     [XmlElement("FullAnalysisIntervalSeconds")]
     public int FullAnalysisIntervalSeconds { get; set; } = 300;
+
+    /// <summary>
+    /// 캘린더 동기화 주기 (초 단위) - 기본 1분(60초)
+    /// </summary>
+    [XmlElement("CalendarSyncIntervalSeconds")]
+    public int CalendarSyncIntervalSeconds { get; set; } = 60;
 }

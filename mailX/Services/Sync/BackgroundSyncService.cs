@@ -43,19 +43,24 @@ public class BackgroundSyncService : BackgroundService
     // 즐겨찾기/전체 동기화 분리 설정
     private int _favoriteSyncIntervalSeconds = 30;   // 기본값: 30초
     private int _fullSyncIntervalSeconds = 300;      // 기본값: 5분 (300초)
+    private int _calendarSyncIntervalSeconds = 60;   // 기본값: 1분 (60초)
     private CancellationTokenSource? _favoriteIntervalChangeCts;  // 즐겨찾기 주기 변경용
     private CancellationTokenSource? _fullIntervalChangeCts;      // 전체 주기 변경용
+    private CancellationTokenSource? _calendarIntervalChangeCts;  // 캘린더 주기 변경용
 
     // 상태
     private DateTime _lastSyncTime = DateTime.MinValue;
     private DateTime _lastFavoriteSyncTime = DateTime.MinValue;
     private DateTime _lastFullSyncTime = DateTime.MinValue;
+    private DateTime _lastCalendarSyncTime = DateTime.MinValue;
     private bool _isSyncing;
     private bool _isFavoriteSyncing;
+    private bool _isCalendarSyncing;
     private bool _isPaused;
     private int _syncCount;
     private int _favoriteSyncCount;
     private int _fullSyncCount;
+    private int _calendarSyncCount;
     private int _errorCount;
 
     /// <summary>
@@ -79,6 +84,11 @@ public class BackgroundSyncService : BackgroundService
     public event Action<int>? FullSyncIntervalChanged;
 
     /// <summary>
+    /// 캘린더 동기화 주기 변경 이벤트 (초 단위)
+    /// </summary>
+    public event Action<int>? CalendarSyncIntervalChanged;
+
+    /// <summary>
     /// 현재 동기화 주기 (초)
     /// </summary>
     public int SyncIntervalSeconds => _syncIntervalSeconds;
@@ -92,6 +102,11 @@ public class BackgroundSyncService : BackgroundService
     /// 전체 동기화 주기 (초)
     /// </summary>
     public int FullSyncIntervalSeconds => _fullSyncIntervalSeconds;
+
+    /// <summary>
+    /// 캘린더 동기화 주기 (초)
+    /// </summary>
+    public int CalendarSyncIntervalSeconds => _calendarSyncIntervalSeconds;
 
     /// <summary>
     /// 폴더 동기화 완료 이벤트
@@ -133,6 +148,11 @@ public class BackgroundSyncService : BackgroundService
     /// </summary>
     public event Action<int>? CalendarSynced;
 
+    /// <summary>
+    /// 캘린더 이벤트 동기화 완료 이벤트 (추가, 수정, 삭제 개수 전달)
+    /// </summary>
+    public event Action<int, int, int>? CalendarEventsSynced;
+
     public BackgroundSyncService(IServiceProvider serviceProvider)
     {
         _serviceProvider = serviceProvider ?? throw new ArgumentNullException(nameof(serviceProvider));
@@ -166,9 +186,9 @@ public class BackgroundSyncService : BackgroundService
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
-        Log4.Info($"[BackgroundSyncService] 백그라운드 동기화 서비스 시작 - 즐겨찾기: {_favoriteSyncIntervalSeconds}초, 전체: {_fullSyncIntervalSeconds}초");
-        _logger.Information("백그라운드 동기화 서비스 시작 - 즐겨찾기: {Favorite}초, 전체: {Full}초",
-            _favoriteSyncIntervalSeconds, _fullSyncIntervalSeconds);
+        Log4.Info($"[BackgroundSyncService] 백그라운드 동기화 서비스 시작 - 즐겨찾기: {_favoriteSyncIntervalSeconds}초, 전체: {_fullSyncIntervalSeconds}초, 캘린더: {_calendarSyncIntervalSeconds}초");
+        _logger.Information("백그라운드 동기화 서비스 시작 - 즐겨찾기: {Favorite}초, 전체: {Full}초, 캘린더: {Calendar}초",
+            _favoriteSyncIntervalSeconds, _fullSyncIntervalSeconds, _calendarSyncIntervalSeconds);
 
         try
         {
@@ -190,6 +210,7 @@ public class BackgroundSyncService : BackgroundService
             // 초기 동기화 시간 기록 (주기적 동기화 루프에서 중복 실행 방지)
             _lastFullSyncTime = DateTime.UtcNow;
             _lastFavoriteSyncTime = DateTime.UtcNow;
+            _lastCalendarSyncTime = DateTime.UtcNow;
         }
         catch (Exception ex)
         {
@@ -197,12 +218,13 @@ public class BackgroundSyncService : BackgroundService
             _logger.Error(ex, "초기 동기화 실패");
         }
 
-        // 2개의 독립적인 동기화 루프 실행
+        // 3개의 독립적인 동기화 루프 실행
         var favoriteTask = RunFavoriteSyncLoopAsync(stoppingToken);
         var fullTask = RunFullSyncLoopAsync(stoppingToken);
+        var calendarTask = RunCalendarSyncLoopAsync(stoppingToken);
 
-        // 두 Task가 모두 완료될 때까지 대기
-        await Task.WhenAll(favoriteTask, fullTask);
+        // 모든 Task가 완료될 때까지 대기
+        await Task.WhenAll(favoriteTask, fullTask, calendarTask);
 
         _logger.Information("백그라운드 동기화 서비스 중지됨");
     }
@@ -303,7 +325,7 @@ public class BackgroundSyncService : BackgroundService
     }
 
     /// <summary>
-    /// 전체 동기화 실행 (폴더, 메일, 캘린더)
+    /// 전체 동기화 실행 (폴더, 메일) - 캘린더는 별도 루프에서 실행
     /// </summary>
     private async Task ExecuteFullSyncAsync(CancellationToken stoppingToken)
     {
@@ -316,12 +338,6 @@ public class BackgroundSyncService : BackgroundService
 
             // 전체 메일 동기화 (Delta Query)
             await SyncAllAccountsAsync(stoppingToken);
-
-            // 캘린더 동기화
-            await SyncCalendarAsync(stoppingToken);
-
-            // 캘린더 알림 체크
-            await CheckCalendarRemindersAsync(stoppingToken);
 
             _lastFullSyncTime = DateTime.UtcNow;
             _lastSyncTime = DateTime.UtcNow;  // 하위 호환용
@@ -336,6 +352,89 @@ public class BackgroundSyncService : BackgroundService
         }
 
         Log4.Debug($"[BackgroundSyncService] 전체 동기화 완료 (#{_fullSyncCount})");
+    }
+
+    /// <summary>
+    /// 캘린더 동기화 루프 (별도 주기)
+    /// </summary>
+    private async Task RunCalendarSyncLoopAsync(CancellationToken stoppingToken)
+    {
+        Log4.Info($"[BackgroundSyncService] 캘린더 동기화 루프 시작 - 주기: {_calendarSyncIntervalSeconds}초");
+
+        while (!stoppingToken.IsCancellationRequested)
+        {
+            try
+            {
+                _calendarIntervalChangeCts = CancellationTokenSource.CreateLinkedTokenSource(stoppingToken);
+
+                // 주기 변경으로 재시작된 경우, 마지막 실행 후 주기가 지났으면 즉시 실행
+                var timeSinceLastSync = DateTime.UtcNow - _lastCalendarSyncTime;
+                if (timeSinceLastSync.TotalSeconds >= _calendarSyncIntervalSeconds)
+                {
+                    Log4.Debug($"[BackgroundSyncService] 캘린더 동기화 주기 경과 ({timeSinceLastSync.TotalSeconds:F0}초) - 즉시 실행");
+                    await ExecuteCalendarSyncAsync(stoppingToken);
+                }
+
+                using var timer = new PeriodicTimer(TimeSpan.FromSeconds(_calendarSyncIntervalSeconds));
+                Log4.Debug($"[BackgroundSyncService] 캘린더 타이머 생성 - 주기: {_calendarSyncIntervalSeconds}초");
+
+                while (await timer.WaitForNextTickAsync(_calendarIntervalChangeCts.Token))
+                {
+                    if (_isPaused)
+                    {
+                        Log4.Debug("[BackgroundSyncService] 캘린더 동기화 일시정지 상태 - 건너뜀");
+                        continue;
+                    }
+
+                    await ExecuteCalendarSyncAsync(stoppingToken);
+                }
+            }
+            catch (OperationCanceledException) when (!stoppingToken.IsCancellationRequested)
+            {
+                Log4.Info($"[BackgroundSyncService] 캘린더 동기화 주기 변경으로 타이머 재시작 - 새 주기: {_calendarSyncIntervalSeconds}초");
+                _logger.Information("캘린더 동기화 주기 변경으로 타이머 재시작 - 새 주기: {Interval}초", _calendarSyncIntervalSeconds);
+                continue;
+            }
+        }
+    }
+
+    /// <summary>
+    /// 캘린더 동기화 실행
+    /// </summary>
+    private async Task ExecuteCalendarSyncAsync(CancellationToken stoppingToken)
+    {
+        if (_isCalendarSyncing)
+        {
+            Log4.Debug("[BackgroundSyncService] 이미 캘린더 동기화 진행 중 - 건너뜀");
+            return;
+        }
+
+        _isCalendarSyncing = true;
+        Log4.Debug($"[BackgroundSyncService] 캘린더 동기화 시작 (#{_calendarSyncCount + 1})");
+
+        try
+        {
+            // 캘린더 동기화
+            await SyncCalendarAsync(stoppingToken);
+
+            // 캘린더 알림 체크
+            await CheckCalendarRemindersAsync(stoppingToken);
+
+            _lastCalendarSyncTime = DateTime.UtcNow;
+            Interlocked.Increment(ref _calendarSyncCount);
+        }
+        catch (Exception ex)
+        {
+            Log4.Error($"[BackgroundSyncService] 캘린더 동기화 실패: {ex.Message}");
+            _logger.Error(ex, "캘린더 동기화 실패");
+            Interlocked.Increment(ref _errorCount);
+        }
+        finally
+        {
+            _isCalendarSyncing = false;
+        }
+
+        Log4.Debug($"[BackgroundSyncService] 캘린더 동기화 완료 (#{_calendarSyncCount})");
     }
 
     /// <summary>
@@ -1429,6 +1528,27 @@ public class BackgroundSyncService : BackgroundService
     }
 
     /// <summary>
+    /// 캘린더 동기화 주기 설정 (초 단위)
+    /// </summary>
+    public void SetCalendarSyncInterval(int seconds)
+    {
+        if (seconds < 1) seconds = 1;  // 최소 1초
+        if (seconds > 3600) seconds = 3600;  // 최대 1시간
+
+        var oldInterval = _calendarSyncIntervalSeconds;
+        _calendarSyncIntervalSeconds = seconds;
+
+        Log4.Info($"[BackgroundSyncService] 캘린더 동기화 주기 변경: {oldInterval}초 → {seconds}초");
+        _logger.Information("캘린더 동기화 주기 변경: {Old}초 → {New}초", oldInterval, seconds);
+
+        // 주기 변경 시 현재 타이머 취소 (새 주기로 재시작하도록)
+        _calendarIntervalChangeCts?.Cancel();
+
+        // 이벤트 발생
+        CalendarSyncIntervalChanged?.Invoke(seconds);
+    }
+
+    /// <summary>
     /// 수동 즉시 동기화 트리거
     /// </summary>
     public async Task TriggerSyncAsync(CancellationToken ct = default)
@@ -1637,8 +1757,8 @@ public class BackgroundSyncService : BackgroundService
     }
 
     /// <summary>
-    /// 캘린더 일정 동기화
-    /// Graph API에서 이번 달 + 다음 달 일정 가져오기
+    /// 캘린더 일정 동기화 (Delta Query + DB 저장)
+    /// Graph API에서 일정 변경분을 가져와 DB에 저장
     /// </summary>
     public async Task SyncCalendarAsync(CancellationToken ct = default)
     {
@@ -1648,6 +1768,7 @@ public class BackgroundSyncService : BackgroundService
         {
             using var scope = _serviceProvider.CreateScope();
             var graphAuthService = scope.ServiceProvider.GetRequiredService<GraphAuthService>();
+            var dbContext = scope.ServiceProvider.GetRequiredService<MailXDbContext>();
 
             // 로그인 상태 확인
             if (!graphAuthService.IsLoggedIn || string.IsNullOrEmpty(graphAuthService.CurrentUserEmail))
@@ -1656,46 +1777,231 @@ public class BackgroundSyncService : BackgroundService
                 return;
             }
 
+            var accountEmail = graphAuthService.CurrentUserEmail;
             var calendarService = scope.ServiceProvider.GetRequiredService<GraphCalendarService>();
 
             // 동기화 시작 이벤트
             CalendarSyncStarted?.Invoke();
 
-            // 진행 상태 알림: 1/3 - 이번 달 일정 조회
-            CalendarSyncProgress?.Invoke(1, 3, "이번 달 일정 조회 중...");
+            // 진행 상태 알림: 1/4 - 동기화 상태 조회
+            CalendarSyncProgress?.Invoke(1, 4, "동기화 상태 조회 중...");
 
-            var today = DateTime.Today;
-            var firstDayThisMonth = new DateTime(today.Year, today.Month, 1);
-            var lastDayThisMonth = firstDayThisMonth.AddMonths(1).AddDays(-1);
+            // CalendarSyncState 조회/생성
+            var syncState = await dbContext.CalendarSyncStates
+                .FirstOrDefaultAsync(s => s.AccountEmail == accountEmail && s.CalendarId == null, ct);
 
-            var thisMonthEvents = await calendarService.GetEventsAsync(firstDayThisMonth, lastDayThisMonth.AddDays(1));
-            var thisMonthCount = thisMonthEvents?.Count() ?? 0;
-            _logger.Debug("이번 달 일정: {Count}건", thisMonthCount);
+            if (syncState == null)
+            {
+                syncState = new CalendarSyncState
+                {
+                    AccountEmail = accountEmail,
+                    CalendarId = null,  // 기본 캘린더
+                    SyncStartDate = DateTime.Today.AddMonths(-3),
+                    SyncEndDate = DateTime.Today.AddMonths(6),
+                    CreatedAt = DateTime.UtcNow
+                };
+                dbContext.CalendarSyncStates.Add(syncState);
+                await dbContext.SaveChangesAsync(ct);
+            }
 
-            // 진행 상태 알림: 2/3 - 다음 달 일정 조회
-            CalendarSyncProgress?.Invoke(2, 3, "다음 달 일정 조회 중...");
+            // 진행 상태 알림: 2/4 - Delta Query 실행
+            CalendarSyncProgress?.Invoke(2, 4, "일정 변경분 조회 중...");
 
-            var firstDayNextMonth = firstDayThisMonth.AddMonths(1);
-            var lastDayNextMonth = firstDayNextMonth.AddMonths(1).AddDays(-1);
+            // Delta Query로 변경분 조회
+            CalendarDeltaResult deltaResult;
+            try
+            {
+                deltaResult = await calendarService.GetEventsDeltaAsync(
+                    syncState.DeltaLink,
+                    syncState.SyncStartDate,
+                    syncState.SyncEndDate);
+            }
+            catch (Exception ex)
+            {
+                _logger.Warning(ex, "Delta Query 실패, 전체 동기화로 폴백");
+                syncState.DeltaLink = null;  // Delta 링크 초기화
+                deltaResult = await calendarService.GetEventsDeltaAsync(
+                    null,
+                    syncState.SyncStartDate,
+                    syncState.SyncEndDate);
+            }
 
-            var nextMonthEvents = await calendarService.GetEventsAsync(firstDayNextMonth, lastDayNextMonth.AddDays(1));
-            var nextMonthCount = nextMonthEvents?.Count() ?? 0;
-            _logger.Debug("다음 달 일정: {Count}건", nextMonthCount);
+            // 진행 상태 알림: 3/4 - DB 저장
+            CalendarSyncProgress?.Invoke(3, 4, "일정 DB 저장 중...");
 
-            // 진행 상태 알림: 3/3 - 동기화 완료
-            CalendarSyncProgress?.Invoke(3, 3, "캘린더 동기화 완료");
+            int addedCount = 0;
+            int updatedCount = 0;
+            int deletedCount = 0;
 
-            var totalCount = thisMonthCount + nextMonthCount;
-            _logger.Information("캘린더 동기화 완료: 총 {Count}건 (이번 달 {This}건, 다음 달 {Next}건)",
-                totalCount, thisMonthCount, nextMonthCount);
+            // 삭제된 이벤트 처리
+            if (deltaResult.DeletedEventIds.Count > 0)
+            {
+                foreach (var deletedId in deltaResult.DeletedEventIds)
+                {
+                    var existingEvent = await dbContext.CalendarEvents
+                        .FirstOrDefaultAsync(e => e.GraphId == deletedId && e.AccountEmail == accountEmail, ct);
 
-            // 동기화 완료 이벤트
+                    if (existingEvent != null)
+                    {
+                        existingEvent.IsDeleted = true;
+                        existingEvent.DeletedAt = DateTime.UtcNow;
+                        deletedCount++;
+                        _logger.Debug("캘린더 이벤트 삭제: {Subject}", existingEvent.Subject);
+                    }
+                }
+            }
+
+            // 추가/수정된 이벤트 처리
+            foreach (var graphEvent in deltaResult.Events)
+            {
+                if (string.IsNullOrEmpty(graphEvent.Id))
+                    continue;
+
+                var existingEvent = await dbContext.CalendarEvents
+                    .FirstOrDefaultAsync(e => e.GraphId == graphEvent.Id && e.AccountEmail == accountEmail, ct);
+
+                if (existingEvent != null)
+                {
+                    // 기존 이벤트 업데이트
+                    UpdateCalendarEventFromGraph(existingEvent, graphEvent);
+                    existingEvent.SyncedAt = DateTime.UtcNow;
+                    updatedCount++;
+                    _logger.Debug("캘린더 이벤트 업데이트: {Subject}", existingEvent.Subject);
+                }
+                else
+                {
+                    // 새 이벤트 추가
+                    var newEvent = calendarService.ConvertToCalendarEvent(graphEvent, accountEmail);
+                    dbContext.CalendarEvents.Add(newEvent);
+                    addedCount++;
+                    _logger.Debug("캘린더 이벤트 추가: {Subject}", newEvent.Subject);
+                }
+            }
+
+            // DB 저장
+            await dbContext.SaveChangesAsync(ct);
+
+            // 동기화 상태 업데이트
+            syncState.DeltaLink = deltaResult.DeltaLink;
+            syncState.LastSyncedAt = DateTime.UtcNow;
+            syncState.LastSyncAddedCount = addedCount;
+            syncState.LastSyncUpdatedCount = updatedCount;
+            syncState.LastSyncDeletedCount = deletedCount;
+            syncState.UpdatedAt = DateTime.UtcNow;
+            syncState.LastErrorMessage = null;  // 성공 시 오류 메시지 초기화
+            await dbContext.SaveChangesAsync(ct);
+
+            // 진행 상태 알림: 4/4 - 동기화 완료
+            CalendarSyncProgress?.Invoke(4, 4, "캘린더 동기화 완료");
+
+            var totalCount = addedCount + updatedCount;
+            _logger.Information("캘린더 동기화 완료: 추가 {Added}건, 수정 {Updated}건, 삭제 {Deleted}건",
+                addedCount, updatedCount, deletedCount);
+
+            // 동기화 완료 이벤트 (기존 호환용)
             CalendarSynced?.Invoke(totalCount);
+
+            // 새 이벤트: 상세 동기화 결과
+            CalendarEventsSynced?.Invoke(addedCount, updatedCount, deletedCount);
         }
         catch (Exception ex)
         {
             _logger.Error(ex, "캘린더 동기화 실패");
             CalendarSyncProgress?.Invoke(0, 0, "캘린더 동기화 실패");
+
+            // 동기화 상태에 오류 기록
+            try
+            {
+                using var errorScope = _serviceProvider.CreateScope();
+                var errorDbContext = errorScope.ServiceProvider.GetRequiredService<MailXDbContext>();
+                var graphAuthService = errorScope.ServiceProvider.GetRequiredService<GraphAuthService>();
+
+                if (graphAuthService.IsLoggedIn && !string.IsNullOrEmpty(graphAuthService.CurrentUserEmail))
+                {
+                    var syncState = await errorDbContext.CalendarSyncStates
+                        .FirstOrDefaultAsync(s => s.AccountEmail == graphAuthService.CurrentUserEmail && s.CalendarId == null);
+
+                    if (syncState != null)
+                    {
+                        syncState.LastErrorMessage = ex.Message;
+                        syncState.LastErrorAt = DateTime.UtcNow;
+                        await errorDbContext.SaveChangesAsync();
+                    }
+                }
+            }
+            catch
+            {
+                // 오류 기록 실패는 무시
+            }
+        }
+    }
+
+    /// <summary>
+    /// Graph API Event에서 CalendarEvent 업데이트
+    /// </summary>
+    private void UpdateCalendarEventFromGraph(CalendarEvent existingEvent, Microsoft.Graph.Models.Event graphEvent)
+    {
+        existingEvent.Subject = graphEvent.Subject ?? existingEvent.Subject;
+        existingEvent.Body = graphEvent.Body?.Content;
+        existingEvent.BodyContentType = graphEvent.Body?.ContentType?.ToString();
+        existingEvent.Location = graphEvent.Location?.DisplayName;
+
+        if (graphEvent.Start?.DateTime != null && DateTime.TryParse(graphEvent.Start.DateTime, out var startDt))
+            existingEvent.StartDateTime = startDt;
+        if (graphEvent.End?.DateTime != null && DateTime.TryParse(graphEvent.End.DateTime, out var endDt))
+            existingEvent.EndDateTime = endDt;
+
+        existingEvent.StartTimeZone = graphEvent.Start?.TimeZone;
+        existingEvent.EndTimeZone = graphEvent.End?.TimeZone;
+        existingEvent.IsAllDay = graphEvent.IsAllDay ?? existingEvent.IsAllDay;
+        existingEvent.IsRecurring = graphEvent.Recurrence != null;
+        existingEvent.ShowAs = graphEvent.ShowAs?.ToString();
+        existingEvent.ResponseStatus = graphEvent.ResponseStatus?.Response?.ToString();
+        existingEvent.Importance = graphEvent.Importance?.ToString();
+        existingEvent.Sensitivity = graphEvent.Sensitivity?.ToString();
+        existingEvent.IsOnlineMeeting = graphEvent.IsOnlineMeeting ?? existingEvent.IsOnlineMeeting;
+        existingEvent.OnlineMeetingUrl = graphEvent.OnlineMeeting?.JoinUrl;
+        existingEvent.OnlineMeetingProvider = graphEvent.OnlineMeetingProvider?.ToString();
+        existingEvent.ReminderMinutesBeforeStart = graphEvent.ReminderMinutesBeforeStart ?? existingEvent.ReminderMinutesBeforeStart;
+        existingEvent.IsReminderOn = graphEvent.IsReminderOn ?? existingEvent.IsReminderOn;
+        existingEvent.OrganizerEmail = graphEvent.Organizer?.EmailAddress?.Address;
+        existingEvent.OrganizerName = graphEvent.Organizer?.EmailAddress?.Name;
+        existingEvent.WebLink = graphEvent.WebLink;
+        existingEvent.LastModifiedDateTime = graphEvent.LastModifiedDateTime?.UtcDateTime;
+        existingEvent.IsCancelled = graphEvent.IsCancelled ?? existingEvent.IsCancelled;
+        existingEvent.EventType = graphEvent.Type?.ToString();
+
+        // 반복 패턴 업데이트
+        if (graphEvent.Recurrence != null)
+        {
+            existingEvent.RecurrencePattern = System.Text.Json.JsonSerializer.Serialize(graphEvent.Recurrence.Pattern);
+            existingEvent.RecurrenceRange = System.Text.Json.JsonSerializer.Serialize(graphEvent.Recurrence.Range);
+        }
+
+        // 참석자 업데이트
+        if (graphEvent.Attendees?.Any() == true)
+        {
+            var attendeesList = graphEvent.Attendees.Select(a => new
+            {
+                email = a.EmailAddress?.Address,
+                name = a.EmailAddress?.Name,
+                type = a.Type?.ToString(),
+                status = a.Status?.Response?.ToString()
+            });
+            existingEvent.Attendees = System.Text.Json.JsonSerializer.Serialize(attendeesList);
+        }
+
+        // 카테고리 업데이트
+        if (graphEvent.Categories?.Any() == true)
+        {
+            existingEvent.Categories = System.Text.Json.JsonSerializer.Serialize(graphEvent.Categories);
+        }
+
+        // 삭제 상태 복원 (재활성화된 이벤트)
+        if (existingEvent.IsDeleted)
+        {
+            existingEvent.IsDeleted = false;
+            existingEvent.DeletedAt = null;
         }
     }
 

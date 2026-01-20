@@ -20,6 +20,72 @@
 
     <ui:FluentWindow.Resources>
         <converters:BoolToVisibilityConverter x:Key="BoolToVisibilityConverter"/>
+
+        <!-- 연락처 제안 아이템 템플릿 -->
+        <DataTemplate x:Key="ContactSuggestionTemplate">
+            <Border Background="Transparent"
+                    Padding="8,6"
+                    Cursor="Hand"
+                    CornerRadius="4">
+                <Border.Style>
+                    <Style TargetType="Border">
+                        <Style.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter Property="Background" Value="{DynamicResource ControlFillColorSecondaryBrush}"/>
+                            </Trigger>
+                        </Style.Triggers>
+                    </Style>
+                </Border.Style>
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto"/>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="Auto"/>
+                    </Grid.ColumnDefinitions>
+
+                    <!-- 이니셜 아바타 -->
+                    <Border Grid.Column="0"
+                            Width="32" Height="32"
+                            CornerRadius="16"
+                            Background="{DynamicResource SystemAccentColorSecondaryBrush}"
+                            Margin="0,0,10,0">
+                        <TextBlock Text="{Binding Initials}"
+                                   FontSize="12"
+                                   FontWeight="SemiBold"
+                                   Foreground="White"
+                                   HorizontalAlignment="Center"
+                                   VerticalAlignment="Center"/>
+                    </Border>
+
+                    <!-- 이름 및 이메일 -->
+                    <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                        <TextBlock Text="{Binding DisplayName}"
+                                   FontWeight="Medium"
+                                   Foreground="{DynamicResource TextFillColorPrimaryBrush}"
+                                   TextTrimming="CharacterEllipsis"/>
+                        <TextBlock FontSize="11"
+                                   Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                                   TextTrimming="CharacterEllipsis">
+                            <Run Text="{Binding Email, Mode=OneWay}"/>
+                            <Run Text="{Binding PositionString, Mode=OneWay, StringFormat=' • {0}'}"
+                                 Foreground="{DynamicResource TextFillColorTertiaryBrush}"/>
+                        </TextBlock>
+                    </StackPanel>
+
+                    <!-- 소스 라벨 -->
+                    <Border Grid.Column="2"
+                            Background="{DynamicResource ControlFillColorTertiaryBrush}"
+                            CornerRadius="4"
+                            Padding="6,2"
+                            VerticalAlignment="Center"
+                            Margin="8,0,0,0">
+                        <TextBlock Text="{Binding SourceLabel}"
+                                   FontSize="10"
+                                   Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
+                    </Border>
+                </Grid>
+            </Border>
+        </DataTemplate>
     </ui:FluentWindow.Resources>
 
     <Grid>
@@ -163,6 +229,7 @@
                                    Text="{Binding To, UpdateSourceTrigger=PropertyChanged}"
                                    PlaceholderText=""
                                    PreviewKeyDown="EmailTextBox_PreviewKeyDown"
+                                   TextChanged="EmailTextBox_TextChanged"
                                    BorderThickness="0"
                                    Background="Transparent"/>
                         <Popup x:Name="ToSuggestionPopup"
@@ -172,15 +239,20 @@
                                AllowsTransparency="True">
                             <Border Background="{DynamicResource ControlFillColorDefaultBrush}"
                                     BorderBrush="{DynamicResource ControlStrokeColorDefaultBrush}"
-                                    BorderThickness="1" CornerRadius="4"
-                                    Padding="4">
+                                    BorderThickness="1" CornerRadius="6"
+                                    Padding="4"
+                                    MinWidth="350" MaxWidth="500">
+                                <Border.Effect>
+                                    <DropShadowEffect BlurRadius="12" ShadowDepth="3" Opacity="0.15"/>
+                                </Border.Effect>
                                 <ListBox x:Name="ToSuggestionList"
-                                         MaxHeight="200" MinWidth="300"
+                                         MaxHeight="250"
                                          Background="Transparent"
                                          BorderThickness="0"
                                          SelectionChanged="SuggestionList_SelectionChanged"
                                          MouseDoubleClick="SuggestionList_MouseDoubleClick"
-                                         KeyDown="SuggestionList_KeyDown"/>
+                                         PreviewKeyDown="SuggestionList_PreviewKeyDown"
+                                         ItemTemplate="{DynamicResource ContactSuggestionTemplate}"/>
                             </Border>
                         </Popup>
                     </Grid>
@@ -226,6 +298,7 @@
                                    Text="{Binding Cc, UpdateSourceTrigger=PropertyChanged}"
                                    PlaceholderText=""
                                    PreviewKeyDown="EmailTextBox_PreviewKeyDown"
+                                   TextChanged="EmailTextBox_TextChanged"
                                    BorderThickness="0"
                                    Background="Transparent"/>
                         <Popup x:Name="CcSuggestionPopup"
@@ -235,15 +308,20 @@
                                AllowsTransparency="True">
                             <Border Background="{DynamicResource ControlFillColorDefaultBrush}"
                                     BorderBrush="{DynamicResource ControlStrokeColorDefaultBrush}"
-                                    BorderThickness="1" CornerRadius="4"
-                                    Padding="4">
+                                    BorderThickness="1" CornerRadius="6"
+                                    Padding="4"
+                                    MinWidth="350" MaxWidth="500">
+                                <Border.Effect>
+                                    <DropShadowEffect BlurRadius="12" ShadowDepth="3" Opacity="0.15"/>
+                                </Border.Effect>
                                 <ListBox x:Name="CcSuggestionList"
-                                         MaxHeight="200" MinWidth="300"
+                                         MaxHeight="250"
                                          Background="Transparent"
                                          BorderThickness="0"
                                          SelectionChanged="SuggestionList_SelectionChanged"
                                          MouseDoubleClick="SuggestionList_MouseDoubleClick"
-                                         KeyDown="SuggestionList_KeyDown"/>
+                                         PreviewKeyDown="SuggestionList_PreviewKeyDown"
+                                         ItemTemplate="{DynamicResource ContactSuggestionTemplate}"/>
                             </Border>
                         </Popup>
                     </Grid>
@@ -270,6 +348,7 @@
                                    Text="{Binding Bcc, UpdateSourceTrigger=PropertyChanged}"
                                    PlaceholderText=""
                                    PreviewKeyDown="EmailTextBox_PreviewKeyDown"
+                                   TextChanged="EmailTextBox_TextChanged"
                                    BorderThickness="0"
                                    Background="Transparent"/>
                         <Popup x:Name="BccSuggestionPopup"
@@ -279,15 +358,20 @@
                                AllowsTransparency="True">
                             <Border Background="{DynamicResource ControlFillColorDefaultBrush}"
                                     BorderBrush="{DynamicResource ControlStrokeColorDefaultBrush}"
-                                    BorderThickness="1" CornerRadius="4"
-                                    Padding="4">
+                                    BorderThickness="1" CornerRadius="6"
+                                    Padding="4"
+                                    MinWidth="350" MaxWidth="500">
+                                <Border.Effect>
+                                    <DropShadowEffect BlurRadius="12" ShadowDepth="3" Opacity="0.15"/>
+                                </Border.Effect>
                                 <ListBox x:Name="BccSuggestionList"
-                                         MaxHeight="200" MinWidth="300"
+                                         MaxHeight="250"
                                          Background="Transparent"
                                          BorderThickness="0"
                                          SelectionChanged="SuggestionList_SelectionChanged"
                                          MouseDoubleClick="SuggestionList_MouseDoubleClick"
-                                         KeyDown="SuggestionList_KeyDown"/>
+                                         PreviewKeyDown="SuggestionList_PreviewKeyDown"
+                                         ItemTemplate="{DynamicResource ContactSuggestionTemplate}"/>
                             </Border>
                         </Popup>
                     </Grid>

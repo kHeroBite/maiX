@@ -12,6 +12,7 @@ using mailX.Models;
 using mailX.Utils;
 using mailX.Services.Theme;
 using mailX.Services.Graph;
+using mailX.Services.Search;
 using mailX.Views.Dialogs;
 using mailX.Data;
 
@@ -33,6 +34,10 @@ public partial class ComposeWindow : FluentWindow
     private Popup? _currentPopup;
     private System.Windows.Controls.ListBox? _currentListBox;
     private List<ContactSuggestion> _suggestions = new();
+    private CancellationTokenSource? _searchCts;
+
+    // ContactSearchService 인스턴스
+    private ContactSearchService? _contactSearchService;
 
     public ComposeWindow(ComposeViewModel viewModel)
     {
@@ -43,6 +48,16 @@ public partial class ComposeWindow : FluentWindow
 
         Loaded += ComposeWindow_Loaded;
         KeyDown += ComposeWindow_KeyDown;
+
+        // ContactSearchService 가져오기
+        try
+        {
+            _contactSearchService = ((App)System.Windows.Application.Current).GetService<ContactSearchService>();
+        }
+        catch (Exception ex)
+        {
+            Log4.Warn($"ContactSearchService 초기화 실패: {ex.Message}");
+        }
     }
 
     /// <summary>
@@ -400,20 +415,36 @@ public partial class ComposeWindow : FluentWindow
     /// </summary>
     private async void Window_Closing(object sender, System.ComponentModel.CancelEventArgs e)
     {
-        // 이미 확인된 닫기이면 바로 닫음
-        if (_closingConfirmed)
+        try
         {
-            // WebView2 정리
-            if (EditorWebView.CoreWebView2 != null)
+            // 이미 확인된 닫기이면 바로 닫음
+            if (_closingConfirmed)
             {
-                EditorWebView.CoreWebView2.WebMessageReceived -= CoreWebView2_WebMessageReceived;
+                // WebView2 정리
+                try
+                {
+                    if (EditorWebView?.CoreWebView2 != null)
+                    {
+                        EditorWebView.CoreWebView2.WebMessageReceived -= CoreWebView2_WebMessageReceived;
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Log4.Warn($"WebView2 정리 중 오류 (무시됨): {ex.Message}");
+                }
+                return;
             }
-            return;
-        }
 
-        // 닫기 취소하고 확인 대화상자 표시
-        e.Cancel = true;
-        await HandleCloseRequestAsync();
+            // 닫기 취소하고 확인 대화상자 표시
+            e.Cancel = true;
+            await HandleCloseRequestAsync();
+        }
+        catch (Exception ex)
+        {
+            Log4.Error($"창 닫기 중 오류: {ex.Message}");
+            // 예외 발생 시에도 창을 닫음
+            _closingConfirmed = true;
+        }
     }
 
     /// <summary>
@@ -421,52 +452,69 @@ public partial class ComposeWindow : FluentWindow
     /// </summary>
     private async Task HandleCloseRequestAsync()
     {
-        // 메일이 이미 발송되었으면 바로 닫음
-        if (_mailSent)
+        try
         {
-            _closingConfirmed = true;
-            Close();
-            return;
-        }
-
-        // 확인 대화상자 표시
-        var dialog = new ComposeCloseDialog
-        {
-            Owner = this
-        };
-
-        var dialogResult = dialog.ShowDialog();
-
-        if (dialogResult != true)
-        {
-            // 대화상자가 취소되었거나 닫힘
-            return;
-        }
-
-        switch (dialog.Result)
-        {
-            case ComposeCloseResult.Delete:
-                // 저장 없이 닫기
-                Log4.Debug("메일 작성 취소 - 삭제");
+            // 메일이 이미 발송되었으면 바로 닫음
+            if (_mailSent)
+            {
                 _closingConfirmed = true;
                 Close();
-                break;
+                return;
+            }
 
-            case ComposeCloseResult.SaveDraft:
-                // 임시보관함에 저장 후 닫기
-                var saved = await SaveToDraftAsync();
-                if (saved)
-                {
-                    Log4.Info("메일 임시보관 완료");
+            // 확인 대화상자 표시
+            var dialog = new ComposeCloseDialog
+            {
+                Owner = this
+            };
+
+            var dialogResult = dialog.ShowDialog();
+
+            if (dialogResult != true)
+            {
+                // 대화상자가 취소되었거나 닫힘
+                return;
+            }
+
+            switch (dialog.Result)
+            {
+                case ComposeCloseResult.Delete:
+                    // 저장 없이 닫기
+                    Log4.Debug("메일 작성 취소 - 삭제");
                     _closingConfirmed = true;
                     Close();
-                }
-                break;
+                    break;
 
-            case ComposeCloseResult.Cancel:
-            default:
-                // 아무 작업 안함 - 계속 작성
-                break;
+                case ComposeCloseResult.SaveDraft:
+                    // 임시보관함에 저장 후 닫기
+                    try
+                    {
+                        var saved = await SaveToDraftAsync();
+                        if (saved)
+                        {
+                            Log4.Info("메일 임시보관 완료");
+                            _closingConfirmed = true;
+                            Close();
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        Log4.Error($"임시보관 저장 중 오류: {ex.Message}");
+                        System.Windows.MessageBox.Show($"임시보관 저장 실패: {ex.Message}", "오류",
+                            System.Windows.MessageBoxButton.OK, System.Windows.MessageBoxImage.Error);
+                    }
+                    break;
+
+                case ComposeCloseResult.Cancel:
+                default:
+                    // 아무 작업 안함 - 계속 작성
+                    break;
+            }
+        }
+        catch (Exception ex)
+        {
+            Log4.Error($"닫기 요청 처리 중 오류: {ex.Message}");
+            // 예외 발생 시 창을 닫지 않고 유지
         }
     }
 
@@ -665,12 +713,10 @@ public partial class ComposeWindow : FluentWindow
     #region 연락처 자동완성
 
     /// <summary>
-    /// 이메일 입력 필드 Tab 키 처리
+    /// 이메일 입력 필드 텍스트 변경 시 실시간 자동완성
     /// </summary>
-    private async void EmailTextBox_PreviewKeyDown(object sender, System.Windows.Input.KeyEventArgs e)
+    private async void EmailTextBox_TextChanged(object sender, TextChangedEventArgs e)
     {
-        if (e.Key != Key.Tab) return;
-
         var textBox = sender as Wpf.Ui.Controls.TextBox;
         if (textBox == null) return;
 
@@ -679,30 +725,95 @@ public partial class ComposeWindow : FluentWindow
         var lastSeparator = Math.Max(text.LastIndexOf(';'), text.LastIndexOf(','));
         var currentInput = text.Substring(lastSeparator + 1).Trim();
 
-        // 이미 이메일 형식이거나 비어있으면 무시
-        if (string.IsNullOrEmpty(currentInput) || currentInput.Contains('@') || currentInput.Contains('<'))
+        // 2자 미만이거나 이미 완성된 이메일이면 팝업 닫기
+        if (currentInput.Length < 2 || currentInput.Contains('@') || currentInput.Contains('<'))
+        {
+            ClosePopup();
             return;
+        }
 
-        // 연락처 검색
-        var suggestions = await SearchContactsAsync(currentInput);
-
-        if (suggestions.Count == 0)
-            return;
-
-        // 해당 TextBox에 맞는 Popup과 ListBox 찾기
+        // 해당 TextBox에 맞는 Popup과 ListBox 설정
         SetCurrentControls(textBox);
 
-        if (suggestions.Count == 1)
+        // 이전 검색 취소
+        _searchCts?.Cancel();
+        _searchCts = new CancellationTokenSource();
+
+        try
         {
-            // 1개면 바로 완성
-            AutoCompleteEmail(textBox, currentInput, suggestions[0]);
-            e.Handled = true;
-        }
-        else
-        {
-            // 여러 개면 Popup 표시
+            // 디바운싱 (300ms 대기)
+            await Task.Delay(300, _searchCts.Token);
+
+            // 연락처 검색
+            var suggestions = await SearchContactsAsync(currentInput);
+
+            if (_searchCts.Token.IsCancellationRequested)
+                return;
+
+            if (suggestions.Count == 0)
+            {
+                ClosePopup();
+                return;
+            }
+
+            // Popup 표시
             ShowSuggestionPopup(suggestions);
-            e.Handled = true;
+        }
+        catch (TaskCanceledException)
+        {
+            // 취소됨 - 정상
+        }
+        catch (Exception ex)
+        {
+            Log4.Warn($"자동완성 검색 실패: {ex.Message}");
+        }
+    }
+
+    /// <summary>
+    /// 이메일 입력 필드 키보드 처리
+    /// </summary>
+    private void EmailTextBox_PreviewKeyDown(object sender, System.Windows.Input.KeyEventArgs e)
+    {
+        var textBox = sender as Wpf.Ui.Controls.TextBox;
+        if (textBox == null) return;
+
+        // 해당 TextBox에 맞는 컨트롤 설정
+        SetCurrentControls(textBox);
+
+        // 팝업이 열려있을 때 키보드 네비게이션
+        if (_currentPopup?.IsOpen == true && _currentListBox != null)
+        {
+            switch (e.Key)
+            {
+                case Key.Down:
+                    // 리스트 포커스 이동
+                    if (_currentListBox.SelectedIndex < _currentListBox.Items.Count - 1)
+                        _currentListBox.SelectedIndex++;
+                    _currentListBox.ScrollIntoView(_currentListBox.SelectedItem);
+                    e.Handled = true;
+                    break;
+
+                case Key.Up:
+                    if (_currentListBox.SelectedIndex > 0)
+                        _currentListBox.SelectedIndex--;
+                    _currentListBox.ScrollIntoView(_currentListBox.SelectedItem);
+                    e.Handled = true;
+                    break;
+
+                case Key.Enter:
+                case Key.Tab:
+                    if (_currentListBox.SelectedIndex >= 0)
+                    {
+                        ApplySelectedSuggestion();
+                        e.Handled = true;
+                    }
+                    break;
+
+                case Key.Escape:
+                    ClosePopup();
+                    e.Handled = true;
+                    break;
+            }
         }
     }
 
@@ -731,9 +842,31 @@ public partial class ComposeWindow : FluentWindow
     }
 
     /// <summary>
-    /// 연락처 검색 (로컬 DB)
+    /// 연락처 검색 (통합 검색 서비스 사용)
     /// </summary>
     private async Task<List<ContactSuggestion>> SearchContactsAsync(string query)
+    {
+        // ContactSearchService 사용 (있으면)
+        if (_contactSearchService != null)
+        {
+            try
+            {
+                return await _contactSearchService.SearchContactsAsync(query);
+            }
+            catch (Exception ex)
+            {
+                Log4.Warn($"ContactSearchService 검색 실패, 로컬 검색으로 대체: {ex.Message}");
+            }
+        }
+
+        // 폴백: 로컬 DB에서만 검색
+        return await SearchLocalContactsAsync(query);
+    }
+
+    /// <summary>
+    /// 로컬 DB에서 연락처 검색 (폴백)
+    /// </summary>
+    private async Task<List<ContactSuggestion>> SearchLocalContactsAsync(string query)
     {
         var results = new List<ContactSuggestion>();
 
@@ -766,7 +899,8 @@ public partial class ComposeWindow : FluentWindow
                     results.Add(new ContactSuggestion
                     {
                         DisplayName = displayName,
-                        Email = email
+                        Email = email,
+                        Source = ContactSource.Local
                     });
                 }
             }
@@ -859,16 +993,10 @@ public partial class ComposeWindow : FluentWindow
         if (_currentPopup == null || _currentListBox == null) return;
 
         _suggestions = suggestions;
-        _currentListBox.Items.Clear();
-
-        foreach (var suggestion in suggestions)
-        {
-            _currentListBox.Items.Add(suggestion.DisplayText);
-        }
+        _currentListBox.ItemsSource = suggestions;
+        _currentListBox.SelectedIndex = 0;
 
         _currentPopup.IsOpen = true;
-        _currentListBox.SelectedIndex = 0;
-        _currentListBox.Focus();
     }
 
     /// <summary>
@@ -876,7 +1004,12 @@ public partial class ComposeWindow : FluentWindow
     /// </summary>
     private void SuggestionList_SelectionChanged(object sender, SelectionChangedEventArgs e)
     {
-        // 더블클릭이나 Enter 키로 선택 시 처리됨
+        // 선택 변경 시 스크롤 위치 조정
+        var listBox = sender as System.Windows.Controls.ListBox;
+        if (listBox?.SelectedItem != null)
+        {
+            listBox.ScrollIntoView(listBox.SelectedItem);
+        }
     }
 
     /// <summary>
@@ -890,7 +1023,7 @@ public partial class ComposeWindow : FluentWindow
     /// <summary>
     /// 자동완성 목록 키보드 처리
     /// </summary>
-    private void SuggestionList_KeyDown(object sender, System.Windows.Input.KeyEventArgs e)
+    private void SuggestionList_PreviewKeyDown(object sender, System.Windows.Input.KeyEventArgs e)
     {
         if (e.Key == Key.Enter || e.Key == Key.Tab)
         {
@@ -912,17 +1045,15 @@ public partial class ComposeWindow : FluentWindow
     {
         if (_currentListBox == null || _currentTextBox == null) return;
 
-        var selectedIndex = _currentListBox.SelectedIndex;
-        if (selectedIndex < 0 || selectedIndex >= _suggestions.Count) return;
-
-        var contact = _suggestions[selectedIndex];
+        var selectedItem = _currentListBox.SelectedItem as ContactSuggestion;
+        if (selectedItem == null) return;
 
         // 현재 입력 중인 텍스트 추출
         var text = _currentTextBox.Text ?? "";
         var lastSeparator = Math.Max(text.LastIndexOf(';'), text.LastIndexOf(','));
         var currentInput = text.Substring(lastSeparator + 1).Trim();
 
-        AutoCompleteEmail(_currentTextBox, currentInput, contact);
+        AutoCompleteEmail(_currentTextBox, currentInput, selectedItem);
         ClosePopup();
         _currentTextBox.Focus();
     }

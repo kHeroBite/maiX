@@ -27,6 +27,11 @@ public partial class MainViewModel : ViewModelBase
     private readonly BackgroundSyncService _syncService;
     private readonly GraphMailService _graphMailService;
 
+    /// <summary>
+    /// 캘린더 ViewModel (외부에서 설정, 캘린더 동기화 이벤트 연동용)
+    /// </summary>
+    public CalendarViewModel? CalendarViewModel { get; set; }
+
     public MainViewModel(MailXDbContext dbContext, BackgroundSyncService syncService, GraphMailService graphMailService)
     {
         try
@@ -1147,6 +1152,19 @@ public partial class MainViewModel : ViewModelBase
     public void SetFullSyncInterval(int seconds)
     {
         _syncService.SetFullSyncInterval(seconds);
+    }
+
+    /// <summary>
+    /// 캘린더 동기화 주기 (초)
+    /// </summary>
+    public int CalendarSyncIntervalSeconds => _syncService.CalendarSyncIntervalSeconds;
+
+    /// <summary>
+    /// 캘린더 동기화 주기 설정
+    /// </summary>
+    public void SetCalendarSyncInterval(int seconds)
+    {
+        _syncService.SetCalendarSyncInterval(seconds);
     }
 
     /// <summary>
