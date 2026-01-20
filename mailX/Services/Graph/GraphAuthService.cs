@@ -18,7 +18,7 @@ namespace mailX.Services.Graph
     public class GraphAuthService
     {
         private string _clientId = "";
-        private string _tenantId = "common";
+        private string _tenantId = "";
         private string[] _scopes = DefaultScopes;
 
         private IPublicClientApplication? _msalClient;
@@ -97,6 +97,13 @@ namespace mailX.Services.Graph
                 return;
             }
 
+            if (string.IsNullOrEmpty(_tenantId))
+            {
+                Log4.Error("[GraphAuthService] TenantId가 설정되지 않았습니다. Azure Portal에서 테넌트 ID를 확인하세요.");
+                _msalClient = null;
+                return;
+            }
+
             try
             {
                 // MSAL.NET 데스크톱 앱은 localhost만 지원
@@ -126,14 +133,14 @@ namespace mailX.Services.Graph
         /// ClientId로 직접 초기화 (UI에서 입력받은 경우)
         /// </summary>
         /// <param name="clientId">Azure AD 애플리케이션 ID</param>
-        /// <param name="tenantId">테넌트 ID (기본: common)</param>
+        /// <param name="tenantId">테넌트 ID (단일 테넌트 앱은 실제 테넌트 ID 필요)</param>
         /// <param name="scopes">권한 범위 (기본값 사용 가능)</param>
         public void Initialize(string clientId, string? tenantId = null, string[]? scopes = null)
         {
             var settings = new AzureAdSettings
             {
                 ClientId = clientId,
-                TenantId = tenantId ?? "common",
+                TenantId = tenantId ?? "",
                 Scopes = scopes?.ToList() ?? DefaultScopes.ToList()
             };
             Initialize(settings);

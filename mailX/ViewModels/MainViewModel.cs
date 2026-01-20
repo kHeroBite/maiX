@@ -1031,12 +1031,23 @@ public partial class MainViewModel : ViewModelBase
             StatusMessage = "이메일 로딩 중...";
 
             // AsNoTracking()으로 캐시된 엔티티가 아닌 DB에서 최신 데이터 로드
-            Emails = await _dbContext.Emails
+            var emails = await _dbContext.Emails
                 .AsNoTracking()
                 .Where(e => e.ParentFolderId == SelectedFolder.Id)
                 .OrderByDescending(e => e.ReceivedDateTime)
                 .ToListAsync();
 
+            // 임시보관함인 경우 IsDraft 플래그 설정
+            bool isDraftsFolder = IsDraftsFolder(SelectedFolder);
+            if (isDraftsFolder)
+            {
+                foreach (var email in emails)
+                {
+                    email.IsDraft = true;
+                }
+            }
+
+            Emails = emails;
             StatusMessage = $"{Emails.Count}개 이메일 로드됨";
         }, "이메일 로드 실패");
     }
@@ -1567,6 +1578,12 @@ public partial class MainViewModel : ViewModelBase
 
             // UI 갱신을 위해 목록 다시 설정
             Emails = new List<Email>(Emails);
+
+            // 선택된 메일의 플래그가 변경된 경우 상세 패널도 갱신
+            if (SelectedEmail != null && emails.Any(e => e.Id == SelectedEmail.Id))
+            {
+                OnPropertyChanged(nameof(SelectedEmail));
+            }
 
             StatusMessage = $"플래그 업데이트 완료 ({completed}/{emails.Count})";
             Log4.Info($"플래그 '{flagStatus}' 업데이트 완료: {completed}건");

@@ -1022,19 +1022,29 @@
                                                     <ColumnDefinition Width="Auto"/>
                                                 </Grid.ColumnDefinitions>
 
-                                                <!-- 이니셜 아바타 -->
-                                                <Border Grid.Column="0"
-                                                        Width="32" Height="32"
-                                                        CornerRadius="16"
-                                                        Background="{DynamicResource SystemAccentColorSecondaryBrush}"
-                                                        Margin="0,0,10,0">
-                                                    <TextBlock Text="{Binding Initials}"
-                                                               FontSize="12"
-                                                               FontWeight="SemiBold"
-                                                               Foreground="White"
-                                                               HorizontalAlignment="Center"
-                                                               VerticalAlignment="Center"/>
-                                                </Border>
+                                                <!-- 프로필 사진 / 이니셜 컨테이너 -->
+                                                <Grid Grid.Column="0" Width="32" Height="32" Margin="0,0,10,0">
+                                                    <!-- 프로필 사진 (있을 때만 표시) -->
+                                                    <Border CornerRadius="16"
+                                                            Visibility="{Binding PhotoBase64, Converter={StaticResource NullToVisibilityConverter}}">
+                                                        <Border.Background>
+                                                            <ImageBrush ImageSource="{Binding PhotoBase64, Converter={StaticResource Base64ToImageSourceConverter}}"
+                                                                        Stretch="UniformToFill"/>
+                                                        </Border.Background>
+                                                    </Border>
+
+                                                    <!-- 이니셜 아바타 (사진 없을 때 표시) -->
+                                                    <Border CornerRadius="16"
+                                                            Background="{DynamicResource SystemAccentColorSecondaryBrush}"
+                                                            Visibility="{Binding PhotoBase64, Converter={StaticResource NullToVisibilityConverter}, ConverterParameter=Invert}">
+                                                        <TextBlock Text="{Binding Initials}"
+                                                                   FontSize="12"
+                                                                   FontWeight="SemiBold"
+                                                                   Foreground="White"
+                                                                   HorizontalAlignment="Center"
+                                                                   VerticalAlignment="Center"/>
+                                                    </Border>
+                                                </Grid>
 
                                                 <!-- 이름 및 이메일 -->
                                                 <StackPanel Grid.Column="1" VerticalAlignment="Center">
@@ -2118,12 +2128,26 @@
 
                                             <!-- 발신자 + 첨부파일 -->
                                             <StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center">
-                                                <TextBlock Text="{Binding From, Converter={StaticResource EmailToDisplayNameConverter}}"
+                                                <!-- 일반 메일: 발신자 표시 -->
+                                                <TextBlock x:Name="SenderText"
+                                                           Text="{Binding From, Converter={StaticResource EmailToDisplayNameConverter}}"
                                                            FontWeight="{Binding IsRead, Converter={StaticResource BoolToFontWeightConverter}, FallbackValue=Normal}"
                                                            Foreground="{Binding IsRead, Converter={StaticResource IsReadToForegroundConverter}}"
                                                            TextTrimming="CharacterEllipsis"
                                                            FontSize="13"
                                                            MaxWidth="200"/>
+                                                <!-- 초안: [초안] + 받는사람 표시 -->
+                                                <TextBlock x:Name="DraftText"
+                                                           FontWeight="{Binding IsRead, Converter={StaticResource BoolToFontWeightConverter}, FallbackValue=Normal}"
+                                                           Foreground="#0078D4"
+                                                           TextTrimming="CharacterEllipsis"
+                                                           FontSize="13"
+                                                           MaxWidth="200"
+                                                           Visibility="Collapsed">
+                                                    <Run Text="[초안]" FontWeight="SemiBold"/>
+                                                    <Run Text=" "/>
+                                                    <Run Text="{Binding To, Converter={StaticResource JsonArrayToStringConverter}, Mode=OneWay}"/>
+                                                </TextBlock>
                                                 <!-- 첨부파일 아이콘 -->
                                                 <ui:SymbolIcon Symbol="Attach24"
                                                                FontSize="12"
@@ -2237,6 +2261,11 @@
                             </Border>
                             <!-- 아웃룩 스타일 트리거: 호버/설정 시 Flag/Pin 버튼 개별 표시 -->
                             <DataTemplate.Triggers>
+                                <!-- 초안 메일: [초안] 텍스트 표시, 발신자 숨김 -->
+                                <DataTrigger Binding="{Binding IsDraft}" Value="True">
+                                    <Setter TargetName="SenderText" Property="Visibility" Value="Collapsed"/>
+                                    <Setter TargetName="DraftText" Property="Visibility" Value="Visible"/>
+                                </DataTrigger>
                                 <!-- 호버 시: Flag/Pin/Delete 모두 표시 -->
                                 <DataTrigger Binding="{Binding IsMouseOver, RelativeSource={RelativeSource AncestorType=ListBoxItem}}" Value="True">
                                     <Setter TargetName="FlagButton" Property="Visibility" Value="Visible"/>
@@ -2562,13 +2591,8 @@
                         </ui:Button>
                     </StackPanel>
 
-                    <!-- 오른쪽: 날짜 및 더보기 -->
+                    <!-- 오른쪽: 더보기 버튼만 -->
                     <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
-                        <TextBlock Text="{Binding SelectedEmail.ReceivedDateTime, StringFormat='{}{0:yyyy-MM-dd HH:mm}'}"
-                                   Foreground="{DynamicResource TextFillColorSecondaryBrush}"
-                                   FontSize="12"
-                                   VerticalAlignment="Center"
-                                   Margin="0,0,8,0"/>
                         <!-- 더보기 버튼 -->
                         <ui:Button x:Name="MoreActionsButton"
                                    ToolTip="더 많은 작업"
@@ -2603,13 +2627,18 @@
                             <ColumnDefinition Width="*"/>
                             <ColumnDefinition Width="Auto"/>
                         </Grid.ColumnDefinitions>
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="Auto"/>
+                        </Grid.RowDefinitions>
 
                         <!-- 아바타 -->
-                        <Border Grid.Column="0"
+                        <Border Grid.Column="0" Grid.RowSpan="2"
                                 Width="40" Height="40"
                                 CornerRadius="20"
                                 Background="{DynamicResource SystemAccentColorPrimaryBrush}"
-                                Margin="0,0,12,0">
+                                Margin="0,0,12,0"
+                                VerticalAlignment="Center">
                             <TextBlock Text="{Binding SelectedEmail.From, Converter={StaticResource StringToInitialConverter}}"
                                        Foreground="White"
                                        FontSize="16"
@@ -2618,16 +2647,41 @@
                                        VerticalAlignment="Center"/>
                         </Border>
 
-                        <!-- 발신자 및 수신자 -->
-                        <StackPanel Grid.Column="1" VerticalAlignment="Center">
-                            <TextBlock Text="{Binding SelectedEmail.From}"
-                                       FontWeight="SemiBold"/>
-                            <TextBlock Text="{Binding SelectedEmail.To, Converter={StaticResource JsonArrayToStringConverter}}"
-                                       Foreground="{DynamicResource TextFillColorSecondaryBrush}"
-                                       FontSize="12"
-                                       TextTrimming="CharacterEllipsis"/>
-                        </StackPanel>
+                        <!-- 1행: 발신자 + 날짜 -->
+                        <TextBlock Grid.Row="0" Grid.Column="1"
+                                   Text="{Binding SelectedEmail.From}"
+                                   FontWeight="SemiBold"
+                                   TextTrimming="CharacterEllipsis"
+                                   Margin="0,0,8,0"
+                                   VerticalAlignment="Center"/>
+                        <TextBlock Grid.Row="0" Grid.Column="2"
+                                   Text="{Binding SelectedEmail.ReceivedDateTime, StringFormat='{}{0:yyyy-MM-dd HH:mm}'}"
+                                   Foreground="#888888"
+                                   FontSize="11"
+                                   VerticalAlignment="Center"/>
+
+                        <!-- 2행: 받는 사람 (전체 너비) -->
+                        <TextBlock Grid.Row="1" Grid.Column="1" Grid.ColumnSpan="2"
+                                   Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                                   FontSize="12"
+                                   TextTrimming="CharacterEllipsis"
+                                   Margin="0,2,0,0">
+                            <Run Text="받는 사람:"/>
+                            <Run Text="{Binding SelectedEmail.To, Converter={StaticResource JsonArrayToStringConverter}, Mode=OneWay}"/>
+                        </TextBlock>
                     </Grid>
+
+                    <!-- 플래그 상태 표시 -->
+                    <StackPanel Orientation="Horizontal"
+                                Margin="0,8,0,0"
+                                Visibility="{Binding SelectedEmail.FlagStatus, Converter={StaticResource FlagStatusToVisibilityConverter}}">
+                        <ui:SymbolIcon Symbol="Flag24" FontSize="14"
+                                       Foreground="{Binding SelectedEmail.FlagStatus, Converter={StaticResource FlagStatusToColorConverter}}"
+                                       Margin="0,0,6,0"/>
+                        <TextBlock Text="플래그 지정됨"
+                                   Foreground="{Binding SelectedEmail.FlagStatus, Converter={StaticResource FlagStatusToColorConverter}}"
+                                   FontSize="12"/>
+                    </StackPanel>
 
                     <!-- 첨부파일 표시 -->
                     <StackPanel Orientation="Horizontal"

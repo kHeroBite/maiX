@@ -364,10 +364,12 @@ public partial class MainWindow : FluentWindow
             suffix: '.min',
             plugins: 'table lists link image code',
             toolbar: 'bold italic underline strikethrough | forecolor backcolor | fontfamily fontsize | alignleft aligncenter alignright alignjustify | bullist numlist outdent indent | table | link image | code removeformat',
+            toolbar_mode: 'wrap',
+            font_family_formats: 'Aptos=Aptos,sans-serif; 맑은 고딕=Malgun Gothic; 굴림=Gulim; 돋움=Dotum; 바탕=Batang; 궁서=Gungsuh; Segoe UI=Segoe UI,sans-serif; Arial=arial,helvetica,sans-serif; Arial Black=arial black,avant garde; Comic Sans MS=comic sans ms,sans-serif; Courier New=courier new,courier; Georgia=georgia,palatino; Helvetica=helvetica; Impact=impact,chicago; Tahoma=tahoma,arial,helvetica,sans-serif; Terminal=terminal,monaco; Times New Roman=times new roman,times; Verdana=verdana,geneva',
             skin: '{skin}',
             skin_url: 'https://tinymce-draft.local/skins/ui/{skin}',
             content_css: 'https://tinymce-draft.local/skins/content/{contentCss}/content.min.css',
-            content_style: 'body {{ font-family: Segoe UI, sans-serif; font-size: 14px; color: {textColor}; background-color: {backgroundColor}; padding: 16px; }}',
+            content_style: 'body {{ font-family: Aptos, sans-serif; font-size: 14px; color: {textColor}; background-color: {backgroundColor}; padding: 16px; }}',
             table_toolbar: 'tableprops tabledelete | tableinsertrowbefore tableinsertrowafter tabledeleterow | tableinsertcolbefore tableinsertcolafter tabledeletecol',
             table_appearance_options: true,
             table_default_attributes: {{ border: '1' }},
@@ -3875,6 +3877,9 @@ public partial class MainWindow : FluentWindow
             {
                 ContactSuggestionsHeader.Visibility = Visibility.Visible;
                 ContactSuggestionItems.ItemsSource = contacts;
+
+                // 비동기 프로필 사진 로딩 (UI 차단 없이)
+                _ = _contactSearchService.EnrichWithPhotosAsync(contacts);
             }
             else
             {

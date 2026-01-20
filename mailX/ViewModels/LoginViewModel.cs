@@ -53,10 +53,10 @@ public partial class LoginViewModel : ViewModelBase
     private string? _clientId;
 
     /// <summary>
-    /// 입력된 TenantId (새 로그인 시, 기본값: organizations)
+    /// 입력된 TenantId (새 로그인 시, 단일 테넌트 앱은 실제 테넌트 ID 필요)
     /// </summary>
     [ObservableProperty]
-    private string _tenantId = "organizations";
+    private string _tenantId = "";
 
     /// <summary>
     /// 설정 저장 여부
@@ -91,9 +91,9 @@ public partial class LoginViewModel : ViewModelBase
     public bool CanLoginWithSaved => HasSavedAccount && HasSavedClientId && !IsLoading;
 
     /// <summary>
-    /// 로그인 가능 여부 (ClientId가 있거나 입력됨)
+    /// 로그인 가능 여부 (ClientId와 TenantId가 있거나 입력됨)
     /// </summary>
-    public bool CanLogin => !IsLoading && (HasSavedClientId || !string.IsNullOrWhiteSpace(ClientId));
+    public bool CanLogin => !IsLoading && (HasSavedClientId || (!string.IsNullOrWhiteSpace(ClientId) && !string.IsNullOrWhiteSpace(TenantId)));
 
     /// <summary>
     /// 로그인 성공 이벤트 (View에서 DialogResult 설정용)
@@ -145,6 +145,14 @@ public partial class LoginViewModel : ViewModelBase
     }
 
     /// <summary>
+    /// TenantId 변경 시 로그인 버튼 상태 업데이트
+    /// </summary>
+    partial void OnTenantIdChanged(string value)
+    {
+        OnPropertyChanged(nameof(CanLogin));
+    }
+
+    /// <summary>
     /// 저장된 로그인 설정 로드
     /// </summary>
     public void LoadSavedSettings()
@@ -186,10 +194,14 @@ public partial class LoginViewModel : ViewModelBase
                 _graphAuthService.Initialize(ClientId, TenantId);
             }
 
-            // ClientId 확인
+            // ClientId, TenantId 확인
             if (!_graphAuthService.IsConfigured)
             {
-                throw new Exception("Azure AD ClientId를 입력해주세요.");
+                if (string.IsNullOrWhiteSpace(ClientId))
+                    throw new Exception("Azure AD Client ID를 입력해주세요.");
+                if (string.IsNullOrWhiteSpace(TenantId))
+                    throw new Exception("Azure AD Tenant ID를 입력해주세요. (Azure Portal에서 디렉터리(테넌트) ID 확인)");
+                throw new Exception("Azure AD 설정이 올바르지 않습니다.");
             }
 
             // MSAL 대화형 로그인 실행

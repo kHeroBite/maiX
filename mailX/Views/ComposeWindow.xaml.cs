@@ -169,10 +169,12 @@ public partial class ComposeWindow : FluentWindow
             suffix: '.min',
             plugins: 'table lists link image code',
             toolbar: 'bold italic underline strikethrough | forecolor backcolor | fontfamily fontsize | alignleft aligncenter alignright alignjustify | bullist numlist outdent indent | table | link image | code removeformat',
+            toolbar_mode: 'wrap',
+            font_family_formats: 'Aptos=Aptos,sans-serif; 맑은 고딕=Malgun Gothic; 굴림=Gulim; 돋움=Dotum; 바탕=Batang; 궁서=Gungsuh; Segoe UI=Segoe UI,sans-serif; Arial=arial,helvetica,sans-serif; Arial Black=arial black,avant garde; Comic Sans MS=comic sans ms,sans-serif; Courier New=courier new,courier; Georgia=georgia,palatino; Helvetica=helvetica; Impact=impact,chicago; Tahoma=tahoma,arial,helvetica,sans-serif; Terminal=terminal,monaco; Times New Roman=times new roman,times; Verdana=verdana,geneva',
             skin: '{skin}',
             skin_url: 'https://tinymce.local/skins/ui/{skin}',
             content_css: 'https://tinymce.local/skins/content/{contentCss}/content.min.css',
-            content_style: 'body {{ font-family: Segoe UI, sans-serif; font-size: 14px; color: {textColor}; background-color: {backgroundColor}; padding: 16px; }}',
+            content_style: 'body {{ font-family: Aptos, sans-serif; font-size: 14px; color: {textColor}; background-color: {backgroundColor}; padding: 16px; }}',
             table_toolbar: 'tableprops tabledelete | tableinsertrowbefore tableinsertrowafter tabledeleterow | tableinsertcolbefore tableinsertcolafter tabledeletecol',
             table_appearance_options: true,
             table_default_attributes: {{ border: '1' }},
@@ -801,12 +803,20 @@ public partial class ComposeWindow : FluentWindow
                     break;
 
                 case Key.Enter:
-                case Key.Tab:
                     if (_currentListBox.SelectedIndex >= 0)
                     {
                         ApplySelectedSuggestion();
-                        e.Handled = true;
                     }
+                    e.Handled = true;
+                    break;
+
+                case Key.Tab:
+                    // Tab 키: 선택된 항목 적용 후 포커스 이동 방지
+                    if (_currentListBox.SelectedIndex >= 0)
+                    {
+                        ApplySelectedSuggestion();
+                    }
+                    e.Handled = true; // 팝업이 열려있으면 항상 Tab 이동 방지
                     break;
 
                 case Key.Escape:
@@ -986,9 +996,9 @@ public partial class ComposeWindow : FluentWindow
     }
 
     /// <summary>
-    /// 자동완성 Popup 표시
+    /// 자동완성 Popup 표시 및 프로필 사진 비동기 로딩
     /// </summary>
-    private void ShowSuggestionPopup(List<ContactSuggestion> suggestions)
+    private async void ShowSuggestionPopup(List<ContactSuggestion> suggestions)
     {
         if (_currentPopup == null || _currentListBox == null) return;
 
@@ -997,6 +1007,19 @@ public partial class ComposeWindow : FluentWindow
         _currentListBox.SelectedIndex = 0;
 
         _currentPopup.IsOpen = true;
+
+        // 비동기 프로필 사진 로딩 (팝업 표시 후 UI 차단 없이 로드)
+        if (_contactSearchService != null)
+        {
+            try
+            {
+                await _contactSearchService.EnrichWithPhotosAsync(suggestions);
+            }
+            catch (Exception ex)
+            {
+                Log4.Debug($"프로필 사진 로딩 실패 (무시): {ex.Message}");
+            }
+        }
     }
 
     /// <summary>

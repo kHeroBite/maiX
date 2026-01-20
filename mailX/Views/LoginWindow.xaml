@@ -44,7 +44,7 @@
                     <StackPanel VerticalAlignment="Bottom" Margin="30,0,30,50">
                         <StackPanel Orientation="Horizontal">
                             <TextBlock Text="m" FontSize="28" FontWeight="Bold" Foreground="White"/>
-                            <TextBlock Text="Ai" FontSize="28" FontWeight="Bold" Foreground="#FF4444"/>
+                            <TextBlock Text="Ai" FontSize="28" FontWeight="Bold" Foreground="#7FB8D8"/>
                             <TextBlock Text="l" FontSize="28" FontWeight="Bold" Foreground="White"/>
                             <TextBlock Text="X" FontSize="28" FontWeight="Bold" FontStyle="Italic" Foreground="White">
                                 <TextBlock.Effect>
@@ -208,6 +208,14 @@
                                         </Button>
                                     </Grid>
                                 </Border>
+
+                                <!-- 자동 로그인 체크박스 -->
+                                <CheckBox Content="자동 로그인"
+                                          IsChecked="{Binding AutoLogin}"
+                                          Foreground="#404040"
+                                          FontSize="12"
+                                          Margin="0,10,0,0"
+                                          ToolTip="다음 시작 시 자동으로 로그인합니다"/>
 
                                 <!-- 저장된 계정으로 로그인 버튼 -->
                                 <Button Content="이 계정으로 로그인"

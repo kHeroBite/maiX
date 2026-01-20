@@ -8,6 +8,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Graph.Models;
 using mailX.Data;
 using mailX.Models;
+using mailX.Services.Cache;
 using mailX.Services.Graph;
 using mailX.Utils;
 using Serilog;
@@ -25,6 +26,7 @@ public class ContactSearchService
     private readonly MailXDbContext _dbContext;
     private readonly GraphContactService _contactService;
     private readonly GraphAuthService _authService;
+    private readonly ProfilePhotoCacheService _photoCacheService;
     private readonly ILogger _logger;
 
     // 캐시 (10분 유효)
@@ -40,11 +42,13 @@ public class ContactSearchService
     public ContactSearchService(
         MailXDbContext dbContext,
         GraphContactService contactService,
-        GraphAuthService authService)
+        GraphAuthService authService,
+        ProfilePhotoCacheService photoCacheService)
     {
         _dbContext = dbContext ?? throw new ArgumentNullException(nameof(dbContext));
         _contactService = contactService ?? throw new ArgumentNullException(nameof(contactService));
         _authService = authService ?? throw new ArgumentNullException(nameof(authService));
+        _photoCacheService = photoCacheService ?? throw new ArgumentNullException(nameof(photoCacheService));
         _logger = Log.ForContext<ContactSearchService>();
     }
 
@@ -221,7 +225,8 @@ public class ContactSearchService
                         JobTitle = contact.JobTitle,
                         CompanyName = contact.CompanyName,
                         Source = ContactSource.Contact,
-                        ContactFrequency = 0
+                        ContactFrequency = 0,
+                        ContactId = contact.Id // 프로필 사진 조회용 ID
                     })
                 .Where(s => !string.IsNullOrEmpty(s.Email))
                 .Take(MaxResults / 3) // 연락처는 최대 6개
@@ -278,7 +283,8 @@ public class ContactSearchService
                     JobTitle = u.JobTitle,
                     CompanyName = u.CompanyName,
                     Source = ContactSource.Organization,
-                    ContactFrequency = 0
+                    ContactFrequency = 0,
+                    ContactId = u.Id // 프로필 사진 조회용 ID
                 })
                 .ToList();
 
@@ -320,6 +326,23 @@ public class ContactSearchService
         if (expiredKeys.Count > 0)
         {
             _logger.Debug("만료된 캐시 {Count}건 정리됨", expiredKeys.Count);
+        }
+    }
+
+    /// <summary>
+    /// 연락처 목록에 프로필 사진 비동기 로딩
+    /// 팝업 표시 후 호출하여 UI 차단 없이 사진 로드
+    /// </summary>
+    /// <param name="suggestions">연락처 목록</param>
+    public async Task EnrichWithPhotosAsync(IEnumerable<ContactSuggestion> suggestions)
+    {
+        try
+        {
+            await _photoCacheService.LoadPhotosAsync(suggestions);
+        }
+        catch (Exception ex)
+        {
+            _logger.Warning(ex, "프로필 사진 로딩 실패");
         }
     }
 

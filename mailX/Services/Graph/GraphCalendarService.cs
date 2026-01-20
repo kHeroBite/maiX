@@ -379,6 +379,20 @@ public class GraphCalendarService
                 newEvent.Categories = request.Categories;
             }
 
+            // 상태 설정 (ShowAs)
+            if (!string.IsNullOrEmpty(request.ShowAs))
+            {
+                newEvent.ShowAs = request.ShowAs.ToLower() switch
+                {
+                    "free" => FreeBusyStatus.Free,
+                    "tentative" => FreeBusyStatus.Tentative,
+                    "busy" => FreeBusyStatus.Busy,
+                    "oof" => FreeBusyStatus.Oof,
+                    "workingelsewhere" => FreeBusyStatus.WorkingElsewhere,
+                    _ => FreeBusyStatus.Busy
+                };
+            }
+
             // 온라인 회의 설정 (true일 때만 설정, false면 null 유지)
             if (request.IsOnlineMeeting)
             {
@@ -386,14 +400,30 @@ public class GraphCalendarService
                 newEvent.OnlineMeetingProvider = OnlineMeetingProviderType.TeamsForBusiness;
             }
 
-            // 참석자 추가
+            // 참석자 추가 (필수 + 선택적)
+            var allAttendees = new List<Attendee>();
+
             if (request.Attendees?.Any() == true)
             {
-                newEvent.Attendees = request.Attendees.Select(email => new Attendee
+                allAttendees.AddRange(request.Attendees.Select(email => new Attendee
                 {
                     EmailAddress = new EmailAddress { Address = email },
                     Type = AttendeeType.Required
-                }).ToList();
+                }));
+            }
+
+            if (request.OptionalAttendees?.Any() == true)
+            {
+                allAttendees.AddRange(request.OptionalAttendees.Select(email => new Attendee
+                {
+                    EmailAddress = new EmailAddress { Address = email },
+                    Type = AttendeeType.Optional
+                }));
+            }
+
+            if (allAttendees.Any())
+            {
+                newEvent.Attendees = allAttendees;
             }
 
             _logger.Debug("일정 생성 API 호출: Subject={Subject}, Start={Start}, End={End}, IsAllDay={IsAllDay}",
@@ -475,6 +505,53 @@ public class GraphCalendarService
             if (request.Categories?.Any() == true)
             {
                 updatedEvent.Categories = request.Categories;
+            }
+
+            // 상태 설정 (ShowAs)
+            if (!string.IsNullOrEmpty(request.ShowAs))
+            {
+                updatedEvent.ShowAs = request.ShowAs.ToLower() switch
+                {
+                    "free" => FreeBusyStatus.Free,
+                    "tentative" => FreeBusyStatus.Tentative,
+                    "busy" => FreeBusyStatus.Busy,
+                    "oof" => FreeBusyStatus.Oof,
+                    "workingelsewhere" => FreeBusyStatus.WorkingElsewhere,
+                    _ => FreeBusyStatus.Busy
+                };
+            }
+
+            // 온라인 회의 설정
+            if (request.IsOnlineMeeting)
+            {
+                updatedEvent.IsOnlineMeeting = true;
+                updatedEvent.OnlineMeetingProvider = OnlineMeetingProviderType.TeamsForBusiness;
+            }
+
+            // 참석자 추가 (필수 + 선택적)
+            var allAttendees = new List<Attendee>();
+
+            if (request.Attendees?.Any() == true)
+            {
+                allAttendees.AddRange(request.Attendees.Select(email => new Attendee
+                {
+                    EmailAddress = new EmailAddress { Address = email },
+                    Type = AttendeeType.Required
+                }));
+            }
+
+            if (request.OptionalAttendees?.Any() == true)
+            {
+                allAttendees.AddRange(request.OptionalAttendees.Select(email => new Attendee
+                {
+                    EmailAddress = new EmailAddress { Address = email },
+                    Type = AttendeeType.Optional
+                }));
+            }
+
+            if (allAttendees.Any())
+            {
+                updatedEvent.Attendees = allAttendees;
             }
 
             _logger.Debug("일정 수정 API 호출: EventId={EventId}, Subject={Subject}", eventId, request.Subject);
@@ -1226,9 +1303,11 @@ public class EventCreateRequest
     public string? Body { get; set; }
     public bool IsOnlineMeeting { get; set; }
     public List<string>? Attendees { get; set; }
+    public List<string>? OptionalAttendees { get; set; }
     public int ReminderMinutesBefore { get; set; } = 15;
     public string? RecurrencePattern { get; set; } // None, Daily, Weekly, Monthly, Yearly
     public List<string>? Categories { get; set; }
+    public string? ShowAs { get; set; } // free, tentative, busy, oof, workingElsewhere
 }
 
 /// <summary>

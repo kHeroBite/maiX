@@ -15,6 +15,7 @@ using mailX.Services.Cloud;
 using mailX.Services.Converter;
 using mailX.Services.Graph;
 using mailX.Services.Notification;
+using mailX.Services.Cache;
 using mailX.Services.Search;
 using mailX.Services.Storage;
 using mailX.Services.Sync;
@@ -203,6 +204,9 @@ public partial class App : Application
         services.AddScoped<GraphMailService>();
         services.AddScoped<GraphCalendarService>();
         services.AddScoped<GraphContactService>();
+
+        // 프로필 사진 캐시 서비스 등록
+        services.AddSingleton<ProfilePhotoCacheService>();
 
         // 연락처 검색 서비스 등록
         services.AddScoped<ContactSearchService>();

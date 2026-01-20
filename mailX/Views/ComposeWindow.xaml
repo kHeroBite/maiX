@@ -20,6 +20,8 @@
 
     <ui:FluentWindow.Resources>
         <converters:BoolToVisibilityConverter x:Key="BoolToVisibilityConverter"/>
+        <converters:NullToVisibilityConverter x:Key="NullToVisibilityConverter"/>
+        <converters:Base64ToImageSourceConverter x:Key="Base64ToImageSourceConverter"/>
 
         <!-- 연락처 제안 아이템 템플릿 -->
         <DataTemplate x:Key="ContactSuggestionTemplate">
@@ -43,19 +45,29 @@
                         <ColumnDefinition Width="Auto"/>
                     </Grid.ColumnDefinitions>
 
-                    <!-- 이니셜 아바타 -->
-                    <Border Grid.Column="0"
-                            Width="32" Height="32"
-                            CornerRadius="16"
-                            Background="{DynamicResource SystemAccentColorSecondaryBrush}"
-                            Margin="0,0,10,0">
-                        <TextBlock Text="{Binding Initials}"
-                                   FontSize="12"
-                                   FontWeight="SemiBold"
-                                   Foreground="White"
-                                   HorizontalAlignment="Center"
-                                   VerticalAlignment="Center"/>
-                    </Border>
+                    <!-- 프로필 사진 / 이니셜 컨테이너 -->
+                    <Grid Grid.Column="0" Width="32" Height="32" Margin="0,0,10,0">
+                        <!-- 프로필 사진 (있을 때만 표시) -->
+                        <Border CornerRadius="16"
+                                Visibility="{Binding PhotoBase64, Converter={StaticResource NullToVisibilityConverter}}">
+                            <Border.Background>
+                                <ImageBrush ImageSource="{Binding PhotoBase64, Converter={StaticResource Base64ToImageSourceConverter}}"
+                                            Stretch="UniformToFill"/>
+                            </Border.Background>
+                        </Border>
+
+                        <!-- 이니셜 아바타 (사진 없을 때 표시) -->
+                        <Border CornerRadius="16"
+                                Background="{DynamicResource SystemAccentColorSecondaryBrush}"
+                                Visibility="{Binding PhotoBase64, Converter={StaticResource NullToVisibilityConverter}, ConverterParameter=Invert}">
+                            <TextBlock Text="{Binding Initials}"
+                                       FontSize="12"
+                                       FontWeight="SemiBold"
+                                       Foreground="White"
+                                       HorizontalAlignment="Center"
+                                       VerticalAlignment="Center"/>
+                        </Border>
+                    </Grid>
 
                     <!-- 이름 및 이메일 -->
                     <StackPanel Grid.Column="1" VerticalAlignment="Center">

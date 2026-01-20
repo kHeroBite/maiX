@@ -123,6 +123,12 @@ public class Email
     [MaxLength(500)]
     public string? ParentFolderId { get; set; }
 
+    /// <summary>
+    /// 임시보관함 메일 여부 (계산된 속성)
+    /// </summary>
+    [System.ComponentModel.DataAnnotations.Schema.NotMapped]
+    public bool IsDraft { get; set; }
+
     // ===== AI 분석 결과 필드 =====
 
     /// <summary>

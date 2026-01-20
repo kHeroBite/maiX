@@ -1,3 +1,5 @@
+using CommunityToolkit.Mvvm.ComponentModel;
+
 namespace mailX.Models;
 
 /// <summary>
@@ -23,8 +25,9 @@ public enum ContactSource
 
 /// <summary>
 /// 연락처 자동완성 제안 모델
+/// ObservableObject 상속으로 PropertyChanged 지원 (프로필 사진 비동기 로딩용)
 /// </summary>
-public class ContactSuggestion
+public partial class ContactSuggestion : ObservableObject
 {
     /// <summary>
     /// 표시 이름 (예: 김기로)
@@ -60,6 +63,36 @@ public class ContactSuggestion
     /// 연락 빈도 (정렬용)
     /// </summary>
     public int ContactFrequency { get; set; }
+
+    /// <summary>
+    /// Graph API용 ID (연락처: contactId, 조직: userId)
+    /// </summary>
+    public string? ContactId { get; set; }
+
+    /// <summary>
+    /// 프로필 사진 Base64 (null이면 이니셜 표시)
+    /// ObservableProperty로 선언하여 비동기 로딩 시 UI 자동 갱신
+    /// </summary>
+    [ObservableProperty]
+    private string? _photoBase64;
+
+    /// <summary>
+    /// 사진 로드 완료 여부 (중복 로드 방지)
+    /// </summary>
+    public bool PhotoLoaded { get; set; }
+
+    /// <summary>
+    /// 사진 존재 여부 (UI 바인딩용)
+    /// </summary>
+    public bool HasPhoto => !string.IsNullOrEmpty(PhotoBase64);
+
+    /// <summary>
+    /// PhotoBase64 변경 시 HasPhoto도 알림
+    /// </summary>
+    partial void OnPhotoBase64Changed(string? value)
+    {
+        OnPropertyChanged(nameof(HasPhoto));
+    }
 
     /// <summary>
     /// 포맷된 주소 (예: 김기로 <ryo@diquest.com>)

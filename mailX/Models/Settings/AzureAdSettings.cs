@@ -17,10 +17,10 @@ public class AzureAdSettings
     public string? ClientId { get; set; }
 
     /// <summary>
-    /// 테넌트 ID (기본값: common - 모든 조직 및 개인 계정)
+    /// 테넌트 ID (단일 테넌트 앱은 실제 테넌트 ID 필요)
     /// </summary>
     [XmlElement("TenantId")]
-    public string TenantId { get; set; } = "common";
+    public string TenantId { get; set; } = "";
 
     /// <summary>
     /// 요청할 권한 범위 (XML에서 로드되지 않으면 기본값 사용)
