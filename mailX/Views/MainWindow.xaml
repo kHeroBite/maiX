@@ -1721,7 +1721,8 @@
                          ScrollViewer.HorizontalScrollBarVisibility="Disabled"
                          PreviewMouseRightButtonDown="EmailListBox_PreviewMouseRightButtonDown"
                          PreviewMouseLeftButtonDown="EmailListBox_PreviewMouseLeftButtonDown"
-                         PreviewMouseMove="EmailListBox_PreviewMouseMove">
+                         PreviewMouseMove="EmailListBox_PreviewMouseMove"
+                         MouseDoubleClick="EmailListBox_MouseDoubleClick">
                     <ListBox.ContextMenu>
                         <ContextMenu Background="{DynamicResource ApplicationBackgroundBrush}"
                                      BorderBrush="{DynamicResource ControlElevationBorderBrush}"

@@ -3189,6 +3189,51 @@ public partial class MainWindow : FluentWindow
     }
 
     /// <summary>
+    /// 메일 리스트 더블클릭 - 새 창에서 메일 열기
+    /// 임시보관함: 메일 작성 창, 그 외: 메일 보기 창
+    /// </summary>
+    private void EmailListBox_MouseDoubleClick(object sender, MouseButtonEventArgs e)
+    {
+        // 클릭한 위치에서 ListBoxItem 찾기
+        var element = e.OriginalSource as DependencyObject;
+        var listBoxItem = FindAncestor<System.Windows.Controls.ListBoxItem>(element);
+        if (listBoxItem == null) return;
+
+        var email = listBoxItem.DataContext as Email;
+        if (email == null) return;
+
+        try
+        {
+            // 임시보관함이면 메일 작성 창으로 열기
+            if (IsDraftsFolder(_viewModel.SelectedFolder))
+            {
+                Log4.Info($"임시보관함 메일 더블클릭 - 작성 창으로 열기: {email.Subject}");
+                var graphMailService = (App.Current as App)?.GraphMailService;
+                if (graphMailService == null)
+                {
+                    Log4.Warn("GraphMailService를 가져올 수 없습니다.");
+                    return;
+                }
+                var syncService = (App.Current as App)?.BackgroundSyncService;
+                var viewModel = new ViewModels.ComposeViewModel(graphMailService, syncService, ComposeMode.EditDraft, email);
+                var composeWindow = new ComposeWindow(viewModel);
+                composeWindow.Show();
+            }
+            else
+            {
+                // 그 외 폴더는 메일 보기 창으로 열기
+                Log4.Info($"메일 더블클릭 - 보기 창으로 열기: {email.Subject}");
+                var viewWindow = new EmailViewWindow(email);
+                viewWindow.Show();
+            }
+        }
+        catch (Exception ex)
+        {
+            Log4.Error($"메일 새 창 열기 실패: {ex.Message}");
+        }
+    }
+
+    /// <summary>
     /// 폴더 트리 드래그 진입 - 드롭 가능 여부 표시
     /// </summary>
     private void FolderTreeView_DragEnter(object sender, DragEventArgs e)
