@@ -46,6 +46,7 @@ public partial class EmailViewWindow : FluentWindow
 
             // 이벤트 핸들러 등록
             BodyWebView.CoreWebView2.NavigationStarting += CoreWebView2_NavigationStarting;
+            BodyWebView.CoreWebView2.NewWindowRequested += CoreWebView2_NewWindowRequested;
             BodyWebView.CoreWebView2.ContextMenuRequested += CoreWebView2_ContextMenuRequested;
 
             // 다크/라이트 모드에 따른 배경색 설정
@@ -140,6 +141,38 @@ public partial class EmailViewWindow : FluentWindow
             {
                 Log4.Warn($"링크 열기 실패: {ex.Message}");
             }
+        }
+    }
+
+    /// <summary>
+    /// WebView2 새 창 요청 처리 - mailto: 링크 클릭 시
+    /// </summary>
+    private void CoreWebView2_NewWindowRequested(object? sender, Microsoft.Web.WebView2.Core.CoreWebView2NewWindowRequestedEventArgs e)
+    {
+        Log4.Debug($"NewWindowRequested: {e.Uri}");
+
+        // mailto: 링크인 경우 새 메일 작성 창 열기
+        if (e.Uri.StartsWith("mailto:", StringComparison.OrdinalIgnoreCase))
+        {
+            e.Handled = true;
+            var mailtoUri = e.Uri;
+            Dispatcher.BeginInvoke(new Action(() => OpenComposeWindowWithMailto(mailtoUri)));
+            return;
+        }
+
+        // 기타 링크는 기본 브라우저로 열기
+        e.Handled = true;
+        try
+        {
+            System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
+            {
+                FileName = e.Uri,
+                UseShellExecute = true
+            });
+        }
+        catch (Exception ex)
+        {
+            Log4.Error($"새 창 링크 열기 실패: {ex.Message}");
         }
     }
 
