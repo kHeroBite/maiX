@@ -1,5 +1,7 @@
 using System.Text.Json;
 using System.Windows;
+using System.Windows.Input;
+using Microsoft.EntityFrameworkCore;
 using mailX.Models;
 using mailX.Utils;
 using mailX.ViewModels;
@@ -13,6 +15,7 @@ namespace mailX.Views;
 public partial class EmailViewWindow : FluentWindow
 {
     private readonly Email _email;
+    private bool _webView2Initialized = false;
 
     public EmailViewWindow(Email email)
     {
@@ -20,6 +23,41 @@ public partial class EmailViewWindow : FluentWindow
         _email = email;
 
         Loaded += EmailViewWindow_Loaded;
+        Closing += EmailViewWindow_Closing;
+        KeyDown += EmailViewWindow_KeyDown;
+    }
+
+    /// <summary>
+    /// ESC 키로 창 닫기 (보기 모드이므로 확인 없이 바로 닫기)
+    /// </summary>
+    private void EmailViewWindow_KeyDown(object sender, KeyEventArgs e)
+    {
+        if (e.Key == Key.Escape)
+        {
+            e.Handled = true;
+            Close();
+        }
+    }
+
+    /// <summary>
+    /// 창 닫기 시 WebView2 정리
+    /// </summary>
+    private void EmailViewWindow_Closing(object? sender, System.ComponentModel.CancelEventArgs e)
+    {
+        try
+        {
+            if (_webView2Initialized && BodyWebView.CoreWebView2 != null)
+            {
+                // 이벤트 핸들러 해제
+                BodyWebView.CoreWebView2.NavigationStarting -= CoreWebView2_NavigationStarting;
+                BodyWebView.CoreWebView2.NewWindowRequested -= CoreWebView2_NewWindowRequested;
+                BodyWebView.CoreWebView2.ContextMenuRequested -= CoreWebView2_ContextMenuRequested;
+            }
+        }
+        catch (Exception ex)
+        {
+            Log4.Warn($"WebView2 정리 중 오류 (무시): {ex.Message}");
+        }
     }
 
     private async void EmailViewWindow_Loaded(object sender, RoutedEventArgs e)
@@ -43,6 +81,7 @@ public partial class EmailViewWindow : FluentWindow
 
             // WebView2 초기화 및 본문 로드
             await BodyWebView.EnsureCoreWebView2Async();
+            _webView2Initialized = true;
 
             // 이벤트 핸들러 등록
             BodyWebView.CoreWebView2.NavigationStarting += CoreWebView2_NavigationStarting;
@@ -53,24 +92,25 @@ public partial class EmailViewWindow : FluentWindow
             var isDarkMode = Wpf.Ui.Appearance.ApplicationThemeManager.GetAppTheme() == Wpf.Ui.Appearance.ApplicationTheme.Dark;
             var bgColor = isDarkMode ? "#1e1e1e" : "#ffffff";
             var textColor = isDarkMode ? "#e0e0e0" : "#333333";
+            var scrollbarThumbColor = isDarkMode ? "#555555" : "#c0c0c0";
+            var scrollbarThumbHoverColor = isDarkMode ? "#777777" : "#a0a0a0";
+            var scrollbarTrackColor = isDarkMode ? "#2d2d2d" : "#f0f0f0";
 
-            // 다크모드일 때 인라인 스타일의 흰색 배경을 오버라이드하는 CSS
+            // 다크모드일 때 인라인 스타일 강제 덮어쓰기 (MainWindow와 동일)
             var darkModeOverride = isDarkMode ? @"
-        /* 다크모드: 인라인 스타일 흰색 배경 오버라이드 */
-        * {
-            background-color: transparent !important;
-        }
-        body {
-            background-color: #1e1e1e !important;
-        }
-        table, tr, td, th, div, p, span {
-            background-color: transparent !important;
-            background: transparent !important;
-        }
-        /* 흰색/밝은색 텍스트 보정 */
-        [style*='color: white'], [style*='color:#fff'], [style*='color: #fff'] {
+        /* 다크모드: 인라인 스타일 강제 덮어쓰기 */
+        body, p, div, span, td, th, li, h1, h2, h3, h4, h5, h6, font, blockquote, pre, code {
             color: #e0e0e0 !important;
+            background-color: transparent !important;
         }
+        /* 이미지 배경 제외 (투명하게) */
+        img { background-color: transparent !important; }
+        a { color: #6db3f2 !important; }
+        table { border-color: #444444 !important; background-color: transparent !important; }
+        td, th { border-color: #444444 !important; background-color: transparent !important; }
+        /* 강제 배경색 리셋 */
+        [style*='background'] { background-color: transparent !important; background: transparent !important; }
+        [bgcolor] { background-color: transparent !important; }
 " : "";
 
             var htmlContent = $@"
@@ -96,8 +136,35 @@ public partial class EmailViewWindow : FluentWindow
             border-radius: 4px;
             overflow-x: auto;
         }}
+        /* 스크롤바 스타일 (6px 두께) */
+        ::-webkit-scrollbar {{ width: 6px; height: 6px; }}
+        ::-webkit-scrollbar-track {{ background: {scrollbarTrackColor}; border-radius: 3px; }}
+        ::-webkit-scrollbar-thumb {{ background: {scrollbarThumbColor}; border-radius: 3px; }}
+        ::-webkit-scrollbar-thumb:hover {{ background: {scrollbarThumbHoverColor}; }}
         {darkModeOverride}
     </style>
+    <script>
+        // mailto 링크에 이름 포함시키기
+        document.addEventListener('DOMContentLoaded', function() {{
+            document.querySelectorAll('a[href^=""mailto:""]').forEach(function(link) {{
+                var href = link.getAttribute('href');
+                var email = href.substring(7).split('?')[0]; // mailto: 제거
+                var text = link.textContent.trim();
+
+                // 링크 텍스트가 @이름 형식이면 이름 추출
+                if (text.startsWith('@') && !text.includes('@', 1)) {{
+                    var name = text.substring(1); // @ 제거
+                    // href에 이름 <이메일> 형식으로 변경
+                    var newHref = 'mailto:' + encodeURIComponent(name + ' <' + email + '>');
+                    // subject, body 등 쿼리 파라미터 유지
+                    if (href.includes('?')) {{
+                        newHref += '?' + href.split('?')[1];
+                    }}
+                    link.setAttribute('href', newHref);
+                }}
+            }});
+        }});
+    </script>
 </head>
 <body>
 {_email.Body ?? ""}
@@ -264,8 +331,15 @@ public partial class EmailViewWindow : FluentWindow
 
             // mailto:email@example.com?subject=제목&body=본문 형식 파싱
             var mailtoContent = mailtoUri.Substring(7); // "mailto:" 제거
+
+            // URL 디코딩
+            mailtoContent = System.Web.HttpUtility.UrlDecode(mailtoContent);
+
             var parts = mailtoContent.Split('?');
-            var email = parts[0];
+            var toField = parts[0];
+
+            // 이름 <이메일> 형식 파싱 또는 이메일만 있는 경우 DB에서 이름 조회
+            var emailWithName = GetEmailWithNameFromDb(toField);
 
             var subject = "";
             var body = "";
@@ -291,7 +365,7 @@ public partial class EmailViewWindow : FluentWindow
             var syncService = (App.Current as App)?.BackgroundSyncService;
             var viewModel = new ComposeViewModel(graphMailService, syncService, ComposeMode.New, null);
 
-            viewModel.To = email;
+            viewModel.To = emailWithName;
             if (!string.IsNullOrEmpty(subject)) viewModel.Subject = subject;
             if (!string.IsNullOrEmpty(cc)) viewModel.Cc = cc;
             if (!string.IsNullOrEmpty(bcc)) viewModel.Bcc = bcc;
@@ -301,12 +375,56 @@ public partial class EmailViewWindow : FluentWindow
             composeWindow.Owner = this;
             composeWindow.Show();
 
-            Log4.Debug($"mailto 링크로 새 메일 작성 창 열림: {email}");
+            Log4.Debug($"mailto 링크로 새 메일 작성 창 열림: {emailWithName}");
         }
         catch (Exception ex)
         {
             Log4.Error($"mailto 링크 처리 실패: {ex.Message}");
         }
+    }
+
+    /// <summary>
+    /// 이메일 주소로 DB에서 이름을 찾아 "이름 &lt;이메일&gt;" 형식으로 반환
+    /// </summary>
+    private static string GetEmailWithNameFromDb(string emailString)
+    {
+        if (string.IsNullOrWhiteSpace(emailString))
+            return "";
+
+        emailString = emailString.Trim();
+
+        // 이미 "이름 <이메일>" 형식이면 그대로 반환
+        if (emailString.Contains("<") && emailString.Contains(">"))
+            return emailString;
+
+        // 이메일만 있는 경우 DB에서 이름 조회
+        try
+        {
+            using var context = new Data.MailXDbContext(
+                new Microsoft.EntityFrameworkCore.DbContextOptionsBuilder<Data.MailXDbContext>()
+                    .UseSqlite($"Data Source={App.DatabasePath}")
+                    .Options);
+
+            // From 필드에서 해당 이메일을 가진 레코드 검색
+            var fromWithName = context.Emails
+                .Where(e => e.From != null && e.From.Contains(emailString))
+                .Select(e => e.From)
+                .FirstOrDefault();
+
+            if (!string.IsNullOrEmpty(fromWithName) && fromWithName.Contains("<") && fromWithName.Contains(">"))
+            {
+                // "이름 <이메일>" 형식 발견
+                Log4.Debug($"DB에서 이름 찾음: {fromWithName}");
+                return fromWithName;
+            }
+        }
+        catch (Exception ex)
+        {
+            Log4.Warn($"DB에서 이름 조회 실패 (무시): {ex.Message}");
+        }
+
+        // 찾지 못하면 이메일만 반환
+        return emailString;
     }
 
     /// <summary>
@@ -332,5 +450,26 @@ public partial class EmailViewWindow : FluentWindow
         {
             return jsonArray;
         }
+    }
+
+    /// <summary>
+    /// 이메일 문자열을 파싱 - "이름 &lt;이메일&gt;" 형식이면 그대로 반환, 아니면 이메일만 반환
+    /// </summary>
+    private static string ParseEmailWithName(string emailString)
+    {
+        if (string.IsNullOrWhiteSpace(emailString))
+            return "";
+
+        emailString = emailString.Trim();
+
+        // "이름" <email> 또는 이름 <email> 형식 체크
+        if (emailString.Contains("<") && emailString.Contains(">"))
+        {
+            // 이미 이름 <이메일> 형식이면 그대로 반환
+            return emailString;
+        }
+
+        // 이메일만 있는 경우 그대로 반환
+        return emailString;
     }
 }

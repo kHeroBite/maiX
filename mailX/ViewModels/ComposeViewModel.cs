@@ -92,6 +92,17 @@ public partial class ComposeViewModel : ViewModelBase
     public ObservableCollection<AttachmentItem> Attachments { get; } = new();
 
     /// <summary>
+    /// 중요도 (high, normal, low)
+    /// </summary>
+    [ObservableProperty]
+    private string _importance = "normal";
+
+    /// <summary>
+    /// 첨부파일 유무
+    /// </summary>
+    public bool HasAttachments => Attachments.Count > 0;
+
+    /// <summary>
     /// 창 제목
     /// </summary>
     public string WindowTitle => _mode switch
@@ -128,6 +139,9 @@ public partial class ComposeViewModel : ViewModelBase
         {
             _draftMessageId = originalEmail.EntryId;
         }
+
+        // 첨부파일 변경 시 HasAttachments 속성 갱신
+        Attachments.CollectionChanged += (s, e) => OnPropertyChanged(nameof(HasAttachments));
 
         InitializeFromOriginalEmail();
     }

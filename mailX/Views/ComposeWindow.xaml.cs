@@ -580,6 +580,88 @@ public partial class ComposeWindow : FluentWindow
         return recipients;
     }
 
+    #region 중요도 설정
+
+    /// <summary>
+    /// 중요도 높음 클릭
+    /// </summary>
+    private void ImportanceHigh_Click(object sender, RoutedEventArgs e)
+    {
+        _viewModel.Importance = "high";
+        ImportanceButton.Content = "중요도: 높음";
+        Log4.Debug("중요도 설정: 높음");
+    }
+
+    /// <summary>
+    /// 중요도 보통 클릭
+    /// </summary>
+    private void ImportanceNormal_Click(object sender, RoutedEventArgs e)
+    {
+        _viewModel.Importance = "normal";
+        ImportanceButton.Content = "중요도";
+        Log4.Debug("중요도 설정: 보통");
+    }
+
+    /// <summary>
+    /// 중요도 낮음 클릭
+    /// </summary>
+    private void ImportanceLow_Click(object sender, RoutedEventArgs e)
+    {
+        _viewModel.Importance = "low";
+        ImportanceButton.Content = "중요도: 낮음";
+        Log4.Debug("중요도 설정: 낮음");
+    }
+
+    #endregion
+
+    #region 연락처 버튼 및 숨은 참조 토글
+
+    /// <summary>
+    /// 받는 사람 버튼 클릭 - 연락처 선택 (향후 구현)
+    /// </summary>
+    private void ToButton_Click(object sender, RoutedEventArgs e)
+    {
+        // 향후 연락처 선택 대화상자 구현
+        ToTextBox.Focus();
+    }
+
+    /// <summary>
+    /// 참조 버튼 클릭 - 연락처 선택 (향후 구현)
+    /// </summary>
+    private void CcButton_Click(object sender, RoutedEventArgs e)
+    {
+        // 향후 연락처 선택 대화상자 구현
+        CcTextBox.Focus();
+    }
+
+    /// <summary>
+    /// 숨은 참조 버튼 클릭 - 연락처 선택 (향후 구현)
+    /// </summary>
+    private void BccButton_Click(object sender, RoutedEventArgs e)
+    {
+        // 향후 연락처 선택 대화상자 구현
+        BccTextBox.Focus();
+    }
+
+    /// <summary>
+    /// 숨은 참조 토글 클릭
+    /// </summary>
+    private void BccToggle_Click(object sender, System.Windows.Input.MouseButtonEventArgs e)
+    {
+        if (BccRow.Visibility == Visibility.Collapsed)
+        {
+            BccRow.Visibility = Visibility.Visible;
+            BccToggleLink.Visibility = Visibility.Collapsed;
+        }
+        else
+        {
+            BccRow.Visibility = Visibility.Collapsed;
+            BccToggleLink.Visibility = Visibility.Visible;
+        }
+    }
+
+    #endregion
+
     #region 연락처 자동완성
 
     /// <summary>
