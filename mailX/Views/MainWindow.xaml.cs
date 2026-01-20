@@ -28,6 +28,8 @@ public partial class MainWindow : FluentWindow
     private Folder? _rightClickedFolder;
     private Email? _rightClickedEmail;
     private bool _webView2Initialized;
+    private bool _draftEditorInitialized;
+    private bool _draftEditorReady;
 
     // 실행취소용 변수 (삭제/이동 공통)
     private Email? _lastDeletedEmail;
@@ -92,12 +94,38 @@ public partial class MainWindow : FluentWindow
             });
         };
 
-        // SelectedEmail 변경 감지
-        _viewModel.PropertyChanged += (s, e) =>
+        // SelectedEmail 및 IsEditingDraft 변경 감지
+        _viewModel.PropertyChanged += async (s, e) =>
         {
             if (e.PropertyName == nameof(MainViewModel.SelectedEmail))
             {
+                // 편집 중에 다른 메일 선택 시 자동 저장
+                if (_viewModel.IsEditingDraft)
+                {
+                    await AutoSaveDraftAsync();
+                }
+
+                // 임시보관함 메일이면 편집 모드로 열기
+                if (_viewModel.SelectedEmail != null && IsDraftsFolder(_viewModel.SelectedFolder))
+                {
+                    OpenDraftForEditing(_viewModel.SelectedEmail);
+                    return;
+                }
+
                 LoadMailBodyAsync(_viewModel.SelectedEmail);
+            }
+            else if (e.PropertyName == nameof(MainViewModel.IsEditingDraft))
+            {
+                if (_viewModel.IsEditingDraft)
+                {
+                    // 편집 모드 진입 - TinyMCE 에디터 초기화 및 컨텐츠 로드
+                    await InitializeDraftEditorAsync();
+                }
+                else
+                {
+                    // 편집 모드 종료
+                    _draftEditorReady = false;
+                }
             }
         };
 
@@ -183,9 +211,21 @@ public partial class MainWindow : FluentWindow
 
             // WebView2 설정
             MailBodyWebView.CoreWebView2.Settings.IsScriptEnabled = true;
-            MailBodyWebView.CoreWebView2.Settings.AreDefaultContextMenusEnabled = true;
+            MailBodyWebView.CoreWebView2.Settings.AreDefaultContextMenusEnabled = true; // 이벤트 발생을 위해 true 유지
             MailBodyWebView.CoreWebView2.Settings.IsZoomControlEnabled = true;
             MailBodyWebView.CoreWebView2.Settings.IsSwipeNavigationEnabled = false;
+
+            // 테마에 맞게 컨텍스트 메뉴 색상 설정
+            var theme = Wpf.Ui.Appearance.ApplicationThemeManager.GetAppTheme();
+            MailBodyWebView.CoreWebView2.Profile.PreferredColorScheme =
+                theme == Wpf.Ui.Appearance.ApplicationTheme.Dark
+                    ? Microsoft.Web.WebView2.Core.CoreWebView2PreferredColorScheme.Dark
+                    : Microsoft.Web.WebView2.Core.CoreWebView2PreferredColorScheme.Light;
+
+            // 링크 클릭 이벤트 핸들러 등록
+            MailBodyWebView.CoreWebView2.NavigationStarting += CoreWebView2_NavigationStarting;
+            MailBodyWebView.CoreWebView2.NewWindowRequested += CoreWebView2_NewWindowRequested;
+            MailBodyWebView.CoreWebView2.ContextMenuRequested += CoreWebView2_ContextMenuRequested;
 
             Log4.Debug("WebView2 초기화 완료");
 
@@ -199,6 +239,493 @@ public partial class MainWindow : FluentWindow
         {
             Log4.Error($"WebView2 초기화 실패: {ex.Message}");
         }
+    }
+
+    #region 임시보관함 편집 TinyMCE 에디터
+
+    /// <summary>
+    /// 임시보관함 편집용 TinyMCE 에디터 초기화
+    /// </summary>
+    private async Task InitializeDraftEditorAsync()
+    {
+        try
+        {
+            if (!_draftEditorInitialized)
+            {
+                await DraftBodyWebView.EnsureCoreWebView2Async();
+                _draftEditorInitialized = true;
+
+                // 보안 설정
+                DraftBodyWebView.CoreWebView2.Settings.IsScriptEnabled = true;
+                DraftBodyWebView.CoreWebView2.Settings.AreDefaultContextMenusEnabled = false;
+                DraftBodyWebView.CoreWebView2.Settings.IsStatusBarEnabled = false;
+
+                // 메시지 수신 핸들러
+                DraftBodyWebView.CoreWebView2.WebMessageReceived += DraftEditor_WebMessageReceived;
+
+                Log4.Debug("DraftBodyWebView 초기화 완료");
+            }
+
+            // TinyMCE 에디터 로드
+            await LoadDraftTinyMCEEditorAsync();
+        }
+        catch (System.Exception ex)
+        {
+            Log4.Error($"DraftBodyWebView 초기화 실패: {ex.Message}");
+        }
+    }
+
+    /// <summary>
+    /// 임시보관함 편집용 TinyMCE HTML 로드
+    /// </summary>
+    private async Task LoadDraftTinyMCEEditorAsync()
+    {
+        // ThemeService에서 정확한 테마 상태 가져오기
+        var isDark = Services.Theme.ThemeService.Instance.IsDarkMode;
+
+        var backgroundColor = isDark ? "#1e1e1e" : "#ffffff";
+        var textColor = isDark ? "#ffffff" : "#000000";
+        var skin = isDark ? "oxide-dark" : "oxide";
+        var contentCss = isDark ? "dark" : "default";
+
+        // 로컬 TinyMCE 폴더 경로 설정 (Self-hosted)
+        var appDir = AppDomain.CurrentDomain.BaseDirectory;
+        var tinymcePath = System.IO.Path.Combine(appDir, "Assets", "tinymce");
+
+        // WebView2에서 로컬 파일에 접근할 수 있도록 가상 호스트 매핑
+        DraftBodyWebView.CoreWebView2.SetVirtualHostNameToFolderMapping(
+            "tinymce-draft.local", tinymcePath,
+            Microsoft.Web.WebView2.Core.CoreWebView2HostResourceAccessKind.Allow);
+
+        var editorHtml = $@"
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset='UTF-8'>
+    <script src='https://tinymce-draft.local/tinymce.min.js'></script>
+    <style>
+        * {{ margin: 0; padding: 0; box-sizing: border-box; }}
+        html, body {{
+            height: 100%;
+            background-color: {backgroundColor};
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }}
+        .tox-tinymce {{ border: none !important; }}
+    </style>
+</head>
+<body>
+    <textarea id='editor'></textarea>
+    <script>
+        let editor;
+
+        tinymce.init({{
+            selector: '#editor',
+            height: '100%',
+            width: '100%',
+            menubar: false,
+            statusbar: false,
+            base_url: 'https://tinymce-draft.local',
+            suffix: '.min',
+            plugins: 'table lists link image code',
+            toolbar: 'bold italic underline strikethrough | forecolor backcolor | fontfamily fontsize | alignleft aligncenter alignright alignjustify | bullist numlist outdent indent | table | link image | code removeformat',
+            skin: '{skin}',
+            skin_url: 'https://tinymce-draft.local/skins/ui/{skin}',
+            content_css: 'https://tinymce-draft.local/skins/content/{contentCss}/content.min.css',
+            content_style: 'body {{ font-family: Segoe UI, sans-serif; font-size: 14px; color: {textColor}; background-color: {backgroundColor}; padding: 16px; }}',
+            table_toolbar: 'tableprops tabledelete | tableinsertrowbefore tableinsertrowafter tabledeleterow | tableinsertcolbefore tableinsertcolafter tabledeletecol',
+            table_appearance_options: true,
+            table_default_attributes: {{ border: '1' }},
+            table_default_styles: {{ 'border-collapse': 'collapse', 'width': '100%' }},
+            browser_spellcheck: true,
+            contextmenu: false,
+            setup: function(ed) {{
+                editor = ed;
+                ed.on('init', function() {{
+                    window.chrome.webview.postMessage({{ type: 'ready' }});
+                }});
+            }}
+        }});
+
+        // C#에서 호출하는 함수들
+        window.getContent = function() {{
+            return editor ? editor.getContent() : '';
+        }};
+
+        window.setContent = function(html) {{
+            if (editor) {{
+                editor.setContent(html || '');
+            }}
+        }};
+
+        window.focus = function() {{
+            if (editor) {{
+                editor.focus();
+            }}
+        }};
+    </script>
+</body>
+</html>";
+
+        // WebView2로 HTML 로드
+        DraftBodyWebView.CoreWebView2.NavigateToString(editorHtml);
+    }
+
+    /// <summary>
+    /// 임시보관함 에디터 WebView2 메시지 수신 핸들러
+    /// </summary>
+    private async void DraftEditor_WebMessageReceived(object? sender, Microsoft.Web.WebView2.Core.CoreWebView2WebMessageReceivedEventArgs e)
+    {
+        try
+        {
+            var message = System.Text.Json.JsonSerializer.Deserialize<Dictionary<string, string>>(e.WebMessageAsJson);
+            if (message != null && message.TryGetValue("type", out var type))
+            {
+                if (type == "ready")
+                {
+                    _draftEditorReady = true;
+
+                    // 초기 컨텐츠 설정
+                    if (!string.IsNullOrEmpty(_viewModel.DraftBody))
+                    {
+                        await SetDraftEditorContentAsync(_viewModel.DraftBody);
+                    }
+
+                    Log4.Debug("임시보관함 TinyMCE 에디터 준비 완료");
+                }
+            }
+        }
+        catch (System.Exception ex)
+        {
+            Log4.Error($"DraftEditor 메시지 처리 실패: {ex.Message}");
+        }
+    }
+
+    /// <summary>
+    /// 임시보관함 에디터에 내용 설정
+    /// </summary>
+    public async Task SetDraftEditorContentAsync(string html)
+    {
+        if (!_draftEditorReady || DraftBodyWebView.CoreWebView2 == null) return;
+
+        var escapedHtml = System.Text.Json.JsonSerializer.Serialize(html ?? "");
+        await DraftBodyWebView.ExecuteScriptAsync($"window.setContent({escapedHtml})");
+    }
+
+    /// <summary>
+    /// 임시보관함 에디터에서 내용 가져오기
+    /// </summary>
+    public async Task<string> GetDraftEditorContentAsync()
+    {
+        if (!_draftEditorReady || DraftBodyWebView.CoreWebView2 == null) return "";
+
+        var result = await DraftBodyWebView.ExecuteScriptAsync("window.getContent()");
+        // JSON 문자열로 반환되므로 역직렬화
+        if (!string.IsNullOrEmpty(result) && result != "null")
+        {
+            return System.Text.Json.JsonSerializer.Deserialize<string>(result) ?? "";
+        }
+        return "";
+    }
+
+    /// <summary>
+    /// 임시보관함 에디터 내용을 ViewModel에 동기화
+    /// </summary>
+    public async Task SyncDraftEditorToViewModelAsync()
+    {
+        if (_draftEditorReady)
+        {
+            _viewModel.DraftBody = await GetDraftEditorContentAsync();
+            Log4.Debug($"DraftBody 동기화 완료: {_viewModel.DraftBody.Length} chars");
+        }
+    }
+
+    /// <summary>
+    /// 임시보관함 보내기 버튼 클릭
+    /// </summary>
+    private async void DraftSendButton_Click(object sender, RoutedEventArgs e)
+    {
+        try
+        {
+            // 에디터 내용을 ViewModel에 동기화
+            await SyncDraftEditorToViewModelAsync();
+
+            // ViewModel의 보내기 명령 실행
+            if (_viewModel.SendDraftCommand.CanExecute(null))
+            {
+                await _viewModel.SendDraftAsync();
+            }
+        }
+        catch (System.Exception ex)
+        {
+            Log4.Error($"임시보관함 발송 실패: {ex.Message}");
+        }
+    }
+
+    /// <summary>
+    /// 임시보관함 저장 버튼 클릭
+    /// </summary>
+    private async void DraftSaveButton_Click(object sender, RoutedEventArgs e)
+    {
+        try
+        {
+            // 에디터 내용을 ViewModel에 동기화
+            await SyncDraftEditorToViewModelAsync();
+
+            // ViewModel의 저장 명령 실행
+            if (_viewModel.SaveDraftCommand.CanExecute(null))
+            {
+                await _viewModel.SaveDraftAsync();
+            }
+        }
+        catch (System.Exception ex)
+        {
+            Log4.Error($"임시보관함 저장 실패: {ex.Message}");
+        }
+    }
+
+    /// <summary>
+    /// 임시보관함 자동 저장 (다른 메일 선택 시 호출)
+    /// </summary>
+    private async Task AutoSaveDraftAsync()
+    {
+        try
+        {
+            Log4.Info("[AutoSaveDraftAsync] 편집 중 다른 메일 선택 - 자동 저장 시작");
+
+            // 에디터 내용을 ViewModel에 동기화
+            await SyncDraftEditorToViewModelAsync();
+
+            // 내용이 있으면 저장
+            if (!string.IsNullOrWhiteSpace(_viewModel.DraftTo) ||
+                !string.IsNullOrWhiteSpace(_viewModel.DraftSubject) ||
+                !string.IsNullOrWhiteSpace(_viewModel.DraftBody))
+            {
+                await _viewModel.AutoSaveDraftAsync();
+                Log4.Info("[AutoSaveDraftAsync] 자동 저장 완료");
+            }
+            else
+            {
+                // 내용이 없으면 편집 모드만 종료 (SelectedEmail 유지)
+                _viewModel.CloseDraftEditor(resetSelectedEmail: false);
+                Log4.Debug("[AutoSaveDraftAsync] 내용 없음 - 편집 모드 종료");
+            }
+        }
+        catch (System.Exception ex)
+        {
+            Log4.Error($"[AutoSaveDraftAsync] 자동 저장 실패: {ex.Message}");
+            // 자동 저장 실패 시에도 편집 모드 종료 (SelectedEmail 유지)
+            _viewModel.CloseDraftEditor(resetSelectedEmail: false);
+        }
+    }
+
+    #endregion
+
+    /// <summary>
+    /// WebView2 링크 클릭 처리 - 새 브라우저 창에서 열기
+    /// </summary>
+    private void CoreWebView2_NavigationStarting(object? sender, Microsoft.Web.WebView2.Core.CoreWebView2NavigationStartingEventArgs e)
+    {
+        // 초기 로드(about:blank 또는 data:)는 허용
+        if (e.Uri.StartsWith("about:") || e.Uri.StartsWith("data:"))
+            return;
+
+        e.Cancel = true;
+
+        // mailto: 링크인 경우 새 메일 작성 창 열기
+        if (e.Uri.StartsWith("mailto:", StringComparison.OrdinalIgnoreCase))
+        {
+            OpenComposeWindowWithMailto(e.Uri);
+            return;
+        }
+
+        // 외부 링크 클릭 시 기본 브라우저로 열기
+        try
+        {
+            System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
+            {
+                FileName = e.Uri,
+                UseShellExecute = true
+            });
+            Log4.Debug($"링크 열기: {e.Uri}");
+        }
+        catch (System.Exception ex)
+        {
+            Log4.Error($"링크 열기 실패: {ex.Message}");
+        }
+    }
+
+    /// <summary>
+    /// WebView2 새 창 요청 처리 - mailto: 링크 등
+    /// </summary>
+    private void CoreWebView2_NewWindowRequested(object? sender, Microsoft.Web.WebView2.Core.CoreWebView2NewWindowRequestedEventArgs e)
+    {
+        Log4.Debug($"NewWindowRequested: {e.Uri}");
+
+        // mailto: 링크인 경우 새 메일 작성 창 열기
+        if (e.Uri.StartsWith("mailto:", StringComparison.OrdinalIgnoreCase))
+        {
+            e.Handled = true;
+            var mailtoUri = e.Uri;
+            // UI 스레드에서 비동기로 실행
+            Dispatcher.BeginInvoke(new Action(() => OpenComposeWindowWithMailto(mailtoUri)));
+            return;
+        }
+
+        // 기타 링크는 기본 브라우저로 열기
+        e.Handled = true;
+        try
+        {
+            System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
+            {
+                FileName = e.Uri,
+                UseShellExecute = true
+            });
+        }
+        catch (System.Exception ex)
+        {
+            Log4.Error($"새 창 링크 열기 실패: {ex.Message}");
+        }
+    }
+
+    /// <summary>
+    /// mailto: 링크로 새 메일 작성 창 열기
+    /// </summary>
+    private void OpenComposeWindowWithMailto(string mailtoUri)
+    {
+        try
+        {
+            Log4.Debug($"OpenComposeWindowWithMailto 시작: {mailtoUri}");
+
+            // mailto:email@example.com?subject=제목&body=본문 형식 파싱
+            // mailto: 제거 후 파싱
+            var mailtoContent = mailtoUri.Substring(7); // "mailto:" 제거
+            var parts = mailtoContent.Split('?');
+            var email = parts[0];
+
+            var subject = "";
+            var body = "";
+            var cc = "";
+            var bcc = "";
+
+            if (parts.Length > 1)
+            {
+                var query = System.Web.HttpUtility.ParseQueryString(parts[1]);
+                subject = query["subject"] ?? "";
+                body = query["body"] ?? "";
+                cc = query["cc"] ?? "";
+                bcc = query["bcc"] ?? "";
+            }
+
+            Log4.Debug($"파싱된 이메일: {email}");
+
+            var graphMailService = (App.Current as App)?.GraphMailService;
+            if (graphMailService == null)
+            {
+                Log4.Error("GraphMailService를 찾을 수 없습니다.");
+                return;
+            }
+
+            var syncService = (App.Current as App)?.BackgroundSyncService;
+            var viewModel = new ViewModels.ComposeViewModel(graphMailService, syncService, ViewModels.ComposeMode.New, null);
+
+            // ViewModel 생성 후 프로퍼티 설정
+            viewModel.To = email;
+            if (!string.IsNullOrEmpty(subject)) viewModel.Subject = subject;
+            if (!string.IsNullOrEmpty(cc)) viewModel.Cc = cc;
+            if (!string.IsNullOrEmpty(bcc)) viewModel.Bcc = bcc;
+            if (!string.IsNullOrEmpty(body)) viewModel.Body = body;
+
+            var composeWindow = new ComposeWindow(viewModel);
+            composeWindow.Owner = this;
+            composeWindow.Show(); // ShowDialog 대신 Show 사용
+
+            Log4.Debug($"mailto 링크로 새 메일 작성 창 열림: {email}");
+        }
+        catch (System.Exception ex)
+        {
+            Log4.Error($"mailto 링크 처리 실패: {ex.Message}");
+        }
+    }
+
+    /// <summary>
+    /// WebView2 우클릭 컨텍스트 메뉴 처리
+    /// </summary>
+    private void CoreWebView2_ContextMenuRequested(object? sender, Microsoft.Web.WebView2.Core.CoreWebView2ContextMenuRequestedEventArgs e)
+    {
+        Log4.Debug($"ContextMenuRequested 이벤트 발생 - HasLinkUri: {e.ContextMenuTarget.HasLinkUri}");
+
+        var menuItems = e.MenuItems;
+
+        // 링크 위에서 우클릭한 경우
+        if (e.ContextMenuTarget.HasLinkUri)
+        {
+            var linkUri = e.ContextMenuTarget.LinkUri;
+            Log4.Debug($"링크 감지됨: {linkUri}");
+
+            // 기존 메뉴 지우고 커스텀 메뉴 추가
+            menuItems.Clear();
+
+            // mailto: 링크인 경우
+            if (linkUri.StartsWith("mailto:", StringComparison.OrdinalIgnoreCase))
+            {
+                // 이메일 주소 추출
+                var emailAddress = linkUri.Substring(7).Split('?')[0];
+
+                // 새 메일 작성 메뉴
+                var composeItem = MailBodyWebView.CoreWebView2.Environment.CreateContextMenuItem(
+                    "새 메일 작성", null, Microsoft.Web.WebView2.Core.CoreWebView2ContextMenuItemKind.Command);
+                var capturedLinkUri = linkUri; // 클로저를 위한 캡처
+                composeItem.CustomItemSelected += (s, args) =>
+                {
+                    Dispatcher.BeginInvoke(new Action(() => OpenComposeWindowWithMailto(capturedLinkUri)));
+                };
+                menuItems.Add(composeItem);
+
+                // 메일 주소 복사 메뉴
+                var copyEmailItem = MailBodyWebView.CoreWebView2.Environment.CreateContextMenuItem(
+                    "메일 주소 복사", null, Microsoft.Web.WebView2.Core.CoreWebView2ContextMenuItemKind.Command);
+                copyEmailItem.CustomItemSelected += (s, args) =>
+                {
+                    Dispatcher.Invoke(() => System.Windows.Clipboard.SetText(emailAddress));
+                    Log4.Debug($"메일 주소 복사됨: {emailAddress}");
+                };
+                menuItems.Add(copyEmailItem);
+            }
+            else
+            {
+                // 일반 링크 - 링크 열기 메뉴
+                var openLinkItem = MailBodyWebView.CoreWebView2.Environment.CreateContextMenuItem(
+                    "링크 열기", null, Microsoft.Web.WebView2.Core.CoreWebView2ContextMenuItemKind.Command);
+                openLinkItem.CustomItemSelected += (s, args) =>
+                {
+                    try
+                    {
+                        System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
+                        {
+                            FileName = linkUri,
+                            UseShellExecute = true
+                        });
+                        Log4.Debug($"링크 열기: {linkUri}");
+                    }
+                    catch (System.Exception ex)
+                    {
+                        Log4.Error($"링크 열기 실패: {ex.Message}");
+                    }
+                };
+                menuItems.Add(openLinkItem);
+
+                // 링크 복사 메뉴
+                var copyLinkItem = MailBodyWebView.CoreWebView2.Environment.CreateContextMenuItem(
+                    "링크 복사", null, Microsoft.Web.WebView2.Core.CoreWebView2ContextMenuItemKind.Command);
+                copyLinkItem.CustomItemSelected += (s, args) =>
+                {
+                    Dispatcher.Invoke(() => System.Windows.Clipboard.SetText(linkUri));
+                    Log4.Debug($"링크 복사됨: {linkUri}");
+                };
+                menuItems.Add(copyLinkItem);
+            }
+        }
+        // 일반 영역은 기본 메뉴 사용 (복사, 전체 선택 등)
     }
 
     /// <summary>
@@ -2482,6 +3009,37 @@ public partial class MainWindow : FluentWindow
         catch (Exception ex)
         {
             Log4.Error($"메일 작성 창 열기 실패: {ex.Message}");
+        }
+    }
+
+    /// <summary>
+    /// 임시보관함 폴더인지 확인
+    /// </summary>
+    private bool IsDraftsFolder(Folder? folder)
+    {
+        if (folder == null) return false;
+
+        // 폴더 이름으로 임시보관함 확인
+        return folder.DisplayName.Equals("Drafts", StringComparison.OrdinalIgnoreCase) ||
+               folder.DisplayName.Equals("임시 보관함", StringComparison.OrdinalIgnoreCase) ||
+               folder.DisplayName.Equals("초안", StringComparison.OrdinalIgnoreCase);
+    }
+
+    /// <summary>
+    /// 임시보관함 메일을 인플레이스 편집 모드로 열기
+    /// </summary>
+    private void OpenDraftForEditing(Email draftEmail)
+    {
+        try
+        {
+            Log4.Info($"임시보관함 메일 인플레이스 편집: {draftEmail.Subject}");
+
+            // ViewModel의 드래프트 편집 모드 활성화
+            _viewModel.LoadDraftForEditing(draftEmail);
+        }
+        catch (Exception ex)
+        {
+            Log4.Error($"임시보관함 메일 편집 실패: {ex.Message}");
         }
     }
 

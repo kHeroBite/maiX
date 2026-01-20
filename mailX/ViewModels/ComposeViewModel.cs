@@ -17,7 +17,8 @@ public enum ComposeMode
     New,
     Reply,
     ReplyAll,
-    Forward
+    Forward,
+    EditDraft  // 임시보관함 메일 편집
 }
 
 /// <summary>
@@ -44,6 +45,11 @@ public partial class ComposeViewModel : ViewModelBase
     private readonly BackgroundSyncService? _syncService;
     private readonly ComposeMode _mode;
     private readonly Models.Email? _originalEmail;
+
+    /// <summary>
+    /// 임시보관함 메일 ID (EditDraft 모드에서 사용)
+    /// </summary>
+    private readonly string? _draftMessageId;
 
     /// <summary>
     /// 받는 사람
@@ -94,22 +100,34 @@ public partial class ComposeViewModel : ViewModelBase
         ComposeMode.Reply => "답장",
         ComposeMode.ReplyAll => "전체 답장",
         ComposeMode.Forward => "전달",
+        ComposeMode.EditDraft => "임시 보관함",
         _ => "메일 작성"
     };
+
+    /// <summary>
+    /// 편집 중인 임시보관함 메일 여부
+    /// </summary>
+    public bool IsEditingDraft => _mode == ComposeMode.EditDraft;
 
     /// <summary>
     /// 생성자
     /// </summary>
     public ComposeViewModel(
-        GraphMailService graphMailService, 
+        GraphMailService graphMailService,
         BackgroundSyncService? syncService = null,
-        ComposeMode mode = ComposeMode.New, 
+        ComposeMode mode = ComposeMode.New,
         Models.Email? originalEmail = null)
     {
         _graphMailService = graphMailService;
         _syncService = syncService;
         _mode = mode;
         _originalEmail = originalEmail;
+
+        // EditDraft 모드에서는 원본 메일의 EntryId를 Draft 메시지 ID로 저장
+        if (mode == ComposeMode.EditDraft && originalEmail != null)
+        {
+            _draftMessageId = originalEmail.EntryId;
+        }
 
         InitializeFromOriginalEmail();
     }
@@ -148,6 +166,41 @@ public partial class ComposeViewModel : ViewModelBase
                 Subject = $"FW: {RemoveFwPrefix(_originalEmail.Subject ?? "")}";
                 InitialBody = BuildForwardBody(_originalEmail);
                 break;
+
+            case ComposeMode.EditDraft:
+                // 임시보관함 메일 편집 - 기존 내용 그대로 로드
+                To = ParseJsonArrayToString(_originalEmail.To);
+                Cc = ParseJsonArrayToString(_originalEmail.Cc);
+                Bcc = ParseJsonArrayToString(_originalEmail.Bcc);
+                Subject = _originalEmail.Subject ?? "";
+                InitialBody = _originalEmail.Body ?? "";
+                break;
+        }
+    }
+
+    /// <summary>
+    /// JSON 배열 문자열을 세미콜론 구분 문자열로 변환
+    /// </summary>
+    private static string ParseJsonArrayToString(string? jsonArray)
+    {
+        if (string.IsNullOrWhiteSpace(jsonArray))
+            return "";
+
+        // JSON 배열이 아니면 그대로 반환
+        if (!jsonArray.StartsWith("["))
+            return jsonArray;
+
+        try
+        {
+            var items = System.Text.Json.JsonSerializer.Deserialize<string[]>(jsonArray);
+            if (items == null || items.Length == 0)
+                return "";
+
+            return string.Join("; ", items);
+        }
+        catch
+        {
+            return jsonArray;
         }
     }
 
@@ -292,6 +345,20 @@ public partial class ComposeViewModel : ViewModelBase
             await _graphMailService.SendMessageAsync(message);
 
             Log4.Info($"메일 발송 성공: To={To}, Subject={Subject}");
+
+            // EditDraft 모드에서는 기존 Draft 삭제
+            if (_mode == ComposeMode.EditDraft && !string.IsNullOrEmpty(_draftMessageId))
+            {
+                try
+                {
+                    await _graphMailService.DeleteMessageAsync(_draftMessageId);
+                    Log4.Debug($"임시보관함 메일 삭제 완료: {_draftMessageId}");
+                }
+                catch (Exception ex)
+                {
+                    Log4.Warn($"임시보관함 메일 삭제 실패 (무시): {ex.Message}");
+                }
+            }
 
             // 보낸편지함 즉시 동기화 (비동기로 백그라운드 실행)
             if (_syncService != null && _originalEmail != null)

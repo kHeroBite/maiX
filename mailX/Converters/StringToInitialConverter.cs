@@ -1,5 +1,6 @@
 using System;
 using System.Globalization;
+using System.Text.Json;
 using System.Windows.Data;
 
 namespace mailX.Converters;
@@ -25,8 +26,27 @@ public class StringToInitialConverter : IValueConverter
             return "?";
         }
 
-        // 이메일 주소인 경우 @ 앞 부분 사용
-        if (str.Contains('@'))
+        // JSON 배열이면 첫 번째 항목 추출
+        if (str.StartsWith("["))
+        {
+            try
+            {
+                var items = JsonSerializer.Deserialize<string[]>(str);
+                if (items != null && items.Length > 0)
+                    str = items[0];
+            }
+            catch { }
+        }
+
+        // "이름 <이메일>" 형식에서 이름만 추출
+        if (str.Contains('<'))
+        {
+            var namepart = str.Split('<')[0].Trim();
+            if (!string.IsNullOrEmpty(namepart))
+                str = namepart;
+        }
+        // 이메일 주소만 있는 경우 @ 앞 부분 사용
+        else if (str.Contains('@'))
         {
             str = str.Split('@')[0];
         }

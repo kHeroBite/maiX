@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Text.Encodings.Web;
 using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
@@ -26,6 +27,12 @@ public class BackgroundSyncService : BackgroundService
 {
     private readonly IServiceProvider _serviceProvider;
     private readonly ILogger _logger;
+
+    // JSON 직렬화 옵션 (한글/특수문자 이스케이프 방지)
+    private static readonly JsonSerializerOptions _jsonOptions = new()
+    {
+        Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping
+    };
 
     // 동기화 설정 (기존 - 하위 호환용)
     private int _syncIntervalSeconds = 300;  // 기본값: 5분 (300초)
@@ -899,6 +906,42 @@ public class BackgroundSyncService : BackgroundService
                         updated = true;
                     }
 
+                    // To/Cc/Bcc 필드 재직렬화 (유니코드 이스케이프 문제 해결)
+                    // 기존 DB에 저장된 유니코드 이스케이프 문자열을 정상 형식으로 업데이트
+                    var newTo = SerializeRecipients(message.ToRecipients);
+                    if (!string.IsNullOrEmpty(newTo) && existingEmail.To != newTo)
+                    {
+                        // 유니코드 이스케이프가 포함된 경우에만 업데이트 (\\u로 시작하는 패턴 감지)
+                        if (existingEmail.To?.Contains("\\u") == true || existingEmail.To != newTo)
+                        {
+                            _logger.Debug("메일 To 필드 업데이트: {Subject}", existingEmail.Subject);
+                            existingEmail.To = newTo;
+                            updated = true;
+                        }
+                    }
+
+                    var newCc = SerializeRecipients(message.CcRecipients);
+                    if (existingEmail.Cc != newCc)
+                    {
+                        if (existingEmail.Cc?.Contains("\\u") == true || existingEmail.Cc != newCc)
+                        {
+                            _logger.Debug("메일 Cc 필드 업데이트: {Subject}", existingEmail.Subject);
+                            existingEmail.Cc = newCc;
+                            updated = true;
+                        }
+                    }
+
+                    var newBcc = SerializeRecipients(message.BccRecipients);
+                    if (existingEmail.Bcc != newBcc)
+                    {
+                        if (existingEmail.Bcc?.Contains("\\u") == true || existingEmail.Bcc != newBcc)
+                        {
+                            _logger.Debug("메일 Bcc 필드 업데이트: {Subject}", existingEmail.Subject);
+                            existingEmail.Bcc = newBcc;
+                            updated = true;
+                        }
+                    }
+
                     // 폴더 이동 동기화 (parentFolderId가 변경된 경우)
                     var newParentFolderId = message.ParentFolderId;
                     if (!string.IsNullOrEmpty(newParentFolderId) && existingEmail.ParentFolderId != newParentFolderId)
@@ -1188,7 +1231,7 @@ public class BackgroundSyncService : BackgroundService
             .Select(r => GetDisplayName(r.EmailAddress))
             .ToList();
 
-        return JsonSerializer.Serialize(displayNames);
+        return JsonSerializer.Serialize(displayNames, _jsonOptions);
     }
 
     /// <summary>

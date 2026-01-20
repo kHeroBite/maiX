@@ -384,6 +384,46 @@ namespace mailX.Services.Graph
             });
         }
 
+        /// <summary>
+        /// 임시보관함에 메일 저장
+        /// </summary>
+        /// <param name="message">저장할 메일</param>
+        /// <returns>저장된 메시지</returns>
+        public async Task<Message?> SaveDraftAsync(Message message)
+        {
+            if (message == null)
+            {
+                throw new ArgumentNullException(nameof(message));
+            }
+
+            var client = _authService.GetGraphClient();
+            // 임시보관함(Drafts)에 메시지 저장
+            var savedMessage = await client.Me.Messages.PostAsync(message);
+            return savedMessage;
+        }
+
+        /// <summary>
+        /// 기존 임시보관함 메일 업데이트
+        /// </summary>
+        /// <param name="messageId">업데이트할 메시지 ID</param>
+        /// <param name="message">업데이트할 내용</param>
+        /// <returns>업데이트된 메시지</returns>
+        public async Task<Message?> UpdateDraftAsync(string messageId, Message message)
+        {
+            if (string.IsNullOrEmpty(messageId))
+            {
+                throw new ArgumentNullException(nameof(messageId));
+            }
+            if (message == null)
+            {
+                throw new ArgumentNullException(nameof(message));
+            }
+
+            var client = _authService.GetGraphClient();
+            // 기존 드래프트 메시지 업데이트
+            var updatedMessage = await client.Me.Messages[messageId].PatchAsync(message);
+            return updatedMessage;
+        }
 
         /// <summary>
         /// 메시지의 플래그 상태 업데이트

@@ -359,6 +359,51 @@ public partial class MainViewModel : ViewModelBase
     [ObservableProperty]
     private Email? _selectedEmail;
 
+    #region 임시보관함 편집 모드 프로퍼티
+
+    /// <summary>
+    /// 임시보관함 메일 편집 모드 여부
+    /// </summary>
+    [ObservableProperty]
+    private bool _isEditingDraft;
+
+    /// <summary>
+    /// 임시보관함 편집 - 받는 사람
+    /// </summary>
+    [ObservableProperty]
+    private string _draftTo = "";
+
+    /// <summary>
+    /// 임시보관함 편집 - 참조
+    /// </summary>
+    [ObservableProperty]
+    private string _draftCc = "";
+
+    /// <summary>
+    /// 임시보관함 편집 - 숨은 참조
+    /// </summary>
+    [ObservableProperty]
+    private string _draftBcc = "";
+
+    /// <summary>
+    /// 임시보관함 편집 - 제목
+    /// </summary>
+    [ObservableProperty]
+    private string _draftSubject = "";
+
+    /// <summary>
+    /// 임시보관함 편집 - 본문
+    /// </summary>
+    [ObservableProperty]
+    private string _draftBody = "";
+
+    /// <summary>
+    /// 편집 중인 임시보관함 메일 ID
+    /// </summary>
+    private string? _editingDraftMessageId;
+
+    #endregion
+
     /// <summary>
     /// 동기화 일시정지 상태
     /// </summary>
@@ -2588,6 +2633,405 @@ public partial class MainViewModel : ViewModelBase
         Emails = pinned.Concat(sortedUnpinned).ToList();
 
         Log4.Debug($"[ApplySortingWithPin] 정렬 완료: 고정 {pinned.Count}건, 일반 {unpinned.Count()}건");
+    }
+
+    #endregion
+
+    #region 임시보관함 편집 메서드
+
+    /// <summary>
+    /// 임시보관함 폴더인지 확인
+    /// </summary>
+    public bool IsDraftsFolder(Folder? folder)
+    {
+        if (folder == null) return false;
+
+        // 폴더 이름으로 임시보관함 확인
+        return folder.DisplayName.Equals("Drafts", StringComparison.OrdinalIgnoreCase) ||
+               folder.DisplayName.Equals("임시 보관함", StringComparison.OrdinalIgnoreCase) ||
+               folder.DisplayName.Equals("초안", StringComparison.OrdinalIgnoreCase);
+    }
+
+    /// <summary>
+    /// 드래프트 메일을 편집 모드로 로드
+    /// </summary>
+    public void LoadDraftForEditing(Email draftEmail)
+    {
+        if (draftEmail == null) return;
+
+        try
+        {
+            Log4.Info($"[LoadDraftForEditing] 임시보관함 메일 편집 시작: {draftEmail.Subject}");
+
+            _editingDraftMessageId = draftEmail.EntryId;
+            DraftTo = ParseJsonArrayToString(draftEmail.To);
+            DraftCc = ParseJsonArrayToString(draftEmail.Cc);
+            DraftBcc = ParseJsonArrayToString(draftEmail.Bcc);
+            DraftSubject = draftEmail.Subject ?? "";
+            DraftBody = draftEmail.Body ?? "";
+            IsEditingDraft = true;
+
+            Log4.Debug($"[LoadDraftForEditing] To={DraftTo}, Subject={DraftSubject}");
+        }
+        catch (Exception ex)
+        {
+            Log4.Error($"[LoadDraftForEditing] 드래프트 로드 실패: {ex.Message}");
+        }
+    }
+
+    /// <summary>
+    /// 드래프트 편집 취소/닫기
+    /// </summary>
+    /// <param name="resetSelectedEmail">SelectedEmail을 null로 리셋할지 여부 (자동 저장 시에는 false)</param>
+    [RelayCommand]
+    public void CloseDraftEditor(bool resetSelectedEmail = true)
+    {
+        IsEditingDraft = false;
+        _editingDraftMessageId = null;
+        DraftTo = "";
+        DraftCc = "";
+        DraftBcc = "";
+        DraftSubject = "";
+        DraftBody = "";
+
+        // 자동 저장 시에는 SelectedEmail을 리셋하지 않음 (다음 메일 선택 흐름 유지)
+        if (resetSelectedEmail)
+        {
+            SelectedEmail = null;
+        }
+
+        Log4.Debug($"[CloseDraftEditor] 드래프트 편집 모드 종료 (resetSelectedEmail={resetSelectedEmail})");
+    }
+
+    /// <summary>
+    /// 드래프트 메일 발송
+    /// </summary>
+    [RelayCommand]
+    public async Task SendDraftAsync()
+    {
+        try
+        {
+            Log4.Info($"[SendDraftAsync] 드래프트 발송 시작: {DraftSubject}");
+
+            // 받는 사람 확인
+            var toRecipients = ParseEmailAddresses(DraftTo);
+            if (toRecipients.Count == 0)
+            {
+                Log4.Warn("[SendDraftAsync] 받는 사람이 없습니다.");
+                MessageBox.Show("받는 사람을 입력해주세요.", "알림", MessageBoxButton.OK, MessageBoxImage.Warning);
+                return;
+            }
+
+            // 참조, 숨은참조 파싱
+            var ccRecipients = ParseEmailAddresses(DraftCc);
+            var bccRecipients = ParseEmailAddresses(DraftBcc);
+
+            // Message 객체 생성
+            var message = new Microsoft.Graph.Models.Message
+            {
+                Subject = DraftSubject,
+                Body = new Microsoft.Graph.Models.ItemBody
+                {
+                    ContentType = Microsoft.Graph.Models.BodyType.Html,
+                    Content = DraftBody
+                },
+                ToRecipients = toRecipients,
+                CcRecipients = ccRecipients,
+                BccRecipients = bccRecipients
+            };
+
+            // Graph API로 발송
+            await _graphMailService.SendMessageAsync(message);
+            Log4.Info($"[SendDraftAsync] 메일 발송 성공: To={DraftTo}, Subject={DraftSubject}");
+
+            // 기존 드래프트 삭제
+            if (!string.IsNullOrEmpty(_editingDraftMessageId))
+            {
+                try
+                {
+                    await _graphMailService.DeleteMessageAsync(_editingDraftMessageId);
+                    Log4.Debug($"[SendDraftAsync] 기존 드래프트 삭제 완료: {_editingDraftMessageId}");
+
+                    // 로컬 DB에서도 삭제
+                    var localEmail = await _dbContext.Emails.FirstOrDefaultAsync(e => e.EntryId == _editingDraftMessageId);
+                    if (localEmail != null)
+                    {
+                        _dbContext.Emails.Remove(localEmail);
+                        await _dbContext.SaveChangesAsync();
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Log4.Warn($"[SendDraftAsync] 기존 드래프트 삭제 실패 (무시): {ex.Message}");
+                }
+            }
+
+            // 편집 모드 종료
+            CloseDraftEditor();
+
+            // 메일 목록 새로고침
+            await LoadEmailsAsync();
+
+            MessageBox.Show("메일이 발송되었습니다.", "알림", MessageBoxButton.OK, MessageBoxImage.Information);
+        }
+        catch (Exception ex)
+        {
+            Log4.Error($"[SendDraftAsync] 메일 발송 실패: {ex.Message}");
+            MessageBox.Show($"메일 발송 실패: {ex.Message}", "오류", MessageBoxButton.OK, MessageBoxImage.Error);
+        }
+    }
+
+    /// <summary>
+    /// 드래프트 저장
+    /// </summary>
+    [RelayCommand]
+    public async Task SaveDraftAsync()
+    {
+        try
+        {
+            Log4.Info($"[SaveDraftAsync] 드래프트 저장 시작: {DraftSubject}");
+
+            // 받는 사람 파싱
+            var toRecipients = ParseEmailAddresses(DraftTo);
+            var ccRecipients = ParseEmailAddresses(DraftCc);
+            var bccRecipients = ParseEmailAddresses(DraftBcc);
+
+            // Message 객체 생성
+            var message = new Microsoft.Graph.Models.Message
+            {
+                Subject = string.IsNullOrWhiteSpace(DraftSubject) ? "" : DraftSubject,
+                Body = new Microsoft.Graph.Models.ItemBody
+                {
+                    ContentType = Microsoft.Graph.Models.BodyType.Html,
+                    Content = DraftBody
+                },
+                ToRecipients = toRecipients,
+                CcRecipients = ccRecipients,
+                BccRecipients = bccRecipients
+            };
+
+            // 기존 드래프트가 있으면 업데이트, 없으면 새로 생성
+            if (!string.IsNullOrEmpty(_editingDraftMessageId))
+            {
+                // 기존 드래프트 업데이트 (EntryId 유지)
+                await _graphMailService.UpdateDraftAsync(_editingDraftMessageId, message);
+                Log4.Info($"[SaveDraftAsync] 드래프트 업데이트 성공: {_editingDraftMessageId}");
+
+                // 로컬 DB도 업데이트
+                var localEmail = await _dbContext.Emails.FirstOrDefaultAsync(e => e.EntryId == _editingDraftMessageId);
+                if (localEmail != null)
+                {
+                    localEmail.Subject = message.Subject;
+                    localEmail.Body = message.Body?.Content;
+                    localEmail.To = toRecipients.Count > 0
+                        ? System.Text.Json.JsonSerializer.Serialize(toRecipients.Select(r => $"{r.EmailAddress?.Name} <{r.EmailAddress?.Address}>").ToArray())
+                        : null;
+                    localEmail.Cc = ccRecipients.Count > 0
+                        ? System.Text.Json.JsonSerializer.Serialize(ccRecipients.Select(r => $"{r.EmailAddress?.Name} <{r.EmailAddress?.Address}>").ToArray())
+                        : null;
+                    localEmail.Bcc = bccRecipients.Count > 0
+                        ? System.Text.Json.JsonSerializer.Serialize(bccRecipients.Select(r => $"{r.EmailAddress?.Name} <{r.EmailAddress?.Address}>").ToArray())
+                        : null;
+                    await _dbContext.SaveChangesAsync();
+                    Log4.Debug($"[SaveDraftAsync] 로컬 DB 업데이트 완료: {_editingDraftMessageId}");
+                }
+            }
+            else
+            {
+                // 새 드래프트 생성
+                await _graphMailService.SaveDraftAsync(message);
+                Log4.Info($"[SaveDraftAsync] 새 드래프트 저장 성공: {DraftSubject}");
+            }
+
+            // 편집 모드 종료
+            CloseDraftEditor();
+
+            // 메일 목록 새로고침
+            await LoadEmailsAsync();
+
+            MessageBox.Show("임시 저장되었습니다.", "알림", MessageBoxButton.OK, MessageBoxImage.Information);
+        }
+        catch (Exception ex)
+        {
+            Log4.Error($"[SaveDraftAsync] 드래프트 저장 실패: {ex.Message}");
+            MessageBox.Show($"임시 저장 실패: {ex.Message}", "오류", MessageBoxButton.OK, MessageBoxImage.Error);
+        }
+    }
+
+    /// <summary>
+    /// 드래프트 자동 저장 (다른 메일 선택 시 - MessageBox 없음)
+    /// 기존 드래프트를 업데이트하는 방식으로 EntryId 유지
+    /// </summary>
+    public async Task AutoSaveDraftAsync()
+    {
+        try
+        {
+            Log4.Info($"[AutoSaveDraftAsync] 드래프트 자동 저장 시작: {DraftSubject}");
+
+            // 받는 사람 파싱
+            var toRecipients = ParseEmailAddresses(DraftTo);
+            var ccRecipients = ParseEmailAddresses(DraftCc);
+            var bccRecipients = ParseEmailAddresses(DraftBcc);
+
+            // Message 객체 생성
+            var message = new Microsoft.Graph.Models.Message
+            {
+                Subject = string.IsNullOrWhiteSpace(DraftSubject) ? "" : DraftSubject,
+                Body = new Microsoft.Graph.Models.ItemBody
+                {
+                    ContentType = Microsoft.Graph.Models.BodyType.Html,
+                    Content = DraftBody
+                },
+                ToRecipients = toRecipients,
+                CcRecipients = ccRecipients,
+                BccRecipients = bccRecipients
+            };
+
+            // 기존 드래프트가 있으면 업데이트, 없으면 새로 생성
+            if (!string.IsNullOrEmpty(_editingDraftMessageId))
+            {
+                // 기존 드래프트 업데이트 (EntryId 유지)
+                await _graphMailService.UpdateDraftAsync(_editingDraftMessageId, message);
+                Log4.Info($"[AutoSaveDraftAsync] 드래프트 업데이트 성공: {_editingDraftMessageId}");
+
+                // To/Cc/Bcc 문자열 생성
+                var toStr = toRecipients.Count > 0
+                    ? System.Text.Json.JsonSerializer.Serialize(toRecipients.Select(r => $"{r.EmailAddress?.Name} <{r.EmailAddress?.Address}>").ToArray())
+                    : null;
+                var ccStr = ccRecipients.Count > 0
+                    ? System.Text.Json.JsonSerializer.Serialize(ccRecipients.Select(r => $"{r.EmailAddress?.Name} <{r.EmailAddress?.Address}>").ToArray())
+                    : null;
+                var bccStr = bccRecipients.Count > 0
+                    ? System.Text.Json.JsonSerializer.Serialize(bccRecipients.Select(r => $"{r.EmailAddress?.Name} <{r.EmailAddress?.Address}>").ToArray())
+                    : null;
+
+                // 로컬 DB 업데이트
+                var localEmail = await _dbContext.Emails.FirstOrDefaultAsync(e => e.EntryId == _editingDraftMessageId);
+                if (localEmail != null)
+                {
+                    localEmail.Subject = message.Subject;
+                    localEmail.Body = message.Body?.Content;
+                    localEmail.To = toStr;
+                    localEmail.Cc = ccStr;
+                    localEmail.Bcc = bccStr;
+                    await _dbContext.SaveChangesAsync();
+                    Log4.Debug($"[AutoSaveDraftAsync] 로컬 DB 업데이트 완료: {_editingDraftMessageId}");
+                }
+
+                // UI(Emails 컬렉션)도 업데이트하여 메일 목록에 즉시 반영
+                var uiEmail = Emails.FirstOrDefault(e => e.EntryId == _editingDraftMessageId);
+                if (uiEmail != null)
+                {
+                    uiEmail.Subject = message.Subject;
+                    uiEmail.Body = message.Body?.Content;
+                    uiEmail.To = toStr;
+                    uiEmail.Cc = ccStr;
+                    uiEmail.Bcc = bccStr;
+                    Log4.Debug($"[AutoSaveDraftAsync] UI 메일 목록 업데이트 완료: {_editingDraftMessageId}");
+                }
+            }
+            else
+            {
+                // 새 드래프트 생성
+                await _graphMailService.SaveDraftAsync(message);
+                Log4.Info($"[AutoSaveDraftAsync] 새 드래프트 저장 성공: {DraftSubject}");
+            }
+
+            // 편집 모드 종료 (자동 저장이므로 SelectedEmail 유지)
+            CloseDraftEditor(resetSelectedEmail: false);
+
+            // 메일 목록 새로고침하여 UI에 변경 사항 반영
+            await LoadEmailsAsync();
+            Log4.Debug("[AutoSaveDraftAsync] 메일 목록 새로고침 완료");
+        }
+        catch (Exception ex)
+        {
+            Log4.Error($"[AutoSaveDraftAsync] 드래프트 자동 저장 실패: {ex.Message}");
+            // 자동 저장 실패 시에도 편집 모드 종료 (SelectedEmail 유지)
+            CloseDraftEditor(resetSelectedEmail: false);
+            // 예외를 throw하지 않고 조용히 실패 (다른 메일 선택 흐름 유지)
+        }
+    }
+
+    /// <summary>
+    /// JSON 배열 문자열을 세미콜론 구분 문자열로 변환
+    /// </summary>
+    private static string ParseJsonArrayToString(string? jsonArray)
+    {
+        if (string.IsNullOrWhiteSpace(jsonArray))
+            return "";
+
+        // JSON 배열이 아니면 그대로 반환
+        if (!jsonArray.StartsWith("["))
+            return jsonArray;
+
+        try
+        {
+            var items = System.Text.Json.JsonSerializer.Deserialize<string[]>(jsonArray);
+            if (items == null || items.Length == 0)
+                return "";
+
+            return string.Join("; ", items);
+        }
+        catch
+        {
+            return jsonArray;
+        }
+    }
+
+    /// <summary>
+    /// 이메일 주소 문자열을 Recipient 목록으로 파싱
+    /// </summary>
+    private static List<Microsoft.Graph.Models.Recipient> ParseEmailAddresses(string input)
+    {
+        var result = new List<Microsoft.Graph.Models.Recipient>();
+        if (string.IsNullOrWhiteSpace(input)) return result;
+
+        var addresses = input.Split(new[] { ';', ',' }, StringSplitOptions.RemoveEmptyEntries);
+        foreach (var addr in addresses)
+        {
+            var trimmed = addr.Trim();
+            if (string.IsNullOrEmpty(trimmed)) continue;
+
+            string? name = null;
+            string? email = null;
+
+            // "이름 <주소>" 형식 파싱
+            var bracketStart = trimmed.IndexOf('<');
+            var bracketEnd = trimmed.IndexOf('>');
+
+            if (bracketStart > 0 && bracketEnd > bracketStart)
+            {
+                // "이름 <주소>" 형식
+                name = trimmed.Substring(0, bracketStart).Trim();
+                email = trimmed.Substring(bracketStart + 1, bracketEnd - bracketStart - 1).Trim();
+            }
+            else if (trimmed.Contains('@'))
+            {
+                // 이메일 주소만 있는 경우
+                email = trimmed;
+            }
+            else
+            {
+                // 이메일 형식이 아닌 경우 스킵
+                Log4.Warn($"[ParseEmailAddresses] 유효하지 않은 이메일 주소 형식: {trimmed}");
+                continue;
+            }
+
+            if (!string.IsNullOrEmpty(email))
+            {
+                result.Add(new Microsoft.Graph.Models.Recipient
+                {
+                    EmailAddress = new Microsoft.Graph.Models.EmailAddress
+                    {
+                        Address = email,
+                        Name = name
+                    }
+                });
+            }
+        }
+
+        return result;
     }
 
     #endregion

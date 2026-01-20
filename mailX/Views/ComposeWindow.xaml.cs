@@ -5,11 +5,14 @@ using System.Windows.Controls.Primitives;
 using Microsoft.Web.WebView2.Core;
 using Microsoft.Win32;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Graph.Models;
 using Wpf.Ui.Controls;
 using mailX.ViewModels;
 using mailX.Models;
 using mailX.Utils;
 using mailX.Services.Theme;
+using mailX.Services.Graph;
+using mailX.Views.Dialogs;
 using mailX.Data;
 
 namespace mailX.Views;
@@ -22,6 +25,8 @@ public partial class ComposeWindow : FluentWindow
     private readonly ComposeViewModel _viewModel;
     private bool _webView2Initialized = false;
     private bool _editorReady = false;
+    private bool _mailSent = false; // 메일 발송 완료 플래그
+    private bool _closingConfirmed = false; // 닫기 확인 완료 플래그
 
     // 자동완성용 필드
     private Wpf.Ui.Controls.TextBox? _currentTextBox;
@@ -41,14 +46,14 @@ public partial class ComposeWindow : FluentWindow
     }
 
     /// <summary>
-    /// ESC 키로 창 닫기
+    /// ESC 키로 창 닫기 확인
     /// </summary>
-    private void ComposeWindow_KeyDown(object sender, KeyEventArgs e)
+    private async void ComposeWindow_KeyDown(object sender, KeyEventArgs e)
     {
         if (e.Key == Key.Escape)
         {
-            Close();
             e.Handled = true;
+            await HandleCloseRequestAsync();
         }
     }
 
@@ -325,9 +330,9 @@ public partial class ComposeWindow : FluentWindow
     /// <summary>
     /// 취소 버튼 클릭
     /// </summary>
-    private void CancelButton_Click(object sender, RoutedEventArgs e)
+    private async void CancelButton_Click(object sender, RoutedEventArgs e)
     {
-        Close();
+        await HandleCloseRequestAsync();
     }
 
     /// <summary>
@@ -367,6 +372,8 @@ public partial class ComposeWindow : FluentWindow
             if (success)
             {
                 Log4.Info($"메일 발송 완료: {_viewModel.Subject}");
+                _mailSent = true;
+                _closingConfirmed = true;
                 DialogResult = true;
                 Close();
             }
@@ -391,13 +398,186 @@ public partial class ComposeWindow : FluentWindow
     /// <summary>
     /// 창 닫기 이벤트
     /// </summary>
-    private void Window_Closing(object sender, System.ComponentModel.CancelEventArgs e)
+    private async void Window_Closing(object sender, System.ComponentModel.CancelEventArgs e)
     {
-        // WebView2 정리
-        if (EditorWebView.CoreWebView2 != null)
+        // 이미 확인된 닫기이면 바로 닫음
+        if (_closingConfirmed)
         {
-            EditorWebView.CoreWebView2.WebMessageReceived -= CoreWebView2_WebMessageReceived;
+            // WebView2 정리
+            if (EditorWebView.CoreWebView2 != null)
+            {
+                EditorWebView.CoreWebView2.WebMessageReceived -= CoreWebView2_WebMessageReceived;
+            }
+            return;
         }
+
+        // 닫기 취소하고 확인 대화상자 표시
+        e.Cancel = true;
+        await HandleCloseRequestAsync();
+    }
+
+    /// <summary>
+    /// 닫기 요청 처리 - 확인 대화상자 표시
+    /// </summary>
+    private async Task HandleCloseRequestAsync()
+    {
+        // 메일이 이미 발송되었으면 바로 닫음
+        if (_mailSent)
+        {
+            _closingConfirmed = true;
+            Close();
+            return;
+        }
+
+        // 확인 대화상자 표시
+        var dialog = new ComposeCloseDialog
+        {
+            Owner = this
+        };
+
+        var dialogResult = dialog.ShowDialog();
+
+        if (dialogResult != true)
+        {
+            // 대화상자가 취소되었거나 닫힘
+            return;
+        }
+
+        switch (dialog.Result)
+        {
+            case ComposeCloseResult.Delete:
+                // 저장 없이 닫기
+                Log4.Debug("메일 작성 취소 - 삭제");
+                _closingConfirmed = true;
+                Close();
+                break;
+
+            case ComposeCloseResult.SaveDraft:
+                // 임시보관함에 저장 후 닫기
+                var saved = await SaveToDraftAsync();
+                if (saved)
+                {
+                    Log4.Info("메일 임시보관 완료");
+                    _closingConfirmed = true;
+                    Close();
+                }
+                break;
+
+            case ComposeCloseResult.Cancel:
+            default:
+                // 아무 작업 안함 - 계속 작성
+                break;
+        }
+    }
+
+    /// <summary>
+    /// 임시보관함에 메일 저장
+    /// </summary>
+    private async Task<bool> SaveToDraftAsync()
+    {
+        try
+        {
+            // 에디터에서 본문 가져오기
+            var body = await GetEditorContentAsync();
+
+            // Graph API로 임시보관함에 저장
+            var graphMailService = ((App)System.Windows.Application.Current).GetService<GraphMailService>();
+            if (graphMailService == null)
+            {
+                System.Windows.MessageBox.Show("메일 서비스를 사용할 수 없습니다.", "오류",
+                    System.Windows.MessageBoxButton.OK, System.Windows.MessageBoxImage.Error);
+                return false;
+            }
+
+            // 메시지 객체 생성
+            var message = new Message
+            {
+                Subject = _viewModel.Subject ?? "(제목 없음)",
+                Body = new ItemBody
+                {
+                    ContentType = BodyType.Html,
+                    Content = body
+                },
+                ToRecipients = ParseRecipients(_viewModel.To),
+                CcRecipients = ParseRecipients(_viewModel.Cc),
+                BccRecipients = ParseRecipients(_viewModel.Bcc),
+                IsDraft = true
+            };
+
+            var savedMessage = await graphMailService.SaveDraftAsync(message);
+
+            if (savedMessage != null)
+            {
+                System.Windows.MessageBox.Show("임시보관함에 저장되었습니다.", "알림",
+                    System.Windows.MessageBoxButton.OK, System.Windows.MessageBoxImage.Information);
+                return true;
+            }
+
+            System.Windows.MessageBox.Show("임시보관 저장에 실패했습니다.", "오류",
+                System.Windows.MessageBoxButton.OK, System.Windows.MessageBoxImage.Error);
+            return false;
+        }
+        catch (Exception ex)
+        {
+            Log4.Error($"임시보관 저장 실패: {ex.Message}");
+            System.Windows.MessageBox.Show($"임시보관 저장 실패: {ex.Message}", "오류",
+                System.Windows.MessageBoxButton.OK, System.Windows.MessageBoxImage.Error);
+            return false;
+        }
+    }
+
+    /// <summary>
+    /// 수신자 문자열을 Recipient 목록으로 파싱
+    /// </summary>
+    private List<Recipient> ParseRecipients(string? recipientString)
+    {
+        var recipients = new List<Recipient>();
+
+        if (string.IsNullOrWhiteSpace(recipientString))
+            return recipients;
+
+        // ; 또는 , 로 구분된 수신자 분리
+        var addresses = recipientString.Split(new[] { ';', ',' }, StringSplitOptions.RemoveEmptyEntries);
+
+        foreach (var address in addresses)
+        {
+            var trimmed = address.Trim();
+            if (string.IsNullOrEmpty(trimmed)) continue;
+
+            string email;
+            string? name = null;
+
+            // "이름 <이메일>" 형식 파싱
+            var ltIndex = trimmed.IndexOf('<');
+            var gtIndex = trimmed.IndexOf('>');
+
+            if (ltIndex >= 0 && gtIndex > ltIndex)
+            {
+                email = trimmed.Substring(ltIndex + 1, gtIndex - ltIndex - 1).Trim();
+                if (ltIndex > 0)
+                {
+                    name = trimmed.Substring(0, ltIndex).Trim().Trim('"');
+                }
+            }
+            else
+            {
+                email = trimmed;
+            }
+
+            if (!string.IsNullOrEmpty(email))
+            {
+                recipients.Add(new Recipient
+                {
+                    EmailAddress = new EmailAddress
+                    {
+                        Address = email,
+                        Name = name ?? email
+                    }
+                });
+            }
+        }
+
+        return recipients;
     }
 
     #region 연락처 자동완성

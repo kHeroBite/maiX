@@ -33,6 +33,8 @@
             <converters:FlagStatusToColorConverter x:Key="FlagStatusToColorConverter"/>
             <converters:BoolToIconColorConverter x:Key="BoolToIconColorConverter"/>
             <converters:EmailToDisplayNameConverter x:Key="EmailToDisplayNameConverter"/>
+            <converters:JsonArrayToStringConverter x:Key="JsonArrayToStringConverter"/>
+            <converters:EmptySubjectConverter x:Key="EmptySubjectConverter"/>
 
             <!-- 타이틀바 투명 버튼 스타일 (라이트/다크 모드 호버 효과 지원) -->
             <Style x:Key="TitleBarTransparentButtonStyle" TargetType="ui:Button">
