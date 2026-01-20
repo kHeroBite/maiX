@@ -737,17 +737,63 @@ public class GraphCalendarService
     }
 
     /// <summary>
-    /// DateTimeTimeZone 파싱
+    /// DateTimeTimeZone 파싱 및 로컬 시간으로 변환
+    /// Graph API는 지정된 TimeZone의 로컬 시간을 반환하므로,
+    /// 해당 TimeZone에서 시스템 로컬 시간으로 변환 필요
     /// </summary>
     private DateTime? ParseDateTimeTimeZone(DateTimeTimeZone? dateTimeTimeZone)
     {
         if (dateTimeTimeZone?.DateTime == null)
             return null;
 
-        if (DateTime.TryParse(dateTimeTimeZone.DateTime, out var result))
-            return result;
+        if (!DateTime.TryParse(dateTimeTimeZone.DateTime, out var parsedTime))
+            return null;
 
-        return null;
+        // 시간대 변환
+        return ConvertGraphTimeToLocal(parsedTime, dateTimeTimeZone.TimeZone);
+    }
+
+    /// <summary>
+    /// Graph API 시간을 로컬 시간으로 변환
+    /// </summary>
+    /// <param name="dateTime">Graph API에서 파싱한 DateTime (Kind=Unspecified)</param>
+    /// <param name="timeZoneId">Graph API의 TimeZone ID (예: "Korea Standard Time", "UTC")</param>
+    /// <returns>시스템 로컬 시간</returns>
+    private DateTime ConvertGraphTimeToLocal(DateTime dateTime, string? timeZoneId)
+    {
+        try
+        {
+            // TimeZone이 없으면 UTC로 가정
+            if (string.IsNullOrEmpty(timeZoneId))
+            {
+                var utcTime = DateTime.SpecifyKind(dateTime, DateTimeKind.Utc);
+                return utcTime.ToLocalTime();
+            }
+
+            // TimeZoneInfo 가져오기
+            TimeZoneInfo sourceTimeZone;
+            try
+            {
+                sourceTimeZone = TimeZoneInfo.FindSystemTimeZoneById(timeZoneId);
+            }
+            catch (TimeZoneNotFoundException)
+            {
+                // Windows 시간대 ID가 아닌 경우 (IANA 형식 등) - UTC로 폴백
+                _logger.Warning("알 수 없는 시간대: {TimeZone}, UTC로 처리", timeZoneId);
+                var utcTime = DateTime.SpecifyKind(dateTime, DateTimeKind.Utc);
+                return utcTime.ToLocalTime();
+            }
+
+            // 소스 시간대의 시간을 UTC로 변환 후 로컬로 변환
+            var sourceTime = DateTime.SpecifyKind(dateTime, DateTimeKind.Unspecified);
+            var utcDateTime = TimeZoneInfo.ConvertTimeToUtc(sourceTime, sourceTimeZone);
+            return TimeZoneInfo.ConvertTimeFromUtc(utcDateTime, TimeZoneInfo.Local);
+        }
+        catch (Exception ex)
+        {
+            _logger.Warning(ex, "시간대 변환 실패: {DateTime}, {TimeZone}", dateTime, timeZoneId);
+            return dateTime; // 변환 실패 시 원본 반환
+        }
     }
 
     #endregion

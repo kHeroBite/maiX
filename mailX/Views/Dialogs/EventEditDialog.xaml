@@ -6,8 +6,8 @@
         xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
         mc:Ignorable="d"
         Title="새 이벤트 - 일정"
-        Height="700" Width="900"
-        MinHeight="600" MinWidth="750"
+        Height="700" Width="1050"
+        MinHeight="600" MinWidth="900"
         WindowStartupLocation="CenterOwner"
         ExtendsContentIntoTitleBar="True"
         WindowBackdropType="Mica"
@@ -177,7 +177,9 @@
                                        Grid.Column="1"
                                        PlaceholderText="필수 참석자 초대"
                                        BorderThickness="0"
-                                       Background="Transparent"/>
+                                       Background="Transparent"
+                                       TextChanged="AttendeesTextBox_TextChanged"
+                                       PreviewKeyDown="AttendeesTextBox_PreviewKeyDown"/>
                             <ui:Button Grid.Column="2"
                                       Appearance="Transparent"
                                       Padding="8,4"
@@ -189,6 +191,7 @@
                             </ui:Button>
                         </Grid>
                     </Border>
+
 
                     <!-- 선택적 참석자 (기본 숨김) -->
                     <Border x:Name="OptionalAttendeesRow"
@@ -230,14 +233,18 @@
                                            Width="160"
                                            Margin="0,0,8,0"/>
                                 <ui:TextBox x:Name="StartTimeTextBox"
-                                           Width="80"
+                                           Width="100"
                                            PlaceholderText="오후 9:00"
-                                           HorizontalContentAlignment="Center"/>
+                                           HorizontalContentAlignment="Center"
+                                           PreviewMouseWheel="TimeTextBox_PreviewMouseWheel"
+                                           LostFocus="TimeTextBox_LostFocus"/>
                                 <TextBlock Text=" - " VerticalAlignment="Center" Margin="8,0"/>
                                 <ui:TextBox x:Name="EndTimeTextBox"
-                                           Width="80"
+                                           Width="100"
                                            PlaceholderText="오후 9:30"
-                                           HorizontalContentAlignment="Center"/>
+                                           HorizontalContentAlignment="Center"
+                                           PreviewMouseWheel="TimeTextBox_PreviewMouseWheel"
+                                           LostFocus="TimeTextBox_LostFocus"/>
                             </StackPanel>
 
                             <!-- 종료 날짜 (다른 날일 경우) -->
@@ -434,7 +441,7 @@
                     </Border>
 
                     <!-- 일정 미리보기 (시간대별) -->
-                    <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto">
+                    <ScrollViewer x:Name="TimeSlotScrollViewer" Grid.Row="1" VerticalScrollBarVisibility="Auto">
                         <StackPanel x:Name="TimeSlotPanel" Margin="0,8">
                             <!-- 동적으로 시간대별 슬롯 생성 -->
                         </StackPanel>
@@ -442,5 +449,52 @@
                 </Grid>
             </Border>
         </Grid>
+
+        <!-- 참석자 자동완성 팝업 (Window 레벨에 배치하여 다른 요소와 겹침 방지) -->
+        <Popup x:Name="AttendeesSuggestionPopup"
+               PlacementTarget="{Binding ElementName=AttendeesTextBox}"
+               Placement="Bottom"
+               StaysOpen="False"
+               AllowsTransparency="True"
+               PopupAnimation="Fade"
+               HorizontalOffset="40">
+            <Border Background="{DynamicResource ControlFillColorDefaultBrush}"
+                    BorderBrush="{DynamicResource ControlStrokeColorDefaultBrush}"
+                    BorderThickness="1" CornerRadius="6"
+                    Padding="4" MinWidth="350" MaxWidth="500"
+                    Effect="{DynamicResource DefaultDropShadow}">
+                <ListBox x:Name="AttendeesSuggestionList"
+                         MaxHeight="200"
+                         Background="Transparent"
+                         BorderThickness="0"
+                         SelectionChanged="AttendeesSuggestionList_SelectionChanged"
+                         MouseDoubleClick="AttendeesSuggestionList_MouseDoubleClick">
+                    <ListBox.ItemTemplate>
+                        <DataTemplate>
+                            <Grid Margin="4">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="32"/>
+                                    <ColumnDefinition Width="*"/>
+                                </Grid.ColumnDefinitions>
+                                <Border Grid.Column="0" Width="28" Height="28" CornerRadius="14"
+                                        Background="{DynamicResource AccentFillColorDefaultBrush}">
+                                    <TextBlock Text="{Binding Initials}"
+                                              Foreground="White"
+                                              HorizontalAlignment="Center"
+                                              VerticalAlignment="Center"
+                                              FontSize="11"/>
+                                </Border>
+                                <StackPanel Grid.Column="1" Margin="8,0,0,0">
+                                    <TextBlock Text="{Binding DisplayName}" FontWeight="SemiBold"/>
+                                    <TextBlock Text="{Binding Email}"
+                                              Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                                              FontSize="12"/>
+                                </StackPanel>
+                            </Grid>
+                        </DataTemplate>
+                    </ListBox.ItemTemplate>
+                </ListBox>
+            </Border>
+        </Popup>
     </Grid>
 </ui:FluentWindow>

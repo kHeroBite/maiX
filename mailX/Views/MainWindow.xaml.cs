@@ -4337,8 +4337,8 @@ public partial class MainWindow : FluentWindow
 
         var dayEvents = _currentMonthEvents?
             .Where(e => e.Start?.DateTime != null &&
-                        DateTime.Parse(e.Start.DateTime).Date == targetDate.Date)
-            .OrderBy(e => e.Start?.DateTime)
+                        GetLocalStartTime(e).Date == targetDate.Date)
+            .OrderBy(e => GetLocalStartTime(e))
             .ThenBy(e => e.Subject)
             .ThenBy(e => e.Id)
             .ToList() ?? new List<Microsoft.Graph.Models.Event>();
@@ -4392,8 +4392,8 @@ public partial class MainWindow : FluentWindow
         var isToday = date.Date == DateTime.Today;
         var dayEvents = _currentMonthEvents?
             .Where(e => e.Start?.DateTime != null &&
-                        DateTime.Parse(e.Start.DateTime).Date == date.Date)
-            .OrderBy(e => e.Start?.DateTime)
+                        GetLocalStartTime(e).Date == date.Date)
+            .OrderBy(e => GetLocalStartTime(e))
             .ThenBy(e => e.Subject)
             .ThenBy(e => e.Id)
             .ToList() ?? new List<Microsoft.Graph.Models.Event>();
@@ -4535,8 +4535,8 @@ public partial class MainWindow : FluentWindow
         if (NoEventsText != null)
             NoEventsText.Visibility = events.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
 
-        // 일정 아이템 추가 (시작시간 → 제목 → ID 순으로 정렬)
-        foreach (var evt in events.OrderBy(e => e.Start?.DateTime).ThenBy(e => e.Subject).ThenBy(e => e.Id))
+        // 일정 아이템 추가 (로컬 시간 기준 정렬)
+        foreach (var evt in events.OrderBy(e => GetLocalStartTime(e)).ThenBy(e => e.Subject).ThenBy(e => e.Id))
         {
             var capturedEvent = evt;
             var eventCard = CreateEventCard(evt);
@@ -4566,7 +4566,7 @@ public partial class MainWindow : FluentWindow
 
         var stack = new StackPanel();
 
-        // 시간
+        // 시간 (Graph API 시간대 → 로컬 시간 변환)
         string timeText = "";
         if (evt.IsAllDay ?? false)
         {
@@ -4574,11 +4574,11 @@ public partial class MainWindow : FluentWindow
         }
         else if (evt.Start?.DateTime != null)
         {
-            var startTime = DateTime.Parse(evt.Start.DateTime);
+            var startTime = ConvertGraphTimeToLocal(DateTime.Parse(evt.Start.DateTime), evt.Start.TimeZone);
             timeText = startTime.ToString("HH:mm");
             if (evt.End?.DateTime != null)
             {
-                var endTime = DateTime.Parse(evt.End.DateTime);
+                var endTime = ConvertGraphTimeToLocal(DateTime.Parse(evt.End.DateTime), evt.End.TimeZone);
                 timeText += $" - {endTime:HH:mm}";
             }
         }
@@ -4660,8 +4660,8 @@ public partial class MainWindow : FluentWindow
             if (CalDetailNoEventsText != null)
                 CalDetailNoEventsText.Visibility = events.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
 
-            // 일정 카드 추가 (시작시간 → 제목 → ID 순으로 정렬)
-            foreach (var evt in events.OrderBy(e => e.Start?.DateTime).ThenBy(e => e.Subject).ThenBy(e => e.Id))
+            // 일정 카드 추가 (로컬 시간 기준 정렬)
+            foreach (var evt in events.OrderBy(e => GetLocalStartTime(e)).ThenBy(e => e.Subject).ThenBy(e => e.Id))
             {
                 var capturedEvent = evt;
                 var eventCard = CreateDetailEventCard(evt);
@@ -4699,6 +4699,7 @@ public partial class MainWindow : FluentWindow
         headerGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
         headerGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
 
+        // 시간 (Graph API 시간대 → 로컬 시간 변환)
         string timeText = "";
         if (evt.IsAllDay ?? false)
         {
@@ -4706,11 +4707,11 @@ public partial class MainWindow : FluentWindow
         }
         else if (evt.Start?.DateTime != null)
         {
-            var startTime = DateTime.Parse(evt.Start.DateTime);
+            var startTime = ConvertGraphTimeToLocal(DateTime.Parse(evt.Start.DateTime), evt.Start.TimeZone);
             timeText = startTime.ToString("HH:mm");
             if (evt.End?.DateTime != null)
             {
-                var endTime = DateTime.Parse(evt.End.DateTime);
+                var endTime = ConvertGraphTimeToLocal(DateTime.Parse(evt.End.DateTime), evt.End.TimeZone);
                 timeText += $" - {endTime:HH:mm}";
             }
         }
@@ -4892,9 +4893,12 @@ public partial class MainWindow : FluentWindow
                 var btn = new System.Windows.Controls.Button
                 {
                     Content = day.ToString(),
-                    Width = 28,
+                    MinWidth = 28,
                     Height = 28,
                     FontSize = 11,
+                    Padding = new Thickness(2, 0, 2, 0),
+                    HorizontalContentAlignment = HorizontalAlignment.Center,
+                    VerticalContentAlignment = VerticalAlignment.Center,
                     Background = isToday ?
                         (Brush)FindResource("SystemAccentColorSecondaryBrush") :
                         Brushes.Transparent,
@@ -5244,6 +5248,67 @@ public partial class MainWindow : FluentWindow
             Log4.Debug($"검색어 삭제: {searchText}");
             e.Handled = true; // 부모 Border의 클릭 이벤트 전파 방지
         }
+    }
+
+    #endregion
+
+    #region 시간대 변환 헬퍼
+
+    /// <summary>
+    /// Graph API 시간을 로컬 시간으로 변환
+    /// Graph API는 지정된 TimeZone의 로컬 시간을 반환하므로,
+    /// 해당 TimeZone에서 시스템 로컬 시간으로 변환 필요
+    /// </summary>
+    /// <param name="dateTime">Graph API에서 파싱한 DateTime</param>
+    /// <param name="timeZoneId">Graph API의 TimeZone ID (예: "Korea Standard Time", "UTC")</param>
+    /// <returns>시스템 로컬 시간</returns>
+    private DateTime ConvertGraphTimeToLocal(DateTime dateTime, string? timeZoneId)
+    {
+        try
+        {
+            // TimeZone이 없으면 UTC로 가정
+            if (string.IsNullOrEmpty(timeZoneId))
+            {
+                var utcTime = DateTime.SpecifyKind(dateTime, DateTimeKind.Utc);
+                return utcTime.ToLocalTime();
+            }
+
+            // TimeZoneInfo 가져오기
+            TimeZoneInfo sourceTimeZone;
+            try
+            {
+                sourceTimeZone = TimeZoneInfo.FindSystemTimeZoneById(timeZoneId);
+            }
+            catch (TimeZoneNotFoundException)
+            {
+                // Windows 시간대 ID가 아닌 경우 - UTC로 폴백
+                var utcTime = DateTime.SpecifyKind(dateTime, DateTimeKind.Utc);
+                return utcTime.ToLocalTime();
+            }
+
+            // 소스 시간대의 시간을 UTC로 변환 후 로컬로 변환
+            var sourceTime = DateTime.SpecifyKind(dateTime, DateTimeKind.Unspecified);
+            var utcDateTime = TimeZoneInfo.ConvertTimeToUtc(sourceTime, sourceTimeZone);
+            return TimeZoneInfo.ConvertTimeFromUtc(utcDateTime, TimeZoneInfo.Local);
+        }
+        catch
+        {
+            return dateTime; // 변환 실패 시 원본 반환
+        }
+    }
+
+    /// <summary>
+    /// Graph API Event의 로컬 시작 시간 가져오기 (정렬용)
+    /// </summary>
+    private DateTime GetLocalStartTime(Microsoft.Graph.Models.Event evt)
+    {
+        if (evt.Start?.DateTime == null)
+            return DateTime.MaxValue;
+
+        if (!DateTime.TryParse(evt.Start.DateTime, out var parsedTime))
+            return DateTime.MaxValue;
+
+        return ConvertGraphTimeToLocal(parsedTime, evt.Start.TimeZone);
     }
 
     #endregion

@@ -1,14 +1,21 @@
 using System;
 using System.Collections.Generic;
+using System.Collections.ObjectModel;
 using System.Globalization;
 using System.Linq;
+using System.Threading;
+using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Controls.Primitives;
 using System.Windows.Input;
 using System.Windows.Media;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Graph.Models;
 using Wpf.Ui.Controls;
+using mailX.Models;
 using mailX.Services.Graph;
+using mailX.Services.Search;
 using mailX.Utils;
 
 using Application = System.Windows.Application;
@@ -23,11 +30,17 @@ namespace mailX.Views.Dialogs;
 public partial class EventEditDialog : FluentWindow
 {
     private readonly GraphCalendarService? _calendarService;
+    private readonly ContactSearchService? _contactSearchService;
     private Event? _existingEvent;
     private bool _isEditMode;
     private DateTime _previewDate;
     private string _currentShowAs = "busy"; // free, tentative, busy, oof, workingElsewhere
     private string _currentCategory = "";
+
+    // 참석자 자동완성 관련
+    private CancellationTokenSource? _attendeesSearchCts;
+    private string _lastAttendeesSearchTerm = "";
+    private ObservableCollection<ContactSuggestion> _attendeesSuggestions = new();
 
     /// <summary>
     /// 생성된/수정된 일정
@@ -46,6 +59,7 @@ public partial class EventEditDialog : FluentWindow
     {
         InitializeComponent();
         _calendarService = ((App)Application.Current).GetService<GraphCalendarService>();
+        _contactSearchService = ((App)Application.Current).GetService<ContactSearchService>();
         _isEditMode = false;
         _previewDate = DateTime.Today;
 
@@ -58,8 +72,15 @@ public partial class EventEditDialog : FluentWindow
         // 미리보기 날짜 초기화
         UpdatePreviewDate();
 
-        // Loaded 이벤트에서 시간 슬롯 생성 (리소스 접근을 위해)
-        Loaded += (s, e) => GenerateTimeSlots();
+        // 참석자 자동완성 리스트 바인딩
+        AttendeesSuggestionList.ItemsSource = _attendeesSuggestions;
+
+        // Loaded 이벤트에서 시간 슬롯 생성 및 08:00 기준 스크롤
+        Loaded += (s, e) =>
+        {
+            GenerateTimeSlots();
+            ScrollTo0800();
+        };
     }
 
     /// <summary>
@@ -761,4 +782,245 @@ public partial class EventEditDialog : FluentWindow
         DialogResult = false;
         Close();
     }
+
+    #region 08:00 자동 스크롤
+
+    /// <summary>
+    /// 일정 미리보기 패널을 08:00 기준으로 자동 스크롤
+    /// 06:00부터 시작하므로 08:00은 (8-6) × 2슬롯 × 25px = 100px 위치
+    /// </summary>
+    private void ScrollTo0800()
+    {
+        if (TimeSlotScrollViewer == null) return;
+
+        // 06:00부터 시작, 08:00 = (8-6) × 2슬롯 × 25px = 100px
+        var scrollOffset = (8 - 6) * 2 * 25; // 100px
+        TimeSlotScrollViewer.ScrollToVerticalOffset(scrollOffset);
+    }
+
+    #endregion
+
+    #region 시간 입력 마우스 휠 조절
+
+    /// <summary>
+    /// 시간 입력 필드 마우스 휠 처리 (30분 단위 조절)
+    /// </summary>
+    private void TimeTextBox_PreviewMouseWheel(object sender, MouseWheelEventArgs e)
+    {
+        if (sender is not Wpf.Ui.Controls.TextBox textBox) return;
+
+        // 현재 시간 파싱
+        if (!TimeSpan.TryParse(textBox.Text, out var currentTime))
+        {
+            currentTime = new TimeSpan(9, 0, 0); // 기본값
+        }
+
+        // 30분 단위 조절
+        var delta = e.Delta > 0 ? 30 : -30;
+        var newTime = currentTime.Add(TimeSpan.FromMinutes(delta));
+
+        // 범위 제한 (00:00 ~ 23:30)
+        if (newTime.TotalMinutes < 0)
+            newTime = new TimeSpan(23, 30, 0);
+        else if (newTime.TotalHours >= 24)
+            newTime = new TimeSpan(0, 0, 0);
+
+        textBox.Text = newTime.ToString(@"hh\:mm");
+        e.Handled = true;
+
+        // 미리보기 업데이트
+        GenerateTimeSlots();
+    }
+
+    /// <summary>
+    /// 시간 입력 필드 포커스 해제 시 미리보기 업데이트
+    /// </summary>
+    private void TimeTextBox_LostFocus(object sender, RoutedEventArgs e)
+    {
+        GenerateTimeSlots();
+    }
+
+    #endregion
+
+    #region 참석자 자동완성
+
+    /// <summary>
+    /// 참석자 텍스트 변경 시 자동완성 검색
+    /// </summary>
+    private async void AttendeesTextBox_TextChanged(object sender, TextChangedEventArgs e)
+    {
+        if (_contactSearchService == null) return;
+
+        // 현재 입력 중인 이메일/이름 추출 (쉼표로 구분된 마지막 항목)
+        var text = AttendeesTextBox.Text;
+        var lastCommaIndex = text.LastIndexOf(',');
+        var currentTerm = lastCommaIndex >= 0
+            ? text.Substring(lastCommaIndex + 1).Trim()
+            : text.Trim();
+
+        // 2자 미만이면 팝업 닫기
+        if (string.IsNullOrWhiteSpace(currentTerm) || currentTerm.Length < 2)
+        {
+            CloseAttendeesPopup();
+            return;
+        }
+
+        // 중복 검색 방지
+        if (currentTerm == _lastAttendeesSearchTerm) return;
+        _lastAttendeesSearchTerm = currentTerm;
+
+        // 이전 검색 취소
+        _attendeesSearchCts?.Cancel();
+        _attendeesSearchCts = new CancellationTokenSource();
+        var token = _attendeesSearchCts.Token;
+
+        try
+        {
+            // 300ms 디바운싱
+            await Task.Delay(300, token);
+
+            if (token.IsCancellationRequested) return;
+
+            // 검색 실행
+            var results = await _contactSearchService.SearchContactsAsync(currentTerm, token);
+
+            if (token.IsCancellationRequested) return;
+
+            // 결과가 있으면 팝업 표시
+            if (results.Any())
+            {
+                _attendeesSuggestions.Clear();
+                foreach (var contact in results)
+                {
+                    _attendeesSuggestions.Add(contact);
+                }
+
+                AttendeesSuggestionPopup.IsOpen = true;
+            }
+            else
+            {
+                CloseAttendeesPopup();
+            }
+        }
+        catch (OperationCanceledException)
+        {
+            // 취소됨 - 무시
+        }
+        catch (Exception ex)
+        {
+            Log4.Error($"참석자 검색 실패: {ex.Message}");
+            CloseAttendeesPopup();
+        }
+    }
+
+    /// <summary>
+    /// 참석자 텍스트박스 키보드 이벤트 처리
+    /// </summary>
+    private void AttendeesTextBox_PreviewKeyDown(object sender, KeyEventArgs e)
+    {
+        if (!AttendeesSuggestionPopup.IsOpen) return;
+
+        switch (e.Key)
+        {
+            case Key.Down:
+                // 다음 항목 선택
+                if (AttendeesSuggestionList.SelectedIndex < _attendeesSuggestions.Count - 1)
+                {
+                    AttendeesSuggestionList.SelectedIndex++;
+                    AttendeesSuggestionList.ScrollIntoView(AttendeesSuggestionList.SelectedItem);
+                }
+                e.Handled = true;
+                break;
+
+            case Key.Up:
+                // 이전 항목 선택
+                if (AttendeesSuggestionList.SelectedIndex > 0)
+                {
+                    AttendeesSuggestionList.SelectedIndex--;
+                    AttendeesSuggestionList.ScrollIntoView(AttendeesSuggestionList.SelectedItem);
+                }
+                e.Handled = true;
+                break;
+
+            case Key.Tab:
+            case Key.Enter:
+                // 선택 적용
+                if (AttendeesSuggestionList.SelectedItem is ContactSuggestion selected)
+                {
+                    ApplyAttendeeSuggestion(selected);
+                    e.Handled = true;
+                }
+                else if (_attendeesSuggestions.Count > 0)
+                {
+                    // 선택된 항목이 없으면 첫 번째 항목 적용
+                    ApplyAttendeeSuggestion(_attendeesSuggestions[0]);
+                    e.Handled = true;
+                }
+                break;
+
+            case Key.Escape:
+                // 팝업 닫기
+                CloseAttendeesPopup();
+                e.Handled = true;
+                break;
+        }
+    }
+
+    /// <summary>
+    /// 참석자 선택 적용
+    /// </summary>
+    private void ApplyAttendeeSuggestion(ContactSuggestion contact)
+    {
+        var text = AttendeesTextBox.Text;
+        var lastCommaIndex = text.LastIndexOf(',');
+
+        // 마지막 쉼표 이후 텍스트 교체
+        if (lastCommaIndex >= 0)
+        {
+            AttendeesTextBox.Text = text.Substring(0, lastCommaIndex + 1) + " " + contact.Email + ", ";
+        }
+        else
+        {
+            AttendeesTextBox.Text = contact.Email + ", ";
+        }
+
+        // 커서를 끝으로 이동
+        AttendeesTextBox.CaretIndex = AttendeesTextBox.Text.Length;
+
+        CloseAttendeesPopup();
+        _lastAttendeesSearchTerm = "";
+
+        // 포커스 유지
+        AttendeesTextBox.Focus();
+    }
+
+    /// <summary>
+    /// 참석자 자동완성 팝업 닫기
+    /// </summary>
+    private void CloseAttendeesPopup()
+    {
+        AttendeesSuggestionPopup.IsOpen = false;
+        _attendeesSuggestions.Clear();
+    }
+
+    /// <summary>
+    /// 참석자 리스트 선택 변경
+    /// </summary>
+    private void AttendeesSuggestionList_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        // 선택 변경 시 별도 처리 필요 없음 (키보드로 처리)
+    }
+
+    /// <summary>
+    /// 참석자 리스트 더블클릭
+    /// </summary>
+    private void AttendeesSuggestionList_MouseDoubleClick(object sender, MouseButtonEventArgs e)
+    {
+        if (AttendeesSuggestionList.SelectedItem is ContactSuggestion selected)
+        {
+            ApplyAttendeeSuggestion(selected);
+        }
+    }
+
+    #endregion
 }

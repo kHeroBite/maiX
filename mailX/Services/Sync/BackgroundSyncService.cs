@@ -1946,10 +1946,16 @@ public class BackgroundSyncService : BackgroundService
         existingEvent.BodyContentType = graphEvent.Body?.ContentType?.ToString();
         existingEvent.Location = graphEvent.Location?.DisplayName;
 
+        // Graph API 시간대 변환: Graph API는 지정된 TimeZone의 로컬 시간을 반환
+        // 이를 시스템 로컬 시간으로 변환해야 함
         if (graphEvent.Start?.DateTime != null && DateTime.TryParse(graphEvent.Start.DateTime, out var startDt))
-            existingEvent.StartDateTime = startDt;
+        {
+            existingEvent.StartDateTime = ConvertGraphTimeToLocal(startDt, graphEvent.Start.TimeZone);
+        }
         if (graphEvent.End?.DateTime != null && DateTime.TryParse(graphEvent.End.DateTime, out var endDt))
-            existingEvent.EndDateTime = endDt;
+        {
+            existingEvent.EndDateTime = ConvertGraphTimeToLocal(endDt, graphEvent.End.TimeZone);
+        }
 
         existingEvent.StartTimeZone = graphEvent.Start?.TimeZone;
         existingEvent.EndTimeZone = graphEvent.End?.TimeZone;
@@ -2002,6 +2008,53 @@ public class BackgroundSyncService : BackgroundService
         {
             existingEvent.IsDeleted = false;
             existingEvent.DeletedAt = null;
+        }
+    }
+
+    /// <summary>
+    /// Graph API 시간을 로컬 시간으로 변환
+    /// Graph API는 지정된 TimeZone의 로컬 시간을 반환하므로,
+    /// 해당 TimeZone에서 시스템 로컬 시간으로 변환 필요
+    /// </summary>
+    /// <param name="dateTime">Graph API에서 파싱한 DateTime (Kind=Unspecified)</param>
+    /// <param name="timeZoneId">Graph API의 TimeZone ID (예: "Korea Standard Time", "UTC")</param>
+    /// <returns>시스템 로컬 시간</returns>
+    private DateTime ConvertGraphTimeToLocal(DateTime dateTime, string? timeZoneId)
+    {
+        try
+        {
+            // TimeZone이 없으면 UTC로 가정
+            if (string.IsNullOrEmpty(timeZoneId))
+            {
+                // UTC로 지정 후 로컬 시간으로 변환
+                var utcTime = DateTime.SpecifyKind(dateTime, DateTimeKind.Utc);
+                return utcTime.ToLocalTime();
+            }
+
+            // TimeZoneInfo 가져오기
+            TimeZoneInfo sourceTimeZone;
+            try
+            {
+                sourceTimeZone = TimeZoneInfo.FindSystemTimeZoneById(timeZoneId);
+            }
+            catch (TimeZoneNotFoundException)
+            {
+                // Windows 시간대 ID가 아닌 경우 (IANA 형식 등)
+                // UTC로 폴백
+                _logger.Warning("알 수 없는 시간대: {TimeZone}, UTC로 처리", timeZoneId);
+                var utcTime = DateTime.SpecifyKind(dateTime, DateTimeKind.Utc);
+                return utcTime.ToLocalTime();
+            }
+
+            // 소스 시간대의 시간을 UTC로 변환 후 로컬로 변환
+            var sourceTime = DateTime.SpecifyKind(dateTime, DateTimeKind.Unspecified);
+            var utcDateTime = TimeZoneInfo.ConvertTimeToUtc(sourceTime, sourceTimeZone);
+            return TimeZoneInfo.ConvertTimeFromUtc(utcDateTime, TimeZoneInfo.Local);
+        }
+        catch (Exception ex)
+        {
+            _logger.Warning(ex, "시간대 변환 실패: {DateTime}, {TimeZone}", dateTime, timeZoneId);
+            return dateTime; // 변환 실패 시 원본 반환
         }
     }
 
