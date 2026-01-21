@@ -308,9 +308,33 @@ public partial class App : Application
         services.AddSingleton<BackgroundSyncService>(sp =>
             sp.GetServices<IHostedService>().OfType<BackgroundSyncService>().First());
 
+        // Teams/Chat 서비스 등록
+        services.AddScoped<GraphTeamsService>();
+
+        // OneNote 서비스 등록
+        services.AddScoped<GraphOneNoteService>();
+
+        // OneDrive 서비스 등록
+        services.AddScoped<GraphOneDriveService>();
+
+        // Planner 서비스 등록
+        services.AddScoped<GraphPlannerService>();
+
+        // Activity 서비스 등록
+        services.AddScoped<GraphActivityService>();
+
+        // Call 서비스 등록
+        services.AddScoped<GraphCallService>();
+
         // ViewModels 등록
         services.AddTransient<MainViewModel>();
         services.AddTransient<LoginViewModel>();
+        services.AddTransient<TeamsViewModel>();
+        services.AddTransient<OneNoteViewModel>();
+        services.AddTransient<OneDriveViewModel>();
+        services.AddTransient<PlannerViewModel>();
+        services.AddTransient<ActivityViewModel>();
+        services.AddTransient<CallsViewModel>();
 
         // Views 등록
         services.AddTransient<MainWindow>();
@@ -409,6 +433,19 @@ public partial class App : Application
                         Log4.Debug("REST API 서버 시작");
                         _restApiServer = new RestApiServer(5858);
                         _restApiServer.MainWindow = mainWindow;
+
+                        // 탭 전환 이벤트 연결
+                        _restApiServer.NavigateRequested += (sender, tabName) =>
+                        {
+                            Dispatcher.Invoke(() =>
+                            {
+                                if (mainWindow is Views.MainWindow mw)
+                                {
+                                    mw.NavigateToTab(tabName);
+                                }
+                            });
+                        };
+
                         _restApiServer.Start();
                     }
                     catch (Exception apiEx)

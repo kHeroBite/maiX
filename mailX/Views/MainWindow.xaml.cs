@@ -18,6 +18,7 @@ using mailX.Services.Search;
 using mailX.Utils;
 using mailX.ViewModels;
 using mailX.Views.Dialogs;
+using mailX.Services.Graph;
 
 namespace mailX.Views;
 
@@ -3627,6 +3628,69 @@ public partial class MainWindow : FluentWindow
     }
 
     /// <summary>
+    /// 채팅 모드로 전환
+    /// </summary>
+    private void NavChatButton_Checked(object sender, RoutedEventArgs e)
+    {
+        Log4.Info("네비게이션: 채팅 모드");
+        ShowChatView();
+    }
+
+    /// <summary>
+    /// 팀 모드로 전환
+    /// </summary>
+    private void NavTeamsButton_Checked(object sender, RoutedEventArgs e)
+    {
+        Log4.Info("네비게이션: 팀 모드");
+        ShowTeamsView();
+    }
+
+    /// <summary>
+    /// 활동 모드로 전환
+    /// </summary>
+    private void NavActivityButton_Checked(object sender, RoutedEventArgs e)
+    {
+        Log4.Info("네비게이션: 활동 모드");
+        ShowActivityView();
+    }
+
+    /// <summary>
+    /// 플래너 모드로 전환
+    /// </summary>
+    private void NavPlannerButton_Checked(object sender, RoutedEventArgs e)
+    {
+        Log4.Info("네비게이션: 플래너 모드");
+        ShowPlannerView();
+    }
+
+    /// <summary>
+    /// OneDrive 모드로 전환
+    /// </summary>
+    private void NavOneDriveButton_Checked(object sender, RoutedEventArgs e)
+    {
+        Log4.Info("네비게이션: OneDrive 모드");
+        ShowOneDriveView();
+    }
+
+    /// <summary>
+    /// OneNote 모드로 전환
+    /// </summary>
+    private void NavOneNoteButton_Checked(object sender, RoutedEventArgs e)
+    {
+        Log4.Info("네비게이션: OneNote 모드");
+        ShowOneNoteView();
+    }
+
+    /// <summary>
+    /// 통화 모드로 전환
+    /// </summary>
+    private void NavCallsButton_Checked(object sender, RoutedEventArgs e)
+    {
+        Log4.Info("네비게이션: 통화 모드");
+        ShowCallsView();
+    }
+
+    /// <summary>
     /// 설정 버튼 클릭
     /// </summary>
     private void NavSettingsButton_Click(object sender, RoutedEventArgs e)
@@ -3949,6 +4013,9 @@ public partial class MainWindow : FluentWindow
     /// </summary>
     private void ShowMailView()
     {
+        // 모든 뷰 숨기기
+        HideAllViews();
+
         // 메일 관련 UI 요소 표시
         if (FolderTreeBorder != null) FolderTreeBorder.Visibility = Visibility.Visible;
         if (Splitter1 != null) Splitter1.Visibility = Visibility.Visible;
@@ -3956,16 +4023,15 @@ public partial class MainWindow : FluentWindow
         if (Splitter2 != null) Splitter2.Visibility = Visibility.Visible;
         if (BodyAreaGrid != null) BodyAreaGrid.Visibility = Visibility.Visible;
 
-        // 캘린더 뷰 숨김
-        if (CalendarViewBorder != null) CalendarViewBorder.Visibility = Visibility.Collapsed;
-
-        // 우측 패널: AI 패널 표시, 캘린더 세부 패널 숨김
+        // 우측 패널: AI 패널 표시
         if (AIPanelBorder != null) AIPanelBorder.Visibility = Visibility.Visible;
-        if (CalendarDetailPanel != null) CalendarDetailPanel.Visibility = Visibility.Collapsed;
 
         _viewModel.StatusMessage = "메일";
         _viewModel.IsCalendarViewActive = false;
         _viewModel.IsCalendarMode = false;
+
+        // 기능별 테마 적용
+        Services.Theme.ThemeService.Instance.ApplyFeatureTheme("mail");
     }
 
     /// <summary>
@@ -3973,18 +4039,13 @@ public partial class MainWindow : FluentWindow
     /// </summary>
     private void ShowCalendarView()
     {
-        // 메일 관련 UI 요소 숨김
-        if (FolderTreeBorder != null) FolderTreeBorder.Visibility = Visibility.Collapsed;
-        if (Splitter1 != null) Splitter1.Visibility = Visibility.Collapsed;
-        if (MailListBorder != null) MailListBorder.Visibility = Visibility.Collapsed;
-        if (Splitter2 != null) Splitter2.Visibility = Visibility.Collapsed;
-        if (BodyAreaGrid != null) BodyAreaGrid.Visibility = Visibility.Collapsed;
+        // 모든 뷰 숨기기
+        HideAllViews();
 
         // 캘린더 뷰 표시
         if (CalendarViewBorder != null) CalendarViewBorder.Visibility = Visibility.Visible;
 
-        // 우측 패널: AI 패널 숨김, 캘린더 세부 패널 표시
-        if (AIPanelBorder != null) AIPanelBorder.Visibility = Visibility.Collapsed;
+        // 우측 패널: 캘린더 세부 패널 표시
         if (CalendarDetailPanel != null) CalendarDetailPanel.Visibility = Visibility.Visible;
 
         _viewModel.StatusMessage = "일정";
@@ -3993,6 +4054,290 @@ public partial class MainWindow : FluentWindow
 
         // 캘린더 데이터 로드
         LoadCalendarDataAsync();
+
+        // 기능별 테마 적용
+        Services.Theme.ThemeService.Instance.ApplyFeatureTheme("calendar");
+    }
+
+    /// <summary>
+    /// 모든 뷰 숨기기 (공통 초기화)
+    /// </summary>
+    private void HideAllViews()
+    {
+        // 메일 관련 UI 요소 숨김
+        if (FolderTreeBorder != null) FolderTreeBorder.Visibility = Visibility.Collapsed;
+        if (Splitter1 != null) Splitter1.Visibility = Visibility.Collapsed;
+        if (MailListBorder != null) MailListBorder.Visibility = Visibility.Collapsed;
+        if (Splitter2 != null) Splitter2.Visibility = Visibility.Collapsed;
+        if (BodyAreaGrid != null) BodyAreaGrid.Visibility = Visibility.Collapsed;
+
+        // 캘린더 뷰 숨김
+        if (CalendarViewBorder != null) CalendarViewBorder.Visibility = Visibility.Collapsed;
+
+        // 새 뷰들 숨김
+        if (ChatViewBorder != null) ChatViewBorder.Visibility = Visibility.Collapsed;
+        if (TeamsViewBorder != null) TeamsViewBorder.Visibility = Visibility.Collapsed;
+        if (ActivityViewBorder != null) ActivityViewBorder.Visibility = Visibility.Collapsed;
+        if (PlannerViewBorder != null) PlannerViewBorder.Visibility = Visibility.Collapsed;
+        if (OneDriveViewBorder != null) OneDriveViewBorder.Visibility = Visibility.Collapsed;
+        if (OneNoteViewBorder != null) OneNoteViewBorder.Visibility = Visibility.Collapsed;
+        if (CallsViewBorder != null) CallsViewBorder.Visibility = Visibility.Collapsed;
+
+        // 우측 패널 숨김
+        if (AIPanelBorder != null) AIPanelBorder.Visibility = Visibility.Collapsed;
+        if (CalendarDetailPanel != null) CalendarDetailPanel.Visibility = Visibility.Collapsed;
+
+        _viewModel.IsCalendarViewActive = false;
+        _viewModel.IsCalendarMode = false;
+    }
+
+    /// <summary>
+    /// 채팅 뷰 표시
+    /// </summary>
+    private void ShowChatView()
+    {
+        HideAllViews();
+
+        if (ChatViewBorder != null) ChatViewBorder.Visibility = Visibility.Visible;
+
+        _viewModel.StatusMessage = "채팅";
+        Services.Theme.ThemeService.Instance.ApplyFeatureTheme("chat");
+    }
+
+    /// <summary>
+    /// 팀 뷰 표시
+    /// </summary>
+    private async void ShowTeamsView()
+    {
+        HideAllViews();
+
+        if (TeamsViewBorder != null) TeamsViewBorder.Visibility = Visibility.Visible;
+
+        _viewModel.StatusMessage = "팀";
+        Services.Theme.ThemeService.Instance.ApplyFeatureTheme("teams");
+
+        // 팀 데이터 로드 (최초 1회)
+        if (_teamsViewModel == null || _teamsViewModel.Teams.Count == 0)
+        {
+            await LoadTeamsDataAsync();
+        }
+    }
+
+    /// <summary>
+    /// 팀 데이터 로드
+    /// </summary>
+    private async Task LoadTeamsDataAsync()
+    {
+        try
+        {
+            if (_teamsViewModel == null)
+            {
+                _teamsViewModel = ((App)Application.Current).GetService<TeamsViewModel>()!;
+            }
+
+            await _teamsViewModel.LoadTeamsAsync();
+            TeamsListView.DataContext = _teamsViewModel;
+
+            // 우측 패널에도 바인딩 설정
+            TeamsViewBorder.DataContext = _teamsViewModel;
+        }
+        catch (Exception ex)
+        {
+            Log4.Error($"팀 데이터 로드 실패: {ex.Message}");
+        }
+    }
+
+    /// <summary>
+    /// 활동 뷰 표시
+    /// </summary>
+    private async void ShowActivityView()
+    {
+        HideAllViews();
+
+        if (ActivityViewBorder != null) ActivityViewBorder.Visibility = Visibility.Visible;
+
+        _viewModel.StatusMessage = "활동";
+        Services.Theme.ThemeService.Instance.ApplyFeatureTheme("activity");
+
+        // 활동 데이터 로드 (최초 1회)
+        if (_activityViewModel == null)
+        {
+            await LoadActivityDataAsync();
+        }
+    }
+
+    /// <summary>
+    /// 플래너 뷰 표시
+    /// </summary>
+    private async void ShowPlannerView()
+    {
+        HideAllViews();
+
+        if (PlannerViewBorder != null) PlannerViewBorder.Visibility = Visibility.Visible;
+
+        _viewModel.StatusMessage = "플래너";
+        Services.Theme.ThemeService.Instance.ApplyFeatureTheme("planner");
+
+        // 플랜 목록 로드 (최초 1회)
+        if (_plannerViewModel == null)
+        {
+            await LoadPlannerDataAsync();
+        }
+    }
+
+    /// <summary>
+    /// OneDrive 뷰 표시
+    /// </summary>
+    private void ShowOneDriveView()
+    {
+        HideAllViews();
+
+        if (OneDriveViewBorder != null) OneDriveViewBorder.Visibility = Visibility.Visible;
+
+        _viewModel.StatusMessage = "OneDrive";
+        Services.Theme.ThemeService.Instance.ApplyFeatureTheme("onedrive");
+    }
+
+    /// <summary>
+    /// OneNote 뷰 표시
+    /// </summary>
+    private void ShowOneNoteView()
+    {
+        HideAllViews();
+
+        if (OneNoteViewBorder != null) OneNoteViewBorder.Visibility = Visibility.Visible;
+
+        _viewModel.StatusMessage = "OneNote";
+        Services.Theme.ThemeService.Instance.ApplyFeatureTheme("onenote");
+    }
+
+    /// <summary>
+    /// 통화 뷰 표시
+    /// </summary>
+    private async void ShowCallsView()
+    {
+        HideAllViews();
+
+        if (CallsViewBorder != null) CallsViewBorder.Visibility = Visibility.Visible;
+
+        _viewModel.StatusMessage = "통화";
+        Services.Theme.ThemeService.Instance.ApplyFeatureTheme("calls");
+
+        // 통화 데이터 로드 (최초 1회)
+        if (_callsViewModel == null)
+        {
+            await LoadCallsDataAsync();
+        }
+    }
+
+    /// <summary>
+    /// 통화 데이터 로드
+    /// </summary>
+    private async Task LoadCallsDataAsync()
+    {
+        try
+        {
+            if (_callsViewModel == null)
+            {
+                _callsViewModel = ((App)Application.Current).GetService<CallsViewModel>()!;
+            }
+
+            await _callsViewModel.InitializeAsync();
+            CallsContactsListView.ItemsSource = _callsViewModel.FrequentContacts;
+            CallsSearchResultsListView.ItemsSource = _callsViewModel.SearchResults;
+            CallsViewBorder.DataContext = _callsViewModel;
+
+            // 빈 상태 표시 업데이트
+            UpdateCallsContactsEmptyState();
+            UpdateCallsMyStatus();
+        }
+        catch (Exception ex)
+        {
+            Log4.Error($"통화 데이터 로드 실패: {ex.Message}");
+        }
+    }
+
+    private void UpdateCallsContactsEmptyState()
+    {
+        if (_callsViewModel == null) return;
+
+        if (_callsViewModel.FrequentContacts.Count == 0)
+        {
+            CallsContactsEmptyState.Visibility = Visibility.Visible;
+            CallsContactsListView.Visibility = Visibility.Collapsed;
+        }
+        else
+        {
+            CallsContactsEmptyState.Visibility = Visibility.Collapsed;
+            CallsContactsListView.Visibility = Visibility.Visible;
+        }
+    }
+
+    private void UpdateCallsMyStatus()
+    {
+        if (_callsViewModel == null) return;
+
+        CallsMyStatusText.Text = _callsViewModel.MyAvailability switch
+        {
+            "Available" => "대화 가능",
+            "Busy" => "다른 용무 중",
+            "DoNotDisturb" => "방해 금지",
+            "Away" => "자리 비움",
+            "Offline" => "오프라인",
+            _ => "알 수 없음"
+        };
+
+        var color = _callsViewModel.MyAvailability switch
+        {
+            "Available" => "#107C10",
+            "Busy" or "DoNotDisturb" => "#D13438",
+            "Away" => "#FFAA44",
+            "Offline" => "#8A8886",
+            _ => "#8A8886"
+        };
+
+        CallsMyStatusBrush.Color = (Color)ColorConverter.ConvertFromString(color);
+    }
+
+    /// <summary>
+    /// REST API로 탭 전환 처리
+    /// </summary>
+    public void NavigateToTab(string tabName)
+    {
+        var tabLower = tabName.ToLowerInvariant();
+        switch (tabLower)
+        {
+            case "mail":
+                NavMailButton.IsChecked = true;
+                break;
+            case "calendar":
+                NavCalendarButton.IsChecked = true;
+                break;
+            case "chat":
+                NavChatButton.IsChecked = true;
+                break;
+            case "teams":
+                NavTeamsButton.IsChecked = true;
+                break;
+            case "activity":
+                NavActivityButton.IsChecked = true;
+                break;
+            case "planner":
+                NavPlannerButton.IsChecked = true;
+                break;
+            case "onedrive":
+                NavOneDriveButton.IsChecked = true;
+                break;
+            case "onenote":
+                NavOneNoteButton.IsChecked = true;
+                break;
+            case "calls":
+                NavCallsButton.IsChecked = true;
+                break;
+            default:
+                Log4.Warn($"알 수 없는 탭: {tabName}");
+                break;
+        }
     }
 
     /// <summary>
@@ -5309,6 +5654,1529 @@ public partial class MainWindow : FluentWindow
             return DateTime.MaxValue;
 
         return ConvertGraphTimeToLocal(parsedTime, evt.Start.TimeZone);
+    }
+
+    #endregion
+
+    #region 채팅 이벤트 핸들러
+
+    private TeamsViewModel? _teamsViewModel;
+
+    /// <summary>
+    /// 채팅 검색 토글 버튼 클릭
+    /// </summary>
+    private void ChatSearchToggleButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (ChatSearchPanel != null)
+        {
+            ChatSearchPanel.Visibility = ChatSearchPanel.Visibility == Visibility.Visible
+                ? Visibility.Collapsed
+                : Visibility.Visible;
+
+            if (ChatSearchPanel.Visibility == Visibility.Visible && ChatSearchBox != null)
+            {
+                ChatSearchBox.Focus();
+            }
+        }
+    }
+
+    /// <summary>
+    /// 채팅 검색 키 입력
+    /// </summary>
+    private void ChatSearchBox_KeyDown(object sender, KeyEventArgs e)
+    {
+        if (e.Key == Key.Enter && ChatSearchBox != null)
+        {
+            var query = ChatSearchBox.Text?.Trim();
+            if (!string.IsNullOrEmpty(query))
+            {
+                Log4.Debug($"채팅 검색: {query}");
+                // TODO: 검색 실행
+            }
+        }
+        else if (e.Key == Key.Escape)
+        {
+            if (ChatSearchPanel != null)
+                ChatSearchPanel.Visibility = Visibility.Collapsed;
+        }
+    }
+
+    /// <summary>
+    /// 채팅 필터: 읽지 않음
+    /// </summary>
+    private void ChatFilterUnread_Click(object sender, RoutedEventArgs e)
+    {
+        SetChatFilterButtonAppearance("unread");
+        Log4.Debug("채팅 필터: 읽지 않음");
+    }
+
+    /// <summary>
+    /// 채팅 필터: 채팅
+    /// </summary>
+    private void ChatFilterChat_Click(object sender, RoutedEventArgs e)
+    {
+        SetChatFilterButtonAppearance("chat");
+        Log4.Debug("채팅 필터: 채팅");
+    }
+
+    /// <summary>
+    /// 채팅 필터: 모임 채팅
+    /// </summary>
+    private void ChatFilterMeeting_Click(object sender, RoutedEventArgs e)
+    {
+        SetChatFilterButtonAppearance("meeting");
+        Log4.Debug("채팅 필터: 모임 채팅");
+    }
+
+    /// <summary>
+    /// 채팅 필터 버튼 외관 업데이트
+    /// </summary>
+    private void SetChatFilterButtonAppearance(string selected)
+    {
+        if (ChatFilterUnreadButton != null)
+            ChatFilterUnreadButton.Appearance = selected == "unread"
+                ? Wpf.Ui.Controls.ControlAppearance.Secondary
+                : Wpf.Ui.Controls.ControlAppearance.Transparent;
+
+        if (ChatFilterChatButton != null)
+            ChatFilterChatButton.Appearance = selected == "chat"
+                ? Wpf.Ui.Controls.ControlAppearance.Secondary
+                : Wpf.Ui.Controls.ControlAppearance.Transparent;
+
+        if (ChatFilterMeetingButton != null)
+            ChatFilterMeetingButton.Appearance = selected == "meeting"
+                ? Wpf.Ui.Controls.ControlAppearance.Secondary
+                : Wpf.Ui.Controls.ControlAppearance.Transparent;
+    }
+
+    /// <summary>
+    /// 채팅 목록 선택 변경
+    /// </summary>
+    private async void ChatListBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        var listBox = sender as ListBox;
+        if (listBox?.SelectedItem is ChatItemViewModel selectedChat)
+        {
+            Log4.Debug($"채팅 선택: {selectedChat.DisplayName}");
+
+            // 빈 상태 패널 숨기고 콘텐츠 패널 표시
+            if (ChatEmptyStatePanel != null)
+                ChatEmptyStatePanel.Visibility = Visibility.Collapsed;
+            if (ChatContentPanel != null)
+                ChatContentPanel.Visibility = Visibility.Visible;
+
+            // 헤더 업데이트
+            if (ChatHeaderTitle != null)
+                ChatHeaderTitle.Text = selectedChat.DisplayName;
+            if (ChatHeaderAvatar != null)
+                ChatHeaderAvatar.Text = !string.IsNullOrEmpty(selectedChat.DisplayName)
+                    ? selectedChat.DisplayName.Substring(0, 1).ToUpper()
+                    : "?";
+
+            // 메시지 로드
+            await LoadChatMessagesAsync(selectedChat.Id);
+        }
+    }
+
+    /// <summary>
+    /// 채팅 메시지 로드
+    /// </summary>
+    private async Task LoadChatMessagesAsync(string chatId)
+    {
+        if (_teamsViewModel == null || string.IsNullOrEmpty(chatId))
+            return;
+
+        try
+        {
+            if (ChatMessagesLoadingOverlay != null)
+                ChatMessagesLoadingOverlay.Visibility = Visibility.Visible;
+
+            await _teamsViewModel.LoadMessagesAsync(chatId);
+
+            if (ChatMessagesItemsControl != null)
+                ChatMessagesItemsControl.ItemsSource = _teamsViewModel.Messages;
+
+            // 스크롤 맨 아래로
+            if (ChatMessagesScrollViewer != null)
+                ChatMessagesScrollViewer.ScrollToEnd();
+        }
+        catch (Exception ex)
+        {
+            Log4.Error($"채팅 메시지 로드 실패: {ex.Message}");
+        }
+        finally
+        {
+            if (ChatMessagesLoadingOverlay != null)
+                ChatMessagesLoadingOverlay.Visibility = Visibility.Collapsed;
+        }
+    }
+
+    /// <summary>
+    /// 채팅 새로고침 버튼 클릭
+    /// </summary>
+    private async void ChatRefreshButton_Click(object sender, RoutedEventArgs e)
+    {
+        await LoadChatsAsync();
+    }
+
+    /// <summary>
+    /// 채팅 목록 로드
+    /// </summary>
+    private async Task LoadChatsAsync()
+    {
+        if (_teamsViewModel == null)
+        {
+            // TeamsViewModel 초기화
+            try
+            {
+                using var scope = ((App)Application.Current).ServiceProvider.CreateScope();
+                var teamsService = scope.ServiceProvider.GetService<GraphTeamsService>();
+                if (teamsService != null)
+                {
+                    _teamsViewModel = new TeamsViewModel(teamsService);
+                }
+            }
+            catch (Exception ex)
+            {
+                Log4.Error($"TeamsViewModel 초기화 실패: {ex.Message}");
+                return;
+            }
+        }
+
+        if (_teamsViewModel == null) return;
+
+        try
+        {
+            if (ChatListLoadingOverlay != null)
+                ChatListLoadingOverlay.Visibility = Visibility.Visible;
+
+            await _teamsViewModel.LoadChatsAsync();
+
+            if (ChatListBox != null)
+                ChatListBox.ItemsSource = _teamsViewModel.Chats;
+
+            Log4.Info($"채팅 목록 로드 완료: {_teamsViewModel.Chats.Count}개");
+        }
+        catch (Exception ex)
+        {
+            Log4.Error($"채팅 목록 로드 실패: {ex.Message}");
+        }
+        finally
+        {
+            if (ChatListLoadingOverlay != null)
+                ChatListLoadingOverlay.Visibility = Visibility.Collapsed;
+        }
+    }
+
+    /// <summary>
+    /// 채팅 메시지 입력 키 이벤트
+    /// </summary>
+    private async void ChatMessageInput_KeyDown(object sender, KeyEventArgs e)
+    {
+        // 플레이스홀더 업데이트
+        UpdateChatMessagePlaceholder();
+
+        // Enter 키로 전송 (Shift+Enter는 줄바꿈)
+        if (e.Key == Key.Enter && !Keyboard.Modifiers.HasFlag(ModifierKeys.Shift))
+        {
+            e.Handled = true;
+            await SendChatMessageAsync();
+        }
+    }
+
+    /// <summary>
+    /// 채팅 메시지 플레이스홀더 업데이트
+    /// </summary>
+    private void UpdateChatMessagePlaceholder()
+    {
+        if (ChatMessagePlaceholder != null && ChatMessageInput != null)
+        {
+            ChatMessagePlaceholder.Visibility = string.IsNullOrEmpty(ChatMessageInput.Text)
+                ? Visibility.Visible
+                : Visibility.Collapsed;
+        }
+    }
+
+    /// <summary>
+    /// 채팅 전송 버튼 클릭
+    /// </summary>
+    private async void ChatSendButton_Click(object sender, RoutedEventArgs e)
+    {
+        await SendChatMessageAsync();
+    }
+
+    /// <summary>
+    /// 채팅 메시지 전송
+    /// </summary>
+    private async Task SendChatMessageAsync()
+    {
+        if (_teamsViewModel == null || ChatMessageInput == null)
+            return;
+
+        var message = ChatMessageInput.Text?.Trim();
+        if (string.IsNullOrEmpty(message))
+            return;
+
+        try
+        {
+            _teamsViewModel.NewMessageText = message;
+            ChatMessageInput.Text = string.Empty;
+            UpdateChatMessagePlaceholder();
+
+            await _teamsViewModel.SendMessageAsync();
+
+            // 스크롤 맨 아래로
+            if (ChatMessagesScrollViewer != null)
+                ChatMessagesScrollViewer.ScrollToEnd();
+        }
+        catch (Exception ex)
+        {
+            Log4.Error($"메시지 전송 실패: {ex.Message}");
+        }
+    }
+
+    #endregion
+
+    #region OneNote 이벤트 핸들러
+
+    private OneNoteViewModel? _oneNoteViewModel;
+
+    /// <summary>
+    /// OneNote 새로고침 버튼 클릭
+    /// </summary>
+    private async void OneNoteRefreshButton_Click(object sender, RoutedEventArgs e)
+    {
+        await LoadOneNoteNotebooksAsync();
+    }
+
+    /// <summary>
+    /// OneNote 새 노트북 버튼 클릭
+    /// </summary>
+    private async void OneNoteNewNotebookButton_Click(object sender, RoutedEventArgs e)
+    {
+        // 간단한 입력 다이얼로그 (실제 구현에서는 별도 다이얼로그 필요)
+        var dialog = new Wpf.Ui.Controls.MessageBox
+        {
+            Title = "새 노트북",
+            Content = "새 노트북 이름을 입력하세요 (현재는 기본 이름 사용)",
+            PrimaryButtonText = "만들기",
+            CloseButtonText = "취소"
+        };
+
+        var result = await dialog.ShowDialogAsync();
+        if (result == Wpf.Ui.Controls.MessageBoxResult.Primary)
+        {
+            if (_oneNoteViewModel != null)
+            {
+                await _oneNoteViewModel.CreateNotebookAsync($"새 노트북 {DateTime.Now:yyyyMMdd_HHmmss}");
+                await LoadOneNoteNotebooksAsync();
+            }
+        }
+    }
+
+    /// <summary>
+    /// OneNote 검색 키 입력
+    /// </summary>
+    private async void OneNoteSearchBox_KeyDown(object sender, KeyEventArgs e)
+    {
+        if (e.Key == Key.Enter && OneNoteSearchBox != null)
+        {
+            var query = OneNoteSearchBox.Text?.Trim();
+            if (!string.IsNullOrEmpty(query) && _oneNoteViewModel != null)
+            {
+                Log4.Debug($"OneNote 검색: {query}");
+                _oneNoteViewModel.SearchQuery = query;
+                await _oneNoteViewModel.SearchPagesAsync();
+
+                // 검색 결과를 최근 노트 목록에 표시
+                if (OneNoteRecentListBox != null)
+                    OneNoteRecentListBox.ItemsSource = _oneNoteViewModel.SearchResults;
+            }
+        }
+        else if (e.Key == Key.Escape && OneNoteSearchBox != null)
+        {
+            OneNoteSearchBox.Text = string.Empty;
+            // 최근 노트 목록 복원
+            if (_oneNoteViewModel != null && OneNoteRecentListBox != null)
+                OneNoteRecentListBox.ItemsSource = _oneNoteViewModel.RecentPages;
+        }
+    }
+
+    /// <summary>
+    /// OneNote 최근 노트 목록 선택 변경
+    /// </summary>
+    private async void OneNoteRecentListBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        var listBox = sender as ListBox;
+        if (listBox?.SelectedItem is PageItemViewModel selectedPage && _oneNoteViewModel != null)
+        {
+            Log4.Debug($"OneNote 페이지 선택: {selectedPage.Title}");
+            await LoadOneNotePageAsync(selectedPage);
+        }
+    }
+
+    /// <summary>
+    /// OneNote 트리뷰 선택 변경
+    /// </summary>
+    private async void OneNoteTreeView_SelectedItemChanged(object sender, RoutedPropertyChangedEventArgs<object> e)
+    {
+        if (e.NewValue is PageItemViewModel selectedPage && _oneNoteViewModel != null)
+        {
+            Log4.Debug($"OneNote 페이지 선택 (트리뷰): {selectedPage.Title}");
+            await LoadOneNotePageAsync(selectedPage);
+        }
+        else if (e.NewValue is SectionItemViewModel selectedSection && _oneNoteViewModel != null)
+        {
+            Log4.Debug($"OneNote 섹션 선택: {selectedSection.DisplayName}");
+            _oneNoteViewModel.SelectedSection = selectedSection;
+        }
+        else if (e.NewValue is NotebookItemViewModel selectedNotebook && _oneNoteViewModel != null)
+        {
+            Log4.Debug($"OneNote 노트북 선택: {selectedNotebook.DisplayName}");
+            _oneNoteViewModel.SelectedNotebook = selectedNotebook;
+        }
+    }
+
+    /// <summary>
+    /// OneNote 새 페이지 버튼 클릭
+    /// </summary>
+    private async void OneNoteNewPageButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (_oneNoteViewModel?.SelectedSection == null)
+        {
+            var dialog = new Wpf.Ui.Controls.MessageBox
+            {
+                Title = "알림",
+                Content = "먼저 섹션을 선택해주세요.",
+                PrimaryButtonText = "확인"
+            };
+            await dialog.ShowDialogAsync();
+            return;
+        }
+
+        // 간단한 입력 다이얼로그 (실제 구현에서는 별도 다이얼로그 필요)
+        var createDialog = new Wpf.Ui.Controls.MessageBox
+        {
+            Title = "새 페이지",
+            Content = "새 페이지를 만드시겠습니까?",
+            PrimaryButtonText = "만들기",
+            CloseButtonText = "취소"
+        };
+
+        var result = await createDialog.ShowDialogAsync();
+        if (result == Wpf.Ui.Controls.MessageBoxResult.Primary)
+        {
+            await _oneNoteViewModel.CreatePageAsync($"새 페이지 {DateTime.Now:HH:mm}");
+            await LoadOneNoteNotebooksAsync();
+        }
+    }
+
+    /// <summary>
+    /// OneNote 노트북 목록 로드
+    /// </summary>
+    private async Task LoadOneNoteNotebooksAsync()
+    {
+        if (_oneNoteViewModel == null)
+        {
+            // OneNoteViewModel 초기화
+            try
+            {
+                using var scope = ((App)Application.Current).ServiceProvider.CreateScope();
+                var oneNoteService = scope.ServiceProvider.GetService<GraphOneNoteService>();
+                if (oneNoteService != null)
+                {
+                    _oneNoteViewModel = new OneNoteViewModel(oneNoteService);
+                }
+            }
+            catch (Exception ex)
+            {
+                Log4.Error($"OneNoteViewModel 초기화 실패: {ex.Message}");
+                return;
+            }
+        }
+
+        if (_oneNoteViewModel == null) return;
+
+        try
+        {
+            if (OneNoteLoadingOverlay != null)
+                OneNoteLoadingOverlay.Visibility = Visibility.Visible;
+
+            await _oneNoteViewModel.LoadNotebooksAsync();
+
+            if (OneNoteTreeView != null)
+                OneNoteTreeView.ItemsSource = _oneNoteViewModel.Notebooks;
+
+            // 최근 페이지도 로드
+            await _oneNoteViewModel.LoadRecentPagesAsync();
+            if (OneNoteRecentListBox != null)
+                OneNoteRecentListBox.ItemsSource = _oneNoteViewModel.RecentPages;
+
+            Log4.Info($"OneNote 노트북 로드 완료: {_oneNoteViewModel.Notebooks.Count}개");
+        }
+        catch (Exception ex)
+        {
+            Log4.Error($"OneNote 노트북 로드 실패: {ex.Message}");
+        }
+        finally
+        {
+            if (OneNoteLoadingOverlay != null)
+                OneNoteLoadingOverlay.Visibility = Visibility.Collapsed;
+        }
+    }
+
+    /// <summary>
+    /// OneNote 페이지 로드 및 표시
+    /// </summary>
+    private async Task LoadOneNotePageAsync(PageItemViewModel page)
+    {
+        if (_oneNoteViewModel == null || page == null) return;
+
+        try
+        {
+            // 로딩 표시
+            if (OneNoteLoadingOverlay != null)
+                OneNoteLoadingOverlay.Visibility = Visibility.Visible;
+            if (OneNoteEmptyState != null)
+                OneNoteEmptyState.Visibility = Visibility.Collapsed;
+
+            // 페이지 콘텐츠 로드
+            await _oneNoteViewModel.LoadPageContentAsync(page.Id);
+
+            // 헤더 업데이트
+            if (OneNotePageHeaderBorder != null)
+                OneNotePageHeaderBorder.Visibility = Visibility.Visible;
+            if (OneNotePageTitleText != null)
+                OneNotePageTitleText.Text = page.Title;
+            if (OneNotePageLocationText != null)
+                OneNotePageLocationText.Text = page.LocationDisplay;
+
+            // 콘텐츠 표시 (HTML을 텍스트로 변환하여 표시)
+            if (OneNoteContentBorder != null && _oneNoteViewModel.CurrentPageContent != null)
+            {
+                OneNoteContentBorder.Visibility = Visibility.Visible;
+
+                // HTML에서 텍스트만 추출하여 RichTextBox에 표시
+                if (OneNoteContentRichTextBox != null)
+                {
+                    var plainText = StripHtmlForDisplay(_oneNoteViewModel.CurrentPageContent);
+                    var paragraph = new System.Windows.Documents.Paragraph(
+                        new System.Windows.Documents.Run(plainText));
+                    OneNoteContentRichTextBox.Document.Blocks.Clear();
+                    OneNoteContentRichTextBox.Document.Blocks.Add(paragraph);
+                }
+            }
+
+            Log4.Debug($"OneNote 페이지 로드 완료: {page.Title}");
+        }
+        catch (Exception ex)
+        {
+            Log4.Error($"OneNote 페이지 로드 실패: {ex.Message}");
+        }
+        finally
+        {
+            if (OneNoteLoadingOverlay != null)
+                OneNoteLoadingOverlay.Visibility = Visibility.Collapsed;
+        }
+    }
+
+    /// <summary>
+    /// HTML에서 텍스트 추출 (간단한 버전)
+    /// </summary>
+    private string StripHtmlForDisplay(string html)
+    {
+        if (string.IsNullOrEmpty(html))
+            return string.Empty;
+
+        // HTML 태그 제거
+        var text = System.Text.RegularExpressions.Regex.Replace(html, "<[^>]*>", " ");
+        // HTML 엔티티 디코딩
+        text = System.Net.WebUtility.HtmlDecode(text);
+        // 연속된 공백 정리
+        text = System.Text.RegularExpressions.Regex.Replace(text, @"\s+", " ");
+        return text.Trim();
+    }
+
+    #endregion
+
+    #region OneDrive 이벤트 핸들러
+
+    private OneDriveViewModel? _oneDriveViewModel;
+
+    /// <summary>
+    /// OneDrive 새 폴더 버튼 클릭
+    /// </summary>
+    private async void OneDriveNewFolderButton_Click(object sender, RoutedEventArgs e)
+    {
+        try
+        {
+            if (_oneDriveViewModel == null)
+            {
+                _oneDriveViewModel = ((App)Application.Current).GetService<OneDriveViewModel>()!;
+            }
+
+            // 폴더 이름 입력 받기
+            var dialog = new ContentDialog
+            {
+                Title = "새 폴더",
+                Content = new System.Windows.Controls.TextBox { Text = "", Width = 300 },
+                PrimaryButtonText = "생성",
+                CloseButtonText = "취소",
+                DefaultButton = ContentDialogButton.Primary
+            };
+
+            var result = await dialog.ShowAsync();
+            if (result == ContentDialogResult.Primary)
+            {
+                var textBox = dialog.Content as System.Windows.Controls.TextBox;
+                if (!string.IsNullOrWhiteSpace(textBox?.Text))
+                {
+                    await _oneDriveViewModel.CreateFolderAsync(textBox.Text);
+                    Log4.Info($"OneDrive 폴더 생성 완료: {textBox.Text}");
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            Log4.Error($"OneDrive 폴더 생성 실패: {ex.Message}");
+        }
+    }
+
+    /// <summary>
+    /// OneDrive 업로드 버튼 클릭
+    /// </summary>
+    private async void OneDriveUploadButton_Click(object sender, RoutedEventArgs e)
+    {
+        try
+        {
+            var openFileDialog = new Microsoft.Win32.OpenFileDialog
+            {
+                Title = "파일 업로드",
+                Multiselect = false
+            };
+
+            if (openFileDialog.ShowDialog() == true)
+            {
+                var filePath = openFileDialog.FileName;
+                var fileName = System.IO.Path.GetFileName(filePath);
+
+                if (_oneDriveViewModel == null)
+                {
+                    _oneDriveViewModel = ((App)Application.Current).GetService<OneDriveViewModel>()!;
+                }
+
+                // 파일 업로드 서비스 호출
+                var oneDriveService = ((App)Application.Current).GetService<GraphOneDriveService>()!;
+                using var stream = System.IO.File.OpenRead(filePath);
+                await oneDriveService.UploadSmallFileAsync(_oneDriveViewModel.CurrentFolderId, fileName, stream);
+
+                // 새로고침
+                await _oneDriveViewModel.RefreshAsync();
+                Log4.Info($"OneDrive 파일 업로드 완료: {fileName}");
+            }
+        }
+        catch (Exception ex)
+        {
+            Log4.Error($"OneDrive 파일 업로드 실패: {ex.Message}");
+        }
+    }
+
+    /// <summary>
+    /// OneDrive 새로고침 버튼 클릭
+    /// </summary>
+    private async void OneDriveRefreshButton_Click(object sender, RoutedEventArgs e)
+    {
+        try
+        {
+            if (_oneDriveViewModel == null)
+            {
+                _oneDriveViewModel = ((App)Application.Current).GetService<OneDriveViewModel>()!;
+            }
+
+            await _oneDriveViewModel.RefreshAsync();
+            Log4.Debug("OneDrive 새로고침 완료");
+        }
+        catch (Exception ex)
+        {
+            Log4.Error($"OneDrive 새로고침 실패: {ex.Message}");
+        }
+    }
+
+    /// <summary>
+    /// OneDrive 목록 뷰 버튼 클릭
+    /// </summary>
+    private void OneDriveListViewButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (_oneDriveViewModel != null)
+        {
+            _oneDriveViewModel.ViewMode = "list";
+            Log4.Debug("OneDrive 뷰 모드 변경: list");
+        }
+    }
+
+    /// <summary>
+    /// OneDrive 그리드 뷰 버튼 클릭
+    /// </summary>
+    private void OneDriveGridViewButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (_oneDriveViewModel != null)
+        {
+            _oneDriveViewModel.ViewMode = "grid";
+            Log4.Debug("OneDrive 뷰 모드 변경: grid");
+        }
+    }
+
+    /// <summary>
+    /// OneDrive 검색 박스 KeyDown
+    /// </summary>
+    private async void OneDriveSearchBox_KeyDown(object sender, KeyEventArgs e)
+    {
+        if (e.Key == Key.Enter)
+        {
+            try
+            {
+                if (_oneDriveViewModel == null)
+                {
+                    _oneDriveViewModel = ((App)Application.Current).GetService<OneDriveViewModel>()!;
+                }
+
+                var searchBox = sender as System.Windows.Controls.TextBox;
+                if (!string.IsNullOrWhiteSpace(searchBox?.Text))
+                {
+                    _oneDriveViewModel.SearchQuery = searchBox.Text;
+                    await _oneDriveViewModel.SearchAsync();
+                    Log4.Debug($"OneDrive 검색: {searchBox.Text}");
+                }
+            }
+            catch (Exception ex)
+            {
+                Log4.Error($"OneDrive 검색 실패: {ex.Message}");
+            }
+        }
+    }
+
+    /// <summary>
+    /// OneDrive 상위 폴더 이동 버튼 클릭
+    /// </summary>
+    private async void OneDriveGoUpButton_Click(object sender, RoutedEventArgs e)
+    {
+        try
+        {
+            if (_oneDriveViewModel == null)
+            {
+                _oneDriveViewModel = ((App)Application.Current).GetService<OneDriveViewModel>()!;
+            }
+
+            await _oneDriveViewModel.GoUpAsync();
+            Log4.Debug("OneDrive 상위 폴더로 이동");
+        }
+        catch (Exception ex)
+        {
+            Log4.Error($"OneDrive 상위 폴더 이동 실패: {ex.Message}");
+        }
+    }
+
+    /// <summary>
+    /// OneDrive Breadcrumb 아이템 클릭
+    /// </summary>
+    private async void OneDriveBreadcrumbItem_Click(object sender, RoutedEventArgs e)
+    {
+        try
+        {
+            if (sender is System.Windows.Controls.Button button && button.DataContext is BreadcrumbItem breadcrumb)
+            {
+                if (_oneDriveViewModel == null)
+                {
+                    _oneDriveViewModel = ((App)Application.Current).GetService<OneDriveViewModel>()!;
+                }
+
+                await _oneDriveViewModel.NavigateToBreadcrumbAsync(breadcrumb);
+                Log4.Debug($"OneDrive Breadcrumb 이동: {breadcrumb.Name}");
+            }
+        }
+        catch (Exception ex)
+        {
+            Log4.Error($"OneDrive Breadcrumb 이동 실패: {ex.Message}");
+        }
+    }
+
+    /// <summary>
+    /// OneDrive 파일 로드 버튼 클릭
+    /// </summary>
+    private async void OneDriveLoadFilesButton_Click(object sender, RoutedEventArgs e)
+    {
+        await LoadOneDriveFilesAsync();
+    }
+
+    /// <summary>
+    /// OneDrive 파일 목록 로드
+    /// </summary>
+    private async Task LoadOneDriveFilesAsync()
+    {
+        try
+        {
+            if (OneDriveLoadingOverlay != null)
+                OneDriveLoadingOverlay.Visibility = Visibility.Visible;
+
+            if (_oneDriveViewModel == null)
+            {
+                _oneDriveViewModel = ((App)Application.Current).GetService<OneDriveViewModel>()!;
+            }
+
+            // OneDrive 루트 폴더 로드
+            await _oneDriveViewModel.LoadRootAsync();
+
+            // 드라이브 정보 로드
+            await _oneDriveViewModel.LoadDriveInfoAsync();
+
+            // ListView에 데이터 바인딩
+            if (OneDriveFileListView != null)
+            {
+                OneDriveFileListView.ItemsSource = _oneDriveViewModel.Items;
+            }
+
+            // Breadcrumb 바인딩
+            if (OneDriveBreadcrumb != null)
+            {
+                OneDriveBreadcrumb.ItemsSource = _oneDriveViewModel.Breadcrumbs;
+            }
+
+            // 드라이브 정보 로그
+            if (_oneDriveViewModel.DriveInfo != null)
+            {
+                Log4.Debug($"OneDrive 사용량: {_oneDriveViewModel.DriveInfo.UsedDisplay} / {_oneDriveViewModel.DriveInfo.TotalDisplay}");
+            }
+
+            Log4.Info($"OneDrive 파일 목록 로드 완료: {_oneDriveViewModel.Items.Count}개");
+        }
+        catch (Exception ex)
+        {
+            Log4.Error($"OneDrive 파일 목록 로드 실패: {ex.Message}");
+        }
+        finally
+        {
+            if (OneDriveLoadingOverlay != null)
+                OneDriveLoadingOverlay.Visibility = Visibility.Collapsed;
+        }
+    }
+
+    /// <summary>
+    /// OneDrive 파일 목록 선택 변경
+    /// </summary>
+    private void OneDriveFileListView_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (_oneDriveViewModel != null && sender is System.Windows.Controls.ListView listView)
+        {
+            _oneDriveViewModel.SelectedItem = listView.SelectedItem as DriveItemViewModel;
+        }
+    }
+
+    /// <summary>
+    /// OneDrive 파일 목록 더블클릭
+    /// </summary>
+    private async void OneDriveFileListView_MouseDoubleClick(object sender, MouseButtonEventArgs e)
+    {
+        try
+        {
+            if (_oneDriveViewModel?.SelectedItem == null)
+                return;
+
+            var selectedItem = _oneDriveViewModel.SelectedItem;
+
+            if (selectedItem.IsFolder)
+            {
+                // 폴더인 경우 해당 폴더로 이동
+                await _oneDriveViewModel.OpenItemAsync(selectedItem);
+
+                // ListView 다시 바인딩
+                if (OneDriveFileListView != null)
+                {
+                    OneDriveFileListView.ItemsSource = _oneDriveViewModel.Items;
+                }
+
+                Log4.Debug($"OneDrive 폴더 열기: {selectedItem.Name}");
+            }
+            else
+            {
+                // 파일인 경우 다운로드 또는 미리보기
+                Log4.Info($"OneDrive 파일 열기: {selectedItem.Name}");
+
+                // 파일 다운로드 대화상자
+                var saveFileDialog = new Microsoft.Win32.SaveFileDialog
+                {
+                    Title = "파일 저장",
+                    FileName = selectedItem.Name
+                };
+
+                if (saveFileDialog.ShowDialog() == true)
+                {
+                    var oneDriveService = ((App)Application.Current).GetService<GraphOneDriveService>()!;
+                    using var stream = await oneDriveService.DownloadFileAsync(selectedItem.Id);
+                    if (stream != null)
+                    {
+                        using var fileStream = System.IO.File.Create(saveFileDialog.FileName);
+                        await stream.CopyToAsync(fileStream);
+                        Log4.Info($"OneDrive 파일 다운로드 완료: {saveFileDialog.FileName}");
+                    }
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            Log4.Error($"OneDrive 아이템 열기 실패: {ex.Message}");
+        }
+    }
+
+    #endregion
+
+    #region Teams 이벤트 핸들러
+
+    /// <summary>
+    /// Teams 새로고침 버튼 클릭
+    /// </summary>
+    private async void TeamsRefreshButton_Click(object sender, RoutedEventArgs e)
+    {
+        try
+        {
+            if (_teamsViewModel != null)
+            {
+                await _teamsViewModel.RefreshTeamsAsync();
+            }
+        }
+        catch (Exception ex)
+        {
+            Log4.Error($"팀 새로고침 실패: {ex.Message}");
+        }
+    }
+
+    /// <summary>
+    /// 팀 아이템 클릭 (확장/축소)
+    /// </summary>
+    private void TeamItem_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is Wpf.Ui.Controls.Button btn && btn.Tag is TeamItemViewModel team)
+        {
+            team.IsExpanded = !team.IsExpanded;
+        }
+    }
+
+    /// <summary>
+    /// 채널 아이템 클릭
+    /// </summary>
+    private async void ChannelItem_Click(object sender, RoutedEventArgs e)
+    {
+        try
+        {
+            if (sender is Wpf.Ui.Controls.Button btn && btn.Tag is ChannelItemViewModel channel)
+            {
+                if (_teamsViewModel != null)
+                {
+                    await _teamsViewModel.SelectChannelAsync(channel);
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            Log4.Error($"채널 선택 실패: {ex.Message}");
+        }
+    }
+
+    /// <summary>
+    /// Teams 게시물 탭 클릭
+    /// </summary>
+    private void TeamsPostsTab_Click(object sender, RoutedEventArgs e)
+    {
+        _teamsViewModel?.SwitchChannelTabCommand.Execute("posts");
+    }
+
+    /// <summary>
+    /// Teams 파일 탭 클릭
+    /// </summary>
+    private void TeamsFilesTab_Click(object sender, RoutedEventArgs e)
+    {
+        _teamsViewModel?.SwitchChannelTabCommand.Execute("files");
+    }
+
+    /// <summary>
+    /// 채널 파일 클릭
+    /// </summary>
+    private void ChannelFile_Click(object sender, RoutedEventArgs e)
+    {
+        try
+        {
+            if (sender is Wpf.Ui.Controls.Button btn && btn.Tag is ChannelFileViewModel file)
+            {
+                if (!string.IsNullOrEmpty(file.WebUrl))
+                {
+                    System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
+                    {
+                        FileName = file.WebUrl,
+                        UseShellExecute = true
+                    });
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            Log4.Error($"파일 열기 실패: {ex.Message}");
+        }
+    }
+
+    /// <summary>
+    /// 채널 메시지 입력 KeyDown
+    /// </summary>
+    private async void TeamsChannelMessageInput_KeyDown(object sender, KeyEventArgs e)
+    {
+        if (e.Key == Key.Enter && !Keyboard.Modifiers.HasFlag(ModifierKeys.Shift))
+        {
+            e.Handled = true;
+            await SendTeamsChannelMessageAsync();
+        }
+    }
+
+    /// <summary>
+    /// 채널 메시지 전송 버튼 클릭
+    /// </summary>
+    private async void TeamsChannelSendButton_Click(object sender, RoutedEventArgs e)
+    {
+        await SendTeamsChannelMessageAsync();
+    }
+
+    /// <summary>
+    /// 채널 메시지 전송
+    /// </summary>
+    private async Task SendTeamsChannelMessageAsync()
+    {
+        try
+        {
+            var content = TeamsChannelMessageInput.Text.Trim();
+            if (string.IsNullOrEmpty(content) || _teamsViewModel == null)
+                return;
+
+            TeamsChannelMessageInput.Text = string.Empty;
+            await _teamsViewModel.SendChannelMessageAsync(content);
+        }
+        catch (Exception ex)
+        {
+            Log4.Error($"채널 메시지 전송 실패: {ex.Message}");
+        }
+    }
+
+    #endregion
+
+    #region Activity 이벤트 핸들러
+
+    private ActivityViewModel? _activityViewModel;
+
+    /// <summary>
+    /// Activity 새로고침 버튼 클릭
+    /// </summary>
+    private async void ActivityRefreshButton_Click(object sender, RoutedEventArgs e)
+    {
+        await LoadActivityDataAsync();
+    }
+
+    /// <summary>
+    /// 모든 활동 필터 버튼 클릭
+    /// </summary>
+    private void ActivityFilterAllButton_Click(object sender, RoutedEventArgs e)
+    {
+        SetActivityFilter("all");
+    }
+
+    /// <summary>
+    /// 메일 필터 버튼 클릭
+    /// </summary>
+    private void ActivityFilterMailButton_Click(object sender, RoutedEventArgs e)
+    {
+        SetActivityFilter("mail");
+    }
+
+    /// <summary>
+    /// 채팅 필터 버튼 클릭
+    /// </summary>
+    private void ActivityFilterChatButton_Click(object sender, RoutedEventArgs e)
+    {
+        SetActivityFilter("chat");
+    }
+
+    /// <summary>
+    /// 파일 필터 버튼 클릭
+    /// </summary>
+    private void ActivityFilterFileButton_Click(object sender, RoutedEventArgs e)
+    {
+        SetActivityFilter("file");
+    }
+
+    /// <summary>
+    /// 필터 설정
+    /// </summary>
+    private void SetActivityFilter(string filter)
+    {
+        if (_activityViewModel == null)
+        {
+            _activityViewModel = ((App)Application.Current).GetService<ActivityViewModel>()!;
+        }
+
+        _activityViewModel.SetFilterCommand.Execute(filter);
+        ActivityListView.ItemsSource = _activityViewModel.FilteredActivities;
+
+        // 필터 버튼 UI 업데이트
+        ActivityFilterAllButton.Appearance = filter == "all" ? Wpf.Ui.Controls.ControlAppearance.Secondary : Wpf.Ui.Controls.ControlAppearance.Transparent;
+        ActivityFilterMailButton.Appearance = filter == "mail" ? Wpf.Ui.Controls.ControlAppearance.Secondary : Wpf.Ui.Controls.ControlAppearance.Transparent;
+        ActivityFilterChatButton.Appearance = filter == "chat" ? Wpf.Ui.Controls.ControlAppearance.Secondary : Wpf.Ui.Controls.ControlAppearance.Transparent;
+        ActivityFilterFileButton.Appearance = filter == "file" ? Wpf.Ui.Controls.ControlAppearance.Secondary : Wpf.Ui.Controls.ControlAppearance.Transparent;
+    }
+
+    /// <summary>
+    /// 활동 목록 선택 변경
+    /// </summary>
+    private void ActivityListView_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (ActivityListView.SelectedItem is ActivityItemViewModel selectedActivity)
+        {
+            _activityViewModel?.OpenActivityCommand.Execute(selectedActivity);
+        }
+    }
+
+    /// <summary>
+    /// 활동 로드 버튼 클릭
+    /// </summary>
+    private async void ActivityLoadButton_Click(object sender, RoutedEventArgs e)
+    {
+        await LoadActivityDataAsync();
+    }
+
+    /// <summary>
+    /// Activity 데이터 로드
+    /// </summary>
+    private async Task LoadActivityDataAsync()
+    {
+        try
+        {
+            if (_activityViewModel == null)
+            {
+                _activityViewModel = ((App)Application.Current).GetService<ActivityViewModel>()!;
+            }
+
+            await _activityViewModel.LoadActivitiesAsync();
+
+            // 활동 목록 바인딩
+            ActivityListView.ItemsSource = _activityViewModel.FilteredActivities;
+
+            // Empty state 처리
+            if (_activityViewModel.FilteredActivities.Count == 0)
+            {
+                ActivityEmptyState.Visibility = Visibility.Visible;
+            }
+            else
+            {
+                ActivityEmptyState.Visibility = Visibility.Collapsed;
+            }
+
+            Log4.Info($"Activity 데이터 로드 완료: {_activityViewModel.Activities.Count}개 활동");
+        }
+        catch (Exception ex)
+        {
+            Log4.Error($"Activity 데이터 로드 실패: {ex.Message}");
+        }
+    }
+
+    #endregion
+
+    #region Planner 이벤트 핸들러
+
+    private PlannerViewModel? _plannerViewModel;
+
+    /// <summary>
+    /// Planner 새로고침 버튼 클릭
+    /// </summary>
+    private async void PlannerRefreshButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (_plannerViewModel == null)
+        {
+            _plannerViewModel = ((App)Application.Current).GetService<PlannerViewModel>()!;
+        }
+
+        await _plannerViewModel.RefreshAsync();
+        PlannerListBox.ItemsSource = _plannerViewModel.Plans;
+    }
+
+    /// <summary>
+    /// 내 작업 보기 버튼 클릭
+    /// </summary>
+    private async void PlannerMyTasksButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (_plannerViewModel == null)
+        {
+            _plannerViewModel = ((App)Application.Current).GetService<PlannerViewModel>()!;
+        }
+
+        await _plannerViewModel.LoadMyTasksAsync();
+        PlannerBoardTitle.Text = "내 작업";
+        PlannerNoPlanSelected.Visibility = Visibility.Collapsed;
+
+        // 내 작업 목록 표시 (간단한 리스트로)
+        Log4.Info($"Planner 내 작업 {_plannerViewModel.MyTasks.Count}개 로드");
+    }
+
+    /// <summary>
+    /// 플랜 목록 선택 변경
+    /// </summary>
+    private async void PlannerListBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (PlannerListBox.SelectedItem is PlanItemViewModel selectedPlan)
+        {
+            if (_plannerViewModel == null)
+            {
+                _plannerViewModel = ((App)Application.Current).GetService<PlannerViewModel>()!;
+            }
+
+            await _plannerViewModel.SelectPlanAsync(selectedPlan);
+
+            // UI 업데이트
+            PlannerBoardTitle.Text = selectedPlan.Title;
+            PlannerNoPlanSelected.Visibility = Visibility.Collapsed;
+            PlannerAddBucketButton.IsEnabled = true;
+            PlannerAddTaskButton.IsEnabled = true;
+
+            // 버킷 목록 바인딩
+            PlannerBucketsItemsControl.ItemsSource = _plannerViewModel.Buckets;
+
+            Log4.Debug($"Planner 플랜 선택: {selectedPlan.Title}");
+        }
+    }
+
+    /// <summary>
+    /// 플랜 로드 버튼 클릭
+    /// </summary>
+    private async void PlannerLoadPlansButton_Click(object sender, RoutedEventArgs e)
+    {
+        await LoadPlannerDataAsync();
+    }
+
+    /// <summary>
+    /// 버킷 추가 버튼 클릭
+    /// </summary>
+    private async void PlannerAddBucketButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (_plannerViewModel?.SelectedPlan == null)
+            return;
+
+        var dialog = new ContentDialog
+        {
+            Title = "새 버킷",
+            Content = new System.Windows.Controls.TextBox
+            {
+                Text = "",
+                Width = 300
+            },
+            PrimaryButtonText = "생성",
+            CloseButtonText = "취소"
+        };
+
+        var result = await dialog.ShowAsync();
+        if (result == ContentDialogResult.Primary)
+        {
+            var textBox = dialog.Content as System.Windows.Controls.TextBox;
+            if (!string.IsNullOrWhiteSpace(textBox?.Text))
+            {
+                await _plannerViewModel.CreateBucketAsync(textBox.Text);
+                Log4.Info($"Planner 버킷 생성: {textBox.Text}");
+            }
+        }
+    }
+
+    /// <summary>
+    /// 작업 추가 버튼 클릭
+    /// </summary>
+    private async void PlannerAddTaskButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (_plannerViewModel?.SelectedPlan == null || _plannerViewModel.Buckets.Count == 0)
+            return;
+
+        var dialog = new ContentDialog
+        {
+            Title = "새 작업",
+            Content = new System.Windows.Controls.TextBox
+            {
+                Text = "",
+                Width = 300
+            },
+            PrimaryButtonText = "생성",
+            CloseButtonText = "취소"
+        };
+
+        var result = await dialog.ShowAsync();
+        if (result == ContentDialogResult.Primary)
+        {
+            var textBox = dialog.Content as System.Windows.Controls.TextBox;
+            if (!string.IsNullOrWhiteSpace(textBox?.Text))
+            {
+                await _plannerViewModel.CreateTaskAsync(textBox.Text);
+                Log4.Info($"Planner 작업 생성: {textBox.Text}");
+            }
+        }
+    }
+
+    /// <summary>
+    /// 작업 카드 클릭
+    /// </summary>
+    private void PlannerTaskCard_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
+    {
+        if (sender is Border border && border.DataContext is TaskItemViewModel task)
+        {
+            _plannerViewModel?.ToggleTaskCompleteCommand.Execute(task);
+            Log4.Debug($"Planner 작업 클릭: {task.Title}");
+        }
+    }
+
+    /// <summary>
+    /// Planner 데이터 로드
+    /// </summary>
+    private async Task LoadPlannerDataAsync()
+    {
+        try
+        {
+            if (_plannerViewModel == null)
+            {
+                _plannerViewModel = ((App)Application.Current).GetService<PlannerViewModel>()!;
+            }
+
+            await _plannerViewModel.LoadPlansAsync();
+
+            // 플랜 목록 바인딩
+            PlannerListBox.ItemsSource = _plannerViewModel.Plans;
+
+            // Empty state 처리
+            if (_plannerViewModel.Plans.Count == 0)
+            {
+                PlannerEmptyState.Visibility = Visibility.Visible;
+            }
+            else
+            {
+                PlannerEmptyState.Visibility = Visibility.Collapsed;
+            }
+
+            Log4.Info($"Planner 데이터 로드 완료: {_plannerViewModel.Plans.Count}개 플랜");
+        }
+        catch (Exception ex)
+        {
+            Log4.Error($"Planner 데이터 로드 실패: {ex.Message}");
+        }
+    }
+
+    #endregion
+
+    #region Calls 이벤트 핸들러
+
+    private CallsViewModel? _callsViewModel;
+
+    /// <summary>
+    /// 통화 새로고침 버튼 클릭
+    /// </summary>
+    private async void CallsRefreshButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (_callsViewModel == null) return;
+
+        await _callsViewModel.RefreshAsync();
+        UpdateCallsContactsEmptyState();
+        UpdateCallsMyStatus();
+    }
+
+    /// <summary>
+    /// 상태 변경 버튼 클릭
+    /// </summary>
+    private void CallsStatusMenuButton_Click(object sender, RoutedEventArgs e)
+    {
+        // 상태 변경 메뉴 표시
+        var contextMenu = new ContextMenu();
+
+        var statuses = new[] {
+            ("Available", "대화 가능"),
+            ("Busy", "다른 용무 중"),
+            ("DoNotDisturb", "방해 금지"),
+            ("Away", "자리 비움"),
+            ("Offline", "오프라인")
+        };
+
+        foreach (var (status, text) in statuses)
+        {
+            var menuItem = new System.Windows.Controls.MenuItem { Header = text, Tag = status };
+            menuItem.Click += async (s, args) =>
+            {
+                if (_callsViewModel != null)
+                {
+                    await _callsViewModel.SetMyStatusAsync((string)((System.Windows.Controls.MenuItem)s!).Tag!);
+                    UpdateCallsMyStatus();
+                }
+            };
+            contextMenu.Items.Add(menuItem);
+        }
+
+        contextMenu.IsOpen = true;
+    }
+
+    /// <summary>
+    /// 연락처 검색 키 입력
+    /// </summary>
+    private async void CallsSearchBox_KeyDown(object sender, KeyEventArgs e)
+    {
+        if (e.Key == Key.Enter && _callsViewModel != null)
+        {
+            _callsViewModel.SearchQuery = CallsSearchBox.Text;
+            await _callsViewModel.SearchUsersAsync();
+
+            // 검색 결과가 있으면 검색 결과 패널 표시
+            if (_callsViewModel.SearchResults.Count > 0)
+            {
+                CallsSearchResultsPanel.Visibility = Visibility.Visible;
+                CallsDefaultPanel.Visibility = Visibility.Collapsed;
+            }
+            else
+            {
+                CallsSearchResultsPanel.Visibility = Visibility.Collapsed;
+                CallsDefaultPanel.Visibility = Visibility.Visible;
+            }
+        }
+    }
+
+    /// <summary>
+    /// 다이얼 패드 탭 클릭
+    /// </summary>
+    private void CallsDialPadTab_Click(object sender, RoutedEventArgs e)
+    {
+        CallsDialPadTab.Appearance = Wpf.Ui.Controls.ControlAppearance.Primary;
+        CallsContactsTab.Appearance = Wpf.Ui.Controls.ControlAppearance.Transparent;
+        CallsDialPadPanel.Visibility = Visibility.Visible;
+        CallsContactsPanel.Visibility = Visibility.Collapsed;
+    }
+
+    /// <summary>
+    /// 연락처 탭 클릭
+    /// </summary>
+    private void CallsContactsTab_Click(object sender, RoutedEventArgs e)
+    {
+        CallsDialPadTab.Appearance = Wpf.Ui.Controls.ControlAppearance.Transparent;
+        CallsContactsTab.Appearance = Wpf.Ui.Controls.ControlAppearance.Primary;
+        CallsDialPadPanel.Visibility = Visibility.Collapsed;
+        CallsContactsPanel.Visibility = Visibility.Visible;
+    }
+
+    /// <summary>
+    /// 다이얼 버튼 클릭
+    /// </summary>
+    private void DialButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is Wpf.Ui.Controls.Button btn && btn.Tag != null)
+        {
+            var digit = btn.Tag.ToString();
+            CallsDialNumber.Text += digit;
+            _callsViewModel?.DialDigit(digit!);
+        }
+    }
+
+    /// <summary>
+    /// 다이얼 지우기 버튼 클릭
+    /// </summary>
+    private void DialClearButton_Click(object sender, RoutedEventArgs e)
+    {
+        CallsDialNumber.Text = string.Empty;
+        _callsViewModel?.ClearDial();
+    }
+
+    /// <summary>
+    /// 다이얼 백스페이스 버튼 클릭
+    /// </summary>
+    private void DialBackspaceButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (!string.IsNullOrEmpty(CallsDialNumber.Text))
+        {
+            CallsDialNumber.Text = CallsDialNumber.Text[..^1];
+        }
+        _callsViewModel?.BackspaceDial();
+    }
+
+    /// <summary>
+    /// 다이얼 통화 버튼 클릭
+    /// </summary>
+    private void DialCallButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (string.IsNullOrEmpty(CallsDialNumber.Text))
+        {
+            System.Windows.MessageBox.Show("전화번호를 입력해주세요.", "알림", System.Windows.MessageBoxButton.OK, System.Windows.MessageBoxImage.Information);
+            return;
+        }
+
+        _callsViewModel?.MakeCall();
+        System.Windows.MessageBox.Show($"실제 통화 기능은 Azure Communication Services 연동이 필요합니다.\n번호: {CallsDialNumber.Text}",
+            "알림", System.Windows.MessageBoxButton.OK, System.Windows.MessageBoxImage.Information);
+    }
+
+    /// <summary>
+    /// 연락처 리스트 선택 변경
+    /// </summary>
+    private void CallsContactsListView_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (sender is System.Windows.Controls.ListView listView && listView.SelectedItem is ContactItemViewModel contact)
+        {
+            _callsViewModel?.SelectContact(contact);
+        }
+    }
+
+    /// <summary>
+    /// 검색 결과 리스트 선택 변경
+    /// </summary>
+    private void CallsSearchResultsListView_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (sender is System.Windows.Controls.ListView listView && listView.SelectedItem is ContactItemViewModel contact)
+        {
+            _callsViewModel?.SelectContact(contact);
+        }
+    }
+
+    /// <summary>
+    /// 연락처 음성 통화 버튼 클릭
+    /// </summary>
+    private void ContactCallButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is Wpf.Ui.Controls.Button btn && btn.Tag is ContactItemViewModel contact)
+        {
+            _callsViewModel?.SelectContact(contact);
+            _callsViewModel?.MakeCall();
+            System.Windows.MessageBox.Show($"실제 통화 기능은 Azure Communication Services 연동이 필요합니다.\n대상: {contact.DisplayName}",
+                "알림", System.Windows.MessageBoxButton.OK, System.Windows.MessageBoxImage.Information);
+        }
+    }
+
+    /// <summary>
+    /// 연락처 영상 통화 버튼 클릭
+    /// </summary>
+    private void ContactVideoCallButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is Wpf.Ui.Controls.Button btn && btn.Tag is ContactItemViewModel contact)
+        {
+            _callsViewModel?.SelectContact(contact);
+            _callsViewModel?.MakeVideoCall();
+            System.Windows.MessageBox.Show($"실제 영상 통화 기능은 Azure Communication Services 연동이 필요합니다.\n대상: {contact.DisplayName}",
+                "알림", System.Windows.MessageBoxButton.OK, System.Windows.MessageBoxImage.Information);
+        }
+    }
+
+    /// <summary>
+    /// 검색 결과 음성 통화 버튼 클릭
+    /// </summary>
+    private void SearchResultCallButton_Click(object sender, RoutedEventArgs e)
+    {
+        ContactCallButton_Click(sender, e);
+    }
+
+    /// <summary>
+    /// 검색 결과 영상 통화 버튼 클릭
+    /// </summary>
+    private void SearchResultVideoCallButton_Click(object sender, RoutedEventArgs e)
+    {
+        ContactVideoCallButton_Click(sender, e);
     }
 
     #endregion

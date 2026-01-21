@@ -252,6 +252,102 @@ public class GraphTeamsService
     }
 
     /// <summary>
+    /// 채팅 메시지 전송
+    /// </summary>
+    /// <param name="chatId">채팅방 ID</param>
+    /// <param name="content">메시지 내용 (HTML 지원)</param>
+    /// <returns>전송된 메시지</returns>
+    public async Task<ChatMessage?> SendMessageAsync(string chatId, string content)
+    {
+        if (string.IsNullOrEmpty(chatId))
+            throw new ArgumentNullException(nameof(chatId));
+        if (string.IsNullOrEmpty(content))
+            throw new ArgumentNullException(nameof(content));
+
+        try
+        {
+            var client = _authService.GetGraphClient();
+
+            var chatMessage = new ChatMessage
+            {
+                Body = new ItemBody
+                {
+                    ContentType = BodyType.Html,
+                    Content = content
+                }
+            };
+
+            var response = await client.Me.Chats[chatId].Messages.PostAsync(chatMessage);
+
+            _logger.Information("채팅 메시지 전송 성공: ChatId={ChatId}", chatId);
+            return response;
+        }
+        catch (Exception ex)
+        {
+            _logger.Error(ex, "채팅 메시지 전송 실패: ChatId={ChatId}", chatId);
+            throw;
+        }
+    }
+
+    /// <summary>
+    /// 채팅방의 최신 메시지 로드 (Delta Query 사용)
+    /// </summary>
+    /// <param name="chatId">채팅방 ID</param>
+    /// <param name="sinceDateTime">이 시간 이후의 메시지만</param>
+    /// <returns>새 메시지 목록</returns>
+    public async Task<IEnumerable<ChatMessage>> GetNewMessagesAsync(string chatId, DateTime? sinceDateTime = null)
+    {
+        if (string.IsNullOrEmpty(chatId))
+            throw new ArgumentNullException(nameof(chatId));
+
+        try
+        {
+            var client = _authService.GetGraphClient();
+
+            // 기본값: 5분 전부터
+            var since = sinceDateTime ?? DateTime.UtcNow.AddMinutes(-5);
+            var filter = $"createdDateTime gt {since:yyyy-MM-ddTHH:mm:ssZ}";
+
+            var response = await client.Me.Chats[chatId].Messages.GetAsync(config =>
+            {
+                config.QueryParameters.Filter = filter;
+                config.QueryParameters.Orderby = new[] { "createdDateTime desc" };
+                config.QueryParameters.Top = 50;
+            });
+
+            _logger.Debug("채팅방 {ChatId} 새 메시지 {Count}개 조회", chatId, response?.Value?.Count ?? 0);
+            return response?.Value ?? new List<ChatMessage>();
+        }
+        catch (Exception ex)
+        {
+            _logger.Error(ex, "새 메시지 조회 실패: ChatId={ChatId}", chatId);
+            return new List<ChatMessage>();
+        }
+    }
+
+    /// <summary>
+    /// 채팅방의 마지막 메시지 가져오기
+    /// </summary>
+    /// <param name="chatId">채팅방 ID</param>
+    /// <returns>마지막 메시지</returns>
+    public async Task<ChatMessage?> GetLastMessageAsync(string chatId)
+    {
+        if (string.IsNullOrEmpty(chatId))
+            return null;
+
+        try
+        {
+            var messages = await GetChatMessagesAsync(chatId, 1);
+            return messages.FirstOrDefault();
+        }
+        catch (Exception ex)
+        {
+            _logger.Error(ex, "마지막 메시지 조회 실패: ChatId={ChatId}", chatId);
+            return null;
+        }
+    }
+
+    /// <summary>
     /// 채팅방 제목/이름 가져오기
     /// </summary>
     /// <param name="chat">채팅 객체</param>
@@ -290,4 +386,273 @@ public class GraphTeamsService
 
         return "Chat";
     }
+
+    #region Teams 팀/채널 관련 메서드
+
+    /// <summary>
+    /// 내가 속한 팀 목록 조회
+    /// </summary>
+    /// <returns>팀 목록</returns>
+    public async Task<IEnumerable<Team>> GetMyTeamsAsync()
+    {
+        try
+        {
+            var client = _authService.GetGraphClient();
+            var response = await client.Me.JoinedTeams.GetAsync(config =>
+            {
+                config.QueryParameters.Top = 100;
+            });
+
+            _logger.Debug("팀 {Count}개 조회", response?.Value?.Count ?? 0);
+            return response?.Value ?? new List<Team>();
+        }
+        catch (Exception ex)
+        {
+            _logger.Error(ex, "팀 목록 조회 실패");
+            return new List<Team>();
+        }
+    }
+
+    /// <summary>
+    /// 특정 팀의 상세 정보 조회
+    /// </summary>
+    /// <param name="teamId">팀 ID</param>
+    /// <returns>팀 정보</returns>
+    public async Task<Team?> GetTeamAsync(string teamId)
+    {
+        if (string.IsNullOrEmpty(teamId))
+            return null;
+
+        try
+        {
+            var client = _authService.GetGraphClient();
+            var team = await client.Teams[teamId].GetAsync();
+            return team;
+        }
+        catch (Exception ex)
+        {
+            _logger.Error(ex, "팀 정보 조회 실패: TeamId={TeamId}", teamId);
+            return null;
+        }
+    }
+
+    /// <summary>
+    /// 팀의 채널 목록 조회
+    /// </summary>
+    /// <param name="teamId">팀 ID</param>
+    /// <returns>채널 목록</returns>
+    public async Task<IEnumerable<Channel>> GetChannelsAsync(string teamId)
+    {
+        if (string.IsNullOrEmpty(teamId))
+            return new List<Channel>();
+
+        try
+        {
+            var client = _authService.GetGraphClient();
+            var response = await client.Teams[teamId].Channels.GetAsync();
+
+            _logger.Debug("팀 {TeamId} 채널 {Count}개 조회", teamId, response?.Value?.Count ?? 0);
+            return response?.Value ?? new List<Channel>();
+        }
+        catch (Exception ex)
+        {
+            _logger.Error(ex, "채널 목록 조회 실패: TeamId={TeamId}", teamId);
+            return new List<Channel>();
+        }
+    }
+
+    /// <summary>
+    /// 채널의 메시지 목록 조회
+    /// </summary>
+    /// <param name="teamId">팀 ID</param>
+    /// <param name="channelId">채널 ID</param>
+    /// <param name="top">조회할 메시지 수</param>
+    /// <returns>메시지 목록</returns>
+    public async Task<IEnumerable<ChatMessage>> GetChannelMessagesAsync(string teamId, string channelId, int top = 50)
+    {
+        if (string.IsNullOrEmpty(teamId) || string.IsNullOrEmpty(channelId))
+            return new List<ChatMessage>();
+
+        try
+        {
+            var client = _authService.GetGraphClient();
+            var response = await client.Teams[teamId].Channels[channelId].Messages.GetAsync(config =>
+            {
+                config.QueryParameters.Top = top;
+            });
+
+            _logger.Debug("팀 {TeamId} 채널 {ChannelId} 메시지 {Count}개 조회", teamId, channelId, response?.Value?.Count ?? 0);
+            return response?.Value ?? new List<ChatMessage>();
+        }
+        catch (Exception ex)
+        {
+            _logger.Error(ex, "채널 메시지 조회 실패: TeamId={TeamId}, ChannelId={ChannelId}", teamId, channelId);
+            return new List<ChatMessage>();
+        }
+    }
+
+    /// <summary>
+    /// 채널에 메시지 전송
+    /// </summary>
+    /// <param name="teamId">팀 ID</param>
+    /// <param name="channelId">채널 ID</param>
+    /// <param name="content">메시지 내용 (HTML 지원)</param>
+    /// <returns>전송된 메시지</returns>
+    public async Task<ChatMessage?> SendChannelMessageAsync(string teamId, string channelId, string content)
+    {
+        if (string.IsNullOrEmpty(teamId) || string.IsNullOrEmpty(channelId) || string.IsNullOrEmpty(content))
+            return null;
+
+        try
+        {
+            var client = _authService.GetGraphClient();
+
+            var chatMessage = new ChatMessage
+            {
+                Body = new ItemBody
+                {
+                    ContentType = BodyType.Html,
+                    Content = content
+                }
+            };
+
+            var response = await client.Teams[teamId].Channels[channelId].Messages.PostAsync(chatMessage);
+
+            _logger.Information("채널 메시지 전송 성공: TeamId={TeamId}, ChannelId={ChannelId}", teamId, channelId);
+            return response;
+        }
+        catch (Exception ex)
+        {
+            _logger.Error(ex, "채널 메시지 전송 실패: TeamId={TeamId}, ChannelId={ChannelId}", teamId, channelId);
+            return null;
+        }
+    }
+
+    /// <summary>
+    /// 팀의 멤버 목록 조회
+    /// </summary>
+    /// <param name="teamId">팀 ID</param>
+    /// <returns>멤버 목록</returns>
+    public async Task<IEnumerable<ConversationMember>> GetTeamMembersAsync(string teamId)
+    {
+        if (string.IsNullOrEmpty(teamId))
+            return new List<ConversationMember>();
+
+        try
+        {
+            var client = _authService.GetGraphClient();
+            var response = await client.Teams[teamId].Members.GetAsync();
+
+            _logger.Debug("팀 {TeamId} 멤버 {Count}명 조회", teamId, response?.Value?.Count ?? 0);
+            return response?.Value ?? new List<ConversationMember>();
+        }
+        catch (Exception ex)
+        {
+            _logger.Error(ex, "팀 멤버 조회 실패: TeamId={TeamId}", teamId);
+            return new List<ConversationMember>();
+        }
+    }
+
+    /// <summary>
+    /// 채널의 파일 목록 조회 (SharePoint 연동)
+    /// </summary>
+    /// <param name="teamId">팀 ID</param>
+    /// <param name="channelId">채널 ID</param>
+    /// <returns>파일 목록</returns>
+    public async Task<IEnumerable<DriveItem>> GetChannelFilesAsync(string teamId, string channelId)
+    {
+        if (string.IsNullOrEmpty(teamId) || string.IsNullOrEmpty(channelId))
+            return new List<DriveItem>();
+
+        try
+        {
+            var client = _authService.GetGraphClient();
+            var response = await client.Teams[teamId].Channels[channelId].FilesFolder.GetAsync();
+
+            if (response?.Id != null)
+            {
+                // 폴더의 자식 항목 조회
+                var driveId = response.ParentReference?.DriveId;
+                if (!string.IsNullOrEmpty(driveId))
+                {
+                    var childrenResponse = await client.Drives[driveId].Items[response.Id].Children.GetAsync();
+                    return childrenResponse?.Value ?? new List<DriveItem>();
+                }
+            }
+
+            return new List<DriveItem>();
+        }
+        catch (Exception ex)
+        {
+            _logger.Error(ex, "채널 파일 조회 실패: TeamId={TeamId}, ChannelId={ChannelId}", teamId, channelId);
+            return new List<DriveItem>();
+        }
+    }
+
+    /// <summary>
+    /// 메시지의 답글 조회
+    /// </summary>
+    /// <param name="teamId">팀 ID</param>
+    /// <param name="channelId">채널 ID</param>
+    /// <param name="messageId">메시지 ID</param>
+    /// <returns>답글 목록</returns>
+    public async Task<IEnumerable<ChatMessage>> GetMessageRepliesAsync(string teamId, string channelId, string messageId)
+    {
+        if (string.IsNullOrEmpty(teamId) || string.IsNullOrEmpty(channelId) || string.IsNullOrEmpty(messageId))
+            return new List<ChatMessage>();
+
+        try
+        {
+            var client = _authService.GetGraphClient();
+            var response = await client.Teams[teamId].Channels[channelId].Messages[messageId].Replies.GetAsync();
+
+            return response?.Value ?? new List<ChatMessage>();
+        }
+        catch (Exception ex)
+        {
+            _logger.Error(ex, "답글 조회 실패: MessageId={MessageId}", messageId);
+            return new List<ChatMessage>();
+        }
+    }
+
+    /// <summary>
+    /// 메시지에 답글 작성
+    /// </summary>
+    /// <param name="teamId">팀 ID</param>
+    /// <param name="channelId">채널 ID</param>
+    /// <param name="messageId">메시지 ID</param>
+    /// <param name="content">답글 내용</param>
+    /// <returns>작성된 답글</returns>
+    public async Task<ChatMessage?> ReplyToMessageAsync(string teamId, string channelId, string messageId, string content)
+    {
+        if (string.IsNullOrEmpty(teamId) || string.IsNullOrEmpty(channelId) ||
+            string.IsNullOrEmpty(messageId) || string.IsNullOrEmpty(content))
+            return null;
+
+        try
+        {
+            var client = _authService.GetGraphClient();
+
+            var reply = new ChatMessage
+            {
+                Body = new ItemBody
+                {
+                    ContentType = BodyType.Html,
+                    Content = content
+                }
+            };
+
+            var response = await client.Teams[teamId].Channels[channelId].Messages[messageId].Replies.PostAsync(reply);
+
+            _logger.Information("답글 작성 성공: MessageId={MessageId}", messageId);
+            return response;
+        }
+        catch (Exception ex)
+        {
+            _logger.Error(ex, "답글 작성 실패: MessageId={MessageId}", messageId);
+            return null;
+        }
+    }
+
+    #endregion
 }

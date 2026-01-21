@@ -36,6 +36,38 @@
             <converters:JsonArrayToStringConverter x:Key="JsonArrayToStringConverter"/>
             <converters:EmptySubjectConverter x:Key="EmptySubjectConverter"/>
             <converters:Base64ToImageSourceConverter x:Key="Base64ToImageSourceConverter"/>
+            <!-- Planner 컨버터 -->
+            <converters:BoolToStrikethroughConverter x:Key="BoolToStrikethroughConverter"/>
+            <converters:DueStatusToBackgroundConverter x:Key="DueStatusToBackgroundConverter"/>
+
+            <!-- ========== 기능별 AccentColor 리소스 ========== -->
+            <!-- 기본값: Outlook Blue (ThemeService에서 동적으로 업데이트) -->
+            <Color x:Key="FeatureAccentColor">#0078D4</Color>
+            <SolidColorBrush x:Key="FeatureAccentBrush" Color="#0078D4"/>
+            <SolidColorBrush x:Key="FeatureAccentBrushLight" Color="#500078D4"/>
+            <SolidColorBrush x:Key="FeatureAccentBrushDim" Color="#800078D4"/>
+
+            <!-- 기능별 AccentColor 정적 정의 (참조용) -->
+            <Color x:Key="MailAccentColor">#0078D4</Color>
+            <Color x:Key="CalendarAccentColor">#0078D4</Color>
+            <Color x:Key="ChatAccentColor">#6264A7</Color>
+            <Color x:Key="TeamsAccentColor">#6264A7</Color>
+            <Color x:Key="PlannerAccentColor">#31752F</Color>
+            <Color x:Key="OneDriveAccentColor">#0078D4</Color>
+            <Color x:Key="OneNoteAccentColor">#7719AA</Color>
+            <Color x:Key="ActivityAccentColor">#F7630C</Color>
+            <Color x:Key="CallsAccentColor">#0078D4</Color>
+
+            <!-- 기능별 Brush (정적 참조용) -->
+            <SolidColorBrush x:Key="MailAccentBrush" Color="#0078D4"/>
+            <SolidColorBrush x:Key="CalendarAccentBrush" Color="#0078D4"/>
+            <SolidColorBrush x:Key="ChatAccentBrush" Color="#6264A7"/>
+            <SolidColorBrush x:Key="TeamsAccentBrush" Color="#6264A7"/>
+            <SolidColorBrush x:Key="PlannerAccentBrush" Color="#31752F"/>
+            <SolidColorBrush x:Key="OneDriveAccentBrush" Color="#0078D4"/>
+            <SolidColorBrush x:Key="OneNoteAccentBrush" Color="#7719AA"/>
+            <SolidColorBrush x:Key="ActivityAccentBrush" Color="#F7630C"/>
+            <SolidColorBrush x:Key="CallsAccentBrush" Color="#0078D4"/>
 
             <!-- 타이틀바 투명 버튼 스타일 (라이트/다크 모드 호버 효과 지원) -->
             <Style x:Key="TitleBarTransparentButtonStyle" TargetType="ui:Button">

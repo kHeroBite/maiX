@@ -36,7 +36,29 @@ namespace mailX.Services.Graph
             "Files.Read.All",
             "Sites.Read.All",
             "Calendars.Read",
-            "Calendars.ReadWrite"
+            "Calendars.ReadWrite",
+            // Teams 채팅 권한
+            "Chat.Read",
+            "Chat.ReadWrite",
+            "ChatMessage.Read",
+            "ChatMessage.Send",
+            // 사용자 상태 (프레즌스)
+            "Presence.Read.All",
+            // OneNote 권한
+            "Notes.Read",
+            "Notes.ReadWrite",
+            // OneDrive 권한 (Files.Read.All 이미 있음)
+            "Files.ReadWrite.All",
+            // Planner 권한
+            "Tasks.Read",
+            "Tasks.ReadWrite",
+            "Group.Read.All",
+            // Teams 팀/채널 권한
+            "Team.ReadBasic.All",
+            "Channel.ReadBasic.All",
+            "TeamMember.Read.All",
+            "ChannelMessage.Read.All",
+            "ChannelMessage.Send"
         };
 
         /// <summary>

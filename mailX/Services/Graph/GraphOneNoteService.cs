@@ -452,4 +452,105 @@ public class GraphOneNoteService
             .Replace("\"", "&quot;")
             .Replace("'", "&#39;");
     }
+
+    /// <summary>
+    /// 새 노트북 생성
+    /// </summary>
+    /// <param name="displayName">노트북 이름</param>
+    /// <returns>생성된 노트북</returns>
+    public async Task<Notebook?> CreateNotebookAsync(string displayName)
+    {
+        if (string.IsNullOrEmpty(displayName))
+            throw new ArgumentNullException(nameof(displayName));
+
+        try
+        {
+            var client = _authService.GetGraphClient();
+
+            var notebook = new Notebook
+            {
+                DisplayName = displayName
+            };
+
+            var response = await client.Me.Onenote.Notebooks.PostAsync(notebook);
+
+            _logger.Information("노트북 생성 완료: {DisplayName}", displayName);
+            return response;
+        }
+        catch (Exception ex)
+        {
+            _logger.Error(ex, "노트북 생성 실패: DisplayName={DisplayName}", displayName);
+            throw;
+        }
+    }
+
+    /// <summary>
+    /// 새 섹션 생성
+    /// </summary>
+    /// <param name="notebookId">노트북 ID</param>
+    /// <param name="displayName">섹션 이름</param>
+    /// <returns>생성된 섹션</returns>
+    public async Task<OnenoteSection?> CreateSectionAsync(string notebookId, string displayName)
+    {
+        if (string.IsNullOrEmpty(notebookId))
+            throw new ArgumentNullException(nameof(notebookId));
+        if (string.IsNullOrEmpty(displayName))
+            throw new ArgumentNullException(nameof(displayName));
+
+        try
+        {
+            var client = _authService.GetGraphClient();
+
+            var section = new OnenoteSection
+            {
+                DisplayName = displayName
+            };
+
+            var response = await client.Me.Onenote.Notebooks[notebookId].Sections.PostAsync(section);
+
+            _logger.Information("섹션 생성 완료: {DisplayName}", displayName);
+            return response;
+        }
+        catch (Exception ex)
+        {
+            _logger.Error(ex, "섹션 생성 실패: DisplayName={DisplayName}", displayName);
+            throw;
+        }
+    }
+
+    /// <summary>
+    /// 새 페이지 생성 (제목과 HTML 콘텐츠)
+    /// </summary>
+    /// <param name="sectionId">섹션 ID</param>
+    /// <param name="title">페이지 제목</param>
+    /// <param name="htmlContent">HTML 콘텐츠 (선택)</param>
+    /// <returns>생성된 페이지</returns>
+    public async Task<OnenotePage?> CreatePageAsync(string sectionId, string title, string? htmlContent = null)
+    {
+        if (string.IsNullOrEmpty(sectionId))
+            throw new ArgumentNullException(nameof(sectionId));
+        if (string.IsNullOrEmpty(title))
+            throw new ArgumentNullException(nameof(title));
+
+        try
+        {
+            var client = _authService.GetGraphClient();
+
+            // OneNote 페이지 생성 시 제목만 설정
+            var newPage = new OnenotePage
+            {
+                Title = title
+            };
+
+            var response = await client.Me.Onenote.Sections[sectionId].Pages.PostAsync(newPage);
+
+            _logger.Information("페이지 생성 완료: {Title}", title);
+            return response;
+        }
+        catch (Exception ex)
+        {
+            _logger.Error(ex, "페이지 생성 실패: Title={Title}", title);
+            throw;
+        }
+    }
 }

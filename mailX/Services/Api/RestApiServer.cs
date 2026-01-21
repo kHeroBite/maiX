@@ -19,6 +19,8 @@
  * - POST /api/window/minimize - 창 최소화
  * - POST /api/window/restore - 창 복원
  * - POST /api/window/activate - 창 활성화
+ * - POST /api/navigate/{tab} - 탭 전환 (mail, calendar, chat, teams, planner, onedrive, onenote, activity, calls)
+ * - GET  /api/current-tab - 현재 탭 조회
  */
 
 using System;
@@ -63,6 +65,24 @@ public class RestApiServer
     /// 메인 윈도우 참조 (스크린샷용)
     /// </summary>
     public Window? MainWindow { get; set; }
+
+    /// <summary>
+    /// 현재 활성화된 탭
+    /// </summary>
+    public string CurrentTab { get; set; } = "mail";
+
+    /// <summary>
+    /// 탭 전환 요청 이벤트
+    /// </summary>
+    public event EventHandler<string>? NavigateRequested;
+
+    /// <summary>
+    /// 지원하는 탭 목록
+    /// </summary>
+    private static readonly string[] ValidTabs = new[]
+    {
+        "mail", "calendar", "chat", "teams", "planner", "onedrive", "onenote", "activity", "calls"
+    };
 
     public RestApiServer(int port = 5858)
     {
@@ -231,8 +251,21 @@ public class RestApiServer
                     HandleWindowActivate(response);
                     break;
 
+                case ("GET", "/api/current-tab"):
+                    HandleGetCurrentTab(response);
+                    break;
+
                 default:
-                    SendResponse(response, 404, new { error = "Not Found", path = path });
+                    // 동적 경로 매칭: /api/navigate/{tab}
+                    if (method == "POST" && path.StartsWith("/api/navigate/"))
+                    {
+                        var tab = path.Substring("/api/navigate/".Length).ToLowerInvariant();
+                        HandleNavigate(tab, response);
+                    }
+                    else
+                    {
+                        SendResponse(response, 404, new { error = "Not Found", path = path });
+                    }
                     break;
             }
         }
@@ -679,6 +712,66 @@ public class RestApiServer
         catch (Exception ex)
         {
             SendResponse(response, 500, new { error = "창 활성화 실패", message = ex.Message });
+        }
+    }
+
+    /// <summary>
+    /// POST /api/navigate/{tab} - 탭 전환
+    /// </summary>
+    private void HandleNavigate(string tab, HttpListenerResponse response)
+    {
+        try
+        {
+            if (string.IsNullOrEmpty(tab))
+            {
+                SendResponse(response, 400, new { error = "탭 이름이 필요합니다.", validTabs = ValidTabs });
+                return;
+            }
+
+            if (!ValidTabs.Contains(tab))
+            {
+                SendResponse(response, 400, new { error = $"유효하지 않은 탭: {tab}", validTabs = ValidTabs });
+                return;
+            }
+
+            Log4.Info($"[RestAPI] 탭 전환 요청: {tab}");
+
+            // UI 스레드에서 탭 전환 실행
+            _app.Dispatcher.Invoke(() =>
+            {
+                CurrentTab = tab;
+                NavigateRequested?.Invoke(this, tab);
+            });
+
+            SendResponse(response, 200, new
+            {
+                message = "Tab navigation successful",
+                tab = tab,
+                previousTab = CurrentTab
+            });
+        }
+        catch (Exception ex)
+        {
+            SendResponse(response, 500, new { error = "탭 전환 실패", message = ex.Message });
+        }
+    }
+
+    /// <summary>
+    /// GET /api/current-tab - 현재 탭 조회
+    /// </summary>
+    private void HandleGetCurrentTab(HttpListenerResponse response)
+    {
+        try
+        {
+            SendResponse(response, 200, new
+            {
+                tab = CurrentTab,
+                validTabs = ValidTabs
+            });
+        }
+        catch (Exception ex)
+        {
+            SendResponse(response, 500, new { error = "현재 탭 조회 실패", message = ex.Message });
         }
     }
 

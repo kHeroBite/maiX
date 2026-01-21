@@ -1117,7 +1117,8 @@
 
                 <!-- 상단 네비게이션 아이콘들 -->
                 <StackPanel Grid.Row="0" Margin="0,8,0,0">
-                    <!-- 메일 아이콘 -->
+                    <!-- ===== 상단 그룹: 핵심 기능 ===== -->
+                    <!-- 메일 아이콘 (#0078D4 Outlook Blue) -->
                     <RadioButton x:Name="NavMailButton"
                                  IsChecked="True"
                                  GroupName="NavGroup"
@@ -1127,13 +1128,80 @@
                         <ui:SymbolIcon Symbol="Mail24" FontSize="20" VerticalAlignment="Center" HorizontalAlignment="Center"/>
                     </RadioButton>
 
-                    <!-- 캘린더 아이콘 -->
+                    <!-- 캘린더 아이콘 (#0078D4 Calendar Blue) -->
                     <RadioButton x:Name="NavCalendarButton"
                                  GroupName="NavGroup"
                                  Style="{StaticResource NavIconRadioButtonStyle}"
                                  Checked="NavCalendarButton_Checked"
                                  ToolTip="일정">
                         <ui:SymbolIcon Symbol="CalendarLtr24" FontSize="20" VerticalAlignment="Center" HorizontalAlignment="Center"/>
+                    </RadioButton>
+
+                    <!-- 채팅 아이콘 (#6264A7 Teams Purple) -->
+                    <RadioButton x:Name="NavChatButton"
+                                 GroupName="NavGroup"
+                                 Style="{StaticResource NavIconRadioButtonStyle}"
+                                 Checked="NavChatButton_Checked"
+                                 ToolTip="채팅">
+                        <ui:SymbolIcon Symbol="Chat24" FontSize="20" VerticalAlignment="Center" HorizontalAlignment="Center"/>
+                    </RadioButton>
+
+                    <!-- 팀 아이콘 (#6264A7 Teams Purple) -->
+                    <RadioButton x:Name="NavTeamsButton"
+                                 GroupName="NavGroup"
+                                 Style="{StaticResource NavIconRadioButtonStyle}"
+                                 Checked="NavTeamsButton_Checked"
+                                 ToolTip="팀">
+                        <ui:SymbolIcon Symbol="PeopleTeam24" FontSize="20" VerticalAlignment="Center" HorizontalAlignment="Center"/>
+                    </RadioButton>
+
+                    <!-- 활동 아이콘 (#F7630C Activity Orange) -->
+                    <RadioButton x:Name="NavActivityButton"
+                                 GroupName="NavGroup"
+                                 Style="{StaticResource NavIconRadioButtonStyle}"
+                                 Checked="NavActivityButton_Checked"
+                                 ToolTip="활동">
+                        <ui:SymbolIcon Symbol="Alert24" FontSize="20" VerticalAlignment="Center" HorizontalAlignment="Center"/>
+                    </RadioButton>
+
+                    <!-- 구분선 -->
+                    <Separator Margin="8,8,8,8" Background="{DynamicResource ControlElevationBorderBrush}"/>
+
+                    <!-- ===== 중단 그룹: 생산성 도구 ===== -->
+                    <!-- 플래너 아이콘 (#31752F Planner Green) -->
+                    <RadioButton x:Name="NavPlannerButton"
+                                 GroupName="NavGroup"
+                                 Style="{StaticResource NavIconRadioButtonStyle}"
+                                 Checked="NavPlannerButton_Checked"
+                                 ToolTip="플래너">
+                        <ui:SymbolIcon Symbol="TaskListSquareLtr24" FontSize="20" VerticalAlignment="Center" HorizontalAlignment="Center"/>
+                    </RadioButton>
+
+                    <!-- OneDrive 아이콘 (#0078D4 OneDrive Blue) -->
+                    <RadioButton x:Name="NavOneDriveButton"
+                                 GroupName="NavGroup"
+                                 Style="{StaticResource NavIconRadioButtonStyle}"
+                                 Checked="NavOneDriveButton_Checked"
+                                 ToolTip="OneDrive">
+                        <ui:SymbolIcon Symbol="Cloud24" FontSize="20" VerticalAlignment="Center" HorizontalAlignment="Center"/>
+                    </RadioButton>
+
+                    <!-- OneNote 아이콘 (#7719AA OneNote Purple) -->
+                    <RadioButton x:Name="NavOneNoteButton"
+                                 GroupName="NavGroup"
+                                 Style="{StaticResource NavIconRadioButtonStyle}"
+                                 Checked="NavOneNoteButton_Checked"
+                                 ToolTip="OneNote">
+                        <ui:SymbolIcon Symbol="Notebook24" FontSize="20" VerticalAlignment="Center" HorizontalAlignment="Center"/>
+                    </RadioButton>
+
+                    <!-- 통화 아이콘 (#0078D4 Calling Blue) -->
+                    <RadioButton x:Name="NavCallsButton"
+                                 GroupName="NavGroup"
+                                 Style="{StaticResource NavIconRadioButtonStyle}"
+                                 Checked="NavCallsButton_Checked"
+                                 ToolTip="통화">
+                        <ui:SymbolIcon Symbol="Call24" FontSize="20" VerticalAlignment="Center" HorizontalAlignment="Center"/>
                     </RadioButton>
                 </StackPanel>
 
@@ -2980,6 +3048,1674 @@
                         </Border>
                     </Grid>
                 </Border>
+            </Grid>
+        </Border>
+
+        <!-- ========== 채팅 뷰 컨테이너 (Column 1-5 전체 사용, 초기에는 숨김) - Teams 스타일 ========== -->
+        <Border x:Name="ChatViewBorder"
+                Grid.Column="1" Grid.ColumnSpan="5"
+                Visibility="Collapsed"
+                Background="{DynamicResource ApplicationBackgroundBrush}">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="320" MinWidth="280" MaxWidth="400"/>
+                    <ColumnDefinition Width="*"/>
+                </Grid.ColumnDefinitions>
+
+                <!-- ==================== 좌측 패널: 채팅 목록 (Teams 스타일) ==================== -->
+                <Border Grid.Column="0"
+                        BorderBrush="{DynamicResource ControlElevationBorderBrush}"
+                        BorderThickness="0,0,1,0">
+                    <Grid>
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="*"/>
+                        </Grid.RowDefinitions>
+
+                        <!-- 헤더: 채팅 + 액션 버튼들 -->
+                        <Border Grid.Row="0" Padding="16,12,12,8">
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                </Grid.ColumnDefinitions>
+                                <TextBlock Text="채팅" FontSize="18" FontWeight="SemiBold" VerticalAlignment="Center"/>
+                                <StackPanel Grid.Column="1" Orientation="Horizontal">
+                                    <ui:Button Appearance="Transparent" ToolTip="더보기" Padding="6">
+                                        <ui:SymbolIcon Symbol="MoreHorizontal24" FontSize="16"/>
+                                    </ui:Button>
+                                    <ui:Button Appearance="Transparent" ToolTip="검색" Padding="6"
+                                               x:Name="ChatSearchToggleButton" Click="ChatSearchToggleButton_Click">
+                                        <ui:SymbolIcon Symbol="Search24" FontSize="16"/>
+                                    </ui:Button>
+                                    <ui:Button Appearance="Transparent" ToolTip="새 채팅" Padding="6" Margin="0,0,4,0"
+                                               x:Name="ChatNewButton">
+                                        <ui:SymbolIcon Symbol="Compose24" FontSize="16"/>
+                                    </ui:Button>
+                                </StackPanel>
+                            </Grid>
+                        </Border>
+
+                        <!-- 검색 바 (토글 가능) -->
+                        <Border x:Name="ChatSearchPanel" Grid.Row="1" Padding="12,0,12,8" Visibility="Collapsed">
+                            <ui:TextBox x:Name="ChatSearchBox" PlaceholderText="검색(Ctrl+E)"
+                                        Icon="{ui:SymbolIcon Search24}"
+                                        KeyDown="ChatSearchBox_KeyDown"/>
+                        </Border>
+
+                        <!-- 필터 탭 (읽지 않음 / 채팅 / 모임 채팅) -->
+                        <Border Grid.Row="2" Padding="12,0,12,8">
+                            <StackPanel Orientation="Horizontal">
+                                <ui:Button x:Name="ChatFilterUnreadButton" Content="읽지 않음"
+                                           Appearance="Transparent" Padding="8,4"
+                                           Margin="0,0,4,0" Click="ChatFilterUnread_Click"/>
+                                <ui:Button x:Name="ChatFilterChatButton" Content="채팅"
+                                           Appearance="Secondary" Padding="8,4"
+                                           Margin="0,0,4,0" Click="ChatFilterChat_Click"/>
+                                <ui:Button x:Name="ChatFilterMeetingButton" Content="모임 채팅"
+                                           Appearance="Transparent" Padding="8,4"
+                                           Click="ChatFilterMeeting_Click"/>
+                            </StackPanel>
+                        </Border>
+
+                        <!-- 바로가기: Copilot, 멘션 -->
+                        <Border Grid.Row="3" Padding="8,0,8,4">
+                            <StackPanel>
+                                <ui:Button Appearance="Transparent" HorizontalAlignment="Stretch" HorizontalContentAlignment="Left" Padding="8,6">
+                                    <StackPanel Orientation="Horizontal">
+                                        <ui:SymbolIcon Symbol="Bot24" FontSize="18" Margin="0,0,12,0" Foreground="{StaticResource ChatAccentBrush}"/>
+                                        <TextBlock Text="Copilot" FontSize="14" VerticalAlignment="Center"/>
+                                    </StackPanel>
+                                </ui:Button>
+                                <ui:Button Appearance="Transparent" HorizontalAlignment="Stretch" HorizontalContentAlignment="Left" Padding="8,6">
+                                    <StackPanel Orientation="Horizontal">
+                                        <TextBlock Text="@" FontSize="18" FontWeight="Bold" Margin="0,0,12,0" Foreground="{StaticResource ChatAccentBrush}" Width="18" TextAlignment="Center"/>
+                                        <TextBlock Text="멘션" FontSize="14" VerticalAlignment="Center"/>
+                                    </StackPanel>
+                                </ui:Button>
+                            </StackPanel>
+                        </Border>
+
+                        <!-- 채팅 목록 (즐겨찾기 + 최근) -->
+                        <ScrollViewer Grid.Row="4" VerticalScrollBarVisibility="Auto">
+                            <StackPanel>
+                                <!-- 즐겨찾기 섹션 -->
+                                <Expander x:Name="ChatFavoritesExpander" IsExpanded="True" Padding="0">
+                                    <Expander.Header>
+                                        <TextBlock Text="즐겨찾기" FontSize="12" FontWeight="SemiBold"
+                                                   Foreground="{DynamicResource TextFillColorSecondaryBrush}" Margin="8,0"/>
+                                    </Expander.Header>
+                                    <ListBox x:Name="ChatFavoritesListBox"
+                                             Background="Transparent" BorderThickness="0"
+                                             SelectionChanged="ChatListBox_SelectionChanged"
+                                             Padding="0">
+                                        <ListBox.ItemContainerStyle>
+                                            <Style TargetType="ListBoxItem" BasedOn="{StaticResource {x:Type ListBoxItem}}">
+                                                <Setter Property="Padding" Value="12,8"/>
+                                                <Setter Property="Margin" Value="4,1"/>
+                                                <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
+                                            </Style>
+                                        </ListBox.ItemContainerStyle>
+                                        <ListBox.ItemTemplate>
+                                            <DataTemplate>
+                                                <Grid>
+                                                    <Grid.ColumnDefinitions>
+                                                        <ColumnDefinition Width="44"/>
+                                                        <ColumnDefinition Width="*"/>
+                                                        <ColumnDefinition Width="Auto"/>
+                                                    </Grid.ColumnDefinitions>
+
+                                                    <!-- 아바타 -->
+                                                    <Border Grid.Column="0" Width="36" Height="36" CornerRadius="4"
+                                                            Background="{StaticResource ChatAccentBrush}">
+                                                        <TextBlock Text="{Binding DisplayName, Converter={StaticResource StringToInitialConverter}}"
+                                                                   FontSize="14" Foreground="White" FontWeight="SemiBold"
+                                                                   HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                                    </Border>
+
+                                                    <!-- 채팅 정보 -->
+                                                    <StackPanel Grid.Column="1" Margin="12,0,8,0" VerticalAlignment="Center">
+                                                        <TextBlock Text="{Binding DisplayName}" FontSize="14" FontWeight="SemiBold"
+                                                                   TextTrimming="CharacterEllipsis"/>
+                                                        <TextBlock Text="{Binding LastMessage}" FontSize="12"
+                                                                   Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                                                                   TextTrimming="CharacterEllipsis" MaxHeight="18"/>
+                                                    </StackPanel>
+
+                                                    <!-- 시간 -->
+                                                    <TextBlock Grid.Column="2" Text="{Binding LastUpdatedDisplay}" FontSize="11"
+                                                               Foreground="{DynamicResource TextFillColorTertiaryBrush}"
+                                                               VerticalAlignment="Top" Margin="0,2,0,0"/>
+                                                </Grid>
+                                            </DataTemplate>
+                                        </ListBox.ItemTemplate>
+                                    </ListBox>
+                                </Expander>
+
+                                <!-- 채팅 섹션 -->
+                                <Expander x:Name="ChatRecentExpander" IsExpanded="True" Padding="0" Margin="0,4,0,0">
+                                    <Expander.Header>
+                                        <TextBlock Text="채팅" FontSize="12" FontWeight="SemiBold"
+                                                   Foreground="{DynamicResource TextFillColorSecondaryBrush}" Margin="8,0"/>
+                                    </Expander.Header>
+                                    <ListBox x:Name="ChatListBox"
+                                             Background="Transparent" BorderThickness="0"
+                                             SelectionChanged="ChatListBox_SelectionChanged"
+                                             VirtualizingPanel.IsVirtualizing="True"
+                                             VirtualizingPanel.VirtualizationMode="Recycling"
+                                             Padding="0">
+                                        <ListBox.ItemContainerStyle>
+                                            <Style TargetType="ListBoxItem" BasedOn="{StaticResource {x:Type ListBoxItem}}">
+                                                <Setter Property="Padding" Value="12,8"/>
+                                                <Setter Property="Margin" Value="4,1"/>
+                                                <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
+                                            </Style>
+                                        </ListBox.ItemContainerStyle>
+                                        <ListBox.ItemTemplate>
+                                            <DataTemplate>
+                                                <Grid>
+                                                    <Grid.ColumnDefinitions>
+                                                        <ColumnDefinition Width="44"/>
+                                                        <ColumnDefinition Width="*"/>
+                                                        <ColumnDefinition Width="Auto"/>
+                                                    </Grid.ColumnDefinitions>
+
+                                                    <!-- 아바타 (사각형 둥근 모서리) -->
+                                                    <Border Grid.Column="0" Width="36" Height="36" CornerRadius="4"
+                                                            Background="{StaticResource ChatAccentBrush}">
+                                                        <TextBlock Text="{Binding DisplayName, Converter={StaticResource StringToInitialConverter}}"
+                                                                   FontSize="14" Foreground="White" FontWeight="SemiBold"
+                                                                   HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                                    </Border>
+
+                                                    <!-- 채팅 정보: 이름 + 마지막 메시지 미리보기 -->
+                                                    <StackPanel Grid.Column="1" Margin="12,0,8,0" VerticalAlignment="Center">
+                                                        <TextBlock Text="{Binding DisplayName}" FontSize="14" FontWeight="SemiBold"
+                                                                   TextTrimming="CharacterEllipsis"/>
+                                                        <TextBlock Text="{Binding LastMessage}" FontSize="12"
+                                                                   Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                                                                   TextTrimming="CharacterEllipsis" MaxHeight="18"/>
+                                                    </StackPanel>
+
+                                                    <!-- 시간 및 읽지 않음 표시 -->
+                                                    <StackPanel Grid.Column="2" VerticalAlignment="Top" HorizontalAlignment="Right">
+                                                        <TextBlock Text="{Binding LastUpdatedDisplay}" FontSize="11"
+                                                                   Foreground="{DynamicResource TextFillColorTertiaryBrush}"
+                                                                   HorizontalAlignment="Right" Margin="0,2,0,0"/>
+                                                    </StackPanel>
+                                                </Grid>
+                                            </DataTemplate>
+                                        </ListBox.ItemTemplate>
+                                    </ListBox>
+                                </Expander>
+                            </StackPanel>
+                        </ScrollViewer>
+
+                        <!-- 로딩 오버레이 -->
+                        <Border x:Name="ChatListLoadingOverlay" Grid.Row="4" Visibility="Collapsed"
+                                Background="{DynamicResource ApplicationBackgroundBrush}">
+                            <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center">
+                                <ui:ProgressRing IsIndeterminate="True" Width="32" Height="32"/>
+                                <TextBlock Text="채팅 목록 로딩 중..." FontSize="12" Margin="0,8,0,0"
+                                           Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
+                            </StackPanel>
+                        </Border>
+                    </Grid>
+                </Border>
+
+                <!-- ==================== 우측 패널: 채팅 내용 (Teams 스타일) ==================== -->
+                <Grid Grid.Column="1">
+                    <!-- 채팅방 미선택 시 안내 -->
+                    <StackPanel x:Name="ChatEmptyStatePanel" VerticalAlignment="Center" HorizontalAlignment="Center">
+                        <ui:SymbolIcon Symbol="Chat24" FontSize="64" Foreground="{StaticResource ChatAccentBrush}" Margin="0,0,0,16"/>
+                        <TextBlock Text="채팅을 선택하세요" FontSize="24" FontWeight="SemiBold" HorizontalAlignment="Center"/>
+                        <TextBlock Text="좌측 목록에서 대화를 선택하면 여기에 표시됩니다" FontSize="14"
+                                   Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                                   HorizontalAlignment="Center" Margin="0,8,0,0"/>
+                    </StackPanel>
+
+                    <!-- 채팅 내용 영역 -->
+                    <Grid x:Name="ChatContentPanel" Visibility="Collapsed">
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="*"/>
+                            <RowDefinition Height="Auto"/>
+                        </Grid.RowDefinitions>
+
+                        <!-- 채팅방 헤더 (Teams 스타일: 아바타 + 이름 + 탭 + 통화버튼) -->
+                        <Border Grid.Row="0" Padding="16,8,16,0"
+                                BorderBrush="{DynamicResource ControlElevationBorderBrush}"
+                                BorderThickness="0,0,0,1">
+                            <Grid>
+                                <Grid.RowDefinitions>
+                                    <RowDefinition Height="Auto"/>
+                                    <RowDefinition Height="Auto"/>
+                                </Grid.RowDefinitions>
+
+                                <!-- 상단: 아바타 + 이름 + 통화 버튼 -->
+                                <Grid Grid.Row="0">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*"/>
+                                        <ColumnDefinition Width="Auto"/>
+                                    </Grid.ColumnDefinitions>
+
+                                    <StackPanel Orientation="Horizontal">
+                                        <!-- 채팅방 아바타 -->
+                                        <Border Width="32" Height="32" CornerRadius="4"
+                                                Background="{StaticResource ChatAccentBrush}" Margin="0,0,12,0">
+                                            <TextBlock x:Name="ChatHeaderAvatar" Text="장" FontSize="14"
+                                                       Foreground="White" FontWeight="SemiBold"
+                                                       HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                        </Border>
+                                        <TextBlock x:Name="ChatHeaderTitle" Text="채팅방 이름" FontSize="16" FontWeight="SemiBold"
+                                                   VerticalAlignment="Center"/>
+                                    </StackPanel>
+
+                                    <!-- 통화 버튼들 -->
+                                    <StackPanel Grid.Column="1" Orientation="Horizontal">
+                                        <ui:Button Appearance="Transparent" ToolTip="음성 통화" Padding="8">
+                                            <ui:SymbolIcon Symbol="Call24" FontSize="18"/>
+                                        </ui:Button>
+                                        <ui:Button Appearance="Transparent" ToolTip="화상 통화" Padding="8">
+                                            <ui:SymbolIcon Symbol="Video24" FontSize="18"/>
+                                        </ui:Button>
+                                        <ui:Button Appearance="Transparent" ToolTip="참가자 추가" Padding="8">
+                                            <ui:SymbolIcon Symbol="PersonAdd24" FontSize="18"/>
+                                        </ui:Button>
+                                        <ui:Button Appearance="Transparent" ToolTip="검색" Padding="8">
+                                            <ui:SymbolIcon Symbol="Search24" FontSize="18"/>
+                                        </ui:Button>
+                                        <ui:Button Appearance="Transparent" ToolTip="더보기" Padding="8">
+                                            <ui:SymbolIcon Symbol="MoreHorizontal24" FontSize="18"/>
+                                        </ui:Button>
+                                    </StackPanel>
+                                </Grid>
+
+                                <!-- 하단: 탭 (채팅 / 공유 / 스토리라인) -->
+                                <StackPanel Grid.Row="1" Orientation="Horizontal" Margin="0,8,0,0">
+                                    <ui:Button x:Name="ChatTabChatButton" Content="채팅" Appearance="Transparent"
+                                               Padding="12,6" FontWeight="SemiBold"
+                                               BorderThickness="0,0,0,2" BorderBrush="{StaticResource ChatAccentBrush}"/>
+                                    <ui:Button x:Name="ChatTabShareButton" Content="공유" Appearance="Transparent"
+                                               Padding="12,6" Margin="4,0,0,0"/>
+                                    <ui:Button x:Name="ChatTabStorylineButton" Content="스토리라인" Appearance="Transparent"
+                                               Padding="12,6" Margin="4,0,0,0"/>
+                                    <ui:Button Appearance="Transparent" Padding="6" Margin="4,0,0,0" ToolTip="탭 추가">
+                                        <ui:SymbolIcon Symbol="Add24" FontSize="14"/>
+                                    </ui:Button>
+                                </StackPanel>
+                            </Grid>
+                        </Border>
+
+                        <!-- 메시지 목록 (Teams 스타일: 내 메시지는 우측 보라색 배경) -->
+                        <ScrollViewer x:Name="ChatMessagesScrollViewer" Grid.Row="1" Padding="16,8"
+                                      VerticalScrollBarVisibility="Auto">
+                            <ItemsControl x:Name="ChatMessagesItemsControl">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate>
+                                        <Grid Margin="0,8">
+                                            <!-- 상대방 메시지 (좌측 정렬) -->
+                                            <Grid Visibility="{Binding IsFromMe, Converter={StaticResource BoolToVisibilityConverter}, ConverterParameter=Invert}">
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="36"/>
+                                                    <ColumnDefinition Width="*"/>
+                                                    <ColumnDefinition Width="80"/>
+                                                </Grid.ColumnDefinitions>
+
+                                                <!-- 발신자 아바타 -->
+                                                <Border Grid.Column="0" Width="32" Height="32" CornerRadius="4"
+                                                        Background="{StaticResource ChatAccentBrush}"
+                                                        VerticalAlignment="Top">
+                                                    <TextBlock Text="{Binding FromUserInitial}" FontSize="12"
+                                                               Foreground="White" FontWeight="SemiBold"
+                                                               HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                                </Border>
+
+                                                <!-- 메시지 내용 -->
+                                                <StackPanel Grid.Column="1" Margin="8,0,0,0">
+                                                    <!-- 발신자 이름 + 시간 -->
+                                                    <StackPanel Orientation="Horizontal" Margin="0,0,0,4">
+                                                        <TextBlock Text="{Binding FromUser}" FontSize="13" FontWeight="SemiBold"/>
+                                                        <TextBlock Text="{Binding TimeDisplay}" FontSize="11"
+                                                                   Foreground="{DynamicResource TextFillColorTertiaryBrush}"
+                                                                   Margin="8,0,0,0" VerticalAlignment="Center"/>
+                                                    </StackPanel>
+
+                                                    <!-- 메시지 버블 (좌측) -->
+                                                    <Border Padding="12,8" CornerRadius="4"
+                                                            Background="{DynamicResource ControlFillColorDefaultBrush}"
+                                                            HorizontalAlignment="Left" MaxWidth="500">
+                                                        <TextBlock Text="{Binding Content}" TextWrapping="Wrap" FontSize="14"/>
+                                                    </Border>
+                                                </StackPanel>
+                                            </Grid>
+
+                                            <!-- 내 메시지 (우측 정렬, 보라색 배경) -->
+                                            <Grid Visibility="{Binding IsFromMe, Converter={StaticResource BoolToVisibilityConverter}}"
+                                                  HorizontalAlignment="Right" MaxWidth="550">
+                                                <StackPanel>
+                                                    <!-- 시간 (우측 상단) -->
+                                                    <TextBlock Text="{Binding TimeDisplay}" FontSize="11"
+                                                               Foreground="{DynamicResource TextFillColorTertiaryBrush}"
+                                                               HorizontalAlignment="Right" Margin="0,0,0,4"/>
+
+                                                    <!-- 메시지 버블 (우측, 보라색 배경) -->
+                                                    <Border Padding="12,8" CornerRadius="4"
+                                                            Background="{StaticResource ChatAccentBrush}"
+                                                            HorizontalAlignment="Right">
+                                                        <TextBlock Text="{Binding Content}" TextWrapping="Wrap" FontSize="14"
+                                                                   Foreground="White"/>
+                                                    </Border>
+                                                </StackPanel>
+                                            </Grid>
+                                        </Grid>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                        </ScrollViewer>
+
+                        <!-- 메시지 입력 영역 (Teams 스타일: 서식 도구 + 입력창 + 전송) -->
+                        <Border Grid.Row="2" Padding="16,8,16,12"
+                                BorderBrush="{DynamicResource ControlElevationBorderBrush}"
+                                BorderThickness="0,1,0,0">
+                            <Grid>
+                                <Grid.RowDefinitions>
+                                    <RowDefinition Height="Auto"/>
+                                    <RowDefinition Height="Auto"/>
+                                </Grid.RowDefinitions>
+
+                                <!-- 입력창 -->
+                                <Border Grid.Row="0" BorderBrush="{DynamicResource ControlElevationBorderBrush}"
+                                        BorderThickness="1" CornerRadius="4" Padding="8,4">
+                                    <Grid>
+                                        <Grid.RowDefinitions>
+                                            <RowDefinition Height="*"/>
+                                            <RowDefinition Height="Auto"/>
+                                        </Grid.RowDefinitions>
+
+                                        <!-- 텍스트 입력 -->
+                                        <TextBox x:Name="ChatMessageInput" Grid.Row="0"
+                                                 Background="Transparent" BorderThickness="0"
+                                                 AcceptsReturn="True" TextWrapping="Wrap"
+                                                 MinHeight="24" MaxHeight="120"
+                                                 VerticalScrollBarVisibility="Auto"
+                                                 KeyDown="ChatMessageInput_KeyDown">
+                                            <TextBox.Resources>
+                                                <Style TargetType="TextBox">
+                                                    <Setter Property="CaretBrush" Value="{DynamicResource TextFillColorPrimaryBrush}"/>
+                                                </Style>
+                                            </TextBox.Resources>
+                                        </TextBox>
+
+                                        <!-- 플레이스홀더 -->
+                                        <TextBlock x:Name="ChatMessagePlaceholder" Grid.Row="0"
+                                                   Text="메시지를 입력하세요."
+                                                   Foreground="{DynamicResource TextFillColorTertiaryBrush}"
+                                                   IsHitTestVisible="False" Margin="2,4,0,0"
+                                                   Visibility="Visible"/>
+
+                                        <!-- 하단 도구 버튼들 -->
+                                        <Grid Grid.Row="1" Margin="0,4,0,0">
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="*"/>
+                                                <ColumnDefinition Width="Auto"/>
+                                            </Grid.ColumnDefinitions>
+
+                                            <!-- 왼쪽: 서식 도구 -->
+                                            <StackPanel Orientation="Horizontal">
+                                                <ui:Button Appearance="Transparent" ToolTip="서식" Padding="4">
+                                                    <ui:SymbolIcon Symbol="TextFont24" FontSize="16"/>
+                                                </ui:Button>
+                                                <ui:Button Appearance="Transparent" ToolTip="이모지" Padding="4">
+                                                    <ui:SymbolIcon Symbol="Emoji24" FontSize="16"/>
+                                                </ui:Button>
+                                                <ui:Button Appearance="Transparent" ToolTip="GIF" Padding="4">
+                                                    <ui:SymbolIcon Symbol="Gif24" FontSize="16"/>
+                                                </ui:Button>
+                                                <ui:Button Appearance="Transparent" ToolTip="스티커" Padding="4">
+                                                    <ui:SymbolIcon Symbol="Sticker24" FontSize="16"/>
+                                                </ui:Button>
+                                                <ui:Button Appearance="Transparent" ToolTip="일정" Padding="4">
+                                                    <ui:SymbolIcon Symbol="CalendarLtr24" FontSize="16"/>
+                                                </ui:Button>
+                                                <ui:Button Appearance="Transparent" ToolTip="첨부" Padding="4">
+                                                    <ui:SymbolIcon Symbol="Attach24" FontSize="16"/>
+                                                </ui:Button>
+                                                <ui:Button Appearance="Transparent" ToolTip="더보기" Padding="4">
+                                                    <ui:SymbolIcon Symbol="Add24" FontSize="16"/>
+                                                </ui:Button>
+                                            </StackPanel>
+
+                                            <!-- 오른쪽: 전송 버튼 -->
+                                            <ui:Button x:Name="ChatSendButton" Grid.Column="1"
+                                                       Appearance="Primary" Padding="8,4"
+                                                       Click="ChatSendButton_Click" ToolTip="전송 (Enter)">
+                                                <ui:SymbolIcon Symbol="Send24" FontSize="16"/>
+                                            </ui:Button>
+                                        </Grid>
+                                    </Grid>
+                                </Border>
+                            </Grid>
+                        </Border>
+
+                        <!-- 메시지 로딩 오버레이 -->
+                        <Border x:Name="ChatMessagesLoadingOverlay" Grid.Row="1" Visibility="Collapsed"
+                                Background="{DynamicResource ApplicationBackgroundBrush}">
+                            <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center">
+                                <ui:ProgressRing IsIndeterminate="True" Width="32" Height="32"/>
+                                <TextBlock Text="메시지 로딩 중..." FontSize="12" Margin="0,8,0,0"
+                                           Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
+                            </StackPanel>
+                        </Border>
+                    </Grid>
+                </Grid>
+            </Grid>
+        </Border>
+
+        <!-- ========== 팀 뷰 컨테이너 (Column 1-5 전체 사용, 초기에는 숨김) ========== -->
+        <Border x:Name="TeamsViewBorder"
+                Grid.Column="1" Grid.ColumnSpan="5"
+                Visibility="Collapsed"
+                Background="{DynamicResource ApplicationBackgroundBrush}">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="280" MinWidth="200" MaxWidth="400"/>
+                    <ColumnDefinition Width="*"/>
+                </Grid.ColumnDefinitions>
+
+                <!-- 좌측 패널: 팀/채널 트리 -->
+                <Border Grid.Column="0"
+                        BorderBrush="{DynamicResource ControlElevationBorderBrush}"
+                        BorderThickness="0,0,1,0">
+                    <Grid>
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="*"/>
+                        </Grid.RowDefinitions>
+
+                        <!-- 헤더 -->
+                        <Border Grid.Row="0" Padding="16,12"
+                                BorderBrush="{DynamicResource ControlElevationBorderBrush}"
+                                BorderThickness="0,0,0,1">
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                </Grid.ColumnDefinitions>
+                                <StackPanel Grid.Column="0" Orientation="Horizontal">
+                                    <ui:SymbolIcon Symbol="PeopleTeam24" FontSize="20" Margin="0,0,8,0" Foreground="{StaticResource TeamsAccentBrush}"/>
+                                    <TextBlock Text="팀" FontSize="16" FontWeight="SemiBold" VerticalAlignment="Center"/>
+                                </StackPanel>
+                                <ui:Button Grid.Column="1" x:Name="TeamsRefreshButton"
+                                           Icon="{ui:SymbolIcon ArrowSync24}"
+                                           Appearance="Transparent" Padding="6"
+                                           ToolTip="새로고침"
+                                           Click="TeamsRefreshButton_Click"/>
+                            </Grid>
+                        </Border>
+
+                        <!-- 팀 목록 -->
+                        <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto">
+                            <ItemsControl x:Name="TeamsListView" ItemsSource="{Binding Teams}">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate>
+                                        <StackPanel Margin="0,4,0,0">
+                                            <!-- 팀 헤더 -->
+                                            <ui:Button Appearance="Transparent"
+                                                       HorizontalAlignment="Stretch"
+                                                       HorizontalContentAlignment="Left"
+                                                       Padding="12,8"
+                                                       Click="TeamItem_Click"
+                                                       Tag="{Binding}">
+                                                <StackPanel Orientation="Horizontal">
+                                                    <ui:SymbolIcon Symbol="ChevronDown24" FontSize="12" Margin="0,0,8,0"
+                                                                   Visibility="{Binding IsExpanded, Converter={StaticResource BoolToVisibilityConverter}}"/>
+                                                    <ui:SymbolIcon Symbol="ChevronRight24" FontSize="12" Margin="0,0,8,0"
+                                                                   Visibility="{Binding IsExpanded, Converter={StaticResource BoolToVisibilityConverter}, ConverterParameter=Invert}"/>
+                                                    <ui:SymbolIcon Symbol="PeopleTeam24" FontSize="18" Margin="0,0,8,0" Foreground="{StaticResource TeamsAccentBrush}"/>
+                                                    <TextBlock Text="{Binding DisplayName}" FontWeight="SemiBold" VerticalAlignment="Center"/>
+                                                </StackPanel>
+                                            </ui:Button>
+                                            <!-- 채널 목록 -->
+                                            <ItemsControl ItemsSource="{Binding Channels}"
+                                                          Visibility="{Binding IsExpanded, Converter={StaticResource BoolToVisibilityConverter}}"
+                                                          Margin="24,0,0,0">
+                                                <ItemsControl.ItemTemplate>
+                                                    <DataTemplate>
+                                                        <ui:Button Appearance="Transparent"
+                                                                   HorizontalAlignment="Stretch"
+                                                                   HorizontalContentAlignment="Left"
+                                                                   Padding="12,6"
+                                                                   Click="ChannelItem_Click"
+                                                                   Tag="{Binding}">
+                                                            <StackPanel Orientation="Horizontal">
+                                                                <TextBlock Text="#" FontSize="14" Margin="0,0,6,0" Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
+                                                                <TextBlock Text="{Binding DisplayName}" VerticalAlignment="Center"/>
+                                                            </StackPanel>
+                                                        </ui:Button>
+                                                    </DataTemplate>
+                                                </ItemsControl.ItemTemplate>
+                                            </ItemsControl>
+                                        </StackPanel>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                        </ScrollViewer>
+                    </Grid>
+                </Border>
+
+                <!-- 우측 패널: 채널 콘텐츠 -->
+                <Border Grid.Column="1">
+                    <Grid>
+                        <!-- 채널 미선택 시 플레이스홀더 -->
+                        <StackPanel x:Name="TeamsPlaceholder" VerticalAlignment="Center" HorizontalAlignment="Center"
+                                    Visibility="{Binding HasSelectedChannel, Converter={StaticResource BoolToVisibilityConverter}, ConverterParameter=Invert}">
+                            <ui:SymbolIcon Symbol="PeopleTeam24" FontSize="64" Foreground="{StaticResource TeamsAccentBrush}" Margin="0,0,0,16"/>
+                            <TextBlock Text="팀 채널을 선택하세요" FontSize="24" FontWeight="SemiBold" HorizontalAlignment="Center"/>
+                            <TextBlock Text="좌측에서 팀과 채널을 선택하면 대화가 표시됩니다" FontSize="14" Foreground="{DynamicResource TextFillColorSecondaryBrush}" HorizontalAlignment="Center" Margin="0,8,0,0"/>
+                        </StackPanel>
+
+                        <!-- 채널 선택 시 콘텐츠 -->
+                        <Grid Visibility="{Binding HasSelectedChannel, Converter={StaticResource BoolToVisibilityConverter}}">
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto"/>
+                                <RowDefinition Height="Auto"/>
+                                <RowDefinition Height="*"/>
+                                <RowDefinition Height="Auto"/>
+                            </Grid.RowDefinitions>
+
+                            <!-- 채널 헤더 -->
+                            <Border Grid.Row="0" Padding="16,12"
+                                    BorderBrush="{DynamicResource ControlElevationBorderBrush}"
+                                    BorderThickness="0,0,0,1">
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*"/>
+                                        <ColumnDefinition Width="Auto"/>
+                                    </Grid.ColumnDefinitions>
+                                    <StackPanel Grid.Column="0" Orientation="Horizontal">
+                                        <TextBlock Text="#" FontSize="18" Margin="0,0,6,0" Foreground="{StaticResource TeamsAccentBrush}" VerticalAlignment="Center"/>
+                                        <TextBlock Text="{Binding SelectedChannel.DisplayName}" FontSize="16" FontWeight="SemiBold" VerticalAlignment="Center"/>
+                                    </StackPanel>
+                                    <StackPanel Grid.Column="1" Orientation="Horizontal">
+                                        <ui:Button Icon="{ui:SymbolIcon Call24}" Appearance="Transparent" Padding="6" ToolTip="통화 시작" Margin="0,0,4,0"/>
+                                        <ui:Button Icon="{ui:SymbolIcon Video24}" Appearance="Transparent" Padding="6" ToolTip="모임 시작" Margin="0,0,4,0"/>
+                                        <ui:Button Icon="{ui:SymbolIcon MoreHorizontal24}" Appearance="Transparent" Padding="6" ToolTip="더 보기"/>
+                                    </StackPanel>
+                                </Grid>
+                            </Border>
+
+                            <!-- 탭 바 -->
+                            <Border Grid.Row="1" Padding="16,8"
+                                    BorderBrush="{DynamicResource ControlElevationBorderBrush}"
+                                    BorderThickness="0,0,0,1">
+                                <StackPanel Orientation="Horizontal">
+                                    <ui:Button x:Name="TeamsPostsTabButton" Content="게시물" Padding="12,6" Margin="0,0,8,0"
+                                               Appearance="{Binding CurrentChannelTab, Converter={StaticResource SortByToAppearanceConverter}, ConverterParameter=posts}"
+                                               Click="TeamsPostsTab_Click"/>
+                                    <ui:Button x:Name="TeamsFilesTabButton" Content="파일" Padding="12,6"
+                                               Appearance="{Binding CurrentChannelTab, Converter={StaticResource SortByToAppearanceConverter}, ConverterParameter=files}"
+                                               Click="TeamsFilesTab_Click"/>
+                                </StackPanel>
+                            </Border>
+
+                            <!-- 게시물 탭 -->
+                            <ScrollViewer Grid.Row="2" VerticalScrollBarVisibility="Auto"
+                                          Visibility="{Binding CurrentChannelTab, Converter={StaticResource SortByToAppearanceConverter}, ConverterParameter=posts}">
+                                <ItemsControl ItemsSource="{Binding ChannelMessages}" Margin="16">
+                                    <ItemsControl.ItemTemplate>
+                                        <DataTemplate>
+                                            <Border Margin="0,0,0,12" Padding="12"
+                                                    Background="{DynamicResource ControlFillColorDefaultBrush}"
+                                                    CornerRadius="8">
+                                                <Grid>
+                                                    <Grid.ColumnDefinitions>
+                                                        <ColumnDefinition Width="40"/>
+                                                        <ColumnDefinition Width="*"/>
+                                                    </Grid.ColumnDefinitions>
+                                                    <!-- 아바타 -->
+                                                    <Border Grid.Column="0" Width="36" Height="36" CornerRadius="18"
+                                                            Background="{StaticResource TeamsAccentBrush}" VerticalAlignment="Top">
+                                                        <TextBlock Text="{Binding FromUser, Converter={StaticResource StringToInitialConverter}}"
+                                                                   Foreground="White" FontWeight="SemiBold" FontSize="14"
+                                                                   HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                                    </Border>
+                                                    <!-- 메시지 내용 -->
+                                                    <StackPanel Grid.Column="1" Margin="8,0,0,0">
+                                                        <StackPanel Orientation="Horizontal" Margin="0,0,0,4">
+                                                            <TextBlock Text="{Binding FromUser}" FontWeight="SemiBold"/>
+                                                            <TextBlock Text="{Binding ChannelTimeDisplay}" Foreground="{DynamicResource TextFillColorTertiaryBrush}" Margin="8,0,0,0" FontSize="12"/>
+                                                        </StackPanel>
+                                                        <TextBlock Text="{Binding Content}" TextWrapping="Wrap"/>
+                                                    </StackPanel>
+                                                </Grid>
+                                            </Border>
+                                        </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
+                            </ScrollViewer>
+
+                            <!-- 파일 탭 -->
+                            <ScrollViewer Grid.Row="2" VerticalScrollBarVisibility="Auto"
+                                          Visibility="{Binding CurrentChannelTab, Converter={StaticResource SortByToAppearanceConverter}, ConverterParameter=files}">
+                                <ItemsControl ItemsSource="{Binding ChannelFiles}" Margin="16">
+                                    <ItemsControl.ItemTemplate>
+                                        <DataTemplate>
+                                            <ui:Button Appearance="Transparent" HorizontalAlignment="Stretch"
+                                                       HorizontalContentAlignment="Left" Padding="12,8" Margin="0,0,0,4"
+                                                       Click="ChannelFile_Click" Tag="{Binding}">
+                                                <Grid>
+                                                    <Grid.ColumnDefinitions>
+                                                        <ColumnDefinition Width="36"/>
+                                                        <ColumnDefinition Width="*"/>
+                                                        <ColumnDefinition Width="80"/>
+                                                        <ColumnDefinition Width="100"/>
+                                                    </Grid.ColumnDefinitions>
+                                                    <ui:SymbolIcon Grid.Column="0" Symbol="{Binding FileIcon}" FontSize="20"/>
+                                                    <TextBlock Grid.Column="1" Text="{Binding Name}" VerticalAlignment="Center" Margin="8,0,0,0"/>
+                                                    <TextBlock Grid.Column="2" Text="{Binding SizeDisplay}" VerticalAlignment="Center" Foreground="{DynamicResource TextFillColorSecondaryBrush}" FontSize="12"/>
+                                                    <TextBlock Grid.Column="3" Text="{Binding LastModified, StringFormat='{}{0:MM/dd HH:mm}'}" VerticalAlignment="Center" Foreground="{DynamicResource TextFillColorTertiaryBrush}" FontSize="12"/>
+                                                </Grid>
+                                            </ui:Button>
+                                        </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
+                            </ScrollViewer>
+
+                            <!-- 메시지 입력 영역 -->
+                            <Border Grid.Row="3" Padding="16,12"
+                                    BorderBrush="{DynamicResource ControlElevationBorderBrush}"
+                                    BorderThickness="0,1,0,0"
+                                    Visibility="{Binding CurrentChannelTab, Converter={StaticResource SortByToAppearanceConverter}, ConverterParameter=posts}">
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*"/>
+                                        <ColumnDefinition Width="Auto"/>
+                                    </Grid.ColumnDefinitions>
+                                    <ui:TextBox x:Name="TeamsChannelMessageInput" Grid.Column="0"
+                                                PlaceholderText="메시지를 입력하세요..."
+                                                Margin="0,0,8,0"
+                                                KeyDown="TeamsChannelMessageInput_KeyDown"/>
+                                    <ui:Button Grid.Column="1" x:Name="TeamsChannelSendButton"
+                                               Icon="{ui:SymbolIcon Send24}"
+                                               Appearance="Primary"
+                                               Click="TeamsChannelSendButton_Click"
+                                               ToolTip="전송"/>
+                                </Grid>
+                            </Border>
+                        </Grid>
+                    </Grid>
+                </Border>
+            </Grid>
+        </Border>
+
+        <!-- ========== 활동 뷰 컨테이너 (Column 1-5 전체 사용, 초기에는 숨김) ========== -->
+        <Border x:Name="ActivityViewBorder"
+                Grid.Column="1" Grid.ColumnSpan="5"
+                Visibility="Collapsed"
+                Background="{DynamicResource ApplicationBackgroundBrush}">
+            <Grid>
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="*"/>
+                </Grid.RowDefinitions>
+
+                <!-- 헤더 -->
+                <Border Grid.Row="0" Padding="16,12"
+                        BorderBrush="{DynamicResource ControlElevationBorderBrush}"
+                        BorderThickness="0,0,0,1">
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        <StackPanel Grid.Column="0" Orientation="Horizontal">
+                            <ui:SymbolIcon Symbol="Alert24" FontSize="20" Margin="0,0,8,0" Foreground="{StaticResource ActivityAccentBrush}"/>
+                            <TextBlock Text="활동" FontSize="16" FontWeight="SemiBold" VerticalAlignment="Center"/>
+                        </StackPanel>
+                        <ui:Button Grid.Column="1" x:Name="ActivityRefreshButton"
+                                   Icon="{ui:SymbolIcon ArrowSync24}"
+                                   Appearance="Transparent" Padding="6"
+                                   ToolTip="새로고침"
+                                   Click="ActivityRefreshButton_Click"/>
+                    </Grid>
+                </Border>
+
+                <!-- 필터 바 -->
+                <Border Grid.Row="1" Padding="16,8"
+                        BorderBrush="{DynamicResource ControlElevationBorderBrush}"
+                        BorderThickness="0,0,0,1">
+                    <StackPanel Orientation="Horizontal">
+                        <ui:Button x:Name="ActivityFilterAllButton" Content="모든 활동"
+                                   Appearance="Secondary" Margin="0,0,8,0"
+                                   Click="ActivityFilterAllButton_Click"/>
+                        <ui:Button x:Name="ActivityFilterMailButton" Content="메일"
+                                   Icon="{ui:SymbolIcon Mail24}"
+                                   Appearance="Transparent" Margin="0,0,8,0"
+                                   Click="ActivityFilterMailButton_Click"/>
+                        <ui:Button x:Name="ActivityFilterChatButton" Content="채팅"
+                                   Icon="{ui:SymbolIcon Chat24}"
+                                   Appearance="Transparent" Margin="0,0,8,0"
+                                   Click="ActivityFilterChatButton_Click"/>
+                        <ui:Button x:Name="ActivityFilterFileButton" Content="파일"
+                                   Icon="{ui:SymbolIcon Document24}"
+                                   Appearance="Transparent"
+                                   Click="ActivityFilterFileButton_Click"/>
+                    </StackPanel>
+                </Border>
+
+                <!-- 활동 피드 목록 -->
+                <Grid Grid.Row="2">
+                    <ListView x:Name="ActivityListView"
+                              Background="Transparent" BorderThickness="0"
+                              Padding="8"
+                              SelectionChanged="ActivityListView_SelectionChanged">
+                        <ListView.ItemTemplate>
+                            <DataTemplate>
+                                <Border Padding="12,10" Margin="0,2"
+                                        Background="{DynamicResource CardBackgroundFillColorDefaultBrush}"
+                                        CornerRadius="6"
+                                        BorderBrush="{DynamicResource ControlElevationBorderBrush}"
+                                        BorderThickness="1">
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="Auto"/>
+                                            <ColumnDefinition Width="*"/>
+                                            <ColumnDefinition Width="Auto"/>
+                                        </Grid.ColumnDefinitions>
+
+                                        <!-- 타입 아이콘 -->
+                                        <Border Grid.Column="0" Width="40" Height="40"
+                                                CornerRadius="20" Margin="0,0,12,0"
+                                                Background="{DynamicResource ControlFillColorDefaultBrush}">
+                                            <ui:SymbolIcon Symbol="Alert24" FontSize="20"
+                                                           Foreground="{StaticResource ActivityAccentBrush}"
+                                                           HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                        </Border>
+
+                                        <!-- 내용 -->
+                                        <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                                            <TextBlock Text="{Binding Title}" FontSize="13" FontWeight="SemiBold"
+                                                       TextTrimming="CharacterEllipsis"/>
+                                            <TextBlock Text="{Binding Description}" FontSize="12"
+                                                       Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                                                       TextTrimming="CharacterEllipsis" Margin="0,2,0,0"/>
+                                        </StackPanel>
+
+                                        <!-- 시간 -->
+                                        <TextBlock Grid.Column="2" Text="{Binding TimestampDisplay}"
+                                                   FontSize="11"
+                                                   Foreground="{DynamicResource TextFillColorTertiaryBrush}"
+                                                   VerticalAlignment="Top" Margin="8,0,0,0"/>
+                                    </Grid>
+                                </Border>
+                            </DataTemplate>
+                        </ListView.ItemTemplate>
+                    </ListView>
+
+                    <!-- 빈 상태 표시 -->
+                    <StackPanel x:Name="ActivityEmptyState"
+                                VerticalAlignment="Center" HorizontalAlignment="Center"
+                                Visibility="Collapsed">
+                        <ui:SymbolIcon Symbol="Alert24" FontSize="64"
+                                       Foreground="{StaticResource ActivityAccentBrush}" Margin="0,0,0,16"/>
+                        <TextBlock Text="활동 피드" FontSize="24" FontWeight="SemiBold" HorizontalAlignment="Center"/>
+                        <TextBlock Text="최근 활동이 없습니다" FontSize="14"
+                                   Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                                   HorizontalAlignment="Center" Margin="0,8,0,0"/>
+                        <ui:Button x:Name="ActivityLoadButton" Content="활동 로드" Margin="0,16,0,0"
+                                   Appearance="Secondary" Click="ActivityLoadButton_Click"/>
+                    </StackPanel>
+                </Grid>
+            </Grid>
+        </Border>
+
+        <!-- ========== 플래너 뷰 컨테이너 (Column 1-5 전체 사용, 초기에는 숨김) ========== -->
+        <Border x:Name="PlannerViewBorder"
+                Grid.Column="1" Grid.ColumnSpan="5"
+                Visibility="Collapsed"
+                Background="{DynamicResource ApplicationBackgroundBrush}">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="250" MinWidth="180" MaxWidth="350"/>
+                    <ColumnDefinition Width="*"/>
+                </Grid.ColumnDefinitions>
+
+                <!-- 좌측 패널: 플랜 목록 -->
+                <Border Grid.Column="0"
+                        BorderBrush="{DynamicResource ControlElevationBorderBrush}"
+                        BorderThickness="0,0,1,0">
+                    <Grid>
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="*"/>
+                        </Grid.RowDefinitions>
+
+                        <!-- 헤더 -->
+                        <Border Grid.Row="0" Padding="16,12"
+                                BorderBrush="{DynamicResource ControlElevationBorderBrush}"
+                                BorderThickness="0,0,0,1">
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                </Grid.ColumnDefinitions>
+                                <StackPanel Grid.Column="0" Orientation="Horizontal">
+                                    <ui:SymbolIcon Symbol="TaskListSquareLtr24" FontSize="20" Margin="0,0,8,0" Foreground="{StaticResource PlannerAccentBrush}"/>
+                                    <TextBlock Text="플래너" FontSize="16" FontWeight="SemiBold" VerticalAlignment="Center"/>
+                                </StackPanel>
+                                <ui:Button Grid.Column="1" x:Name="PlannerRefreshButton"
+                                           Icon="{ui:SymbolIcon ArrowSync24}"
+                                           Appearance="Transparent" Padding="6"
+                                           ToolTip="새로고침"
+                                           Click="PlannerRefreshButton_Click"/>
+                            </Grid>
+                        </Border>
+
+                        <!-- 내 작업 섹션 -->
+                        <Border Grid.Row="1" Padding="12,8"
+                                Background="{DynamicResource ControlFillColorDefaultBrush}">
+                            <StackPanel>
+                                <TextBlock Text="내 작업" FontSize="12" FontWeight="SemiBold"
+                                           Foreground="{DynamicResource TextFillColorSecondaryBrush}" Margin="0,0,0,8"/>
+                                <ui:Button x:Name="PlannerMyTasksButton"
+                                           Content="모든 작업 보기"
+                                           Icon="{ui:SymbolIcon Person24}"
+                                           Appearance="Transparent" HorizontalAlignment="Left"
+                                           Click="PlannerMyTasksButton_Click"/>
+                            </StackPanel>
+                        </Border>
+
+                        <!-- 플랜 목록 -->
+                        <Grid Grid.Row="2">
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto"/>
+                                <RowDefinition Height="*"/>
+                            </Grid.RowDefinitions>
+                            <TextBlock Grid.Row="0" Text="플랜" FontSize="12" FontWeight="SemiBold"
+                                       Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                                       Margin="12,12,12,8"/>
+                            <ListBox x:Name="PlannerListBox" Grid.Row="1"
+                                     Background="Transparent" BorderThickness="0"
+                                     SelectionChanged="PlannerListBox_SelectionChanged">
+                                <ListBox.ItemTemplate>
+                                    <DataTemplate>
+                                        <StackPanel Orientation="Horizontal" Margin="4">
+                                            <ui:SymbolIcon Symbol="Board24" FontSize="16" Margin="0,0,8,0"
+                                                           Foreground="{StaticResource PlannerAccentBrush}"/>
+                                            <TextBlock Text="{Binding Title}" VerticalAlignment="Center"/>
+                                        </StackPanel>
+                                    </DataTemplate>
+                                </ListBox.ItemTemplate>
+                            </ListBox>
+
+                            <!-- 플랜 없음 표시 -->
+                            <StackPanel x:Name="PlannerEmptyState" Grid.Row="1"
+                                        VerticalAlignment="Center" HorizontalAlignment="Center"
+                                        Visibility="Collapsed">
+                                <ui:SymbolIcon Symbol="TaskListSquareLtr24" FontSize="32"
+                                               Foreground="{DynamicResource TextFillColorTertiaryBrush}" Margin="0,0,0,8"/>
+                                <TextBlock Text="플랜이 없습니다" FontSize="13"
+                                           Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                                           HorizontalAlignment="Center"/>
+                                <ui:Button x:Name="PlannerLoadPlansButton" Content="플랜 로드" Margin="0,12,0,0"
+                                           Appearance="Secondary" Click="PlannerLoadPlansButton_Click"/>
+                            </StackPanel>
+                        </Grid>
+                    </Grid>
+                </Border>
+
+                <!-- 우측 패널: 칸반 보드 -->
+                <Grid Grid.Column="1">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="*"/>
+                    </Grid.RowDefinitions>
+
+                    <!-- 보드 헤더 -->
+                    <Border Grid.Row="0" Padding="16,12"
+                            BorderBrush="{DynamicResource ControlElevationBorderBrush}"
+                            BorderThickness="0,0,0,1">
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
+
+                            <StackPanel Grid.Column="0" Orientation="Horizontal">
+                                <TextBlock x:Name="PlannerBoardTitle" Text="플랜을 선택하세요"
+                                           FontSize="16" FontWeight="SemiBold" VerticalAlignment="Center"/>
+                            </StackPanel>
+
+                            <!-- 툴바 -->
+                            <StackPanel Grid.Column="1" Orientation="Horizontal">
+                                <ui:Button x:Name="PlannerAddBucketButton"
+                                           Content="버킷 추가" Icon="{ui:SymbolIcon Add24}"
+                                           Appearance="Transparent" Margin="0,0,8,0"
+                                           IsEnabled="False"
+                                           Click="PlannerAddBucketButton_Click"/>
+                                <ui:Button x:Name="PlannerAddTaskButton"
+                                           Content="작업 추가" Icon="{ui:SymbolIcon TaskListAdd24}"
+                                           Appearance="Secondary"
+                                           IsEnabled="False"
+                                           Click="PlannerAddTaskButton_Click"/>
+                            </StackPanel>
+                        </Grid>
+                    </Border>
+
+                    <!-- 칸반 보드 영역 -->
+                    <ScrollViewer Grid.Row="1" HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Disabled">
+                        <ItemsControl x:Name="PlannerBucketsItemsControl">
+                            <ItemsControl.ItemsPanel>
+                                <ItemsPanelTemplate>
+                                    <StackPanel Orientation="Horizontal" Margin="16"/>
+                                </ItemsPanelTemplate>
+                            </ItemsControl.ItemsPanel>
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate>
+                                    <Border Width="280" Margin="0,0,16,0"
+                                            Background="{DynamicResource ControlFillColorDefaultBrush}"
+                                            CornerRadius="8" Padding="12">
+                                        <Grid>
+                                            <Grid.RowDefinitions>
+                                                <RowDefinition Height="Auto"/>
+                                                <RowDefinition Height="*"/>
+                                            </Grid.RowDefinitions>
+
+                                            <!-- 버킷 헤더 -->
+                                            <StackPanel Grid.Row="0" Orientation="Horizontal" Margin="0,0,0,12">
+                                                <TextBlock Text="{Binding Name}" FontSize="14" FontWeight="SemiBold"/>
+                                                <TextBlock Text="{Binding Tasks.Count, StringFormat=' ({0})'}"
+                                                           Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
+                                            </StackPanel>
+
+                                            <!-- 작업 목록 -->
+                                            <ItemsControl Grid.Row="1" ItemsSource="{Binding Tasks}">
+                                                <ItemsControl.ItemTemplate>
+                                                    <DataTemplate>
+                                                        <Border Background="{DynamicResource CardBackgroundFillColorDefaultBrush}"
+                                                                CornerRadius="6" Padding="12" Margin="0,0,0,8"
+                                                                BorderBrush="{DynamicResource ControlElevationBorderBrush}"
+                                                                BorderThickness="1"
+                                                                MouseLeftButtonDown="PlannerTaskCard_MouseLeftButtonDown">
+                                                            <Grid>
+                                                                <Grid.RowDefinitions>
+                                                                    <RowDefinition Height="Auto"/>
+                                                                    <RowDefinition Height="Auto"/>
+                                                                    <RowDefinition Height="Auto"/>
+                                                                </Grid.RowDefinitions>
+
+                                                                <!-- 작업 제목 -->
+                                                                <TextBlock Grid.Row="0" Text="{Binding Title}"
+                                                                           FontSize="13" TextWrapping="Wrap"
+                                                                           TextDecorations="{Binding IsComplete, Converter={StaticResource BoolToStrikethroughConverter}}"/>
+
+                                                                <!-- 진행률 바 -->
+                                                                <ProgressBar Grid.Row="1" Value="{Binding PercentComplete}"
+                                                                             Maximum="100" Height="4" Margin="0,8,0,0"
+                                                                             Visibility="{Binding PercentComplete, Converter={StaticResource IntToVisibilityConverter}}"/>
+
+                                                                <!-- 메타 정보 -->
+                                                                <StackPanel Grid.Row="2" Orientation="Horizontal" Margin="0,8,0,0">
+                                                                    <!-- 마감일 -->
+                                                                    <Border Visibility="{Binding DueDateTime, Converter={StaticResource NullToVisibilityConverter}}"
+                                                                            Background="{Binding DueStatus, Converter={StaticResource DueStatusToBackgroundConverter}}"
+                                                                            CornerRadius="3" Padding="6,2" Margin="0,0,6,0">
+                                                                        <TextBlock Text="{Binding DueDateDisplay}" FontSize="11"/>
+                                                                    </Border>
+
+                                                                    <!-- 체크리스트 -->
+                                                                    <StackPanel Orientation="Horizontal"
+                                                                                Visibility="{Binding ChecklistItemCount, Converter={StaticResource IntToVisibilityConverter}}">
+                                                                        <ui:SymbolIcon Symbol="CheckboxChecked24" FontSize="12" Margin="0,0,4,0"/>
+                                                                        <TextBlock Text="{Binding ChecklistDisplay}" FontSize="11"/>
+                                                                    </StackPanel>
+                                                                </StackPanel>
+                                                            </Grid>
+                                                        </Border>
+                                                    </DataTemplate>
+                                                </ItemsControl.ItemTemplate>
+                                            </ItemsControl>
+                                        </Grid>
+                                    </Border>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                    </ScrollViewer>
+
+                    <!-- 플랜 미선택 안내 -->
+                    <StackPanel x:Name="PlannerNoPlanSelected" Grid.Row="1"
+                                VerticalAlignment="Center" HorizontalAlignment="Center">
+                        <ui:SymbolIcon Symbol="TaskListSquareLtr24" FontSize="64"
+                                       Foreground="{StaticResource PlannerAccentBrush}" Margin="0,0,0,16"/>
+                        <TextBlock Text="플래너" FontSize="24" FontWeight="SemiBold" HorizontalAlignment="Center"/>
+                        <TextBlock Text="좌측에서 플랜을 선택하세요" FontSize="14"
+                                   Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                                   HorizontalAlignment="Center" Margin="0,8,0,0"/>
+                    </StackPanel>
+                </Grid>
+            </Grid>
+        </Border>
+
+        <!-- ========== OneDrive 뷰 컨테이너 (Column 1-5 전체 사용, 초기에는 숨김) ========== -->
+        <Border x:Name="OneDriveViewBorder"
+                Grid.Column="1" Grid.ColumnSpan="5"
+                Visibility="Collapsed"
+                Background="{DynamicResource ApplicationBackgroundBrush}">
+            <Grid>
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="*"/>
+                </Grid.RowDefinitions>
+
+                <!-- 헤더: 타이틀 + 액션 버튼들 -->
+                <Border Grid.Row="0" Padding="16,12"
+                        BorderBrush="{DynamicResource ControlElevationBorderBrush}"
+                        BorderThickness="0,0,0,1">
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto"/>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        <StackPanel Grid.Column="0" Orientation="Horizontal">
+                            <ui:SymbolIcon Symbol="Cloud24" FontSize="24" Margin="0,0,10,0" Foreground="{StaticResource OneDriveAccentBrush}"/>
+                            <TextBlock Text="OneDrive" FontSize="18" FontWeight="SemiBold" VerticalAlignment="Center"/>
+                        </StackPanel>
+                        <!-- 액션 버튼들 -->
+                        <StackPanel Grid.Column="2" Orientation="Horizontal">
+                            <ui:Button x:Name="OneDriveNewFolderButton" Icon="{ui:SymbolIcon FolderAdd24}"
+                                       Content="새 폴더" Appearance="Transparent" Margin="0,0,8,0"
+                                       Click="OneDriveNewFolderButton_Click"/>
+                            <ui:Button x:Name="OneDriveUploadButton" Icon="{ui:SymbolIcon ArrowUpload24}"
+                                       Content="업로드" Appearance="Transparent" Margin="0,0,8,0"
+                                       Click="OneDriveUploadButton_Click"/>
+                            <ui:Button x:Name="OneDriveRefreshButton" Icon="{ui:SymbolIcon ArrowSync24}"
+                                       Appearance="Transparent" ToolTip="새로고침"
+                                       Click="OneDriveRefreshButton_Click"/>
+                        </StackPanel>
+                    </Grid>
+                </Border>
+
+                <!-- 툴바: 보기 전환 + 검색 -->
+                <Border Grid.Row="1" Padding="16,8"
+                        BorderBrush="{DynamicResource ControlElevationBorderBrush}"
+                        BorderThickness="0,0,0,1">
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto"/>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        <!-- 뷰 모드 전환 -->
+                        <StackPanel Grid.Column="0" Orientation="Horizontal">
+                            <ui:Button x:Name="OneDriveListViewButton" Icon="{ui:SymbolIcon List24}"
+                                       ToolTip="목록 보기" Appearance="Secondary" Padding="8"
+                                       Click="OneDriveListViewButton_Click"/>
+                            <ui:Button x:Name="OneDriveGridViewButton" Icon="{ui:SymbolIcon Grid24}"
+                                       ToolTip="그리드 보기" Appearance="Transparent" Padding="8" Margin="4,0,0,0"
+                                       Click="OneDriveGridViewButton_Click"/>
+                        </StackPanel>
+                        <!-- 검색 -->
+                        <ui:TextBox Grid.Column="2" x:Name="OneDriveSearchBox" PlaceholderText="파일 검색..."
+                                    Icon="{ui:SymbolIcon Search24}" Width="250"
+                                    KeyDown="OneDriveSearchBox_KeyDown"/>
+                    </Grid>
+                </Border>
+
+                <!-- 경로 표시 (Breadcrumb) -->
+                <Border Grid.Row="2" Padding="16,10"
+                        BorderBrush="{DynamicResource ControlElevationBorderBrush}"
+                        BorderThickness="0,0,0,1">
+                    <StackPanel Orientation="Horizontal">
+                        <ui:Button x:Name="OneDriveGoUpButton" Icon="{ui:SymbolIcon ArrowUp24}"
+                                   Appearance="Transparent" Padding="6" Margin="0,0,8,0"
+                                   ToolTip="상위 폴더" Click="OneDriveGoUpButton_Click"/>
+                        <ItemsControl x:Name="OneDriveBreadcrumb">
+                            <ItemsControl.ItemsPanel>
+                                <ItemsPanelTemplate>
+                                    <StackPanel Orientation="Horizontal"/>
+                                </ItemsPanelTemplate>
+                            </ItemsControl.ItemsPanel>
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate>
+                                    <StackPanel Orientation="Horizontal">
+                                        <ui:Button Content="{Binding Name}" Appearance="Transparent"
+                                                   Foreground="{StaticResource OneDriveAccentBrush}"
+                                                   Padding="4,2" FontSize="14"
+                                                   Click="OneDriveBreadcrumbItem_Click"
+                                                   Tag="{Binding}"/>
+                                        <TextBlock Text=">" VerticalAlignment="Center" Margin="4,0"
+                                                   Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
+                                    </StackPanel>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                    </StackPanel>
+                </Border>
+
+                <!-- 파일 목록 -->
+                <Grid Grid.Row="3">
+                    <!-- 빈 상태 -->
+                    <StackPanel x:Name="OneDriveEmptyState" VerticalAlignment="Center" HorizontalAlignment="Center">
+                        <ui:SymbolIcon Symbol="Cloud24" FontSize="72" Foreground="{StaticResource OneDriveAccentBrush}" Margin="0,0,0,24"/>
+                        <TextBlock Text="OneDrive" FontSize="28" FontWeight="Bold" HorizontalAlignment="Center"/>
+                        <TextBlock Text="클라우드 파일을 관리하세요" FontSize="14"
+                                   Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                                   HorizontalAlignment="Center" Margin="0,12,0,0"/>
+                        <ui:Button x:Name="OneDriveLoadFilesButton" Content="파일 로드"
+                                   Icon="{ui:SymbolIcon ArrowSync24}" Appearance="Primary"
+                                   Margin="0,24,0,0" Padding="16,10" Click="OneDriveLoadFilesButton_Click"/>
+                    </StackPanel>
+
+                    <!-- 파일 목록 (ListView) -->
+                    <ListView x:Name="OneDriveFileListView" Visibility="Collapsed"
+                              SelectionMode="Single" SelectionChanged="OneDriveFileListView_SelectionChanged"
+                              MouseDoubleClick="OneDriveFileListView_MouseDoubleClick">
+                        <ListView.View>
+                            <GridView>
+                                <GridViewColumn Header="이름" Width="300">
+                                    <GridViewColumn.CellTemplate>
+                                        <DataTemplate>
+                                            <StackPanel Orientation="Horizontal" Margin="4,4">
+                                                <ui:SymbolIcon Symbol="Folder24" FontSize="20" Margin="0,0,10,0"
+                                                               Foreground="#FFB900"
+                                                               Visibility="{Binding IsFolder, Converter={StaticResource BoolToVisibilityConverter}}"/>
+                                                <ui:SymbolIcon Symbol="Document24" FontSize="20" Margin="0,0,10,0"
+                                                               Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                                                               Visibility="{Binding IsFolder, Converter={StaticResource BoolToVisibilityConverter}, ConverterParameter=Invert}"/>
+                                                <TextBlock Text="{Binding Name}" VerticalAlignment="Center"/>
+                                            </StackPanel>
+                                        </DataTemplate>
+                                    </GridViewColumn.CellTemplate>
+                                </GridViewColumn>
+                                <GridViewColumn Header="수정 날짜" Width="150" DisplayMemberBinding="{Binding LastModifiedDisplay}"/>
+                                <GridViewColumn Header="크기" Width="100" DisplayMemberBinding="{Binding SizeDisplay}"/>
+                            </GridView>
+                        </ListView.View>
+                    </ListView>
+
+                    <!-- 로딩 인디케이터 -->
+                    <Border x:Name="OneDriveLoadingOverlay" Visibility="Collapsed"
+                            Background="{DynamicResource ApplicationBackgroundBrush}">
+                        <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center">
+                            <ui:ProgressRing IsIndeterminate="True" Width="48" Height="48"/>
+                            <TextBlock Text="로딩 중..." FontSize="14"
+                                       Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                                       HorizontalAlignment="Center" Margin="0,12,0,0"/>
+                        </StackPanel>
+                    </Border>
+                </Grid>
+            </Grid>
+        </Border>
+
+        <!-- ========== OneNote 뷰 컨테이너 (Column 1-5 전체 사용, 초기에는 숨김) ========== -->
+        <Border x:Name="OneNoteViewBorder"
+                Grid.Column="1" Grid.ColumnSpan="5"
+                Visibility="Collapsed"
+                Background="{DynamicResource ApplicationBackgroundBrush}">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="280" MinWidth="200" MaxWidth="400"/>
+                    <ColumnDefinition Width="*"/>
+                </Grid.ColumnDefinitions>
+
+                <!-- 좌측 패널: 노트북/섹션/페이지 탐색 (OneNote 스타일) -->
+                <Border Grid.Column="0"
+                        BorderBrush="{DynamicResource ControlElevationBorderBrush}"
+                        BorderThickness="0,0,1,0">
+                    <Grid>
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="*"/>
+                        </Grid.RowDefinitions>
+
+                        <!-- 헤더: OneNote 타이틀 및 액션 버튼 -->
+                        <Border Grid.Row="0" Padding="16,12"
+                                BorderBrush="{DynamicResource ControlElevationBorderBrush}"
+                                BorderThickness="0,0,0,1">
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                </Grid.ColumnDefinitions>
+                                <StackPanel Grid.Column="0" Orientation="Horizontal">
+                                    <ui:SymbolIcon Symbol="Notebook24" FontSize="24" Margin="0,0,10,0" Foreground="{StaticResource OneNoteAccentBrush}"/>
+                                    <TextBlock Text="OneNote" FontSize="18" FontWeight="SemiBold" VerticalAlignment="Center"/>
+                                </StackPanel>
+                                <StackPanel Grid.Column="1" Orientation="Horizontal">
+                                    <ui:Button x:Name="OneNoteRefreshButton" Icon="{ui:SymbolIcon ArrowSync24}"
+                                               Appearance="Transparent" ToolTip="새로고침" Click="OneNoteRefreshButton_Click"
+                                               Padding="6" Margin="0,0,4,0"/>
+                                    <ui:Button x:Name="OneNoteNewNotebookButton" Icon="{ui:SymbolIcon Add24}"
+                                               Appearance="Transparent" ToolTip="새 노트북" Click="OneNoteNewNotebookButton_Click"
+                                               Padding="6"/>
+                                </StackPanel>
+                            </Grid>
+                        </Border>
+
+                        <!-- 검색 바 -->
+                        <Border Grid.Row="1" Padding="12,8">
+                            <ui:TextBox x:Name="OneNoteSearchBox" PlaceholderText="노트 검색..."
+                                        Icon="{ui:SymbolIcon Search24}"
+                                        KeyDown="OneNoteSearchBox_KeyDown"/>
+                        </Border>
+
+                        <!-- 노트북/섹션/페이지 트리뷰 -->
+                        <ScrollViewer Grid.Row="2" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+                            <StackPanel>
+                                <!-- 최근 노트 섹션 -->
+                                <Expander x:Name="OneNoteRecentExpander" IsExpanded="True" Margin="8,4">
+                                    <Expander.Header>
+                                        <StackPanel Orientation="Horizontal">
+                                            <ui:SymbolIcon Symbol="History24" FontSize="16" Margin="0,0,8,0"
+                                                           Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
+                                            <TextBlock Text="최근 노트" FontWeight="SemiBold" VerticalAlignment="Center"/>
+                                        </StackPanel>
+                                    </Expander.Header>
+                                    <ListBox x:Name="OneNoteRecentListBox" Background="Transparent" BorderThickness="0"
+                                             SelectionChanged="OneNoteRecentListBox_SelectionChanged" Margin="0,4,0,0">
+                                        <ListBox.ItemTemplate>
+                                            <DataTemplate>
+                                                <Grid Margin="4,6">
+                                                    <Grid.ColumnDefinitions>
+                                                        <ColumnDefinition Width="Auto"/>
+                                                        <ColumnDefinition Width="*"/>
+                                                        <ColumnDefinition Width="Auto"/>
+                                                    </Grid.ColumnDefinitions>
+                                                    <ui:SymbolIcon Grid.Column="0" Symbol="Document24" FontSize="16"
+                                                                   Foreground="{StaticResource OneNoteAccentBrush}" Margin="0,0,10,0"/>
+                                                    <StackPanel Grid.Column="1">
+                                                        <TextBlock Text="{Binding Title}" FontWeight="Medium" TextTrimming="CharacterEllipsis"/>
+                                                        <TextBlock Text="{Binding LocationDisplay}" FontSize="11"
+                                                                   Foreground="{DynamicResource TextFillColorTertiaryBrush}"/>
+                                                    </StackPanel>
+                                                    <TextBlock Grid.Column="2" Text="{Binding TimeDisplay}" FontSize="11"
+                                                               Foreground="{DynamicResource TextFillColorTertiaryBrush}" VerticalAlignment="Center"/>
+                                                </Grid>
+                                            </DataTemplate>
+                                        </ListBox.ItemTemplate>
+                                    </ListBox>
+                                </Expander>
+
+                                <!-- 노트북 목록 -->
+                                <Expander x:Name="OneNoteNotebooksExpander" IsExpanded="True" Margin="8,4">
+                                    <Expander.Header>
+                                        <StackPanel Orientation="Horizontal">
+                                            <ui:SymbolIcon Symbol="Notebook24" FontSize="16" Margin="0,0,8,0"
+                                                           Foreground="{StaticResource OneNoteAccentBrush}"/>
+                                            <TextBlock Text="노트북" FontWeight="SemiBold" VerticalAlignment="Center"/>
+                                        </StackPanel>
+                                    </Expander.Header>
+                                    <TreeView x:Name="OneNoteTreeView" Background="Transparent" BorderThickness="0" Margin="0,4,0,0"
+                                              SelectedItemChanged="OneNoteTreeView_SelectedItemChanged">
+                                        <TreeView.ItemTemplate>
+                                            <HierarchicalDataTemplate ItemsSource="{Binding Sections}">
+                                                <StackPanel Orientation="Horizontal" Margin="2,4">
+                                                    <ui:SymbolIcon Symbol="Notebook24" FontSize="16" Foreground="{StaticResource OneNoteAccentBrush}" Margin="0,0,8,0"/>
+                                                    <TextBlock Text="{Binding DisplayName}" VerticalAlignment="Center"/>
+                                                </StackPanel>
+                                                <HierarchicalDataTemplate.ItemTemplate>
+                                                    <HierarchicalDataTemplate ItemsSource="{Binding Pages}">
+                                                        <StackPanel Orientation="Horizontal" Margin="2,3">
+                                                            <ui:SymbolIcon Symbol="FolderOpen24" FontSize="14" Foreground="#107C10" Margin="0,0,8,0"/>
+                                                            <TextBlock Text="{Binding DisplayName}" VerticalAlignment="Center"/>
+                                                        </StackPanel>
+                                                        <HierarchicalDataTemplate.ItemTemplate>
+                                                            <DataTemplate>
+                                                                <StackPanel Orientation="Horizontal" Margin="2,2">
+                                                                    <ui:SymbolIcon Symbol="Document24" FontSize="12"
+                                                                                   Foreground="{DynamicResource TextFillColorSecondaryBrush}" Margin="0,0,6,0"/>
+                                                                    <TextBlock Text="{Binding Title}" VerticalAlignment="Center"/>
+                                                                </StackPanel>
+                                                            </DataTemplate>
+                                                        </HierarchicalDataTemplate.ItemTemplate>
+                                                    </HierarchicalDataTemplate>
+                                                </HierarchicalDataTemplate.ItemTemplate>
+                                            </HierarchicalDataTemplate>
+                                        </TreeView.ItemTemplate>
+                                    </TreeView>
+                                </Expander>
+                            </StackPanel>
+                        </ScrollViewer>
+                    </Grid>
+                </Border>
+
+                <!-- 우측 패널: 페이지 콘텐츠 뷰어/에디터 -->
+                <Border Grid.Column="1">
+                    <Grid>
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="*"/>
+                        </Grid.RowDefinitions>
+
+                        <!-- 페이지 헤더 (선택된 페이지가 있을 때만) -->
+                        <Border x:Name="OneNotePageHeaderBorder" Grid.Row="0" Padding="16,12"
+                                BorderBrush="{DynamicResource ControlElevationBorderBrush}"
+                                BorderThickness="0,0,0,1" Visibility="Collapsed">
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                </Grid.ColumnDefinitions>
+                                <StackPanel Grid.Column="0">
+                                    <TextBlock x:Name="OneNotePageTitleText" Text="페이지 제목" FontSize="18" FontWeight="SemiBold"/>
+                                    <TextBlock x:Name="OneNotePageLocationText" Text="노트북 > 섹션" FontSize="12"
+                                               Foreground="{DynamicResource TextFillColorSecondaryBrush}" Margin="0,4,0,0"/>
+                                </StackPanel>
+                                <StackPanel Grid.Column="1" Orientation="Horizontal">
+                                    <ui:Button x:Name="OneNoteEditButton" Icon="{ui:SymbolIcon Edit24}"
+                                               Appearance="Transparent" ToolTip="편집" Padding="8"/>
+                                    <ui:Button x:Name="OneNoteShareButton" Icon="{ui:SymbolIcon Share24}"
+                                               Appearance="Transparent" ToolTip="공유" Padding="8"/>
+                                    <ui:Button x:Name="OneNoteMoreButton" Icon="{ui:SymbolIcon MoreHorizontal24}"
+                                               Appearance="Transparent" ToolTip="더보기" Padding="8"/>
+                                </StackPanel>
+                            </Grid>
+                        </Border>
+
+                        <!-- 페이지 콘텐츠 (WebView2 또는 RichTextBox) -->
+                        <Grid Grid.Row="1">
+                            <!-- 빈 상태 (페이지 미선택) -->
+                            <StackPanel x:Name="OneNoteEmptyState" VerticalAlignment="Center" HorizontalAlignment="Center">
+                                <ui:SymbolIcon Symbol="Notebook24" FontSize="72" Foreground="{StaticResource OneNoteAccentBrush}" Margin="0,0,0,24"/>
+                                <TextBlock Text="OneNote" FontSize="28" FontWeight="Bold" HorizontalAlignment="Center"/>
+                                <TextBlock Text="노트를 선택하여 내용을 확인하세요" FontSize="14"
+                                           Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                                           HorizontalAlignment="Center" Margin="0,12,0,0"/>
+                                <ui:Button x:Name="OneNoteNewPageButton" Content="새 페이지 만들기"
+                                           Icon="{ui:SymbolIcon Add24}" Appearance="Primary"
+                                           Margin="0,24,0,0" Padding="16,10" Click="OneNoteNewPageButton_Click"/>
+                            </StackPanel>
+
+                            <!-- 페이지 콘텐츠 (HTML 렌더링용) -->
+                            <Border x:Name="OneNoteContentBorder" Visibility="Collapsed" Background="White" Margin="16">
+                                <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Auto">
+                                    <RichTextBox x:Name="OneNoteContentRichTextBox"
+                                                 IsReadOnly="True" BorderThickness="0"
+                                                 Padding="20" FontSize="14"
+                                                 Background="White" Foreground="Black"/>
+                                </ScrollViewer>
+                            </Border>
+
+                            <!-- 로딩 인디케이터 -->
+                            <Border x:Name="OneNoteLoadingOverlay" Visibility="Collapsed"
+                                    Background="{DynamicResource ApplicationBackgroundBrush}">
+                                <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center">
+                                    <ui:ProgressRing IsIndeterminate="True" Width="48" Height="48"/>
+                                    <TextBlock Text="로딩 중..." FontSize="14"
+                                               Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                                               HorizontalAlignment="Center" Margin="0,12,0,0"/>
+                                </StackPanel>
+                            </Border>
+                        </Grid>
+                    </Grid>
+                </Border>
+            </Grid>
+        </Border>
+
+        <!-- ========== 통화 뷰 컨테이너 (Column 1-5 전체 사용, 초기에는 숨김) ========== -->
+        <Border x:Name="CallsViewBorder"
+                Grid.Column="1" Grid.ColumnSpan="5"
+                Visibility="Collapsed"
+                Background="{DynamicResource ApplicationBackgroundBrush}">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="320" MinWidth="280" MaxWidth="400"/>
+                    <ColumnDefinition Width="*"/>
+                </Grid.ColumnDefinitions>
+
+                <!-- 좌측 패널: 다이얼패드 + 연락처 -->
+                <Border Grid.Column="0"
+                        BorderBrush="{DynamicResource ControlElevationBorderBrush}"
+                        BorderThickness="0,0,1,0">
+                    <Grid>
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="*"/>
+                        </Grid.RowDefinitions>
+
+                        <!-- 헤더 -->
+                        <Border Grid.Row="0" Padding="16,12" BorderBrush="{DynamicResource ControlElevationBorderBrush}" BorderThickness="0,0,0,1">
+                            <Grid>
+                                <StackPanel Orientation="Horizontal">
+                                    <ui:SymbolIcon Symbol="Call24" FontSize="20" Margin="0,0,8,0" Foreground="{StaticResource CallsAccentBrush}"/>
+                                    <TextBlock Text="통화" FontSize="16" FontWeight="SemiBold" VerticalAlignment="Center"/>
+                                </StackPanel>
+                                <ui:Button x:Name="CallsRefreshButton" HorizontalAlignment="Right" Appearance="Transparent" ToolTip="새로고침" Click="CallsRefreshButton_Click">
+                                    <ui:SymbolIcon Symbol="ArrowSync24"/>
+                                </ui:Button>
+                            </Grid>
+                        </Border>
+
+                        <!-- 내 상태 표시 -->
+                        <Border Grid.Row="1" Padding="12,8" Background="{DynamicResource ControlFillColorDefaultBrush}">
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="Auto"/>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                </Grid.ColumnDefinitions>
+                                <Ellipse Grid.Column="0" Width="12" Height="12" Margin="0,0,8,0">
+                                    <Ellipse.Fill>
+                                        <SolidColorBrush x:Name="CallsMyStatusBrush" Color="#107C10"/>
+                                    </Ellipse.Fill>
+                                </Ellipse>
+                                <TextBlock Grid.Column="1" x:Name="CallsMyStatusText" Text="대화 가능" VerticalAlignment="Center" FontSize="13"/>
+                                <ui:Button Grid.Column="2" x:Name="CallsStatusMenuButton" Appearance="Transparent" Content="상태 변경" FontSize="12" Click="CallsStatusMenuButton_Click"/>
+                            </Grid>
+                        </Border>
+
+                        <!-- 연락처 검색 -->
+                        <Border Grid.Row="2" Padding="12,8">
+                            <ui:TextBox x:Name="CallsSearchBox" PlaceholderText="이름 또는 이메일로 검색..." Icon="{ui:SymbolIcon Search24}" KeyDown="CallsSearchBox_KeyDown"/>
+                        </Border>
+
+                        <!-- 탭: 다이얼패드/자주 연락하는 사람 -->
+                        <Grid Grid.Row="3">
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto"/>
+                                <RowDefinition Height="*"/>
+                            </Grid.RowDefinitions>
+
+                            <!-- 탭 바 -->
+                            <StackPanel Grid.Row="0" Orientation="Horizontal" Margin="12,4,12,8">
+                                <ui:Button x:Name="CallsDialPadTab" Content="다이얼 패드" Appearance="Transparent" Margin="0,0,8,0" Click="CallsDialPadTab_Click"/>
+                                <ui:Button x:Name="CallsContactsTab" Content="연락처" Appearance="Primary" Click="CallsContactsTab_Click"/>
+                            </StackPanel>
+
+                            <!-- 다이얼 패드 영역 -->
+                            <Border Grid.Row="1" x:Name="CallsDialPadPanel" Visibility="Collapsed" Padding="20">
+                                <StackPanel>
+                                    <!-- 입력 번호 표시 -->
+                                    <Border Background="{DynamicResource ControlFillColorDefaultBrush}" CornerRadius="8" Padding="16,12" Margin="0,0,0,16">
+                                        <TextBlock x:Name="CallsDialNumber" Text="" FontSize="24" FontWeight="SemiBold" HorizontalAlignment="Center" TextWrapping="NoWrap"/>
+                                    </Border>
+
+                                    <!-- 숫자 키패드 -->
+                                    <UniformGrid Columns="3" Rows="4" Margin="0,0,0,16">
+                                        <ui:Button Content="1" FontSize="20" Margin="4" Height="50" Click="DialButton_Click" Tag="1"/>
+                                        <ui:Button Content="2" FontSize="20" Margin="4" Height="50" Click="DialButton_Click" Tag="2"/>
+                                        <ui:Button Content="3" FontSize="20" Margin="4" Height="50" Click="DialButton_Click" Tag="3"/>
+                                        <ui:Button Content="4" FontSize="20" Margin="4" Height="50" Click="DialButton_Click" Tag="4"/>
+                                        <ui:Button Content="5" FontSize="20" Margin="4" Height="50" Click="DialButton_Click" Tag="5"/>
+                                        <ui:Button Content="6" FontSize="20" Margin="4" Height="50" Click="DialButton_Click" Tag="6"/>
+                                        <ui:Button Content="7" FontSize="20" Margin="4" Height="50" Click="DialButton_Click" Tag="7"/>
+                                        <ui:Button Content="8" FontSize="20" Margin="4" Height="50" Click="DialButton_Click" Tag="8"/>
+                                        <ui:Button Content="9" FontSize="20" Margin="4" Height="50" Click="DialButton_Click" Tag="9"/>
+                                        <ui:Button Content="*" FontSize="20" Margin="4" Height="50" Click="DialButton_Click" Tag="*"/>
+                                        <ui:Button Content="0" FontSize="20" Margin="4" Height="50" Click="DialButton_Click" Tag="0"/>
+                                        <ui:Button Content="#" FontSize="20" Margin="4" Height="50" Click="DialButton_Click" Tag="#"/>
+                                    </UniformGrid>
+
+                                    <!-- 통화 버튼 -->
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*"/>
+                                            <ColumnDefinition Width="Auto"/>
+                                            <ColumnDefinition Width="*"/>
+                                        </Grid.ColumnDefinitions>
+                                        <ui:Button Grid.Column="0" Content="지우기" Appearance="Secondary" HorizontalAlignment="Stretch" Margin="4" Click="DialClearButton_Click"/>
+                                        <ui:Button Grid.Column="1" Width="60" Height="60" Appearance="Primary" CornerRadius="30" Margin="8" Click="DialCallButton_Click">
+                                            <ui:SymbolIcon Symbol="Call24" FontSize="24"/>
+                                        </ui:Button>
+                                        <ui:Button Grid.Column="2" Appearance="Secondary" HorizontalAlignment="Stretch" Margin="4" Click="DialBackspaceButton_Click">
+                                            <ui:SymbolIcon Symbol="Backspace24"/>
+                                        </ui:Button>
+                                    </Grid>
+                                </StackPanel>
+                            </Border>
+
+                            <!-- 연락처 목록 영역 -->
+                            <Border Grid.Row="1" x:Name="CallsContactsPanel" Visibility="Visible">
+                                <Grid>
+                                    <Grid.RowDefinitions>
+                                        <RowDefinition Height="Auto"/>
+                                        <RowDefinition Height="*"/>
+                                    </Grid.RowDefinitions>
+
+                                    <!-- 자주 연락하는 사람 헤더 -->
+                                    <TextBlock Grid.Row="0" Text="자주 연락하는 사람" FontSize="12" Foreground="{DynamicResource TextFillColorSecondaryBrush}" Margin="12,4,12,8"/>
+
+                                    <!-- 연락처 리스트 -->
+                                    <ListView x:Name="CallsContactsListView" Grid.Row="1"
+                                              Background="Transparent"
+                                              BorderThickness="0"
+                                              SelectionChanged="CallsContactsListView_SelectionChanged">
+                                        <ListView.ItemTemplate>
+                                            <DataTemplate>
+                                                <Grid Margin="4,8">
+                                                    <Grid.ColumnDefinitions>
+                                                        <ColumnDefinition Width="Auto"/>
+                                                        <ColumnDefinition Width="*"/>
+                                                        <ColumnDefinition Width="Auto"/>
+                                                    </Grid.ColumnDefinitions>
+
+                                                    <!-- 아바타 + 상태 표시 -->
+                                                    <Grid Grid.Column="0" Margin="0,0,12,0">
+                                                        <Border Width="40" Height="40" CornerRadius="20" Background="{StaticResource CallsAccentBrush}">
+                                                            <TextBlock Text="{Binding Initials}" FontSize="14" FontWeight="SemiBold" Foreground="White" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                                        </Border>
+                                                        <Ellipse Width="12" Height="12" HorizontalAlignment="Right" VerticalAlignment="Bottom" Stroke="White" StrokeThickness="2">
+                                                            <Ellipse.Fill>
+                                                                <SolidColorBrush Color="{Binding AvailabilityColor}"/>
+                                                            </Ellipse.Fill>
+                                                        </Ellipse>
+                                                    </Grid>
+
+                                                    <!-- 이름/이메일/상태 -->
+                                                    <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                                                        <TextBlock Text="{Binding DisplayName}" FontWeight="SemiBold" FontSize="13" TextTrimming="CharacterEllipsis"/>
+                                                        <TextBlock Text="{Binding Email}" FontSize="11" Foreground="{DynamicResource TextFillColorSecondaryBrush}" TextTrimming="CharacterEllipsis"/>
+                                                    </StackPanel>
+
+                                                    <!-- 통화 버튼 -->
+                                                    <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center">
+                                                        <ui:Button Appearance="Transparent" ToolTip="음성 통화" Width="32" Height="32" Margin="2" Click="ContactCallButton_Click" Tag="{Binding}">
+                                                            <ui:SymbolIcon Symbol="Call24" FontSize="16"/>
+                                                        </ui:Button>
+                                                        <ui:Button Appearance="Transparent" ToolTip="영상 통화" Width="32" Height="32" Margin="2" Click="ContactVideoCallButton_Click" Tag="{Binding}">
+                                                            <ui:SymbolIcon Symbol="Video24" FontSize="16"/>
+                                                        </ui:Button>
+                                                    </StackPanel>
+                                                </Grid>
+                                            </DataTemplate>
+                                        </ListView.ItemTemplate>
+                                    </ListView>
+
+                                    <!-- 빈 상태 표시 -->
+                                    <StackPanel x:Name="CallsContactsEmptyState" Grid.Row="1" Visibility="Collapsed" VerticalAlignment="Center" HorizontalAlignment="Center">
+                                        <ui:SymbolIcon Symbol="People24" FontSize="32" Foreground="{DynamicResource TextFillColorTertiaryBrush}" Margin="0,0,0,8"/>
+                                        <TextBlock Text="연락처가 없습니다" FontSize="13" Foreground="{DynamicResource TextFillColorSecondaryBrush}" HorizontalAlignment="Center"/>
+                                    </StackPanel>
+                                </Grid>
+                            </Border>
+                        </Grid>
+                    </Grid>
+                </Border>
+
+                <!-- 우측 패널: 선택된 연락처 상세 / 검색 결과 -->
+                <Grid Grid.Column="1">
+                    <!-- 검색 결과 표시 -->
+                    <Border x:Name="CallsSearchResultsPanel" Visibility="Collapsed" Padding="16">
+                        <Grid>
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto"/>
+                                <RowDefinition Height="*"/>
+                            </Grid.RowDefinitions>
+
+                            <TextBlock Grid.Row="0" Text="검색 결과" FontSize="14" FontWeight="SemiBold" Margin="0,0,0,12"/>
+
+                            <ListView x:Name="CallsSearchResultsListView" Grid.Row="1"
+                                      Background="Transparent"
+                                      BorderThickness="0"
+                                      SelectionChanged="CallsSearchResultsListView_SelectionChanged">
+                                <ListView.ItemTemplate>
+                                    <DataTemplate>
+                                        <Grid Margin="8,12">
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="Auto"/>
+                                                <ColumnDefinition Width="*"/>
+                                                <ColumnDefinition Width="Auto"/>
+                                            </Grid.ColumnDefinitions>
+
+                                            <!-- 아바타 -->
+                                            <Grid Grid.Column="0" Margin="0,0,16,0">
+                                                <Border Width="48" Height="48" CornerRadius="24" Background="{StaticResource CallsAccentBrush}">
+                                                    <TextBlock Text="{Binding Initials}" FontSize="16" FontWeight="SemiBold" Foreground="White" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                                </Border>
+                                                <Ellipse Width="14" Height="14" HorizontalAlignment="Right" VerticalAlignment="Bottom" Stroke="White" StrokeThickness="2">
+                                                    <Ellipse.Fill>
+                                                        <SolidColorBrush Color="{Binding AvailabilityColor}"/>
+                                                    </Ellipse.Fill>
+                                                </Ellipse>
+                                            </Grid>
+
+                                            <!-- 정보 -->
+                                            <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                                                <TextBlock Text="{Binding DisplayName}" FontWeight="SemiBold" FontSize="14"/>
+                                                <TextBlock Text="{Binding Email}" FontSize="12" Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
+                                                <StackPanel Orientation="Horizontal" Margin="0,4,0,0">
+                                                    <TextBlock Text="{Binding JobTitle}" FontSize="11" Foreground="{DynamicResource TextFillColorTertiaryBrush}"/>
+                                                    <TextBlock Text=" • " FontSize="11" Foreground="{DynamicResource TextFillColorTertiaryBrush}" Visibility="{Binding Department, Converter={StaticResource NullToVisibilityConverter}}"/>
+                                                    <TextBlock Text="{Binding Department}" FontSize="11" Foreground="{DynamicResource TextFillColorTertiaryBrush}"/>
+                                                </StackPanel>
+                                            </StackPanel>
+
+                                            <!-- 통화 버튼 -->
+                                            <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center">
+                                                <ui:Button Appearance="Primary" ToolTip="음성 통화" Width="40" Height="40" Margin="4" Click="SearchResultCallButton_Click" Tag="{Binding}">
+                                                    <ui:SymbolIcon Symbol="Call24" FontSize="18"/>
+                                                </ui:Button>
+                                                <ui:Button Appearance="Secondary" ToolTip="영상 통화" Width="40" Height="40" Margin="4" Click="SearchResultVideoCallButton_Click" Tag="{Binding}">
+                                                    <ui:SymbolIcon Symbol="Video24" FontSize="18"/>
+                                                </ui:Button>
+                                            </StackPanel>
+                                        </Grid>
+                                    </DataTemplate>
+                                </ListView.ItemTemplate>
+                            </ListView>
+                        </Grid>
+                    </Border>
+
+                    <!-- 기본 화면: 통화 안내 -->
+                    <StackPanel x:Name="CallsDefaultPanel" VerticalAlignment="Center" HorizontalAlignment="Center">
+                        <ui:SymbolIcon Symbol="Call24" FontSize="64" Foreground="{StaticResource CallsAccentBrush}" Margin="0,0,0,16"/>
+                        <TextBlock Text="통화" FontSize="24" FontWeight="SemiBold" HorizontalAlignment="Center"/>
+                        <TextBlock Text="연락처를 검색하거나 다이얼 패드를 사용하세요" FontSize="14" Foreground="{DynamicResource TextFillColorSecondaryBrush}" HorizontalAlignment="Center" Margin="0,8,0,0"/>
+                        <TextBlock Text="실제 통화 기능은 Azure Communication Services 연동이 필요합니다" FontSize="12" Foreground="{DynamicResource TextFillColorTertiaryBrush}" HorizontalAlignment="Center" Margin="0,16,0,0"/>
+                    </StackPanel>
+                </Grid>
             </Grid>
         </Border>
 
