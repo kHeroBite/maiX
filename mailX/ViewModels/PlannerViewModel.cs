@@ -1,7 +1,9 @@
 using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
+using System.IO;
 using System.Linq;
+using System.Text.Json;
 using System.Threading.Tasks;
 using System.Windows.Media;
 using CommunityToolkit.Mvvm.ComponentModel;
@@ -20,6 +22,13 @@ public partial class PlannerViewModel : ViewModelBase
 {
     private readonly GraphPlannerService _plannerService;
     private readonly ILogger _logger;
+
+    /// <summary>
+    /// 핀 고정 상태 저장 파일 경로
+    /// </summary>
+    private static readonly string PinnedPlansFilePath = Path.Combine(
+        Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
+        "mailX", "pinned_plans.json");
 
     /// <summary>
     /// 플랜 목록
@@ -97,20 +106,80 @@ public partial class PlannerViewModel : ViewModelBase
         {
             var plans = await _plannerService.GetAllPlansAsync();
 
+            // 저장된 핀 목록 로드
+            var pinnedPlanIds = LoadPinnedPlanIds();
+
             Plans.Clear();
+            PinnedPlans.Clear();
+
             foreach (var plan in plans.OrderBy(p => p.Title))
             {
-                Plans.Add(new PlanItemViewModel
+                var isPinned = pinnedPlanIds.Contains(plan.Id ?? string.Empty);
+                var planVm = new PlanItemViewModel
                 {
                     Id = plan.Id ?? string.Empty,
                     Title = plan.Title ?? "Untitled",
                     CreatedDateTime = plan.CreatedDateTime?.DateTime,
-                    OwnerId = plan.Owner
-                });
+                    OwnerId = plan.Owner,
+                    IsPinned = isPinned
+                };
+
+                Plans.Add(planVm);
+
+                // 핀 고정된 플랜은 PinnedPlans에도 추가
+                if (isPinned)
+                {
+                    PinnedPlans.Add(planVm);
+                }
             }
 
-            _logger.Information("플랜 목록 로드 완료: {Count}개", Plans.Count);
+            _logger.Information("플랜 목록 로드 완료: {Count}개, 핀 고정: {PinnedCount}개", Plans.Count, PinnedPlans.Count);
         }, "플랜 목록 로드 실패");
+    }
+
+    /// <summary>
+    /// 핀 고정된 플랜 ID 목록 로드
+    /// </summary>
+    private HashSet<string> LoadPinnedPlanIds()
+    {
+        try
+        {
+            if (File.Exists(PinnedPlansFilePath))
+            {
+                var json = File.ReadAllText(PinnedPlansFilePath);
+                var ids = JsonSerializer.Deserialize<List<string>>(json);
+                return ids != null ? new HashSet<string>(ids) : new HashSet<string>();
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.Warning(ex, "핀 고정 목록 로드 실패");
+        }
+        return new HashSet<string>();
+    }
+
+    /// <summary>
+    /// 핀 고정된 플랜 ID 목록 저장
+    /// </summary>
+    public void SavePinnedPlanIds()
+    {
+        try
+        {
+            var directory = Path.GetDirectoryName(PinnedPlansFilePath);
+            if (!string.IsNullOrEmpty(directory) && !Directory.Exists(directory))
+            {
+                Directory.CreateDirectory(directory);
+            }
+
+            var pinnedIds = PinnedPlans.Select(p => p.Id).ToList();
+            var json = JsonSerializer.Serialize(pinnedIds, new JsonSerializerOptions { WriteIndented = true });
+            File.WriteAllText(PinnedPlansFilePath, json);
+            _logger.Debug("핀 고정 목록 저장: {Count}개", pinnedIds.Count);
+        }
+        catch (Exception ex)
+        {
+            _logger.Warning(ex, "핀 고정 목록 저장 실패");
+        }
     }
 
     /// <summary>
@@ -538,6 +607,27 @@ public partial class PlannerViewModel : ViewModelBase
     }
 
     /// <summary>
+    /// 작업 완료로 표시 (100%)
+    /// </summary>
+    [RelayCommand]
+    public async Task CompleteTaskAsync(TaskItemViewModel task)
+    {
+        if (task == null || string.IsNullOrEmpty(task.ETag)) return;
+        if (task.PercentComplete == 100) return; // 이미 완료됨
+
+        await ExecuteAsync(async () =>
+        {
+            var updated = await _plannerService.UpdateTaskPercentCompleteAsync(task.Id, task.ETag, 100);
+            if (updated != null)
+            {
+                task.PercentComplete = 100;
+                task.ETag = updated.AdditionalData?.TryGetValue("@odata.etag", out var etag) == true ? etag?.ToString() : task.ETag;
+                _logger.Information("작업 완료 처리: {Title}", task.Title);
+            }
+        }, "작업 완료 처리 실패");
+    }
+
+    /// <summary>
     /// 작업 삭제
     /// </summary>
     [RelayCommand]
@@ -636,6 +726,9 @@ public partial class PlanItemViewModel : ObservableObject
 
     [ObservableProperty]
     private bool _isPinned;
+
+    [ObservableProperty]
+    private bool _isSelected;
 }
 
 /// <summary>
@@ -845,6 +938,12 @@ public partial class TaskItemViewModel : ObservableObject
     /// 라벨 있음 여부
     /// </summary>
     public bool HasCategories => AppliedCategories.Count > 0;
+
+    /// <summary>
+    /// 선택 상태
+    /// </summary>
+    [ObservableProperty]
+    private bool _isSelected;
 }
 
 /// <summary>

@@ -4293,7 +4293,9 @@
         <Border x:Name="PlannerViewBorder"
                 Grid.Column="1" Grid.ColumnSpan="7"
                 Visibility="Collapsed"
-                Background="{DynamicResource ApplicationBackgroundBrush}">
+                Background="{DynamicResource ApplicationBackgroundBrush}"
+                Focusable="True"
+                KeyDown="PlannerView_KeyDown">
             <Grid>
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="280" MinWidth="200" MaxWidth="400"/>
@@ -4385,6 +4387,7 @@
                                             <Style TargetType="ListBoxItem" BasedOn="{StaticResource {x:Type ListBoxItem}}">
                                                 <Setter Property="Padding" Value="12,8"/>
                                                 <Setter Property="Margin" Value="0,0,0,2"/>
+                                                <Setter Property="IsSelected" Value="{Binding IsSelected, Mode=TwoWay}"/>
                                             </Style>
                                         </ListBox.ItemContainerStyle>
                                         <ListBox.ItemTemplate>
@@ -4433,6 +4436,7 @@
                                                 <Style TargetType="ListBoxItem" BasedOn="{StaticResource {x:Type ListBoxItem}}">
                                                     <Setter Property="Padding" Value="12,8"/>
                                                     <Setter Property="Margin" Value="0,0,0,2"/>
+                                                    <Setter Property="IsSelected" Value="{Binding IsSelected, Mode=TwoWay}"/>
                                                 </Style>
                                             </ListBox.ItemContainerStyle>
                                             <ListBox.ItemTemplate>
@@ -4606,12 +4610,12 @@
                                             </Border>
 
                                             <!-- 작업 목록 (스크롤 가능, 전체 높이 사용) -->
-                                            <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto" Padding="0,0,2,0">
+                                            <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto" Padding="0,0,8,0">
                                                 <ItemsControl ItemsSource="{Binding Tasks}">
                                                     <ItemsControl.ItemTemplate>
                                                         <DataTemplate>
                                                             <!-- 작업 카드 -->
-                                                            <Border Background="{DynamicResource CardBackgroundFillColorDefaultBrush}"
+                                                            <Border x:Name="TaskCardBorder"
                                                                     CornerRadius="8" Margin="0,0,0,8"
                                                                     BorderBrush="{DynamicResource ControlElevationBorderBrush}"
                                                                     BorderThickness="1"
@@ -4620,6 +4624,35 @@
                                                                     PreviewMouseLeftButtonDown="PlannerTaskCard_PreviewMouseLeftButtonDown"
                                                                     PreviewMouseMove="PlannerTaskCard_PreviewMouseMove"
                                                                     MouseLeftButtonUp="PlannerTaskCard_MouseLeftButtonUp">
+                                                                <!-- 우클릭 컨텍스트 메뉴 -->
+                                                                <Border.ContextMenu>
+                                                                    <ContextMenu>
+                                                                        <MenuItem Header="열기" Click="PlannerTaskContextMenu_Open_Click"/>
+                                                                        <Separator/>
+                                                                        <MenuItem Header="완료로 표시" Click="PlannerTaskContextMenu_Complete_Click"/>
+                                                                        <Separator/>
+                                                                        <MenuItem Header="삭제" Click="PlannerTaskContextMenu_Delete_Click"
+                                                                                  InputGestureText="Delete"
+                                                                                  Foreground="#D13438"/>
+                                                                    </ContextMenu>
+                                                                </Border.ContextMenu>
+                                                                <Border.Style>
+                                                                    <Style TargetType="Border">
+                                                                        <Setter Property="Background" Value="{DynamicResource CardBackgroundFillColorDefaultBrush}"/>
+                                                                        <Style.Triggers>
+                                                                            <!-- 마우스 오버 시 배경색 변화 -->
+                                                                            <Trigger Property="IsMouseOver" Value="True">
+                                                                                <Setter Property="Background" Value="{DynamicResource ControlFillColorSecondaryBrush}"/>
+                                                                            </Trigger>
+                                                                            <!-- 선택 상태일 때 배경색 - 더 명확한 색상 -->
+                                                                            <DataTrigger Binding="{Binding IsSelected}" Value="True">
+                                                                                <Setter Property="Background" Value="#2D5016"/>
+                                                                                <Setter Property="BorderBrush" Value="{StaticResource PlannerAccentBrush}"/>
+                                                                                <Setter Property="BorderThickness" Value="2"/>
+                                                                            </DataTrigger>
+                                                                        </Style.Triggers>
+                                                                    </Style>
+                                                                </Border.Style>
                                                                 <Grid Margin="12">
                                                                     <Grid.RowDefinitions>
                                                                         <RowDefinition Height="Auto"/>

@@ -7533,13 +7533,25 @@ public partial class MainWindow : FluentWindow
     /// </summary>
     private async void PlannerListBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
     {
+        if (_plannerViewModel == null)
+        {
+            _plannerViewModel = ((App)Application.Current).GetService<PlannerViewModel>()!;
+        }
+
+        // 이전 선택 해제
+        foreach (var item in e.RemovedItems.OfType<PlanItemViewModel>())
+        {
+            item.IsSelected = false;
+        }
+
+        // 새 선택 설정
+        foreach (var item in e.AddedItems.OfType<PlanItemViewModel>())
+        {
+            item.IsSelected = true;
+        }
+
         if (PlannerListBox.SelectedItem is PlanItemViewModel selectedPlan)
         {
-            if (_plannerViewModel == null)
-            {
-                _plannerViewModel = ((App)Application.Current).GetService<PlannerViewModel>()!;
-            }
-
             await _plannerViewModel.SelectPlanAsync(selectedPlan);
 
             // 칸반 보드 표시
@@ -7586,18 +7598,20 @@ public partial class MainWindow : FluentWindow
     /// </summary>
     private void PlannerPinnedPlanItem_SelectionChanged(object sender, SelectionChangedEventArgs e)
     {
-        if (sender is ListBox listBox && listBox.SelectedItem is PlanItemViewModel plan)
+        // 고정 목록에서 선택 시 내 플랜 목록도 동기화
+        if (e.AddedItems.Count > 0 && e.AddedItems[0] is PlanItemViewModel plan)
         {
             if (_plannerViewModel == null)
             {
                 _plannerViewModel = ((App)Application.Current).GetService<PlannerViewModel>()!;
             }
 
-            // 해당 플랜 선택 (내 플랜 목록에서)
-            PlannerListBox.SelectedItem = _plannerViewModel.Plans.FirstOrDefault(p => p.Id == plan.Id);
-
-            // 고정 목록 선택 해제 (내 플랜 목록에서 선택되도록)
-            listBox.SelectedItem = null;
+            // 해당 플랜 선택 (내 플랜 목록에서) - 이렇게 하면 IsSelected가 true로 설정됨
+            var planInList = _plannerViewModel.Plans.FirstOrDefault(p => p.Id == plan.Id);
+            if (planInList != null)
+            {
+                PlannerListBox.SelectedItem = planInList;
+            }
         }
     }
 
@@ -7646,6 +7660,9 @@ public partial class MainWindow : FluentWindow
             PlannerPinnedExpander.Visibility = _plannerViewModel.PinnedPlans.Count > 0
                 ? Visibility.Visible
                 : Visibility.Collapsed;
+
+            // 핀 상태 저장
+            _plannerViewModel.SavePinnedPlanIds();
         }
     }
 
@@ -7834,13 +7851,21 @@ public partial class MainWindow : FluentWindow
     }
 
     /// <summary>
-    /// 작업 카드 드래그 시작
+    /// 작업 카드 드래그 시작 및 더블클릭 감지
     /// </summary>
-    private void PlannerTaskCard_PreviewMouseLeftButtonDown(object sender, MouseButtonEventArgs e)
+    private async void PlannerTaskCard_PreviewMouseLeftButtonDown(object sender, MouseButtonEventArgs e)
     {
         _plannerTaskDragStartPoint = e.GetPosition(null);
         if (sender is FrameworkElement element && element.Tag is TaskItemViewModel task)
         {
+            // 더블클릭 감지
+            if (e.ClickCount == 2)
+            {
+                await ShowTaskEditDialogAsync(task);
+                e.Handled = true;
+                return;
+            }
+
             _plannerDraggedTask = task;
             _plannerDragSourceBucket = _plannerViewModel?.Buckets.FirstOrDefault(b => b.Tasks.Contains(task));
         }
@@ -7869,14 +7894,140 @@ public partial class MainWindow : FluentWindow
     }
 
     /// <summary>
-    /// 작업 카드 클릭 (드래그가 아닌 경우)
+    /// 작업 카드 클릭 (선택)
     /// </summary>
-    private async void PlannerTaskCard_MouseLeftButtonUp(object sender, MouseButtonEventArgs e)
+    private void PlannerTaskCard_MouseLeftButtonUp(object sender, MouseButtonEventArgs e)
     {
-        // 드래그 중이 아닌 경우에만 상세 다이얼로그 표시
+        // 드래그 중이 아닌 경우에만 카드 선택
         if (!_plannerIsDragging && sender is FrameworkElement element && element.Tag is TaskItemViewModel task)
         {
-            await ShowTaskEditDialogAsync(task);
+            SelectPlannerTask(task);
+        }
+    }
+
+    /// <summary>
+    /// 작업 카드 선택
+    /// </summary>
+    private void SelectPlannerTask(TaskItemViewModel task)
+    {
+        if (_plannerViewModel == null)
+            return;
+
+        // 모든 버킷의 모든 태스크 선택 해제
+        foreach (var bucket in _plannerViewModel.Buckets)
+        {
+            foreach (var t in bucket.Tasks)
+            {
+                t.IsSelected = false;
+            }
+        }
+
+        // 선택한 태스크만 선택 상태로
+        task.IsSelected = true;
+
+        // 포커스를 플래너 뷰로 이동 (Delete 키 이벤트 수신용)
+        PlannerViewBorder.Focus();
+    }
+
+    /// <summary>
+    /// 현재 선택된 작업 가져오기
+    /// </summary>
+    private TaskItemViewModel? GetSelectedPlannerTask()
+    {
+        if (_plannerViewModel == null)
+            return null;
+
+        foreach (var bucket in _plannerViewModel.Buckets)
+        {
+            var selected = bucket.Tasks.FirstOrDefault(t => t.IsSelected);
+            if (selected != null)
+                return selected;
+        }
+        return null;
+    }
+
+    /// <summary>
+    /// 플래너 뷰 키보드 이벤트 (Delete 키 등)
+    /// </summary>
+    private async void PlannerView_KeyDown(object sender, KeyEventArgs e)
+    {
+        if (e.Key == Key.Delete)
+        {
+            var selectedTask = GetSelectedPlannerTask();
+            if (selectedTask != null)
+            {
+                await DeletePlannerTaskWithConfirmAsync(selectedTask);
+            }
+        }
+    }
+
+    /// <summary>
+    /// 컨텍스트 메뉴 - 열기
+    /// </summary>
+    private async void PlannerTaskContextMenu_Open_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is System.Windows.Controls.MenuItem menuItem && menuItem.Parent is ContextMenu contextMenu)
+        {
+            if (contextMenu.PlacementTarget is Border border && border.Tag is TaskItemViewModel task)
+            {
+                await ShowTaskEditDialogAsync(task);
+            }
+        }
+    }
+
+    /// <summary>
+    /// 컨텍스트 메뉴 - 완료로 표시
+    /// </summary>
+    private async void PlannerTaskContextMenu_Complete_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is System.Windows.Controls.MenuItem menuItem && menuItem.Parent is ContextMenu contextMenu)
+        {
+            if (contextMenu.PlacementTarget is Border border && border.Tag is TaskItemViewModel task)
+            {
+                if (_plannerViewModel != null)
+                {
+                    await _plannerViewModel.CompleteTaskAsync(task);
+                }
+            }
+        }
+    }
+
+    /// <summary>
+    /// 컨텍스트 메뉴 - 삭제
+    /// </summary>
+    private async void PlannerTaskContextMenu_Delete_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is System.Windows.Controls.MenuItem menuItem && menuItem.Parent is ContextMenu contextMenu)
+        {
+            if (contextMenu.PlacementTarget is Border border && border.Tag is TaskItemViewModel task)
+            {
+                await DeletePlannerTaskWithConfirmAsync(task);
+            }
+        }
+    }
+
+    /// <summary>
+    /// 작업 삭제 확인 후 삭제
+    /// </summary>
+    private async Task DeletePlannerTaskWithConfirmAsync(TaskItemViewModel task)
+    {
+        var dialog = new ContentDialog
+        {
+            Title = "작업 삭제",
+            Content = $"'{task.Title}' 작업을 삭제하시겠습니까?\n\n이 작업은 영구적으로 삭제되며 복구할 수 없습니다.",
+            PrimaryButtonText = "삭제",
+            CloseButtonText = "취소",
+            DefaultButton = ContentDialogButton.Close
+        };
+
+        var result = await dialog.ShowAsync();
+        if (result == ContentDialogResult.Primary)
+        {
+            if (_plannerViewModel != null)
+            {
+                await _plannerViewModel.DeleteTaskAsync(task);
+                Log4.Info($"[DeletePlannerTaskWithConfirmAsync] 작업 '{task.Title}' 삭제됨");
+            }
         }
     }
 
