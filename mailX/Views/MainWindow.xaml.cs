@@ -8196,6 +8196,11 @@ public partial class MainWindow : FluentWindow
             PlannerListBox.ItemsSource = _plannerViewModel.Plans;
             PlannerPinnedPlansItemsControl.ItemsSource = _plannerViewModel.PinnedPlans;
 
+            // 고정 섹션 표시/숨김
+            PlannerPinnedExpander.Visibility = _plannerViewModel.PinnedPlans.Count > 0
+                ? Visibility.Visible
+                : Visibility.Collapsed;
+
             // Empty state 처리
             if (_plannerViewModel.Plans.Count == 0)
             {
