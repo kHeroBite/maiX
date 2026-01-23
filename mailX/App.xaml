@@ -42,6 +42,7 @@
             <!-- Planner 컨버터 -->
             <converters:BoolToStrikethroughConverter x:Key="BoolToStrikethroughConverter"/>
             <converters:DueStatusToBackgroundConverter x:Key="DueStatusToBackgroundConverter"/>
+            <converters:DueStatusToForegroundConverter x:Key="DueStatusToForegroundConverter"/>
             <!-- 채팅 시간 표시 컨버터 -->
             <converters:DateTimeToRelativeTimeConverter x:Key="DateTimeToRelativeTimeConverter"/>
 

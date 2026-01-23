@@ -453,6 +453,18 @@ public partial class App : Application
                             });
                         };
 
+                        // Planner 플랜 선택 이벤트 연결
+                        _restApiServer.PlannerPlanSelectRequested += (sender, index) =>
+                        {
+                            Dispatcher.Invoke(() =>
+                            {
+                                if (mainWindow is Views.MainWindow mw)
+                                {
+                                    mw.SelectPlannerPlanByIndex(index);
+                                }
+                            });
+                        };
+
                         _restApiServer.Start();
                     }
                     catch (Exception apiEx)

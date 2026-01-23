@@ -77,6 +77,11 @@ public class RestApiServer
     public event EventHandler<string>? NavigateRequested;
 
     /// <summary>
+    /// Planner 플랜 선택 요청 이벤트
+    /// </summary>
+    public event EventHandler<int>? PlannerPlanSelectRequested;
+
+    /// <summary>
     /// 지원하는 탭 목록
     /// </summary>
     private static readonly string[] ValidTabs = new[]
@@ -261,6 +266,19 @@ public class RestApiServer
                     {
                         var tab = path.Substring("/api/navigate/".Length).ToLowerInvariant();
                         HandleNavigate(tab, response);
+                    }
+                    // 동적 경로 매칭: /api/planner/select/{index}
+                    else if (method == "POST" && path.StartsWith("/api/planner/select/"))
+                    {
+                        var indexStr = path.Substring("/api/planner/select/".Length);
+                        if (int.TryParse(indexStr, out int index))
+                        {
+                            HandlePlannerSelect(index, response);
+                        }
+                        else
+                        {
+                            SendResponse(response, 400, new { error = "Invalid index", path = path });
+                        }
                     }
                     else
                     {
@@ -772,6 +790,33 @@ public class RestApiServer
         catch (Exception ex)
         {
             SendResponse(response, 500, new { error = "현재 탭 조회 실패", message = ex.Message });
+        }
+    }
+
+    /// <summary>
+    /// POST /api/planner/select/{index} - Planner 플랜 선택
+    /// </summary>
+    private void HandlePlannerSelect(int index, HttpListenerResponse response)
+    {
+        try
+        {
+            Log4.Info($"[RestAPI] Planner 플랜 선택 요청: 인덱스 {index}");
+
+            // UI 스레드에서 플랜 선택 실행
+            _app.Dispatcher.Invoke(() =>
+            {
+                PlannerPlanSelectRequested?.Invoke(this, index);
+            });
+
+            SendResponse(response, 200, new
+            {
+                message = "Planner plan selection requested",
+                index = index
+            });
+        }
+        catch (Exception ex)
+        {
+            SendResponse(response, 500, new { error = "플랜 선택 실패", message = ex.Message });
         }
     }
 

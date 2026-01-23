@@ -307,6 +307,24 @@ namespace mailX.Services.Graph
         }
 
         /// <summary>
+        /// 인증된 HttpClient 생성 (Beta API 등 직접 호출용)
+        /// </summary>
+        /// <returns>Authorization 헤더가 설정된 HttpClient</returns>
+        public System.Net.Http.HttpClient GetHttpClient()
+        {
+            if (!IsLoggedIn)
+            {
+                throw new InvalidOperationException("로그인이 필요합니다.");
+            }
+
+            var httpClient = new System.Net.Http.HttpClient();
+            var token = GetAccessTokenAsync().GetAwaiter().GetResult();
+            httpClient.DefaultRequestHeaders.Authorization =
+                new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", token);
+            return httpClient;
+        }
+
+        /// <summary>
         /// 현재 액세스 토큰 반환 (자동 갱신)
         /// </summary>
         private async Task<string> GetAccessTokenAsync()

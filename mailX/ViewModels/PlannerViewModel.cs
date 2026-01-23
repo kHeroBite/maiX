@@ -1,11 +1,14 @@
 using System;
+using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Linq;
 using System.Threading.Tasks;
+using System.Windows.Media;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Microsoft.Graph.Models;
 using mailX.Services.Graph;
+using mailX.Utils;
 using Serilog;
 
 namespace mailX.ViewModels;
@@ -50,7 +53,7 @@ public partial class PlannerViewModel : ViewModelBase
     private TaskItemViewModel? _selectedTask;
 
     /// <summary>
-    /// 현재 뷰 모드 (board, list)
+    /// 현재 뷰 모드 (board, list, myDay, myTasks)
     /// </summary>
     [ObservableProperty]
     private string _viewMode = "board";
@@ -59,6 +62,24 @@ public partial class PlannerViewModel : ViewModelBase
     /// 플랜이 선택되었는지
     /// </summary>
     public bool HasSelectedPlan => SelectedPlan != null;
+
+    /// <summary>
+    /// 현재 플랜의 카테고리(라벨) 정의
+    /// </summary>
+    [ObservableProperty]
+    private ObservableCollection<PlanCategoryViewModel> _planCategories = new();
+
+    /// <summary>
+    /// 고정된 플랜 목록
+    /// </summary>
+    [ObservableProperty]
+    private ObservableCollection<PlanItemViewModel> _pinnedPlans = new();
+
+    /// <summary>
+    /// 나의 하루 작업 목록
+    /// </summary>
+    [ObservableProperty]
+    private ObservableCollection<TaskItemViewModel> _myDayTasks = new();
 
     public PlannerViewModel(GraphPlannerService plannerService)
     {
@@ -131,10 +152,32 @@ public partial class PlannerViewModel : ViewModelBase
     {
         await ExecuteAsync(async () =>
         {
+            // 플랜 카테고리(라벨) 로드
+            var categories = await _plannerService.GetPlanCategoriesAsync(planId);
+            PlanCategories.Clear();
+            foreach (var category in categories)
+            {
+                PlanCategories.Add(category);
+            }
+
             // 버킷 로드
             var buckets = await _plannerService.GetBucketsAsync(planId);
-            // 작업 로드
-            var tasks = await _plannerService.GetTasksAsync(planId);
+            // 작업 로드 (라벨, 담당자 포함)
+            var taskList = (await _plannerService.GetTasksWithDetailsAsync(planId)).ToList();
+
+            // 모든 작업에서 담당자 userId 수집
+            var allUserIds = taskList
+                .SelectMany(t => GetTaskAssigneeIds(t))
+                .Distinct()
+                .ToList();
+
+            // 일괄로 사용자 이름 조회 (Graph API)
+            var userNames = allUserIds.Count > 0
+                ? await _plannerService.GetUserDisplayNamesAsync(allUserIds)
+                : new Dictionary<string, string>();
+
+            // 모든 담당자 ViewModel 목록 (사진 로드용)
+            var allAssigneeVms = new List<TaskAssigneeViewModel>();
 
             Buckets.Clear();
 
@@ -150,20 +193,276 @@ public partial class PlannerViewModel : ViewModelBase
                 };
 
                 // 해당 버킷의 작업 추가
-                var bucketTasks = tasks.Where(t => t.BucketId == bucket.Id)
+                var bucketTasks = taskList.Where(t => t.BucketId == bucket.Id)
                     .OrderBy(t => t.OrderHint);
 
                 foreach (var task in bucketTasks)
                 {
-                    bucketVm.Tasks.Add(CreateTaskViewModel(task));
+                    var taskVm = CreateTaskViewModel(task);
+                    // 라벨 정보 매핑
+                    MapTaskCategories(taskVm, task, categories);
+                    // 담당자 정보 매핑 (조회한 이름 사용)
+                    var taskUserIds = GetTaskAssigneeIds(task);
+                    ApplyAssigneesToTask(taskVm, taskUserIds, userNames);
+                    // 담당자 ViewModel 수집
+                    allAssigneeVms.AddRange(taskVm.Assignees);
+                    bucketVm.Tasks.Add(taskVm);
                 }
 
                 Buckets.Add(bucketVm);
             }
 
-            _logger.Debug("플랜 {PlanId} 로드: {BucketCount}개 버킷, {TaskCount}개 작업",
-                planId, Buckets.Count, tasks.Count());
+            // 기한이 있는 작업 수 로깅
+            var tasksWithDueDate = taskList.Where(t => t.DueDateTime != null).ToList();
+            Log4.Debug($"[PlannerViewModel] 플랜 로드: {Buckets.Count}개 버킷, {taskList.Count}개 작업, {userNames.Count}명 담당자, 기한설정 {tasksWithDueDate.Count}개");
+
+            // 기한이 있는 작업 상세 로깅
+            foreach (var task in tasksWithDueDate)
+            {
+                var bucketName = buckets.FirstOrDefault(b => b.Id == task.BucketId)?.Name ?? "Unknown";
+                Log4.Debug($"[PlannerViewModel] 기한 있는 작업: '{task.Title}' (버킷: {bucketName}, 기한: {task.DueDateTime?.DateTime:yyyy-MM-dd})");
+            }
+
+            // 백그라운드에서 프로필 사진 로드
+            if (allUserIds.Count > 0)
+            {
+                _ = LoadAssigneePhotosAsync(allUserIds, allAssigneeVms);
+            }
         }, "버킷/작업 로드 실패");
+    }
+
+    /// <summary>
+    /// 담당자 프로필 사진 비동기 로드
+    /// </summary>
+    private async Task LoadAssigneePhotosAsync(List<string> userIds, List<TaskAssigneeViewModel> assigneeVms)
+    {
+        try
+        {
+            if (userIds == null || userIds.Count == 0 || assigneeVms == null || assigneeVms.Count == 0)
+                return;
+
+            var photos = await _plannerService.GetUserPhotosAsync(userIds);
+
+            if (photos == null || photos.Count == 0)
+                return;
+
+            // UI 스레드에서 사진 업데이트
+            var app = System.Windows.Application.Current;
+            if (app == null)
+                return;
+
+            await app.Dispatcher.InvokeAsync(() =>
+            {
+                try
+                {
+                    foreach (var assignee in assigneeVms)
+                    {
+                        if (assignee != null &&
+                            !string.IsNullOrEmpty(assignee.UserId) &&
+                            photos.TryGetValue(assignee.UserId, out var photo) &&
+                            !string.IsNullOrEmpty(photo))
+                        {
+                            assignee.PhotoBase64 = photo;
+                        }
+                    }
+                }
+                catch (Exception innerEx)
+                {
+                    _logger.Warning(innerEx, "UI 스레드에서 사진 업데이트 실패");
+                }
+            });
+
+            _logger.Debug("담당자 프로필 사진 로드 완료: {PhotoCount}개", photos.Values.Count(p => !string.IsNullOrEmpty(p)));
+        }
+        catch (Exception ex)
+        {
+            _logger.Warning(ex, "담당자 프로필 사진 로드 실패");
+        }
+    }
+
+    /// <summary>
+    /// 작업에 적용된 카테고리(라벨) 매핑
+    /// </summary>
+    private void MapTaskCategories(TaskItemViewModel taskVm, PlannerTask task, List<PlanCategoryViewModel> categories)
+    {
+        if (task.AppliedCategories == null)
+        {
+            return;
+        }
+
+        var appliedCategories = task.AppliedCategories.AdditionalData;
+        if (appliedCategories == null || appliedCategories.Count == 0)
+        {
+            return;
+        }
+
+        foreach (var kvp in appliedCategories)
+        {
+            // bool 또는 JsonElement로 올 수 있음
+            bool applied = false;
+            if (kvp.Value is bool boolValue)
+            {
+                applied = boolValue;
+            }
+            else if (kvp.Value is System.Text.Json.JsonElement jsonElement)
+            {
+                applied = jsonElement.ValueKind == System.Text.Json.JsonValueKind.True;
+            }
+
+            if (applied)
+            {
+                // 플랜에 정의된 카테고리 찾기
+                var category = categories.FirstOrDefault(c =>
+                    c.CategoryId.Equals(kvp.Key, StringComparison.OrdinalIgnoreCase));
+
+                if (category != null)
+                {
+                    // 플랜에 정의된 카테고리 사용
+                    taskVm.AppliedCategories.Add(new AppliedCategoryViewModel
+                    {
+                        CategoryId = category.CategoryId,
+                        Name = category.Name,
+                        Color = category.Color
+                    });
+                }
+                else
+                {
+                    // 플랜에 정의되지 않은 카테고리도 기본 색상으로 표시
+                    var categoryId = kvp.Key;
+                    taskVm.AppliedCategories.Add(new AppliedCategoryViewModel
+                    {
+                        CategoryId = categoryId,
+                        Name = GetCategoryDisplayName(categoryId),
+                        Color = PlanCategoryViewModel.GetDefaultColor(categoryId)
+                    });
+                }
+            }
+        }
+    }
+
+    /// <summary>
+    /// 카테고리 ID에서 표시 이름 생성
+    /// </summary>
+    private static string GetCategoryDisplayName(string categoryId)
+    {
+        // "category7" -> "라벨 7"
+        if (categoryId.StartsWith("category", StringComparison.OrdinalIgnoreCase) &&
+            int.TryParse(categoryId.Substring(8), out int num))
+        {
+            return $"라벨 {num}";
+        }
+        return categoryId;
+    }
+
+    /// <summary>
+    /// 작업 담당자 매핑 (userId만 수집)
+    /// </summary>
+    private List<string> GetTaskAssigneeIds(PlannerTask task)
+    {
+        var userIds = new List<string>();
+        if (task.Assignments == null) return userIds;
+
+        var assignments = task.Assignments.AdditionalData;
+        if (assignments == null) return userIds;
+
+        foreach (var kvp in assignments)
+        {
+            // userId가 키로 들어옴
+            userIds.Add(kvp.Key);
+        }
+        return userIds;
+    }
+
+    /// <summary>
+    /// 작업 담당자 매핑 (이름 적용)
+    /// </summary>
+    private void ApplyAssigneesToTask(TaskItemViewModel taskVm, List<string> userIds, Dictionary<string, string> userNames)
+    {
+        foreach (var userId in userIds)
+        {
+            var displayName = userNames.TryGetValue(userId, out var name) ? name : userId[..Math.Min(8, userId.Length)];
+            taskVm.Assignees.Add(new TaskAssigneeViewModel
+            {
+                UserId = userId,
+                DisplayName = displayName
+            });
+        }
+    }
+
+    /// <summary>
+    /// 작업을 다른 버킷으로 이동
+    /// </summary>
+    public async Task<bool> MoveTaskToBucketAsync(TaskItemViewModel task, string targetBucketId)
+    {
+        if (task == null || string.IsNullOrEmpty(task.ETag) || string.IsNullOrEmpty(targetBucketId))
+            return false;
+
+        try
+        {
+            var updated = await _plannerService.MoveTaskToBucketAsync(task.Id, task.ETag, targetBucketId);
+            if (updated != null)
+            {
+                task.BucketId = targetBucketId;
+                task.ETag = updated.AdditionalData?.TryGetValue("@odata.etag", out var etag) == true ? etag?.ToString() : task.ETag;
+                _logger.Information("작업 버킷 이동 완료: {Title} -> {BucketId}", task.Title, targetBucketId);
+                return true;
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.Error(ex, "작업 버킷 이동 실패: {TaskId}", task.Id);
+        }
+        return false;
+    }
+
+    /// <summary>
+    /// 작업 순서 변경
+    /// </summary>
+    public async Task<bool> ReorderTaskAsync(TaskItemViewModel task, string newOrderHint)
+    {
+        if (task == null || string.IsNullOrEmpty(task.ETag))
+            return false;
+
+        try
+        {
+            var updated = await _plannerService.UpdateTaskOrderHintAsync(task.Id, task.ETag, newOrderHint);
+            if (updated != null)
+            {
+                task.OrderHint = newOrderHint;
+                task.ETag = updated.AdditionalData?.TryGetValue("@odata.etag", out var etag) == true ? etag?.ToString() : task.ETag;
+                _logger.Debug("작업 순서 변경 완료: {Title}", task.Title);
+                return true;
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.Error(ex, "작업 순서 변경 실패: {TaskId}", task.Id);
+        }
+        return false;
+    }
+
+    /// <summary>
+    /// 나의 하루 작업 로드
+    /// </summary>
+    [RelayCommand]
+    public async Task LoadMyDayTasksAsync()
+    {
+        await ExecuteAsync(async () =>
+        {
+            var today = DateTime.Today;
+            var tasks = await _plannerService.GetMyTasksAsync();
+
+            MyDayTasks.Clear();
+            foreach (var task in tasks
+                .Where(t => t.DueDateTime?.DateTime.Date == today || t.StartDateTime?.DateTime.Date == today)
+                .OrderBy(t => t.DueDateTime))
+            {
+                MyDayTasks.Add(CreateTaskViewModel(task));
+            }
+
+            ViewMode = "myDay";
+            _logger.Information("나의 하루 작업 로드 완료: {Count}개", MyDayTasks.Count);
+        }, "나의 하루 작업 로드 실패");
     }
 
     /// <summary>
@@ -289,7 +588,12 @@ public partial class PlannerViewModel : ViewModelBase
     /// </summary>
     private TaskItemViewModel CreateTaskViewModel(PlannerTask task)
     {
-        return new TaskItemViewModel
+        // DateTimeOffset? 타입을 DateTime?으로 명시적 변환
+        DateTime? dueDateTime = task.DueDateTime.HasValue ? task.DueDateTime.Value.DateTime : (DateTime?)null;
+        DateTime? startDateTime = task.StartDateTime.HasValue ? task.StartDateTime.Value.DateTime : (DateTime?)null;
+        DateTime? createdDateTime = task.CreatedDateTime.HasValue ? task.CreatedDateTime.Value.DateTime : (DateTime?)null;
+
+        var vm = new TaskItemViewModel
         {
             Id = task.Id ?? string.Empty,
             Title = task.Title ?? "Untitled",
@@ -297,13 +601,16 @@ public partial class PlannerViewModel : ViewModelBase
             PlanId = task.PlanId ?? string.Empty,
             PercentComplete = task.PercentComplete ?? 0,
             Priority = task.Priority ?? 5,
-            DueDateTime = task.DueDateTime?.DateTime,
-            CreatedDateTime = task.CreatedDateTime?.DateTime,
+            DueDateTime = dueDateTime,
+            StartDateTime = startDateTime,
+            CreatedDateTime = createdDateTime,
             HasDescription = task.HasDescription ?? false,
             ChecklistItemCount = task.ChecklistItemCount ?? 0,
             ActiveChecklistItemCount = task.ActiveChecklistItemCount ?? 0,
             ETag = task.AdditionalData?.TryGetValue("@odata.etag", out var etag) == true ? etag?.ToString() : null
         };
+
+        return vm;
     }
 }
 
@@ -326,6 +633,9 @@ public partial class PlanItemViewModel : ObservableObject
 
     [ObservableProperty]
     private int _taskCount;
+
+    [ObservableProperty]
+    private bool _isPinned;
 }
 
 /// <summary>
@@ -379,10 +689,19 @@ public partial class TaskItemViewModel : ObservableObject
     private DateTime? _dueDateTime;
 
     [ObservableProperty]
+    private DateTime? _startDateTime;
+
+    [ObservableProperty]
     private DateTime? _createdDateTime;
 
     [ObservableProperty]
     private bool _hasDescription;
+
+    /// <summary>
+    /// 메모 내용
+    /// </summary>
+    [ObservableProperty]
+    private string? _notes;
 
     [ObservableProperty]
     private int _checklistItemCount;
@@ -392,6 +711,24 @@ public partial class TaskItemViewModel : ObservableObject
 
     [ObservableProperty]
     private string? _eTag;
+
+    /// <summary>
+    /// 작업 순서 힌트 (드래그앤드롭용)
+    /// </summary>
+    [ObservableProperty]
+    private string _orderHint = string.Empty;
+
+    /// <summary>
+    /// 적용된 라벨(카테고리) 목록
+    /// </summary>
+    [ObservableProperty]
+    private ObservableCollection<AppliedCategoryViewModel> _appliedCategories = new();
+
+    /// <summary>
+    /// 담당자 목록
+    /// </summary>
+    [ObservableProperty]
+    private ObservableCollection<TaskAssigneeViewModel> _assignees = new();
 
     /// <summary>
     /// 완료 여부
@@ -409,15 +746,15 @@ public partial class TaskItemViewModel : ObservableObject
     public string PriorityDisplay => GraphPlannerService.GetPriorityDisplay(Priority);
 
     /// <summary>
-    /// 우선순위 색상
+    /// 우선순위 색상 (Brush)
     /// </summary>
-    public string PriorityColor => Priority switch
+    public SolidColorBrush PriorityColor => Priority switch
     {
-        1 => "#D13438", // 긴급
-        3 => "#C239B3", // 중요
-        5 => "#0078D4", // 중간
-        9 => "#808080", // 낮음
-        _ => "#0078D4"
+        1 => new SolidColorBrush((Color)ColorConverter.ConvertFromString("#D13438")), // 긴급
+        3 => new SolidColorBrush((Color)ColorConverter.ConvertFromString("#C239B3")), // 중요
+        5 => new SolidColorBrush((Color)ColorConverter.ConvertFromString("#0078D4")), // 중간
+        9 => new SolidColorBrush((Color)ColorConverter.ConvertFromString("#808080")), // 낮음
+        _ => new SolidColorBrush((Color)ColorConverter.ConvertFromString("#0078D4"))
     };
 
     /// <summary>
@@ -482,6 +819,190 @@ public partial class TaskItemViewModel : ObservableObject
 
             var completed = ChecklistItemCount - ActiveChecklistItemCount;
             return $"{completed}/{ChecklistItemCount}";
+        }
+    }
+
+    /// <summary>
+    /// 첫 번째 담당자 이니셜 (아바타용)
+    /// </summary>
+    public string FirstAssigneeInitial =>
+        Assignees.FirstOrDefault()?.DisplayName?.Length > 0
+            ? Assignees.First().DisplayName[..1].ToUpper()
+            : string.Empty;
+
+    /// <summary>
+    /// 담당자 수 표시 (2명 이상일 때)
+    /// </summary>
+    public string AssigneeCountDisplay =>
+        Assignees.Count > 1 ? $"+{Assignees.Count - 1}" : string.Empty;
+
+    /// <summary>
+    /// 담당자 있음 여부
+    /// </summary>
+    public bool HasAssignees => Assignees.Count > 0;
+
+    /// <summary>
+    /// 라벨 있음 여부
+    /// </summary>
+    public bool HasCategories => AppliedCategories.Count > 0;
+}
+
+/// <summary>
+/// 플랜 카테고리(라벨) 정의 ViewModel
+/// </summary>
+public partial class PlanCategoryViewModel : ObservableObject
+{
+    /// <summary>
+    /// 카테고리 ID (category1~category6)
+    /// </summary>
+    [ObservableProperty]
+    private string _categoryId = string.Empty;
+
+    /// <summary>
+    /// 라벨 이름
+    /// </summary>
+    [ObservableProperty]
+    private string _name = string.Empty;
+
+    /// <summary>
+    /// 라벨 색상 (Hex)
+    /// </summary>
+    [ObservableProperty]
+    private string _color = string.Empty;
+
+    /// <summary>
+    /// 기본 라벨 색상 (Microsoft Planner 25개 카테고리)
+    /// </summary>
+    public static readonly Dictionary<string, string> DefaultColors = new()
+    {
+        { "category1", "#E74856" },   // 빨강
+        { "category2", "#FF8C00" },   // 주황
+        { "category3", "#FFCC00" },   // 노랑
+        { "category4", "#6BB700" },   // 초록
+        { "category5", "#0078D4" },   // 파랑
+        { "category6", "#8764B8" },   // 보라
+        { "category7", "#E3008C" },   // 핑크
+        { "category8", "#038387" },   // 청록
+        { "category9", "#8E562E" },   // 갈색
+        { "category10", "#00B294" },  // 민트
+        { "category11", "#D13438" },  // 진한 빨강
+        { "category12", "#CA5010" },  // 진한 주황
+        { "category13", "#4A154B" },  // 진한 보라
+        { "category14", "#107C10" },  // 진한 초록
+        { "category15", "#002050" },  // 진한 파랑
+        { "category16", "#5C2D91" },  // 바이올렛
+        { "category17", "#EE3F60" },  // 코랄
+        { "category18", "#00AD56" },  // 에메랄드
+        { "category19", "#0063B1" },  // 로얄 블루
+        { "category20", "#744DA9" },  // 라벤더
+        { "category21", "#C239B3" },  // 마젠타
+        { "category22", "#16A085" },  // 터쿼이즈
+        { "category23", "#E67E22" },  // 캐럿
+        { "category24", "#3498DB" },  // 스카이 블루
+        { "category25", "#9B59B6" },  // 아메시스트
+    };
+
+    /// <summary>
+    /// 카테고리 ID로 기본 색상 가져오기
+    /// </summary>
+    public static string GetDefaultColor(string categoryId)
+    {
+        return DefaultColors.TryGetValue(categoryId.ToLower(), out var color) ? color : "#808080";
+    }
+}
+
+/// <summary>
+/// 작업에 적용된 카테고리(라벨) ViewModel
+/// </summary>
+public partial class AppliedCategoryViewModel : ObservableObject
+{
+    /// <summary>
+    /// 카테고리 ID
+    /// </summary>
+    [ObservableProperty]
+    private string _categoryId = string.Empty;
+
+    /// <summary>
+    /// 라벨 이름
+    /// </summary>
+    [ObservableProperty]
+    private string _name = string.Empty;
+
+    /// <summary>
+    /// 라벨 색상 (Hex)
+    /// </summary>
+    [ObservableProperty]
+    private string _color = string.Empty;
+
+    /// <summary>
+    /// 브러시로 변환
+    /// </summary>
+    public SolidColorBrush ColorBrush
+    {
+        get
+        {
+            try
+            {
+                return new SolidColorBrush((Color)ColorConverter.ConvertFromString(Color));
+            }
+            catch
+            {
+                return new SolidColorBrush(Colors.Gray);
+            }
+        }
+    }
+}
+
+/// <summary>
+/// 작업 담당자 ViewModel
+/// </summary>
+public partial class TaskAssigneeViewModel : ObservableObject
+{
+    /// <summary>
+    /// 사용자 ID
+    /// </summary>
+    [ObservableProperty]
+    private string _userId = string.Empty;
+
+    /// <summary>
+    /// 표시 이름
+    /// </summary>
+    [ObservableProperty]
+    private string _displayName = string.Empty;
+
+    /// <summary>
+    /// 프로필 사진 (Base64)
+    /// </summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasPhoto))]
+    private string? _photoBase64;
+
+    /// <summary>
+    /// 프로필 사진 유무
+    /// </summary>
+    public bool HasPhoto => !string.IsNullOrEmpty(PhotoBase64);
+
+    /// <summary>
+    /// 이니셜 (아바타용)
+    /// </summary>
+    public string Initial => DisplayName.Length > 0 ? DisplayName[..1].ToUpper() : "?";
+
+    /// <summary>
+    /// 아바타 배경색 (이름 기반)
+    /// </summary>
+    public SolidColorBrush AvatarColor
+    {
+        get
+        {
+            // 이름 해시값으로 색상 결정
+            var hash = DisplayName.GetHashCode();
+            var colors = new[]
+            {
+                "#0078D4", "#107C10", "#E74856", "#8764B8",
+                "#FF8C00", "#008575", "#D83B01", "#5C2D91"
+            };
+            var index = Math.Abs(hash) % colors.Length;
+            return new SolidColorBrush((Color)ColorConverter.ConvertFromString(colors[index]));
         }
     }
 }

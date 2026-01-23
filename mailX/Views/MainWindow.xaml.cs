@@ -7457,6 +7457,12 @@ public partial class MainWindow : FluentWindow
 
     private PlannerViewModel? _plannerViewModel;
 
+    // 드래그앤드롭 상태 변수
+    private Point _plannerTaskDragStartPoint;
+    private TaskItemViewModel? _plannerDraggedTask;
+    private BucketViewModel? _plannerDragSourceBucket;
+    private bool _plannerIsDragging = false;
+
     /// <summary>
     /// Planner 새로고침 버튼 클릭
     /// </summary>
@@ -7469,6 +7475,32 @@ public partial class MainWindow : FluentWindow
 
         await _plannerViewModel.RefreshAsync();
         PlannerListBox.ItemsSource = _plannerViewModel.Plans;
+        PlannerPinnedPlansItemsControl.ItemsSource = _plannerViewModel.PinnedPlans;
+    }
+
+    /// <summary>
+    /// 나의 하루 버튼 클릭
+    /// </summary>
+    private async void PlannerMyDayButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (_plannerViewModel == null)
+        {
+            _plannerViewModel = ((App)Application.Current).GetService<PlannerViewModel>()!;
+        }
+
+        await _plannerViewModel.LoadMyDayTasksAsync();
+
+        // 보드 숨기고 내 작업 뷰 표시
+        PlannerBoardScrollViewer.Visibility = Visibility.Collapsed;
+        PlannerNoPlanSelected.Visibility = Visibility.Collapsed;
+        PlannerMyTasksView.Visibility = Visibility.Visible;
+        PlannerMyTasksViewTitle.Text = "나의 하루";
+        PlannerMyTasksListView.ItemsSource = _plannerViewModel.MyDayTasks;
+        PlannerBoardTitle.Text = "나의 하루";
+        PlannerAddBucketButton.IsEnabled = false;
+        PlannerAddTaskButton.IsEnabled = false;
+
+        Log4.Info($"Planner 나의 하루 {_plannerViewModel.MyDayTasks.Count}개 로드");
     }
 
     /// <summary>
@@ -7482,10 +7514,17 @@ public partial class MainWindow : FluentWindow
         }
 
         await _plannerViewModel.LoadMyTasksAsync();
-        PlannerBoardTitle.Text = "내 작업";
-        PlannerNoPlanSelected.Visibility = Visibility.Collapsed;
 
-        // 내 작업 목록 표시 (간단한 리스트로)
+        // 보드 숨기고 내 작업 뷰 표시
+        PlannerBoardScrollViewer.Visibility = Visibility.Collapsed;
+        PlannerNoPlanSelected.Visibility = Visibility.Collapsed;
+        PlannerMyTasksView.Visibility = Visibility.Visible;
+        PlannerMyTasksViewTitle.Text = "내 작업";
+        PlannerMyTasksListView.ItemsSource = _plannerViewModel.MyTasks;
+        PlannerBoardTitle.Text = "내 작업";
+        PlannerAddBucketButton.IsEnabled = false;
+        PlannerAddTaskButton.IsEnabled = false;
+
         Log4.Info($"Planner 내 작업 {_plannerViewModel.MyTasks.Count}개 로드");
     }
 
@@ -7503,9 +7542,13 @@ public partial class MainWindow : FluentWindow
 
             await _plannerViewModel.SelectPlanAsync(selectedPlan);
 
+            // 칸반 보드 표시
+            PlannerMyTasksView.Visibility = Visibility.Collapsed;
+            PlannerBoardScrollViewer.Visibility = Visibility.Visible;
+            PlannerNoPlanSelected.Visibility = Visibility.Collapsed;
+
             // UI 업데이트
             PlannerBoardTitle.Text = selectedPlan.Title;
-            PlannerNoPlanSelected.Visibility = Visibility.Collapsed;
             PlannerAddBucketButton.IsEnabled = true;
             PlannerAddTaskButton.IsEnabled = true;
 
@@ -7513,6 +7556,96 @@ public partial class MainWindow : FluentWindow
             PlannerBucketsItemsControl.ItemsSource = _plannerViewModel.Buckets;
 
             Log4.Debug($"Planner 플랜 선택: {selectedPlan.Title}");
+        }
+    }
+
+    /// <summary>
+    /// REST API를 통한 Planner 플랜 선택 (인덱스 기반)
+    /// </summary>
+    public void SelectPlannerPlanByIndex(int index)
+    {
+        if (_plannerViewModel == null || _plannerViewModel.Plans.Count == 0)
+        {
+            Log4.Warn($"[SelectPlannerPlanByIndex] 플랜 목록이 비어 있습니다.");
+            return;
+        }
+
+        if (index < 0 || index >= _plannerViewModel.Plans.Count)
+        {
+            Log4.Warn($"[SelectPlannerPlanByIndex] 유효하지 않은 인덱스: {index} (플랜 수: {_plannerViewModel.Plans.Count})");
+            return;
+        }
+
+        // ListBox 선택 변경 (SelectionChanged 이벤트가 자동으로 발생)
+        PlannerListBox.SelectedIndex = index;
+        Log4.Info($"[SelectPlannerPlanByIndex] 플랜 인덱스 {index} 선택됨");
+    }
+
+    /// <summary>
+    /// 고정된 플랜 아이템 선택 변경
+    /// </summary>
+    private void PlannerPinnedPlanItem_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (sender is ListBox listBox && listBox.SelectedItem is PlanItemViewModel plan)
+        {
+            if (_plannerViewModel == null)
+            {
+                _plannerViewModel = ((App)Application.Current).GetService<PlannerViewModel>()!;
+            }
+
+            // 해당 플랜 선택 (내 플랜 목록에서)
+            PlannerListBox.SelectedItem = _plannerViewModel.Plans.FirstOrDefault(p => p.Id == plan.Id);
+
+            // 고정 목록 선택 해제 (내 플랜 목록에서 선택되도록)
+            listBox.SelectedItem = null;
+        }
+    }
+
+    /// <summary>
+    /// 플랜 핀 고정/해제 버튼 클릭
+    /// </summary>
+    private void PlannerPinButton_Click(object sender, RoutedEventArgs e)
+    {
+        // 이벤트 버블링 방지 (ListBox 선택 이벤트 방지)
+        e.Handled = true;
+
+        if (sender is FrameworkElement element && element.Tag is PlanItemViewModel plan)
+        {
+            if (_plannerViewModel == null)
+            {
+                _plannerViewModel = ((App)Application.Current).GetService<PlannerViewModel>()!;
+            }
+
+            // 핀 상태 토글
+            plan.IsPinned = !plan.IsPinned;
+
+            // PinnedPlans 컬렉션 업데이트
+            if (plan.IsPinned)
+            {
+                if (!_plannerViewModel.PinnedPlans.Any(p => p.Id == plan.Id))
+                {
+                    _plannerViewModel.PinnedPlans.Add(plan);
+                }
+                Log4.Info($"[PlannerPinButton_Click] 플랜 '{plan.Title}' 핀 고정됨");
+            }
+            else
+            {
+                var pinnedItem = _plannerViewModel.PinnedPlans.FirstOrDefault(p => p.Id == plan.Id);
+                if (pinnedItem != null)
+                {
+                    _plannerViewModel.PinnedPlans.Remove(pinnedItem);
+                }
+                Log4.Info($"[PlannerPinButton_Click] 플랜 '{plan.Title}' 핀 해제됨");
+            }
+
+            // 고정 섹션 UI 강제 갱신 (null 후 재할당)
+            PlannerPinnedPlansItemsControl.ItemsSource = null;
+            PlannerPinnedPlansItemsControl.ItemsSource = _plannerViewModel.PinnedPlans;
+
+            // 고정 항목 유무에 따라 Expander 표시/숨김
+            PlannerPinnedExpander.Visibility = _plannerViewModel.PinnedPlans.Count > 0
+                ? Visibility.Visible
+                : Visibility.Collapsed;
         }
     }
 
@@ -7589,14 +7722,308 @@ public partial class MainWindow : FluentWindow
     }
 
     /// <summary>
-    /// 작업 카드 클릭
+    /// 버킷 내 작업 추가 버튼 클릭
     /// </summary>
-    private void PlannerTaskCard_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
+    private async void PlannerBucketAddTask_Click(object sender, RoutedEventArgs e)
     {
-        if (sender is Border border && border.DataContext is TaskItemViewModel task)
+        if (sender is FrameworkElement element && element.Tag is BucketViewModel bucket)
         {
-            _plannerViewModel?.ToggleTaskCompleteCommand.Execute(task);
-            Log4.Debug($"Planner 작업 클릭: {task.Title}");
+            if (_plannerViewModel?.SelectedPlan == null)
+                return;
+
+            var dialog = new ContentDialog
+            {
+                Title = $"'{bucket.Name}'에 작업 추가",
+                Content = new System.Windows.Controls.TextBox
+                {
+                    Text = "",
+                    Width = 300
+                },
+                PrimaryButtonText = "생성",
+                CloseButtonText = "취소"
+            };
+
+            var result = await dialog.ShowAsync();
+            if (result == ContentDialogResult.Primary)
+            {
+                var textBox = dialog.Content as System.Windows.Controls.TextBox;
+                if (!string.IsNullOrWhiteSpace(textBox?.Text))
+                {
+                    var plannerService = ((App)Application.Current).GetService<GraphPlannerService>()!;
+                    var task = await plannerService.CreateTaskAsync(_plannerViewModel.SelectedPlan.Id, bucket.Id, textBox.Text);
+                    if (task != null)
+                    {
+                        bucket.Tasks.Insert(0, new TaskItemViewModel
+                        {
+                            Id = task.Id ?? string.Empty,
+                            Title = task.Title ?? textBox.Text,
+                            BucketId = bucket.Id,
+                            PlanId = _plannerViewModel.SelectedPlan.Id,
+                            ETag = task.AdditionalData?.TryGetValue("@odata.etag", out var etag) == true ? etag?.ToString() : null
+                        });
+                        Log4.Info($"Planner 작업 생성 (버킷 {bucket.Name}): {textBox.Text}");
+                    }
+                }
+            }
+        }
+    }
+
+    /// <summary>
+    /// 버킷 메뉴 버튼 클릭
+    /// </summary>
+    private void PlannerBucketMenu_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is FrameworkElement element && element.Tag is BucketViewModel bucket)
+        {
+            var contextMenu = new ContextMenu();
+
+            var renameItem = new System.Windows.Controls.MenuItem { Header = "이름 변경" };
+            renameItem.Click += async (s, args) => await RenameBucketAsync(bucket);
+            contextMenu.Items.Add(renameItem);
+
+            var deleteItem = new System.Windows.Controls.MenuItem { Header = "삭제" };
+            deleteItem.Click += async (s, args) => await DeleteBucketAsync(bucket);
+            contextMenu.Items.Add(deleteItem);
+
+            contextMenu.IsOpen = true;
+        }
+    }
+
+    private async Task RenameBucketAsync(BucketViewModel bucket)
+    {
+        var dialog = new ContentDialog
+        {
+            Title = "버킷 이름 변경",
+            Content = new System.Windows.Controls.TextBox
+            {
+                Text = bucket.Name,
+                Width = 300
+            },
+            PrimaryButtonText = "변경",
+            CloseButtonText = "취소"
+        };
+
+        var result = await dialog.ShowAsync();
+        if (result == ContentDialogResult.Primary)
+        {
+            var textBox = dialog.Content as System.Windows.Controls.TextBox;
+            if (!string.IsNullOrWhiteSpace(textBox?.Text) && textBox.Text != bucket.Name)
+            {
+                // API 호출하여 이름 변경 (GraphPlannerService에 메서드 추가 필요)
+                bucket.Name = textBox.Text;
+                Log4.Info($"Planner 버킷 이름 변경: {bucket.Name}");
+            }
+        }
+    }
+
+    private async Task DeleteBucketAsync(BucketViewModel bucket)
+    {
+        if (string.IsNullOrEmpty(bucket.ETag))
+        {
+            Log4.Warn("Planner 버킷 삭제 실패: ETag 없음");
+            return;
+        }
+
+        var plannerService = ((App)Application.Current).GetService<GraphPlannerService>()!;
+        var success = await plannerService.DeleteBucketAsync(bucket.Id, bucket.ETag);
+        if (success)
+        {
+            _plannerViewModel?.Buckets.Remove(bucket);
+            Log4.Info($"Planner 버킷 삭제: {bucket.Name}");
+        }
+    }
+
+    /// <summary>
+    /// 작업 카드 드래그 시작
+    /// </summary>
+    private void PlannerTaskCard_PreviewMouseLeftButtonDown(object sender, MouseButtonEventArgs e)
+    {
+        _plannerTaskDragStartPoint = e.GetPosition(null);
+        if (sender is FrameworkElement element && element.Tag is TaskItemViewModel task)
+        {
+            _plannerDraggedTask = task;
+            _plannerDragSourceBucket = _plannerViewModel?.Buckets.FirstOrDefault(b => b.Tasks.Contains(task));
+        }
+    }
+
+    /// <summary>
+    /// 작업 카드 드래그 진행
+    /// </summary>
+    private void PlannerTaskCard_PreviewMouseMove(object sender, MouseEventArgs e)
+    {
+        if (e.LeftButton != MouseButtonState.Pressed || _plannerDraggedTask == null || _plannerIsDragging)
+            return;
+
+        var diff = _plannerTaskDragStartPoint - e.GetPosition(null);
+        if (Math.Abs(diff.X) < SystemParameters.MinimumHorizontalDragDistance &&
+            Math.Abs(diff.Y) < SystemParameters.MinimumVerticalDragDistance)
+            return;
+
+        _plannerIsDragging = true;
+        var dragData = new DataObject("PlannerTask", _plannerDraggedTask);
+        dragData.SetData("SourceBucket", _plannerDragSourceBucket);
+        DragDrop.DoDragDrop(sender as DependencyObject, dragData, DragDropEffects.Move);
+        _plannerIsDragging = false;
+        _plannerDraggedTask = null;
+        _plannerDragSourceBucket = null;
+    }
+
+    /// <summary>
+    /// 작업 카드 클릭 (드래그가 아닌 경우)
+    /// </summary>
+    private async void PlannerTaskCard_MouseLeftButtonUp(object sender, MouseButtonEventArgs e)
+    {
+        // 드래그 중이 아닌 경우에만 상세 다이얼로그 표시
+        if (!_plannerIsDragging && sender is FrameworkElement element && element.Tag is TaskItemViewModel task)
+        {
+            await ShowTaskEditDialogAsync(task);
+        }
+    }
+
+    /// <summary>
+    /// 버킷 드래그 진입
+    /// </summary>
+    private void PlannerBucket_DragEnter(object sender, DragEventArgs e)
+    {
+        if (sender is Border border)
+        {
+            border.BorderBrush = new SolidColorBrush((Color)ColorConverter.ConvertFromString("#0078D4"));
+            border.BorderThickness = new Thickness(2);
+        }
+    }
+
+    /// <summary>
+    /// 버킷 드래그 이탈
+    /// </summary>
+    private void PlannerBucket_DragLeave(object sender, DragEventArgs e)
+    {
+        if (sender is Border border)
+        {
+            border.BorderBrush = null;
+            border.BorderThickness = new Thickness(0);
+        }
+    }
+
+    /// <summary>
+    /// 버킷 드롭
+    /// </summary>
+    private async void PlannerBucket_Drop(object sender, DragEventArgs e)
+    {
+        if (sender is Border border)
+        {
+            border.BorderBrush = null;
+            border.BorderThickness = new Thickness(0);
+        }
+
+        var task = e.Data.GetData("PlannerTask") as TaskItemViewModel;
+        var sourceBucket = e.Data.GetData("SourceBucket") as BucketViewModel;
+        var targetBucket = (sender as FrameworkElement)?.Tag as BucketViewModel;
+
+        if (task != null && targetBucket != null && sourceBucket?.Id != targetBucket.Id)
+        {
+            if (_plannerViewModel != null)
+            {
+                var success = await _plannerViewModel.MoveTaskToBucketAsync(task, targetBucket.Id);
+                if (success)
+                {
+                    // UI 스레드에서 컬렉션 업데이트
+                    await Dispatcher.InvokeAsync(() =>
+                    {
+                        sourceBucket?.Tasks.Remove(task);
+                        task.BucketId = targetBucket.Id;
+                        targetBucket.Tasks.Add(task);
+                    });
+                    Log4.Info($"Planner 작업 이동: {task.Title} -> {targetBucket.Name}");
+                }
+            }
+        }
+    }
+
+    /// <summary>
+    /// 칸반 보드 마우스 휠 스크롤 (Shift+휠 또는 Ctrl+휠로 좌우 스크롤)
+    /// </summary>
+    private void PlannerBoardScrollViewer_PreviewMouseWheel(object sender, MouseWheelEventArgs e)
+    {
+        if (sender is ScrollViewer scrollViewer)
+        {
+            // Shift+휠 또는 Ctrl+휠일 때 좌우 스크롤
+            if (Keyboard.Modifiers == ModifierKeys.Shift || Keyboard.Modifiers == ModifierKeys.Control)
+            {
+                scrollViewer.ScrollToHorizontalOffset(scrollViewer.HorizontalOffset - e.Delta);
+                e.Handled = true;
+            }
+            // 일반 휠은 기본 동작 (자식 스크롤뷰어로 전달하여 상하 스크롤)
+        }
+    }
+
+    /// <summary>
+    /// 내 작업 리스트 선택 변경
+    /// </summary>
+    private async void PlannerMyTasksListView_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (PlannerMyTasksListView.SelectedItem is TaskItemViewModel task)
+        {
+            await ShowTaskEditDialogAsync(task);
+            PlannerMyTasksListView.SelectedItem = null;
+        }
+    }
+
+    /// <summary>
+    /// 내 작업 체크박스 클릭 (완료 토글)
+    /// </summary>
+    private async void PlannerMyTaskCheckBox_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is CheckBox checkBox && checkBox.DataContext is TaskItemViewModel task)
+        {
+            await _plannerViewModel?.ToggleTaskCompleteCommand.ExecuteAsync(task);
+        }
+    }
+
+    /// <summary>
+    /// 작업 상세 편집 다이얼로그 표시
+    /// </summary>
+    private async Task ShowTaskEditDialogAsync(TaskItemViewModel task)
+    {
+        try
+        {
+            // 현재 플랜의 버킷 목록 가져오기
+            var buckets = _plannerViewModel?.Buckets ?? new ObservableCollection<BucketViewModel>();
+            var plannerService = ((App)Application.Current).GetService<GraphPlannerService>()!;
+
+            // TaskEditDialog 열기
+            var dialog = new TaskEditDialog(task, buckets, plannerService);
+            dialog.Owner = this;
+
+            var result = dialog.ShowDialog();
+
+            if (result == true)
+            {
+                // 저장된 경우 - 다이얼로그 내에서 이미 API 호출하여 저장됨
+                // 버킷 변경 시 UI 업데이트
+                if (task.BucketId != dialog.SelectedBucketId && !string.IsNullOrEmpty(dialog.SelectedBucketId))
+                {
+                    var sourceBucket = _plannerViewModel?.Buckets.FirstOrDefault(b => b.Id != dialog.SelectedBucketId && b.Tasks.Contains(task));
+                    var targetBucket = _plannerViewModel?.Buckets.FirstOrDefault(b => b.Id == dialog.SelectedBucketId);
+
+                    sourceBucket?.Tasks.Remove(task);
+                    if (targetBucket != null && !targetBucket.Tasks.Contains(task))
+                    {
+                        targetBucket.Tasks.Add(task);
+                    }
+                }
+
+                Log4.Info($"Planner 작업 편집 완료: {task.Title}");
+            }
+            else if (dialog.IsDeleted)
+            {
+                // 삭제된 경우
+                await _plannerViewModel?.DeleteTaskCommand.ExecuteAsync(task);
+                Log4.Info($"Planner 작업 삭제: {task.Title}");
+            }
+        }
+        catch (Exception ex)
+        {
+            Log4.Error($"작업 편집 다이얼로그 오류: {ex.Message}");
         }
     }
 
@@ -7616,6 +8043,7 @@ public partial class MainWindow : FluentWindow
 
             // 플랜 목록 바인딩
             PlannerListBox.ItemsSource = _plannerViewModel.Plans;
+            PlannerPinnedPlansItemsControl.ItemsSource = _plannerViewModel.PinnedPlans;
 
             // Empty state 처리
             if (_plannerViewModel.Plans.Count == 0)
@@ -7626,6 +8054,11 @@ public partial class MainWindow : FluentWindow
             {
                 PlannerEmptyState.Visibility = Visibility.Collapsed;
             }
+
+            // 초기 상태: 플랜 미선택 안내 표시, 보드 숨김
+            PlannerBoardScrollViewer.Visibility = Visibility.Collapsed;
+            PlannerMyTasksView.Visibility = Visibility.Collapsed;
+            PlannerNoPlanSelected.Visibility = Visibility.Visible;
 
             Log4.Info($"Planner 데이터 로드 완료: {_plannerViewModel.Plans.Count}개 플랜");
         }

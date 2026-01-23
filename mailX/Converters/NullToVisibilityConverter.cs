@@ -2,6 +2,7 @@ using System;
 using System.Globalization;
 using System.Windows;
 using System.Windows.Data;
+using mailX.Utils;
 
 namespace mailX.Converters;
 
@@ -11,6 +12,8 @@ namespace mailX.Converters;
 /// </summary>
 public class NullToVisibilityConverter : IValueConverter
 {
+    private static bool _loggedOnce = false;
+
     /// <summary>
     /// 값을 Visibility로 변환
     /// </summary>
@@ -24,6 +27,18 @@ public class NullToVisibilityConverter : IValueConverter
         bool invert = parameter?.ToString()?.Equals("Invert", StringComparison.OrdinalIgnoreCase) == true;
 
         bool isNotNull = value != null;
+
+        // DateTime? 타입 처리 (boxing된 경우)
+        if (value is DateTime dt)
+        {
+            isNotNull = true;
+            // 첫 번째 DateTime 값 로그 (디버그용)
+            if (!_loggedOnce)
+            {
+                Log4.Debug($"[NullToVisibilityConverter] DateTime 값: {dt:yyyy-MM-dd}, isNotNull={isNotNull}");
+                _loggedOnce = true;
+            }
+        }
 
         // 문자열의 경우 빈 문자열도 null로 취급
         if (value is string str)
