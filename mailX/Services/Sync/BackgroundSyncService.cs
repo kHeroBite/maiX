@@ -44,23 +44,28 @@ public class BackgroundSyncService : BackgroundService
     private int _favoriteSyncIntervalSeconds = 30;   // 기본값: 30초
     private int _fullSyncIntervalSeconds = 300;      // 기본값: 5분 (300초)
     private int _calendarSyncIntervalSeconds = 60;   // 기본값: 1분 (60초)
+    private int _chatSyncIntervalSeconds = 120;      // 기본값: 2분 (120초)
     private CancellationTokenSource? _favoriteIntervalChangeCts;  // 즐겨찾기 주기 변경용
     private CancellationTokenSource? _fullIntervalChangeCts;      // 전체 주기 변경용
     private CancellationTokenSource? _calendarIntervalChangeCts;  // 캘린더 주기 변경용
+    private CancellationTokenSource? _chatIntervalChangeCts;      // 채팅 주기 변경용
 
     // 상태
     private DateTime _lastSyncTime = DateTime.MinValue;
     private DateTime _lastFavoriteSyncTime = DateTime.MinValue;
     private DateTime _lastFullSyncTime = DateTime.MinValue;
     private DateTime _lastCalendarSyncTime = DateTime.MinValue;
+    private DateTime _lastChatSyncTime = DateTime.MinValue;
     private bool _isSyncing;
     private bool _isFavoriteSyncing;
     private bool _isCalendarSyncing;
+    private bool _isChatSyncing;
     private bool _isPaused;
     private int _syncCount;
     private int _favoriteSyncCount;
     private int _fullSyncCount;
     private int _calendarSyncCount;
+    private int _chatSyncCount;
     private int _errorCount;
 
     /// <summary>
@@ -89,6 +94,16 @@ public class BackgroundSyncService : BackgroundService
     public event Action<int>? CalendarSyncIntervalChanged;
 
     /// <summary>
+    /// 채팅 동기화 주기 변경 이벤트 (초 단위)
+    /// </summary>
+    public event Action<int>? ChatSyncIntervalChanged;
+
+    /// <summary>
+    /// 채팅 동기화 완료 이벤트 (채팅방 개수 전달)
+    /// </summary>
+    public event Action<int>? ChatSynced;
+
+    /// <summary>
     /// 현재 동기화 주기 (초)
     /// </summary>
     public int SyncIntervalSeconds => _syncIntervalSeconds;
@@ -107,6 +122,11 @@ public class BackgroundSyncService : BackgroundService
     /// 캘린더 동기화 주기 (초)
     /// </summary>
     public int CalendarSyncIntervalSeconds => _calendarSyncIntervalSeconds;
+
+    /// <summary>
+    /// 채팅 동기화 주기 (초)
+    /// </summary>
+    public int ChatSyncIntervalSeconds => _chatSyncIntervalSeconds;
 
     /// <summary>
     /// 폴더 동기화 완료 이벤트
@@ -186,9 +206,9 @@ public class BackgroundSyncService : BackgroundService
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
-        Log4.Info($"[BackgroundSyncService] 백그라운드 동기화 서비스 시작 - 즐겨찾기: {_favoriteSyncIntervalSeconds}초, 전체: {_fullSyncIntervalSeconds}초, 캘린더: {_calendarSyncIntervalSeconds}초");
-        _logger.Information("백그라운드 동기화 서비스 시작 - 즐겨찾기: {Favorite}초, 전체: {Full}초, 캘린더: {Calendar}초",
-            _favoriteSyncIntervalSeconds, _fullSyncIntervalSeconds, _calendarSyncIntervalSeconds);
+        Log4.Info($"[BackgroundSyncService] 백그라운드 동기화 서비스 시작 - 즐겨찾기: {_favoriteSyncIntervalSeconds}초, 전체: {_fullSyncIntervalSeconds}초, 캘린더: {_calendarSyncIntervalSeconds}초, 채팅: {_chatSyncIntervalSeconds}초");
+        _logger.Information("백그라운드 동기화 서비스 시작 - 즐겨찾기: {Favorite}초, 전체: {Full}초, 캘린더: {Calendar}초, 채팅: {Chat}초",
+            _favoriteSyncIntervalSeconds, _fullSyncIntervalSeconds, _calendarSyncIntervalSeconds, _chatSyncIntervalSeconds);
 
         try
         {
@@ -207,10 +227,16 @@ public class BackgroundSyncService : BackgroundService
             await SyncCalendarAsync(stoppingToken);
             Log4.Debug("[BackgroundSyncService] 초기 캘린더 동기화 완료");
 
+            // 시작 시 채팅 동기화
+            Log4.Debug("[BackgroundSyncService] 초기 채팅 동기화 시작");
+            await SyncChatsAsync(stoppingToken);
+            Log4.Debug("[BackgroundSyncService] 초기 채팅 동기화 완료");
+
             // 초기 동기화 시간 기록 (주기적 동기화 루프에서 중복 실행 방지)
             _lastFullSyncTime = DateTime.UtcNow;
             _lastFavoriteSyncTime = DateTime.UtcNow;
             _lastCalendarSyncTime = DateTime.UtcNow;
+            _lastChatSyncTime = DateTime.UtcNow;
         }
         catch (Exception ex)
         {
@@ -218,13 +244,14 @@ public class BackgroundSyncService : BackgroundService
             _logger.Error(ex, "초기 동기화 실패");
         }
 
-        // 3개의 독립적인 동기화 루프 실행
+        // 4개의 독립적인 동기화 루프 실행
         var favoriteTask = RunFavoriteSyncLoopAsync(stoppingToken);
         var fullTask = RunFullSyncLoopAsync(stoppingToken);
         var calendarTask = RunCalendarSyncLoopAsync(stoppingToken);
+        var chatTask = RunChatSyncLoopAsync(stoppingToken);
 
         // 모든 Task가 완료될 때까지 대기
-        await Task.WhenAll(favoriteTask, fullTask, calendarTask);
+        await Task.WhenAll(favoriteTask, fullTask, calendarTask, chatTask);
 
         _logger.Information("백그라운드 동기화 서비스 중지됨");
     }
@@ -435,6 +462,111 @@ public class BackgroundSyncService : BackgroundService
         }
 
         Log4.Debug($"[BackgroundSyncService] 캘린더 동기화 완료 (#{_calendarSyncCount})");
+    }
+
+    /// <summary>
+    /// 채팅 동기화 루프
+    /// </summary>
+    private async Task RunChatSyncLoopAsync(CancellationToken stoppingToken)
+    {
+        Log4.Info($"[BackgroundSyncService] 채팅 동기화 루프 시작 - 주기: {_chatSyncIntervalSeconds}초");
+
+        while (!stoppingToken.IsCancellationRequested)
+        {
+            try
+            {
+                _chatIntervalChangeCts = CancellationTokenSource.CreateLinkedTokenSource(stoppingToken);
+
+                // 주기 변경으로 재시작된 경우, 마지막 실행 후 주기가 지났으면 즉시 실행
+                var timeSinceLastSync = DateTime.UtcNow - _lastChatSyncTime;
+                if (timeSinceLastSync.TotalSeconds >= _chatSyncIntervalSeconds)
+                {
+                    Log4.Debug($"[BackgroundSyncService] 채팅 동기화 주기 경과 ({timeSinceLastSync.TotalSeconds:F0}초) - 즉시 실행");
+                    await ExecuteChatSyncAsync(stoppingToken);
+                }
+
+                using var timer = new PeriodicTimer(TimeSpan.FromSeconds(_chatSyncIntervalSeconds));
+                Log4.Debug($"[BackgroundSyncService] 채팅 타이머 생성 - 주기: {_chatSyncIntervalSeconds}초");
+
+                while (await timer.WaitForNextTickAsync(_chatIntervalChangeCts.Token))
+                {
+                    if (_isPaused)
+                    {
+                        Log4.Debug("[BackgroundSyncService] 채팅 동기화 일시정지 상태 - 건너뜀");
+                        continue;
+                    }
+
+                    await ExecuteChatSyncAsync(stoppingToken);
+                }
+            }
+            catch (OperationCanceledException) when (!stoppingToken.IsCancellationRequested)
+            {
+                Log4.Info($"[BackgroundSyncService] 채팅 동기화 주기 변경으로 타이머 재시작 - 새 주기: {_chatSyncIntervalSeconds}초");
+                _logger.Information("채팅 동기화 주기 변경으로 타이머 재시작 - 새 주기: {Interval}초", _chatSyncIntervalSeconds);
+                continue;
+            }
+        }
+    }
+
+    /// <summary>
+    /// 채팅 동기화 실행
+    /// </summary>
+    private async Task ExecuteChatSyncAsync(CancellationToken stoppingToken)
+    {
+        if (_isChatSyncing)
+        {
+            Log4.Debug("[BackgroundSyncService] 이미 채팅 동기화 진행 중 - 건너뜀");
+            return;
+        }
+
+        _isChatSyncing = true;
+        Log4.Debug($"[BackgroundSyncService] 채팅 동기화 시작 (#{_chatSyncCount + 1})");
+
+        try
+        {
+            await SyncChatsAsync(stoppingToken);
+
+            _lastChatSyncTime = DateTime.UtcNow;
+            Interlocked.Increment(ref _chatSyncCount);
+        }
+        catch (Exception ex)
+        {
+            Log4.Error($"[BackgroundSyncService] 채팅 동기화 실패: {ex.Message}");
+            _logger.Error(ex, "채팅 동기화 실패");
+            Interlocked.Increment(ref _errorCount);
+        }
+        finally
+        {
+            _isChatSyncing = false;
+        }
+
+        Log4.Debug($"[BackgroundSyncService] 채팅 동기화 완료 (#{_chatSyncCount})");
+    }
+
+    /// <summary>
+    /// 채팅 동기화 (Teams API)
+    /// </summary>
+    public async Task SyncChatsAsync(CancellationToken ct = default)
+    {
+        try
+        {
+            using var scope = _serviceProvider.CreateScope();
+            var teamsService = scope.ServiceProvider.GetRequiredService<GraphTeamsService>();
+
+            // Teams 채팅 목록 가져오기
+            var chats = await teamsService.GetChatsAsync();
+            var chatCount = chats.Count();
+
+            Log4.Debug($"[BackgroundSyncService] 채팅 동기화: {chatCount}개 채팅방");
+
+            // 이벤트 발생
+            ChatSynced?.Invoke(chatCount);
+        }
+        catch (Exception ex)
+        {
+            Log4.Error($"[BackgroundSyncService] 채팅 동기화 실패: {ex.Message}");
+            _logger.Error(ex, "채팅 동기화 실패");
+        }
     }
 
     /// <summary>
@@ -1546,6 +1678,27 @@ public class BackgroundSyncService : BackgroundService
 
         // 이벤트 발생
         CalendarSyncIntervalChanged?.Invoke(seconds);
+    }
+
+    /// <summary>
+    /// 채팅 동기화 주기 설정 (초 단위)
+    /// </summary>
+    public void SetChatSyncInterval(int seconds)
+    {
+        if (seconds < 1) seconds = 1;  // 최소 1초
+        if (seconds > 3600) seconds = 3600;  // 최대 1시간
+
+        var oldInterval = _chatSyncIntervalSeconds;
+        _chatSyncIntervalSeconds = seconds;
+
+        Log4.Info($"[BackgroundSyncService] 채팅 동기화 주기 변경: {oldInterval}초 → {seconds}초");
+        _logger.Information("채팅 동기화 주기 변경: {Old}초 → {New}초", oldInterval, seconds);
+
+        // 주기 변경 시 현재 타이머 취소 (새 주기로 재시작하도록)
+        _chatIntervalChangeCts?.Cancel();
+
+        // 이벤트 발생
+        ChatSyncIntervalChanged?.Invoke(seconds);
     }
 
     /// <summary>

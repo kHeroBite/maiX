@@ -100,6 +100,11 @@ public class MailXDbContext : DbContext
     /// </summary>
     public DbSet<CalendarSyncState> CalendarSyncStates { get; set; } = null!;
 
+    /// <summary>
+    /// 채팅 즐겨찾기 테이블 (로컬 전용)
+    /// </summary>
+    public DbSet<ChatFavorite> ChatFavorites { get; set; } = null!;
+
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         base.OnModelCreating(modelBuilder);

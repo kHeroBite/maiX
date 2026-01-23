@@ -106,11 +106,12 @@ public partial class App : Application
     {
         try
         {
-            using var scope = _host.Services.CreateScope();
-            return scope.ServiceProvider.GetService<T>();
+            // Singleton 서비스는 scope 없이 직접 가져오기
+            return _host.Services.GetService<T>();
         }
-        catch
+        catch (Exception ex)
         {
+            System.Diagnostics.Debug.WriteLine($"[App] GetService<{typeof(T).Name}> 실패: {ex.Message}");
             return null;
         }
     }
@@ -193,7 +194,13 @@ public partial class App : Application
         services.AddSingleton(Settings.Database);
         services.AddSingleton(Settings.Logging);
 
-        // DbContext 등록 (SQLite)
+        // DbContext 등록 (SQLite) - Factory 패턴 사용
+        services.AddDbContextFactory<MailXDbContext>(options =>
+        {
+            options.UseSqlite($"Data Source={DatabasePath}");
+        });
+
+        // DbContext 직접 등록 (기존 호환성)
         services.AddDbContext<MailXDbContext>(options =>
         {
             options.UseSqlite($"Data Source={DatabasePath}");
@@ -309,7 +316,7 @@ public partial class App : Application
             sp.GetServices<IHostedService>().OfType<BackgroundSyncService>().First());
 
         // Teams/Chat 서비스 등록
-        services.AddScoped<GraphTeamsService>();
+        services.AddSingleton<GraphTeamsService>();
 
         // OneNote 서비스 등록
         services.AddScoped<GraphOneNoteService>();
@@ -329,7 +336,7 @@ public partial class App : Application
         // ViewModels 등록
         services.AddTransient<MainViewModel>();
         services.AddTransient<LoginViewModel>();
-        services.AddTransient<TeamsViewModel>();
+        services.AddSingleton<TeamsViewModel>();
         services.AddTransient<OneNoteViewModel>();
         services.AddTransient<OneDriveViewModel>();
         services.AddTransient<PlannerViewModel>();

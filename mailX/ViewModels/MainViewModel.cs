@@ -1179,6 +1179,19 @@ public partial class MainViewModel : ViewModelBase
     }
 
     /// <summary>
+    /// 채팅 동기화 주기 (초)
+    /// </summary>
+    public int ChatSyncIntervalSeconds => _syncService.ChatSyncIntervalSeconds;
+
+    /// <summary>
+    /// 채팅 동기화 주기 설정
+    /// </summary>
+    public void SetChatSyncInterval(int seconds)
+    {
+        _syncService.SetChatSyncInterval(seconds);
+    }
+
+    /// <summary>
     /// 현재 AI 분석 주기 (초) - 하위 호환용
     /// </summary>
     private int _aiAnalysisIntervalSeconds = 300;  // 기본값: 5분

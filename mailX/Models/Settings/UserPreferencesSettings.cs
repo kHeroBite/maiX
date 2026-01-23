@@ -86,6 +86,18 @@ public class UserPreferencesSettings
     public bool IsAiAnalysisPaused { get; set; } = false;
 
     /// <summary>
+    /// 즐겨찾기 메일 동기화 기간 타입 (Count, Days, Weeks, Months, Years, All)
+    /// </summary>
+    [XmlElement("FavoriteSyncPeriodType")]
+    public string FavoriteSyncPeriodType { get; set; } = "Count";
+
+    /// <summary>
+    /// 즐겨찾기 메일 동기화 기간 값
+    /// </summary>
+    [XmlElement("FavoriteSyncPeriodValue")]
+    public int FavoriteSyncPeriodValue { get; set; } = 5;
+
+    /// <summary>
     /// 즐겨찾기 메일 동기화 주기 (초 단위) - 기본 30초
     /// </summary>
     [XmlElement("FavoriteSyncIntervalSeconds")]
@@ -96,6 +108,18 @@ public class UserPreferencesSettings
     /// </summary>
     [XmlElement("FullSyncIntervalSeconds")]
     public int FullSyncIntervalSeconds { get; set; } = 300;
+
+    /// <summary>
+    /// 즐겨찾기 AI 분석 기간 타입 (Count, Days, Weeks, Months, Years, All)
+    /// </summary>
+    [XmlElement("FavoriteAiPeriodType")]
+    public string FavoriteAiPeriodType { get; set; } = "Count";
+
+    /// <summary>
+    /// 즐겨찾기 AI 분석 기간 값
+    /// </summary>
+    [XmlElement("FavoriteAiPeriodValue")]
+    public int FavoriteAiPeriodValue { get; set; } = 5;
 
     /// <summary>
     /// 즐겨찾기 AI 분석 주기 (초 단위) - 기본 30초
@@ -114,4 +138,10 @@ public class UserPreferencesSettings
     /// </summary>
     [XmlElement("CalendarSyncIntervalSeconds")]
     public int CalendarSyncIntervalSeconds { get; set; } = 60;
+
+    /// <summary>
+    /// 채팅 동기화 주기 (초 단위) - 기본 2분(120초)
+    /// </summary>
+    [XmlElement("ChatSyncIntervalSeconds")]
+    public int ChatSyncIntervalSeconds { get; set; } = 120;
 }

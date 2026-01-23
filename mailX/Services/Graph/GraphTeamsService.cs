@@ -17,14 +17,43 @@ namespace mailX.Services.Graph;
 public class GraphTeamsService
 {
     private readonly GraphAuthService _authService;
-    private readonly MailXDbContext _dbContext;
+    private readonly IDbContextFactory<MailXDbContext> _dbContextFactory;
     private readonly ILogger _logger;
+    private string? _cachedCurrentUserId;
 
-    public GraphTeamsService(GraphAuthService authService, MailXDbContext dbContext)
+    // 사용자 사진 메모리 캐시 (userId -> Base64 photo, null이면 사진 없음)
+    private readonly Dictionary<string, string?> _userPhotoCache = new();
+    private readonly object _photoCacheLock = new();
+
+    // 로컬 파일 캐시 경로
+    private readonly string _photoCacheDir;
+
+    public GraphTeamsService(GraphAuthService authService, IDbContextFactory<MailXDbContext> dbContextFactory)
     {
         _authService = authService ?? throw new ArgumentNullException(nameof(authService));
-        _dbContext = dbContext ?? throw new ArgumentNullException(nameof(dbContext));
+        _dbContextFactory = dbContextFactory ?? throw new ArgumentNullException(nameof(dbContextFactory));
         _logger = Log.ForContext<GraphTeamsService>();
+
+        // 사진 캐시 디렉토리 초기화
+        _photoCacheDir = System.IO.Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
+            "mailX", "cache", "photos");
+        if (!System.IO.Directory.Exists(_photoCacheDir))
+        {
+            System.IO.Directory.CreateDirectory(_photoCacheDir);
+        }
+    }
+
+    /// <summary>
+    /// 현재 사용자 ID 가져오기 (캐시됨)
+    /// </summary>
+    public async Task<string?> GetCachedCurrentUserIdAsync()
+    {
+        if (_cachedCurrentUserId == null)
+        {
+            _cachedCurrentUserId = await GetCurrentUserIdAsync();
+        }
+        return _cachedCurrentUserId;
     }
 
     /// <summary>
@@ -39,7 +68,7 @@ public class GraphTeamsService
             var response = await client.Me.Chats.GetAsync(config =>
             {
                 config.QueryParameters.Top = 50;
-                config.QueryParameters.Expand = new[] { "members" };
+                config.QueryParameters.Expand = new[] { "members", "lastMessagePreview" };
             });
 
             _logger.Debug("채팅방 {Count}개 조회", response?.Value?.Count ?? 0);
@@ -79,6 +108,64 @@ public class GraphTeamsService
         {
             _logger.Error(ex, "채팅 메시지 조회 실패: ChatId={ChatId}", chatId);
             throw;
+        }
+    }
+
+    /// <summary>
+    /// 채팅방의 실제 마지막 일반 메시지 정보 조회 (시스템 이벤트 제외)
+    /// </summary>
+    /// <param name="chatId">채팅방 ID</param>
+    /// <returns>(마지막 메시지 시간, 메시지 미리보기) 또는 (null, null)</returns>
+    public async Task<(DateTime? LastMessageTime, string? Preview)> GetLastRealMessageAsync(string chatId)
+    {
+        if (string.IsNullOrEmpty(chatId))
+            return (null, null);
+
+        try
+        {
+            var client = _authService.GetGraphClient();
+            // 최근 10개 메시지를 가져와서 시스템 이벤트가 아닌 첫 번째 메시지 찾기
+            var response = await client.Me.Chats[chatId].Messages.GetAsync(config =>
+            {
+                config.QueryParameters.Top = 10;
+                config.QueryParameters.Orderby = new[] { "createdDateTime desc" };
+            });
+
+            if (response?.Value == null || response.Value.Count == 0)
+                return (null, null);
+
+            // 시스템 이벤트(EventDetail)가 아니고, 빈 본문이 아닌 첫 번째 메시지 찾기
+            var realMessage = response.Value.FirstOrDefault(m =>
+                m.EventDetail == null &&
+                m.MessageType != ChatMessageType.SystemEventMessage &&
+                !string.IsNullOrWhiteSpace(m.Body?.Content) &&
+                m.Body?.Content != "<systemEventMessage/>");
+
+            if (realMessage == null || !realMessage.CreatedDateTime.HasValue)
+            {
+                _logger.Warning("채팅방 {ChatId}: 유효한 메시지를 찾지 못함", chatId);
+                return (null, null);
+            }
+
+            // UTC 시간을 로컬 시간으로 변환하고 Kind를 Local로 명시적 설정
+            var utcTime = realMessage.CreatedDateTime.Value.UtcDateTime;
+            var lastTime = DateTime.SpecifyKind(utcTime.ToLocalTime(), DateTimeKind.Local);
+            var preview = realMessage.Body?.Content;
+
+            // HTML 태그 제거
+            if (!string.IsNullOrEmpty(preview))
+            {
+                preview = System.Text.RegularExpressions.Regex.Replace(preview, "<[^>]*>", "");
+                preview = System.Net.WebUtility.HtmlDecode(preview)?.Trim();
+            }
+
+            _logger.Debug("채팅방 {ChatId} 마지막 메시지: {Time}", chatId, lastTime);
+            return (lastTime, preview);
+        }
+        catch (Exception ex)
+        {
+            _logger.Debug("채팅방 {ChatId} 마지막 메시지 조회 실패: {Error}", chatId, ex.Message);
+            return (null, null);
         }
     }
 
@@ -167,8 +254,10 @@ public class GraphTeamsService
         {
             var messageId = chatMessage.Id ?? Guid.NewGuid().ToString();
 
+            await using var dbContext = await _dbContextFactory.CreateDbContextAsync();
+
             // 기존 메시지 확인
-            var existingMessage = await _dbContext.TeamsMessages
+            var existingMessage = await dbContext.TeamsMessages
                 .FirstOrDefaultAsync(m => m.Id == messageId);
 
             if (existingMessage != null)
@@ -190,11 +279,11 @@ public class GraphTeamsService
                     CreatedDateTime = chatMessage.CreatedDateTime?.DateTime
                 };
 
-                _dbContext.TeamsMessages.Add(teamsMessage);
+                dbContext.TeamsMessages.Add(teamsMessage);
                 existingMessage = teamsMessage;
             }
 
-            await _dbContext.SaveChangesAsync();
+            await dbContext.SaveChangesAsync();
             _logger.Debug("Teams 메시지 저장: {MessageId}", messageId);
 
             return existingMessage;
@@ -245,7 +334,8 @@ public class GraphTeamsService
     /// <returns>연결된 Teams 메시지 목록</returns>
     public async Task<IEnumerable<TeamsMessage>> GetLinkedMessagesAsync(int emailId)
     {
-        return await _dbContext.TeamsMessages
+        await using var dbContext = await _dbContextFactory.CreateDbContextAsync();
+        return await dbContext.TeamsMessages
             .Where(m => m.LinkedEmailId == emailId)
             .OrderByDescending(m => m.CreatedDateTime)
             .ToListAsync();
@@ -348,7 +438,50 @@ public class GraphTeamsService
     }
 
     /// <summary>
-    /// 채팅방 제목/이름 가져오기
+    /// 채팅방 제목/이름 가져오기 (비동기)
+    /// </summary>
+    /// <param name="chat">채팅 객체</param>
+    /// <returns>채팅방 이름</returns>
+    public async Task<string> GetChatDisplayNameAsync(Chat chat)
+    {
+        if (chat == null)
+            return "Unknown";
+
+        // 그룹 채팅인 경우 topic 사용
+        if (!string.IsNullOrEmpty(chat.Topic))
+            return chat.Topic;
+
+        // 1:1 채팅인 경우 상대방 이름 사용
+        if (chat.ChatType == ChatType.OneOnOne && chat.Members?.Count >= 2)
+        {
+            var currentUserId = await GetCachedCurrentUserIdAsync();
+            var otherMember = chat.Members
+                .OfType<AadUserConversationMember>()
+                .FirstOrDefault(m => !string.IsNullOrEmpty(m.UserId) && m.UserId != currentUserId);
+
+            return otherMember?.DisplayName ?? "Direct Chat";
+        }
+
+        // 그룹 채팅이지만 topic이 없는 경우 - 본인 제외한 멤버 이름
+        if (chat.ChatType == ChatType.Group)
+        {
+            var currentUserId = await GetCachedCurrentUserIdAsync();
+            var memberNames = chat.Members?
+                .OfType<AadUserConversationMember>()
+                .Where(m => m.UserId != currentUserId)
+                .Take(3)
+                .Select(m => m.DisplayName)
+                .Where(n => !string.IsNullOrEmpty(n));
+
+            if (memberNames?.Any() == true)
+                return string.Join(", ", memberNames);
+        }
+
+        return "Chat";
+    }
+
+    /// <summary>
+    /// 채팅방 제목/이름 가져오기 (동기 - 캐시된 사용자 ID 사용)
     /// </summary>
     /// <param name="chat">채팅 객체</param>
     /// <returns>채팅방 이름</returns>
@@ -362,20 +495,21 @@ public class GraphTeamsService
             return chat.Topic;
 
         // 1:1 채팅인 경우 상대방 이름 사용
-        if (chat.ChatType == ChatType.OneOnOne && chat.Members?.Count == 2)
+        if (chat.ChatType == ChatType.OneOnOne && chat.Members?.Count >= 2)
         {
             var otherMember = chat.Members
                 .OfType<AadUserConversationMember>()
-                .FirstOrDefault(m => m.UserId != null);
+                .FirstOrDefault(m => !string.IsNullOrEmpty(m.UserId) && m.UserId != _cachedCurrentUserId);
 
             return otherMember?.DisplayName ?? "Direct Chat";
         }
 
-        // 그룹 채팅이지만 topic이 없는 경우
+        // 그룹 채팅이지만 topic이 없는 경우 - 본인 제외한 멤버 이름
         if (chat.ChatType == ChatType.Group)
         {
             var memberNames = chat.Members?
                 .OfType<AadUserConversationMember>()
+                .Where(m => m.UserId != _cachedCurrentUserId)
                 .Take(3)
                 .Select(m => m.DisplayName)
                 .Where(n => !string.IsNullOrEmpty(n));
@@ -395,21 +529,57 @@ public class GraphTeamsService
     /// <returns>팀 목록</returns>
     public async Task<IEnumerable<Team>> GetMyTeamsAsync()
     {
+        var (teams, _) = await GetMyTeamsWithErrorAsync();
+        return teams;
+    }
+
+    /// <summary>
+    /// 내가 속한 팀 목록 조회 (오류 메시지 포함)
+    /// </summary>
+    /// <returns>(팀 목록, 오류 메시지)</returns>
+    public async Task<(IEnumerable<Team> Teams, string? ErrorMessage)> GetMyTeamsWithErrorAsync()
+    {
         try
         {
+            Serilog.Log.Information("[GraphTeamsService] ========== GetMyTeamsAsync 시작 ==========");
+            Utils.Log4.Info("[GraphTeamsService] ========== GetMyTeamsAsync 시작 ==========");
+
             var client = _authService.GetGraphClient();
+            Serilog.Log.Information("[GraphTeamsService] GraphClient 획득 완료");
+            Utils.Log4.Info("[GraphTeamsService] GraphClient 획득 완료");
+
+            Serilog.Log.Information("[GraphTeamsService] Graph API 호출 중... (Me.JoinedTeams)");
             var response = await client.Me.JoinedTeams.GetAsync(config =>
             {
                 config.QueryParameters.Top = 100;
             });
 
-            _logger.Debug("팀 {Count}개 조회", response?.Value?.Count ?? 0);
-            return response?.Value ?? new List<Team>();
+            var count = response?.Value?.Count ?? 0;
+            Serilog.Log.Information("[GraphTeamsService] Graph API 응답: {Count}개 팀", count);
+            Utils.Log4.Info($"[GraphTeamsService] Graph API 응답: {count}개 팀");
+
+            if (count == 0)
+            {
+                Serilog.Log.Warning("[GraphTeamsService] ⚠️ 팀 목록이 비어있습니다. 권한 확인 필요: Team.ReadBasic.All");
+                Utils.Log4.Info("[GraphTeamsService] ⚠️ 팀 목록이 비어있습니다. 권한 확인 필요: Team.ReadBasic.All");
+            }
+
+            return (response?.Value ?? new List<Team>(), null);
+        }
+        catch (Microsoft.Graph.Models.ODataErrors.ODataError odataEx) when (odataEx.Message?.Contains("Missing scope permissions") == true)
+        {
+            // 권한 오류인 경우 사용자 친화적 메시지 반환
+            Serilog.Log.Warning(odataEx, "[GraphTeamsService] Teams 권한 부족");
+            Utils.Log4.Error($"[GraphTeamsService] Teams 권한 부족: {odataEx.Message}");
+
+            return (new List<Team>(), "Teams 권한이 없습니다.\nAzure Portal에서 'Team.ReadBasic.All' 권한을 앱에 추가하고 관리자 동의를 받아주세요.");
         }
         catch (Exception ex)
         {
-            _logger.Error(ex, "팀 목록 조회 실패");
-            return new List<Team>();
+            Serilog.Log.Error(ex, "[GraphTeamsService] 팀 목록 조회 실패");
+            Utils.Log4.Error($"[GraphTeamsService] 팀 목록 조회 실패: {ex.Message}");
+            Utils.Log4.Error($"[GraphTeamsService] StackTrace: {ex.StackTrace}");
+            return (new List<Team>(), $"팀 목록 로드 실패: {ex.Message}");
         }
     }
 
@@ -650,6 +820,332 @@ public class GraphTeamsService
         catch (Exception ex)
         {
             _logger.Error(ex, "답글 작성 실패: MessageId={MessageId}", messageId);
+            return null;
+        }
+    }
+
+    #endregion
+
+    #region 사용자 프로필 사진
+
+    /// <summary>
+    /// 로컬 캐시에서 사진 가져오기 (즉시 반환)
+    /// </summary>
+    /// <param name="userId">사용자 ID</param>
+    /// <returns>캐시된 Base64 사진 또는 null</returns>
+    public string? GetCachedUserPhoto(string? userId)
+    {
+        if (string.IsNullOrEmpty(userId))
+            return null;
+
+        // 1. 메모리 캐시 확인
+        lock (_photoCacheLock)
+        {
+            if (_userPhotoCache.TryGetValue(userId, out var cachedPhoto))
+            {
+                return cachedPhoto;
+            }
+        }
+
+        // 2. 로컬 파일 캐시 확인
+        var cacheFile = GetPhotoCachePath(userId);
+        if (System.IO.File.Exists(cacheFile))
+        {
+            try
+            {
+                var photo = System.IO.File.ReadAllText(cacheFile);
+                // 메모리 캐시에도 저장
+                lock (_photoCacheLock)
+                {
+                    _userPhotoCache[userId] = photo;
+                }
+                return photo;
+            }
+            catch
+            {
+                // 파일 읽기 실패 시 무시
+            }
+        }
+
+        return null;
+    }
+
+    /// <summary>
+    /// 사용자 프로필 사진 가져오기 (Base64) - 로컬 캐시 + API 조회
+    /// </summary>
+    /// <param name="userId">사용자 ID</param>
+    /// <returns>Base64 인코딩된 사진 또는 null</returns>
+    public async Task<string?> GetUserPhotoAsync(string? userId)
+    {
+        if (string.IsNullOrEmpty(userId))
+            return null;
+
+        // 1. 메모리 캐시 확인
+        lock (_photoCacheLock)
+        {
+            if (_userPhotoCache.TryGetValue(userId, out var cachedPhoto))
+            {
+                return cachedPhoto;
+            }
+        }
+
+        // 2. 로컬 파일 캐시 확인
+        var cacheFile = GetPhotoCachePath(userId);
+        if (System.IO.File.Exists(cacheFile))
+        {
+            try
+            {
+                var cachedPhoto = await System.IO.File.ReadAllTextAsync(cacheFile);
+                // 메모리 캐시에도 저장
+                lock (_photoCacheLock)
+                {
+                    _userPhotoCache[userId] = cachedPhoto;
+                }
+                return cachedPhoto;
+            }
+            catch
+            {
+                // 파일 읽기 실패 시 API에서 조회
+            }
+        }
+
+        // 3. API에서 조회
+        string? photo = null;
+        try
+        {
+            var client = _authService.GetGraphClient();
+            var photoStream = await client.Users[userId].Photo.Content.GetAsync();
+
+            if (photoStream != null)
+            {
+                using var ms = new System.IO.MemoryStream();
+                await photoStream.CopyToAsync(ms);
+                var photoBytes = ms.ToArray();
+                photo = Convert.ToBase64String(photoBytes);
+
+                // 로컬 파일에 저장
+                await System.IO.File.WriteAllTextAsync(cacheFile, photo);
+            }
+        }
+        catch (Microsoft.Graph.Models.ODataErrors.ODataError odataEx)
+        {
+            // 사진이 없는 경우 무시 (404 에러)
+            if (odataEx.ResponseStatusCode != 404)
+            {
+                _logger.Debug("사용자 {UserId} 사진 조회 실패: {Error}", userId, odataEx.Message);
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.Debug("사용자 {UserId} 사진 조회 실패: {Error}", userId, ex.Message);
+        }
+
+        // 메모리 캐시에 저장 (사진이 없는 경우도 캐시하여 반복 요청 방지)
+        lock (_photoCacheLock)
+        {
+            _userPhotoCache[userId] = photo;
+        }
+
+        return photo;
+    }
+
+    /// <summary>
+    /// 사용자 사진을 백그라운드에서 새로고침 (API 조회 후 캐시 업데이트)
+    /// </summary>
+    /// <param name="userId">사용자 ID</param>
+    /// <returns>새로 조회된 Base64 사진 또는 null</returns>
+    public async Task<string?> RefreshUserPhotoAsync(string? userId)
+    {
+        if (string.IsNullOrEmpty(userId))
+            return null;
+
+        string? photo = null;
+        try
+        {
+            var client = _authService.GetGraphClient();
+            var photoStream = await client.Users[userId].Photo.Content.GetAsync();
+
+            if (photoStream != null)
+            {
+                using var ms = new System.IO.MemoryStream();
+                await photoStream.CopyToAsync(ms);
+                var photoBytes = ms.ToArray();
+                photo = Convert.ToBase64String(photoBytes);
+
+                // 로컬 파일에 저장
+                var cacheFile = GetPhotoCachePath(userId);
+                await System.IO.File.WriteAllTextAsync(cacheFile, photo);
+
+                // 메모리 캐시 업데이트
+                lock (_photoCacheLock)
+                {
+                    _userPhotoCache[userId] = photo;
+                }
+            }
+        }
+        catch (Microsoft.Graph.Models.ODataErrors.ODataError odataEx)
+        {
+            if (odataEx.ResponseStatusCode != 404)
+            {
+                _logger.Debug("사용자 {UserId} 사진 새로고침 실패: {Error}", userId, odataEx.Message);
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.Debug("사용자 {UserId} 사진 새로고침 실패: {Error}", userId, ex.Message);
+        }
+
+        return photo;
+    }
+
+    /// <summary>
+    /// 사진 캐시 파일 경로 가져오기
+    /// </summary>
+    private string GetPhotoCachePath(string userId)
+    {
+        // userId에서 파일명으로 사용 불가능한 문자 제거
+        var safeUserId = string.Join("_", userId.Split(System.IO.Path.GetInvalidFileNameChars()));
+        return System.IO.Path.Combine(_photoCacheDir, $"{safeUserId}.txt");
+    }
+
+    /// <summary>
+    /// 사진 캐시 초기화 (메모리 + 파일)
+    /// </summary>
+    public void ClearPhotoCache()
+    {
+        lock (_photoCacheLock)
+        {
+            _userPhotoCache.Clear();
+        }
+
+        // 파일 캐시도 삭제
+        try
+        {
+            if (System.IO.Directory.Exists(_photoCacheDir))
+            {
+                foreach (var file in System.IO.Directory.GetFiles(_photoCacheDir, "*.txt"))
+                {
+                    System.IO.File.Delete(file);
+                }
+            }
+            _logger.Debug("사용자 사진 캐시 초기화됨 (메모리 + 파일)");
+        }
+        catch (Exception ex)
+        {
+            _logger.Debug("사진 캐시 파일 삭제 실패: {Error}", ex.Message);
+        }
+    }
+
+    /// <summary>
+    /// 채팅 멤버들의 프로필 사진 일괄 조회
+    /// </summary>
+    /// <param name="chat">채팅 정보</param>
+    /// <returns>첫 번째 상대방의 프로필 사진 (1:1 채팅) 또는 null</returns>
+    public async Task<string?> GetChatPhotoAsync(Chat chat)
+    {
+        if (chat?.Members == null || !chat.Members.Any())
+            return null;
+
+        try
+        {
+            // 1:1 채팅인 경우 상대방 사진 가져오기
+            if (chat.ChatType == ChatType.OneOnOne)
+            {
+                // 현재 사용자가 아닌 멤버 찾기
+                var client = _authService.GetGraphClient();
+                var me = await client.Me.GetAsync();
+                var myId = me?.Id;
+
+                var otherMember = chat.Members
+                    .OfType<AadUserConversationMember>()
+                    .FirstOrDefault(m => m.UserId != myId);
+
+                if (otherMember?.UserId != null)
+                {
+                    return await GetUserPhotoAsync(otherMember.UserId);
+                }
+            }
+            // 그룹 채팅인 경우 첫 번째 멤버 사진 (임시)
+            else
+            {
+                var firstMember = chat.Members
+                    .OfType<AadUserConversationMember>()
+                    .FirstOrDefault();
+
+                if (firstMember?.UserId != null)
+                {
+                    return await GetUserPhotoAsync(firstMember.UserId);
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.Debug("채팅 사진 조회 실패: {Error}", ex.Message);
+        }
+
+        return null;
+    }
+
+    /// <summary>
+    /// 그룹 채팅 멤버들의 프로필 사진 목록 조회 (최대 4명)
+    /// </summary>
+    /// <param name="chat">채팅 정보</param>
+    /// <returns>멤버 사진 정보 목록 (userId, displayName, photoBase64)</returns>
+    public async Task<List<(string UserId, string DisplayName, string? PhotoBase64)>> GetGroupChatMemberPhotosAsync(Chat chat)
+    {
+        var result = new List<(string UserId, string DisplayName, string? PhotoBase64)>();
+
+        if (chat?.Members == null || !chat.Members.Any())
+            return result;
+
+        try
+        {
+            // 현재 사용자 ID 조회
+            var client = _authService.GetGraphClient();
+            var me = await client.Me.GetAsync();
+            var myId = me?.Id;
+
+            // 나를 제외한 멤버 최대 4명
+            var members = chat.Members
+                .OfType<AadUserConversationMember>()
+                .Where(m => m.UserId != myId)
+                .Take(4)
+                .ToList();
+
+            foreach (var member in members)
+            {
+                if (string.IsNullOrEmpty(member.UserId))
+                    continue;
+
+                var photo = await GetUserPhotoAsync(member.UserId);
+                result.Add((member.UserId, member.DisplayName ?? "알 수 없음", photo));
+            }
+
+            _logger.Debug("그룹 채팅 멤버 사진 {Count}개 조회", result.Count);
+        }
+        catch (Exception ex)
+        {
+            _logger.Debug("그룹 채팅 멤버 사진 조회 실패: {Error}", ex.Message);
+        }
+
+        return result;
+    }
+
+    /// <summary>
+    /// 현재 사용자 ID 조회
+    /// </summary>
+    /// <returns>현재 사용자 ID</returns>
+    public async Task<string?> GetCurrentUserIdAsync()
+    {
+        try
+        {
+            var client = _authService.GetGraphClient();
+            var me = await client.Me.GetAsync();
+            return me?.Id;
+        }
+        catch (Exception ex)
+        {
+            _logger.Error(ex, "현재 사용자 ID 조회 실패");
             return null;
         }
     }

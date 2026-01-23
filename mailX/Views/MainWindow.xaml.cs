@@ -160,6 +160,10 @@ public partial class MainWindow : FluentWindow
         _syncService.CalendarEventsSynced += OnCalendarEventsSyncedFromWindow;
         Log4.Info("[MainWindow] CalendarEventsSynced 이벤트 구독 완료");
 
+        // ChatSynced 이벤트 구독 (채팅 동기화 완료 시 자동 로드)
+        _syncService.ChatSynced += OnChatSyncedFromWindow;
+        Log4.Info("[MainWindow] ChatSynced 이벤트 구독 완료");
+
         Loaded += MainWindow_Loaded;
         Closed += MainWindow_Closed;
         SizeChanged += MainWindow_SizeChanged;
@@ -205,6 +209,51 @@ public partial class MainWindow : FluentWindow
 
             // CalendarViewModel이 있으면 새로고침 (추후 사용을 위해 유지)
             _viewModel.CalendarViewModel?.OnCalendarEventsSynced(added, updated, deleted);
+        });
+    }
+
+    /// <summary>
+    /// 채팅 동기화 완료 이벤트 핸들러
+    /// 프로그램 시작 시 첫 동기화 후 채팅 데이터를 자동으로 로드
+    /// </summary>
+    private void OnChatSyncedFromWindow(int chatCount)
+    {
+        Log4.Info($"[MainWindow] OnChatSyncedFromWindow 이벤트 수신: {chatCount}개 채팅방");
+
+        Dispatcher.InvokeAsync(async () =>
+        {
+            // TeamsViewModel 초기화 (필요 시)
+            if (_teamsViewModel == null)
+            {
+                try
+                {
+                    _teamsViewModel = ((App)Application.Current).GetService<TeamsViewModel>()!;
+                }
+                catch (Exception ex)
+                {
+                    Log4.Error($"[OnChatSyncedFromWindow] TeamsViewModel 초기화 실패: {ex.Message}");
+                    return;
+                }
+            }
+
+            // 채팅 데이터가 아직 로드되지 않은 경우에만 로드
+            if (_teamsViewModel != null && _teamsViewModel.Chats.Count == 0)
+            {
+                Log4.Info("[OnChatSyncedFromWindow] 채팅 데이터 자동 로드 시작");
+                try
+                {
+                    await _teamsViewModel.LoadChatsAsync();
+                    Log4.Info($"[OnChatSyncedFromWindow] 채팅 데이터 로드 완료: {_teamsViewModel.Chats.Count}개");
+                }
+                catch (Exception ex)
+                {
+                    Log4.Error($"[OnChatSyncedFromWindow] 채팅 데이터 로드 실패: {ex.Message}");
+                }
+            }
+            else
+            {
+                Log4.Debug($"[OnChatSyncedFromWindow] 이미 로드됨: {_teamsViewModel?.Chats.Count ?? 0}개");
+            }
         });
     }
 
@@ -976,9 +1025,11 @@ public partial class MainWindow : FluentWindow
 
         // 동기화/분석 기간 및 주기 현재 설정 표시 초기화
         UpdateSyncPeriodCurrentDisplay();
+        UpdateFavoriteSyncPeriodCurrentDisplay();
         UpdateFavoriteSyncIntervalCurrentDisplay();
         UpdateFullSyncIntervalCurrentDisplay();
         UpdateAIAnalysisPeriodCurrentDisplay();
+        UpdateFavoriteAiPeriodCurrentDisplay();
         UpdateFavoriteAnalysisIntervalCurrentDisplay();
         UpdateFullAnalysisIntervalCurrentDisplay();
 
@@ -999,7 +1050,44 @@ public partial class MainWindow : FluentWindow
 
         // 폴더 목록 초기 로드
         await _viewModel.LoadFoldersCommand.ExecuteAsync(null);
+
+        // 채팅 데이터 자동 로드 (BackgroundSyncService 초기 동기화보다 MainWindow 생성이 늦기 때문에 직접 로드)
+        await LoadChatsOnStartupAsync();
+
         Log4.Debug("MainWindow_Loaded 완료");
+    }
+
+    /// <summary>
+    /// 프로그램 시작 시 채팅 데이터 자동 로드
+    /// MainWindow는 BackgroundSyncService 초기 동기화 이후에 생성되므로
+    /// ChatSynced 이벤트를 놓치게 됨 → 직접 로드
+    /// </summary>
+    private async Task LoadChatsOnStartupAsync()
+    {
+        try
+        {
+            // TeamsViewModel 초기화 (필요 시)
+            if (_teamsViewModel == null)
+            {
+                _teamsViewModel = ((App)Application.Current).GetService<TeamsViewModel>()!;
+            }
+
+            // 채팅 데이터가 아직 로드되지 않은 경우에만 로드
+            if (_teamsViewModel != null && _teamsViewModel.Chats.Count == 0)
+            {
+                Log4.Info("[MainWindow_Loaded] 채팅 데이터 자동 로드 시작");
+                await _teamsViewModel.LoadChatsAsync();
+                Log4.Info($"[MainWindow_Loaded] 채팅 데이터 로드 완료: {_teamsViewModel.Chats.Count}개");
+            }
+            else
+            {
+                Log4.Debug($"[MainWindow_Loaded] 채팅 데이터 이미 로드됨: {_teamsViewModel?.Chats.Count ?? 0}개");
+            }
+        }
+        catch (Exception ex)
+        {
+            Log4.Error($"[MainWindow_Loaded] 채팅 데이터 로드 실패: {ex.Message}");
+        }
     }
 
     /// <summary>
@@ -1049,6 +1137,7 @@ public partial class MainWindow : FluentWindow
         // 이벤트 구독 해제
         _syncService.MailSyncCompleted -= OnMailSyncCompletedFromWindow;
         _syncService.CalendarEventsSynced -= OnCalendarEventsSyncedFromWindow;
+        _syncService.ChatSynced -= OnChatSyncedFromWindow;
 
         // OnExplicitShutdown 모드에서는 명시적으로 종료 호출 필요
         Application.Current.Shutdown();
@@ -1849,12 +1938,18 @@ public partial class MainWindow : FluentWindow
             Log4.Debug($"전체 동기화 주기 로드: {prefs.FullSyncIntervalSeconds}초");
         }
 
-        // 캘린더 동기화 주기 로드
+        // 캘린더 동기화 주기 로드 (전체 동기화 주기로 통합됨)
         if (prefs.CalendarSyncIntervalSeconds > 0)
         {
             _viewModel.SetCalendarSyncInterval(prefs.CalendarSyncIntervalSeconds);
-            UpdateCalendarSyncIntervalCurrentDisplay(prefs.CalendarSyncIntervalSeconds);
             Log4.Debug($"캘린더 동기화 주기 로드: {prefs.CalendarSyncIntervalSeconds}초");
+        }
+
+        // 채팅 동기화 주기 로드 (전체 동기화 주기로 통합됨)
+        if (prefs.ChatSyncIntervalSeconds > 0)
+        {
+            _viewModel.SetChatSyncInterval(prefs.ChatSyncIntervalSeconds);
+            Log4.Debug($"채팅 동기화 주기 로드: {prefs.ChatSyncIntervalSeconds}초");
         }
 
         // 메일 동기화 일시정지 상태 로드
@@ -1906,6 +2001,7 @@ public partial class MainWindow : FluentWindow
     {
         Log4.Info("메뉴: 다크 모드 클릭");
         Services.Theme.ThemeService.Instance.SetDarkMode();
+        SyncSettingsUIFromMenu(); // 설정 UI 동기화
     }
 
     /// <summary>
@@ -1915,6 +2011,7 @@ public partial class MainWindow : FluentWindow
     {
         Log4.Info("메뉴: 라이트 모드 클릭");
         Services.Theme.ThemeService.Instance.SetLightMode();
+        SyncSettingsUIFromMenu(); // 설정 UI 동기화
     }
 
     /// <summary>
@@ -1925,6 +2022,7 @@ public partial class MainWindow : FluentWindow
         Log4.Info("메뉴: GPU 모드 토글");
         Services.Theme.RenderModeService.Instance.ToggleGpuMode();
         UpdateGpuModeCheckmark();
+        SyncSettingsUIFromMenu(); // 설정 UI 동기화
 
         // 사용자에게 재시작 안내
         var currentMode = Services.Theme.RenderModeService.Instance.GetCurrentModeString();
@@ -2178,57 +2276,8 @@ public partial class MainWindow : FluentWindow
         var highlightColor = new System.Windows.Media.SolidColorBrush(
             (System.Windows.Media.Color)System.Windows.Media.ColorConverter.ConvertFromString("#2196F3"));
 
-        var menuItems = new System.Windows.Controls.MenuItem?[] { MenuFullSyncInterval1m, MenuFullSyncInterval5m, MenuFullSyncInterval10m, MenuFullSyncInterval30m, MenuFullSyncInterval1h };
-        var intervalSeconds = new[] { 60, 300, 600, 1800, 3600 };
-
-        for (int i = 0; i < menuItems.Length; i++)
-        {
-            if (menuItems[i] != null)
-            {
-                bool isSelected = seconds == intervalSeconds[i];
-                menuItems[i]!.ClearValue(System.Windows.Controls.Control.ForegroundProperty);
-                if (isSelected)
-                    menuItems[i]!.Foreground = highlightColor;
-            }
-        }
-    }
-
-    // 캘린더 동기화 주기 설정
-    private void MenuCalendarSyncInterval_Click(object sender, RoutedEventArgs e)
-    {
-        if (sender is System.Windows.Controls.MenuItem menuItem && menuItem.Tag is string tagStr && int.TryParse(tagStr, out int seconds))
-        {
-            SetCalendarSyncInterval(seconds);
-        }
-    }
-
-    private void SetCalendarSyncInterval(int seconds)
-    {
-        _viewModel.SetCalendarSyncInterval(seconds);
-        var displayText = GetIntervalDisplayText(seconds);
-        Log4.Info($"캘린더 동기화 주기 설정: {displayText}");
-        _viewModel.StatusMessage = $"캘린더 동기화 주기: {displayText}";
-        UpdateCalendarSyncIntervalCurrentDisplay(seconds);
-
-        // 설정 저장
-        App.Settings.UserPreferences.CalendarSyncIntervalSeconds = seconds;
-        App.Settings.SaveUserPreferences();
-    }
-
-    private void UpdateCalendarSyncIntervalCurrentDisplay(int? seconds = null)
-    {
-        seconds ??= _viewModel.CalendarSyncIntervalSeconds;
-        if (MenuCalendarSyncIntervalCurrent != null)
-        {
-            MenuCalendarSyncIntervalCurrent.Header = $"현재: {GetIntervalDisplayText(seconds.Value)}";
-        }
-
-        // 캘린더 동기화 주기 메뉴 하이라이팅
-        var highlightColor = new System.Windows.Media.SolidColorBrush(
-            (System.Windows.Media.Color)System.Windows.Media.ColorConverter.ConvertFromString("#2196F3"));
-
-        var menuItems = new System.Windows.Controls.MenuItem?[] { MenuCalendarSyncInterval1s, MenuCalendarSyncInterval5s, MenuCalendarSyncInterval10s, MenuCalendarSyncInterval30s, MenuCalendarSyncInterval1m, MenuCalendarSyncInterval5m, MenuCalendarSyncInterval10m };
-        var intervalSeconds = new[] { 1, 5, 10, 30, 60, 300, 600 };
+        var menuItems = new System.Windows.Controls.MenuItem?[] { MenuFullSyncInterval1s, MenuFullSyncInterval5s, MenuFullSyncInterval10s, MenuFullSyncInterval30s, MenuFullSyncInterval1m, MenuFullSyncInterval5m, MenuFullSyncInterval10m, MenuFullSyncInterval30m, MenuFullSyncInterval1h };
+        var intervalSeconds = new[] { 1, 5, 10, 30, 60, 300, 600, 1800, 3600 };
 
         for (int i = 0; i < menuItems.Length; i++)
         {
@@ -2325,8 +2374,8 @@ public partial class MainWindow : FluentWindow
         var highlightColor = new System.Windows.Media.SolidColorBrush(
             (System.Windows.Media.Color)System.Windows.Media.ColorConverter.ConvertFromString("#2196F3"));
 
-        var menuItems = new System.Windows.Controls.MenuItem?[] { MenuFullAnalysisInterval1m, MenuFullAnalysisInterval5m, MenuFullAnalysisInterval10m, MenuFullAnalysisInterval30m, MenuFullAnalysisInterval1h };
-        var intervalSeconds = new[] { 60, 300, 600, 1800, 3600 };
+        var menuItems = new System.Windows.Controls.MenuItem?[] { MenuFullAnalysisInterval1s, MenuFullAnalysisInterval5s, MenuFullAnalysisInterval10s, MenuFullAnalysisInterval30s, MenuFullAnalysisInterval1m, MenuFullAnalysisInterval5m, MenuFullAnalysisInterval10m, MenuFullAnalysisInterval30m, MenuFullAnalysisInterval1h };
+        var intervalSeconds = new[] { 1, 5, 10, 30, 60, 300, 600, 1800, 3600 };
 
         for (int i = 0; i < menuItems.Length; i++)
         {
@@ -2349,6 +2398,128 @@ public partial class MainWindow : FluentWindow
             < 3600 => $"{seconds / 60}분",
             3600 => "1시간",
             _ => $"{seconds / 3600}시간"
+        };
+    }
+
+    // 즐겨찾기 동기화 기간 설정 (신규)
+    private void MenuFavoriteSyncPeriod_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is System.Windows.Controls.MenuItem menuItem && menuItem.Tag is string tagStr)
+        {
+            var parts = tagStr.Split(':');
+            if (parts.Length == 2 && int.TryParse(parts[1], out int value))
+            {
+                SetFavoriteSyncPeriod(parts[0], value);
+            }
+        }
+    }
+
+    private void SetFavoriteSyncPeriod(string periodType, int value)
+    {
+        App.Settings.UserPreferences.FavoriteSyncPeriodType = periodType;
+        App.Settings.UserPreferences.FavoriteSyncPeriodValue = value;
+        App.Settings.SaveUserPreferences();
+
+        var displayText = GetPeriodDisplayText(periodType, value);
+        Log4.Info($"즐겨찾기 동기화 기간 설정: {displayText}");
+        _viewModel.StatusMessage = $"즐겨찾기 동기화 기간: {displayText}";
+        UpdateFavoriteSyncPeriodCurrentDisplay(periodType, value);
+    }
+
+    private void UpdateFavoriteSyncPeriodCurrentDisplay(string? periodType = null, int? value = null)
+    {
+        periodType ??= App.Settings.UserPreferences.FavoriteSyncPeriodType;
+        value ??= App.Settings.UserPreferences.FavoriteSyncPeriodValue;
+
+        if (MenuFavoriteSyncPeriodCurrent != null)
+        {
+            MenuFavoriteSyncPeriodCurrent.Header = $"현재: {GetPeriodDisplayText(periodType, value.Value)}";
+        }
+
+        // 즐겨찾기 동기화 기간 메뉴 하이라이팅
+        var highlightColor = new System.Windows.Media.SolidColorBrush(
+            (System.Windows.Media.Color)System.Windows.Media.ColorConverter.ConvertFromString("#0078D4"));
+
+        var menuItems = new System.Windows.Controls.MenuItem?[] { MenuFavoriteSyncPeriod5, MenuFavoriteSyncPeriodDay, MenuFavoriteSyncPeriodWeek, MenuFavoriteSyncPeriodMonth, MenuFavoriteSyncPeriodYear, MenuFavoriteSyncPeriodAll };
+        var periodTypes = new[] { ("Count", 5), ("Days", 1), ("Weeks", 1), ("Months", 1), ("Years", 1), ("All", 0) };
+
+        for (int i = 0; i < menuItems.Length; i++)
+        {
+            if (menuItems[i] != null)
+            {
+                bool isSelected = periodType == periodTypes[i].Item1 && value == periodTypes[i].Item2;
+                menuItems[i]!.ClearValue(System.Windows.Controls.Control.ForegroundProperty);
+                if (isSelected)
+                    menuItems[i]!.Foreground = highlightColor;
+            }
+        }
+    }
+
+    // 즐겨찾기 AI 분석 기간 설정 (신규)
+    private void MenuFavoriteAiPeriod_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is System.Windows.Controls.MenuItem menuItem && menuItem.Tag is string tagStr)
+        {
+            var parts = tagStr.Split(':');
+            if (parts.Length == 2 && int.TryParse(parts[1], out int value))
+            {
+                SetFavoriteAiPeriod(parts[0], value);
+            }
+        }
+    }
+
+    private void SetFavoriteAiPeriod(string periodType, int value)
+    {
+        App.Settings.UserPreferences.FavoriteAiPeriodType = periodType;
+        App.Settings.UserPreferences.FavoriteAiPeriodValue = value;
+        App.Settings.SaveUserPreferences();
+
+        var displayText = GetPeriodDisplayText(periodType, value);
+        Log4.Info($"즐겨찾기 AI 분석 기간 설정: {displayText}");
+        _viewModel.StatusMessage = $"즐겨찾기 AI 분석 기간: {displayText}";
+        UpdateFavoriteAiPeriodCurrentDisplay(periodType, value);
+    }
+
+    private void UpdateFavoriteAiPeriodCurrentDisplay(string? periodType = null, int? value = null)
+    {
+        periodType ??= App.Settings.UserPreferences.FavoriteAiPeriodType;
+        value ??= App.Settings.UserPreferences.FavoriteAiPeriodValue;
+
+        if (MenuFavoriteAiPeriodCurrent != null)
+        {
+            MenuFavoriteAiPeriodCurrent.Header = $"현재: {GetPeriodDisplayText(periodType, value.Value)}";
+        }
+
+        // 즐겨찾기 AI 분석 기간 메뉴 하이라이팅
+        var highlightColor = new System.Windows.Media.SolidColorBrush(
+            (System.Windows.Media.Color)System.Windows.Media.ColorConverter.ConvertFromString("#FFD700"));
+
+        var menuItems = new System.Windows.Controls.MenuItem?[] { MenuFavoriteAiPeriod5, MenuFavoriteAiPeriodDay, MenuFavoriteAiPeriodWeek, MenuFavoriteAiPeriodMonth, MenuFavoriteAiPeriodYear, MenuFavoriteAiPeriodAll };
+        var periodTypes = new[] { ("Count", 5), ("Days", 1), ("Weeks", 1), ("Months", 1), ("Years", 1), ("All", 0) };
+
+        for (int i = 0; i < menuItems.Length; i++)
+        {
+            if (menuItems[i] != null)
+            {
+                bool isSelected = periodType == periodTypes[i].Item1 && value == periodTypes[i].Item2;
+                menuItems[i]!.ClearValue(System.Windows.Controls.Control.ForegroundProperty);
+                if (isSelected)
+                    menuItems[i]!.Foreground = highlightColor;
+            }
+        }
+    }
+
+    private static string GetPeriodDisplayText(string periodType, int value)
+    {
+        return periodType switch
+        {
+            "Count" => $"최근 {value}건",
+            "Days" => value == 1 ? "하루" : $"{value}일",
+            "Weeks" => value == 1 ? "1주일" : $"{value}주",
+            "Months" => value == 1 ? "1달" : $"{value}개월",
+            "Years" => value == 1 ? "1년" : $"{value}년",
+            "All" => "전체",
+            _ => "알 수 없음"
         };
     }
 
@@ -2401,14 +2572,44 @@ public partial class MainWindow : FluentWindow
     /// </summary>
     private async void MenuForceResync_Click(object sender, RoutedEventArgs e)
     {
-        Log4.Info("메뉴: 전체 재동기화 클릭");
-        _viewModel.StatusMessage = "전체 재동기화 시작...";
+        Log4.Info("메뉴: 전체 재동기화 클릭 (모든 서비스)");
 
         try
         {
-            // BackgroundSyncService를 통해 강제 동기화
+            // 1. 메일 동기화
+            _viewModel.StatusMessage = "메일 동기화 중...";
             await _viewModel.ForceResyncAllAsync();
+
+            // 2. 캘린더 동기화
+            _viewModel.StatusMessage = "캘린더 동기화 중...";
+            await _syncService.SyncCalendarAsync();
+
+            // 3. 채팅 동기화
+            _viewModel.StatusMessage = "채팅 동기화 중...";
+            await _syncService.SyncChatsAsync();
+            if (_teamsViewModel != null)
+            {
+                await _teamsViewModel.LoadChatsAsync();
+            }
+
+            // 4. 원노트 동기화
+            _viewModel.StatusMessage = "원노트 동기화 중...";
+            if (_oneNoteViewModel != null)
+            {
+                await _oneNoteViewModel.LoadNotebooksAsync();
+                await _oneNoteViewModel.LoadRecentPagesAsync();
+            }
+
+            // 5. 플래너 동기화
+            _viewModel.StatusMessage = "플래너 동기화 중...";
+            if (_plannerViewModel != null)
+            {
+                await _plannerViewModel.LoadPlansAsync();
+                await _plannerViewModel.LoadMyTasksAsync();
+            }
+
             _viewModel.StatusMessage = "전체 재동기화 완료";
+            Log4.Info("전체 재동기화 완료 (모든 서비스)");
         }
         catch (Exception ex)
         {
@@ -3691,13 +3892,12 @@ public partial class MainWindow : FluentWindow
     }
 
     /// <summary>
-    /// 설정 버튼 클릭
+    /// 설정 버튼 체크 (라디오버튼)
     /// </summary>
-    private void NavSettingsButton_Click(object sender, RoutedEventArgs e)
+    private void NavSettingsButton_Checked(object sender, RoutedEventArgs e)
     {
-        Log4.Info("네비게이션: 설정");
-        // API 설정 다이얼로그 열기
-        MenuApiSettings_Click(sender, e);
+        Log4.Info("네비게이션: 설정 모드");
+        ShowSettingsView();
     }
 
     /// <summary>
@@ -4082,6 +4282,7 @@ public partial class MainWindow : FluentWindow
         if (OneDriveViewBorder != null) OneDriveViewBorder.Visibility = Visibility.Collapsed;
         if (OneNoteViewBorder != null) OneNoteViewBorder.Visibility = Visibility.Collapsed;
         if (CallsViewBorder != null) CallsViewBorder.Visibility = Visibility.Collapsed;
+        if (SettingsViewBorder != null) SettingsViewBorder.Visibility = Visibility.Collapsed;
 
         // 우측 패널 숨김
         if (AIPanelBorder != null) AIPanelBorder.Visibility = Visibility.Collapsed;
@@ -4094,7 +4295,7 @@ public partial class MainWindow : FluentWindow
     /// <summary>
     /// 채팅 뷰 표시
     /// </summary>
-    private void ShowChatView()
+    private async void ShowChatView()
     {
         HideAllViews();
 
@@ -4102,6 +4303,173 @@ public partial class MainWindow : FluentWindow
 
         _viewModel.StatusMessage = "채팅";
         Services.Theme.ThemeService.Instance.ApplyFeatureTheme("chat");
+
+        // TeamsViewModel 초기화 (필요 시)
+        if (_teamsViewModel == null)
+        {
+            try
+            {
+                System.Diagnostics.Debug.WriteLine("[DEBUG] TeamsViewModel 초기화 시작");
+                _teamsViewModel = ((App)Application.Current).GetService<TeamsViewModel>()!;
+                System.Diagnostics.Debug.WriteLine($"[DEBUG] TeamsViewModel 초기화 완료: {(_teamsViewModel != null ? "성공" : "null")}");
+                Log4.Info($"TeamsViewModel 초기화 완료: {(_teamsViewModel != null ? "성공" : "null")}");
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"[DEBUG] TeamsViewModel 초기화 실패: {ex.Message}");
+                Log4.Error($"TeamsViewModel 초기화 실패: {ex.Message}");
+            }
+        }
+
+        // 채팅 데이터 로드 (최초 1회)
+        Log4.Info($"[ShowChatView] 분기 조건 체크: _teamsViewModel={(_teamsViewModel != null ? "not null" : "null")}, Chats.Count={_teamsViewModel?.Chats.Count ?? -1}");
+        System.Diagnostics.Debug.WriteLine($"[DEBUG] _teamsViewModel: {(_teamsViewModel != null ? "not null" : "null")}, Chats.Count: {_teamsViewModel?.Chats.Count ?? -1}");
+        if (_teamsViewModel != null && _teamsViewModel.Chats.Count == 0)
+        {
+            Log4.Info("[ShowChatView] Chats.Count == 0 → LoadChatDataAsync 호출");
+            System.Diagnostics.Debug.WriteLine("[DEBUG] LoadChatDataAsync 호출");
+            await LoadChatDataAsync();
+        }
+        else if (_teamsViewModel == null)
+        {
+            System.Diagnostics.Debug.WriteLine("[DEBUG] TeamsViewModel이 null입니다");
+            Log4.Error("TeamsViewModel이 null입니다. 채팅 로드 불가");
+        }
+        else
+        {
+            // 이미 로드된 경우에도 ItemsSource 강제 새로고침 (UI 업데이트 보장)
+            Log4.Info($"[ShowChatView] Chats.Count > 0 → 채팅 이미 로드됨 - UI 새로고침: Chats={_teamsViewModel.Chats.Count}개, FavoriteChats={_teamsViewModel.FavoriteChats.Count}개");
+            UpdateChatListUI();
+        }
+    }
+
+    /// <summary>
+    /// 채팅 데이터 로드
+    /// </summary>
+    private async Task LoadChatDataAsync()
+    {
+        Log4.Info("[LoadChatDataAsync] 시작");
+        try
+        {
+            System.Diagnostics.Debug.WriteLine("[DEBUG] LoadChatDataAsync 시작");
+            Log4.Info("[LoadChatDataAsync] LoadChatsAsync 호출 전");
+            await _teamsViewModel!.LoadChatsAsync();
+            System.Diagnostics.Debug.WriteLine($"[DEBUG] LoadChatsAsync 완료: {_teamsViewModel.Chats.Count}개");
+            Log4.Info($"[LoadChatDataAsync] LoadChatsAsync 완료: {_teamsViewModel.Chats.Count}개, FavoriteChats: {_teamsViewModel.FavoriteChats.Count}개");
+
+            // 채팅 목록 UI 업데이트
+            Log4.Info("[LoadChatDataAsync] UpdateChatListUI 호출 전");
+            UpdateChatListUI();
+            Log4.Info("[LoadChatDataAsync] UpdateChatListUI 호출 후");
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"[DEBUG] LoadChatDataAsync 실패: {ex.Message}\n{ex.StackTrace}");
+            Log4.Error($"[LoadChatDataAsync] 실패: {ex.Message}");
+        }
+    }
+
+    /// <summary>
+    /// 채팅 목록 UI 업데이트
+    /// </summary>
+    private void UpdateChatListUI()
+    {
+        // UI 스레드에서 실행 보장
+        if (!Dispatcher.CheckAccess())
+        {
+            Dispatcher.Invoke(UpdateChatListUI);
+            return;
+        }
+
+        Log4.Info("[UpdateChatListUI] 시작");
+
+        if (_teamsViewModel == null)
+        {
+            Log4.Warn("[UpdateChatListUI] _teamsViewModel이 null입니다");
+            return;
+        }
+
+        try
+        {
+            // 디버그: 현대자동차 채팅방 데이터 확인
+            var hyundaiChat = _teamsViewModel.Chats.FirstOrDefault(c => c.DisplayName?.Contains("현대자동차") == true);
+            if (hyundaiChat == null)
+            {
+                // FavoriteChats에서도 확인
+                hyundaiChat = _teamsViewModel.FavoriteChats.FirstOrDefault(c => c.DisplayName?.Contains("현대자동차") == true);
+            }
+            if (hyundaiChat != null)
+            {
+                // Serilog로도 로깅 (Log4가 파일에 기록되지 않을 수 있으므로)
+                Serilog.Log.Information("[UI바인딩] 현대자동차 채팅방 - HashCode: {Hash}, LastUpdatedDateTime: {Time}, Display: {Display}",
+                    hyundaiChat.GetHashCode(), hyundaiChat.LastUpdatedDateTime, hyundaiChat.LastUpdatedDisplay);
+                Log4.Info($"[UI바인딩] 현대자동차 채팅방 - HashCode: {hyundaiChat.GetHashCode()}, LastUpdatedDateTime: {hyundaiChat.LastUpdatedDateTime}, Display: {hyundaiChat.LastUpdatedDisplay}");
+            }
+
+            // 모든 ChatItemViewModel의 LastUpdatedDisplay 갱신
+            foreach (var chat in _teamsViewModel.Chats)
+            {
+                chat.RefreshLastUpdatedDisplay();
+            }
+            foreach (var chat in _teamsViewModel.FavoriteChats)
+            {
+                chat.RefreshLastUpdatedDisplay();
+            }
+            Serilog.Log.Information("[UpdateChatListUI] RefreshLastUpdatedDisplay 호출 완료");
+
+            // 채팅 목록 ItemsSource 설정
+            if (ChatListBox != null)
+            {
+                ChatListBox.ItemsSource = null;
+                ChatListBox.Items.Refresh();
+                ChatListBox.ItemsSource = _teamsViewModel.Chats;
+                ChatListBox.Items.Refresh();
+                Serilog.Log.Information("[UpdateChatListUI] ChatListBox.ItemsSource 설정: {Count}개", _teamsViewModel.Chats.Count);
+                Log4.Info($"[UpdateChatListUI] ChatListBox.ItemsSource 설정: {_teamsViewModel.Chats.Count}개");
+
+                // 바인딩 후 실제 데이터 확인
+                foreach (var item in ChatListBox.Items.Cast<ChatItemViewModel>().Take(10))
+                {
+                    if (item.DisplayName?.Contains("현대자동차") == true)
+                    {
+                        Serilog.Log.Information("[바인딩검증] ChatListBox 아이템 - HashCode: {Hash}, Name: {Name}, LastUpdatedDisplay: {Display}",
+                            item.GetHashCode(), item.DisplayName, item.LastUpdatedDisplay);
+                    }
+                }
+            }
+            else
+            {
+                Log4.Warn("[UpdateChatListUI] ChatListBox가 null입니다");
+            }
+
+            // 즐겨찾기 목록 ItemsSource 설정
+            if (ChatFavoritesListBox != null)
+            {
+                ChatFavoritesListBox.ItemsSource = null;
+                ChatFavoritesListBox.Items.Refresh();
+                ChatFavoritesListBox.ItemsSource = _teamsViewModel.FavoriteChats;
+                ChatFavoritesListBox.Items.Refresh();
+                Serilog.Log.Information("[UpdateChatListUI] ChatFavoritesListBox.ItemsSource 설정: {Count}개", _teamsViewModel.FavoriteChats.Count);
+                Log4.Info($"[UpdateChatListUI] ChatFavoritesListBox.ItemsSource 설정: {_teamsViewModel.FavoriteChats.Count}개");
+            }
+            else
+            {
+                Log4.Warn("[UpdateChatListUI] ChatFavoritesListBox가 null입니다");
+            }
+
+            // 빈 상태 표시 (채팅 로딩 오버레이 사용)
+            if (ChatListLoadingOverlay != null)
+            {
+                ChatListLoadingOverlay.Visibility = Visibility.Collapsed;
+            }
+
+            Serilog.Log.Information("[UpdateChatListUI] 완료");
+            Log4.Info("[UpdateChatListUI] 완료");
+        }
+        catch (Exception ex)
+        {
+            Log4.Error($"[UpdateChatListUI] 예외 발생: {ex.Message}");
+        }
     }
 
     /// <summary>
@@ -4109,17 +4477,42 @@ public partial class MainWindow : FluentWindow
     /// </summary>
     private async void ShowTeamsView()
     {
-        HideAllViews();
-
-        if (TeamsViewBorder != null) TeamsViewBorder.Visibility = Visibility.Visible;
-
-        _viewModel.StatusMessage = "팀";
-        Services.Theme.ThemeService.Instance.ApplyFeatureTheme("teams");
-
-        // 팀 데이터 로드 (최초 1회)
-        if (_teamsViewModel == null || _teamsViewModel.Teams.Count == 0)
+        try
         {
-            await LoadTeamsDataAsync();
+            System.Diagnostics.Debug.WriteLine("[Teams] ShowTeamsView 호출됨");
+            Serilog.Log.Information("[Teams] ShowTeamsView 호출됨");
+            Log4.Info("[Teams] ShowTeamsView 호출됨");
+            HideAllViews();
+
+            if (TeamsViewBorder != null) TeamsViewBorder.Visibility = Visibility.Visible;
+
+            _viewModel.StatusMessage = "팀";
+            Services.Theme.ThemeService.Instance.ApplyFeatureTheme("teams");
+
+            // 팀 데이터 로드 (최초 1회 또는 비어있을 때)
+            var teamsCount = _teamsViewModel?.Teams.Count ?? -1;
+            System.Diagnostics.Debug.WriteLine($"[Teams] 로드 조건 확인: _teamsViewModel={(_teamsViewModel != null ? "not null" : "null")}, Teams.Count={teamsCount}");
+            Serilog.Log.Information("[Teams] 로드 조건 확인: _teamsViewModel={IsNull}, Teams.Count={Count}",
+                _teamsViewModel != null ? "not null" : "null", teamsCount);
+
+            if (_teamsViewModel == null || _teamsViewModel.Teams.Count == 0)
+            {
+                Serilog.Log.Information("[Teams] LoadTeamsDataAsync 호출 시작");
+                await LoadTeamsDataAsync();
+                Serilog.Log.Information("[Teams] LoadTeamsDataAsync 호출 완료");
+            }
+            else
+            {
+                // 이미 로드된 경우 DataContext만 설정
+                Serilog.Log.Information("[Teams] 이미 로드됨, DataContext만 설정 (Teams.Count={Count})", teamsCount);
+                TeamsViewBorder.DataContext = _teamsViewModel;
+            }
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"[Teams] ShowTeamsView 오류: {ex.Message}");
+            Serilog.Log.Error(ex, "[Teams] ShowTeamsView 오류");
+            Log4.Error($"[Teams] ShowTeamsView 오류: {ex.Message}");
         }
     }
 
@@ -4130,20 +4523,47 @@ public partial class MainWindow : FluentWindow
     {
         try
         {
+            Serilog.Log.Information("[Teams] ========== 팀 데이터 로드 시작 ==========");
+            Log4.Info("[Teams] ========== 팀 데이터 로드 시작 ==========");
+
             if (_teamsViewModel == null)
             {
                 _teamsViewModel = ((App)Application.Current).GetService<TeamsViewModel>()!;
+                Serilog.Log.Information("[Teams] TeamsViewModel DI로 초기화 완료");
+                Log4.Info("[Teams] TeamsViewModel DI로 초기화 완료");
             }
 
+            Serilog.Log.Information("[Teams] LoadTeamsAsync 호출 전...");
+            Log4.Info("[Teams] LoadTeamsAsync 호출 전...");
             await _teamsViewModel.LoadTeamsAsync();
-            TeamsListView.DataContext = _teamsViewModel;
+            Serilog.Log.Information("[Teams] LoadTeamsAsync 완료 - 팀 {Count}개", _teamsViewModel.Teams.Count);
+            Log4.Info($"[Teams] LoadTeamsAsync 완료 - 팀 {_teamsViewModel.Teams.Count}개");
 
-            // 우측 패널에도 바인딩 설정
+            // DataContext 설정
             TeamsViewBorder.DataContext = _teamsViewModel;
+            Serilog.Log.Information("[Teams] TeamsViewBorder.DataContext 설정 완료");
+            Log4.Info("[Teams] TeamsViewBorder.DataContext 설정 완료");
+
+            // 팀 목록이 비어있으면 API 문제 가능성
+            if (_teamsViewModel.Teams.Count == 0)
+            {
+                Serilog.Log.Warning("[Teams] ⚠️ 팀 목록이 비어있습니다! Graph API 권한 또는 연결 문제 확인 필요");
+                Log4.Info("[Teams] ⚠️ 팀 목록이 비어있습니다! Graph API 권한 또는 연결 문제 확인 필요");
+            }
+            else
+            {
+                foreach (var team in _teamsViewModel.Teams)
+                {
+                    Serilog.Log.Information("[Teams] 로드된 팀: {TeamName} (채널 {ChannelCount}개)", team.DisplayName, team.Channels.Count);
+                    Log4.Info($"[Teams] 로드된 팀: {team.DisplayName} (채널 {team.Channels.Count}개)");
+                }
+            }
         }
         catch (Exception ex)
         {
-            Log4.Error($"팀 데이터 로드 실패: {ex.Message}");
+            Serilog.Log.Error(ex, "[Teams] 팀 데이터 로드 실패");
+            Log4.Error($"[Teams] 팀 데이터 로드 실패: {ex.Message}");
+            Log4.Error($"[Teams] StackTrace: {ex.StackTrace}");
         }
     }
 
@@ -4304,38 +4724,48 @@ public partial class MainWindow : FluentWindow
     /// </summary>
     public void NavigateToTab(string tabName)
     {
+        Log4.Info($"[NavigateToTab] 탭 전환 요청: {tabName}");
         var tabLower = tabName.ToLowerInvariant();
         switch (tabLower)
         {
             case "mail":
                 NavMailButton.IsChecked = true;
+                ShowMailView();
                 break;
             case "calendar":
                 NavCalendarButton.IsChecked = true;
+                ShowCalendarView();
                 break;
             case "chat":
                 NavChatButton.IsChecked = true;
+                ShowChatView();
                 break;
             case "teams":
                 NavTeamsButton.IsChecked = true;
+                ShowTeamsView();
                 break;
             case "activity":
                 NavActivityButton.IsChecked = true;
+                ShowActivityView();
                 break;
             case "planner":
                 NavPlannerButton.IsChecked = true;
+                ShowPlannerView();
                 break;
             case "onedrive":
                 NavOneDriveButton.IsChecked = true;
+                ShowOneDriveView();
                 break;
             case "onenote":
                 NavOneNoteButton.IsChecked = true;
+                ShowOneNoteView();
                 break;
             case "calls":
                 NavCallsButton.IsChecked = true;
+                ShowCallsView();
                 break;
             default:
-                Log4.Warn($"알 수 없는 탭: {tabName}");
+                Log4.Warn($"[NavigateToTab] 알 수 없는 탭: {tabName}");
                 break;
         }
     }
@@ -5288,6 +5718,7 @@ public partial class MainWindow : FluentWindow
         var themeService = Services.Theme.ThemeService.Instance;
         themeService.ToggleTheme();
         UpdateThemeIcon();
+        SyncSettingsUIFromMenu(); // 설정 UI 동기화
     }
 
     /// <summary>
@@ -5702,54 +6133,6 @@ public partial class MainWindow : FluentWindow
     }
 
     /// <summary>
-    /// 채팅 필터: 읽지 않음
-    /// </summary>
-    private void ChatFilterUnread_Click(object sender, RoutedEventArgs e)
-    {
-        SetChatFilterButtonAppearance("unread");
-        Log4.Debug("채팅 필터: 읽지 않음");
-    }
-
-    /// <summary>
-    /// 채팅 필터: 채팅
-    /// </summary>
-    private void ChatFilterChat_Click(object sender, RoutedEventArgs e)
-    {
-        SetChatFilterButtonAppearance("chat");
-        Log4.Debug("채팅 필터: 채팅");
-    }
-
-    /// <summary>
-    /// 채팅 필터: 모임 채팅
-    /// </summary>
-    private void ChatFilterMeeting_Click(object sender, RoutedEventArgs e)
-    {
-        SetChatFilterButtonAppearance("meeting");
-        Log4.Debug("채팅 필터: 모임 채팅");
-    }
-
-    /// <summary>
-    /// 채팅 필터 버튼 외관 업데이트
-    /// </summary>
-    private void SetChatFilterButtonAppearance(string selected)
-    {
-        if (ChatFilterUnreadButton != null)
-            ChatFilterUnreadButton.Appearance = selected == "unread"
-                ? Wpf.Ui.Controls.ControlAppearance.Secondary
-                : Wpf.Ui.Controls.ControlAppearance.Transparent;
-
-        if (ChatFilterChatButton != null)
-            ChatFilterChatButton.Appearance = selected == "chat"
-                ? Wpf.Ui.Controls.ControlAppearance.Secondary
-                : Wpf.Ui.Controls.ControlAppearance.Transparent;
-
-        if (ChatFilterMeetingButton != null)
-            ChatFilterMeetingButton.Appearance = selected == "meeting"
-                ? Wpf.Ui.Controls.ControlAppearance.Secondary
-                : Wpf.Ui.Controls.ControlAppearance.Transparent;
-    }
-
-    /// <summary>
     /// 채팅 목록 선택 변경
     /// </summary>
     private async void ChatListBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
@@ -5757,7 +6140,21 @@ public partial class MainWindow : FluentWindow
         var listBox = sender as ListBox;
         if (listBox?.SelectedItem is ChatItemViewModel selectedChat)
         {
-            Log4.Debug($"채팅 선택: {selectedChat.DisplayName}");
+            Log4.Debug($"채팅 선택: {selectedChat.DisplayName} (from: {listBox.Name})");
+
+            // 다른 ListBox의 선택 해제 (무한 루프 방지를 위해 이벤트 핸들러 임시 해제)
+            if (listBox == ChatListBox && ChatFavoritesListBox?.SelectedItem != null)
+            {
+                ChatFavoritesListBox.SelectionChanged -= ChatListBox_SelectionChanged;
+                ChatFavoritesListBox.SelectedItem = null;
+                ChatFavoritesListBox.SelectionChanged += ChatListBox_SelectionChanged;
+            }
+            else if (listBox == ChatFavoritesListBox && ChatListBox?.SelectedItem != null)
+            {
+                ChatListBox.SelectionChanged -= ChatListBox_SelectionChanged;
+                ChatListBox.SelectedItem = null;
+                ChatListBox.SelectionChanged += ChatListBox_SelectionChanged;
+            }
 
             // 빈 상태 패널 숨기고 콘텐츠 패널 표시
             if (ChatEmptyStatePanel != null)
@@ -5820,21 +6217,135 @@ public partial class MainWindow : FluentWindow
     }
 
     /// <summary>
+    /// 채팅 즐겨찾기 추가
+    /// </summary>
+    private async void ChatFavorite_Click(object sender, RoutedEventArgs e)
+    {
+        if (ChatListBox?.SelectedItem is ChatItemViewModel chat && _teamsViewModel != null)
+        {
+            await _teamsViewModel.ToggleFavoriteAsync(chat);
+        }
+    }
+
+    /// <summary>
+    /// 채팅 즐겨찾기 해제
+    /// </summary>
+    private async void ChatUnfavorite_Click(object sender, RoutedEventArgs e)
+    {
+        if (ChatFavoritesListBox?.SelectedItem is ChatItemViewModel chat && _teamsViewModel != null)
+        {
+            await _teamsViewModel.ToggleFavoriteAsync(chat);
+        }
+    }
+
+    #region 채팅 즐겨찾기 드래그 앤 드롭
+
+    private ChatItemViewModel? _draggedChatItem;
+    private bool _isChatDragging;
+
+    /// <summary>
+    /// 드래그 시작점 기록
+    /// </summary>
+    private void ChatFavorites_PreviewMouseLeftButtonDown(object sender, MouseButtonEventArgs e)
+    {
+        _dragStartPoint = e.GetPosition(null);
+        _isChatDragging = false;
+
+        // 드래그 대상 아이템 찾기
+        var listBoxItem = FindAncestor<ListBoxItem>((DependencyObject)e.OriginalSource);
+        if (listBoxItem != null)
+        {
+            _draggedChatItem = listBoxItem.DataContext as ChatItemViewModel;
+        }
+        else
+        {
+            _draggedChatItem = null;
+        }
+    }
+
+    /// <summary>
+    /// 마우스 이동 시 드래그 시작
+    /// </summary>
+    private void ChatFavorites_PreviewMouseMove(object sender, MouseEventArgs e)
+    {
+        if (e.LeftButton != MouseButtonState.Pressed || _draggedChatItem == null)
+            return;
+
+        Point currentPosition = e.GetPosition(null);
+        Vector diff = _dragStartPoint - currentPosition;
+
+        // 최소 드래그 거리 확인 (실수로 드래그 시작하는 것 방지)
+        if (Math.Abs(diff.X) > SystemParameters.MinimumHorizontalDragDistance ||
+            Math.Abs(diff.Y) > SystemParameters.MinimumVerticalDragDistance)
+        {
+            _isChatDragging = true;
+
+            // 드래그 데이터 설정
+            var data = new DataObject(typeof(ChatItemViewModel), _draggedChatItem);
+            DragDrop.DoDragDrop(ChatFavoritesListBox, data, DragDropEffects.Move);
+        }
+    }
+
+    /// <summary>
+    /// 드래그 오버 시 드롭 허용 표시
+    /// </summary>
+    private void ChatFavorites_DragOver(object sender, DragEventArgs e)
+    {
+        if (!e.Data.GetDataPresent(typeof(ChatItemViewModel)))
+        {
+            e.Effects = DragDropEffects.None;
+            e.Handled = true;
+            return;
+        }
+
+        e.Effects = DragDropEffects.Move;
+        e.Handled = true;
+    }
+
+    /// <summary>
+    /// 드롭 시 위치 변경
+    /// </summary>
+    private async void ChatFavorites_Drop(object sender, DragEventArgs e)
+    {
+        if (!e.Data.GetDataPresent(typeof(ChatItemViewModel)))
+            return;
+
+        var droppedItem = e.Data.GetData(typeof(ChatItemViewModel)) as ChatItemViewModel;
+        if (droppedItem == null || _teamsViewModel == null)
+            return;
+
+        // 드롭 위치의 아이템 찾기
+        var targetListBoxItem = FindAncestor<ListBoxItem>((DependencyObject)e.OriginalSource);
+        ChatItemViewModel? targetItem = null;
+
+        if (targetListBoxItem != null)
+        {
+            targetItem = targetListBoxItem.DataContext as ChatItemViewModel;
+        }
+
+        // 동일 아이템이면 무시
+        if (targetItem == null || targetItem.Id == droppedItem.Id)
+            return;
+
+        Log4.Info($"[ChatFavorites_Drop] 드래그: {droppedItem.DisplayName} → 타겟: {targetItem.DisplayName}");
+
+        // 순서 변경 실행
+        await _teamsViewModel.ReorderFavoriteAsync(droppedItem.Id, targetItem.Id);
+    }
+
+    #endregion
+
+    /// <summary>
     /// 채팅 목록 로드
     /// </summary>
     private async Task LoadChatsAsync()
     {
         if (_teamsViewModel == null)
         {
-            // TeamsViewModel 초기화
+            // TeamsViewModel 초기화 (DI에서 가져오기)
             try
             {
-                using var scope = ((App)Application.Current).ServiceProvider.CreateScope();
-                var teamsService = scope.ServiceProvider.GetService<GraphTeamsService>();
-                if (teamsService != null)
-                {
-                    _teamsViewModel = new TeamsViewModel(teamsService);
-                }
+                _teamsViewModel = ((App)Application.Current).GetService<TeamsViewModel>();
             }
             catch (Exception ex)
             {
@@ -5852,8 +6363,8 @@ public partial class MainWindow : FluentWindow
 
             await _teamsViewModel.LoadChatsAsync();
 
-            if (ChatListBox != null)
-                ChatListBox.ItemsSource = _teamsViewModel.Chats;
+            // UI 업데이트 (두 ListBox 모두 업데이트)
+            UpdateChatListUI();
 
             Log4.Info($"채팅 목록 로드 완료: {_teamsViewModel.Chats.Count}개");
         }
@@ -5934,6 +6445,116 @@ public partial class MainWindow : FluentWindow
             Log4.Error($"메시지 전송 실패: {ex.Message}");
         }
     }
+
+    #region 채팅 필터 이벤트 핸들러
+
+    /// <summary>
+    /// 읽지 않음 필터 체크됨
+    /// </summary>
+    private void ChatFilterUnread_Checked(object sender, RoutedEventArgs e)
+    {
+        if (_teamsViewModel != null)
+        {
+            _teamsViewModel.FilterUnread = true;
+            ApplyChatFilters();
+        }
+    }
+
+    /// <summary>
+    /// 읽지 않음 필터 체크 해제됨
+    /// </summary>
+    private void ChatFilterUnread_Unchecked(object sender, RoutedEventArgs e)
+    {
+        if (_teamsViewModel != null)
+        {
+            _teamsViewModel.FilterUnread = false;
+            ApplyChatFilters();
+        }
+    }
+
+    /// <summary>
+    /// 채팅 필터 체크됨
+    /// </summary>
+    private void ChatFilterChat_Checked(object sender, RoutedEventArgs e)
+    {
+        if (_teamsViewModel != null)
+        {
+            _teamsViewModel.FilterChat = true;
+            ApplyChatFilters();
+        }
+    }
+
+    /// <summary>
+    /// 채팅 필터 체크 해제됨
+    /// </summary>
+    private void ChatFilterChat_Unchecked(object sender, RoutedEventArgs e)
+    {
+        if (_teamsViewModel != null)
+        {
+            _teamsViewModel.FilterChat = false;
+            ApplyChatFilters();
+        }
+    }
+
+    /// <summary>
+    /// 모임 채팅 필터 체크됨
+    /// </summary>
+    private void ChatFilterMeeting_Checked(object sender, RoutedEventArgs e)
+    {
+        if (_teamsViewModel != null)
+        {
+            _teamsViewModel.FilterMeeting = true;
+            ApplyChatFilters();
+        }
+    }
+
+    /// <summary>
+    /// 모임 채팅 필터 체크 해제됨
+    /// </summary>
+    private void ChatFilterMeeting_Unchecked(object sender, RoutedEventArgs e)
+    {
+        if (_teamsViewModel != null)
+        {
+            _teamsViewModel.FilterMeeting = false;
+            ApplyChatFilters();
+        }
+    }
+
+    /// <summary>
+    /// 채팅 필터 적용
+    /// </summary>
+    private void ApplyChatFilters()
+    {
+        if (_teamsViewModel == null || ChatListBox == null) return;
+
+        var filteredChats = _teamsViewModel.AllChats?.Where(chat =>
+        {
+            // 필터가 모두 해제된 경우 모든 채팅 표시
+            if (!_teamsViewModel.FilterUnread && !_teamsViewModel.FilterChat && !_teamsViewModel.FilterMeeting)
+                return true;
+
+            bool match = false;
+
+            // 읽지 않음 필터
+            if (_teamsViewModel.FilterUnread && chat.UnreadCount > 0)
+                match = true;
+
+            // 채팅 필터 (1:1 채팅)
+            if (_teamsViewModel.FilterChat && !chat.IsGroupChat)
+                match = true;
+
+            // 모임 채팅 필터 (그룹 채팅)
+            if (_teamsViewModel.FilterMeeting && chat.IsGroupChat)
+                match = true;
+
+            return match;
+        }).ToList() ?? new List<ChatItemViewModel>();
+
+        ChatListBox.ItemsSource = filteredChats;
+        Log4.Debug($"채팅 필터 적용: {filteredChats.Count}개 표시");
+    }
+
+    #endregion
 
     #endregion
 
@@ -6538,13 +7159,13 @@ public partial class MainWindow : FluentWindow
     {
         try
         {
-            if (_teamsViewModel != null)
-            {
-                await _teamsViewModel.RefreshTeamsAsync();
-            }
+            System.Diagnostics.Debug.WriteLine("[Teams] 새로고침 버튼 클릭");
+            await LoadTeamsDataAsync();
+            System.Diagnostics.Debug.WriteLine($"[Teams] 새로고침 완료: {_teamsViewModel?.Teams.Count ?? 0}개 팀");
         }
         catch (Exception ex)
         {
+            System.Diagnostics.Debug.WriteLine($"[Teams] 팀 새로고침 실패: {ex.Message}");
             Log4.Error($"팀 새로고침 실패: {ex.Message}");
         }
     }
@@ -6582,6 +7203,33 @@ public partial class MainWindow : FluentWindow
     }
 
     /// <summary>
+    /// 즐겨찾기 채널 아이템 클릭
+    /// </summary>
+    private async void FavoriteChannelItem_Click(object sender, RoutedEventArgs e)
+    {
+        try
+        {
+            if (sender is Wpf.Ui.Controls.Button btn && btn.Tag is FavoriteChannelViewModel favorite)
+            {
+                if (_teamsViewModel != null)
+                {
+                    // 팀에서 해당 채널 찾기
+                    var team = _teamsViewModel.Teams.FirstOrDefault(t => t.Id == favorite.TeamId);
+                    var channel = team?.Channels.FirstOrDefault(c => c.Id == favorite.ChannelId);
+                    if (channel != null)
+                    {
+                        await _teamsViewModel.SelectChannelAsync(channel);
+                    }
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            Log4.Error($"즐겨찾기 채널 선택 실패: {ex.Message}");
+        }
+    }
+
+    /// <summary>
     /// Teams 게시물 탭 클릭
     /// </summary>
     private void TeamsPostsTab_Click(object sender, RoutedEventArgs e)
@@ -6595,6 +7243,27 @@ public partial class MainWindow : FluentWindow
     private void TeamsFilesTab_Click(object sender, RoutedEventArgs e)
     {
         _teamsViewModel?.SwitchChannelTabCommand.Execute("files");
+    }
+
+    /// <summary>
+    /// 스레드에서 회신 버튼 클릭
+    /// </summary>
+    private void ReplyToThread_Click(object sender, RoutedEventArgs e)
+    {
+        try
+        {
+            if (sender is Wpf.Ui.Controls.Button btn && btn.Tag is ChannelMessageViewModel message)
+            {
+                // 입력창에 포커스를 주고 회신 준비
+                // 추후 스레드 회신 기능 구현 시 확장
+                TeamsChannelMessageInput?.Focus();
+                Log4.Info($"스레드 회신 준비: 메시지 ID={message.Id}, 작성자={message.FromUser}");
+            }
+        }
+        catch (Exception ex)
+        {
+            Log4.Error($"스레드 회신 준비 실패: {ex.Message}");
+        }
     }
 
     /// <summary>
@@ -7177,6 +7846,1990 @@ public partial class MainWindow : FluentWindow
     private void SearchResultVideoCallButton_Click(object sender, RoutedEventArgs e)
     {
         ContactVideoCallButton_Click(sender, e);
+    }
+
+    #endregion
+
+    #region 설정 뷰 관련
+
+    private string _selectedSettingsMainMenu = "";
+    private string _selectedSettingsSubMenu = "";
+
+    /// <summary>
+    /// 설정 뷰 표시
+    /// </summary>
+    private void ShowSettingsView()
+    {
+        HideAllViews();
+        if (SettingsViewBorder != null) SettingsViewBorder.Visibility = Visibility.Visible;
+        _viewModel.StatusMessage = "설정";
+
+        // 대메뉴 초기화
+        InitializeSettingsMainMenu();
+
+        // 기본 선택: AI 동기화
+        SelectSettingsMainMenu("sync_ai");
+    }
+
+    /// <summary>
+    /// 설정 대메뉴 초기화
+    /// </summary>
+    private void InitializeSettingsMainMenu()
+    {
+        if (SettingsMainMenuPanel == null) return;
+        SettingsMainMenuPanel.Children.Clear();
+
+        var mainMenuItems = new[]
+        {
+            ("sync_ai", "Bot24", "AI"),
+            ("sync_ms365", "Cloud24", "MS365"),
+            ("mail", "Mail24", "메일"),
+            ("api", "Key24", "API 관리"),
+            ("general", "Settings24", "기타 설정")
+        };
+
+        foreach (var (key, icon, text) in mainMenuItems)
+        {
+            var btn = CreateSettingsMainMenuButton(key, icon, text);
+            SettingsMainMenuPanel.Children.Add(btn);
+        }
+    }
+
+    /// <summary>
+    /// 설정 대메뉴 버튼 생성 (좌측 세로 바 스타일)
+    /// </summary>
+    private Border CreateSettingsMainMenuButton(string key, string iconSymbol, string text)
+    {
+        // 선택 표시용 좌측 세로 바
+        var indicator = new Border
+        {
+            Width = 3,
+            Background = Brushes.Transparent,
+            Margin = new Thickness(0, 4, 0, 4),
+            CornerRadius = new CornerRadius(2)
+        };
+
+        // 아이콘
+        Wpf.Ui.Controls.SymbolIcon? icon = null;
+        if (Enum.TryParse<Wpf.Ui.Controls.SymbolRegular>(iconSymbol, out var symbol))
+        {
+            icon = new Wpf.Ui.Controls.SymbolIcon
+            {
+                Symbol = symbol,
+                FontSize = 18,
+                Margin = new Thickness(8, 0, 12, 0),
+                VerticalAlignment = VerticalAlignment.Center
+            };
+        }
+
+        // 텍스트
+        var textBlock = new System.Windows.Controls.TextBlock
+        {
+            Text = text,
+            VerticalAlignment = VerticalAlignment.Center,
+            FontSize = 14
+        };
+
+        // 내용 StackPanel
+        var contentPanel = new StackPanel { Orientation = Orientation.Horizontal };
+        contentPanel.Children.Add(indicator);
+        if (icon != null) contentPanel.Children.Add(icon);
+        contentPanel.Children.Add(textBlock);
+
+        // 버튼 역할을 하는 Border
+        var btn = new Border
+        {
+            Tag = key,
+            Padding = new Thickness(0, 10, 16, 10),
+            Cursor = Cursors.Hand,
+            Background = Brushes.Transparent,
+            Child = contentPanel
+        };
+
+        // 마우스 이벤트
+        btn.MouseEnter += (s, e) =>
+        {
+            if (_selectedSettingsMainMenu != key)
+                btn.Background = (Brush)FindResource("ControlFillColorDefaultBrush");
+        };
+        btn.MouseLeave += (s, e) =>
+        {
+            if (_selectedSettingsMainMenu != key)
+                btn.Background = Brushes.Transparent;
+        };
+        btn.MouseLeftButtonUp += (s, e) => SelectSettingsMainMenu(key);
+
+        return btn;
+    }
+
+    /// <summary>
+    /// 설정 대메뉴 선택 처리
+    /// </summary>
+    private void SelectSettingsMainMenu(string menuKey)
+    {
+        _selectedSettingsMainMenu = menuKey;
+        UpdateSettingsSubMenu(menuKey);
+
+        // 대메뉴 선택 상태 업데이트 (좌측 세로 바 표시)
+        UpdateSettingsMainMenuSelection(menuKey);
+
+        // 첫 번째 소메뉴 자동 선택
+        var subMenuItems = GetSubMenuItems(menuKey);
+        if (subMenuItems.Length > 0)
+        {
+            SelectSettingsSubMenu(subMenuItems[0].key);
+        }
+    }
+
+    /// <summary>
+    /// 대메뉴 선택 상태 업데이트 (좌측 세로 바 표시)
+    /// </summary>
+    private void UpdateSettingsMainMenuSelection(string selectedKey)
+    {
+        if (SettingsMainMenuPanel == null) return;
+
+        foreach (var child in SettingsMainMenuPanel.Children)
+        {
+            if (child is Border btn && btn.Child is StackPanel contentPanel && contentPanel.Children.Count > 0)
+            {
+                var key = btn.Tag?.ToString();
+                var indicator = contentPanel.Children[0] as Border;
+
+                if (indicator != null)
+                {
+                    if (key == selectedKey)
+                    {
+                        // 선택됨: 녹색 세로 바 표시
+                        indicator.Background = new SolidColorBrush(Color.FromRgb(0x4C, 0xAF, 0x50)); // 녹색
+                        btn.Background = Brushes.Transparent;
+                    }
+                    else
+                    {
+                        // 선택 안됨: 세로 바 숨김
+                        indicator.Background = Brushes.Transparent;
+                        btn.Background = Brushes.Transparent;
+                    }
+                }
+            }
+        }
+    }
+
+    /// <summary>
+    /// 소메뉴 항목 정의
+    /// </summary>
+    private (string key, string text)[] GetSubMenuItems(string mainMenuKey)
+    {
+        return mainMenuKey switch
+        {
+            "sync_ai" => new[] { ("sync_ai_favorite", "즐겨찾기"), ("sync_ai_all", "전체") },
+            "sync_ms365" => new[] { ("sync_ms365_favorite", "즐겨찾기"), ("sync_ms365_all", "전체") },
+            "mail" => new[] { ("mail_signature", "서명 관리") },
+            "api" => new[] { ("api_ai_providers", "AI Provider"), ("api_tinymce", "TinyMCE") },
+            "general" => new[] { ("general_theme", "일반"), ("general_account", "계정") },
+            _ => Array.Empty<(string, string)>()
+        };
+    }
+
+    /// <summary>
+    /// 설정 소메뉴 업데이트
+    /// </summary>
+    private void UpdateSettingsSubMenu(string mainMenuKey)
+    {
+        if (SettingsSubMenuPanel == null || SettingsSubMenuTitle == null) return;
+
+        SettingsSubMenuPanel.Children.Clear();
+        SettingsSubMenuTitle.Text = mainMenuKey switch
+        {
+            "sync_ai" => "AI 동기화",
+            "sync_ms365" => "MS365 동기화",
+            "mail" => "메일",
+            "api" => "API 관리",
+            "general" => "기타 설정",
+            _ => ""
+        };
+
+        foreach (var (key, text) in GetSubMenuItems(mainMenuKey))
+        {
+            var btn = CreateSettingsSubMenuButton(key, text);
+            SettingsSubMenuPanel.Children.Add(btn);
+        }
+    }
+
+    /// <summary>
+    /// 설정 소메뉴 버튼 생성 (좌측 세로 바 스타일)
+    /// </summary>
+    private Border CreateSettingsSubMenuButton(string key, string text)
+    {
+        // 선택 표시용 좌측 세로 바
+        var indicator = new Border
+        {
+            Width = 3,
+            Background = Brushes.Transparent,
+            Margin = new Thickness(0, 4, 0, 4),
+            CornerRadius = new CornerRadius(2)
+        };
+
+        // 텍스트
+        var textBlock = new System.Windows.Controls.TextBlock
+        {
+            Text = text,
+            VerticalAlignment = VerticalAlignment.Center,
+            FontSize = 14,
+            Margin = new Thickness(12, 0, 0, 0)
+        };
+
+        // 내용 StackPanel
+        var contentPanel = new StackPanel { Orientation = Orientation.Horizontal };
+        contentPanel.Children.Add(indicator);
+        contentPanel.Children.Add(textBlock);
+
+        // 버튼 역할을 하는 Border
+        var btn = new Border
+        {
+            Tag = key,
+            Padding = new Thickness(0, 8, 16, 8),
+            Cursor = Cursors.Hand,
+            Background = Brushes.Transparent,
+            Child = contentPanel
+        };
+
+        // 마우스 이벤트
+        btn.MouseEnter += (s, e) =>
+        {
+            if (_selectedSettingsSubMenu != key)
+                btn.Background = (Brush)FindResource("ControlFillColorDefaultBrush");
+        };
+        btn.MouseLeave += (s, e) =>
+        {
+            if (_selectedSettingsSubMenu != key)
+                btn.Background = Brushes.Transparent;
+        };
+        btn.MouseLeftButtonUp += (s, e) => SelectSettingsSubMenu(key);
+
+        return btn;
+    }
+
+    /// <summary>
+    /// 설정 소메뉴 선택 처리
+    /// </summary>
+    private void SelectSettingsSubMenu(string subMenuKey)
+    {
+        _selectedSettingsSubMenu = subMenuKey;
+
+        // 소메뉴 선택 상태 업데이트 (좌측 세로 바 표시)
+        UpdateSettingsSubMenuSelection(subMenuKey);
+
+        UpdateSettingsContent(subMenuKey);
+    }
+
+    /// <summary>
+    /// 소메뉴 선택 상태 업데이트 (좌측 세로 바 표시)
+    /// </summary>
+    private void UpdateSettingsSubMenuSelection(string selectedKey)
+    {
+        if (SettingsSubMenuPanel == null) return;
+
+        foreach (var child in SettingsSubMenuPanel.Children)
+        {
+            if (child is Border btn && btn.Child is StackPanel contentPanel && contentPanel.Children.Count > 0)
+            {
+                var key = btn.Tag?.ToString();
+                var indicator = contentPanel.Children[0] as Border;
+
+                if (indicator != null)
+                {
+                    if (key == selectedKey)
+                    {
+                        // 선택됨: 녹색 세로 바 표시
+                        indicator.Background = new SolidColorBrush(Color.FromRgb(0x4C, 0xAF, 0x50)); // 녹색
+                        btn.Background = Brushes.Transparent;
+                    }
+                    else
+                    {
+                        // 선택 안됨: 세로 바 숨김
+                        indicator.Background = Brushes.Transparent;
+                        btn.Background = Brushes.Transparent;
+                    }
+                }
+            }
+        }
+    }
+
+    /// <summary>
+    /// 설정 내용 패널 업데이트
+    /// </summary>
+    private void UpdateSettingsContent(string subMenuKey)
+    {
+        if (SettingsContentPanel == null) return;
+        SettingsContentPanel.Children.Clear();
+
+        switch (subMenuKey)
+        {
+            case "sync_ai_favorite":
+                ShowAiSyncFavoriteSettings();
+                break;
+            case "sync_ai_all":
+                ShowAiSyncAllSettings();
+                break;
+            case "sync_ms365_favorite":
+                ShowMs365SyncFavoriteSettings();
+                break;
+            case "sync_ms365_all":
+                ShowMs365SyncAllSettings();
+                break;
+            case "mail_signature":
+                ShowSignatureSettings();
+                break;
+            case "api_ai_providers":
+                ShowAiProviderSettings();
+                break;
+            case "api_tinymce":
+                ShowTinyMCESettings();
+                break;
+            case "general_theme":
+                ShowGeneralSettings();
+                break;
+            case "general_account":
+                ShowAccountSettings();
+                break;
+        }
+    }
+
+    /// <summary>
+    /// 설정 섹션 헤더 생성
+    /// </summary>
+    private System.Windows.Controls.TextBlock CreateSettingsSectionHeader(string title)
+    {
+        return new System.Windows.Controls.TextBlock
+        {
+            Text = title,
+            FontSize = 20,
+            FontWeight = FontWeights.SemiBold,
+            Margin = new Thickness(0, 0, 0, 16)
+        };
+    }
+
+    /// <summary>
+    /// 설정 그룹 Border 생성
+    /// </summary>
+    private Border CreateSettingsGroupBorder()
+    {
+        return new Border
+        {
+            Background = (Brush)FindResource("CardBackgroundFillColorDefaultBrush"),
+            CornerRadius = new CornerRadius(8),
+            Padding = new Thickness(20),
+            Margin = new Thickness(0, 0, 0, 16)
+        };
+    }
+
+    /// <summary>
+    /// 설정 라벨 생성
+    /// </summary>
+    private System.Windows.Controls.TextBlock CreateSettingsLabel(string text)
+    {
+        return new System.Windows.Controls.TextBlock
+        {
+            Text = text,
+            FontSize = 14,
+            FontWeight = FontWeights.Medium,
+            Margin = new Thickness(0, 0, 0, 8)
+        };
+    }
+
+    /// <summary>
+    /// 설정 설명 텍스트 생성
+    /// </summary>
+    private System.Windows.Controls.TextBlock CreateSettingsDescription(string text)
+    {
+        return new System.Windows.Controls.TextBlock
+        {
+            Text = text,
+            FontSize = 12,
+            Foreground = (Brush)FindResource("TextFillColorSecondaryBrush"),
+            TextWrapping = TextWrapping.Wrap,
+            Margin = new Thickness(0, 4, 0, 0)
+        };
+    }
+
+    /// <summary>
+    /// 저장 버튼 생성
+    /// </summary>
+    private Wpf.Ui.Controls.Button CreateSaveButton(Action saveAction)
+    {
+        var btn = new Wpf.Ui.Controls.Button
+        {
+            Content = "저장",
+            Appearance = Wpf.Ui.Controls.ControlAppearance.Primary,
+            Margin = new Thickness(0, 16, 0, 0),
+            Padding = new Thickness(24, 8, 24, 8)
+        };
+        btn.Click += (s, e) => saveAction();
+        return btn;
+    }
+
+    #region AI 동기화 설정 (즐겨찾기/전체)
+
+    /// <summary>
+    /// AI 동기화 즐겨찾기 설정 UI 표시
+    /// </summary>
+    private void ShowAiSyncFavoriteSettings()
+    {
+        if (SettingsContentPanel == null) return;
+        var prefs = App.Settings.UserPreferences;
+
+        SettingsContentPanel.Children.Add(CreateSettingsSectionHeader("AI 동기화 - 즐겨찾기"));
+
+        // AI 분석 주기 (라디오버튼 선택)
+        var intervalGroup = CreateSettingsGroupBorder();
+        var intervalStack = new StackPanel();
+        intervalStack.Children.Add(CreateSettingsLabel("AI 분석 주기"));
+
+        var currentInterval = prefs.AiAnalysisIntervalSeconds > 0 ? prefs.AiAnalysisIntervalSeconds : 300;
+        var intervalOptions = new[] { (1, "1초"), (5, "5초"), (10, "10초"), (30, "30초"), (60, "1분"), (300, "5분") };
+
+        var intervalWrap = new WrapPanel { Margin = new Thickness(0, 0, 0, 12) };
+        foreach (var (seconds, label) in intervalOptions)
+        {
+            var radio = new RadioButton
+            {
+                Content = label,
+                Tag = seconds,
+                IsChecked = currentInterval == seconds,
+                Margin = new Thickness(0, 0, 16, 8),
+                GroupName = "AiFavoriteInterval"
+            };
+            radio.Checked += (s, e) =>
+            {
+                prefs.AiAnalysisIntervalSeconds = seconds;
+                App.Settings.SaveUserPreferences();
+                Log4.Info($"AI 분석 주기 저장: {seconds}초");
+            };
+            intervalWrap.Children.Add(radio);
+        }
+        intervalStack.Children.Add(intervalWrap);
+        intervalStack.Children.Add(CreateSettingsDescription("즐겨찾기 메일에 대한 AI 분석 주기입니다."));
+
+        intervalGroup.Child = intervalStack;
+        SettingsContentPanel.Children.Add(intervalGroup);
+    }
+
+    /// <summary>
+    /// AI 동기화 전체 설정 UI 표시
+    /// </summary>
+    private void ShowAiSyncAllSettings()
+    {
+        if (SettingsContentPanel == null) return;
+        var prefs = App.Settings.UserPreferences;
+
+        SettingsContentPanel.Children.Add(CreateSettingsSectionHeader("AI 동기화 - 전체"));
+
+        // AI 분석 기간 (라디오버튼 선택)
+        var periodGroup = CreateSettingsGroupBorder();
+        var periodStack = new StackPanel();
+        periodStack.Children.Add(CreateSettingsLabel("분석 대상 기간"));
+
+        var currentPeriod = $"{prefs.AiAnalysisPeriodType}:{prefs.AiAnalysisPeriodValue}";
+        var periodOptions = new[] { ("Count:5", "최근 5건"), ("Days:1", "하루"), ("Weeks:1", "1주일"), ("Months:1", "1달"), ("Years:1", "1년"), ("All:0", "전체") };
+
+        var periodWrap = new WrapPanel { Margin = new Thickness(0, 0, 0, 12) };
+        foreach (var (value, label) in periodOptions)
+        {
+            var parts = value.Split(':');
+            var radio = new RadioButton
+            {
+                Content = label,
+                Tag = value,
+                IsChecked = currentPeriod == value,
+                Margin = new Thickness(0, 0, 16, 8),
+                GroupName = "AiAllPeriod"
+            };
+            radio.Checked += (s, e) =>
+            {
+                prefs.AiAnalysisPeriodType = parts[0];
+                prefs.AiAnalysisPeriodValue = int.Parse(parts[1]);
+                App.Settings.SaveUserPreferences();
+                Log4.Info($"AI 분석 기간 저장: {parts[0]}:{parts[1]}");
+            };
+            periodWrap.Children.Add(radio);
+        }
+        periodStack.Children.Add(periodWrap);
+        periodStack.Children.Add(CreateSettingsDescription("AI 분석 대상 메일 범위입니다."));
+
+        periodGroup.Child = periodStack;
+        SettingsContentPanel.Children.Add(periodGroup);
+
+        // AI 분석 주기 (라디오버튼 선택)
+        var intervalGroup = CreateSettingsGroupBorder();
+        var intervalStack = new StackPanel();
+        intervalStack.Children.Add(CreateSettingsLabel("분석 주기"));
+
+        var currentInterval = prefs.AiAnalysisIntervalSeconds > 0 ? prefs.AiAnalysisIntervalSeconds : 300;
+        var intervalOptions = new[] { (1, "1초"), (5, "5초"), (10, "10초"), (30, "30초"), (60, "1분"), (300, "5분"), (600, "10분"), (1800, "30분"), (3600, "1시간") };
+
+        var intervalWrap = new WrapPanel { Margin = new Thickness(0, 0, 0, 12) };
+        foreach (var (seconds, label) in intervalOptions)
+        {
+            var radio = new RadioButton
+            {
+                Content = label,
+                Tag = seconds,
+                IsChecked = currentInterval == seconds,
+                Margin = new Thickness(0, 0, 16, 8),
+                GroupName = "AiAllInterval"
+            };
+            radio.Checked += (s, e) =>
+            {
+                prefs.AiAnalysisIntervalSeconds = seconds;
+                App.Settings.SaveUserPreferences();
+                Log4.Info($"AI 분석 주기 저장: {seconds}초");
+            };
+            intervalWrap.Children.Add(radio);
+        }
+        intervalStack.Children.Add(intervalWrap);
+        intervalStack.Children.Add(CreateSettingsDescription("전체 메일에 대한 AI 분석 주기입니다."));
+
+        intervalGroup.Child = intervalStack;
+        SettingsContentPanel.Children.Add(intervalGroup);
+    }
+
+    #endregion
+
+    #region MS365 동기화 설정 (즐겨찾기/전체)
+
+    /// <summary>
+    /// MS365 동기화 즐겨찾기 설정 UI 표시
+    /// </summary>
+    private void ShowMs365SyncFavoriteSettings()
+    {
+        if (SettingsContentPanel == null) return;
+        var prefs = App.Settings.UserPreferences;
+
+        SettingsContentPanel.Children.Add(CreateSettingsSectionHeader("MS365 동기화 - 즐겨찾기"));
+
+        var intervalOptions = new[] { (1, "1초"), (5, "5초"), (10, "10초"), (30, "30초"), (60, "1분"), (300, "5분") };
+
+        // 메일 동기화 주기 (라디오버튼)
+        var mailGroup = CreateSettingsGroupBorder();
+        var mailStack = new StackPanel();
+        mailStack.Children.Add(CreateSettingsLabel("메일 동기화 주기"));
+
+        var mailIntervalSeconds = prefs.MailSyncIntervalSeconds > 0 ? prefs.MailSyncIntervalSeconds : prefs.MailSyncIntervalMinutes * 60;
+        var mailWrap = new WrapPanel { Margin = new Thickness(0, 0, 0, 12) };
+        foreach (var (seconds, label) in intervalOptions)
+        {
+            var radio = new RadioButton
+            {
+                Content = label,
+                Tag = seconds,
+                IsChecked = mailIntervalSeconds == seconds,
+                Margin = new Thickness(0, 0, 16, 8),
+                GroupName = "Ms365FavoriteMailInterval"
+            };
+            radio.Checked += (s, e) =>
+            {
+                prefs.MailSyncIntervalSeconds = seconds;
+                App.Settings.SaveUserPreferences();
+                Log4.Info($"메일 동기화 주기 저장: {seconds}초");
+            };
+            mailWrap.Children.Add(radio);
+        }
+        mailStack.Children.Add(mailWrap);
+        mailStack.Children.Add(CreateSettingsDescription("즐겨찾기 메일의 동기화 주기입니다."));
+
+        mailGroup.Child = mailStack;
+        SettingsContentPanel.Children.Add(mailGroup);
+
+        // 캘린더 동기화 주기 (라디오버튼)
+        var calendarGroup = CreateSettingsGroupBorder();
+        var calendarStack = new StackPanel();
+        calendarStack.Children.Add(CreateSettingsLabel("캘린더 동기화 주기"));
+
+        var calendarWrap = new WrapPanel { Margin = new Thickness(0, 0, 0, 12) };
+        foreach (var (seconds, label) in intervalOptions)
+        {
+            var radio = new RadioButton
+            {
+                Content = label,
+                Tag = seconds,
+                IsChecked = prefs.CalendarSyncIntervalSeconds == seconds,
+                Margin = new Thickness(0, 0, 16, 8),
+                GroupName = "Ms365FavoriteCalendarInterval"
+            };
+            radio.Checked += (s, e) =>
+            {
+                prefs.CalendarSyncIntervalSeconds = seconds;
+                App.Settings.SaveUserPreferences();
+                Log4.Info($"캘린더 동기화 주기 저장: {seconds}초");
+            };
+            calendarWrap.Children.Add(radio);
+        }
+        calendarStack.Children.Add(calendarWrap);
+        calendarStack.Children.Add(CreateSettingsDescription("즐겨찾기 캘린더의 동기화 주기입니다."));
+
+        calendarGroup.Child = calendarStack;
+        SettingsContentPanel.Children.Add(calendarGroup);
+
+        // 채팅 동기화 주기 (라디오버튼)
+        var chatGroup = CreateSettingsGroupBorder();
+        var chatStack = new StackPanel();
+        chatStack.Children.Add(CreateSettingsLabel("채팅 동기화 주기"));
+
+        var chatWrap = new WrapPanel { Margin = new Thickness(0, 0, 0, 12) };
+        foreach (var (seconds, label) in intervalOptions)
+        {
+            var radio = new RadioButton
+            {
+                Content = label,
+                Tag = seconds,
+                IsChecked = prefs.ChatSyncIntervalSeconds == seconds,
+                Margin = new Thickness(0, 0, 16, 8),
+                GroupName = "Ms365FavoriteChatInterval"
+            };
+            radio.Checked += (s, e) =>
+            {
+                prefs.ChatSyncIntervalSeconds = seconds;
+                App.Settings.SaveUserPreferences();
+                Log4.Info($"채팅 동기화 주기 저장: {seconds}초");
+            };
+            chatWrap.Children.Add(radio);
+        }
+        chatStack.Children.Add(chatWrap);
+        chatStack.Children.Add(CreateSettingsDescription("즐겨찾기 채팅의 동기화 주기입니다."));
+
+        chatGroup.Child = chatStack;
+        SettingsContentPanel.Children.Add(chatGroup);
+    }
+
+    /// <summary>
+    /// MS365 동기화 전체 설정 UI 표시
+    /// </summary>
+    private void ShowMs365SyncAllSettings()
+    {
+        if (SettingsContentPanel == null) return;
+        var prefs = App.Settings.UserPreferences;
+
+        SettingsContentPanel.Children.Add(CreateSettingsSectionHeader("MS365 동기화 - 전체"));
+
+        // 메일 동기화 기간 (라디오버튼 선택)
+        var periodGroup = CreateSettingsGroupBorder();
+        var periodStack = new StackPanel();
+        periodStack.Children.Add(CreateSettingsLabel("메일 동기화 대상 기간"));
+
+        var currentPeriod = $"{prefs.MailSyncPeriodType}:{prefs.MailSyncPeriodValue}";
+        var periodOptions = new[] { ("Count:5", "최근 5건"), ("Days:1", "하루"), ("Weeks:1", "1주일"), ("Months:1", "1달"), ("Years:1", "1년"), ("All:0", "전체") };
+
+        var periodWrap = new WrapPanel { Margin = new Thickness(0, 0, 0, 12) };
+        foreach (var (value, label) in periodOptions)
+        {
+            var parts = value.Split(':');
+            var radio = new RadioButton
+            {
+                Content = label,
+                Tag = value,
+                IsChecked = currentPeriod == value,
+                Margin = new Thickness(0, 0, 16, 8),
+                GroupName = "Ms365AllPeriod"
+            };
+            radio.Checked += (s, e) =>
+            {
+                prefs.MailSyncPeriodType = parts[0];
+                prefs.MailSyncPeriodValue = int.Parse(parts[1]);
+                App.Settings.SaveUserPreferences();
+                Log4.Info($"메일 동기화 기간 저장: {parts[0]}:{parts[1]}");
+            };
+            periodWrap.Children.Add(radio);
+        }
+        periodStack.Children.Add(periodWrap);
+        periodStack.Children.Add(CreateSettingsDescription("동기화할 메일 범위입니다."));
+
+        periodGroup.Child = periodStack;
+        SettingsContentPanel.Children.Add(periodGroup);
+
+        // 메일 동기화 주기 (라디오버튼 선택)
+        var intervalGroup = CreateSettingsGroupBorder();
+        var intervalStack = new StackPanel();
+        intervalStack.Children.Add(CreateSettingsLabel("메일 동기화 주기"));
+
+        var mailIntervalSeconds = prefs.MailSyncIntervalSeconds > 0 ? prefs.MailSyncIntervalSeconds : prefs.MailSyncIntervalMinutes * 60;
+        var intervalOptions = new[] { (1, "1초"), (5, "5초"), (10, "10초"), (30, "30초"), (60, "1분"), (300, "5분"), (600, "10분"), (1800, "30분"), (3600, "1시간") };
+
+        var intervalWrap = new WrapPanel { Margin = new Thickness(0, 0, 0, 12) };
+        foreach (var (seconds, label) in intervalOptions)
+        {
+            var radio = new RadioButton
+            {
+                Content = label,
+                Tag = seconds,
+                IsChecked = mailIntervalSeconds == seconds,
+                Margin = new Thickness(0, 0, 16, 8),
+                GroupName = "Ms365AllInterval"
+            };
+            radio.Checked += (s, e) =>
+            {
+                prefs.MailSyncIntervalSeconds = seconds;
+                App.Settings.SaveUserPreferences();
+                Log4.Info($"메일 동기화 주기 저장: {seconds}초");
+            };
+            intervalWrap.Children.Add(radio);
+        }
+        intervalStack.Children.Add(intervalWrap);
+        intervalStack.Children.Add(CreateSettingsDescription("전체 메일에 대한 동기화 주기입니다."));
+
+        intervalGroup.Child = intervalStack;
+        SettingsContentPanel.Children.Add(intervalGroup);
+    }
+
+    #endregion
+
+    #region 서명 설정
+
+    private ListBox? _signatureListBox;
+    private Wpf.Ui.Controls.TextBox? _signatureNameBox;
+    private System.Windows.Controls.TextBox? _signatureContentBox;
+    private string? _currentSignatureId;
+
+    /// <summary>
+    /// 서명 설정 UI 표시
+    /// </summary>
+    private void ShowSignatureSettings()
+    {
+        if (SettingsContentPanel == null) return;
+
+        var signatureSettings = App.Settings.Signature;
+
+        // 헤더
+        SettingsContentPanel.Children.Add(CreateSettingsSectionHeader("서명 관리"));
+
+        // 2단 레이아웃 (좌: 서명 목록, 우: 편집)
+        var mainGrid = new Grid();
+        mainGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(200) });
+        mainGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+
+        // 좌측: 서명 목록
+        var listGroup = CreateSettingsGroupBorder();
+        listGroup.Margin = new Thickness(0, 0, 12, 0);
+        var listStack = new StackPanel();
+
+        listStack.Children.Add(CreateSettingsLabel("서명 목록"));
+
+        _signatureListBox = new ListBox
+        {
+            Height = 200,
+            Margin = new Thickness(0, 0, 0, 12)
+        };
+        RefreshSignatureList(signatureSettings);
+        _signatureListBox.SelectionChanged += (s, e) => OnSignatureSelectionChanged(signatureSettings);
+        listStack.Children.Add(_signatureListBox);
+
+        // 추가/삭제 버튼
+        var btnPanel = new StackPanel { Orientation = Orientation.Horizontal };
+        var addBtn = new Wpf.Ui.Controls.Button { Content = "추가", Margin = new Thickness(0, 0, 8, 0), Padding = new Thickness(16, 6, 16, 6) };
+        addBtn.Click += (s, e) => AddNewSignature(signatureSettings);
+        var delBtn = new Wpf.Ui.Controls.Button { Content = "삭제", Appearance = Wpf.Ui.Controls.ControlAppearance.Danger, Padding = new Thickness(16, 6, 16, 6) };
+        delBtn.Click += (s, e) => DeleteSelectedSignature(signatureSettings);
+        btnPanel.Children.Add(addBtn);
+        btnPanel.Children.Add(delBtn);
+        listStack.Children.Add(btnPanel);
+
+        listGroup.Child = listStack;
+        Grid.SetColumn(listGroup, 0);
+        mainGrid.Children.Add(listGroup);
+
+        // 우측: 서명 편집
+        var editGroup = CreateSettingsGroupBorder();
+        var editStack = new StackPanel();
+
+        editStack.Children.Add(CreateSettingsLabel("서명 이름"));
+        _signatureNameBox = new Wpf.Ui.Controls.TextBox
+        {
+            PlaceholderText = "서명 이름을 입력하세요",
+            Margin = new Thickness(0, 0, 0, 12)
+        };
+        _signatureNameBox.TextChanged += (s, e) => SaveCurrentSignature(signatureSettings);
+        editStack.Children.Add(_signatureNameBox);
+
+        editStack.Children.Add(CreateSettingsLabel("서명 내용 (텍스트)"));
+        _signatureContentBox = new System.Windows.Controls.TextBox
+        {
+            AcceptsReturn = true,
+            TextWrapping = TextWrapping.Wrap,
+            Height = 150,
+            Margin = new Thickness(0, 0, 0, 12),
+            VerticalScrollBarVisibility = ScrollBarVisibility.Auto
+        };
+        _signatureContentBox.TextChanged += (s, e) => SaveCurrentSignature(signatureSettings);
+        editStack.Children.Add(_signatureContentBox);
+
+        editStack.Children.Add(CreateSettingsDescription("HTML 서명은 텍스트 내용을 기반으로 자동 생성됩니다."));
+
+        editGroup.Child = editStack;
+        Grid.SetColumn(editGroup, 1);
+        mainGrid.Children.Add(editGroup);
+
+        SettingsContentPanel.Children.Add(mainGrid);
+
+        // 기본 서명 설정 그룹
+        var defaultGroup = CreateSettingsGroupBorder();
+        defaultGroup.Margin = new Thickness(0, 16, 0, 0);
+        var defaultStack = new StackPanel();
+
+        defaultStack.Children.Add(CreateSettingsLabel("기본 서명 설정"));
+
+        var autoNewMailCheck = new CheckBox
+        {
+            Content = "새 메일에 자동으로 서명 추가",
+            IsChecked = signatureSettings.AutoAddToNewMail,
+            Margin = new Thickness(0, 8, 0, 4)
+        };
+        autoNewMailCheck.Checked += (s, e) => { signatureSettings.AutoAddToNewMail = true; App.Settings.SaveSignature(); };
+        autoNewMailCheck.Unchecked += (s, e) => { signatureSettings.AutoAddToNewMail = false; App.Settings.SaveSignature(); };
+        defaultStack.Children.Add(autoNewMailCheck);
+
+        var autoReplyCheck = new CheckBox
+        {
+            Content = "답장/전달에 자동으로 서명 추가",
+            IsChecked = signatureSettings.AutoAddToReplyForward,
+            Margin = new Thickness(0, 4, 0, 0)
+        };
+        autoReplyCheck.Checked += (s, e) => { signatureSettings.AutoAddToReplyForward = true; App.Settings.SaveSignature(); };
+        autoReplyCheck.Unchecked += (s, e) => { signatureSettings.AutoAddToReplyForward = false; App.Settings.SaveSignature(); };
+        defaultStack.Children.Add(autoReplyCheck);
+
+        defaultGroup.Child = defaultStack;
+        SettingsContentPanel.Children.Add(defaultGroup);
+
+        // 첫 번째 서명 선택
+        if (_signatureListBox.Items.Count > 0)
+            _signatureListBox.SelectedIndex = 0;
+    }
+
+    private void RefreshSignatureList(Models.Settings.SignatureSettings signatureSettings)
+    {
+        if (_signatureListBox == null) return;
+        _signatureListBox.Items.Clear();
+        foreach (var sig in signatureSettings.Signatures)
+        {
+            _signatureListBox.Items.Add(new ListBoxItem { Content = sig.Name, Tag = sig.Id });
+        }
+    }
+
+    private void OnSignatureSelectionChanged(Models.Settings.SignatureSettings signatureSettings)
+    {
+        if (_signatureListBox?.SelectedItem is not ListBoxItem item) return;
+        var sigId = item.Tag?.ToString();
+        var sig = signatureSettings.Signatures.Find(s => s.Id == sigId);
+        if (sig == null) return;
+
+        _currentSignatureId = sig.Id;
+        if (_signatureNameBox != null) _signatureNameBox.Text = sig.Name;
+        if (_signatureContentBox != null) _signatureContentBox.Text = sig.PlainTextContent;
+    }
+
+    private void SaveCurrentSignature(Models.Settings.SignatureSettings signatureSettings)
+    {
+        if (string.IsNullOrEmpty(_currentSignatureId)) return;
+        var sig = signatureSettings.Signatures.Find(s => s.Id == _currentSignatureId);
+        if (sig == null) return;
+
+        sig.Name = _signatureNameBox?.Text ?? "";
+        sig.PlainTextContent = _signatureContentBox?.Text ?? "";
+        sig.HtmlContent = $"<p>{System.Net.WebUtility.HtmlEncode(sig.PlainTextContent).Replace("\n", "<br/>")}</p>";
+        sig.ModifiedAt = DateTime.Now;
+
+        App.Settings.SaveSignature();
+
+        // 목록 업데이트
+        if (_signatureListBox?.SelectedItem is ListBoxItem item)
+        {
+            item.Content = sig.Name;
+        }
+    }
+
+    private void AddNewSignature(Models.Settings.SignatureSettings signatureSettings)
+    {
+        var newSig = new Models.Settings.EmailSignature
+        {
+            Name = $"새 서명 {signatureSettings.Signatures.Count + 1}",
+            PlainTextContent = "",
+            HtmlContent = ""
+        };
+        signatureSettings.Signatures.Add(newSig);
+        App.Settings.SaveSignature();
+        RefreshSignatureList(signatureSettings);
+        if (_signatureListBox != null)
+            _signatureListBox.SelectedIndex = _signatureListBox.Items.Count - 1;
+    }
+
+    private void DeleteSelectedSignature(Models.Settings.SignatureSettings signatureSettings)
+    {
+        if (_signatureListBox?.SelectedItem is not ListBoxItem item) return;
+        var sigId = item.Tag?.ToString();
+        var sig = signatureSettings.Signatures.Find(s => s.Id == sigId);
+        if (sig == null) return;
+
+        signatureSettings.Signatures.Remove(sig);
+        App.Settings.SaveSignature();
+        _currentSignatureId = null;
+        RefreshSignatureList(signatureSettings);
+        if (_signatureListBox.Items.Count > 0)
+            _signatureListBox.SelectedIndex = 0;
+    }
+
+    #endregion
+
+    #region AI Provider 설정
+
+    /// <summary>
+    /// AI Provider 설정 UI 표시
+    /// </summary>
+    // AI Provider 설정용 필드
+    private Dictionary<string, RadioButton>? _providerRadioButtons;
+    private Dictionary<string, Wpf.Ui.Controls.TextBox>? _providerApiKeyBoxes;
+    private Dictionary<string, ComboBox>? _providerModelCombos;
+    private Dictionary<string, Wpf.Ui.Controls.TextBox>? _providerBaseUrlBoxes;
+    private Dictionary<string, System.Windows.Controls.TextBlock>? _providerStatusTexts;
+
+    private void ShowAiProviderSettings()
+    {
+        if (SettingsContentPanel == null) return;
+
+        var aiSettings = App.Settings.AIProviders;
+
+        // 필드 초기화
+        _providerRadioButtons = new Dictionary<string, RadioButton>();
+        _providerApiKeyBoxes = new Dictionary<string, Wpf.Ui.Controls.TextBox>();
+        _providerModelCombos = new Dictionary<string, ComboBox>();
+        _providerBaseUrlBoxes = new Dictionary<string, Wpf.Ui.Controls.TextBox>();
+        _providerStatusTexts = new Dictionary<string, System.Windows.Controls.TextBlock>();
+
+        // 헤더
+        SettingsContentPanel.Children.Add(CreateSettingsSectionHeader("AI Provider 설정"));
+
+        // 설명
+        var descGroup = CreateSettingsGroupBorder();
+        var descStack = new StackPanel();
+        descStack.Children.Add(CreateSettingsDescription("메일 분석에 사용할 AI Provider를 설정합니다. 라디오버튼으로 대표 Provider를 선택하세요."));
+        descGroup.Child = descStack;
+        SettingsContentPanel.Children.Add(descGroup);
+
+        // 각 Provider 설정 (Expander 스타일)
+        CreateProviderExpanderSection("Claude", aiSettings.Claude, aiSettings.DefaultProvider == "Claude",
+            GetClaudeModels(), isLocal: false);
+
+        CreateProviderExpanderSection("OpenAI", aiSettings.OpenAI, aiSettings.DefaultProvider == "OpenAI",
+            GetOpenAIModels(), isLocal: false);
+
+        CreateProviderExpanderSection("Gemini", aiSettings.Gemini, aiSettings.DefaultProvider == "Gemini",
+            GetGeminiModels(), isLocal: false);
+
+        CreateProviderExpanderSection("Ollama", aiSettings.Ollama, aiSettings.DefaultProvider == "Ollama",
+            GetOllamaModels(), isLocal: true);
+
+        CreateProviderExpanderSection("LMStudio", aiSettings.LMStudio, aiSettings.DefaultProvider == "LMStudio",
+            GetLMStudioModels(), isLocal: true);
+
+        // 고급 설정 섹션
+        CreateAdvancedSettingsSection();
+    }
+
+    /// <summary>
+    /// Provider별 모델 목록 - Claude
+    /// </summary>
+    private string[] GetClaudeModels() => new[]
+    {
+        "claude-sonnet-4-20250514",
+        "claude-3-5-sonnet-20241022",
+        "claude-3-5-haiku-20241022",
+        "claude-3-opus-20240229",
+        "claude-3-sonnet-20240229",
+        "claude-3-haiku-20240307"
+    };
+
+    /// <summary>
+    /// Provider별 모델 목록 - OpenAI
+    /// </summary>
+    private string[] GetOpenAIModels() => new[]
+    {
+        "gpt-4o",
+        "gpt-4o-mini",
+        "gpt-4-turbo",
+        "gpt-4",
+        "gpt-3.5-turbo"
+    };
+
+    /// <summary>
+    /// Provider별 모델 목록 - Gemini
+    /// </summary>
+    private string[] GetGeminiModels() => new[]
+    {
+        "gemini-2.0-flash",
+        "gemini-1.5-pro",
+        "gemini-1.5-flash",
+        "gemini-1.0-pro"
+    };
+
+    /// <summary>
+    /// Provider별 모델 목록 - Ollama (로컬)
+    /// </summary>
+    private string[] GetOllamaModels() => new[]
+    {
+        "llama3.3",
+        "llama3.2",
+        "llama3.1",
+        "mistral",
+        "mixtral",
+        "codellama",
+        "phi3"
+    };
+
+    /// <summary>
+    /// Provider별 모델 목록 - LMStudio (로컬)
+    /// </summary>
+    private string[] GetLMStudioModels() => new[]
+    {
+        "local-model",
+        "lmstudio-community/Meta-Llama-3.1-8B-Instruct-GGUF",
+        "lmstudio-community/Mistral-7B-Instruct-v0.3-GGUF"
+    };
+
+    /// <summary>
+    /// Provider Expander 섹션 생성 (라디오버튼 + 테스트 + 모델 콤보)
+    /// </summary>
+    private void CreateProviderExpanderSection(
+        string providerName,
+        Models.Settings.AIProviderConfig config,
+        bool isDefault,
+        string[] availableModels,
+        bool isLocal)
+    {
+        if (SettingsContentPanel == null) return;
+
+        var group = CreateSettingsGroupBorder();
+        var mainStack = new StackPanel();
+
+        // 헤더 영역 (라디오버튼 + Provider명 + 상태)
+        var headerPanel = new Grid();
+        headerPanel.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        headerPanel.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        headerPanel.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        headerPanel.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+
+        // 라디오버튼 (대표 Provider 선택)
+        var radio = new RadioButton
+        {
+            GroupName = "DefaultAIProvider",
+            IsChecked = isDefault,
+            VerticalAlignment = VerticalAlignment.Center,
+            Margin = new Thickness(0, 0, 8, 0)
+        };
+        radio.Checked += (s, e) => OnDefaultProviderChanged(providerName);
+        _providerRadioButtons![providerName] = radio;
+        Grid.SetColumn(radio, 0);
+        headerPanel.Children.Add(radio);
+
+        // Provider 이름
+        var nameText = new System.Windows.Controls.TextBlock
+        {
+            Text = providerName,
+            FontSize = 16,
+            FontWeight = FontWeights.SemiBold,
+            VerticalAlignment = VerticalAlignment.Center
+        };
+        Grid.SetColumn(nameText, 1);
+        headerPanel.Children.Add(nameText);
+
+        // 상태 표시 (설정됨/미설정 또는 N개 모델 발견)
+        var hasConfig = isLocal || !string.IsNullOrEmpty(config.ApiKey);
+        var statusText = new System.Windows.Controls.TextBlock
+        {
+            Text = hasConfig ? "✓ 설정됨" : "미설정",
+            Foreground = hasConfig ? new SolidColorBrush((Color)ColorConverter.ConvertFromString("#4CAF50")) : Brushes.Gray,
+            FontSize = 12,
+            VerticalAlignment = VerticalAlignment.Center,
+            HorizontalAlignment = HorizontalAlignment.Right
+        };
+        _providerStatusTexts![providerName] = statusText;
+        Grid.SetColumn(statusText, 3);
+        headerPanel.Children.Add(statusText);
+
+        mainStack.Children.Add(headerPanel);
+
+        // 설정 내용 패널
+        var contentBorder = new Border
+        {
+            Margin = new Thickness(28, 12, 0, 0),
+            Padding = new Thickness(0)
+        };
+        var contentStack = new StackPanel();
+
+        // API 키 (로컬이 아닌 경우만)
+        if (!isLocal)
+        {
+            contentStack.Children.Add(CreateSettingsLabel("API Key"));
+
+            var apiKeyPanel = new Grid { Margin = new Thickness(0, 0, 0, 12) };
+            apiKeyPanel.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+            apiKeyPanel.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+
+            // API 키 입력
+            var apiKeyBox = new Wpf.Ui.Controls.TextBox
+            {
+                Text = MaskApiKey(config.ApiKey),
+                PlaceholderText = "API 키를 입력하세요",
+                Margin = new Thickness(0, 0, 8, 0),
+                Tag = config.ApiKey // 원본 값 저장
+            };
+            apiKeyBox.GotFocus += (s, e) =>
+            {
+                // 포커스 받으면 원본 값 표시
+                if (apiKeyBox.Tag is string originalKey && !string.IsNullOrEmpty(originalKey))
+                {
+                    apiKeyBox.Text = originalKey;
+                }
+            };
+            apiKeyBox.LostFocus += (s, e) =>
+            {
+                // 포커스 잃으면 마스킹
+                var newKey = apiKeyBox.Text;
+                apiKeyBox.Tag = newKey;
+                config.ApiKey = newKey;
+                apiKeyBox.Text = MaskApiKey(newKey);
+                OnProviderSettingChanged(providerName, isLocal);
+            };
+            Grid.SetColumn(apiKeyBox, 0);
+            apiKeyPanel.Children.Add(apiKeyBox);
+
+            // 테스트 버튼
+            var testButton = new Wpf.Ui.Controls.Button
+            {
+                Content = "테스트",
+                Appearance = Wpf.Ui.Controls.ControlAppearance.Secondary,
+                Padding = new Thickness(16, 6, 16, 6)
+            };
+            testButton.Click += async (s, e) =>
+            {
+                // 테스트 전 현재 입력값 저장
+                var currentKey = apiKeyBox.Text;
+                if (!currentKey.Contains("*"))
+                {
+                    config.ApiKey = currentKey;
+                    apiKeyBox.Tag = currentKey;
+                }
+                await TestAndLoadModelsAsync(providerName, statusText);
+            };
+            Grid.SetColumn(testButton, 1);
+            apiKeyPanel.Children.Add(testButton);
+
+            contentStack.Children.Add(apiKeyPanel);
+        }
+        else
+        {
+            // 로컬 Provider의 경우 테스트 버튼만
+            var testPanel = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 0, 0, 12) };
+            var testButton = new Wpf.Ui.Controls.Button
+            {
+                Content = "연결 테스트",
+                Appearance = Wpf.Ui.Controls.ControlAppearance.Secondary,
+                Padding = new Thickness(16, 6, 16, 6)
+            };
+            testButton.Click += async (s, e) => await TestAndLoadModelsAsync(providerName, statusText);
+            testPanel.Children.Add(testButton);
+            contentStack.Children.Add(testPanel);
+        }
+
+        // 모델 선택 (ComboBox)
+        contentStack.Children.Add(CreateSettingsLabel("Model"));
+        var modelCombo = new ComboBox
+        {
+            IsEditable = false,
+            Margin = new Thickness(0, 0, 0, 12)
+        };
+        foreach (var model in availableModels)
+        {
+            modelCombo.Items.Add(model);
+        }
+        // 현재 모델이 목록에 없으면 추가
+        if (!string.IsNullOrEmpty(config.Model) && !availableModels.Contains(config.Model))
+        {
+            modelCombo.Items.Insert(0, config.Model);
+        }
+        modelCombo.Text = config.Model ?? (availableModels.Length > 0 ? availableModels[0] : "");
+        modelCombo.SelectionChanged += (s, e) => OnProviderSettingChanged(providerName, isLocal);
+        modelCombo.LostFocus += (s, e) => OnProviderSettingChanged(providerName, isLocal);
+        _providerModelCombos![providerName] = modelCombo;
+        contentStack.Children.Add(modelCombo);
+
+        // 고급 설정 (Expander)
+        var advancedExpander = new Expander
+        {
+            Header = "고급 설정",
+            IsExpanded = false,
+            Margin = new Thickness(0, 8, 0, 0)
+        };
+
+        var advancedStack = new StackPanel { Margin = new Thickness(0, 8, 0, 0) };
+
+        // Base URL
+        advancedStack.Children.Add(CreateSettingsLabel("API URL"));
+        var defaultUrl = GetDefaultProviderUrl(providerName);
+        var baseUrlBox = new Wpf.Ui.Controls.TextBox
+        {
+            Text = config.BaseUrl ?? defaultUrl,
+            PlaceholderText = defaultUrl,
+            Margin = new Thickness(0, 0, 0, 8)
+        };
+        baseUrlBox.TextChanged += (s, e) => OnProviderSettingChanged(providerName, isLocal);
+        _providerBaseUrlBoxes![providerName] = baseUrlBox;
+        advancedStack.Children.Add(baseUrlBox);
+
+        advancedStack.Children.Add(CreateSettingsDescription("API 엔드포인트 URL을 변경할 수 있습니다. 일반적으로 기본값을 사용합니다."));
+
+        advancedExpander.Content = advancedStack;
+        contentStack.Children.Add(advancedExpander);
+
+        contentBorder.Child = contentStack;
+        mainStack.Children.Add(contentBorder);
+
+        group.Child = mainStack;
+        SettingsContentPanel.Children.Add(group);
+    }
+
+    /// <summary>
+    /// Provider 기본 URL 반환
+    /// </summary>
+    private string GetDefaultProviderUrl(string providerName)
+    {
+        return providerName switch
+        {
+            "Claude" => "https://api.anthropic.com",
+            "OpenAI" => "https://api.openai.com/v1",
+            "Gemini" => "https://generativelanguage.googleapis.com/v1beta",
+            "Ollama" => "http://localhost:11434",
+            "LMStudio" => "http://localhost:1234/v1",
+            _ => ""
+        };
+    }
+
+    /// <summary>
+    /// API 키 마스킹 (앞 8자리와 뒤 4자리만 표시, 중간은 *** 처리)
+    /// </summary>
+    private string MaskApiKey(string? apiKey)
+    {
+        if (string.IsNullOrEmpty(apiKey)) return "";
+        if (apiKey.Length <= 12) return new string('*', apiKey.Length);
+
+        // 앞 8자리 + *** + 뒤 4자리
+        return apiKey.Substring(0, 8) + "***" + apiKey.Substring(apiKey.Length - 4);
+    }
+
+    /// <summary>
+    /// API 테스트 후 모델 목록 불러오기
+    /// </summary>
+    private async Task TestAndLoadModelsAsync(string providerName, System.Windows.Controls.TextBlock statusText)
+    {
+        try
+        {
+            Log4.Info($"AI Provider 테스트 및 모델 로드 시작: {providerName}");
+
+            var aiSettings = App.Settings.AIProviders;
+            var config = providerName switch
+            {
+                "Claude" => aiSettings.Claude,
+                "OpenAI" => aiSettings.OpenAI,
+                "Gemini" => aiSettings.Gemini,
+                "Ollama" => aiSettings.Ollama,
+                "LMStudio" => aiSettings.LMStudio,
+                _ => null
+            };
+
+            if (config == null)
+            {
+                ShowSettingsMessage($"{providerName} 설정을 찾을 수 없습니다.", isError: true);
+                return;
+            }
+
+            // 로컬이 아닌 경우 API 키 확인
+            bool isLocal = providerName == "Ollama" || providerName == "LMStudio";
+            if (!isLocal && string.IsNullOrEmpty(config.ApiKey))
+            {
+                ShowSettingsMessage("API 키를 입력해주세요.", isError: true);
+                return;
+            }
+
+            statusText.Text = "테스트 중...";
+            statusText.Foreground = Brushes.Orange;
+
+            using var httpClient = new System.Net.Http.HttpClient();
+            httpClient.Timeout = TimeSpan.FromSeconds(15);
+
+            var models = new List<string>();
+            string baseUrl = config.BaseUrl ?? GetDefaultProviderUrl(providerName);
+
+            switch (providerName)
+            {
+                case "OpenAI":
+                    httpClient.DefaultRequestHeaders.Add("Authorization", $"Bearer {config.ApiKey}");
+                    var openAiResponse = await httpClient.GetAsync($"{baseUrl}/models");
+                    if (openAiResponse.IsSuccessStatusCode)
+                    {
+                        var json = await openAiResponse.Content.ReadAsStringAsync();
+                        models = ParseOpenAIModels(json);
+                    }
+                    break;
+
+                case "Claude":
+                    // Claude API는 모델 목록 엔드포인트가 없으므로 연결 테스트만 수행
+                    httpClient.DefaultRequestHeaders.Add("x-api-key", config.ApiKey);
+                    httpClient.DefaultRequestHeaders.Add("anthropic-version", "2023-06-01");
+                    // Claude는 목록을 제공하지 않으므로 기본 모델 목록 유지
+                    models = GetClaudeModels().ToList();
+                    break;
+
+                case "Gemini":
+                    var geminiResponse = await httpClient.GetAsync($"{baseUrl}/models?key={config.ApiKey}");
+                    if (geminiResponse.IsSuccessStatusCode)
+                    {
+                        var json = await geminiResponse.Content.ReadAsStringAsync();
+                        models = ParseGeminiModels(json);
+                    }
+                    break;
+
+                case "Ollama":
+                    var ollamaResponse = await httpClient.GetAsync($"{baseUrl}/api/tags");
+                    if (ollamaResponse.IsSuccessStatusCode)
+                    {
+                        var json = await ollamaResponse.Content.ReadAsStringAsync();
+                        models = ParseOllamaModels(json);
+                    }
+                    break;
+
+                case "LMStudio":
+                    var lmStudioResponse = await httpClient.GetAsync($"{baseUrl}/models");
+                    if (lmStudioResponse.IsSuccessStatusCode)
+                    {
+                        var json = await lmStudioResponse.Content.ReadAsStringAsync();
+                        models = ParseLMStudioModels(json);
+                    }
+                    break;
+            }
+
+            if (models.Count > 0)
+            {
+                // 모델 콤보박스 업데이트
+                if (_providerModelCombos != null && _providerModelCombos.TryGetValue(providerName, out var modelCombo))
+                {
+                    var currentModel = modelCombo.Text;
+                    modelCombo.Items.Clear();
+                    foreach (var model in models)
+                    {
+                        modelCombo.Items.Add(model);
+                    }
+                    // 기존 선택된 모델이 목록에 있으면 선택 유지
+                    if (!string.IsNullOrEmpty(currentModel) && models.Contains(currentModel))
+                    {
+                        modelCombo.Text = currentModel;
+                    }
+                    else if (!string.IsNullOrEmpty(currentModel))
+                    {
+                        modelCombo.Items.Insert(0, currentModel);
+                        modelCombo.Text = currentModel;
+                    }
+                    else if (models.Count > 0)
+                    {
+                        modelCombo.SelectedIndex = 0;
+                    }
+                }
+
+                statusText.Text = $"✓ {models.Count}개 모델 발견";
+                statusText.Foreground = new SolidColorBrush((Color)ColorConverter.ConvertFromString("#4CAF50"));
+                Log4.Info($"AI Provider 모델 로드 완료: {providerName}, {models.Count}개");
+            }
+            else
+            {
+                statusText.Text = "✓ 연결됨";
+                statusText.Foreground = new SolidColorBrush((Color)ColorConverter.ConvertFromString("#4CAF50"));
+                Log4.Info($"AI Provider 연결 성공: {providerName} (모델 목록 없음)");
+            }
+        }
+        catch (Exception ex)
+        {
+            statusText.Text = "연결 실패";
+            statusText.Foreground = Brushes.Red;
+            ShowSettingsMessage($"{providerName} 연결 오류: {ex.Message}", isError: true);
+            Log4.Error($"AI Provider 테스트 오류: {providerName}, {ex.Message}");
+        }
+    }
+
+    /// <summary>
+    /// OpenAI 모델 목록 파싱
+    /// </summary>
+    private List<string> ParseOpenAIModels(string json)
+    {
+        var models = new List<string>();
+        try
+        {
+            using var doc = System.Text.Json.JsonDocument.Parse(json);
+            if (doc.RootElement.TryGetProperty("data", out var data))
+            {
+                foreach (var item in data.EnumerateArray())
+                {
+                    if (item.TryGetProperty("id", out var id))
+                    {
+                        var modelId = id.GetString();
+                        // GPT 모델만 필터링 (선택적)
+                        if (!string.IsNullOrEmpty(modelId))
+                        {
+                            models.Add(modelId);
+                        }
+                    }
+                }
+            }
+            // GPT 모델을 우선 정렬
+            models = models.OrderByDescending(m => m.StartsWith("gpt-4"))
+                           .ThenByDescending(m => m.StartsWith("gpt-3"))
+                           .ThenBy(m => m)
+                           .ToList();
+        }
+        catch (Exception ex)
+        {
+            Log4.Error($"OpenAI 모델 파싱 오류: {ex.Message}");
+        }
+        return models;
+    }
+
+    /// <summary>
+    /// Gemini 모델 목록 파싱
+    /// </summary>
+    private List<string> ParseGeminiModels(string json)
+    {
+        var models = new List<string>();
+        try
+        {
+            using var doc = System.Text.Json.JsonDocument.Parse(json);
+            if (doc.RootElement.TryGetProperty("models", out var modelsArray))
+            {
+                foreach (var item in modelsArray.EnumerateArray())
+                {
+                    if (item.TryGetProperty("name", out var name))
+                    {
+                        var modelName = name.GetString();
+                        if (!string.IsNullOrEmpty(modelName))
+                        {
+                            // "models/" 접두어 제거
+                            models.Add(modelName.Replace("models/", ""));
+                        }
+                    }
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            Log4.Error($"Gemini 모델 파싱 오류: {ex.Message}");
+        }
+        return models;
+    }
+
+    /// <summary>
+    /// Ollama 모델 목록 파싱
+    /// </summary>
+    private List<string> ParseOllamaModels(string json)
+    {
+        var models = new List<string>();
+        try
+        {
+            using var doc = System.Text.Json.JsonDocument.Parse(json);
+            if (doc.RootElement.TryGetProperty("models", out var modelsArray))
+            {
+                foreach (var item in modelsArray.EnumerateArray())
+                {
+                    if (item.TryGetProperty("name", out var name))
+                    {
+                        var modelName = name.GetString();
+                        if (!string.IsNullOrEmpty(modelName))
+                        {
+                            models.Add(modelName);
+                        }
+                    }
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            Log4.Error($"Ollama 모델 파싱 오류: {ex.Message}");
+        }
+        return models;
+    }
+
+    /// <summary>
+    /// LMStudio 모델 목록 파싱
+    /// </summary>
+    private List<string> ParseLMStudioModels(string json)
+    {
+        var models = new List<string>();
+        try
+        {
+            using var doc = System.Text.Json.JsonDocument.Parse(json);
+            if (doc.RootElement.TryGetProperty("data", out var data))
+            {
+                foreach (var item in data.EnumerateArray())
+                {
+                    if (item.TryGetProperty("id", out var id))
+                    {
+                        var modelId = id.GetString();
+                        if (!string.IsNullOrEmpty(modelId))
+                        {
+                            models.Add(modelId);
+                        }
+                    }
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            Log4.Error($"LMStudio 모델 파싱 오류: {ex.Message}");
+        }
+        return models;
+    }
+
+    /// <summary>
+    /// 고급 설정 섹션 (전역)
+    /// </summary>
+    private void CreateAdvancedSettingsSection()
+    {
+        // 더 이상 사용하지 않음 - 각 Provider 내에 고급 설정 Expander로 이동
+    }
+
+    /// <summary>
+    /// 대표 Provider 변경 시 처리
+    /// </summary>
+    private void OnDefaultProviderChanged(string providerName)
+    {
+        var aiSettings = App.Settings.AIProviders;
+        aiSettings.DefaultProvider = providerName;
+        App.Settings.SaveAIProviders();
+        Log4.Info($"대표 AI Provider 변경: {providerName}");
+    }
+
+    /// <summary>
+    /// Provider 설정 변경 시 자동 저장
+    /// </summary>
+    private void OnProviderSettingChanged(string providerName, bool isLocal)
+    {
+        var aiSettings = App.Settings.AIProviders;
+        var config = providerName switch
+        {
+            "Claude" => aiSettings.Claude,
+            "OpenAI" => aiSettings.OpenAI,
+            "Gemini" => aiSettings.Gemini,
+            "Ollama" => aiSettings.Ollama,
+            "LMStudio" => aiSettings.LMStudio,
+            _ => null
+        };
+
+        if (config == null) return;
+
+        // API 키 저장
+        if (!isLocal && _providerApiKeyBoxes != null && _providerApiKeyBoxes.TryGetValue(providerName, out var apiKeyBox))
+        {
+            config.ApiKey = apiKeyBox.Text;
+        }
+
+        // 모델 저장
+        if (_providerModelCombos != null && _providerModelCombos.TryGetValue(providerName, out var modelCombo))
+        {
+            config.Model = modelCombo.Text;
+        }
+
+        // Base URL 저장
+        if (_providerBaseUrlBoxes != null && _providerBaseUrlBoxes.TryGetValue(providerName, out var baseUrlBox))
+        {
+            config.BaseUrl = baseUrlBox.Text;
+        }
+
+        // 상태 텍스트 업데이트
+        if (_providerStatusTexts != null && _providerStatusTexts.TryGetValue(providerName, out var statusText))
+        {
+            var hasConfig = isLocal || !string.IsNullOrEmpty(config.ApiKey);
+            statusText.Text = hasConfig ? "✓ 설정됨" : "미설정";
+            statusText.Foreground = hasConfig ? new SolidColorBrush((Color)ColorConverter.ConvertFromString("#4CAF50")) : Brushes.Gray;
+        }
+
+        App.Settings.SaveAIProviders();
+        Log4.Debug($"AI Provider 설정 자동 저장: {providerName}");
+    }
+
+    /// <summary>
+    /// Provider 연결 테스트
+    /// </summary>
+    private async Task TestProviderConnectionAsync(string providerName)
+    {
+        try
+        {
+            Log4.Info($"AI Provider 연결 테스트 시작: {providerName}");
+
+            var aiSettings = App.Settings.AIProviders;
+            var config = providerName switch
+            {
+                "Claude" => aiSettings.Claude,
+                "OpenAI" => aiSettings.OpenAI,
+                "Gemini" => aiSettings.Gemini,
+                "Ollama" => aiSettings.Ollama,
+                "LMStudio" => aiSettings.LMStudio,
+                _ => null
+            };
+
+            if (config == null)
+            {
+                ShowSettingsMessage($"{providerName} 설정을 찾을 수 없습니다.", isError: true);
+                return;
+            }
+
+            if (string.IsNullOrEmpty(config.ApiKey) && providerName != "Ollama" && providerName != "LMStudio")
+            {
+                ShowSettingsMessage("API 키를 입력해주세요.", isError: true);
+                return;
+            }
+
+            // 간단한 HTTP 연결 테스트
+            using var httpClient = new System.Net.Http.HttpClient();
+            httpClient.Timeout = TimeSpan.FromSeconds(10);
+
+            string testUrl = providerName switch
+            {
+                "Claude" => "https://api.anthropic.com/v1/messages",
+                "OpenAI" => "https://api.openai.com/v1/models",
+                "Gemini" => $"https://generativelanguage.googleapis.com/v1beta/models?key={config.ApiKey}",
+                "Ollama" => $"{config.BaseUrl ?? "http://localhost:11434"}/api/tags",
+                "LMStudio" => $"{config.BaseUrl ?? "http://localhost:1234/v1"}/models",
+                _ => ""
+            };
+
+            if (providerName == "Claude")
+            {
+                httpClient.DefaultRequestHeaders.Add("x-api-key", config.ApiKey);
+                httpClient.DefaultRequestHeaders.Add("anthropic-version", "2023-06-01");
+            }
+            else if (providerName == "OpenAI")
+            {
+                httpClient.DefaultRequestHeaders.Add("Authorization", $"Bearer {config.ApiKey}");
+            }
+
+            var response = await httpClient.GetAsync(testUrl);
+
+            if (response.IsSuccessStatusCode || response.StatusCode == System.Net.HttpStatusCode.MethodNotAllowed)
+            {
+                ShowSettingsMessage($"{providerName} 연결 성공!", isError: false);
+                Log4.Info($"AI Provider 연결 테스트 성공: {providerName}");
+            }
+            else
+            {
+                ShowSettingsMessage($"{providerName} 연결 실패: {response.StatusCode}", isError: true);
+                Log4.Warn($"AI Provider 연결 테스트 실패: {providerName}, Status: {response.StatusCode}");
+            }
+        }
+        catch (Exception ex)
+        {
+            ShowSettingsMessage($"{providerName} 연결 오류: {ex.Message}", isError: true);
+            Log4.Error($"AI Provider 연결 테스트 오류: {providerName}, {ex.Message}");
+        }
+    }
+
+    /// <summary>
+    /// 설정 메시지 표시
+    /// </summary>
+    private void ShowSettingsMessage(string message, bool isError)
+    {
+        var msgBox = new Wpf.Ui.Controls.MessageBox
+        {
+            Title = isError ? "오류" : "알림",
+            Content = message
+        };
+        msgBox.ShowDialogAsync();
+    }
+
+    #endregion
+
+    #region TinyMCE 설정
+
+    /// <summary>
+    /// TinyMCE 설정 UI 표시
+    /// </summary>
+    private void ShowTinyMCESettings()
+    {
+        if (SettingsContentPanel == null) return;
+
+        var aiSettings = App.Settings.AIProviders;
+
+        // 헤더
+        SettingsContentPanel.Children.Add(CreateSettingsSectionHeader("TinyMCE 에디터 설정"));
+
+        // TinyMCE API 키 그룹
+        var tinyMCEGroup = CreateSettingsGroupBorder();
+        var tinyMCEStack = new StackPanel();
+
+        tinyMCEStack.Children.Add(CreateSettingsLabel("TinyMCE API 키"));
+        tinyMCEStack.Children.Add(CreateSettingsDescription("메일 작성 에디터(TinyMCE)의 API 키입니다. tiny.cloud에서 발급받을 수 있습니다."));
+
+        var tinyMCEApiKeyBox = new Wpf.Ui.Controls.TextBox
+        {
+            Text = aiSettings.TinyMCE?.ApiKey ?? "",
+            PlaceholderText = "TinyMCE API 키를 입력하세요",
+            Margin = new Thickness(0, 12, 0, 0)
+        };
+        tinyMCEStack.Children.Add(tinyMCEApiKeyBox);
+
+        tinyMCEGroup.Child = tinyMCEStack;
+        SettingsContentPanel.Children.Add(tinyMCEGroup);
+
+        // 저장 버튼
+        SettingsContentPanel.Children.Add(CreateSaveButton(() =>
+        {
+            if (aiSettings.TinyMCE == null)
+                aiSettings.TinyMCE = new Models.Settings.TinyMCEConfig();
+            aiSettings.TinyMCE.ApiKey = tinyMCEApiKeyBox.Text;
+            App.Settings.SaveAIProviders();
+            Log4.Info("TinyMCE 설정 저장");
+            ShowSettingsSavedMessage();
+        }));
+    }
+
+    #endregion
+
+    #region 일반 설정
+
+    // 설정 UI 동기화용 필드
+    private RadioButton? _settingsDarkRadio;
+    private RadioButton? _settingsLightRadio;
+    private CheckBox? _settingsGpuCheckBox;
+    private bool _isUpdatingSettingsUI; // 이벤트 무한 루프 방지
+
+    /// <summary>
+    /// 일반 설정 UI 표시
+    /// </summary>
+    private void ShowGeneralSettings()
+    {
+        if (SettingsContentPanel == null) return;
+
+        var prefs = App.Settings.UserPreferences;
+
+        // 헤더
+        SettingsContentPanel.Children.Add(CreateSettingsSectionHeader("일반 설정"));
+
+        // 테마 설정 그룹
+        var themeGroup = CreateSettingsGroupBorder();
+        var themeStack = new StackPanel();
+
+        themeStack.Children.Add(CreateSettingsLabel("테마"));
+        themeStack.Children.Add(CreateSettingsDescription("테마를 선택하면 즉시 적용됩니다. 상단 메뉴와 동기화됩니다."));
+
+        var themePanel = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 8, 0, 0) };
+
+        _settingsDarkRadio = new RadioButton
+        {
+            Content = "다크 모드",
+            GroupName = "ThemeGroup",
+            IsChecked = prefs.Theme == "Dark",
+            Margin = new Thickness(0, 0, 24, 0)
+        };
+        _settingsLightRadio = new RadioButton
+        {
+            Content = "라이트 모드",
+            GroupName = "ThemeGroup",
+            IsChecked = prefs.Theme == "Light"
+        };
+
+        // 테마 즉시 적용 이벤트
+        _settingsDarkRadio.Checked += (s, e) =>
+        {
+            if (_isUpdatingSettingsUI) return;
+            Services.Theme.ThemeService.Instance.SetDarkMode();
+            UpdateThemeIcon(); // 상단 메뉴 아이콘 동기화
+            Log4.Info("설정 UI: 테마 변경 → Dark (상단 메뉴 동기화)");
+        };
+        _settingsLightRadio.Checked += (s, e) =>
+        {
+            if (_isUpdatingSettingsUI) return;
+            Services.Theme.ThemeService.Instance.SetLightMode();
+            UpdateThemeIcon(); // 상단 메뉴 아이콘 동기화
+            Log4.Info("설정 UI: 테마 변경 → Light (상단 메뉴 동기화)");
+        };
+
+        themePanel.Children.Add(_settingsDarkRadio);
+        themePanel.Children.Add(_settingsLightRadio);
+        themeStack.Children.Add(themePanel);
+
+        themeGroup.Child = themeStack;
+        SettingsContentPanel.Children.Add(themeGroup);
+
+        // GPU 모드 설정 그룹
+        var gpuGroup = CreateSettingsGroupBorder();
+        var gpuStack = new StackPanel();
+
+        gpuStack.Children.Add(CreateSettingsLabel("렌더링 모드"));
+
+        _settingsGpuCheckBox = new CheckBox
+        {
+            Content = "GPU 가속 사용",
+            IsChecked = prefs.UseGpuMode,
+            Margin = new Thickness(0, 8, 0, 0)
+        };
+
+        // GPU 모드 즉시 적용 이벤트
+        _settingsGpuCheckBox.Checked += (s, e) =>
+        {
+            if (_isUpdatingSettingsUI) return;
+            Services.Theme.RenderModeService.Instance.SetGpuMode(true);
+            UpdateGpuModeCheckmark(); // 상단 메뉴 체크마크 동기화
+            Log4.Info("설정 UI: GPU 모드 활성화 (상단 메뉴 동기화, 재시작 필요)");
+            ShowSettingsMessage("GPU 가속이 활성화되었습니다. 변경 사항은 앱 재시작 후 적용됩니다.", isError: false);
+        };
+        _settingsGpuCheckBox.Unchecked += (s, e) =>
+        {
+            if (_isUpdatingSettingsUI) return;
+            Services.Theme.RenderModeService.Instance.SetGpuMode(false);
+            UpdateGpuModeCheckmark(); // 상단 메뉴 체크마크 동기화
+            Log4.Info("설정 UI: GPU 모드 비활성화 (상단 메뉴 동기화, 재시작 필요)");
+            ShowSettingsMessage("GPU 가속이 비활성화되었습니다. 변경 사항은 앱 재시작 후 적용됩니다.", isError: false);
+        };
+
+        gpuStack.Children.Add(_settingsGpuCheckBox);
+        gpuStack.Children.Add(CreateSettingsDescription("GPU 가속을 사용하면 그래픽 성능이 향상되지만, 일부 시스템에서 호환성 문제가 발생할 수 있습니다. 변경 시 앱 재시작이 필요합니다."));
+
+        gpuGroup.Child = gpuStack;
+        SettingsContentPanel.Children.Add(gpuGroup);
+    }
+
+    /// <summary>
+    /// 설정 UI의 테마/GPU 상태 동기화 (상단 메뉴에서 호출)
+    /// </summary>
+    private void SyncSettingsUIFromMenu()
+    {
+        if (_settingsDarkRadio == null || _settingsLightRadio == null || _settingsGpuCheckBox == null) return;
+
+        _isUpdatingSettingsUI = true;
+        try
+        {
+            var prefs = App.Settings.UserPreferences;
+            var isDarkMode = Services.Theme.ThemeService.Instance.IsDarkMode;
+            var isGpuMode = Services.Theme.RenderModeService.Instance.IsGpuMode;
+
+            _settingsDarkRadio.IsChecked = isDarkMode;
+            _settingsLightRadio.IsChecked = !isDarkMode;
+            _settingsGpuCheckBox.IsChecked = isGpuMode;
+
+            Log4.Debug($"설정 UI 동기화: 테마={isDarkMode}, GPU={isGpuMode}");
+        }
+        finally
+        {
+            _isUpdatingSettingsUI = false;
+        }
+    }
+
+    #endregion
+
+    #region 계정 설정
+
+    /// <summary>
+    /// 계정 설정 UI 표시
+    /// </summary>
+    private void ShowAccountSettings()
+    {
+        if (SettingsContentPanel == null) return;
+
+        var loginSettings = App.Settings.Login;
+
+        // 헤더
+        SettingsContentPanel.Children.Add(CreateSettingsSectionHeader("계정 설정"));
+
+        // 현재 계정 정보 그룹
+        var accountGroup = CreateSettingsGroupBorder();
+        var accountStack = new StackPanel();
+
+        accountStack.Children.Add(CreateSettingsLabel("현재 로그인 계정"));
+
+        var emailText = new System.Windows.Controls.TextBlock
+        {
+            Text = loginSettings?.Email ?? "(로그인되지 않음)",
+            FontSize = 14,
+            Margin = new Thickness(0, 8, 0, 4)
+        };
+        accountStack.Children.Add(emailText);
+
+        var displayNameText = new System.Windows.Controls.TextBlock
+        {
+            Text = loginSettings?.DisplayName ?? "",
+            FontSize = 12,
+            Foreground = (Brush)FindResource("TextFillColorSecondaryBrush"),
+            Margin = new Thickness(0, 0, 0, 12)
+        };
+        accountStack.Children.Add(displayNameText);
+
+        // 자동 로그인 체크박스 (즉시 반영)
+        var autoLoginCheckBox = new CheckBox
+        {
+            Content = "자동 로그인",
+            IsChecked = loginSettings?.AutoLogin ?? false,
+            Margin = new Thickness(0, 8, 0, 0)
+        };
+
+        // 자동 로그인 즉시 반영 이벤트
+        autoLoginCheckBox.Checked += (s, e) =>
+        {
+            if (loginSettings != null)
+            {
+                loginSettings.AutoLogin = true;
+                App.Settings.SaveLogin();
+                Log4.Info("자동 로그인 활성화");
+            }
+        };
+        autoLoginCheckBox.Unchecked += (s, e) =>
+        {
+            if (loginSettings != null)
+            {
+                loginSettings.AutoLogin = false;
+                App.Settings.SaveLogin();
+                Log4.Info("자동 로그인 비활성화");
+            }
+        };
+
+        accountStack.Children.Add(autoLoginCheckBox);
+        accountStack.Children.Add(CreateSettingsDescription("자동 로그인을 활성화하면 앱 시작 시 자동으로 로그인합니다. 변경 사항은 즉시 저장됩니다."));
+
+        accountGroup.Child = accountStack;
+        SettingsContentPanel.Children.Add(accountGroup);
+
+        // 로그아웃 그룹
+        var logoutGroup = CreateSettingsGroupBorder();
+        var logoutStack = new StackPanel();
+
+        logoutStack.Children.Add(CreateSettingsLabel("계정 관리"));
+
+        var logoutBtn = new Wpf.Ui.Controls.Button
+        {
+            Content = "로그아웃",
+            Appearance = Wpf.Ui.Controls.ControlAppearance.Danger,
+            Margin = new Thickness(0, 8, 0, 0),
+            Padding = new Thickness(24, 8, 24, 8)
+        };
+        logoutBtn.Click += (s, e) =>
+        {
+            MenuLogout_Click(s, e);
+        };
+        logoutStack.Children.Add(logoutBtn);
+
+        logoutGroup.Child = logoutStack;
+        SettingsContentPanel.Children.Add(logoutGroup);
+    }
+
+    #endregion
+
+    /// <summary>
+    /// 설정 저장 완료 메시지 표시
+    /// </summary>
+    private void ShowSettingsSavedMessage()
+    {
+        _viewModel.StatusMessage = "설정이 저장되었습니다.";
     }
 
     #endregion

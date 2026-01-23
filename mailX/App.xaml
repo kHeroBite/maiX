@@ -18,6 +18,7 @@
             <converters:NullToVisibilityConverter x:Key="NullToVisibilityConverter"/>
             <converters:BoolToFontWeightConverter x:Key="BoolToFontWeightConverter"/>
             <converters:StringToInitialConverter x:Key="StringToInitialConverter"/>
+            <converters:NameToAvatarColorConverter x:Key="NameToAvatarColorConverter"/>
             <converters:StringEqualsToVisibilityConverter x:Key="StringEqualsToVisibilityConverter"/>
             <converters:BoolToForegroundConverter x:Key="BoolToForegroundConverter"/>
             <converters:IsReadToForegroundConverter x:Key="IsReadToForegroundConverter"/>
@@ -36,9 +37,13 @@
             <converters:JsonArrayToStringConverter x:Key="JsonArrayToStringConverter"/>
             <converters:EmptySubjectConverter x:Key="EmptySubjectConverter"/>
             <converters:Base64ToImageSourceConverter x:Key="Base64ToImageSourceConverter"/>
+            <!-- 채팅 그룹 아바타 컨버터 -->
+            <converters:CountToVisibilityConverter x:Key="CountToVisibilityConverter"/>
             <!-- Planner 컨버터 -->
             <converters:BoolToStrikethroughConverter x:Key="BoolToStrikethroughConverter"/>
             <converters:DueStatusToBackgroundConverter x:Key="DueStatusToBackgroundConverter"/>
+            <!-- 채팅 시간 표시 컨버터 -->
+            <converters:DateTimeToRelativeTimeConverter x:Key="DateTimeToRelativeTimeConverter"/>
 
             <!-- ========== 기능별 AccentColor 리소스 ========== -->
             <!-- 기본값: Outlook Blue (ThemeService에서 동적으로 업데이트) -->

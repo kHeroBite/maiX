@@ -18,6 +18,7 @@ public class AppSettingsManager
     private readonly XmlSettingsService<DatabaseSettings> _databaseService;
     private readonly XmlSettingsService<LoggingSettings> _loggingService;
     private readonly XmlSettingsService<UserPreferencesSettings> _userPreferencesService;
+    private readonly XmlSettingsService<SignatureSettings> _signatureService;
 
     /// <summary>
     /// 로그인 + Azure AD 설정
@@ -54,6 +55,11 @@ public class AppSettingsManager
     /// </summary>
     public UserPreferencesSettings UserPreferences { get; private set; } = new();
 
+    /// <summary>
+    /// 이메일 서명 설정
+    /// </summary>
+    public SignatureSettings Signature { get; private set; } = new();
+
     public AppSettingsManager()
     {
         _loginService = new XmlSettingsService<LoginSettings>("autologin.xml");
@@ -63,6 +69,7 @@ public class AppSettingsManager
         _databaseService = new XmlSettingsService<DatabaseSettings>("database.xml");
         _loggingService = new XmlSettingsService<LoggingSettings>("logging.xml");
         _userPreferencesService = new XmlSettingsService<UserPreferencesSettings>("preferences.xml");
+        _signatureService = new XmlSettingsService<SignatureSettings>("signature.xml");
     }
 
     /// <summary>
@@ -81,6 +88,7 @@ public class AppSettingsManager
             Database = _databaseService.Load();
             Logging = _loggingService.Load();
             UserPreferences = _userPreferencesService.Load();
+            Signature = _signatureService.Load();
 
             Log4.Info("[AppSettingsManager] 모든 설정 로드 완료");
         }
@@ -106,6 +114,7 @@ public class AppSettingsManager
             _databaseService.Save(Database);
             _loggingService.Save(Logging);
             _userPreferencesService.Save(UserPreferences);
+            _signatureService.Save(Signature);
 
             Log4.Info("[AppSettingsManager] 모든 설정 저장 완료");
         }
@@ -165,6 +174,14 @@ public class AppSettingsManager
     }
 
     /// <summary>
+    /// 서명 설정만 저장
+    /// </summary>
+    public void SaveSignature()
+    {
+        _signatureService.Save(Signature);
+    }
+
+    /// <summary>
     /// 로그인 설정 초기화 (파일 삭제)
     /// </summary>
     public void ClearLogin()
@@ -213,6 +230,12 @@ public class AppSettingsManager
         {
             _userPreferencesService.Save(new UserPreferencesSettings());
             Log4.Debug("[AppSettingsManager] 기본 사용자 환경 설정 생성");
+        }
+
+        if (!_signatureService.Exists)
+        {
+            _signatureService.Save(new SignatureSettings());
+            Log4.Debug("[AppSettingsManager] 기본 서명 설정 생성");
         }
     }
 }

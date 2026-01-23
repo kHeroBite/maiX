@@ -131,236 +131,285 @@
                                 </MenuItem.Header>
                             </MenuItem>
                         </MenuItem>
+                        <!-- 동기화 메뉴 (신규 통합) -->
                         <MenuItem Padding="8,4">
                             <MenuItem.Header>
                                 <StackPanel Orientation="Horizontal">
-                                    <ui:SymbolIcon Symbol="Mail24" FontSize="12" Margin="0,0,4,0"/>
-                                    <TextBlock Text="메일" VerticalAlignment="Center"/>
+                                    <ui:SymbolIcon Symbol="ArrowSync24" FontSize="12" Margin="0,0,4,0"/>
+                                    <TextBlock Text="동기화" VerticalAlignment="Center"/>
                                 </StackPanel>
                             </MenuItem.Header>
-                            <MenuItem x:Name="MenuMailSyncPause" Click="MenuMailSyncPause_Click"
-                                      Visibility="{Binding IsSyncPaused, Converter={StaticResource BoolToVisibilityConverter}, ConverterParameter=Invert}">
+
+                            <!-- AI 서브메뉴 -->
+                            <MenuItem>
                                 <MenuItem.Header>
                                     <Grid>
                                         <Grid.ColumnDefinitions>
                                             <ColumnDefinition Width="20"/>
                                             <ColumnDefinition Width="*"/>
                                         </Grid.ColumnDefinitions>
-                                        <ui:SymbolIcon x:Name="MenuMailSyncPauseIcon" Grid.Column="0" Symbol="Pause24" FontSize="12" Foreground="#2196F3" HorizontalAlignment="Left"/>
-                                        <TextBlock Grid.Column="1" Text="동기화 중지" VerticalAlignment="Center"/>
+                                        <TextBlock Grid.Column="0" Text="✨" FontSize="10" HorizontalAlignment="Left" VerticalAlignment="Center"/>
+                                        <TextBlock Grid.Column="1" Text="AI" VerticalAlignment="Center" Margin="0,0,20,0"/>
                                     </Grid>
                                 </MenuItem.Header>
+                                <MenuItem x:Name="MenuAISyncPause2" Click="MenuAISyncPause_Click"
+                                          Visibility="{Binding IsAISyncPaused, Converter={StaticResource BoolToVisibilityConverter}, ConverterParameter=Invert}">
+                                    <MenuItem.Header>
+                                        <Grid>
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="20"/>
+                                                <ColumnDefinition Width="*"/>
+                                            </Grid.ColumnDefinitions>
+                                            <ui:SymbolIcon x:Name="MenuAISyncPauseIcon" Grid.Column="0" Symbol="Pause24" FontSize="12" Foreground="#FFD700" HorizontalAlignment="Left"/>
+                                            <TextBlock Grid.Column="1" Text="분석 중지" VerticalAlignment="Center"/>
+                                        </Grid>
+                                    </MenuItem.Header>
+                                </MenuItem>
+                                <MenuItem x:Name="MenuAISyncResume2" Click="MenuAISyncResume_Click"
+                                          Visibility="{Binding IsAISyncPaused, Converter={StaticResource BoolToVisibilityConverter}}">
+                                    <MenuItem.Header>
+                                        <Grid>
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="20"/>
+                                                <ColumnDefinition Width="*"/>
+                                            </Grid.ColumnDefinitions>
+                                            <ui:SymbolIcon x:Name="MenuAISyncResumeIcon" Grid.Column="0" Symbol="Play24" FontSize="12" Foreground="#888888" HorizontalAlignment="Left"/>
+                                            <TextBlock Grid.Column="1" Text="분석 시작" VerticalAlignment="Center"/>
+                                        </Grid>
+                                    </MenuItem.Header>
+                                </MenuItem>
+                                <Separator/>
+                                <!-- 즐겨찾기(메일) 분석 기간 - 신규 -->
+                                <MenuItem x:Name="MenuFavoriteAiPeriod">
+                                    <MenuItem.Header>
+                                        <Grid MinWidth="130">
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="20"/>
+                                                <ColumnDefinition Width="*"/>
+                                            </Grid.ColumnDefinitions>
+                                            <ui:SymbolIcon Grid.Column="0" Symbol="Star24" FontSize="12" HorizontalAlignment="Left"/>
+                                            <TextBlock Grid.Column="1" Text="즐겨찾기(메일) 분석 기간" VerticalAlignment="Center" Margin="0,0,20,0"/>
+                                        </Grid>
+                                    </MenuItem.Header>
+                                    <MenuItem x:Name="MenuFavoriteAiPeriodCurrent" Header="현재: 최근 5건" IsEnabled="False" FontStyle="Italic"/>
+                                    <Separator/>
+                                    <MenuItem x:Name="MenuFavoriteAiPeriod5" Header="최근 5건" Click="MenuFavoriteAiPeriod_Click" Tag="Count:5"/>
+                                    <MenuItem x:Name="MenuFavoriteAiPeriodDay" Header="하루" Click="MenuFavoriteAiPeriod_Click" Tag="Days:1"/>
+                                    <MenuItem x:Name="MenuFavoriteAiPeriodWeek" Header="1주일" Click="MenuFavoriteAiPeriod_Click" Tag="Weeks:1"/>
+                                    <MenuItem x:Name="MenuFavoriteAiPeriodMonth" Header="1달" Click="MenuFavoriteAiPeriod_Click" Tag="Months:1"/>
+                                    <MenuItem x:Name="MenuFavoriteAiPeriodYear" Header="1년" Click="MenuFavoriteAiPeriod_Click" Tag="Years:1"/>
+                                    <MenuItem x:Name="MenuFavoriteAiPeriodAll" Header="전체" Click="MenuFavoriteAiPeriod_Click" Tag="All:0"/>
+                                </MenuItem>
+                                <!-- 즐겨찾기(메일) 분석 주기 -->
+                                <MenuItem x:Name="MenuFavoriteAnalysisInterval">
+                                    <MenuItem.Header>
+                                        <Grid MinWidth="130">
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="20"/>
+                                                <ColumnDefinition Width="*"/>
+                                            </Grid.ColumnDefinitions>
+                                            <ui:SymbolIcon Grid.Column="0" Symbol="Clock24" FontSize="12" HorizontalAlignment="Left"/>
+                                            <TextBlock Grid.Column="1" Text="즐겨찾기(메일) 분석 주기" VerticalAlignment="Center" Margin="0,0,20,0"/>
+                                        </Grid>
+                                    </MenuItem.Header>
+                                    <MenuItem x:Name="MenuFavoriteAnalysisIntervalCurrent" Header="현재: 30초" IsEnabled="False" FontStyle="Italic"/>
+                                    <Separator/>
+                                    <MenuItem x:Name="MenuFavoriteAnalysisInterval1s" Header="1초" Click="MenuFavoriteAnalysisInterval_Click" Tag="1"/>
+                                    <MenuItem x:Name="MenuFavoriteAnalysisInterval5s" Header="5초" Click="MenuFavoriteAnalysisInterval_Click" Tag="5"/>
+                                    <MenuItem x:Name="MenuFavoriteAnalysisInterval10s" Header="10초" Click="MenuFavoriteAnalysisInterval_Click" Tag="10"/>
+                                    <MenuItem x:Name="MenuFavoriteAnalysisInterval30s" Header="30초" Click="MenuFavoriteAnalysisInterval_Click" Tag="30"/>
+                                    <MenuItem x:Name="MenuFavoriteAnalysisInterval1m" Header="1분" Click="MenuFavoriteAnalysisInterval_Click" Tag="60"/>
+                                    <MenuItem x:Name="MenuFavoriteAnalysisInterval5m" Header="5분" Click="MenuFavoriteAnalysisInterval_Click" Tag="300"/>
+                                </MenuItem>
+                                <Separator/>
+                                <!-- 전체 분석 기간 -->
+                                <MenuItem x:Name="MenuAIAnalysisPeriod">
+                                    <MenuItem.Header>
+                                        <Grid MinWidth="100">
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="20"/>
+                                                <ColumnDefinition Width="*"/>
+                                            </Grid.ColumnDefinitions>
+                                            <ui:SymbolIcon Grid.Column="0" Symbol="CalendarLtr24" FontSize="12" HorizontalAlignment="Left"/>
+                                            <TextBlock Grid.Column="1" Text="전체 분석 기간" VerticalAlignment="Center" Margin="0,0,20,0"/>
+                                        </Grid>
+                                    </MenuItem.Header>
+                                    <MenuItem x:Name="MenuAIAnalysisPeriodCurrent" Header="현재: 최근 5건" IsEnabled="False" FontStyle="Italic"/>
+                                    <Separator/>
+                                    <MenuItem x:Name="MenuAIAnalysis5" Header="최근 5건" Click="MenuAIAnalysis5_Click"/>
+                                    <MenuItem x:Name="MenuAIAnalysisDay" Header="하루" Click="MenuAIAnalysisDay_Click"/>
+                                    <MenuItem x:Name="MenuAIAnalysisWeek" Header="1주일" Click="MenuAIAnalysisWeek_Click"/>
+                                    <MenuItem x:Name="MenuAIAnalysisMonth" Header="1달" Click="MenuAIAnalysisMonth_Click"/>
+                                    <MenuItem x:Name="MenuAIAnalysisYear" Header="1년" Click="MenuAIAnalysisYear_Click"/>
+                                    <MenuItem x:Name="MenuAIAnalysisAll" Header="전체" Click="MenuAIAnalysisAll_Click"/>
+                                </MenuItem>
+                                <!-- 전체 분석 주기 -->
+                                <MenuItem x:Name="MenuFullAnalysisInterval">
+                                    <MenuItem.Header>
+                                        <Grid MinWidth="130">
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="20"/>
+                                                <ColumnDefinition Width="*"/>
+                                            </Grid.ColumnDefinitions>
+                                            <ui:SymbolIcon Grid.Column="0" Symbol="Clock24" FontSize="12" HorizontalAlignment="Left"/>
+                                            <TextBlock Grid.Column="1" Text="전체 분석 주기" VerticalAlignment="Center" Margin="0,0,20,0"/>
+                                        </Grid>
+                                    </MenuItem.Header>
+                                    <MenuItem x:Name="MenuFullAnalysisIntervalCurrent" Header="현재: 5분" IsEnabled="False" FontStyle="Italic"/>
+                                    <Separator/>
+                                    <MenuItem x:Name="MenuFullAnalysisInterval1s" Header="1초" Click="MenuFullAnalysisInterval_Click" Tag="1"/>
+                                    <MenuItem x:Name="MenuFullAnalysisInterval5s" Header="5초" Click="MenuFullAnalysisInterval_Click" Tag="5"/>
+                                    <MenuItem x:Name="MenuFullAnalysisInterval10s" Header="10초" Click="MenuFullAnalysisInterval_Click" Tag="10"/>
+                                    <MenuItem x:Name="MenuFullAnalysisInterval30s" Header="30초" Click="MenuFullAnalysisInterval_Click" Tag="30"/>
+                                    <MenuItem x:Name="MenuFullAnalysisInterval1m" Header="1분" Click="MenuFullAnalysisInterval_Click" Tag="60"/>
+                                    <MenuItem x:Name="MenuFullAnalysisInterval5m" Header="5분" Click="MenuFullAnalysisInterval_Click" Tag="300"/>
+                                    <MenuItem x:Name="MenuFullAnalysisInterval10m" Header="10분" Click="MenuFullAnalysisInterval_Click" Tag="600"/>
+                                    <MenuItem x:Name="MenuFullAnalysisInterval30m" Header="30분" Click="MenuFullAnalysisInterval_Click" Tag="1800"/>
+                                    <MenuItem x:Name="MenuFullAnalysisInterval1h" Header="1시간" Click="MenuFullAnalysisInterval_Click" Tag="3600"/>
+                                </MenuItem>
                             </MenuItem>
-                            <MenuItem x:Name="MenuMailSyncResume" Click="MenuMailSyncResume_Click"
-                                      Visibility="{Binding IsSyncPaused, Converter={StaticResource BoolToVisibilityConverter}}">
+
+                            <!-- MS365 서브메뉴 -->
+                            <MenuItem>
                                 <MenuItem.Header>
                                     <Grid>
                                         <Grid.ColumnDefinitions>
                                             <ColumnDefinition Width="20"/>
                                             <ColumnDefinition Width="*"/>
                                         </Grid.ColumnDefinitions>
-                                        <ui:SymbolIcon x:Name="MenuMailSyncResumeIcon" Grid.Column="0" Symbol="Play24" FontSize="12" Foreground="#888888" HorizontalAlignment="Left"/>
-                                        <TextBlock Grid.Column="1" Text="동기화 시작" VerticalAlignment="Center"/>
+                                        <ui:SymbolIcon Grid.Column="0" Symbol="Cloud24" FontSize="12" HorizontalAlignment="Left"/>
+                                        <TextBlock Grid.Column="1" Text="MS365" VerticalAlignment="Center" Margin="0,0,20,0"/>
                                     </Grid>
                                 </MenuItem.Header>
-                            </MenuItem>
-                            <MenuItem x:Name="MenuSyncPeriod">
-                                <MenuItem.Header>
-                                    <Grid MinWidth="100">
-                                        <Grid.ColumnDefinitions>
-                                            <ColumnDefinition Width="20"/>
-                                            <ColumnDefinition Width="*"/>
-                                            <ColumnDefinition Width="30"/>
-                                        </Grid.ColumnDefinitions>
-                                        <ui:SymbolIcon Grid.Column="0" Symbol="CalendarLtr24" FontSize="12" HorizontalAlignment="Left"/>
-                                        <TextBlock Grid.Column="1" Text="동기화 기간" VerticalAlignment="Center"/>
-                                    </Grid>
-                                </MenuItem.Header>
-                                <!-- 현재 설정 표시 -->
-                                <MenuItem x:Name="MenuSyncPeriodCurrent" Header="현재: 최근 5건" IsEnabled="False" FontStyle="Italic"/>
+                                <MenuItem x:Name="MenuMailSyncPause" Click="MenuMailSyncPause_Click"
+                                          Visibility="{Binding IsSyncPaused, Converter={StaticResource BoolToVisibilityConverter}, ConverterParameter=Invert}">
+                                    <MenuItem.Header>
+                                        <Grid>
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="20"/>
+                                                <ColumnDefinition Width="*"/>
+                                            </Grid.ColumnDefinitions>
+                                            <ui:SymbolIcon x:Name="MenuMailSyncPauseIcon" Grid.Column="0" Symbol="Pause24" FontSize="12" Foreground="#0078D4" HorizontalAlignment="Left"/>
+                                            <TextBlock Grid.Column="1" Text="동기화 중지" VerticalAlignment="Center"/>
+                                        </Grid>
+                                    </MenuItem.Header>
+                                </MenuItem>
+                                <MenuItem x:Name="MenuMailSyncResume" Click="MenuMailSyncResume_Click"
+                                          Visibility="{Binding IsSyncPaused, Converter={StaticResource BoolToVisibilityConverter}}">
+                                    <MenuItem.Header>
+                                        <Grid>
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="20"/>
+                                                <ColumnDefinition Width="*"/>
+                                            </Grid.ColumnDefinitions>
+                                            <ui:SymbolIcon x:Name="MenuMailSyncResumeIcon" Grid.Column="0" Symbol="Play24" FontSize="12" Foreground="#888888" HorizontalAlignment="Left"/>
+                                            <TextBlock Grid.Column="1" Text="동기화 시작" VerticalAlignment="Center"/>
+                                        </Grid>
+                                    </MenuItem.Header>
+                                </MenuItem>
                                 <Separator/>
-                                <MenuItem x:Name="MenuMailSync5" Header="5건" Click="MenuMailSync5_Click"/>
-                                <MenuItem x:Name="MenuMailSyncDay" Header="하루" Click="MenuMailSyncDay_Click"/>
-                                <MenuItem x:Name="MenuMailSyncWeek" Header="1주일" Click="MenuMailSyncWeek_Click"/>
-                                <MenuItem x:Name="MenuMailSyncMonth" Header="1달" Click="MenuMailSyncMonth_Click"/>
-                                <MenuItem x:Name="MenuMailSyncYear" Header="1년" Click="MenuMailSyncYear_Click"/>
-                                <MenuItem x:Name="MenuMailSyncAll" Header="전체" Click="MenuMailSyncAll_Click"/>
+                                <!-- 즐겨찾기(메일) 동기화 기간 - 신규 -->
+                                <MenuItem x:Name="MenuFavoriteSyncPeriod">
+                                    <MenuItem.Header>
+                                        <Grid MinWidth="130">
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="20"/>
+                                                <ColumnDefinition Width="*"/>
+                                            </Grid.ColumnDefinitions>
+                                            <ui:SymbolIcon Grid.Column="0" Symbol="Star24" FontSize="12" HorizontalAlignment="Left"/>
+                                            <TextBlock Grid.Column="1" Text="즐겨찾기(메일) 동기화 기간" VerticalAlignment="Center" Margin="0,0,20,0"/>
+                                        </Grid>
+                                    </MenuItem.Header>
+                                    <MenuItem x:Name="MenuFavoriteSyncPeriodCurrent" Header="현재: 최근 5건" IsEnabled="False" FontStyle="Italic"/>
+                                    <Separator/>
+                                    <MenuItem x:Name="MenuFavoriteSyncPeriod5" Header="최근 5건" Click="MenuFavoriteSyncPeriod_Click" Tag="Count:5"/>
+                                    <MenuItem x:Name="MenuFavoriteSyncPeriodDay" Header="하루" Click="MenuFavoriteSyncPeriod_Click" Tag="Days:1"/>
+                                    <MenuItem x:Name="MenuFavoriteSyncPeriodWeek" Header="1주일" Click="MenuFavoriteSyncPeriod_Click" Tag="Weeks:1"/>
+                                    <MenuItem x:Name="MenuFavoriteSyncPeriodMonth" Header="1달" Click="MenuFavoriteSyncPeriod_Click" Tag="Months:1"/>
+                                    <MenuItem x:Name="MenuFavoriteSyncPeriodYear" Header="1년" Click="MenuFavoriteSyncPeriod_Click" Tag="Years:1"/>
+                                    <MenuItem x:Name="MenuFavoriteSyncPeriodAll" Header="전체" Click="MenuFavoriteSyncPeriod_Click" Tag="All:0"/>
+                                </MenuItem>
+                                <!-- 즐겨찾기(메일) 동기화 주기 -->
+                                <MenuItem x:Name="MenuFavoriteSyncInterval">
+                                    <MenuItem.Header>
+                                        <Grid MinWidth="130">
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="20"/>
+                                                <ColumnDefinition Width="*"/>
+                                            </Grid.ColumnDefinitions>
+                                            <ui:SymbolIcon Grid.Column="0" Symbol="Clock24" FontSize="12" HorizontalAlignment="Left"/>
+                                            <TextBlock Grid.Column="1" Text="즐겨찾기(메일) 동기화 주기" VerticalAlignment="Center" Margin="0,0,20,0"/>
+                                        </Grid>
+                                    </MenuItem.Header>
+                                    <MenuItem x:Name="MenuFavoriteSyncIntervalCurrent" Header="현재: 30초" IsEnabled="False" FontStyle="Italic"/>
+                                    <Separator/>
+                                    <MenuItem x:Name="MenuFavoriteSyncInterval1s" Header="1초" Click="MenuFavoriteSyncInterval_Click" Tag="1"/>
+                                    <MenuItem x:Name="MenuFavoriteSyncInterval5s" Header="5초" Click="MenuFavoriteSyncInterval_Click" Tag="5"/>
+                                    <MenuItem x:Name="MenuFavoriteSyncInterval10s" Header="10초" Click="MenuFavoriteSyncInterval_Click" Tag="10"/>
+                                    <MenuItem x:Name="MenuFavoriteSyncInterval30s" Header="30초" Click="MenuFavoriteSyncInterval_Click" Tag="30"/>
+                                    <MenuItem x:Name="MenuFavoriteSyncInterval1m" Header="1분" Click="MenuFavoriteSyncInterval_Click" Tag="60"/>
+                                    <MenuItem x:Name="MenuFavoriteSyncInterval5m" Header="5분" Click="MenuFavoriteSyncInterval_Click" Tag="300"/>
+                                </MenuItem>
                                 <Separator/>
-                                <MenuItem Header="상세설정" Click="MenuSyncSettings_Click"/>
-                            </MenuItem>
-                            <!-- 즐겨찾기 동기화 주기 -->
-                            <MenuItem x:Name="MenuFavoriteSyncInterval">
-                                <MenuItem.Header>
-                                    <Grid MinWidth="130">
-                                        <Grid.ColumnDefinitions>
-                                            <ColumnDefinition Width="20"/>
-                                            <ColumnDefinition Width="*"/>
-                                        </Grid.ColumnDefinitions>
-                                        <ui:SymbolIcon Grid.Column="0" Symbol="Star24" FontSize="12" HorizontalAlignment="Left"/>
-                                        <TextBlock Grid.Column="1" Text="즐겨찾기 동기화 주기" VerticalAlignment="Center"/>
-                                    </Grid>
-                                </MenuItem.Header>
-                                <MenuItem x:Name="MenuFavoriteSyncIntervalCurrent" Header="현재: 5초" IsEnabled="False" FontStyle="Italic"/>
+                                <!-- 전체 동기화 기간 -->
+                                <MenuItem x:Name="MenuSyncPeriod">
+                                    <MenuItem.Header>
+                                        <Grid MinWidth="100">
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="20"/>
+                                                <ColumnDefinition Width="*"/>
+                                            </Grid.ColumnDefinitions>
+                                            <ui:SymbolIcon Grid.Column="0" Symbol="CalendarLtr24" FontSize="12" HorizontalAlignment="Left"/>
+                                            <TextBlock Grid.Column="1" Text="전체 동기화 기간" VerticalAlignment="Center" Margin="0,0,20,0"/>
+                                        </Grid>
+                                    </MenuItem.Header>
+                                    <MenuItem x:Name="MenuSyncPeriodCurrent" Header="현재: 최근 5건" IsEnabled="False" FontStyle="Italic"/>
+                                    <Separator/>
+                                    <MenuItem x:Name="MenuMailSync5" Header="최근 5건" Click="MenuMailSync5_Click"/>
+                                    <MenuItem x:Name="MenuMailSyncDay" Header="하루" Click="MenuMailSyncDay_Click"/>
+                                    <MenuItem x:Name="MenuMailSyncWeek" Header="1주일" Click="MenuMailSyncWeek_Click"/>
+                                    <MenuItem x:Name="MenuMailSyncMonth" Header="1달" Click="MenuMailSyncMonth_Click"/>
+                                    <MenuItem x:Name="MenuMailSyncYear" Header="1년" Click="MenuMailSyncYear_Click"/>
+                                    <MenuItem x:Name="MenuMailSyncAll" Header="전체" Click="MenuMailSyncAll_Click"/>
+                                </MenuItem>
+                                <!-- 전체 동기화 주기 -->
+                                <MenuItem x:Name="MenuFullSyncInterval">
+                                    <MenuItem.Header>
+                                        <Grid MinWidth="130">
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="20"/>
+                                                <ColumnDefinition Width="*"/>
+                                            </Grid.ColumnDefinitions>
+                                            <ui:SymbolIcon Grid.Column="0" Symbol="Clock24" FontSize="12" HorizontalAlignment="Left"/>
+                                            <TextBlock Grid.Column="1" Text="전체 동기화 주기" VerticalAlignment="Center" Margin="0,0,20,0"/>
+                                        </Grid>
+                                    </MenuItem.Header>
+                                    <MenuItem x:Name="MenuFullSyncIntervalCurrent" Header="현재: 5분" IsEnabled="False" FontStyle="Italic"/>
+                                    <Separator/>
+                                    <MenuItem x:Name="MenuFullSyncInterval1s" Header="1초" Click="MenuFullSyncInterval_Click" Tag="1"/>
+                                    <MenuItem x:Name="MenuFullSyncInterval5s" Header="5초" Click="MenuFullSyncInterval_Click" Tag="5"/>
+                                    <MenuItem x:Name="MenuFullSyncInterval10s" Header="10초" Click="MenuFullSyncInterval_Click" Tag="10"/>
+                                    <MenuItem x:Name="MenuFullSyncInterval30s" Header="30초" Click="MenuFullSyncInterval_Click" Tag="30"/>
+                                    <MenuItem x:Name="MenuFullSyncInterval1m" Header="1분" Click="MenuFullSyncInterval_Click" Tag="60"/>
+                                    <MenuItem x:Name="MenuFullSyncInterval5m" Header="5분" Click="MenuFullSyncInterval_Click" Tag="300"/>
+                                    <MenuItem x:Name="MenuFullSyncInterval10m" Header="10분" Click="MenuFullSyncInterval_Click" Tag="600"/>
+                                    <MenuItem x:Name="MenuFullSyncInterval30m" Header="30분" Click="MenuFullSyncInterval_Click" Tag="1800"/>
+                                    <MenuItem x:Name="MenuFullSyncInterval1h" Header="1시간" Click="MenuFullSyncInterval_Click" Tag="3600"/>
+                                </MenuItem>
                                 <Separator/>
-                                <MenuItem x:Name="MenuFavoriteSyncInterval1s" Header="1초" Click="MenuFavoriteSyncInterval_Click" Tag="1"/>
-                                <MenuItem x:Name="MenuFavoriteSyncInterval5s" Header="5초" Click="MenuFavoriteSyncInterval_Click" Tag="5"/>
-                                <MenuItem x:Name="MenuFavoriteSyncInterval10s" Header="10초" Click="MenuFavoriteSyncInterval_Click" Tag="10"/>
-                                <MenuItem x:Name="MenuFavoriteSyncInterval30s" Header="30초" Click="MenuFavoriteSyncInterval_Click" Tag="30"/>
-                                <MenuItem x:Name="MenuFavoriteSyncInterval1m" Header="1분" Click="MenuFavoriteSyncInterval_Click" Tag="60"/>
-                                <MenuItem x:Name="MenuFavoriteSyncInterval5m" Header="5분" Click="MenuFavoriteSyncInterval_Click" Tag="300"/>
-                            </MenuItem>
-                            <!-- 전체메일 동기화 주기 -->
-                            <MenuItem x:Name="MenuFullSyncInterval">
-                                <MenuItem.Header>
-                                    <Grid MinWidth="130">
-                                        <Grid.ColumnDefinitions>
-                                            <ColumnDefinition Width="20"/>
-                                            <ColumnDefinition Width="*"/>
-                                        </Grid.ColumnDefinitions>
-                                        <ui:SymbolIcon Grid.Column="0" Symbol="Clock24" FontSize="12" HorizontalAlignment="Left"/>
-                                        <TextBlock Grid.Column="1" Text="전체메일 동기화 주기" VerticalAlignment="Center"/>
-                                    </Grid>
-                                </MenuItem.Header>
-                                <MenuItem x:Name="MenuFullSyncIntervalCurrent" Header="현재: 5분" IsEnabled="False" FontStyle="Italic"/>
-                                <Separator/>
-                                <MenuItem x:Name="MenuFullSyncInterval1m" Header="1분" Click="MenuFullSyncInterval_Click" Tag="60"/>
-                                <MenuItem x:Name="MenuFullSyncInterval5m" Header="5분" Click="MenuFullSyncInterval_Click" Tag="300"/>
-                                <MenuItem x:Name="MenuFullSyncInterval10m" Header="10분" Click="MenuFullSyncInterval_Click" Tag="600"/>
-                                <MenuItem x:Name="MenuFullSyncInterval30m" Header="30분" Click="MenuFullSyncInterval_Click" Tag="1800"/>
-                                <MenuItem x:Name="MenuFullSyncInterval1h" Header="1시간" Click="MenuFullSyncInterval_Click" Tag="3600"/>
-                            </MenuItem>
-                            <!-- 캘린더 동기화 주기 -->
-                            <MenuItem x:Name="MenuCalendarSyncInterval">
-                                <MenuItem.Header>
-                                    <Grid MinWidth="130">
-                                        <Grid.ColumnDefinitions>
-                                            <ColumnDefinition Width="20"/>
-                                            <ColumnDefinition Width="*"/>
-                                        </Grid.ColumnDefinitions>
-                                        <ui:SymbolIcon Grid.Column="0" Symbol="CalendarLtr24" FontSize="12" HorizontalAlignment="Left"/>
-                                        <TextBlock Grid.Column="1" Text="캘린더 동기화 주기" VerticalAlignment="Center"/>
-                                    </Grid>
-                                </MenuItem.Header>
-                                <MenuItem x:Name="MenuCalendarSyncIntervalCurrent" Header="현재: 1분" IsEnabled="False" FontStyle="Italic"/>
-                                <Separator/>
-                                <MenuItem x:Name="MenuCalendarSyncInterval1s" Header="1초" Click="MenuCalendarSyncInterval_Click" Tag="1"/>
-                                <MenuItem x:Name="MenuCalendarSyncInterval5s" Header="5초" Click="MenuCalendarSyncInterval_Click" Tag="5"/>
-                                <MenuItem x:Name="MenuCalendarSyncInterval10s" Header="10초" Click="MenuCalendarSyncInterval_Click" Tag="10"/>
-                                <MenuItem x:Name="MenuCalendarSyncInterval30s" Header="30초" Click="MenuCalendarSyncInterval_Click" Tag="30"/>
-                                <MenuItem x:Name="MenuCalendarSyncInterval1m" Header="1분" Click="MenuCalendarSyncInterval_Click" Tag="60"/>
-                                <MenuItem x:Name="MenuCalendarSyncInterval5m" Header="5분" Click="MenuCalendarSyncInterval_Click" Tag="300"/>
-                                <MenuItem x:Name="MenuCalendarSyncInterval10m" Header="10분" Click="MenuCalendarSyncInterval_Click" Tag="600"/>
-                            </MenuItem>
-                            <MenuItem Click="MenuForceResync_Click">
-                                <MenuItem.Header>
-                                    <Grid>
-                                        <Grid.ColumnDefinitions>
-                                            <ColumnDefinition Width="20"/>
-                                            <ColumnDefinition Width="*"/>
-                                        </Grid.ColumnDefinitions>
-                                        <ui:SymbolIcon Grid.Column="0" Symbol="ArrowSync24" FontSize="12" HorizontalAlignment="Left"/>
-                                        <TextBlock Grid.Column="1" Text="전체 재동기화" VerticalAlignment="Center"/>
-                                    </Grid>
-                                </MenuItem.Header>
-                            </MenuItem>
-                        </MenuItem>
-                        <MenuItem Padding="8,4">
-                            <MenuItem.Header>
-                                <StackPanel Orientation="Horizontal">
-                                    <TextBlock Text="✨" FontSize="10" Margin="0,0,4,0" VerticalAlignment="Center"/>
-                                    <TextBlock Text="Ai" VerticalAlignment="Center"/>
-                                </StackPanel>
-                            </MenuItem.Header>
-                            <MenuItem x:Name="MenuAISyncPause2" Click="MenuAISyncPause_Click"
-                                      Visibility="{Binding IsAISyncPaused, Converter={StaticResource BoolToVisibilityConverter}, ConverterParameter=Invert}">
-                                <MenuItem.Header>
-                                    <Grid>
-                                        <Grid.ColumnDefinitions>
-                                            <ColumnDefinition Width="20"/>
-                                            <ColumnDefinition Width="*"/>
-                                        </Grid.ColumnDefinitions>
-                                        <ui:SymbolIcon x:Name="MenuAISyncPauseIcon" Grid.Column="0" Symbol="Pause24" FontSize="12" Foreground="#FFD700" HorizontalAlignment="Left"/>
-                                        <TextBlock Grid.Column="1" Text="분석 중지" VerticalAlignment="Center"/>
-                                    </Grid>
-                                </MenuItem.Header>
-                            </MenuItem>
-                            <MenuItem x:Name="MenuAISyncResume2" Click="MenuAISyncResume_Click"
-                                      Visibility="{Binding IsAISyncPaused, Converter={StaticResource BoolToVisibilityConverter}}">
-                                <MenuItem.Header>
-                                    <Grid>
-                                        <Grid.ColumnDefinitions>
-                                            <ColumnDefinition Width="20"/>
-                                            <ColumnDefinition Width="*"/>
-                                        </Grid.ColumnDefinitions>
-                                        <ui:SymbolIcon x:Name="MenuAISyncResumeIcon" Grid.Column="0" Symbol="Play24" FontSize="12" Foreground="#888888" HorizontalAlignment="Left"/>
-                                        <TextBlock Grid.Column="1" Text="분석 시작" VerticalAlignment="Center"/>
-                                    </Grid>
-                                </MenuItem.Header>
-                            </MenuItem>
-                            <MenuItem x:Name="MenuAIAnalysisPeriod">
-                                <MenuItem.Header>
-                                    <Grid MinWidth="100">
-                                        <Grid.ColumnDefinitions>
-                                            <ColumnDefinition Width="20"/>
-                                            <ColumnDefinition Width="*"/>
-                                            <ColumnDefinition Width="30"/>
-                                        </Grid.ColumnDefinitions>
-                                        <ui:SymbolIcon Grid.Column="0" Symbol="CalendarLtr24" FontSize="12" HorizontalAlignment="Left"/>
-                                        <TextBlock Grid.Column="1" Text="분석 기간" VerticalAlignment="Center"/>
-                                    </Grid>
-                                </MenuItem.Header>
-                                <!-- 현재 설정 표시 -->
-                                <MenuItem x:Name="MenuAIAnalysisPeriodCurrent" Header="현재: 최근 5건" IsEnabled="False" FontStyle="Italic"/>
-                                <Separator/>
-                                <MenuItem x:Name="MenuAIAnalysis5" Header="5건" Click="MenuAIAnalysis5_Click"/>
-                                <MenuItem x:Name="MenuAIAnalysisDay" Header="하루" Click="MenuAIAnalysisDay_Click"/>
-                                <MenuItem x:Name="MenuAIAnalysisWeek" Header="1주일" Click="MenuAIAnalysisWeek_Click"/>
-                                <MenuItem x:Name="MenuAIAnalysisMonth" Header="1달" Click="MenuAIAnalysisMonth_Click"/>
-                                <MenuItem x:Name="MenuAIAnalysisYear" Header="1년" Click="MenuAIAnalysisYear_Click"/>
-                                <MenuItem x:Name="MenuAIAnalysisAll" Header="전체" Click="MenuAIAnalysisAll_Click"/>
-                                <Separator/>
-                                <MenuItem Header="상세설정" Click="MenuSyncSettings_Click"/>
-                            </MenuItem>
-                            <!-- 즐겨찾기 분석 주기 -->
-                            <MenuItem x:Name="MenuFavoriteAnalysisInterval">
-                                <MenuItem.Header>
-                                    <Grid MinWidth="130">
-                                        <Grid.ColumnDefinitions>
-                                            <ColumnDefinition Width="20"/>
-                                            <ColumnDefinition Width="*"/>
-                                        </Grid.ColumnDefinitions>
-                                        <ui:SymbolIcon Grid.Column="0" Symbol="Star24" FontSize="12" HorizontalAlignment="Left"/>
-                                        <TextBlock Grid.Column="1" Text="즐겨찾기 분석 주기" VerticalAlignment="Center"/>
-                                    </Grid>
-                                </MenuItem.Header>
-                                <MenuItem x:Name="MenuFavoriteAnalysisIntervalCurrent" Header="현재: 5초" IsEnabled="False" FontStyle="Italic"/>
-                                <Separator/>
-                                <MenuItem x:Name="MenuFavoriteAnalysisInterval1s" Header="1초" Click="MenuFavoriteAnalysisInterval_Click" Tag="1"/>
-                                <MenuItem x:Name="MenuFavoriteAnalysisInterval5s" Header="5초" Click="MenuFavoriteAnalysisInterval_Click" Tag="5"/>
-                                <MenuItem x:Name="MenuFavoriteAnalysisInterval10s" Header="10초" Click="MenuFavoriteAnalysisInterval_Click" Tag="10"/>
-                                <MenuItem x:Name="MenuFavoriteAnalysisInterval30s" Header="30초" Click="MenuFavoriteAnalysisInterval_Click" Tag="30"/>
-                                <MenuItem x:Name="MenuFavoriteAnalysisInterval1m" Header="1분" Click="MenuFavoriteAnalysisInterval_Click" Tag="60"/>
-                                <MenuItem x:Name="MenuFavoriteAnalysisInterval5m" Header="5분" Click="MenuFavoriteAnalysisInterval_Click" Tag="300"/>
-                            </MenuItem>
-                            <!-- 전체메일 분석 주기 -->
-                            <MenuItem x:Name="MenuFullAnalysisInterval">
-                                <MenuItem.Header>
-                                    <Grid MinWidth="130">
-                                        <Grid.ColumnDefinitions>
-                                            <ColumnDefinition Width="20"/>
-                                            <ColumnDefinition Width="*"/>
-                                        </Grid.ColumnDefinitions>
-                                        <ui:SymbolIcon Grid.Column="0" Symbol="Clock24" FontSize="12" HorizontalAlignment="Left"/>
-                                        <TextBlock Grid.Column="1" Text="전체메일 분석 주기" VerticalAlignment="Center"/>
-                                    </Grid>
-                                </MenuItem.Header>
-                                <MenuItem x:Name="MenuFullAnalysisIntervalCurrent" Header="현재: 5분" IsEnabled="False" FontStyle="Italic"/>
-                                <Separator/>
-                                <MenuItem x:Name="MenuFullAnalysisInterval1m" Header="1분" Click="MenuFullAnalysisInterval_Click" Tag="60"/>
-                                <MenuItem x:Name="MenuFullAnalysisInterval5m" Header="5분" Click="MenuFullAnalysisInterval_Click" Tag="300"/>
-                                <MenuItem x:Name="MenuFullAnalysisInterval10m" Header="10분" Click="MenuFullAnalysisInterval_Click" Tag="600"/>
-                                <MenuItem x:Name="MenuFullAnalysisInterval30m" Header="30분" Click="MenuFullAnalysisInterval_Click" Tag="1800"/>
-                                <MenuItem x:Name="MenuFullAnalysisInterval1h" Header="1시간" Click="MenuFullAnalysisInterval_Click" Tag="3600"/>
+                                <!-- 전체 재동기화 -->
+                                <MenuItem Click="MenuForceResync_Click">
+                                    <MenuItem.Header>
+                                        <Grid>
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="20"/>
+                                                <ColumnDefinition Width="*"/>
+                                            </Grid.ColumnDefinitions>
+                                            <ui:SymbolIcon Grid.Column="0" Symbol="ArrowSync24" FontSize="12" HorizontalAlignment="Left"/>
+                                            <TextBlock Grid.Column="1" Text="전체 재동기화" VerticalAlignment="Center"/>
+                                        </Grid>
+                                    </MenuItem.Header>
+                                </MenuItem>
                             </MenuItem>
                         </MenuItem>
                         <MenuItem Padding="8,4">
@@ -404,7 +453,7 @@
                                             <ColumnDefinition Width="30"/>
                                         </Grid.ColumnDefinitions>
                                         <ui:SymbolIcon Grid.Column="0" Symbol="ColorBackground24" FontSize="12" HorizontalAlignment="Left"/>
-                                        <TextBlock Grid.Column="1" Text="테마" VerticalAlignment="Center"/>
+                                        <TextBlock Grid.Column="1" Text="테마" VerticalAlignment="Center" Margin="0,0,20,0"/>
                                     </Grid>
                                 </MenuItem.Header>
                                 <MenuItem x:Name="MenuThemeDark2" Click="MenuThemeDark_Click">
@@ -1207,12 +1256,13 @@
 
                 <!-- 하단 설정 아이콘 -->
                 <StackPanel Grid.Row="1" Margin="0,0,0,8">
-                    <Button x:Name="NavSettingsButton"
-                            Style="{StaticResource NavIconButtonStyle}"
-                            Click="NavSettingsButton_Click"
-                            ToolTip="설정">
+                    <RadioButton x:Name="NavSettingsButton"
+                                 GroupName="NavGroup"
+                                 Style="{StaticResource NavIconRadioButtonStyle}"
+                                 Checked="NavSettingsButton_Checked"
+                                 ToolTip="설정">
                         <ui:SymbolIcon Symbol="Settings24" FontSize="20" VerticalAlignment="Center" HorizontalAlignment="Center"/>
-                    </Button>
+                    </RadioButton>
                 </StackPanel>
             </Grid>
         </Border>
@@ -2812,7 +2862,9 @@
             <Grid>
                 <Grid.ColumnDefinitions>
                     <!-- 좌측 미니캘린더 + 캘린더 목록 -->
-                    <ColumnDefinition Width="250"/>
+                    <ColumnDefinition Width="250" MinWidth="200" MaxWidth="400"/>
+                    <!-- GridSplitter -->
+                    <ColumnDefinition Width="Auto"/>
                     <!-- 메인 캘린더 뷰 -->
                     <ColumnDefinition Width="*"/>
                 </Grid.ColumnDefinitions>
@@ -2962,8 +3014,16 @@
                     </Grid>
                 </Border>
 
+                <!-- GridSplitter (캘린더) -->
+                <GridSplitter Grid.Column="1"
+                              Width="4"
+                              HorizontalAlignment="Center"
+                              VerticalAlignment="Stretch"
+                              Background="Transparent"
+                              Cursor="SizeWE"/>
+
                 <!-- 메인 캘린더: 월간 뷰 -->
-                <Border Grid.Column="1">
+                <Border Grid.Column="2">
                     <Grid>
                         <Grid.RowDefinitions>
                             <!-- 툴바 -->
@@ -3058,7 +3118,9 @@
                 Background="{DynamicResource ApplicationBackgroundBrush}">
             <Grid>
                 <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="320" MinWidth="280" MaxWidth="400"/>
+                    <ColumnDefinition Width="320" MinWidth="320" MaxWidth="400"/>
+                    <!-- GridSplitter -->
+                    <ColumnDefinition Width="Auto"/>
                     <ColumnDefinition Width="*"/>
                 </Grid.ColumnDefinitions>
 
@@ -3106,18 +3168,21 @@
                                         KeyDown="ChatSearchBox_KeyDown"/>
                         </Border>
 
-                        <!-- 필터 탭 (읽지 않음 / 채팅 / 모임 채팅) -->
+                        <!-- 필터 탭 (읽지 않음 / 채팅 / 모임 채팅) - 토글 스타일 -->
                         <Border Grid.Row="2" Padding="12,0,12,8">
                             <StackPanel Orientation="Horizontal">
-                                <ui:Button x:Name="ChatFilterUnreadButton" Content="읽지 않음"
-                                           Appearance="Transparent" Padding="8,4"
-                                           Margin="0,0,4,0" Click="ChatFilterUnread_Click"/>
-                                <ui:Button x:Name="ChatFilterChatButton" Content="채팅"
-                                           Appearance="Secondary" Padding="8,4"
-                                           Margin="0,0,4,0" Click="ChatFilterChat_Click"/>
-                                <ui:Button x:Name="ChatFilterMeetingButton" Content="모임 채팅"
-                                           Appearance="Transparent" Padding="8,4"
-                                           Click="ChatFilterMeeting_Click"/>
+                                <ToggleButton x:Name="ChatFilterUnreadToggle" Content="읽지 않음"
+                                              Padding="8,4" Margin="0,0,4,0"
+                                              Checked="ChatFilterUnread_Checked" Unchecked="ChatFilterUnread_Unchecked"
+                                              Style="{StaticResource {x:Type ToggleButton}}"/>
+                                <ToggleButton x:Name="ChatFilterChatToggle" Content="채팅"
+                                              Padding="8,4" Margin="0,0,4,0" IsChecked="True"
+                                              Checked="ChatFilterChat_Checked" Unchecked="ChatFilterChat_Unchecked"
+                                              Style="{StaticResource {x:Type ToggleButton}}"/>
+                                <ToggleButton x:Name="ChatFilterMeetingToggle" Content="모임 채팅"
+                                              Padding="8,4"
+                                              Checked="ChatFilterMeeting_Checked" Unchecked="ChatFilterMeeting_Unchecked"
+                                              Style="{StaticResource {x:Type ToggleButton}}"/>
                             </StackPanel>
                         </Border>
 
@@ -3151,44 +3216,143 @@
                                     <ListBox x:Name="ChatFavoritesListBox"
                                              Background="Transparent" BorderThickness="0"
                                              SelectionChanged="ChatListBox_SelectionChanged"
-                                             Padding="0">
+                                             AlternationCount="2"
+                                             Padding="0"
+                                             ScrollViewer.HorizontalScrollBarVisibility="Disabled"
+                                             AllowDrop="True"
+                                             PreviewMouseLeftButtonDown="ChatFavorites_PreviewMouseLeftButtonDown"
+                                             PreviewMouseMove="ChatFavorites_PreviewMouseMove"
+                                             Drop="ChatFavorites_Drop"
+                                             DragOver="ChatFavorites_DragOver">
                                         <ListBox.ItemContainerStyle>
                                             <Style TargetType="ListBoxItem" BasedOn="{StaticResource {x:Type ListBoxItem}}">
                                                 <Setter Property="Padding" Value="12,8"/>
                                                 <Setter Property="Margin" Value="4,1"/>
                                                 <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
+                                                <!-- 라이트모드에서 채팅 항목 구분을 위한 배경색 -->
+                                                <Style.Triggers>
+                                                    <Trigger Property="ItemsControl.AlternationIndex" Value="0">
+                                                        <Setter Property="Background" Value="{DynamicResource CardBackgroundFillColorDefaultBrush}"/>
+                                                    </Trigger>
+                                                    <Trigger Property="ItemsControl.AlternationIndex" Value="1">
+                                                        <Setter Property="Background" Value="{DynamicResource SubtleFillColorSecondaryBrush}"/>
+                                                    </Trigger>
+                                                </Style.Triggers>
                                             </Style>
                                         </ListBox.ItemContainerStyle>
+                                        <ListBox.ContextMenu>
+                                            <ContextMenu>
+                                                <MenuItem Header="즐겨찾기 해제" Click="ChatUnfavorite_Click">
+                                                    <MenuItem.Icon>
+                                                        <ui:SymbolIcon Symbol="PinOff20"/>
+                                                    </MenuItem.Icon>
+                                                </MenuItem>
+                                            </ContextMenu>
+                                        </ListBox.ContextMenu>
                                         <ListBox.ItemTemplate>
                                             <DataTemplate>
                                                 <Grid>
                                                     <Grid.ColumnDefinitions>
                                                         <ColumnDefinition Width="44"/>
                                                         <ColumnDefinition Width="*"/>
-                                                        <ColumnDefinition Width="Auto"/>
+                                                        <ColumnDefinition Width="60"/>
                                                     </Grid.ColumnDefinitions>
 
-                                                    <!-- 아바타 -->
-                                                    <Border Grid.Column="0" Width="36" Height="36" CornerRadius="4"
-                                                            Background="{StaticResource ChatAccentBrush}">
-                                                        <TextBlock Text="{Binding DisplayName, Converter={StaticResource StringToInitialConverter}}"
-                                                                   FontSize="14" Foreground="White" FontWeight="SemiBold"
-                                                                   HorizontalAlignment="Center" VerticalAlignment="Center"/>
-                                                    </Border>
+                                                    <!-- 아바타: 1:1 채팅 또는 그룹 채팅 (즐겨찾기 목록) -->
+                                                    <Grid Grid.Column="0" Width="36" Height="36">
+                                                        <!-- 1:1 채팅: 단일 사진 -->
+                                                        <Grid Visibility="{Binding IsGroupChat, Converter={StaticResource BoolToVisibilityConverter}, ConverterParameter=Invert}">
+                                                            <!-- 사진이 있는 경우 (사각형) -->
+                                                            <Border CornerRadius="4" ClipToBounds="True" Visibility="{Binding HasPhoto, Converter={StaticResource BoolToVisibilityConverter}}">
+                                                                <Border.Background>
+                                                                    <ImageBrush ImageSource="{Binding PhotoBase64, Converter={StaticResource Base64ToImageSourceConverter}}" Stretch="UniformToFill"/>
+                                                                </Border.Background>
+                                                            </Border>
+                                                            <!-- 사진이 없는 경우 이니셜 (아웃룩 스타일 배경색) -->
+                                                            <Border CornerRadius="4" Background="{Binding DisplayName, Converter={StaticResource NameToAvatarColorConverter}}"
+                                                                    Visibility="{Binding HasPhoto, Converter={StaticResource BoolToVisibilityConverter}, ConverterParameter=Invert}">
+                                                                <TextBlock Text="{Binding DisplayName, Converter={StaticResource StringToInitialConverter}}"
+                                                                           FontSize="14" Foreground="White" FontWeight="SemiBold"
+                                                                           HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                                            </Border>
+                                                        </Grid>
 
-                                                    <!-- 채팅 정보 -->
-                                                    <StackPanel Grid.Column="1" Margin="12,0,8,0" VerticalAlignment="Center">
+                                                        <!-- 그룹 채팅: 2x2 그리드 (사각형) -->
+                                                        <Grid Visibility="{Binding IsGroupChat, Converter={StaticResource BoolToVisibilityConverter}}">
+                                                            <Border CornerRadius="4" ClipToBounds="True" Background="{Binding DisplayName, Converter={StaticResource NameToAvatarColorConverter}}">
+                                                                <Grid>
+                                                                    <Grid.RowDefinitions>
+                                                                        <RowDefinition Height="*"/>
+                                                                        <RowDefinition Height="*"/>
+                                                                    </Grid.RowDefinitions>
+                                                                    <Grid.ColumnDefinitions>
+                                                                        <ColumnDefinition Width="*"/>
+                                                                        <ColumnDefinition Width="*"/>
+                                                                    </Grid.ColumnDefinitions>
+                                                                    <!-- 멤버 1 (좌상단) -->
+                                                                    <Border Grid.Row="0" Grid.Column="0" Margin="1" CornerRadius="2"
+                                                                            Visibility="{Binding MemberPhotos.Count, Converter={StaticResource CountToVisibilityConverter}, ConverterParameter=0}">
+                                                                        <Border.Background>
+                                                                            <ImageBrush ImageSource="{Binding MemberPhotos[0].PhotoBase64, Converter={StaticResource Base64ToImageSourceConverter}, FallbackValue={x:Null}}" Stretch="UniformToFill"/>
+                                                                        </Border.Background>
+                                                                        <!-- 사진 없으면 이니셜 -->
+                                                                        <TextBlock Text="{Binding MemberPhotos[0].Initial, FallbackValue=''}" FontSize="9" Foreground="White" FontWeight="SemiBold"
+                                                                                   HorizontalAlignment="Center" VerticalAlignment="Center"
+                                                                                   Visibility="{Binding MemberPhotos[0].HasPhoto, Converter={StaticResource BoolToVisibilityConverter}, ConverterParameter=Invert, FallbackValue=Collapsed}"/>
+                                                                    </Border>
+                                                                    <!-- 멤버 2 (우상단) -->
+                                                                    <Border Grid.Row="0" Grid.Column="1" Margin="1" CornerRadius="2"
+                                                                            Visibility="{Binding MemberPhotos.Count, Converter={StaticResource CountToVisibilityConverter}, ConverterParameter=1}">
+                                                                        <Border.Background>
+                                                                            <ImageBrush ImageSource="{Binding MemberPhotos[1].PhotoBase64, Converter={StaticResource Base64ToImageSourceConverter}, FallbackValue={x:Null}}" Stretch="UniformToFill"/>
+                                                                        </Border.Background>
+                                                                        <TextBlock Text="{Binding MemberPhotos[1].Initial, FallbackValue=''}" FontSize="9" Foreground="White" FontWeight="SemiBold"
+                                                                                   HorizontalAlignment="Center" VerticalAlignment="Center"
+                                                                                   Visibility="{Binding MemberPhotos[1].HasPhoto, Converter={StaticResource BoolToVisibilityConverter}, ConverterParameter=Invert, FallbackValue=Collapsed}"/>
+                                                                    </Border>
+                                                                    <!-- 멤버 3 (좌하단) -->
+                                                                    <Border Grid.Row="1" Grid.Column="0" Margin="1" CornerRadius="2"
+                                                                            Visibility="{Binding MemberPhotos.Count, Converter={StaticResource CountToVisibilityConverter}, ConverterParameter=2}">
+                                                                        <Border.Background>
+                                                                            <ImageBrush ImageSource="{Binding MemberPhotos[2].PhotoBase64, Converter={StaticResource Base64ToImageSourceConverter}, FallbackValue={x:Null}}" Stretch="UniformToFill"/>
+                                                                        </Border.Background>
+                                                                        <TextBlock Text="{Binding MemberPhotos[2].Initial, FallbackValue=''}" FontSize="9" Foreground="White" FontWeight="SemiBold"
+                                                                                   HorizontalAlignment="Center" VerticalAlignment="Center"
+                                                                                   Visibility="{Binding MemberPhotos[2].HasPhoto, Converter={StaticResource BoolToVisibilityConverter}, ConverterParameter=Invert, FallbackValue=Collapsed}"/>
+                                                                    </Border>
+                                                                    <!-- 멤버 4 (우하단) -->
+                                                                    <Border Grid.Row="1" Grid.Column="1" Margin="1" CornerRadius="2"
+                                                                            Visibility="{Binding MemberPhotos.Count, Converter={StaticResource CountToVisibilityConverter}, ConverterParameter=3}">
+                                                                        <Border.Background>
+                                                                            <ImageBrush ImageSource="{Binding MemberPhotos[3].PhotoBase64, Converter={StaticResource Base64ToImageSourceConverter}, FallbackValue={x:Null}}" Stretch="UniformToFill"/>
+                                                                        </Border.Background>
+                                                                        <TextBlock Text="{Binding MemberPhotos[3].Initial, FallbackValue=''}" FontSize="9" Foreground="White" FontWeight="SemiBold"
+                                                                                   HorizontalAlignment="Center" VerticalAlignment="Center"
+                                                                                   Visibility="{Binding MemberPhotos[3].HasPhoto, Converter={StaticResource BoolToVisibilityConverter}, ConverterParameter=Invert, FallbackValue=Collapsed}"/>
+                                                                    </Border>
+                                                                    <TextBlock Grid.RowSpan="2" Grid.ColumnSpan="2"
+                                                                               Text="{Binding DisplayName, Converter={StaticResource StringToInitialConverter}}"
+                                                                               FontSize="14" Foreground="White" FontWeight="SemiBold"
+                                                                               HorizontalAlignment="Center" VerticalAlignment="Center"
+                                                                               Visibility="{Binding HasGroupPhotos, Converter={StaticResource BoolToVisibilityConverter}, ConverterParameter=Invert}"/>
+                                                                </Grid>
+                                                            </Border>
+                                                        </Grid>
+                                                    </Grid>
+
+                                                    <!-- 2열: 채팅방명 + 메시지 -->
+                                                    <StackPanel Grid.Column="1" Margin="8,0,4,0" VerticalAlignment="Center">
                                                         <TextBlock Text="{Binding DisplayName}" FontSize="14" FontWeight="SemiBold"
                                                                    TextTrimming="CharacterEllipsis"/>
                                                         <TextBlock Text="{Binding LastMessage}" FontSize="12"
                                                                    Foreground="{DynamicResource TextFillColorSecondaryBrush}"
                                                                    TextTrimming="CharacterEllipsis" MaxHeight="18"/>
                                                     </StackPanel>
-
-                                                    <!-- 시간 -->
-                                                    <TextBlock Grid.Column="2" Text="{Binding LastUpdatedDisplay}" FontSize="11"
+                                                    <!-- 3열: 시간 (고정 45px) - 컨버터로 직접 변환 -->
+                                                    <TextBlock Grid.Column="2" Text="{Binding LastUpdatedDateTime, Converter={StaticResource DateTimeToRelativeTimeConverter}}" FontSize="11"
                                                                Foreground="{DynamicResource TextFillColorTertiaryBrush}"
-                                                               VerticalAlignment="Top" Margin="0,2,0,0"/>
+                                                               VerticalAlignment="Top" HorizontalAlignment="Right"
+                                                               Margin="0,2,0,0"/>
                                                 </Grid>
                                             </DataTemplate>
                                         </ListBox.ItemTemplate>
@@ -3204,14 +3368,33 @@
                                     <ListBox x:Name="ChatListBox"
                                              Background="Transparent" BorderThickness="0"
                                              SelectionChanged="ChatListBox_SelectionChanged"
-                                             VirtualizingPanel.IsVirtualizing="True"
-                                             VirtualizingPanel.VirtualizationMode="Recycling"
-                                             Padding="0">
+                                             VirtualizingPanel.IsVirtualizing="False"
+                                             AlternationCount="2"
+                                             Padding="0"
+                                             ScrollViewer.HorizontalScrollBarVisibility="Disabled">
+                                        <ListBox.ContextMenu>
+                                            <ContextMenu>
+                                                <MenuItem Header="즐겨찾기 추가" Click="ChatFavorite_Click">
+                                                    <MenuItem.Icon>
+                                                        <ui:SymbolIcon Symbol="Pin20"/>
+                                                    </MenuItem.Icon>
+                                                </MenuItem>
+                                            </ContextMenu>
+                                        </ListBox.ContextMenu>
                                         <ListBox.ItemContainerStyle>
                                             <Style TargetType="ListBoxItem" BasedOn="{StaticResource {x:Type ListBoxItem}}">
                                                 <Setter Property="Padding" Value="12,8"/>
                                                 <Setter Property="Margin" Value="4,1"/>
                                                 <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
+                                                <!-- 라이트모드에서 채팅 항목 구분을 위한 배경색 -->
+                                                <Style.Triggers>
+                                                    <Trigger Property="ItemsControl.AlternationIndex" Value="0">
+                                                        <Setter Property="Background" Value="{DynamicResource CardBackgroundFillColorDefaultBrush}"/>
+                                                    </Trigger>
+                                                    <Trigger Property="ItemsControl.AlternationIndex" Value="1">
+                                                        <Setter Property="Background" Value="{DynamicResource SubtleFillColorSecondaryBrush}"/>
+                                                    </Trigger>
+                                                </Style.Triggers>
                                             </Style>
                                         </ListBox.ItemContainerStyle>
                                         <ListBox.ItemTemplate>
@@ -3220,32 +3403,117 @@
                                                     <Grid.ColumnDefinitions>
                                                         <ColumnDefinition Width="44"/>
                                                         <ColumnDefinition Width="*"/>
-                                                        <ColumnDefinition Width="Auto"/>
+                                                        <ColumnDefinition Width="60"/>
                                                     </Grid.ColumnDefinitions>
 
-                                                    <!-- 아바타 (사각형 둥근 모서리) -->
-                                                    <Border Grid.Column="0" Width="36" Height="36" CornerRadius="4"
-                                                            Background="{StaticResource ChatAccentBrush}">
-                                                        <TextBlock Text="{Binding DisplayName, Converter={StaticResource StringToInitialConverter}}"
-                                                                   FontSize="14" Foreground="White" FontWeight="SemiBold"
-                                                                   HorizontalAlignment="Center" VerticalAlignment="Center"/>
-                                                    </Border>
+                                                    <!-- 아바타: 1:1 채팅 또는 그룹 채팅 -->
+                                                    <Grid Grid.Column="0" Width="36" Height="36">
+                                                        <!-- 1:1 채팅: 단일 사진 -->
+                                                        <Grid Visibility="{Binding IsGroupChat, Converter={StaticResource BoolToVisibilityConverter}, ConverterParameter=Invert}">
+                                                            <!-- 사진이 있는 경우 (사각형) -->
+                                                            <Border CornerRadius="4" ClipToBounds="True" Visibility="{Binding HasPhoto, Converter={StaticResource BoolToVisibilityConverter}}">
+                                                                <Border.Background>
+                                                                    <ImageBrush ImageSource="{Binding PhotoBase64, Converter={StaticResource Base64ToImageSourceConverter}}" Stretch="UniformToFill"/>
+                                                                </Border.Background>
+                                                            </Border>
+                                                            <!-- 사진이 없는 경우 이니셜 (아웃룩 스타일 배경색) -->
+                                                            <Border CornerRadius="4" Background="{Binding DisplayName, Converter={StaticResource NameToAvatarColorConverter}}"
+                                                                    Visibility="{Binding HasPhoto, Converter={StaticResource BoolToVisibilityConverter}, ConverterParameter=Invert}">
+                                                                <TextBlock Text="{Binding DisplayName, Converter={StaticResource StringToInitialConverter}}"
+                                                                           FontSize="14" Foreground="White" FontWeight="SemiBold"
+                                                                           HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                                            </Border>
+                                                        </Grid>
 
-                                                    <!-- 채팅 정보: 이름 + 마지막 메시지 미리보기 -->
-                                                    <StackPanel Grid.Column="1" Margin="12,0,8,0" VerticalAlignment="Center">
+                                                        <!-- 그룹 채팅: 2x2 그리드 (최대 4명, 사각형) -->
+                                                        <Grid Visibility="{Binding IsGroupChat, Converter={StaticResource BoolToVisibilityConverter}}">
+                                                            <Border CornerRadius="4" Background="{Binding DisplayName, Converter={StaticResource NameToAvatarColorConverter}}">
+                                                                <Grid>
+                                                                    <Grid.RowDefinitions>
+                                                                        <RowDefinition Height="*"/>
+                                                                        <RowDefinition Height="*"/>
+                                                                    </Grid.RowDefinitions>
+                                                                    <Grid.ColumnDefinitions>
+                                                                        <ColumnDefinition Width="*"/>
+                                                                        <ColumnDefinition Width="*"/>
+                                                                    </Grid.ColumnDefinitions>
+
+                                                                    <!-- 멤버 1 (좌상단) -->
+                                                                    <Border Grid.Row="0" Grid.Column="0" Margin="1" CornerRadius="2"
+                                                                            Visibility="{Binding MemberPhotos.Count, Converter={StaticResource CountToVisibilityConverter}, ConverterParameter=0}">
+                                                                        <Border.Background>
+                                                                            <ImageBrush ImageSource="{Binding MemberPhotos[0].PhotoBase64, Converter={StaticResource Base64ToImageSourceConverter}, FallbackValue={x:Null}}" Stretch="UniformToFill"/>
+                                                                        </Border.Background>
+                                                                        <!-- 사진 없으면 이니셜 -->
+                                                                        <TextBlock Text="{Binding MemberPhotos[0].Initial, FallbackValue=''}" FontSize="9" Foreground="White" FontWeight="SemiBold"
+                                                                                   HorizontalAlignment="Center" VerticalAlignment="Center"
+                                                                                   Visibility="{Binding MemberPhotos[0].HasPhoto, Converter={StaticResource BoolToVisibilityConverter}, ConverterParameter=Invert, FallbackValue=Collapsed}"/>
+                                                                    </Border>
+
+                                                                    <!-- 멤버 2 (우상단) -->
+                                                                    <Border Grid.Row="0" Grid.Column="1" Margin="1" CornerRadius="2"
+                                                                            Visibility="{Binding MemberPhotos.Count, Converter={StaticResource CountToVisibilityConverter}, ConverterParameter=1}">
+                                                                        <Border.Background>
+                                                                            <ImageBrush ImageSource="{Binding MemberPhotos[1].PhotoBase64, Converter={StaticResource Base64ToImageSourceConverter}, FallbackValue={x:Null}}" Stretch="UniformToFill"/>
+                                                                        </Border.Background>
+                                                                        <TextBlock Text="{Binding MemberPhotos[1].Initial, FallbackValue=''}" FontSize="9" Foreground="White" FontWeight="SemiBold"
+                                                                                   HorizontalAlignment="Center" VerticalAlignment="Center"
+                                                                                   Visibility="{Binding MemberPhotos[1].HasPhoto, Converter={StaticResource BoolToVisibilityConverter}, ConverterParameter=Invert, FallbackValue=Collapsed}"/>
+                                                                    </Border>
+
+                                                                    <!-- 멤버 3 (좌하단) -->
+                                                                    <Border Grid.Row="1" Grid.Column="0" Margin="1" CornerRadius="2"
+                                                                            Visibility="{Binding MemberPhotos.Count, Converter={StaticResource CountToVisibilityConverter}, ConverterParameter=2}">
+                                                                        <Border.Background>
+                                                                            <ImageBrush ImageSource="{Binding MemberPhotos[2].PhotoBase64, Converter={StaticResource Base64ToImageSourceConverter}, FallbackValue={x:Null}}" Stretch="UniformToFill"/>
+                                                                        </Border.Background>
+                                                                        <TextBlock Text="{Binding MemberPhotos[2].Initial, FallbackValue=''}" FontSize="9" Foreground="White" FontWeight="SemiBold"
+                                                                                   HorizontalAlignment="Center" VerticalAlignment="Center"
+                                                                                   Visibility="{Binding MemberPhotos[2].HasPhoto, Converter={StaticResource BoolToVisibilityConverter}, ConverterParameter=Invert, FallbackValue=Collapsed}"/>
+                                                                    </Border>
+
+                                                                    <!-- 멤버 4 (우하단) -->
+                                                                    <Border Grid.Row="1" Grid.Column="1" Margin="1" CornerRadius="2"
+                                                                            Visibility="{Binding MemberPhotos.Count, Converter={StaticResource CountToVisibilityConverter}, ConverterParameter=3}">
+                                                                        <Border.Background>
+                                                                            <ImageBrush ImageSource="{Binding MemberPhotos[3].PhotoBase64, Converter={StaticResource Base64ToImageSourceConverter}, FallbackValue={x:Null}}" Stretch="UniformToFill"/>
+                                                                        </Border.Background>
+                                                                        <TextBlock Text="{Binding MemberPhotos[3].Initial, FallbackValue=''}" FontSize="9" Foreground="White" FontWeight="SemiBold"
+                                                                                   HorizontalAlignment="Center" VerticalAlignment="Center"
+                                                                                   Visibility="{Binding MemberPhotos[3].HasPhoto, Converter={StaticResource BoolToVisibilityConverter}, ConverterParameter=Invert, FallbackValue=Collapsed}"/>
+                                                                    </Border>
+
+                                                                    <!-- 그룹 사진이 없는 경우 기본 이니셜 -->
+                                                                    <TextBlock Grid.RowSpan="2" Grid.ColumnSpan="2"
+                                                                               Text="{Binding DisplayName, Converter={StaticResource StringToInitialConverter}}"
+                                                                               FontSize="14" Foreground="White" FontWeight="SemiBold"
+                                                                               HorizontalAlignment="Center" VerticalAlignment="Center"
+                                                                               Visibility="{Binding HasGroupPhotos, Converter={StaticResource BoolToVisibilityConverter}, ConverterParameter=Invert}"/>
+                                                                </Grid>
+                                                            </Border>
+                                                        </Grid>
+
+                                                        <!-- 즐겨찾기 표시 (핀 아이콘) -->
+                                                        <Border CornerRadius="6" Background="{Binding DisplayName, Converter={StaticResource NameToAvatarColorConverter}}"
+                                                                Width="12" Height="12" HorizontalAlignment="Right" VerticalAlignment="Bottom"
+                                                                Visibility="{Binding IsFavorite, Converter={StaticResource BoolToVisibilityConverter}}">
+                                                            <ui:SymbolIcon Symbol="Pin12" FontSize="8" Foreground="White"/>
+                                                        </Border>
+                                                    </Grid>
+
+                                                    <!-- 2열: 채팅방명 + 메시지 -->
+                                                    <StackPanel Grid.Column="1" Margin="8,0,4,0" VerticalAlignment="Center">
                                                         <TextBlock Text="{Binding DisplayName}" FontSize="14" FontWeight="SemiBold"
                                                                    TextTrimming="CharacterEllipsis"/>
                                                         <TextBlock Text="{Binding LastMessage}" FontSize="12"
                                                                    Foreground="{DynamicResource TextFillColorSecondaryBrush}"
                                                                    TextTrimming="CharacterEllipsis" MaxHeight="18"/>
                                                     </StackPanel>
-
-                                                    <!-- 시간 및 읽지 않음 표시 -->
-                                                    <StackPanel Grid.Column="2" VerticalAlignment="Top" HorizontalAlignment="Right">
-                                                        <TextBlock Text="{Binding LastUpdatedDisplay}" FontSize="11"
-                                                                   Foreground="{DynamicResource TextFillColorTertiaryBrush}"
-                                                                   HorizontalAlignment="Right" Margin="0,2,0,0"/>
-                                                    </StackPanel>
+                                                    <!-- 3열: 시간 (고정 45px) - 컨버터로 직접 변환 -->
+                                                    <TextBlock Grid.Column="2" Text="{Binding LastUpdatedDateTime, Converter={StaticResource DateTimeToRelativeTimeConverter}}" FontSize="11"
+                                                               Foreground="{DynamicResource TextFillColorTertiaryBrush}"
+                                                               VerticalAlignment="Top" HorizontalAlignment="Right"
+                                                               Margin="0,2,0,0"/>
                                                 </Grid>
                                             </DataTemplate>
                                         </ListBox.ItemTemplate>
@@ -3266,8 +3534,16 @@
                     </Grid>
                 </Border>
 
+                <!-- GridSplitter (채팅) -->
+                <GridSplitter Grid.Column="1"
+                              Width="4"
+                              HorizontalAlignment="Center"
+                              VerticalAlignment="Stretch"
+                              Background="Transparent"
+                              Cursor="SizeWE"/>
+
                 <!-- ==================== 우측 패널: 채팅 내용 (Teams 스타일) ==================== -->
-                <Grid Grid.Column="1">
+                <Grid Grid.Column="2">
                     <!-- 채팅방 미선택 시 안내 -->
                     <StackPanel x:Name="ChatEmptyStatePanel" VerticalAlignment="Center" HorizontalAlignment="Center">
                         <ui:SymbolIcon Symbol="Chat24" FontSize="64" Foreground="{StaticResource ChatAccentBrush}" Margin="0,0,0,16"/>
@@ -3356,7 +3632,25 @@
                             <ItemsControl x:Name="ChatMessagesItemsControl">
                                 <ItemsControl.ItemTemplate>
                                     <DataTemplate>
-                                        <Grid Margin="0,8">
+                                        <StackPanel>
+                                            <!-- 날짜 분리선 -->
+                                            <Grid Visibility="{Binding ShowDateSeparator, Converter={StaticResource BoolToVisibilityConverter}}"
+                                                  Margin="0,16,0,8">
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="*"/>
+                                                    <ColumnDefinition Width="Auto"/>
+                                                    <ColumnDefinition Width="*"/>
+                                                </Grid.ColumnDefinitions>
+                                                <Border Grid.Column="0" Height="1" VerticalAlignment="Center"
+                                                        Background="{DynamicResource ControlStrokeColorDefaultBrush}"/>
+                                                <TextBlock Grid.Column="1" Text="{Binding DateSeparatorText}"
+                                                           FontSize="12" Margin="16,0"
+                                                           Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
+                                                <Border Grid.Column="2" Height="1" VerticalAlignment="Center"
+                                                        Background="{DynamicResource ControlStrokeColorDefaultBrush}"/>
+                                            </Grid>
+
+                                            <Grid Margin="0,8">
                                             <!-- 상대방 메시지 (좌측 정렬) -->
                                             <Grid Visibility="{Binding IsFromMe, Converter={StaticResource BoolToVisibilityConverter}, ConverterParameter=Invert}">
                                                 <Grid.ColumnDefinitions>
@@ -3366,13 +3660,22 @@
                                                 </Grid.ColumnDefinitions>
 
                                                 <!-- 발신자 아바타 -->
-                                                <Border Grid.Column="0" Width="32" Height="32" CornerRadius="4"
-                                                        Background="{StaticResource ChatAccentBrush}"
-                                                        VerticalAlignment="Top">
-                                                    <TextBlock Text="{Binding FromUserInitial}" FontSize="12"
-                                                               Foreground="White" FontWeight="SemiBold"
-                                                               HorizontalAlignment="Center" VerticalAlignment="Center"/>
-                                                </Border>
+                                                <Grid Grid.Column="0" Width="32" Height="32" VerticalAlignment="Top">
+                                                    <!-- 사진이 있는 경우 -->
+                                                    <Border CornerRadius="4" ClipToBounds="True"
+                                                            Visibility="{Binding HasFromUserPhoto, Converter={StaticResource BoolToVisibilityConverter}}">
+                                                        <Border.Background>
+                                                            <ImageBrush ImageSource="{Binding FromUserPhoto, Converter={StaticResource Base64ToImageSourceConverter}}" Stretch="UniformToFill"/>
+                                                        </Border.Background>
+                                                    </Border>
+                                                    <!-- 사진이 없는 경우 이니셜 -->
+                                                    <Border CornerRadius="4" Background="{Binding FromUser, Converter={StaticResource NameToAvatarColorConverter}}"
+                                                            Visibility="{Binding HasFromUserPhoto, Converter={StaticResource BoolToVisibilityConverter}, ConverterParameter=Invert}">
+                                                        <TextBlock Text="{Binding FromUserInitial}" FontSize="12"
+                                                                   Foreground="White" FontWeight="SemiBold"
+                                                                   HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                                    </Border>
+                                                </Grid>
 
                                                 <!-- 메시지 내용 -->
                                                 <StackPanel Grid.Column="1" Margin="8,0,0,0">
@@ -3412,6 +3715,7 @@
                                                 </StackPanel>
                                             </Grid>
                                         </Grid>
+                                        </StackPanel>
                                     </DataTemplate>
                                 </ItemsControl.ItemTemplate>
                             </ItemsControl>
@@ -3523,6 +3827,8 @@
             <Grid>
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="280" MinWidth="200" MaxWidth="400"/>
+                    <!-- GridSplitter -->
+                    <ColumnDefinition Width="Auto"/>
                     <ColumnDefinition Width="*"/>
                 </Grid.ColumnDefinitions>
 
@@ -3557,58 +3863,153 @@
                             </Grid>
                         </Border>
 
-                        <!-- 팀 목록 -->
+                        <!-- 팀 목록 (스크롤) -->
                         <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto">
-                            <ItemsControl x:Name="TeamsListView" ItemsSource="{Binding Teams}">
-                                <ItemsControl.ItemTemplate>
-                                    <DataTemplate>
-                                        <StackPanel Margin="0,4,0,0">
-                                            <!-- 팀 헤더 -->
-                                            <ui:Button Appearance="Transparent"
-                                                       HorizontalAlignment="Stretch"
-                                                       HorizontalContentAlignment="Left"
-                                                       Padding="12,8"
-                                                       Click="TeamItem_Click"
-                                                       Tag="{Binding}">
-                                                <StackPanel Orientation="Horizontal">
-                                                    <ui:SymbolIcon Symbol="ChevronDown24" FontSize="12" Margin="0,0,8,0"
-                                                                   Visibility="{Binding IsExpanded, Converter={StaticResource BoolToVisibilityConverter}}"/>
-                                                    <ui:SymbolIcon Symbol="ChevronRight24" FontSize="12" Margin="0,0,8,0"
-                                                                   Visibility="{Binding IsExpanded, Converter={StaticResource BoolToVisibilityConverter}, ConverterParameter=Invert}"/>
-                                                    <ui:SymbolIcon Symbol="PeopleTeam24" FontSize="18" Margin="0,0,8,0" Foreground="{StaticResource TeamsAccentBrush}"/>
-                                                    <TextBlock Text="{Binding DisplayName}" FontWeight="SemiBold" VerticalAlignment="Center"/>
-                                                </StackPanel>
-                                            </ui:Button>
-                                            <!-- 채널 목록 -->
-                                            <ItemsControl ItemsSource="{Binding Channels}"
-                                                          Visibility="{Binding IsExpanded, Converter={StaticResource BoolToVisibilityConverter}}"
-                                                          Margin="24,0,0,0">
-                                                <ItemsControl.ItemTemplate>
-                                                    <DataTemplate>
-                                                        <ui:Button Appearance="Transparent"
-                                                                   HorizontalAlignment="Stretch"
-                                                                   HorizontalContentAlignment="Left"
-                                                                   Padding="12,6"
-                                                                   Click="ChannelItem_Click"
-                                                                   Tag="{Binding}">
-                                                            <StackPanel Orientation="Horizontal">
-                                                                <TextBlock Text="#" FontSize="14" Margin="0,0,6,0" Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
-                                                                <TextBlock Text="{Binding DisplayName}" VerticalAlignment="Center"/>
-                                                            </StackPanel>
-                                                        </ui:Button>
-                                                    </DataTemplate>
-                                                </ItemsControl.ItemTemplate>
-                                            </ItemsControl>
+                            <StackPanel>
+                                <!-- 바로가기 섹션 -->
+                                <StackPanel Margin="8,8,8,0">
+                                    <ui:Button Appearance="Transparent" HorizontalAlignment="Stretch" HorizontalContentAlignment="Left" Padding="8,6">
+                                        <StackPanel Orientation="Horizontal">
+                                            <ui:SymbolIcon Symbol="Alert24" FontSize="16" Margin="0,0,8,0" Foreground="{StaticResource TeamsAccentBrush}"/>
+                                            <TextBlock Text="읽지 않음" VerticalAlignment="Center"/>
                                         </StackPanel>
-                                    </DataTemplate>
-                                </ItemsControl.ItemTemplate>
-                            </ItemsControl>
+                                    </ui:Button>
+                                    <ui:Button Appearance="Transparent" HorizontalAlignment="Stretch" HorizontalContentAlignment="Left" Padding="8,6">
+                                        <StackPanel Orientation="Horizontal">
+                                            <ui:SymbolIcon Symbol="Search24" FontSize="16" Margin="0,0,8,0" Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
+                                            <TextBlock Text="검색" VerticalAlignment="Center"/>
+                                        </StackPanel>
+                                    </ui:Button>
+                                    <ui:Button Appearance="Transparent" HorizontalAlignment="Stretch" HorizontalContentAlignment="Left" Padding="8,6">
+                                        <StackPanel Orientation="Horizontal">
+                                            <ui:SymbolIcon Symbol="Mention24" FontSize="16" Margin="0,0,8,0" Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
+                                            <TextBlock Text="멘션" VerticalAlignment="Center"/>
+                                        </StackPanel>
+                                    </ui:Button>
+                                    <ui:Button Appearance="Transparent" HorizontalAlignment="Stretch" HorizontalContentAlignment="Left" Padding="8,6">
+                                        <StackPanel Orientation="Horizontal">
+                                            <ui:SymbolIcon Symbol="Pin24" FontSize="16" Margin="0,0,8,0" Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
+                                            <TextBlock Text="팔로우한 스레드" VerticalAlignment="Center"/>
+                                        </StackPanel>
+                                    </ui:Button>
+                                </StackPanel>
+
+                                <!-- 즐겨찾기 섹션 (Expander) -->
+                                <Expander IsExpanded="True" Margin="8,12,8,0">
+                                    <Expander.Header>
+                                        <TextBlock Text="즐겨찾기" FontWeight="SemiBold" FontSize="13"/>
+                                    </Expander.Header>
+                                    <ItemsControl ItemsSource="{Binding FavoriteChannels}" Margin="0,4,0,0">
+                                        <ItemsControl.ItemTemplate>
+                                            <DataTemplate>
+                                                <ui:Button Appearance="Transparent"
+                                                           HorizontalAlignment="Stretch"
+                                                           HorizontalContentAlignment="Left"
+                                                           Padding="8,6"
+                                                           Click="FavoriteChannelItem_Click"
+                                                           Tag="{Binding}">
+                                                    <Grid>
+                                                        <Grid.ColumnDefinitions>
+                                                            <ColumnDefinition Width="*"/>
+                                                            <ColumnDefinition Width="Auto"/>
+                                                        </Grid.ColumnDefinitions>
+                                                        <StackPanel Grid.Column="0" Orientation="Horizontal">
+                                                            <TextBlock Text="#" FontSize="14" Margin="0,0,4,0" Foreground="{StaticResource TeamsAccentBrush}"/>
+                                                            <TextBlock Text="{Binding DisplayName}" VerticalAlignment="Center"/>
+                                                        </StackPanel>
+                                                        <TextBlock Grid.Column="1" Text="{Binding LastActivityDisplay}"
+                                                                   Foreground="{DynamicResource TextFillColorTertiaryBrush}"
+                                                                   FontSize="11" VerticalAlignment="Center"/>
+                                                    </Grid>
+                                                </ui:Button>
+                                            </DataTemplate>
+                                        </ItemsControl.ItemTemplate>
+                                    </ItemsControl>
+                                </Expander>
+
+                                <!-- Teams 및 채널 섹션 (Expander) -->
+                                <Expander IsExpanded="True" Margin="8,8,8,0">
+                                    <Expander.Header>
+                                        <TextBlock Text="Teams 및 채널" FontWeight="SemiBold" FontSize="13"/>
+                                    </Expander.Header>
+                                    <StackPanel>
+                                        <!-- 팀이 없을 때 메시지 표시 -->
+                                        <Border Visibility="{Binding HasTeams, Converter={StaticResource BoolToVisibilityConverter}, ConverterParameter=Invert}"
+                                                Margin="4,8" Padding="12" CornerRadius="8"
+                                                Background="{DynamicResource SystemFillColorCautionBackgroundBrush}">
+                                            <StackPanel>
+                                                <TextBlock Text="{Binding NoTeamsMessage}" FontSize="12" TextWrapping="Wrap"
+                                                           Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
+                                            </StackPanel>
+                                        </Border>
+                                        <!-- 팀 목록 -->
+                                        <ItemsControl x:Name="TeamsListView" ItemsSource="{Binding Teams}" Margin="0,4,0,0"
+                                                      Visibility="{Binding HasTeams, Converter={StaticResource BoolToVisibilityConverter}}">
+                                        <ItemsControl.ItemTemplate>
+                                            <DataTemplate>
+                                                <StackPanel Margin="0,2,0,0">
+                                                    <!-- 팀 헤더 -->
+                                                    <ui:Button Appearance="Transparent"
+                                                               HorizontalAlignment="Stretch"
+                                                               HorizontalContentAlignment="Left"
+                                                               Padding="8,6"
+                                                               Click="TeamItem_Click"
+                                                               Tag="{Binding}">
+                                                        <StackPanel Orientation="Horizontal">
+                                                            <ui:SymbolIcon Symbol="ChevronDown24" FontSize="10" Margin="0,0,6,0"
+                                                                           Visibility="{Binding IsExpanded, Converter={StaticResource BoolToVisibilityConverter}}"/>
+                                                            <ui:SymbolIcon Symbol="ChevronRight24" FontSize="10" Margin="0,0,6,0"
+                                                                           Visibility="{Binding IsExpanded, Converter={StaticResource BoolToVisibilityConverter}, ConverterParameter=Invert}"/>
+                                                            <Border Width="20" Height="20" CornerRadius="4"
+                                                                    Background="{StaticResource TeamsAccentBrush}" Margin="0,0,6,0">
+                                                                <TextBlock Text="{Binding DisplayName, Converter={StaticResource StringToInitialConverter}}"
+                                                                           Foreground="White" FontSize="10" FontWeight="SemiBold"
+                                                                           HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                                            </Border>
+                                                            <TextBlock Text="{Binding DisplayName}" FontWeight="SemiBold" FontSize="13" VerticalAlignment="Center"/>
+                                                        </StackPanel>
+                                                    </ui:Button>
+                                                    <!-- 채널 목록 -->
+                                                    <ItemsControl ItemsSource="{Binding Channels}"
+                                                                  Visibility="{Binding IsExpanded, Converter={StaticResource BoolToVisibilityConverter}}"
+                                                                  Margin="32,0,0,0">
+                                                        <ItemsControl.ItemTemplate>
+                                                            <DataTemplate>
+                                                                <ui:Button Appearance="Transparent"
+                                                                           HorizontalAlignment="Stretch"
+                                                                           HorizontalContentAlignment="Left"
+                                                                           Padding="8,5"
+                                                                           Click="ChannelItem_Click"
+                                                                           Tag="{Binding}">
+                                                                    <StackPanel Orientation="Horizontal">
+                                                                        <TextBlock Text="#" FontSize="12" Margin="0,0,4,0" Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
+                                                                        <TextBlock Text="{Binding DisplayName}" FontSize="13" VerticalAlignment="Center"/>
+                                                                    </StackPanel>
+                                                                </ui:Button>
+                                                            </DataTemplate>
+                                                        </ItemsControl.ItemTemplate>
+                                                    </ItemsControl>
+                                                </StackPanel>
+                                            </DataTemplate>
+                                        </ItemsControl.ItemTemplate>
+                                    </ItemsControl>
+                                    </StackPanel>
+                                </Expander>
+                            </StackPanel>
                         </ScrollViewer>
                     </Grid>
                 </Border>
 
+                <!-- GridSplitter (팀) -->
+                <GridSplitter Grid.Column="1"
+                              Width="4"
+                              HorizontalAlignment="Center"
+                              VerticalAlignment="Stretch"
+                              Background="Transparent"
+                              Cursor="SizeWE"/>
+
                 <!-- 우측 패널: 채널 콘텐츠 -->
-                <Border Grid.Column="1">
+                <Border Grid.Column="2">
                     <Grid>
                         <!-- 채널 미선택 시 플레이스홀더 -->
                         <StackPanel x:Name="TeamsPlaceholder" VerticalAlignment="Center" HorizontalAlignment="Center"
@@ -3664,32 +4065,46 @@
 
                             <!-- 게시물 탭 -->
                             <ScrollViewer Grid.Row="2" VerticalScrollBarVisibility="Auto"
-                                          Visibility="{Binding CurrentChannelTab, Converter={StaticResource SortByToAppearanceConverter}, ConverterParameter=posts}">
+                                          Visibility="{Binding CurrentChannelTab, Converter={StaticResource StringEqualsToVisibilityConverter}, ConverterParameter=posts}">
                                 <ItemsControl ItemsSource="{Binding ChannelMessages}" Margin="16">
                                     <ItemsControl.ItemTemplate>
                                         <DataTemplate>
-                                            <Border Margin="0,0,0,12" Padding="12"
-                                                    Background="{DynamicResource ControlFillColorDefaultBrush}"
+                                            <Border Margin="0,0,0,12" Padding="14"
+                                                    Background="{DynamicResource CardBackgroundFillColorDefaultBrush}"
+                                                    BorderBrush="{DynamicResource ControlElevationBorderBrush}"
+                                                    BorderThickness="1"
                                                     CornerRadius="8">
                                                 <Grid>
                                                     <Grid.ColumnDefinitions>
-                                                        <ColumnDefinition Width="40"/>
+                                                        <ColumnDefinition Width="44"/>
                                                         <ColumnDefinition Width="*"/>
                                                     </Grid.ColumnDefinitions>
-                                                    <!-- 아바타 -->
-                                                    <Border Grid.Column="0" Width="36" Height="36" CornerRadius="18"
-                                                            Background="{StaticResource TeamsAccentBrush}" VerticalAlignment="Top">
+                                                    <!-- 아바타 (사용자별 색상) -->
+                                                    <Border Grid.Column="0" Width="40" Height="40" CornerRadius="20"
+                                                            Background="{Binding FromUser, Converter={StaticResource NameToAvatarColorConverter}}" VerticalAlignment="Top">
                                                         <TextBlock Text="{Binding FromUser, Converter={StaticResource StringToInitialConverter}}"
-                                                                   Foreground="White" FontWeight="SemiBold" FontSize="14"
+                                                                   Foreground="White" FontWeight="SemiBold" FontSize="15"
                                                                    HorizontalAlignment="Center" VerticalAlignment="Center"/>
                                                     </Border>
                                                     <!-- 메시지 내용 -->
-                                                    <StackPanel Grid.Column="1" Margin="8,0,0,0">
-                                                        <StackPanel Orientation="Horizontal" Margin="0,0,0,4">
-                                                            <TextBlock Text="{Binding FromUser}" FontWeight="SemiBold"/>
-                                                            <TextBlock Text="{Binding ChannelTimeDisplay}" Foreground="{DynamicResource TextFillColorTertiaryBrush}" Margin="8,0,0,0" FontSize="12"/>
+                                                    <StackPanel Grid.Column="1" Margin="12,0,0,0">
+                                                        <StackPanel Orientation="Horizontal" Margin="0,0,0,6">
+                                                            <!-- 온라인 상태 표시 -->
+                                                            <Ellipse Width="8" Height="8" Fill="#10B981" Margin="0,0,6,0" VerticalAlignment="Center"/>
+                                                            <TextBlock Text="{Binding FromUser}" FontWeight="SemiBold" FontSize="14"/>
+                                                            <TextBlock Text="{Binding ChannelTimeDisplay}" Foreground="{DynamicResource TextFillColorTertiaryBrush}" Margin="10,0,0,0" FontSize="12" VerticalAlignment="Center"/>
                                                         </StackPanel>
-                                                        <TextBlock Text="{Binding Content}" TextWrapping="Wrap"/>
+                                                        <!-- 메시지 본문 -->
+                                                        <TextBlock Text="{Binding Content}" TextWrapping="Wrap" FontSize="14" Margin="0,0,0,8"/>
+                                                        <!-- 스레드에서 회신 버튼 -->
+                                                        <ui:Button Appearance="Transparent" Padding="6,4" Margin="0,4,0,0"
+                                                                   Click="ReplyToThread_Click" Tag="{Binding}"
+                                                                   HorizontalAlignment="Left">
+                                                            <StackPanel Orientation="Horizontal">
+                                                                <ui:SymbolIcon Symbol="ChatMultiple24" FontSize="14" Margin="0,0,6,0" Foreground="{StaticResource TeamsAccentBrush}"/>
+                                                                <TextBlock Text="스레드에서 회신" FontSize="12" Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
+                                                            </StackPanel>
+                                                        </ui:Button>
                                                     </StackPanel>
                                                 </Grid>
                                             </Border>
@@ -3700,7 +4115,7 @@
 
                             <!-- 파일 탭 -->
                             <ScrollViewer Grid.Row="2" VerticalScrollBarVisibility="Auto"
-                                          Visibility="{Binding CurrentChannelTab, Converter={StaticResource SortByToAppearanceConverter}, ConverterParameter=files}">
+                                          Visibility="{Binding CurrentChannelTab, Converter={StaticResource StringEqualsToVisibilityConverter}, ConverterParameter=files}">
                                 <ItemsControl ItemsSource="{Binding ChannelFiles}" Margin="16">
                                     <ItemsControl.ItemTemplate>
                                         <DataTemplate>
@@ -3729,7 +4144,7 @@
                             <Border Grid.Row="3" Padding="16,12"
                                     BorderBrush="{DynamicResource ControlElevationBorderBrush}"
                                     BorderThickness="0,1,0,0"
-                                    Visibility="{Binding CurrentChannelTab, Converter={StaticResource SortByToAppearanceConverter}, ConverterParameter=posts}">
+                                    Visibility="{Binding CurrentChannelTab, Converter={StaticResource StringEqualsToVisibilityConverter}, ConverterParameter=posts}">
                                 <Grid>
                                     <Grid.ColumnDefinitions>
                                         <ColumnDefinition Width="*"/>
@@ -3882,6 +4297,8 @@
             <Grid>
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="250" MinWidth="180" MaxWidth="350"/>
+                    <!-- GridSplitter -->
+                    <ColumnDefinition Width="Auto"/>
                     <ColumnDefinition Width="*"/>
                 </Grid.ColumnDefinitions>
 
@@ -3970,8 +4387,16 @@
                     </Grid>
                 </Border>
 
+                <!-- GridSplitter (플래너) -->
+                <GridSplitter Grid.Column="1"
+                              Width="4"
+                              HorizontalAlignment="Center"
+                              VerticalAlignment="Stretch"
+                              Background="Transparent"
+                              Cursor="SizeWE"/>
+
                 <!-- 우측 패널: 칸반 보드 -->
-                <Grid Grid.Column="1">
+                <Grid Grid.Column="2">
                     <Grid.RowDefinitions>
                         <RowDefinition Height="Auto"/>
                         <RowDefinition Height="*"/>
@@ -4264,6 +4689,8 @@
             <Grid>
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="280" MinWidth="200" MaxWidth="400"/>
+                    <!-- GridSplitter -->
+                    <ColumnDefinition Width="Auto"/>
                     <ColumnDefinition Width="*"/>
                 </Grid.ColumnDefinitions>
 
@@ -4389,8 +4816,16 @@
                     </Grid>
                 </Border>
 
+                <!-- GridSplitter (OneNote) -->
+                <GridSplitter Grid.Column="1"
+                              Width="4"
+                              HorizontalAlignment="Center"
+                              VerticalAlignment="Stretch"
+                              Background="Transparent"
+                              Cursor="SizeWE"/>
+
                 <!-- 우측 패널: 페이지 콘텐츠 뷰어/에디터 -->
-                <Border Grid.Column="1">
+                <Border Grid.Column="2">
                     <Grid>
                         <Grid.RowDefinitions>
                             <RowDefinition Height="Auto"/>
@@ -4469,7 +4904,9 @@
                 Background="{DynamicResource ApplicationBackgroundBrush}">
             <Grid>
                 <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="320" MinWidth="280" MaxWidth="400"/>
+                    <ColumnDefinition Width="320" MinWidth="320" MaxWidth="400"/>
+                    <!-- GridSplitter -->
+                    <ColumnDefinition Width="Auto"/>
                     <ColumnDefinition Width="*"/>
                 </Grid.ColumnDefinitions>
 
@@ -4644,8 +5081,16 @@
                     </Grid>
                 </Border>
 
+                <!-- GridSplitter (통화) -->
+                <GridSplitter Grid.Column="1"
+                              Width="4"
+                              HorizontalAlignment="Center"
+                              VerticalAlignment="Stretch"
+                              Background="Transparent"
+                              Cursor="SizeWE"/>
+
                 <!-- 우측 패널: 선택된 연락처 상세 / 검색 결과 -->
-                <Grid Grid.Column="1">
+                <Grid Grid.Column="2">
                     <!-- 검색 결과 표시 -->
                     <Border x:Name="CallsSearchResultsPanel" Visibility="Collapsed" Padding="16">
                         <Grid>
@@ -4715,6 +5160,59 @@
                         <TextBlock Text="연락처를 검색하거나 다이얼 패드를 사용하세요" FontSize="14" Foreground="{DynamicResource TextFillColorSecondaryBrush}" HorizontalAlignment="Center" Margin="0,8,0,0"/>
                         <TextBlock Text="실제 통화 기능은 Azure Communication Services 연동이 필요합니다" FontSize="12" Foreground="{DynamicResource TextFillColorTertiaryBrush}" HorizontalAlignment="Center" Margin="0,16,0,0"/>
                     </StackPanel>
+                </Grid>
+            </Grid>
+        </Border>
+
+        <!-- ========== 설정 뷰 컨테이너 (Column 1-5 전체 사용, 초기에는 숨김) ========== -->
+        <Border x:Name="SettingsViewBorder"
+                Grid.Column="1" Grid.ColumnSpan="5"
+                Visibility="Collapsed"
+                Background="{DynamicResource ApplicationBackgroundBrush}">
+            <Grid>
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="*"/>
+                </Grid.RowDefinitions>
+
+                <!-- 헤더 -->
+                <Border Grid.Row="0" Padding="24,16" Background="{DynamicResource CardBackgroundFillColorDefaultBrush}"
+                        BorderBrush="{DynamicResource ControlElevationBorderBrush}" BorderThickness="0,0,0,1">
+                    <TextBlock Text="설정" FontSize="24" FontWeight="SemiBold"/>
+                </Border>
+
+                <!-- 본문 3단 레이아웃 -->
+                <Grid Grid.Row="1">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="180"/>
+                        <ColumnDefinition Width="220"/>
+                        <ColumnDefinition Width="*"/>
+                    </Grid.ColumnDefinitions>
+
+                    <!-- 대메뉴 패널 -->
+                    <Border Grid.Column="0" Background="{DynamicResource CardBackgroundFillColorDefaultBrush}"
+                            BorderBrush="{DynamicResource ControlElevationBorderBrush}" BorderThickness="0,0,1,0">
+                        <ScrollViewer VerticalScrollBarVisibility="Auto">
+                            <StackPanel x:Name="SettingsMainMenuPanel" Margin="0,8,0,0"/>
+                        </ScrollViewer>
+                    </Border>
+
+                    <!-- 소메뉴 패널 -->
+                    <Border Grid.Column="1" Background="{DynamicResource CardBackgroundFillColorSecondaryBrush}"
+                            BorderBrush="{DynamicResource ControlElevationBorderBrush}" BorderThickness="0,0,1,0">
+                        <ScrollViewer VerticalScrollBarVisibility="Auto">
+                            <StackPanel>
+                                <TextBlock x:Name="SettingsSubMenuTitle" FontWeight="SemiBold"
+                                           Margin="16,16,16,8" Foreground="{DynamicResource SystemAccentColorPrimaryBrush}"/>
+                                <StackPanel x:Name="SettingsSubMenuPanel"/>
+                            </StackPanel>
+                        </ScrollViewer>
+                    </Border>
+
+                    <!-- 설정 내용 패널 -->
+                    <ScrollViewer Grid.Column="2" VerticalScrollBarVisibility="Auto">
+                        <StackPanel x:Name="SettingsContentPanel" Margin="24,16"/>
+                    </ScrollViewer>
                 </Grid>
             </Grid>
         </Border>

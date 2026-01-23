@@ -77,16 +77,24 @@ public static class Log4
                 Directory.CreateDirectory(logPath);
             }
 
-            // log4net 설정 파일 로드
-            var configFile = new FileInfo("log4net.config");
+            // log4net 설정 파일 로드 (실행 파일 디렉토리 기준)
+            var exeDir = AppDomain.CurrentDomain.BaseDirectory;
+            var configFilePath = Path.Combine(exeDir, "log4net.config");
+            var configFile = new FileInfo(configFilePath);
+
+            System.Diagnostics.Debug.WriteLine($"[Log4] 설정 파일 경로: {configFilePath}");
+            System.Diagnostics.Debug.WriteLine($"[Log4] 설정 파일 존재: {configFile.Exists}");
+
             if (configFile.Exists)
             {
                 XmlConfigurator.Configure(configFile);
+                System.Diagnostics.Debug.WriteLine("[Log4] XmlConfigurator.Configure 완료");
             }
             else
             {
                 // 설정 파일이 없으면 기본 콘솔 출력
                 BasicConfigurator.Configure();
+                System.Diagnostics.Debug.WriteLine("[Log4] BasicConfigurator.Configure 사용 (config 파일 없음)");
             }
 
             // RollingFileAppender의 파일 경로를 동적으로 변경
