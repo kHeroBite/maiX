@@ -11,7 +11,6 @@
         Title="{Binding Title}"
         Height="800" Width="1400"
         MinHeight="600" MinWidth="1000"
-        WindowStartupLocation="CenterScreen"
         ExtendsContentIntoTitleBar="True"
         WindowBackdropType="Mica"
         d:DataContext="{d:DesignInstance Type=vm:MainViewModel, IsDesignTimeCreatable=False}">
@@ -4857,154 +4856,981 @@
         </Border>
 
         <!-- ========== OneDrive 뷰 컨테이너 (Column 1-5 전체 사용, 초기에는 숨김) ========== -->
+        <!-- Teams 스타일 OneDrive UI - 좌측 사이드바 + 우측 콘텐츠 영역 -->
         <Border x:Name="OneDriveViewBorder"
                 Grid.Column="1" Grid.ColumnSpan="5"
                 Visibility="Collapsed"
                 Background="{DynamicResource ApplicationBackgroundBrush}">
             <Grid>
-                <Grid.RowDefinitions>
-                    <RowDefinition Height="Auto"/>
-                    <RowDefinition Height="Auto"/>
-                    <RowDefinition Height="Auto"/>
-                    <RowDefinition Height="*"/>
-                </Grid.RowDefinitions>
+                <Grid.ColumnDefinitions>
+                    <!-- 좌측 사이드바 -->
+                    <ColumnDefinition Width="220" MinWidth="180" MaxWidth="350"/>
+                    <!-- GridSplitter -->
+                    <ColumnDefinition Width="Auto"/>
+                    <!-- 우측 콘텐츠 영역 -->
+                    <ColumnDefinition Width="*"/>
+                </Grid.ColumnDefinitions>
 
-                <!-- 헤더: 타이틀 + 액션 버튼들 -->
-                <Border Grid.Row="0" Padding="16,12"
+                <!-- ===== 좌측 사이드바 ===== -->
+                <Border Grid.Column="0"
                         BorderBrush="{DynamicResource ControlElevationBorderBrush}"
-                        BorderThickness="0,0,0,1">
+                        BorderThickness="0,0,1,0"
+                        Background="{DynamicResource CardBackgroundFillColorDefaultBrush}">
                     <Grid>
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="Auto"/>
-                            <ColumnDefinition Width="*"/>
-                            <ColumnDefinition Width="Auto"/>
-                        </Grid.ColumnDefinitions>
-                        <StackPanel Grid.Column="0" Orientation="Horizontal">
-                            <ui:SymbolIcon Symbol="Cloud24" FontSize="24" Margin="0,0,10,0" Foreground="{StaticResource OneDriveAccentBrush}"/>
-                            <TextBlock Text="OneDrive" FontSize="18" FontWeight="SemiBold" VerticalAlignment="Center"/>
-                        </StackPanel>
-                        <!-- 액션 버튼들 -->
-                        <StackPanel Grid.Column="2" Orientation="Horizontal">
-                            <ui:Button x:Name="OneDriveNewFolderButton" Icon="{ui:SymbolIcon FolderAdd24}"
-                                       Content="새 폴더" Appearance="Transparent" Margin="0,0,8,0"
-                                       Click="OneDriveNewFolderButton_Click"/>
-                            <ui:Button x:Name="OneDriveUploadButton" Icon="{ui:SymbolIcon ArrowUpload24}"
-                                       Content="업로드" Appearance="Transparent" Margin="0,0,8,0"
-                                       Click="OneDriveUploadButton_Click"/>
-                            <ui:Button x:Name="OneDriveRefreshButton" Icon="{ui:SymbolIcon ArrowSync24}"
-                                       Appearance="Transparent" ToolTip="새로고침"
-                                       Click="OneDriveRefreshButton_Click"/>
-                        </StackPanel>
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="*"/>
+                            <RowDefinition Height="Auto"/>
+                        </Grid.RowDefinitions>
+
+                        <!-- Row 0: 네비게이션 메뉴 -->
+                        <Border Grid.Row="0" Padding="8,12,8,0">
+                            <StackPanel>
+                                <!-- 홈 -->
+                                <ui:Button x:Name="OneDriveNavHome"
+                                           Content="홈"
+                                           Icon="{ui:SymbolIcon Home20}"
+                                           Appearance="Transparent"
+                                           HorizontalAlignment="Stretch"
+                                           HorizontalContentAlignment="Left"
+                                           Padding="12,8"
+                                           Click="OneDriveNav_Click"
+                                           Tag="home"/>
+                                <!-- 공유됨 -->
+                                <ui:Button x:Name="OneDriveNavShared"
+                                           Content="공유됨"
+                                           Icon="{ui:SymbolIcon People20}"
+                                           Appearance="Transparent"
+                                           HorizontalAlignment="Stretch"
+                                           HorizontalContentAlignment="Left"
+                                           Padding="12,8"
+                                           Click="OneDriveNav_Click"
+                                           Tag="shared"/>
+                                <!-- 즐겨찾기 -->
+                                <ui:Button x:Name="OneDriveNavFavorites"
+                                           Content="즐겨찾기"
+                                           Icon="{ui:SymbolIcon Star20}"
+                                           Appearance="Transparent"
+                                           HorizontalAlignment="Stretch"
+                                           HorizontalContentAlignment="Left"
+                                           Padding="12,8"
+                                           Click="OneDriveNav_Click"
+                                           Tag="favorites"/>
+                                <!-- 휴지통 -->
+                                <ui:Button x:Name="OneDriveNavTrash"
+                                           Content="휴지통"
+                                           Icon="{ui:SymbolIcon Delete20}"
+                                           Appearance="Transparent"
+                                           HorizontalAlignment="Stretch"
+                                           HorizontalContentAlignment="Left"
+                                           Padding="12,8"
+                                           Click="OneDriveNav_Click"
+                                           Tag="trash"/>
+
+                                <!-- 구분선 -->
+                                <Separator Margin="4,12,4,8"/>
+
+                                <!-- 내 파일 (루트 폴더 - 클릭 가능) -->
+                                <ui:Button x:Name="OneDriveNavMyFiles"
+                                           Content="내 파일"
+                                           Icon="{ui:SymbolIcon Folder20}"
+                                           Appearance="Transparent"
+                                           HorizontalAlignment="Stretch"
+                                           HorizontalContentAlignment="Left"
+                                           Padding="12,6"
+                                           FontSize="12"
+                                           FontWeight="SemiBold"
+                                           Click="OneDriveNav_Click"
+                                           Tag="myfiles"/>
+                            </StackPanel>
+                        </Border>
+
+                        <!-- Row 1: 폴더 트리 (ScrollViewer) -->
+                        <Border Grid.Row="1" Padding="8,0,8,8">
+                            <ScrollViewer VerticalScrollBarVisibility="Auto"
+                                          HorizontalScrollBarVisibility="Disabled">
+                                <TreeView x:Name="OneDriveFolderTree"
+                                          Background="Transparent"
+                                          BorderThickness="0"
+                                          Padding="0"
+                                          ScrollViewer.HorizontalScrollBarVisibility="Disabled"
+                                          SelectedItemChanged="OneDriveFolderTree_SelectedItemChanged">
+                                    <TreeView.ItemContainerStyle>
+                                        <Style TargetType="TreeViewItem">
+                                            <Setter Property="Padding" Value="4,2"/>
+                                            <Setter Property="Margin" Value="0"/>
+                                            <Setter Property="Foreground" Value="{DynamicResource TextFillColorPrimaryBrush}"/>
+                                            <Setter Property="Background" Value="Transparent"/>
+                                            <Setter Property="IsExpanded" Value="{Binding IsExpanded, Mode=TwoWay}"/>
+                                            <EventSetter Event="Expanded" Handler="OneDriveFolderTreeItem_Expanded"/>
+                                            <Style.Triggers>
+                                                <Trigger Property="IsSelected" Value="True">
+                                                    <Setter Property="Background" Value="{DynamicResource ControlFillColorDefaultBrush}"/>
+                                                </Trigger>
+                                                <Trigger Property="IsMouseOver" Value="True">
+                                                    <Setter Property="Background" Value="{DynamicResource ControlFillColorSecondaryBrush}"/>
+                                                </Trigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </TreeView.ItemContainerStyle>
+                                    <TreeView.ItemTemplate>
+                                        <HierarchicalDataTemplate ItemsSource="{Binding Children}">
+                                            <StackPanel Orientation="Horizontal" Margin="2,4">
+                                                <ui:SymbolIcon Symbol="Folder16" FontSize="16"
+                                                               Foreground="#FFB900" Margin="0,0,8,0"/>
+                                                <TextBlock Text="{Binding Name}" FontSize="12" VerticalAlignment="Center"
+                                                           Foreground="{DynamicResource TextFillColorPrimaryBrush}"/>
+                                            </StackPanel>
+                                        </HierarchicalDataTemplate>
+                                    </TreeView.ItemTemplate>
+                                </TreeView>
+                            </ScrollViewer>
+                        </Border>
+
+                        <!-- Row 2: 드라이브 용량 정보 -->
+                        <Border Grid.Row="2" Padding="16,8,16,16">
+                            <StackPanel x:Name="OneDriveDriveInfoPanel" Visibility="Collapsed">
+                                <TextBlock Text="저장소" FontSize="12" FontWeight="SemiBold"
+                                           Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                                           Margin="0,0,0,8"/>
+                                <ProgressBar x:Name="OneDriveStorageBar"
+                                             Height="4" Minimum="0" Maximum="100"
+                                             Foreground="{StaticResource OneDriveAccentBrush}"/>
+                                <TextBlock x:Name="OneDriveStorageText"
+                                           FontSize="11" Margin="0,6,0,0"
+                                           Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
+                            </StackPanel>
+                        </Border>
                     </Grid>
                 </Border>
 
-                <!-- 툴바: 보기 전환 + 검색 -->
-                <Border Grid.Row="1" Padding="16,8"
-                        BorderBrush="{DynamicResource ControlElevationBorderBrush}"
-                        BorderThickness="0,0,0,1">
-                    <Grid>
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="Auto"/>
-                            <ColumnDefinition Width="*"/>
-                            <ColumnDefinition Width="Auto"/>
-                        </Grid.ColumnDefinitions>
-                        <!-- 뷰 모드 전환 -->
-                        <StackPanel Grid.Column="0" Orientation="Horizontal">
-                            <ui:Button x:Name="OneDriveListViewButton" Icon="{ui:SymbolIcon List24}"
-                                       ToolTip="목록 보기" Appearance="Secondary" Padding="8"
-                                       Click="OneDriveListViewButton_Click"/>
-                            <ui:Button x:Name="OneDriveGridViewButton" Icon="{ui:SymbolIcon Grid24}"
-                                       ToolTip="그리드 보기" Appearance="Transparent" Padding="8" Margin="4,0,0,0"
-                                       Click="OneDriveGridViewButton_Click"/>
-                        </StackPanel>
-                        <!-- 검색 -->
-                        <ui:TextBox Grid.Column="2" x:Name="OneDriveSearchBox" PlaceholderText="파일 검색..."
-                                    Icon="{ui:SymbolIcon Search24}" Width="250"
-                                    KeyDown="OneDriveSearchBox_KeyDown"/>
-                    </Grid>
-                </Border>
+                <!-- GridSplitter (OneDrive) -->
+                <GridSplitter Grid.Column="1"
+                              Width="4"
+                              HorizontalAlignment="Center"
+                              VerticalAlignment="Stretch"
+                              Background="Transparent"
+                              Cursor="SizeWE"/>
 
-                <!-- 경로 표시 (Breadcrumb) -->
-                <Border Grid.Row="2" Padding="16,10"
-                        BorderBrush="{DynamicResource ControlElevationBorderBrush}"
-                        BorderThickness="0,0,0,1">
-                    <StackPanel Orientation="Horizontal">
-                        <ui:Button x:Name="OneDriveGoUpButton" Icon="{ui:SymbolIcon ArrowUp24}"
-                                   Appearance="Transparent" Padding="6" Margin="0,0,8,0"
-                                   ToolTip="상위 폴더" Click="OneDriveGoUpButton_Click"/>
-                        <ItemsControl x:Name="OneDriveBreadcrumb">
-                            <ItemsControl.ItemsPanel>
-                                <ItemsPanelTemplate>
-                                    <StackPanel Orientation="Horizontal"/>
-                                </ItemsPanelTemplate>
-                            </ItemsControl.ItemsPanel>
-                            <ItemsControl.ItemTemplate>
-                                <DataTemplate>
-                                    <StackPanel Orientation="Horizontal">
-                                        <ui:Button Content="{Binding Name}" Appearance="Transparent"
-                                                   Foreground="{StaticResource OneDriveAccentBrush}"
-                                                   Padding="4,2" FontSize="14"
-                                                   Click="OneDriveBreadcrumbItem_Click"
-                                                   Tag="{Binding}"/>
-                                        <TextBlock Text=">" VerticalAlignment="Center" Margin="4,0"
-                                                   Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
-                                    </StackPanel>
-                                </DataTemplate>
-                            </ItemsControl.ItemTemplate>
-                        </ItemsControl>
-                    </StackPanel>
-                </Border>
+                <!-- ===== 우측 콘텐츠 영역 ===== -->
+                <Grid Grid.Column="2">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="*"/>
+                    </Grid.RowDefinitions>
 
-                <!-- 파일 목록 -->
-                <Grid Grid.Row="3">
-                    <!-- 빈 상태 -->
-                    <StackPanel x:Name="OneDriveEmptyState" VerticalAlignment="Center" HorizontalAlignment="Center">
-                        <ui:SymbolIcon Symbol="Cloud24" FontSize="72" Foreground="{StaticResource OneDriveAccentBrush}" Margin="0,0,0,24"/>
-                        <TextBlock Text="OneDrive" FontSize="28" FontWeight="Bold" HorizontalAlignment="Center"/>
-                        <TextBlock Text="클라우드 파일을 관리하세요" FontSize="14"
-                                   Foreground="{DynamicResource TextFillColorSecondaryBrush}"
-                                   HorizontalAlignment="Center" Margin="0,12,0,0"/>
-                        <ui:Button x:Name="OneDriveLoadFilesButton" Content="파일 로드"
-                                   Icon="{ui:SymbolIcon ArrowSync24}" Appearance="Primary"
-                                   Margin="0,24,0,0" Padding="16,10" Click="OneDriveLoadFilesButton_Click"/>
-                    </StackPanel>
-
-                    <!-- 파일 목록 (ListView) -->
-                    <ListView x:Name="OneDriveFileListView" Visibility="Collapsed"
-                              SelectionMode="Single" SelectionChanged="OneDriveFileListView_SelectionChanged"
-                              MouseDoubleClick="OneDriveFileListView_MouseDoubleClick">
-                        <ListView.View>
-                            <GridView>
-                                <GridViewColumn Header="이름" Width="300">
-                                    <GridViewColumn.CellTemplate>
+                    <!-- Row 0: 상단 헤더 (경로 + 액션 버튼) -->
+                    <Border Grid.Row="0" Padding="16,12"
+                            BorderBrush="{DynamicResource ControlElevationBorderBrush}"
+                            BorderThickness="0,0,0,1">
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto"/>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
+                            
+                            <!-- Breadcrumb 경로 -->
+                            <StackPanel Grid.Column="0" Orientation="Horizontal">
+                                <ui:Button x:Name="OneDriveGoUpButton" Icon="{ui:SymbolIcon ArrowUp20}"
+                                           Appearance="Transparent" Padding="6" Margin="0,0,8,0"
+                                           ToolTip="상위 폴더" Click="OneDriveGoUpButton_Click"/>
+                                <ItemsControl x:Name="OneDriveBreadcrumb">
+                                    <ItemsControl.ItemsPanel>
+                                        <ItemsPanelTemplate>
+                                            <StackPanel Orientation="Horizontal"/>
+                                        </ItemsPanelTemplate>
+                                    </ItemsControl.ItemsPanel>
+                                    <ItemsControl.ItemTemplate>
                                         <DataTemplate>
-                                            <StackPanel Orientation="Horizontal" Margin="4,4">
-                                                <ui:SymbolIcon Symbol="Folder24" FontSize="20" Margin="0,0,10,0"
-                                                               Foreground="#FFB900"
-                                                               Visibility="{Binding IsFolder, Converter={StaticResource BoolToVisibilityConverter}}"/>
-                                                <ui:SymbolIcon Symbol="Document24" FontSize="20" Margin="0,0,10,0"
-                                                               Foreground="{DynamicResource TextFillColorSecondaryBrush}"
-                                                               Visibility="{Binding IsFolder, Converter={StaticResource BoolToVisibilityConverter}, ConverterParameter=Invert}"/>
-                                                <TextBlock Text="{Binding Name}" VerticalAlignment="Center"/>
+                                            <StackPanel Orientation="Horizontal">
+                                                <ui:Button Content="{Binding Name}" Appearance="Transparent"
+                                                           Foreground="{StaticResource OneDriveAccentBrush}"
+                                                           Padding="4,2" FontSize="14"
+                                                           Click="OneDriveBreadcrumbItem_Click"
+                                                           Tag="{Binding}"/>
+                                                <TextBlock Text="›" VerticalAlignment="Center" Margin="4,0"
+                                                           FontSize="14"
+                                                           Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
                                             </StackPanel>
                                         </DataTemplate>
-                                    </GridViewColumn.CellTemplate>
-                                </GridViewColumn>
-                                <GridViewColumn Header="수정 날짜" Width="150" DisplayMemberBinding="{Binding LastModifiedDisplay}"/>
-                                <GridViewColumn Header="크기" Width="100" DisplayMemberBinding="{Binding SizeDisplay}"/>
-                            </GridView>
-                        </ListView.View>
-                    </ListView>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
+                            </StackPanel>
+                            
+                            <!-- 액션 버튼들 -->
+                            <StackPanel Grid.Column="2" Orientation="Horizontal">
+                                <ui:Button x:Name="OneDriveNewFolderButton" Icon="{ui:SymbolIcon FolderAdd20}"
+                                           Content="새 폴더" Appearance="Transparent" Margin="0,0,4,0"
+                                           Click="OneDriveNewFolderButton_Click"/>
+                                <ui:Button x:Name="OneDriveUploadButton" Icon="{ui:SymbolIcon ArrowUpload20}"
+                                           Content="업로드" Appearance="Transparent" Margin="0,0,4,0"
+                                           Click="OneDriveUploadButton_Click"/>
+                                <ui:Button x:Name="OneDriveRefreshButton" Icon="{ui:SymbolIcon ArrowSync20}"
+                                           Appearance="Transparent" ToolTip="새로고침"
+                                           Click="OneDriveRefreshButton_Click"/>
+                            </StackPanel>
+                        </Grid>
+                    </Border>
 
-                    <!-- 로딩 인디케이터 -->
-                    <Border x:Name="OneDriveLoadingOverlay" Visibility="Collapsed"
-                            Background="{DynamicResource ApplicationBackgroundBrush}">
-                        <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center">
-                            <ui:ProgressRing IsIndeterminate="True" Width="48" Height="48"/>
-                            <TextBlock Text="로딩 중..." FontSize="14"
+                    <!-- Row 1: 필터 탭 바 -->
+                    <Border Grid.Row="1" Padding="16,8"
+                            BorderBrush="{DynamicResource ControlElevationBorderBrush}"
+                            BorderThickness="0,0,0,1">
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
+                            
+                            <!-- 파일 타입 필터 -->
+                            <StackPanel Grid.Column="0" Orientation="Horizontal">
+                                <ui:Button x:Name="OneDriveFilterAll"
+                                           Content="모두" Appearance="Secondary"
+                                           Padding="12,6" Margin="0,0,4,0"
+                                           Click="OneDriveFilter_Click" Tag="all"/>
+                                <ui:Button x:Name="OneDriveFilterWord"
+                                           Icon="{ui:SymbolIcon DocumentText20}"
+                                           Content="Word" Appearance="Transparent"
+                                           Padding="12,6" Margin="0,0,4,0"
+                                           Click="OneDriveFilter_Click" Tag="word"/>
+                                <ui:Button x:Name="OneDriveFilterExcel"
+                                           Icon="{ui:SymbolIcon TableSimple20}"
+                                           Content="Excel" Appearance="Transparent"
+                                           Padding="12,6" Margin="0,0,4,0"
+                                           Click="OneDriveFilter_Click" Tag="excel"/>
+                                <ui:Button x:Name="OneDriveFilterPowerPoint"
+                                           Icon="{ui:SymbolIcon SlideText20}"
+                                           Content="PowerPoint" Appearance="Transparent"
+                                           Padding="12,6" Margin="0,0,4,0"
+                                           Click="OneDriveFilter_Click" Tag="ppt"/>
+                                <ui:Button x:Name="OneDriveFilterPdf"
+                                           Icon="{ui:SymbolIcon Document20}"
+                                           Content="PDF" Appearance="Transparent"
+                                           Padding="12,6" Margin="0,0,4,0"
+                                           Click="OneDriveFilter_Click" Tag="pdf"/>
+                            </StackPanel>
+                            
+                            <!-- 뷰 모드 + 검색 -->
+                            <StackPanel Grid.Column="1" Orientation="Horizontal">
+                                <ui:Button x:Name="OneDriveListViewButton" Icon="{ui:SymbolIcon List20}"
+                                           ToolTip="목록 보기" Appearance="Secondary" Padding="8"
+                                           Click="OneDriveListViewButton_Click"/>
+                                <ui:Button x:Name="OneDriveGridViewButton" Icon="{ui:SymbolIcon Grid20}"
+                                           ToolTip="그리드 보기" Appearance="Transparent" Padding="8" Margin="4,0,12,0"
+                                           Click="OneDriveGridViewButton_Click"/>
+                                <ui:TextBox x:Name="OneDriveSearchBox" PlaceholderText="파일 검색..."
+                                            Icon="{ui:SymbolIcon Search20}" Width="220"
+                                            KeyDown="OneDriveSearchBox_KeyDown"/>
+                            </StackPanel>
+                        </Grid>
+                    </Border>
+
+                    <!-- Row 2: 컬럼 헤더 (정렬 가능) -->
+                    <Border Grid.Row="2" Padding="16,8"
+                            Background="{DynamicResource CardBackgroundFillColorSecondaryBrush}"
+                            BorderBrush="{DynamicResource ControlElevationBorderBrush}"
+                            BorderThickness="0,0,0,1">
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="40"/>
+                                <ColumnDefinition Width="*" MinWidth="200"/>
+                                <ColumnDefinition Width="140"/>
+                                <ColumnDefinition Width="120"/>
+                                <ColumnDefinition Width="100"/>
+                            </Grid.ColumnDefinitions>
+                            <TextBlock Grid.Column="1" Text="이름" FontSize="12" FontWeight="SemiBold"
                                        Foreground="{DynamicResource TextFillColorSecondaryBrush}"
-                                       HorizontalAlignment="Center" Margin="0,12,0,0"/>
-                        </StackPanel>
+                                       VerticalAlignment="Center"/>
+                            <TextBlock Grid.Column="2" Text="수정한 날짜" FontSize="12" FontWeight="SemiBold"
+                                       Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                                       VerticalAlignment="Center"/>
+                            <TextBlock Grid.Column="3" Text="소유자" FontSize="12" FontWeight="SemiBold"
+                                       Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                                       VerticalAlignment="Center"/>
+                            <TextBlock Grid.Column="4" Text="크기" FontSize="12" FontWeight="SemiBold"
+                                       Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                                       VerticalAlignment="Center" HorizontalAlignment="Right" Margin="0,0,8,0"/>
+                        </Grid>
+                    </Border>
+
+                    <!-- Row 3: 파일 목록 -->
+                    <Grid Grid.Row="3">
+                            <!-- 빈 상태 -->
+                            <StackPanel x:Name="OneDriveEmptyState" VerticalAlignment="Center" HorizontalAlignment="Center">
+                                <ui:SymbolIcon Symbol="Cloud48" FontSize="64" Foreground="{StaticResource OneDriveAccentBrush}" Margin="0,0,0,20"/>
+                                <TextBlock Text="OneDrive" FontSize="24" FontWeight="SemiBold" HorizontalAlignment="Center"
+                                           Foreground="{DynamicResource TextFillColorPrimaryBrush}"/>
+                                <TextBlock Text="클라우드 파일을 관리하세요" FontSize="13"
+                                           Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                                           HorizontalAlignment="Center" Margin="0,8,0,0"/>
+                                <ui:Button x:Name="OneDriveLoadFilesButton" Content="파일 로드"
+                                           Icon="{ui:SymbolIcon ArrowSync20}" Appearance="Primary"
+                                           Margin="0,20,0,0" Padding="20,10" Click="OneDriveLoadFilesButton_Click"/>
+                            </StackPanel>
+
+                            <!-- 파일 목록 (ListView) -->
+                            <ListView x:Name="OneDriveFileListView" Visibility="Collapsed"
+                                      SelectionMode="Single"
+                                      SelectionChanged="OneDriveFileListView_SelectionChanged"
+                                      MouseDoubleClick="OneDriveFileListView_MouseDoubleClick"
+                                      BorderThickness="0"
+                                      Background="Transparent">
+                                <!-- 컨텍스트 메뉴 (마우스 우클릭) - Teams 스타일 -->
+                                <ListView.ContextMenu>
+                                    <ContextMenu>
+                                        <!-- 열기 (서브메뉴) -->
+                                        <MenuItem Header="열기">
+                                            <MenuItem.Icon>
+                                                <ui:SymbolIcon Symbol="Open20"/>
+                                            </MenuItem.Icon>
+                                            <MenuItem Header="앱에서 열기" Click="OneDriveContext_OpenInApp_Click">
+                                                <MenuItem.Icon>
+                                                    <ui:SymbolIcon Symbol="AppGeneric20"/>
+                                                </MenuItem.Icon>
+                                            </MenuItem>
+                                            <MenuItem Header="브라우저에서 열기" Click="OneDriveContext_Open_Click">
+                                                <MenuItem.Icon>
+                                                    <ui:SymbolIcon Symbol="Globe20"/>
+                                                </MenuItem.Icon>
+                                            </MenuItem>
+                                        </MenuItem>
+                                        <!-- 미리 보기 -->
+                                        <MenuItem Header="미리 보기" Click="OneDriveContext_Preview_Click">
+                                            <MenuItem.Icon>
+                                                <ui:SymbolIcon Symbol="Eye20"/>
+                                            </MenuItem.Icon>
+                                        </MenuItem>
+                                        <!-- 공유 -->
+                                        <MenuItem Header="공유" Click="OneDriveContext_Share_Click">
+                                            <MenuItem.Icon>
+                                                <ui:SymbolIcon Symbol="Share20"/>
+                                            </MenuItem.Icon>
+                                        </MenuItem>
+                                        <!-- 링크 복사 -->
+                                        <MenuItem Header="링크 복사" Click="OneDriveContext_CopyLink_Click">
+                                            <MenuItem.Icon>
+                                                <ui:SymbolIcon Symbol="Link20"/>
+                                            </MenuItem.Icon>
+                                        </MenuItem>
+                                        <!-- 액세스 관리 -->
+                                        <MenuItem Header="액세스 관리" Click="OneDriveContext_ManageAccess_Click">
+                                            <MenuItem.Icon>
+                                                <ui:SymbolIcon Symbol="PeopleSettings20"/>
+                                            </MenuItem.Icon>
+                                        </MenuItem>
+                                        <Separator/>
+                                        <!-- 삭제 -->
+                                        <MenuItem Header="삭제" Click="OneDriveContext_Delete_Click">
+                                            <MenuItem.Icon>
+                                                <ui:SymbolIcon Symbol="Delete20"/>
+                                            </MenuItem.Icon>
+                                        </MenuItem>
+                                        <!-- 즐겨찾기 -->
+                                        <MenuItem Header="즐겨찾기" Click="OneDriveContext_Favorite_Click">
+                                            <MenuItem.Icon>
+                                                <ui:SymbolIcon Symbol="Star20"/>
+                                            </MenuItem.Icon>
+                                        </MenuItem>
+                                        <!-- 바로 가기 추가 -->
+                                        <MenuItem Header="바로 가기 추가" Click="OneDriveContext_AddShortcut_Click">
+                                            <MenuItem.Icon>
+                                                <ui:SymbolIcon Symbol="Pin20"/>
+                                            </MenuItem.Icon>
+                                        </MenuItem>
+                                        <!-- 다운로드 -->
+                                        <MenuItem Header="다운로드" Click="OneDriveContext_Download_Click">
+                                            <MenuItem.Icon>
+                                                <ui:SymbolIcon Symbol="ArrowDownload20"/>
+                                            </MenuItem.Icon>
+                                        </MenuItem>
+                                        <!-- 이름 바꾸기 -->
+                                        <MenuItem Header="이름 바꾸기" Click="OneDriveContext_Rename_Click">
+                                            <MenuItem.Icon>
+                                                <ui:SymbolIcon Symbol="Rename20"/>
+                                            </MenuItem.Icon>
+                                        </MenuItem>
+                                        <!-- OneDrive에서 열기 -->
+                                        <MenuItem Header="OneDrive에서 열기" Click="OneDriveContext_OpenInOneDrive_Click">
+                                            <MenuItem.Icon>
+                                                <ui:SymbolIcon Symbol="Cloud20"/>
+                                            </MenuItem.Icon>
+                                        </MenuItem>
+                                        <Separator/>
+                                        <!-- 다음으로 이동 -->
+                                        <MenuItem Header="다음으로 이동" Click="OneDriveContext_MoveTo_Click">
+                                            <MenuItem.Icon>
+                                                <ui:SymbolIcon Symbol="FolderArrowRight20"/>
+                                            </MenuItem.Icon>
+                                        </MenuItem>
+                                        <!-- 다음으로 복사 -->
+                                        <MenuItem Header="다음으로 복사" Click="OneDriveContext_CopyTo_Click">
+                                            <MenuItem.Icon>
+                                                <ui:SymbolIcon Symbol="Copy20"/>
+                                            </MenuItem.Icon>
+                                        </MenuItem>
+                                        <Separator/>
+                                        <!-- 버전 기록 -->
+                                        <MenuItem Header="버전 기록" Click="OneDriveContext_VersionHistory_Click">
+                                            <MenuItem.Icon>
+                                                <ui:SymbolIcon Symbol="History20"/>
+                                            </MenuItem.Icon>
+                                        </MenuItem>
+                                        <!-- 세부 정보 -->
+                                        <MenuItem Header="세부 정보" Click="OneDriveContext_Properties_Click">
+                                            <MenuItem.Icon>
+                                                <ui:SymbolIcon Symbol="Info20"/>
+                                            </MenuItem.Icon>
+                                        </MenuItem>
+                                    </ContextMenu>
+                                </ListView.ContextMenu>
+                                <ListView.ItemContainerStyle>
+                                    <Style TargetType="ListViewItem">
+                                        <Setter Property="Padding" Value="16,10"/>
+                                        <Setter Property="Margin" Value="0"/>
+                                        <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
+                                        <Setter Property="Foreground" Value="{DynamicResource TextFillColorPrimaryBrush}"/>
+                                        <Setter Property="Background" Value="Transparent"/>
+                                        <Setter Property="BorderThickness" Value="0,0,0,1"/>
+                                        <Setter Property="BorderBrush" Value="{DynamicResource ControlElevationBorderBrush}"/>
+                                        <Style.Triggers>
+                                            <Trigger Property="IsMouseOver" Value="True">
+                                                <Setter Property="Background" Value="{DynamicResource ControlFillColorSecondaryBrush}"/>
+                                            </Trigger>
+                                            <Trigger Property="IsSelected" Value="True">
+                                                <Setter Property="Background" Value="{DynamicResource ControlFillColorDefaultBrush}"/>
+                                            </Trigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </ListView.ItemContainerStyle>
+                                <ListView.ItemTemplate>
+                                    <DataTemplate>
+                                        <Grid>
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="40"/>
+                                                <ColumnDefinition Width="*" MinWidth="200"/>
+                                                <ColumnDefinition Width="140"/>
+                                                <ColumnDefinition Width="120"/>
+                                                <ColumnDefinition Width="100"/>
+                                            </Grid.ColumnDefinitions>
+
+                                            <!-- 파일 타입 아이콘 -->
+                                            <Grid Grid.Column="0" Width="32" Height="32">
+                                                <ui:SymbolIcon Symbol="Folder24" FontSize="24"
+                                                               Foreground="#FFB900"
+                                                               Visibility="{Binding IsFolder, Converter={StaticResource BoolToVisibilityConverter}}"/>
+                                                <ui:SymbolIcon Symbol="Document24" FontSize="24"
+                                                               Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                                                               Visibility="{Binding IsFolder, Converter={StaticResource BoolToVisibilityConverter}, ConverterParameter=Invert}"/>
+                                            </Grid>
+
+                                            <!-- 파일 이름 -->
+                                            <StackPanel Grid.Column="1" VerticalAlignment="Center" Margin="8,0,0,0">
+                                                <TextBlock Text="{Binding Name}" FontSize="13"
+                                                           Foreground="{DynamicResource TextFillColorPrimaryBrush}"
+                                                           TextTrimming="CharacterEllipsis"/>
+                                            </StackPanel>
+
+                                            <!-- 수정 날짜 -->
+                                            <TextBlock Grid.Column="2" Text="{Binding LastModifiedDisplay}"
+                                                       FontSize="12" VerticalAlignment="Center"
+                                                       Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
+
+                                            <!-- 소유자 -->
+                                            <TextBlock Grid.Column="3" Text="{Binding OwnerDisplayName, FallbackValue=나}"
+                                                       FontSize="12" VerticalAlignment="Center"
+                                                       Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
+
+                                            <!-- 크기 -->
+                                            <TextBlock Grid.Column="4" Text="{Binding SizeDisplay}"
+                                                       FontSize="12" VerticalAlignment="Center"
+                                                       HorizontalAlignment="Right" Margin="0,0,8,0"
+                                                       Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
+                                        </Grid>
+                                    </DataTemplate>
+                                </ListView.ItemTemplate>
+                            </ListView>
+
+                            <!-- ========== 사람별 파일 뷰 (Teams 스타일) ========== -->
+                            <ScrollViewer x:Name="OneDrivePeopleView" Visibility="Collapsed" VerticalScrollBarVisibility="Auto">
+                                <StackPanel Margin="0,16,16,16">
+                                    <!-- 헤더 -->
+                                    <Grid Margin="0,0,0,16">
+                                        <TextBlock Text="사람" FontSize="18" FontWeight="SemiBold"
+                                                   Foreground="{DynamicResource TextFillColorPrimaryBrush}"/>
+                                        <ui:TextBox x:Name="OneDrivePeopleFilterBox"
+                                                    PlaceholderText="사용자별 필터링"
+                                                    Width="200" HorizontalAlignment="Right"
+                                                    TextChanged="OneDrivePeopleFilter_TextChanged"/>
+                                    </Grid>
+
+                                    <!-- 사람별 파일 목록 -->
+                                    <ItemsControl x:Name="OneDrivePeopleItemsControl">
+                                        <ItemsControl.ItemTemplate>
+                                            <DataTemplate>
+                                                <Border Margin="0,0,0,16" Padding="0">
+                                                    <StackPanel>
+                                                        <!-- 사람 헤더 (프로필 + 이름) -->
+                                                        <StackPanel Orientation="Horizontal" Margin="0,0,0,12">
+                                                            <Border Width="40" Height="40" CornerRadius="20"
+                                                                    Background="{DynamicResource AccentFillColorDefaultBrush}"
+                                                                    Margin="0,0,12,0">
+                                                                <TextBlock Text="{Binding PersonInitials}"
+                                                                           FontSize="14" FontWeight="SemiBold"
+                                                                           Foreground="White"
+                                                                           HorizontalAlignment="Center"
+                                                                           VerticalAlignment="Center"/>
+                                                            </Border>
+                                                            <TextBlock Text="{Binding PersonName}" FontSize="15" FontWeight="SemiBold"
+                                                                       Foreground="{DynamicResource TextFillColorPrimaryBrush}"
+                                                                       VerticalAlignment="Center"/>
+                                                        </StackPanel>
+
+                                                        <!-- 파일 칩 목록 (가로 스크롤) -->
+                                                        <ScrollViewer HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Disabled">
+                                                            <ItemsControl ItemsSource="{Binding Files}">
+                                                                <ItemsControl.ItemsPanel>
+                                                                    <ItemsPanelTemplate>
+                                                                        <StackPanel Orientation="Horizontal"/>
+                                                                    </ItemsPanelTemplate>
+                                                                </ItemsControl.ItemsPanel>
+                                                                <ItemsControl.ItemTemplate>
+                                                                    <DataTemplate>
+                                                                        <Border Background="{DynamicResource ControlFillColorDefaultBrush}"
+                                                                                CornerRadius="4" Padding="10,8" Margin="0,0,8,0"
+                                                                                Cursor="Hand" MouseLeftButtonDown="OneDrivePeopleFile_Click">
+                                                                            <StackPanel Orientation="Horizontal">
+                                                                                <Border Width="24" Height="24" CornerRadius="2"
+                                                                                        Background="{Binding IconBackground}" Margin="0,0,8,0">
+                                                                                    <TextBlock Text="{Binding IconText}" FontSize="9" FontWeight="Bold"
+                                                                                               Foreground="White" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                                                                </Border>
+                                                                                <TextBlock Text="{Binding Name}" FontSize="12"
+                                                                                           Foreground="{DynamicResource TextFillColorPrimaryBrush}"
+                                                                                           VerticalAlignment="Center" MaxWidth="200" TextTrimming="CharacterEllipsis"/>
+                                                                            </StackPanel>
+                                                                        </Border>
+                                                                    </DataTemplate>
+                                                                </ItemsControl.ItemTemplate>
+                                                            </ItemsControl>
+                                                        </ScrollViewer>
+
+                                                        <!-- +N개 더보기 버튼 -->
+                                                        <ui:Button Content="{Binding MoreFilesText}"
+                                                                   Visibility="{Binding HasMoreFiles, Converter={StaticResource BoolToVisibilityConverter}}"
+                                                                   Appearance="Transparent"
+                                                                   Padding="8,4" Margin="0,8,0,0"
+                                                                   Click="OneDrivePeopleMoreFiles_Click"
+                                                                   Tag="{Binding PersonName}"/>
+                                                    </StackPanel>
+                                                </Border>
+                                            </DataTemplate>
+                                        </ItemsControl.ItemTemplate>
+                                    </ItemsControl>
+                                </StackPanel>
+                            </ScrollViewer>
+
+                            <!-- ========== 모임별 파일 뷰 (Teams 스타일) ========== -->
+                            <ScrollViewer x:Name="OneDriveMeetingsView" Visibility="Collapsed" VerticalScrollBarVisibility="Auto">
+                                <StackPanel Margin="0,16,16,16">
+                                    <!-- 안내 배너 -->
+                                    <Border Background="{DynamicResource ControlFillColorDefaultBrush}"
+                                            CornerRadius="4" Padding="12" Margin="0,0,0,16">
+                                        <StackPanel Orientation="Horizontal">
+                                            <ui:SymbolIcon Symbol="Info20" Foreground="{DynamicResource AccentFillColorDefaultBrush}" Margin="0,0,8,0"/>
+                                            <TextBlock Text="모든 회의 모임이 여기에 있습니다! 이제 공유된 파일이 있는 모임을 찾을 수 있습니다."
+                                                       FontSize="12" Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
+                                        </StackPanel>
+                                    </Border>
+
+                                    <!-- 필터 -->
+                                    <Grid Margin="0,0,0,16">
+                                        <TextBlock Text="지난 모임" FontSize="14" FontWeight="SemiBold"
+                                                   Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
+                                        <ui:TextBox x:Name="OneDriveMeetingsFilterBox"
+                                                    PlaceholderText="모임 이름별 필터링"
+                                                    Width="200" HorizontalAlignment="Right"
+                                                    TextChanged="OneDriveMeetingsFilter_TextChanged"/>
+                                    </Grid>
+
+                                    <!-- 모임별 파일 목록 -->
+                                    <ItemsControl x:Name="OneDriveMeetingsItemsControl">
+                                        <ItemsControl.ItemTemplate>
+                                            <DataTemplate>
+                                                <Border Background="{DynamicResource ControlFillColorDefaultBrush}"
+                                                        CornerRadius="8" Margin="0,0,0,12" Padding="0">
+                                                    <Grid>
+                                                        <Grid.ColumnDefinitions>
+                                                            <ColumnDefinition Width="120"/>
+                                                            <ColumnDefinition Width="*"/>
+                                                        </Grid.ColumnDefinitions>
+
+                                                        <!-- 날짜/시간 영역 -->
+                                                        <Border Grid.Column="0" Background="{DynamicResource AccentFillColorDefaultBrush}"
+                                                                CornerRadius="8,0,0,8" Padding="12">
+                                                            <StackPanel VerticalAlignment="Center">
+                                                                <TextBlock Text="{Binding MeetingTime}" FontSize="12"
+                                                                           Foreground="White" Opacity="0.9"/>
+                                                                <TextBlock Text="{Binding MeetingDate}" FontSize="14" FontWeight="SemiBold"
+                                                                           Foreground="White"/>
+                                                            </StackPanel>
+                                                        </Border>
+
+                                                        <!-- 모임 정보 + 파일 -->
+                                                        <StackPanel Grid.Column="1" Margin="16,12">
+                                                            <!-- 모임 제목 -->
+                                                            <TextBlock Text="{Binding MeetingTitle}" FontSize="14" FontWeight="SemiBold"
+                                                                       Foreground="{DynamicResource TextFillColorPrimaryBrush}"
+                                                                       Margin="0,0,0,4"/>
+
+                                                            <!-- 참석자 아이콘들 -->
+                                                            <StackPanel Orientation="Horizontal" Margin="0,0,0,12">
+                                                                <ItemsControl ItemsSource="{Binding Attendees}">
+                                                                    <ItemsControl.ItemsPanel>
+                                                                        <ItemsPanelTemplate>
+                                                                            <StackPanel Orientation="Horizontal"/>
+                                                                        </ItemsPanelTemplate>
+                                                                    </ItemsControl.ItemsPanel>
+                                                                    <ItemsControl.ItemTemplate>
+                                                                        <DataTemplate>
+                                                                            <Border Width="28" Height="28" CornerRadius="14"
+                                                                                    Background="{DynamicResource AccentFillColorSecondaryBrush}"
+                                                                                    Margin="-6,0,0,0" BorderThickness="2"
+                                                                                    BorderBrush="{DynamicResource ControlFillColorDefaultBrush}">
+                                                                                <TextBlock Text="{Binding Initials}" FontSize="10" FontWeight="SemiBold"
+                                                                                           Foreground="White" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                                                            </Border>
+                                                                        </DataTemplate>
+                                                                    </ItemsControl.ItemTemplate>
+                                                                </ItemsControl>
+                                                                <TextBlock Text="{Binding MoreAttendeesText}"
+                                                                           Visibility="{Binding HasMoreAttendees, Converter={StaticResource BoolToVisibilityConverter}}"
+                                                                           FontSize="11" Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                                                                           VerticalAlignment="Center" Margin="8,0,0,0"/>
+                                                                <TextBlock Text="{Binding OrganizerText}"
+                                                                           FontSize="11" Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                                                                           VerticalAlignment="Center" Margin="12,0,0,0"/>
+                                                            </StackPanel>
+
+                                                            <!-- 파일 칩들 -->
+                                                            <ScrollViewer HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Disabled">
+                                                                <ItemsControl ItemsSource="{Binding Files}">
+                                                                    <ItemsControl.ItemsPanel>
+                                                                        <ItemsPanelTemplate>
+                                                                            <StackPanel Orientation="Horizontal"/>
+                                                                        </ItemsPanelTemplate>
+                                                                    </ItemsControl.ItemsPanel>
+                                                                    <ItemsControl.ItemTemplate>
+                                                                        <DataTemplate>
+                                                                            <Border Background="{DynamicResource ControlFillColorSecondaryBrush}"
+                                                                                    CornerRadius="4" Padding="10,6" Margin="0,0,8,0"
+                                                                                    Cursor="Hand" MouseLeftButtonDown="OneDriveMeetingFile_Click">
+                                                                                <StackPanel Orientation="Horizontal">
+                                                                                    <Border Width="20" Height="20" CornerRadius="2"
+                                                                                            Background="{Binding IconBackground}" Margin="0,0,6,0">
+                                                                                        <TextBlock Text="{Binding IconText}" FontSize="8" FontWeight="Bold"
+                                                                                                   Foreground="White" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                                                                    </Border>
+                                                                                    <TextBlock Text="{Binding Name}" FontSize="12"
+                                                                                               Foreground="{DynamicResource TextFillColorPrimaryBrush}"
+                                                                                               VerticalAlignment="Center" MaxWidth="180" TextTrimming="CharacterEllipsis"/>
+                                                                                </StackPanel>
+                                                                            </Border>
+                                                                        </DataTemplate>
+                                                                    </ItemsControl.ItemTemplate>
+                                                                </ItemsControl>
+                                                            </ScrollViewer>
+                                                        </StackPanel>
+                                                    </Grid>
+                                                </Border>
+                                            </DataTemplate>
+                                        </ItemsControl.ItemTemplate>
+                                    </ItemsControl>
+                                </StackPanel>
+                            </ScrollViewer>
+
+                            <!-- ========== 미디어 갤러리 뷰 (Teams 스타일) ========== -->
+                            <ScrollViewer x:Name="OneDriveMediaView" Visibility="Collapsed" VerticalScrollBarVisibility="Auto">
+                                <StackPanel Margin="0,16,16,16">
+                                    <!-- 헤더 + 툴바 -->
+                                    <Grid Margin="0,0,0,16">
+                                        <StackPanel Orientation="Horizontal">
+                                            <TextBlock Text="미디어" FontSize="18" FontWeight="SemiBold"
+                                                       Foreground="{DynamicResource TextFillColorPrimaryBrush}"
+                                                       VerticalAlignment="Center"/>
+                                        </StackPanel>
+                                        <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
+                                            <ui:Button Icon="{ui:SymbolIcon GridDots20}" Appearance="Transparent" Padding="8" ToolTip="그리드 보기"/>
+                                            <ui:Button Icon="{ui:SymbolIcon ArrowSort20}" Appearance="Transparent" Padding="8" ToolTip="정렬"/>
+                                            <Slider x:Name="OneDriveMediaZoomSlider" Width="100" Minimum="80" Maximum="200" Value="120"
+                                                    VerticalAlignment="Center" Margin="8,0,0,0" ToolTip="썸네일 크기"/>
+                                        </StackPanel>
+                                    </Grid>
+
+                                    <!-- 모든 사진 섹션 -->
+                                    <TextBlock Text="모든 사진" FontSize="14" FontWeight="SemiBold"
+                                               Foreground="{DynamicResource TextFillColorPrimaryBrush}"
+                                               Margin="0,0,0,12"/>
+
+                                    <!-- 날짜별 그룹화된 미디어 -->
+                                    <ItemsControl x:Name="OneDriveMediaItemsControl">
+                                        <ItemsControl.ItemTemplate>
+                                            <DataTemplate>
+                                                <StackPanel Margin="0,0,0,24">
+                                                    <!-- 날짜 헤더 -->
+                                                    <TextBlock Text="{Binding DateHeader}" FontSize="13" FontWeight="SemiBold"
+                                                               Foreground="{DynamicResource AccentFillColorDefaultBrush}"
+                                                               Margin="0,0,0,12"/>
+
+                                                    <!-- 썸네일 그리드 -->
+                                                    <ItemsControl ItemsSource="{Binding Items}">
+                                                        <ItemsControl.ItemsPanel>
+                                                            <ItemsPanelTemplate>
+                                                                <WrapPanel/>
+                                                            </ItemsPanelTemplate>
+                                                        </ItemsControl.ItemsPanel>
+                                                        <ItemsControl.ItemTemplate>
+                                                            <DataTemplate>
+                                                                <Border Width="120" Height="120" Margin="4"
+                                                                        Background="{DynamicResource ControlFillColorDefaultBrush}"
+                                                                        CornerRadius="4" Cursor="Hand"
+                                                                        MouseLeftButtonDown="OneDriveMediaItem_Click"
+                                                                        Tag="{Binding}">
+                                                                    <Grid>
+                                                                        <!-- 썸네일 이미지 또는 플레이스홀더 -->
+                                                                        <Image Source="{Binding ThumbnailUrl, TargetNullValue={x:Null}}"
+                                                                               Stretch="UniformToFill"
+                                                                               HorizontalAlignment="Center"
+                                                                               VerticalAlignment="Center"/>
+                                                                        <!-- 이미지 없을 때 아이콘 표시 -->
+                                                                        <ui:SymbolIcon Symbol="Image24" FontSize="32"
+                                                                                       Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                                                                                       HorizontalAlignment="Center" VerticalAlignment="Center"
+                                                                                       Visibility="{Binding HasThumbnail, Converter={StaticResource BoolToVisibilityConverter}, ConverterParameter=Invert}"/>
+                                                                        <!-- 파일명 오버레이 -->
+                                                                        <Border VerticalAlignment="Bottom"
+                                                                                Background="#80000000" Padding="6,4">
+                                                                            <TextBlock Text="{Binding Name}" FontSize="10"
+                                                                                       Foreground="White" TextTrimming="CharacterEllipsis"/>
+                                                                        </Border>
+                                                                        <!-- 비디오 아이콘 -->
+                                                                        <ui:SymbolIcon Symbol="Play24" FontSize="24"
+                                                                                       Foreground="White"
+                                                                                       HorizontalAlignment="Center" VerticalAlignment="Center"
+                                                                                       Visibility="{Binding IsVideo, Converter={StaticResource BoolToVisibilityConverter}}">
+                                                                            <ui:SymbolIcon.Effect>
+                                                                                <DropShadowEffect ShadowDepth="0" BlurRadius="4" Color="Black"/>
+                                                                            </ui:SymbolIcon.Effect>
+                                                                        </ui:SymbolIcon>
+                                                                    </Grid>
+                                                                </Border>
+                                                            </DataTemplate>
+                                                        </ItemsControl.ItemTemplate>
+                                                    </ItemsControl>
+                                                </StackPanel>
+                                            </DataTemplate>
+                                        </ItemsControl.ItemTemplate>
+                                    </ItemsControl>
+                                </StackPanel>
+                            </ScrollViewer>
+
+                        <!-- 로딩 인디케이터 -->
+                        <Border x:Name="OneDriveLoadingOverlay" Visibility="Collapsed"
+                                Background="{DynamicResource ApplicationBackgroundBrush}">
+                            <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center">
+                                <ui:ProgressRing IsIndeterminate="True" Width="48" Height="48"/>
+                                <TextBlock Text="로딩 중..." FontSize="13"
+                                           Foreground="{DynamicResource TextFillColorPrimaryBrush}"
+                                           HorizontalAlignment="Center" Margin="0,12,0,0"/>
+                            </StackPanel>
+                        </Border>
+                    </Grid>
+
+                    <!-- ========== 휴지통 뷰 (Teams 스타일) - Row 2~3 영역 덮음 ========== -->
+                    <Border x:Name="OneDriveTrashView" Grid.Row="2" Grid.RowSpan="2"
+                            Visibility="Collapsed"
+                            Background="{DynamicResource ApplicationBackgroundBrush}">
+                        <Grid>
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto"/>
+                                <RowDefinition Height="Auto"/>
+                                <RowDefinition Height="*"/>
+                            </Grid.RowDefinitions>
+
+                            <!-- 헤더 -->
+                            <Border Grid.Row="0" Padding="16,12"
+                                    BorderBrush="{DynamicResource ControlElevationBorderBrush}" BorderThickness="0,0,0,1">
+                                <Grid>
+                                    <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                                        <ui:SymbolIcon Symbol="Delete24" FontSize="20" Margin="0,0,10,0"
+                                                       Foreground="{DynamicResource TextFillColorPrimaryBrush}"/>
+                                        <TextBlock Text="휴지통" FontSize="18" FontWeight="SemiBold"
+                                                   Foreground="{DynamicResource TextFillColorPrimaryBrush}"/>
+                                    </StackPanel>
+                                    <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Center">
+                                        <ui:Button x:Name="OneDriveTrashRestoreAllBtn" Content="모두 복원"
+                                                   Appearance="Secondary" Margin="0,0,8,0"
+                                                   Click="OneDriveTrashRestoreAll_Click"/>
+                                        <ui:Button x:Name="OneDriveTrashEmptyBtn" Content="휴지통 비우기"
+                                                   Appearance="Danger"
+                                                   Click="OneDriveTrashEmpty_Click"/>
+                                    </StackPanel>
+                                </Grid>
+                            </Border>
+
+                            <!-- 안내 메시지 -->
+                            <Border Grid.Row="1" Padding="16,8"
+                                    Background="{DynamicResource ControlFillColorDefaultBrush}">
+                                <TextBlock Text="삭제된 항목은 93일 동안 휴지통에 보관됩니다. 이후 자동으로 영구 삭제됩니다."
+                                           FontSize="12" Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
+                            </Border>
+
+                            <!-- 휴지통 파일 목록 (Grid + GridSplitter 기반) -->
+                            <Grid Grid.Row="2" x:Name="OneDriveTrashGrid">
+                                <Grid.RowDefinitions>
+                                    <RowDefinition Height="Auto"/>
+                                    <RowDefinition Height="*"/>
+                                </Grid.RowDefinitions>
+
+                                <!-- 컬럼 헤더 -->
+                                <Grid Grid.Row="0" Background="{DynamicResource ApplicationBackgroundBrush}"
+                                      x:Name="OneDriveTrashHeaderGrid">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="3*" MinWidth="150"/>
+                                        <ColumnDefinition Width="Auto"/>
+                                        <ColumnDefinition Width="2*" MinWidth="100"/>
+                                        <ColumnDefinition Width="Auto"/>
+                                        <ColumnDefinition Width="140" MinWidth="100"/>
+                                        <ColumnDefinition Width="Auto"/>
+                                        <ColumnDefinition Width="100" MinWidth="80"/>
+                                        <ColumnDefinition Width="Auto"/>
+                                        <ColumnDefinition Width="80" MinWidth="60"/>
+                                        <ColumnDefinition Width="Auto"/>
+                                        <ColumnDefinition Width="70"/>
+                                    </Grid.ColumnDefinitions>
+                                    <TextBlock Grid.Column="0" Text="이름" Padding="8,8" VerticalAlignment="Center"
+                                               FontSize="12" FontWeight="SemiBold"
+                                               Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
+                                    <GridSplitter Grid.Column="1" Width="1" HorizontalAlignment="Center"
+                                                  Background="{DynamicResource ControlElevationBorderBrush}" Cursor="SizeWE"/>
+                                    <TextBlock Grid.Column="2" Text="원래 위치" Padding="8,8" VerticalAlignment="Center"
+                                               FontSize="12" FontWeight="SemiBold"
+                                               Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
+                                    <GridSplitter Grid.Column="3" Width="1" HorizontalAlignment="Center"
+                                                  Background="{DynamicResource ControlElevationBorderBrush}" Cursor="SizeWE"/>
+                                    <TextBlock Grid.Column="4" Text="삭제 날짜" Padding="8,8" VerticalAlignment="Center"
+                                               FontSize="12" FontWeight="SemiBold"
+                                               Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
+                                    <GridSplitter Grid.Column="5" Width="1" HorizontalAlignment="Center"
+                                                  Background="{DynamicResource ControlElevationBorderBrush}" Cursor="SizeWE"/>
+                                    <TextBlock Grid.Column="6" Text="삭제한 사용자" Padding="8,8" VerticalAlignment="Center"
+                                               FontSize="12" FontWeight="SemiBold"
+                                               Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
+                                    <GridSplitter Grid.Column="7" Width="1" HorizontalAlignment="Center"
+                                                  Background="{DynamicResource ControlElevationBorderBrush}" Cursor="SizeWE"/>
+                                    <TextBlock Grid.Column="8" Text="크기" Padding="8,8" VerticalAlignment="Center"
+                                               FontSize="12" FontWeight="SemiBold" HorizontalAlignment="Right"
+                                               Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
+                                    <GridSplitter Grid.Column="9" Width="1" HorizontalAlignment="Center"
+                                                  Background="{DynamicResource ControlElevationBorderBrush}" Cursor="SizeWE"/>
+                                </Grid>
+
+                                <!-- 데이터 행 목록 -->
+                                <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+                                    <ItemsControl x:Name="OneDriveTrashListView" ItemsSource="{Binding TrashItems}">
+                                        <ItemsControl.ItemTemplate>
+                                            <DataTemplate>
+                                                <Border x:Name="RowBorder" Background="Transparent" MinHeight="32"
+                                                        BorderBrush="{DynamicResource ControlElevationBorderBrush}"
+                                                        BorderThickness="0,0,0,0">
+                                                    <Grid>
+                                                        <Grid.ColumnDefinitions>
+                                                            <ColumnDefinition Width="{Binding ColumnDefinitions[0].Width, ElementName=OneDriveTrashHeaderGrid}"/>
+                                                            <ColumnDefinition Width="1"/>
+                                                            <ColumnDefinition Width="{Binding ColumnDefinitions[2].Width, ElementName=OneDriveTrashHeaderGrid}"/>
+                                                            <ColumnDefinition Width="1"/>
+                                                            <ColumnDefinition Width="{Binding ColumnDefinitions[4].Width, ElementName=OneDriveTrashHeaderGrid}"/>
+                                                            <ColumnDefinition Width="1"/>
+                                                            <ColumnDefinition Width="{Binding ColumnDefinitions[6].Width, ElementName=OneDriveTrashHeaderGrid}"/>
+                                                            <ColumnDefinition Width="1"/>
+                                                            <ColumnDefinition Width="{Binding ColumnDefinitions[8].Width, ElementName=OneDriveTrashHeaderGrid}"/>
+                                                            <ColumnDefinition Width="1"/>
+                                                            <ColumnDefinition Width="70"/>
+                                                        </Grid.ColumnDefinitions>
+                                                        <!-- 이름 -->
+                                                        <StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center" Margin="8,0">
+                                                            <Grid Width="20" Height="20" Margin="0,0,8,0">
+                                                                <ui:SymbolIcon Symbol="Folder24" FontSize="16" Foreground="#FFB900"
+                                                                               Visibility="{Binding IsFolder, Converter={StaticResource BoolToVisibilityConverter}}"/>
+                                                                <ui:SymbolIcon Symbol="Document24" FontSize="16"
+                                                                               Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                                                                               Visibility="{Binding IsFolder, Converter={StaticResource BoolToVisibilityConverter}, ConverterParameter=Invert}"/>
+                                                            </Grid>
+                                                            <TextBlock Text="{Binding LeafName}" VerticalAlignment="Center"
+                                                                       Foreground="{DynamicResource TextFillColorPrimaryBrush}"
+                                                                       TextTrimming="CharacterEllipsis"/>
+                                                        </StackPanel>
+                                                        <!-- 원래 위치 -->
+                                                        <TextBlock Grid.Column="2" Text="{Binding DirName}" Margin="8,0"
+                                                                   VerticalAlignment="Center" TextTrimming="CharacterEllipsis"
+                                                                   Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
+                                                        <!-- 삭제 날짜 -->
+                                                        <TextBlock Grid.Column="4" Text="{Binding DeletedDateDisplay}" Margin="8,0"
+                                                                   VerticalAlignment="Center"
+                                                                   Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
+                                                        <!-- 삭제한 사용자 -->
+                                                        <TextBlock Grid.Column="6" Text="{Binding DeletedByName}" Margin="8,0"
+                                                                   VerticalAlignment="Center"
+                                                                   Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
+                                                        <!-- 크기 -->
+                                                        <TextBlock Grid.Column="8" Text="{Binding SizeDisplay}" Margin="8,0"
+                                                                   VerticalAlignment="Center" HorizontalAlignment="Right"
+                                                                   Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
+                                                        <!-- 액션 버튼 -->
+                                                        <StackPanel Grid.Column="10" Orientation="Horizontal" VerticalAlignment="Center" Margin="4,0">
+                                                            <ui:Button ToolTip="복원" Appearance="Secondary"
+                                                                       Padding="4" Margin="0,0,4,0"
+                                                                       Tag="{Binding}"
+                                                                       Click="OneDriveTrashRestore_Click">
+                                                                <ui:SymbolIcon Symbol="ArrowUndo24" FontSize="14"/>
+                                                            </ui:Button>
+                                                            <ui:Button ToolTip="영구 삭제" Appearance="Danger"
+                                                                       Padding="4"
+                                                                       Tag="{Binding}"
+                                                                       Click="OneDriveTrashDelete_Click">
+                                                                <ui:SymbolIcon Symbol="Delete24" FontSize="14"/>
+                                                            </ui:Button>
+                                                        </StackPanel>
+                                                    </Grid>
+                                                </Border>
+                                                <DataTemplate.Triggers>
+                                                    <Trigger Property="IsMouseOver" Value="True">
+                                                        <Setter TargetName="RowBorder" Property="Background" Value="#19FFFFFF"/>
+                                                    </Trigger>
+                                                </DataTemplate.Triggers>
+                                            </DataTemplate>
+                                        </ItemsControl.ItemTemplate>
+                                    </ItemsControl>
+                                </ScrollViewer>
+                            </Grid>
+
+                            <!-- 빈 상태 -->
+                            <StackPanel x:Name="OneDriveTrashEmptyState" Grid.Row="2"
+                                        VerticalAlignment="Center" HorizontalAlignment="Center"
+                                        Visibility="{Binding TrashItems.Count, Converter={StaticResource CountToVisibilityConverter}, ConverterParameter=Invert}">
+                                <ui:SymbolIcon Symbol="Delete24" FontSize="48"
+                                               Foreground="{DynamicResource TextFillColorTertiaryBrush}"
+                                               HorizontalAlignment="Center"/>
+                                <TextBlock Text="휴지통이 비어 있습니다" FontSize="16" FontWeight="SemiBold"
+                                           Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                                           HorizontalAlignment="Center" Margin="0,12,0,4"/>
+                                <TextBlock Text="삭제된 파일이 여기에 표시됩니다"
+                                           FontSize="13" Foreground="{DynamicResource TextFillColorTertiaryBrush}"
+                                           HorizontalAlignment="Center"/>
+                            </StackPanel>
+                        </Grid>
                     </Border>
                 </Grid>
             </Grid>
@@ -5557,8 +6383,102 @@
                     <RowDefinition Height="*"/>
                 </Grid.RowDefinitions>
 
+                <!-- ========== OneDrive 사이드 패널 (OneDrive 탭 활성 시 표시) ========== -->
+                <Border x:Name="OneDriveSidePanel" Grid.Row="0" Grid.RowSpan="2"
+                        Visibility="Collapsed">
+                    <ScrollViewer VerticalScrollBarVisibility="Auto" Padding="16,12">
+                        <StackPanel>
+                            <!-- 다음으로 파일 찾아보기 -->
+                            <Expander x:Name="OneDriveRightFindByExpander"
+                                      IsExpanded="True"
+                                      Padding="0"
+                                      Margin="0,0,0,20">
+                                <Expander.Header>
+                                    <TextBlock Text="다음으로 파일 찾아보기" FontSize="13" FontWeight="SemiBold"
+                                               Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
+                                </Expander.Header>
+                                <StackPanel Margin="0,8,0,0">
+                                    <!-- 사람 -->
+                                    <ui:Button x:Name="OneDriveRightFindByPeople"
+                                               Content="사람"
+                                               Icon="{ui:SymbolIcon Person20}"
+                                               Appearance="Transparent"
+                                               HorizontalAlignment="Stretch"
+                                               HorizontalContentAlignment="Left"
+                                               Padding="10,8"
+                                               Click="OneDriveFindBy_Click"
+                                               Tag="people"/>
+                                    <!-- 모임 -->
+                                    <ui:Button x:Name="OneDriveRightFindByMeetings"
+                                               Content="모임"
+                                               Icon="{ui:SymbolIcon CalendarLtr20}"
+                                               Appearance="Transparent"
+                                               HorizontalAlignment="Stretch"
+                                               HorizontalContentAlignment="Left"
+                                               Padding="10,8"
+                                               Click="OneDriveFindBy_Click"
+                                               Tag="meetings"/>
+                                    <!-- 미디어 -->
+                                    <ui:Button x:Name="OneDriveRightFindByMedia"
+                                               Content="미디어"
+                                               Icon="{ui:SymbolIcon Image20}"
+                                               Appearance="Transparent"
+                                               HorizontalAlignment="Stretch"
+                                               HorizontalContentAlignment="Left"
+                                               Padding="10,8"
+                                               Click="OneDriveFindBy_Click"
+                                               Tag="media"/>
+                                </StackPanel>
+                            </Expander>
+
+                            <!-- 빠른 액세스 (최근 접근 파일) -->
+                            <StackPanel>
+                                <TextBlock Text="빠른 액세스" FontSize="13" FontWeight="SemiBold"
+                                           Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                                           Margin="0,0,0,12"/>
+                                <ItemsControl x:Name="OneDriveQuickAccessList">
+                                    <ItemsControl.ItemTemplate>
+                                        <DataTemplate>
+                                            <ui:Button Appearance="Transparent"
+                                                       HorizontalAlignment="Stretch"
+                                                       HorizontalContentAlignment="Left"
+                                                       Padding="8,10"
+                                                       Margin="0,2"
+                                                       Click="OneDriveQuickAccess_Click"
+                                                       Tag="{Binding}">
+                                                <StackPanel Orientation="Horizontal">
+                                                    <!-- 파일 타입에 따른 아이콘 -->
+                                                    <Border Width="32" Height="32" Margin="0,0,12,0"
+                                                            Background="{Binding IconBackground}"
+                                                            CornerRadius="4">
+                                                        <TextBlock Text="{Binding IconText}"
+                                                                   FontSize="11" FontWeight="Bold"
+                                                                   Foreground="White"
+                                                                   HorizontalAlignment="Center"
+                                                                   VerticalAlignment="Center"/>
+                                                    </Border>
+                                                    <StackPanel VerticalAlignment="Center">
+                                                        <TextBlock Text="{Binding Name}" FontSize="13"
+                                                                   Foreground="{DynamicResource TextFillColorPrimaryBrush}"
+                                                                   TextTrimming="CharacterEllipsis"
+                                                                   MaxWidth="200"/>
+                                                        <TextBlock Text="{Binding Description}" FontSize="11"
+                                                                   Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                                                                   TextTrimming="CharacterEllipsis"
+                                                                   MaxWidth="200"/>
+                                                    </StackPanel>
+                                                </StackPanel>
+                                            </ui:Button>
+                                        </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
+                            </StackPanel>
+                        </StackPanel>
+                    </ScrollViewer>
+                </Border>
+
                 <!-- AI 패널 헤더 -->
-                <Border Grid.Row="0"
+                <Border x:Name="AIPanelHeader" Grid.Row="0"
                         Padding="16,12"
                         BorderBrush="{DynamicResource ControlElevationBorderBrush}"
                         BorderThickness="0,0,0,1">
@@ -5589,7 +6509,7 @@
                 </Border>
 
                 <!-- AI 분석 내용 -->
-                <ScrollViewer Grid.Row="1"
+                <ScrollViewer x:Name="AIPanelContent" Grid.Row="1"
                               Padding="16"
                               VerticalScrollBarVisibility="Auto">
                     <StackPanel Visibility="{Binding SelectedEmail, Converter={StaticResource NullToVisibilityConverter}}">

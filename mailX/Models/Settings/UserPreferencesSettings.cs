@@ -144,4 +144,34 @@ public class UserPreferencesSettings
     /// </summary>
     [XmlElement("ChatSyncIntervalSeconds")]
     public int ChatSyncIntervalSeconds { get; set; } = 120;
+
+    /// <summary>
+    /// 창 위치 X (Left)
+    /// </summary>
+    [XmlElement("WindowLeft")]
+    public double? WindowLeft { get; set; }
+
+    /// <summary>
+    /// 창 위치 Y (Top)
+    /// </summary>
+    [XmlElement("WindowTop")]
+    public double? WindowTop { get; set; }
+
+    /// <summary>
+    /// 창 너비
+    /// </summary>
+    [XmlElement("WindowWidth")]
+    public double? WindowWidth { get; set; }
+
+    /// <summary>
+    /// 창 높이
+    /// </summary>
+    [XmlElement("WindowHeight")]
+    public double? WindowHeight { get; set; }
+
+    /// <summary>
+    /// 창 상태 ("Normal", "Maximized")
+    /// </summary>
+    [XmlElement("WindowState")]
+    public string? WindowState { get; set; }
 }

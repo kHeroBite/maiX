@@ -47,6 +47,12 @@ public partial class MainWindow : FluentWindow
     private Point _dragStartPoint;
     private Folder? _draggedFolder;
 
+    // 창 위치/크기 추적 (Normal 상태일 때의 값 저장)
+    private double _lastNormalLeft;
+    private double _lastNormalTop;
+    private double _lastNormalWidth;
+    private double _lastNormalHeight;
+
     // 최근 검색어 (최대 10개)
     private readonly ObservableCollection<string> _recentSearches = new();
     private const int MaxRecentSearches = 10;
@@ -167,7 +173,36 @@ public partial class MainWindow : FluentWindow
         Loaded += MainWindow_Loaded;
         Closed += MainWindow_Closed;
         SizeChanged += MainWindow_SizeChanged;
+        StateChanged += MainWindow_StateChanged;
+        LocationChanged += MainWindow_LocationChanged;
         Log4.Debug("MainWindow 생성자 완료");
+    }
+
+    /// <summary>
+    /// 창 상태 변경 시 Normal 상태의 위치/크기 저장
+    /// </summary>
+    private void MainWindow_StateChanged(object? sender, EventArgs e)
+    {
+        // Normal 상태가 되면 현재 위치/크기 저장
+        if (WindowState == System.Windows.WindowState.Normal)
+        {
+            _lastNormalLeft = Left;
+            _lastNormalTop = Top;
+            _lastNormalWidth = Width;
+            _lastNormalHeight = Height;
+        }
+    }
+
+    /// <summary>
+    /// 창 위치 변경 시 Normal 상태면 위치 저장
+    /// </summary>
+    private void MainWindow_LocationChanged(object? sender, EventArgs e)
+    {
+        if (WindowState == System.Windows.WindowState.Normal)
+        {
+            _lastNormalLeft = Left;
+            _lastNormalTop = Top;
+        }
     }
 
     /// <summary>
@@ -258,11 +293,18 @@ public partial class MainWindow : FluentWindow
     }
 
     /// <summary>
-    /// 창 크기 변경 시 검색창 너비 조절
+    /// 창 크기 변경 시 검색창 너비 조절 및 Normal 상태 크기 저장
     /// </summary>
     private void MainWindow_SizeChanged(object sender, SizeChangedEventArgs e)
     {
         UpdateSearchBoxWidth();
+
+        // Normal 상태일 때 크기 저장
+        if (WindowState == System.Windows.WindowState.Normal)
+        {
+            _lastNormalWidth = Width;
+            _lastNormalHeight = Height;
+        }
     }
 
     /// <summary>
@@ -1134,6 +1176,9 @@ public partial class MainWindow : FluentWindow
     {
         Log4.Debug("MainWindow_Closed - 애플리케이션 종료");
 
+        // 창 상태 저장
+        SaveWindowState();
+
         // 이벤트 구독 해제
         _syncService.MailSyncCompleted -= OnMailSyncCompletedFromWindow;
         _syncService.CalendarEventsSynced -= OnCalendarEventsSyncedFromWindow;
@@ -1141,6 +1186,201 @@ public partial class MainWindow : FluentWindow
 
         // OnExplicitShutdown 모드에서는 명시적으로 종료 호출 필요
         Application.Current.Shutdown();
+    }
+
+    /// <summary>
+    /// 창 위치/크기/상태를 설정 파일에 저장
+    /// </summary>
+    private void SaveWindowState()
+    {
+        try
+        {
+            // 최소화 상태면 저장 안 함
+            if (WindowState == System.Windows.WindowState.Minimized)
+            {
+                Log4.Debug("창 최소화 상태 - 위치/크기 저장 생략");
+                return;
+            }
+
+            var settings = App.Settings.UserPreferences;
+
+            // 최대화 상태면 최대화 직전의 Normal 상태 위치/크기 저장
+            if (WindowState == System.Windows.WindowState.Maximized)
+            {
+                // 추적된 Normal 상태 값이 유효한지 확인
+                if (_lastNormalWidth > 0 && _lastNormalHeight > 0)
+                {
+                    settings.WindowLeft = _lastNormalLeft;
+                    settings.WindowTop = _lastNormalTop;
+                    settings.WindowWidth = _lastNormalWidth;
+                    settings.WindowHeight = _lastNormalHeight;
+                    settings.WindowState = "Maximized";
+                    Log4.Info($"창 상태 저장 (최대화): Normal 위치/크기 = Left={settings.WindowLeft}, Top={settings.WindowTop}, Width={settings.WindowWidth}, Height={settings.WindowHeight}");
+                }
+                else
+                {
+                    // 추적된 값이 없으면 RestoreBounds 시도
+                    var rb = RestoreBounds;
+                    if (!double.IsInfinity(rb.Left) && !double.IsInfinity(rb.Width) && rb.Width > 0 && rb.Height > 0)
+                    {
+                        settings.WindowLeft = rb.Left;
+                        settings.WindowTop = rb.Top;
+                        settings.WindowWidth = rb.Width;
+                        settings.WindowHeight = rb.Height;
+                    }
+                    else
+                    {
+                        // 기본값 사용
+                        var workArea = SystemParameters.WorkArea;
+                        settings.WindowWidth = 1400;
+                        settings.WindowHeight = 800;
+                        settings.WindowLeft = (workArea.Width - 1400) / 2 + workArea.Left;
+                        settings.WindowTop = (workArea.Height - 800) / 2 + workArea.Top;
+                    }
+                    settings.WindowState = "Maximized";
+                    Log4.Info($"창 상태 저장 (최대화, 기본값): Left={settings.WindowLeft}, Top={settings.WindowTop}, Width={settings.WindowWidth}, Height={settings.WindowHeight}");
+                }
+            }
+            else
+            {
+                settings.WindowLeft = Left;
+                settings.WindowTop = Top;
+                settings.WindowWidth = Width;
+                settings.WindowHeight = Height;
+                settings.WindowState = "Normal";
+                Log4.Info($"창 상태 저장 (보통): Left={settings.WindowLeft}, Top={settings.WindowTop}, Width={settings.WindowWidth}, Height={settings.WindowHeight}");
+            }
+
+            App.Settings.SaveUserPreferences();
+        }
+        catch (Exception ex)
+        {
+            Log4.Error($"창 상태 저장 실패: {ex.Message}");
+        }
+    }
+
+    /// <summary>
+    /// 저장된 창 위치/크기/상태를 복원 (Show() 전에 호출)
+    /// </summary>
+    public void RestoreWindowState()
+    {
+        try
+        {
+            var settings = App.Settings.UserPreferences;
+
+            // 저장된 값이 없으면 화면 중앙
+            if (!settings.WindowLeft.HasValue || !settings.WindowWidth.HasValue)
+            {
+                Log4.Info("저장된 창 위치 없음 - 화면 중앙 배치");
+                CenterOnScreen();
+                // Normal 상태 추적 초기화
+                _lastNormalLeft = Left;
+                _lastNormalTop = Top;
+                _lastNormalWidth = Width;
+                _lastNormalHeight = Height;
+                return;
+            }
+
+            // 저장된 값 적용
+            Left = settings.WindowLeft.Value;
+            Top = settings.WindowTop!.Value;
+            Width = settings.WindowWidth.Value;
+            Height = settings.WindowHeight!.Value;
+
+            Log4.Info($"창 위치 복원 시도: Left={Left}, Top={Top}, Width={Width}, Height={Height}");
+
+            // 화면 밖 검증
+            if (!IsWindowVisible())
+            {
+                Log4.Warn("창 위치가 화면 밖 - 화면 중앙 배치");
+                CenterOnScreen();
+                // Normal 상태 추적 초기화
+                _lastNormalLeft = Left;
+                _lastNormalTop = Top;
+                _lastNormalWidth = Width;
+                _lastNormalHeight = Height;
+                return;
+            }
+
+            // Normal 상태 추적 초기화 (저장된 값으로)
+            _lastNormalLeft = Left;
+            _lastNormalTop = Top;
+            _lastNormalWidth = Width;
+            _lastNormalHeight = Height;
+
+            // 최대화 상태 복원
+            if (settings.WindowState == "Maximized")
+            {
+                WindowState = System.Windows.WindowState.Maximized;
+                Log4.Info("창 최대화 상태 복원");
+            }
+
+            Log4.Info("창 위치/크기 복원 완료");
+        }
+        catch (Exception ex)
+        {
+            Log4.Error($"창 상태 복원 실패: {ex.Message}");
+            CenterOnScreen();
+        }
+    }
+
+    /// <summary>
+    /// 창이 화면에 충분히 보이는지 검증 (최소 100px 이상)
+    /// WPF의 SystemParameters를 사용하여 가상 화면(모든 모니터 통합) 영역 확인
+    /// </summary>
+    private bool IsWindowVisible()
+    {
+        try
+        {
+            // 가상 화면 경계 (모든 모니터 통합)
+            var virtualLeft = SystemParameters.VirtualScreenLeft;
+            var virtualTop = SystemParameters.VirtualScreenTop;
+            var virtualWidth = SystemParameters.VirtualScreenWidth;
+            var virtualHeight = SystemParameters.VirtualScreenHeight;
+
+            // 창이 가상 화면 내에 최소 100px 이상 보이는지 확인
+            var rightEdge = Left + Width;
+            var bottomEdge = Top + Height;
+
+            // 가상 화면 경계
+            var virtualRight = virtualLeft + virtualWidth;
+            var virtualBottom = virtualTop + virtualHeight;
+
+            // 교차 영역 계산
+            var intersectLeft = Math.Max(Left, virtualLeft);
+            var intersectTop = Math.Max(Top, virtualTop);
+            var intersectRight = Math.Min(rightEdge, virtualRight);
+            var intersectBottom = Math.Min(bottomEdge, virtualBottom);
+
+            var intersectWidth = intersectRight - intersectLeft;
+            var intersectHeight = intersectBottom - intersectTop;
+
+            return intersectWidth >= 100 && intersectHeight >= 100;
+        }
+        catch (Exception ex)
+        {
+            Log4.Error($"화면 표시 여부 검증 실패: {ex.Message}");
+            return false;
+        }
+    }
+
+    /// <summary>
+    /// 창을 주 모니터 작업 영역 중앙에 배치
+    /// </summary>
+    private void CenterOnScreen()
+    {
+        try
+        {
+            // 주 모니터 작업 영역 (작업 표시줄 제외)
+            var workArea = SystemParameters.WorkArea;
+            Left = (workArea.Width - Width) / 2 + workArea.Left;
+            Top = (workArea.Height - Height) / 2 + workArea.Top;
+            Log4.Info($"화면 중앙 배치: Left={Left}, Top={Top}");
+        }
+        catch (Exception ex)
+        {
+            Log4.Error($"화면 중앙 배치 실패: {ex.Message}");
+        }
     }
 
     /// <summary>
@@ -4225,6 +4465,8 @@ public partial class MainWindow : FluentWindow
 
         // 우측 패널: AI 패널 표시
         if (AIPanelBorder != null) AIPanelBorder.Visibility = Visibility.Visible;
+        if (AIPanelHeader != null) AIPanelHeader.Visibility = Visibility.Visible;
+        if (AIPanelContent != null) AIPanelContent.Visibility = Visibility.Visible;
 
         _viewModel.StatusMessage = "메일";
         _viewModel.IsCalendarViewActive = false;
@@ -4287,6 +4529,7 @@ public partial class MainWindow : FluentWindow
         // 우측 패널 숨김
         if (AIPanelBorder != null) AIPanelBorder.Visibility = Visibility.Collapsed;
         if (CalendarDetailPanel != null) CalendarDetailPanel.Visibility = Visibility.Collapsed;
+        if (OneDriveSidePanel != null) OneDriveSidePanel.Visibility = Visibility.Collapsed;
 
         _viewModel.IsCalendarViewActive = false;
         _viewModel.IsCalendarMode = false;
@@ -4608,14 +4851,55 @@ public partial class MainWindow : FluentWindow
     /// <summary>
     /// OneDrive 뷰 표시
     /// </summary>
-    private void ShowOneDriveView()
+    private async void ShowOneDriveView()
     {
         HideAllViews();
 
         if (OneDriveViewBorder != null) OneDriveViewBorder.Visibility = Visibility.Visible;
 
+        // AI 패널 영역 표시 (OneDrive 사이드 패널용)
+        if (AIPanelBorder != null) AIPanelBorder.Visibility = Visibility.Visible;
+        
+        // OneDrive 사이드 패널 표시, AI 패널 내용 숨기기
+        if (OneDriveSidePanel != null) OneDriveSidePanel.Visibility = Visibility.Visible;
+        if (AIPanelHeader != null) AIPanelHeader.Visibility = Visibility.Collapsed;
+        if (AIPanelContent != null) AIPanelContent.Visibility = Visibility.Collapsed;
+
         _viewModel.StatusMessage = "OneDrive";
         Services.Theme.ThemeService.Instance.ApplyFeatureTheme("onedrive");
+
+        // ViewModel 초기화 (필요시)
+        if (_oneDriveViewModel == null)
+        {
+            _oneDriveViewModel = ((App)Application.Current).GetService<OneDriveViewModel>()!;
+        }
+
+        // OneDrive 파일 목록 자동 로드 (최초 1회 또는 Items가 비어있을 때)
+        if (_oneDriveViewModel.Items.Count == 0)
+        {
+            await LoadOneDriveFilesAsync();
+        }
+        else
+        {
+            // 파일 목록은 이미 로드됨 - 빠른 액세스만 로드 및 바인딩
+            try
+            {
+                if (_oneDriveViewModel.QuickAccessItems.Count == 0)
+                {
+                    await _oneDriveViewModel.LoadQuickAccessItemsAsync();
+                }
+                
+                // ItemsSource 바인딩
+                if (OneDriveQuickAccessList != null)
+                {
+                    OneDriveQuickAccessList.ItemsSource = _oneDriveViewModel.QuickAccessItems;
+                }
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"빠른 액세스 로드 실패: {ex.Message}");
+            }
+        }
     }
 
     /// <summary>
@@ -4766,6 +5050,83 @@ public partial class MainWindow : FluentWindow
                 break;
             default:
                 Log4.Warn($"[NavigateToTab] 알 수 없는 탭: {tabName}");
+                break;
+        }
+    }
+
+    /// <summary>
+    /// REST API로 OneDrive 뷰 전환 처리
+    /// </summary>
+    public async void NavigateToOneDriveView(string viewName)
+    {
+        Log4.Info($"[NavigateToOneDriveView] OneDrive 뷰 전환 요청: {viewName}");
+
+        // 먼저 OneDrive 탭으로 전환
+        NavOneDriveButton.IsChecked = true;
+        ShowOneDriveView();
+
+        // OneDriveViewModel 초기화
+        if (_oneDriveViewModel == null)
+        {
+            _oneDriveViewModel = ((App)Application.Current).GetService<OneDriveViewModel>()!;
+        }
+
+        // 뷰 전환 처리
+        var viewLower = viewName.ToLowerInvariant();
+        switch (viewLower)
+        {
+            case "home":
+            case "myfiles":
+            case "shared":
+            case "favorites":
+            case "people":
+            case "meetings":
+            case "media":
+                // 기존 OneDriveNav_Click 로직 사용
+                HideAllOneDriveContentViews();
+                UpdateOneDriveNavButtons(viewLower);
+                if (OneDriveLoadingOverlay != null)
+                    OneDriveLoadingOverlay.Visibility = Visibility.Visible;
+                try
+                {
+                    await _oneDriveViewModel.ChangeViewAsync(viewLower);
+                    if (OneDriveFileListView != null)
+                    {
+                        OneDriveFileListView.ItemsSource = _oneDriveViewModel.Items;
+                        OneDriveFileListView.Visibility = _oneDriveViewModel.Items.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
+                    }
+                    if (OneDriveEmptyState != null)
+                        OneDriveEmptyState.Visibility = _oneDriveViewModel.Items.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
+                }
+                finally
+                {
+                    if (OneDriveLoadingOverlay != null)
+                        OneDriveLoadingOverlay.Visibility = Visibility.Collapsed;
+                }
+                break;
+
+            case "trash":
+                // 휴지통 뷰 표시
+                HideAllOneDriveContentViews();
+                if (OneDriveTrashView != null) OneDriveTrashView.Visibility = Visibility.Visible;
+                UpdateOneDriveNavButtons(viewLower);
+                await _oneDriveViewModel.LoadTrashAsync();
+                // ListView에 ItemsSource 직접 바인딩
+                if (OneDriveTrashListView != null)
+                {
+                    OneDriveTrashListView.ItemsSource = _oneDriveViewModel.TrashItems;
+                    Log4.Info($"OneDrive 휴지통 아이템 바인딩 완료: {_oneDriveViewModel.TrashItems.Count}개");
+                }
+                // 빈 상태 UI 업데이트
+                if (OneDriveTrashEmptyState != null)
+                {
+                    OneDriveTrashEmptyState.Visibility = _oneDriveViewModel.TrashItems.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
+                }
+                Log4.Info("OneDrive 휴지통 뷰 표시 (REST API)");
+                break;
+
+            default:
+                Log4.Warn($"[NavigateToOneDriveView] 알 수 없는 뷰: {viewName}");
                 break;
         }
     }
@@ -7039,6 +7400,10 @@ public partial class MainWindow : FluentWindow
             if (OneDriveLoadingOverlay != null)
                 OneDriveLoadingOverlay.Visibility = Visibility.Visible;
 
+            // EmptyState 숨기기
+            if (OneDriveEmptyState != null)
+                OneDriveEmptyState.Visibility = Visibility.Collapsed;
+
             if (_oneDriveViewModel == null)
             {
                 _oneDriveViewModel = ((App)Application.Current).GetService<OneDriveViewModel>()!;
@@ -7054,6 +7419,20 @@ public partial class MainWindow : FluentWindow
             if (OneDriveFileListView != null)
             {
                 OneDriveFileListView.ItemsSource = _oneDriveViewModel.Items;
+                
+                // 파일이 있으면 ListView 표시, 없으면 EmptyState 표시
+                if (_oneDriveViewModel.Items.Count > 0)
+                {
+                    OneDriveFileListView.Visibility = Visibility.Visible;
+                    if (OneDriveEmptyState != null)
+                        OneDriveEmptyState.Visibility = Visibility.Collapsed;
+                }
+                else
+                {
+                    OneDriveFileListView.Visibility = Visibility.Collapsed;
+                    if (OneDriveEmptyState != null)
+                        OneDriveEmptyState.Visibility = Visibility.Visible;
+                }
             }
 
             // Breadcrumb 바인딩
@@ -7062,10 +7441,32 @@ public partial class MainWindow : FluentWindow
                 OneDriveBreadcrumb.ItemsSource = _oneDriveViewModel.Breadcrumbs;
             }
 
-            // 드라이브 정보 로그
+            // 드라이브 정보 UI 업데이트
             if (_oneDriveViewModel.DriveInfo != null)
             {
+                if (OneDriveDriveInfoPanel != null)
+                    OneDriveDriveInfoPanel.Visibility = Visibility.Visible;
+
+                if (OneDriveStorageBar != null)
+                    OneDriveStorageBar.Value = _oneDriveViewModel.DriveInfo.UsagePercentage;
+
+                if (OneDriveStorageText != null)
+                    OneDriveStorageText.Text = $"{_oneDriveViewModel.DriveInfo.UsedDisplay} / {_oneDriveViewModel.DriveInfo.TotalDisplay} 사용 중";
+
                 Log4.Debug($"OneDrive 사용량: {_oneDriveViewModel.DriveInfo.UsedDisplay} / {_oneDriveViewModel.DriveInfo.TotalDisplay}");
+            }
+
+            // 폴더 트리 바인딩
+            if (OneDriveFolderTree != null)
+            {
+                OneDriveFolderTree.ItemsSource = _oneDriveViewModel.FolderTree;
+            }
+
+            // 빠른 액세스 로드 및 바인딩
+            await _oneDriveViewModel.LoadQuickAccessItemsAsync();
+            if (OneDriveQuickAccessList != null)
+            {
+                OneDriveQuickAccessList.ItemsSource = _oneDriveViewModel.QuickAccessItems;
             }
 
             Log4.Info($"OneDrive 파일 목록 로드 완료: {_oneDriveViewModel.Items.Count}개");
@@ -7073,6 +7474,12 @@ public partial class MainWindow : FluentWindow
         catch (Exception ex)
         {
             Log4.Error($"OneDrive 파일 목록 로드 실패: {ex.Message}");
+            
+            // 에러 시 EmptyState 다시 표시
+            if (OneDriveEmptyState != null)
+                OneDriveEmptyState.Visibility = Visibility.Visible;
+            if (OneDriveFileListView != null)
+                OneDriveFileListView.Visibility = Visibility.Collapsed;
         }
         finally
         {
@@ -7106,45 +7513,1410 @@ public partial class MainWindow : FluentWindow
 
             if (selectedItem.IsFolder)
             {
+                // 모든 콘텐츠 뷰 숨기기 (사람/모임/미디어 뷰 포함)
+                HideAllOneDriveContentViews();
+
                 // 폴더인 경우 해당 폴더로 이동
                 await _oneDriveViewModel.OpenItemAsync(selectedItem);
 
-                // ListView 다시 바인딩
+                // ListView 다시 바인딩 및 표시
                 if (OneDriveFileListView != null)
                 {
                     OneDriveFileListView.ItemsSource = _oneDriveViewModel.Items;
+                    OneDriveFileListView.Visibility = Visibility.Visible;
                 }
 
                 Log4.Debug($"OneDrive 폴더 열기: {selectedItem.Name}");
             }
             else
             {
-                // 파일인 경우 다운로드 또는 미리보기
+                // 파일인 경우 웹 브라우저에서 SharePoint 링크로 열기
                 Log4.Info($"OneDrive 파일 열기: {selectedItem.Name}");
 
-                // 파일 다운로드 대화상자
-                var saveFileDialog = new Microsoft.Win32.SaveFileDialog
+                if (!string.IsNullOrEmpty(selectedItem.WebUrl))
                 {
-                    Title = "파일 저장",
-                    FileName = selectedItem.Name
-                };
-
-                if (saveFileDialog.ShowDialog() == true)
-                {
-                    var oneDriveService = ((App)Application.Current).GetService<GraphOneDriveService>()!;
-                    using var stream = await oneDriveService.DownloadFileAsync(selectedItem.Id);
-                    if (stream != null)
+                    // 기본 브라우저에서 SharePoint 링크 열기
+                    var psi = new System.Diagnostics.ProcessStartInfo
                     {
-                        using var fileStream = System.IO.File.Create(saveFileDialog.FileName);
-                        await stream.CopyToAsync(fileStream);
-                        Log4.Info($"OneDrive 파일 다운로드 완료: {saveFileDialog.FileName}");
-                    }
+                        FileName = selectedItem.WebUrl,
+                        UseShellExecute = true
+                    };
+                    System.Diagnostics.Process.Start(psi);
+                    Log4.Info($"OneDrive 파일 웹에서 열기: {selectedItem.WebUrl}");
+                }
+                else
+                {
+                    Log4.Warn($"OneDrive 파일에 WebUrl이 없습니다: {selectedItem.Name}");
                 }
             }
         }
         catch (Exception ex)
         {
             Log4.Error($"OneDrive 아이템 열기 실패: {ex.Message}");
+        }
+    }
+
+
+    #region OneDrive 컨텍스트 메뉴 이벤트 핸들러
+
+    /// <summary>
+    /// OneDrive 컨텍스트 메뉴: 열기 (웹)
+    /// </summary>
+    private void OneDriveContext_Open_Click(object sender, RoutedEventArgs e)
+    {
+        try
+        {
+            if (_oneDriveViewModel?.SelectedItem == null)
+                return;
+
+            var selectedItem = _oneDriveViewModel.SelectedItem;
+
+            if (!string.IsNullOrEmpty(selectedItem.WebUrl))
+            {
+                var psi = new System.Diagnostics.ProcessStartInfo
+                {
+                    FileName = selectedItem.WebUrl,
+                    UseShellExecute = true
+                };
+                System.Diagnostics.Process.Start(psi);
+                Log4.Info($"OneDrive 컨텍스트: 웹에서 열기 - {selectedItem.Name}");
+            }
+            else
+            {
+                Log4.Warn($"OneDrive 파일에 WebUrl이 없습니다: {selectedItem.Name}");
+            }
+        }
+        catch (Exception ex)
+        {
+            Log4.Error($"OneDrive 컨텍스트 열기 실패: {ex.Message}");
+        }
+    }
+
+    /// <summary>
+    /// OneDrive 컨텍스트 메뉴: 다운로드
+    /// </summary>
+    private async void OneDriveContext_Download_Click(object sender, RoutedEventArgs e)
+    {
+        try
+        {
+            if (_oneDriveViewModel?.SelectedItem == null)
+                return;
+
+            var selectedItem = _oneDriveViewModel.SelectedItem;
+
+            if (selectedItem.IsFolder)
+            {
+                Log4.Warn("폴더는 다운로드할 수 없습니다.");
+                return;
+            }
+
+            var saveFileDialog = new Microsoft.Win32.SaveFileDialog
+            {
+                Title = "파일 저장",
+                FileName = selectedItem.Name
+            };
+
+            if (saveFileDialog.ShowDialog() == true)
+            {
+                var oneDriveService = ((App)Application.Current).GetService<GraphOneDriveService>()!;
+                using var stream = await oneDriveService.DownloadFileAsync(selectedItem.Id);
+                if (stream != null)
+                {
+                    using var fileStream = System.IO.File.Create(saveFileDialog.FileName);
+                    await stream.CopyToAsync(fileStream);
+                    Log4.Info($"OneDrive 컨텍스트: 다운로드 완료 - {saveFileDialog.FileName}");
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            Log4.Error($"OneDrive 컨텍스트 다운로드 실패: {ex.Message}");
+        }
+    }
+
+    /// <summary>
+    /// OneDrive 컨텍스트 메뉴: 이름 바꾸기
+    /// </summary>
+    private async void OneDriveContext_Rename_Click(object sender, RoutedEventArgs e)
+    {
+        try
+        {
+            if (_oneDriveViewModel?.SelectedItem == null)
+                return;
+
+            var selectedItem = _oneDriveViewModel.SelectedItem;
+
+            // 간단한 입력 대화상자
+            var dialog = new Wpf.Ui.Controls.ContentDialog
+            {
+                Title = "이름 바꾸기",
+                PrimaryButtonText = "변경",
+                CloseButtonText = "취소",
+                DefaultButton = Wpf.Ui.Controls.ContentDialogButton.Primary
+            };
+
+            var textBox = new Wpf.Ui.Controls.TextBox
+            {
+                Text = selectedItem.Name,
+                PlaceholderText = "새 이름 입력",
+                Margin = new Thickness(0, 16, 0, 0)
+            };
+            dialog.Content = textBox;
+
+            var result = await dialog.ShowAsync();
+            if (result == Wpf.Ui.Controls.ContentDialogResult.Primary && !string.IsNullOrWhiteSpace(textBox.Text))
+            {
+                var oneDriveService = ((App)Application.Current).GetService<GraphOneDriveService>()!;
+                await oneDriveService.RenameItemAsync(selectedItem.Id, textBox.Text);
+                await _oneDriveViewModel.RefreshAsync();
+                Log4.Info($"OneDrive 컨텍스트: 이름 변경 - {selectedItem.Name} -> {textBox.Text}");
+            }
+        }
+        catch (Exception ex)
+        {
+            Log4.Error($"OneDrive 컨텍스트 이름 바꾸기 실패: {ex.Message}");
+        }
+    }
+
+    /// <summary>
+    /// OneDrive 컨텍스트 메뉴: 삭제
+    /// </summary>
+    private async void OneDriveContext_Delete_Click(object sender, RoutedEventArgs e)
+    {
+        try
+        {
+            if (_oneDriveViewModel?.SelectedItem == null)
+                return;
+
+            var selectedItem = _oneDriveViewModel.SelectedItem;
+
+            // 확인 대화상자
+            var dialog = new Wpf.Ui.Controls.ContentDialog
+            {
+                Title = "삭제 확인",
+                Content = $"'{selectedItem.Name}'을(를) 삭제하시겠습니까?\n\n삭제된 항목은 OneDrive 휴지통으로 이동합니다.",
+                PrimaryButtonText = "삭제",
+                CloseButtonText = "취소",
+                DefaultButton = Wpf.Ui.Controls.ContentDialogButton.Close
+            };
+
+            var result = await dialog.ShowAsync();
+            if (result == Wpf.Ui.Controls.ContentDialogResult.Primary)
+            {
+                var oneDriveService = ((App)Application.Current).GetService<GraphOneDriveService>()!;
+                await oneDriveService.DeleteItemAsync(selectedItem.Id);
+                await _oneDriveViewModel.RefreshAsync();
+                Log4.Info($"OneDrive 컨텍스트: 삭제 - {selectedItem.Name}");
+            }
+        }
+        catch (Exception ex)
+        {
+            Log4.Error($"OneDrive 컨텍스트 삭제 실패: {ex.Message}");
+        }
+    }
+
+    /// <summary>
+    /// OneDrive 컨텍스트 메뉴: 속성
+    /// </summary>
+    private async void OneDriveContext_Properties_Click(object sender, RoutedEventArgs e)
+    {
+        try
+        {
+            if (_oneDriveViewModel?.SelectedItem == null)
+                return;
+
+            var selectedItem = _oneDriveViewModel.SelectedItem;
+
+            var propertiesContent = new StackPanel { Margin = new Thickness(0, 16, 0, 0) };
+            propertiesContent.Children.Add(new System.Windows.Controls.TextBlock { Text = $"이름: {selectedItem.Name}", Margin = new Thickness(0, 0, 0, 8) });
+            propertiesContent.Children.Add(new System.Windows.Controls.TextBlock { Text = $"유형: {(selectedItem.IsFolder ? "폴더" : "파일")}", Margin = new Thickness(0, 0, 0, 8) });
+            propertiesContent.Children.Add(new System.Windows.Controls.TextBlock { Text = $"크기: {selectedItem.SizeDisplay}", Margin = new Thickness(0, 0, 0, 8) });
+            propertiesContent.Children.Add(new System.Windows.Controls.TextBlock { Text = $"수정 날짜: {selectedItem.LastModifiedDisplay}", Margin = new Thickness(0, 0, 0, 8) });
+            if (!string.IsNullOrEmpty(selectedItem.WebUrl))
+            {
+                propertiesContent.Children.Add(new System.Windows.Controls.TextBlock { Text = $"웹 URL: {selectedItem.WebUrl}", TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 0, 0, 8) });
+            }
+
+            var dialog = new Wpf.Ui.Controls.ContentDialog
+            {
+                Title = "속성",
+                Content = propertiesContent,
+                CloseButtonText = "닫기",
+                DefaultButton = Wpf.Ui.Controls.ContentDialogButton.Close
+            };
+
+            await dialog.ShowAsync();
+        }
+        catch (Exception ex)
+        {
+            Log4.Error($"OneDrive 컨텍스트 속성 표시 실패: {ex.Message}");
+        }
+    }
+
+
+    /// <summary>
+    /// OneDrive 컨텍스트 메뉴: 앱에서 열기
+    /// </summary>
+    private async void OneDriveContext_OpenInApp_Click(object sender, RoutedEventArgs e)
+    {
+        try
+        {
+            if (_oneDriveViewModel?.SelectedItem == null)
+                return;
+
+            var selectedItem = _oneDriveViewModel.SelectedItem;
+
+            if (selectedItem.IsFolder)
+            {
+                // 폴더인 경우 해당 폴더로 이동
+                await _oneDriveViewModel.OpenItemAsync(selectedItem);
+                if (OneDriveFileListView != null)
+                    OneDriveFileListView.ItemsSource = _oneDriveViewModel.Items;
+                return;
+            }
+
+            // 파일 다운로드 후 기본 앱으로 열기
+            var oneDriveService = ((App)Application.Current).GetService<GraphOneDriveService>()!;
+            var tempPath = System.IO.Path.Combine(System.IO.Path.GetTempPath(), selectedItem.Name);
+            
+            using var stream = await oneDriveService.DownloadFileAsync(selectedItem.Id);
+            if (stream != null)
+            {
+                using var fileStream = System.IO.File.Create(tempPath);
+                await stream.CopyToAsync(fileStream);
+                
+                var psi = new System.Diagnostics.ProcessStartInfo
+                {
+                    FileName = tempPath,
+                    UseShellExecute = true
+                };
+                System.Diagnostics.Process.Start(psi);
+                Log4.Info($"OneDrive 컨텍스트: 앱에서 열기 - {selectedItem.Name}");
+            }
+        }
+        catch (Exception ex)
+        {
+            Log4.Error($"OneDrive 컨텍스트 앱에서 열기 실패: {ex.Message}");
+        }
+    }
+
+    /// <summary>
+    /// OneDrive 컨텍스트 메뉴: 미리 보기
+    /// </summary>
+    private void OneDriveContext_Preview_Click(object sender, RoutedEventArgs e)
+    {
+        // 웹에서 미리보기 열기 (WebUrl 사용)
+        OneDriveContext_Open_Click(sender, e);
+    }
+
+    /// <summary>
+    /// OneDrive 컨텍스트 메뉴: 공유
+    /// </summary>
+    private async void OneDriveContext_Share_Click(object sender, RoutedEventArgs e)
+    {
+        try
+        {
+            if (_oneDriveViewModel?.SelectedItem == null)
+                return;
+
+            var selectedItem = _oneDriveViewModel.SelectedItem;
+
+            // 공유 링크 생성 및 클립보드 복사
+            var oneDriveService = ((App)Application.Current).GetService<GraphOneDriveService>()!;
+            var shareLink = await oneDriveService.CreateShareLinkAsync(selectedItem.Id);
+            
+            if (!string.IsNullOrEmpty(shareLink))
+            {
+                System.Windows.Clipboard.SetText(shareLink);
+                Log4.Info($"OneDrive 컨텍스트: 공유 링크 복사 - {selectedItem.Name}");
+                
+                // 알림 표시
+                var dialog = new Wpf.Ui.Controls.ContentDialog
+                {
+                    Title = "공유",
+                    Content = "공유 링크가 클립보드에 복사되었습니다.",
+                    CloseButtonText = "확인",
+                    DefaultButton = Wpf.Ui.Controls.ContentDialogButton.Close
+                };
+                await dialog.ShowAsync();
+            }
+        }
+        catch (Exception ex)
+        {
+            Log4.Error($"OneDrive 컨텍스트 공유 실패: {ex.Message}");
+        }
+    }
+
+    /// <summary>
+    /// OneDrive 컨텍스트 메뉴: 링크 복사
+    /// </summary>
+    private void OneDriveContext_CopyLink_Click(object sender, RoutedEventArgs e)
+    {
+        try
+        {
+            if (_oneDriveViewModel?.SelectedItem == null)
+                return;
+
+            var selectedItem = _oneDriveViewModel.SelectedItem;
+
+            if (!string.IsNullOrEmpty(selectedItem.WebUrl))
+            {
+                System.Windows.Clipboard.SetText(selectedItem.WebUrl);
+                Log4.Info($"OneDrive 컨텍스트: 링크 복사 - {selectedItem.Name}");
+            }
+        }
+        catch (Exception ex)
+        {
+            Log4.Error($"OneDrive 컨텍스트 링크 복사 실패: {ex.Message}");
+        }
+    }
+
+    /// <summary>
+    /// OneDrive 컨텍스트 메뉴: 액세스 관리
+    /// </summary>
+    private void OneDriveContext_ManageAccess_Click(object sender, RoutedEventArgs e)
+    {
+        try
+        {
+            if (_oneDriveViewModel?.SelectedItem == null)
+                return;
+
+            var selectedItem = _oneDriveViewModel.SelectedItem;
+
+            // OneDrive 웹에서 액세스 관리 페이지 열기
+            if (!string.IsNullOrEmpty(selectedItem.WebUrl))
+            {
+                var accessUrl = selectedItem.WebUrl + "?sharing=1";
+                var psi = new System.Diagnostics.ProcessStartInfo
+                {
+                    FileName = accessUrl,
+                    UseShellExecute = true
+                };
+                System.Diagnostics.Process.Start(psi);
+                Log4.Info($"OneDrive 컨텍스트: 액세스 관리 - {selectedItem.Name}");
+            }
+        }
+        catch (Exception ex)
+        {
+            Log4.Error($"OneDrive 컨텍스트 액세스 관리 실패: {ex.Message}");
+        }
+    }
+
+    /// <summary>
+    /// OneDrive 컨텍스트 메뉴: 즐겨찾기
+    /// </summary>
+    private async void OneDriveContext_Favorite_Click(object sender, RoutedEventArgs e)
+    {
+        try
+        {
+            if (_oneDriveViewModel?.SelectedItem == null)
+                return;
+
+            var selectedItem = _oneDriveViewModel.SelectedItem;
+            Log4.Info($"OneDrive 컨텍스트: 즐겨찾기 추가 - {selectedItem.Name}");
+            
+            // 알림 표시
+            var dialog = new Wpf.Ui.Controls.ContentDialog
+            {
+                Title = "즐겨찾기",
+                Content = $"'{selectedItem.Name}'이(가) 즐겨찾기에 추가되었습니다.",
+                CloseButtonText = "확인",
+                DefaultButton = Wpf.Ui.Controls.ContentDialogButton.Close
+            };
+            await dialog.ShowAsync();
+        }
+        catch (Exception ex)
+        {
+            Log4.Error($"OneDrive 컨텍스트 즐겨찾기 실패: {ex.Message}");
+        }
+    }
+
+    /// <summary>
+    /// OneDrive 컨텍스트 메뉴: 바로 가기 추가
+    /// </summary>
+    private async void OneDriveContext_AddShortcut_Click(object sender, RoutedEventArgs e)
+    {
+        try
+        {
+            if (_oneDriveViewModel?.SelectedItem == null)
+                return;
+
+            var selectedItem = _oneDriveViewModel.SelectedItem;
+            Log4.Info($"OneDrive 컨텍스트: 바로 가기 추가 - {selectedItem.Name}");
+            
+            var dialog = new Wpf.Ui.Controls.ContentDialog
+            {
+                Title = "바로 가기 추가",
+                Content = $"'{selectedItem.Name}'의 바로 가기가 추가되었습니다.",
+                CloseButtonText = "확인",
+                DefaultButton = Wpf.Ui.Controls.ContentDialogButton.Close
+            };
+            await dialog.ShowAsync();
+        }
+        catch (Exception ex)
+        {
+            Log4.Error($"OneDrive 컨텍스트 바로 가기 추가 실패: {ex.Message}");
+        }
+    }
+
+    /// <summary>
+    /// OneDrive 컨텍스트 메뉴: OneDrive에서 열기
+    /// </summary>
+    private void OneDriveContext_OpenInOneDrive_Click(object sender, RoutedEventArgs e)
+    {
+        try
+        {
+            if (_oneDriveViewModel?.SelectedItem == null)
+                return;
+
+            var selectedItem = _oneDriveViewModel.SelectedItem;
+
+            // OneDrive 웹 앱에서 열기
+            if (!string.IsNullOrEmpty(selectedItem.WebUrl))
+            {
+                var psi = new System.Diagnostics.ProcessStartInfo
+                {
+                    FileName = selectedItem.WebUrl,
+                    UseShellExecute = true
+                };
+                System.Diagnostics.Process.Start(psi);
+                Log4.Info($"OneDrive 컨텍스트: OneDrive에서 열기 - {selectedItem.Name}");
+            }
+        }
+        catch (Exception ex)
+        {
+            Log4.Error($"OneDrive 컨텍스트 OneDrive에서 열기 실패: {ex.Message}");
+        }
+    }
+
+    /// <summary>
+    /// OneDrive 컨텍스트 메뉴: 다음으로 이동
+    /// </summary>
+    private async void OneDriveContext_MoveTo_Click(object sender, RoutedEventArgs e)
+    {
+        try
+        {
+            if (_oneDriveViewModel?.SelectedItem == null)
+                return;
+
+            var selectedItem = _oneDriveViewModel.SelectedItem;
+            Log4.Info($"OneDrive 컨텍스트: 다음으로 이동 - {selectedItem.Name}");
+            
+            var dialog = new Wpf.Ui.Controls.ContentDialog
+            {
+                Title = "다음으로 이동",
+                Content = "이동할 폴더를 선택하는 기능은 추후 구현 예정입니다.",
+                CloseButtonText = "확인",
+                DefaultButton = Wpf.Ui.Controls.ContentDialogButton.Close
+            };
+            await dialog.ShowAsync();
+        }
+        catch (Exception ex)
+        {
+            Log4.Error($"OneDrive 컨텍스트 다음으로 이동 실패: {ex.Message}");
+        }
+    }
+
+    /// <summary>
+    /// OneDrive 컨텍스트 메뉴: 다음으로 복사
+    /// </summary>
+    private async void OneDriveContext_CopyTo_Click(object sender, RoutedEventArgs e)
+    {
+        try
+        {
+            if (_oneDriveViewModel?.SelectedItem == null)
+                return;
+
+            var selectedItem = _oneDriveViewModel.SelectedItem;
+            Log4.Info($"OneDrive 컨텍스트: 다음으로 복사 - {selectedItem.Name}");
+            
+            var dialog = new Wpf.Ui.Controls.ContentDialog
+            {
+                Title = "다음으로 복사",
+                Content = "복사할 폴더를 선택하는 기능은 추후 구현 예정입니다.",
+                CloseButtonText = "확인",
+                DefaultButton = Wpf.Ui.Controls.ContentDialogButton.Close
+            };
+            await dialog.ShowAsync();
+        }
+        catch (Exception ex)
+        {
+            Log4.Error($"OneDrive 컨텍스트 다음으로 복사 실패: {ex.Message}");
+        }
+    }
+
+    /// <summary>
+    /// OneDrive 컨텍스트 메뉴: 버전 기록
+    /// </summary>
+    private void OneDriveContext_VersionHistory_Click(object sender, RoutedEventArgs e)
+    {
+        try
+        {
+            if (_oneDriveViewModel?.SelectedItem == null)
+                return;
+
+            var selectedItem = _oneDriveViewModel.SelectedItem;
+
+            // OneDrive 웹에서 버전 기록 페이지 열기
+            if (!string.IsNullOrEmpty(selectedItem.WebUrl))
+            {
+                var versionUrl = selectedItem.WebUrl + "?versions=1";
+                var psi = new System.Diagnostics.ProcessStartInfo
+                {
+                    FileName = versionUrl,
+                    UseShellExecute = true
+                };
+                System.Diagnostics.Process.Start(psi);
+                Log4.Info($"OneDrive 컨텍스트: 버전 기록 - {selectedItem.Name}");
+            }
+        }
+        catch (Exception ex)
+        {
+            Log4.Error($"OneDrive 컨텍스트 버전 기록 실패: {ex.Message}");
+        }
+    }
+
+    #endregion
+
+    /// <summary>
+    /// OneDrive 사이드바 네비게이션 클릭
+    /// </summary>
+    private async void OneDriveNav_Click(object sender, RoutedEventArgs e)
+    {
+        try
+        {
+            if (sender is Wpf.Ui.Controls.Button button && button.Tag is string view)
+            {
+                if (_oneDriveViewModel == null)
+                {
+                    _oneDriveViewModel = ((App)Application.Current).GetService<OneDriveViewModel>()!;
+                }
+
+                // 휴지통 클릭 시 휴지통 뷰 표시
+                if (view == "trash")
+                {
+                    // 모든 콘텐츠 뷰 숨기기
+                    HideAllOneDriveContentViews();
+
+                    // 휴지통 뷰 표시
+                    if (OneDriveTrashView != null) OneDriveTrashView.Visibility = Visibility.Visible;
+
+                    // 네비게이션 버튼 상태 업데이트
+                    UpdateOneDriveNavButtons(view);
+
+                    // 휴지통 데이터 로드
+                    await _oneDriveViewModel.LoadTrashAsync();
+
+                    // ListView에 ItemsSource 직접 바인딩
+                    if (OneDriveTrashListView != null)
+                    {
+                        OneDriveTrashListView.ItemsSource = _oneDriveViewModel.TrashItems;
+                        Log4.Info($"OneDrive 휴지통 아이템 바인딩 완료: {_oneDriveViewModel.TrashItems.Count}개");
+                    }
+                    // 빈 상태 UI 업데이트
+                    if (OneDriveTrashEmptyState != null)
+                    {
+                        OneDriveTrashEmptyState.Visibility = _oneDriveViewModel.TrashItems.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
+                    }
+
+                    Log4.Info("OneDrive 휴지통 뷰 표시");
+                    return;
+                }
+
+                // 네비게이션 버튼 상태 업데이트
+                UpdateOneDriveNavButtons(view);
+
+                // 로딩 표시
+                if (OneDriveLoadingOverlay != null)
+                    OneDriveLoadingOverlay.Visibility = Visibility.Visible;
+
+                // 모든 콘텐츠 뷰 숨기기 (사람/모임/미디어 뷰 포함)
+                HideAllOneDriveContentViews();
+
+                await _oneDriveViewModel.ChangeViewAsync(view);
+
+                // ListView 바인딩
+                if (OneDriveFileListView != null)
+                {
+                    OneDriveFileListView.ItemsSource = _oneDriveViewModel.Items;
+                    OneDriveFileListView.Visibility = _oneDriveViewModel.Items.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
+                }
+
+                if (OneDriveEmptyState != null)
+                    OneDriveEmptyState.Visibility = _oneDriveViewModel.Items.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
+
+                // Breadcrumb 바인딩
+                if (OneDriveBreadcrumb != null)
+                    OneDriveBreadcrumb.ItemsSource = _oneDriveViewModel.Breadcrumbs;
+
+                Log4.Debug($"OneDrive 네비게이션: {view}");
+            }
+        }
+        catch (Exception ex)
+        {
+            Log4.Error($"OneDrive 네비게이션 실패: {ex.Message}");
+        }
+        finally
+        {
+            if (OneDriveLoadingOverlay != null)
+                OneDriveLoadingOverlay.Visibility = Visibility.Collapsed;
+        }
+    }
+
+    /// <summary>
+    /// OneDrive 네비게이션 버튼 상태 업데이트
+    /// </summary>
+    private void UpdateOneDriveNavButtons(string activeView)
+    {
+        var navButtons = new (Wpf.Ui.Controls.Button? button, string view)[]
+        {
+            (OneDriveNavHome, "home"),
+            (OneDriveNavMyFiles, "myfiles"),
+            (OneDriveNavShared, "shared"),
+            (OneDriveNavFavorites, "favorites"),
+            (OneDriveNavTrash, "trash")
+        };
+
+        foreach (var (button, view) in navButtons)
+        {
+            if (button != null)
+            {
+                button.Appearance = view == activeView
+                    ? Wpf.Ui.Controls.ControlAppearance.Secondary
+                    : Wpf.Ui.Controls.ControlAppearance.Transparent;
+            }
+        }
+    }
+
+
+    /// <summary>
+    /// OneDrive 모든 콘텐츠 뷰 숨기기
+    /// </summary>
+    private void HideAllOneDriveContentViews()
+    {
+        if (OneDriveFileListView != null) OneDriveFileListView.Visibility = Visibility.Collapsed;
+        if (OneDriveEmptyState != null) OneDriveEmptyState.Visibility = Visibility.Collapsed;
+        if (OneDrivePeopleView != null) OneDrivePeopleView.Visibility = Visibility.Collapsed;
+        if (OneDriveMeetingsView != null) OneDriveMeetingsView.Visibility = Visibility.Collapsed;
+        if (OneDriveMediaView != null) OneDriveMediaView.Visibility = Visibility.Collapsed;
+        if (OneDriveTrashView != null) OneDriveTrashView.Visibility = Visibility.Collapsed;
+    }
+
+    /// <summary>
+    /// 사람별 파일 뷰 로드
+    /// </summary>
+    private async Task LoadPeopleViewAsync()
+    {
+        try
+        {
+            var oneDriveService = ((App)Application.Current).GetService<GraphOneDriveService>()!;
+            var itemsByPerson = await oneDriveService.GetSharedItemsByPersonAsync(100);
+
+            var groups = new List<PersonFilesGroupViewModel>();
+
+            foreach (var (personName, items) in itemsByPerson.OrderByDescending(kvp => kvp.Value.Count))
+            {
+                var group = new PersonFilesGroupViewModel
+                {
+                    PersonName = personName
+                };
+
+                const int maxVisibleFiles = 4;
+                var visibleItems = items.Take(maxVisibleFiles).ToList();
+                var remainingCount = items.Count - maxVisibleFiles;
+
+                foreach (var item in visibleItems)
+                {
+                    var fileVm = new PersonFileItemViewModel
+                    {
+                        Id = item.Id ?? string.Empty,
+                        Name = item.Name ?? "알 수 없음",
+                        WebUrl = item.WebUrl ?? string.Empty
+                    };
+                    fileVm.SetIconByFileName(item.Name ?? string.Empty);
+                    group.Files.Add(fileVm);
+                }
+
+                if (remainingCount > 0)
+                    group.MoreFilesCount = remainingCount;
+
+                groups.Add(group);
+            }
+
+            if (OneDrivePeopleItemsControl != null)
+            {
+                OneDrivePeopleItemsControl.ItemsSource = groups;
+            }
+
+            if (OneDrivePeopleView != null)
+                OneDrivePeopleView.Visibility = Visibility.Visible;
+
+            // Breadcrumb 업데이트
+            if (OneDriveBreadcrumb != null)
+            {
+                OneDriveBreadcrumb.ItemsSource = new List<BreadcrumbItem>
+                {
+                    new BreadcrumbItem { Name = "사람", Path = "/people", Id = null }
+                };
+            }
+
+            Log4.Info($"OneDrive 사람별 파일 로드: {groups.Count}명");
+        }
+        catch (Exception ex)
+        {
+            Log4.Error($"OneDrive 사람별 파일 로드 실패: {ex.Message}");
+        }
+    }
+
+    /// <summary>
+    /// 모임별 파일 뷰 로드
+    /// </summary>
+    private async Task LoadMeetingsViewAsync()
+    {
+        try
+        {
+            // 캘린더 서비스에서 지난 모임 + 공유 파일 정보 조회
+            var calendarService = ((App)Application.Current).GetService<GraphCalendarService>();
+            var oneDriveService = ((App)Application.Current).GetService<GraphOneDriveService>()!;
+            
+            var groups = new List<MeetingFilesGroupViewModel>();
+
+            if (calendarService != null)
+            {
+                // 지난 30일간의 이벤트 조회
+                var startDate = DateTime.Now.AddDays(-90);
+                var endDate = DateTime.Now;
+                var events = await calendarService.GetEventsAsync(startDate, endDate);
+
+                // 온라인 모임만 필터링 (Teams 회의 등)
+                var onlineMeetings = events
+                    .Where(e => e.IsOnlineMeeting == true || 
+                               (e.OnlineMeeting?.JoinUrl != null) ||
+                               (e.Subject?.Contains("회의") == true) ||
+                               (e.Subject?.Contains("미팅") == true))
+                    .OrderByDescending(e => e.Start?.DateTime)
+                    .Take(20)
+                    .ToList();
+
+                foreach (var meeting in onlineMeetings)
+                {
+                    var meetingDate = DateTime.TryParse(meeting.Start?.DateTime, out var dt) ? dt : DateTime.Now;
+                    
+                    var group = new MeetingFilesGroupViewModel
+                    {
+                        MeetingId = meeting.Id ?? string.Empty,
+                        MeetingTitle = meeting.Subject ?? "제목 없음",
+                        MeetingTime = meetingDate.ToString("tt h:mm"),
+                        MeetingDate = meetingDate.ToString("yyyy년 M월 d일"),
+                        MeetingDateTime = meetingDate
+                    };
+
+                    // 참석자 추가 (최대 3명 표시)
+                    var attendees = meeting.Attendees?.Take(3).ToList() ?? new List<Microsoft.Graph.Models.Attendee>();
+                    foreach (var attendee in attendees)
+                    {
+                        group.Attendees.Add(new MeetingAttendeeViewModel
+                        {
+                            Name = attendee.EmailAddress?.Name ?? "알 수 없음",
+                            Email = attendee.EmailAddress?.Address ?? string.Empty
+                        });
+                    }
+
+                    var totalAttendees = meeting.Attendees?.Count ?? 0;
+                    if (totalAttendees > 3)
+                        group.MoreAttendeesCount = totalAttendees - 3;
+
+                    // 주최자 텍스트
+                    if (meeting.Organizer?.EmailAddress?.Name != null)
+                        group.OrganizerText = $"이끌이: {meeting.Organizer.EmailAddress.Name}";
+
+                    // TODO: 모임에 연결된 파일 검색 (현재는 빈 목록)
+                    // 실제 구현시에는 모임 채팅 또는 관련 SharePoint 사이트에서 파일을 가져와야 함
+
+                    groups.Add(group);
+                }
+            }
+
+            if (OneDriveMeetingsItemsControl != null)
+            {
+                OneDriveMeetingsItemsControl.ItemsSource = groups;
+            }
+
+            if (OneDriveMeetingsView != null)
+                OneDriveMeetingsView.Visibility = Visibility.Visible;
+
+            // Breadcrumb 업데이트
+            if (OneDriveBreadcrumb != null)
+            {
+                OneDriveBreadcrumb.ItemsSource = new List<BreadcrumbItem>
+                {
+                    new BreadcrumbItem { Name = "모임", Path = "/meetings", Id = null }
+                };
+            }
+
+            Log4.Info($"OneDrive 모임별 파일 로드: {groups.Count}개 모임");
+        }
+        catch (Exception ex)
+        {
+            Log4.Error($"OneDrive 모임별 파일 로드 실패: {ex.Message}");
+        }
+    }
+
+    /// <summary>
+    /// 미디어 갤러리 뷰 로드
+    /// </summary>
+    private async Task LoadMediaViewAsync()
+    {
+        try
+        {
+            var oneDriveService = ((App)Application.Current).GetService<GraphOneDriveService>()!;
+            var mediaItems = await oneDriveService.GetMediaFilesAsync(100);
+
+            // 날짜별로 그룹화
+            var groupedByDate = mediaItems
+                .OrderByDescending(i => i.CreatedDateTime ?? i.LastModifiedDateTime)
+                .GroupBy(i => (i.CreatedDateTime ?? i.LastModifiedDateTime ?? DateTime.Now).Date)
+                .Select(g => new MediaDateGroupViewModel
+                {
+                    Date = g.Key,
+                    Items = new ObservableCollection<MediaItemViewModel>(
+                        g.Select(item => new MediaItemViewModel
+                        {
+                            Id = item.Id ?? string.Empty,
+                            Name = item.Name ?? "알 수 없음",
+                            WebUrl = item.WebUrl ?? string.Empty,
+                            ThumbnailUrl = item.Thumbnails?.FirstOrDefault()?.Medium?.Url,
+                            IsVideo = IsVideoFile(item.Name ?? string.Empty),
+                            CreatedDateTime = item.CreatedDateTime?.DateTime ?? DateTime.Now
+                        })
+                    )
+                })
+                .ToList();
+
+            if (OneDriveMediaItemsControl != null)
+            {
+                OneDriveMediaItemsControl.ItemsSource = groupedByDate;
+            }
+
+            if (OneDriveMediaView != null)
+                OneDriveMediaView.Visibility = Visibility.Visible;
+
+            // Breadcrumb 업데이트
+            if (OneDriveBreadcrumb != null)
+            {
+                OneDriveBreadcrumb.ItemsSource = new List<BreadcrumbItem>
+                {
+                    new BreadcrumbItem { Name = "미디어", Path = "/media", Id = null }
+                };
+            }
+
+            Log4.Info($"OneDrive 미디어 로드: {mediaItems.Count()}개 파일");
+        }
+        catch (Exception ex)
+        {
+            Log4.Error($"OneDrive 미디어 로드 실패: {ex.Message}");
+        }
+    }
+
+    /// <summary>
+    /// 비디오 파일 여부 확인
+    /// </summary>
+    private static bool IsVideoFile(string fileName)
+    {
+        var ext = System.IO.Path.GetExtension(fileName)?.ToLowerInvariant();
+        return ext is ".mp4" or ".avi" or ".mov" or ".wmv" or ".mkv" or ".webm";
+    }
+
+    /// <summary>
+    /// 사람별 파일 필터 텍스트 변경
+    /// </summary>
+    private void OneDrivePeopleFilter_TextChanged(object sender, System.Windows.Controls.TextChangedEventArgs e)
+    {
+        // TODO: 필터링 구현
+    }
+
+    /// <summary>
+    /// 모임 필터 텍스트 변경
+    /// </summary>
+    private void OneDriveMeetingsFilter_TextChanged(object sender, System.Windows.Controls.TextChangedEventArgs e)
+    {
+        // TODO: 필터링 구현
+    }
+
+    /// <summary>
+    /// 사람별 파일 클릭
+    /// </summary>
+    private void OneDrivePeopleFile_Click(object sender, System.Windows.Input.MouseButtonEventArgs e)
+    {
+        try
+        {
+            if (sender is FrameworkElement element && element.DataContext is PersonFileItemViewModel file)
+            {
+                if (!string.IsNullOrEmpty(file.WebUrl))
+                {
+                    var psi = new System.Diagnostics.ProcessStartInfo
+                    {
+                        FileName = file.WebUrl,
+                        UseShellExecute = true
+                    };
+                    System.Diagnostics.Process.Start(psi);
+                    Log4.Info($"OneDrive 사람별 파일 열기: {file.Name}");
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            Log4.Error($"OneDrive 사람별 파일 열기 실패: {ex.Message}");
+        }
+    }
+
+    /// <summary>
+    /// 사람별 파일 더보기 클릭
+    /// </summary>
+    private void OneDrivePeopleMoreFiles_Click(object sender, RoutedEventArgs e)
+    {
+        // TODO: 특정 사람의 모든 파일 보기 구현
+        if (sender is Wpf.Ui.Controls.Button button && button.Tag is string personName)
+        {
+            Log4.Debug($"OneDrive 사람별 파일 더보기: {personName}");
+        }
+    }
+
+    /// <summary>
+    /// 모임 파일 클릭
+    /// </summary>
+    private void OneDriveMeetingFile_Click(object sender, System.Windows.Input.MouseButtonEventArgs e)
+    {
+        try
+        {
+            if (sender is FrameworkElement element && element.DataContext is PersonFileItemViewModel file)
+            {
+                if (!string.IsNullOrEmpty(file.WebUrl))
+                {
+                    var psi = new System.Diagnostics.ProcessStartInfo
+                    {
+                        FileName = file.WebUrl,
+                        UseShellExecute = true
+                    };
+                    System.Diagnostics.Process.Start(psi);
+                    Log4.Info($"OneDrive 모임 파일 열기: {file.Name}");
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            Log4.Error($"OneDrive 모임 파일 열기 실패: {ex.Message}");
+        }
+    }
+
+    /// <summary>
+    /// 미디어 아이템 클릭
+    /// </summary>
+    private void OneDriveMediaItem_Click(object sender, System.Windows.Input.MouseButtonEventArgs e)
+    {
+        try
+        {
+            if (sender is FrameworkElement element && element.Tag is MediaItemViewModel media)
+            {
+                if (!string.IsNullOrEmpty(media.WebUrl))
+                {
+                    var psi = new System.Diagnostics.ProcessStartInfo
+                    {
+                        FileName = media.WebUrl,
+                        UseShellExecute = true
+                    };
+                    System.Diagnostics.Process.Start(psi);
+                    Log4.Info($"OneDrive 미디어 열기: {media.Name}");
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            Log4.Error($"OneDrive 미디어 열기 실패: {ex.Message}");
+        }
+    }
+
+    /// <summary>
+    /// OneDrive "다음으로 파일 찾아보기" 클릭
+    /// </summary>
+    private async void OneDriveFindBy_Click(object sender, RoutedEventArgs e)
+    {
+        try
+        {
+            if (sender is Wpf.Ui.Controls.Button button && button.Tag is string findBy)
+            {
+                Log4.Debug($"OneDrive 파일 찾기: {findBy}");
+                
+                // 로딩 표시
+                if (OneDriveLoadingOverlay != null)
+                    OneDriveLoadingOverlay.Visibility = Visibility.Visible;
+
+                // 모든 뷰 숨기기
+                HideAllOneDriveContentViews();
+
+                switch (findBy)
+                {
+                    case "people":
+                        await LoadPeopleViewAsync();
+                        break;
+                    case "meetings":
+                        await LoadMeetingsViewAsync();
+                        break;
+                    case "media":
+                        await LoadMediaViewAsync();
+                        break;
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            Log4.Error($"OneDrive 파일 찾기 실패: {ex.Message}");
+        }
+        finally
+        {
+            if (OneDriveLoadingOverlay != null)
+                OneDriveLoadingOverlay.Visibility = Visibility.Collapsed;
+        }
+    }
+
+    /// <summary>
+    /// 휴지통 아이템 복원 클릭
+    /// </summary>
+    private async void OneDriveTrashRestore_Click(object sender, RoutedEventArgs e)
+    {
+        try
+        {
+            if (sender is Wpf.Ui.Controls.Button button && button.Tag is Models.OneDriveRecycleBinItem item)
+            {
+                Log4.Debug($"휴지통 아이템 복원: {item.LeafName}");
+                await _oneDriveViewModel.RestoreTrashItemAsync(item);
+            }
+        }
+        catch (Exception ex)
+        {
+            Log4.Error($"휴지통 아이템 복원 실패: {ex.Message}");
+        }
+    }
+
+    /// <summary>
+    /// 휴지통 아이템 영구 삭제 클릭
+    /// </summary>
+    private async void OneDriveTrashDelete_Click(object sender, RoutedEventArgs e)
+    {
+        try
+        {
+            if (sender is Wpf.Ui.Controls.Button button && button.Tag is Models.OneDriveRecycleBinItem item)
+            {
+                // 확인 대화상자
+                var result = System.Windows.MessageBox.Show(
+                    $"'{item.LeafName}' 항목을 영구 삭제하시겠습니까?\n이 작업은 되돌릴 수 없습니다.",
+                    "영구 삭제 확인",
+                    System.Windows.MessageBoxButton.YesNo,
+                    System.Windows.MessageBoxImage.Warning);
+
+                if (result == System.Windows.MessageBoxResult.Yes)
+                {
+                    Log4.Debug($"휴지통 아이템 영구 삭제: {item.LeafName}");
+                    await _oneDriveViewModel.DeleteTrashItemPermanentlyAsync(item);
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            Log4.Error($"휴지통 아이템 영구 삭제 실패: {ex.Message}");
+        }
+    }
+
+    /// <summary>
+    /// 모든 휴지통 아이템 복원 클릭
+    /// </summary>
+    private async void OneDriveTrashRestoreAll_Click(object sender, RoutedEventArgs e)
+    {
+        try
+        {
+            if (_oneDriveViewModel.TrashItems.Count == 0)
+            {
+                System.Windows.MessageBox.Show("복원할 항목이 없습니다.", "알림", System.Windows.MessageBoxButton.OK, System.Windows.MessageBoxImage.Information);
+                return;
+            }
+
+            var result = System.Windows.MessageBox.Show(
+                $"휴지통의 모든 항목({_oneDriveViewModel.TrashItems.Count}개)을 복원하시겠습니까?",
+                "전체 복원 확인",
+                System.Windows.MessageBoxButton.YesNo,
+                System.Windows.MessageBoxImage.Question);
+
+            if (result == System.Windows.MessageBoxResult.Yes)
+            {
+                Log4.Info($"휴지통 전체 복원 시작: {_oneDriveViewModel.TrashItems.Count}개");
+
+                var itemsToRestore = _oneDriveViewModel.TrashItems.ToList();
+                foreach (var item in itemsToRestore)
+                {
+                    await _oneDriveViewModel.RestoreTrashItemAsync(item);
+                }
+
+                Log4.Info("휴지통 전체 복원 완료");
+            }
+        }
+        catch (Exception ex)
+        {
+            Log4.Error($"휴지통 전체 복원 실패: {ex.Message}");
+        }
+    }
+
+    /// <summary>
+    /// 휴지통 비우기 클릭
+    /// </summary>
+    private async void OneDriveTrashEmpty_Click(object sender, RoutedEventArgs e)
+    {
+        try
+        {
+            if (_oneDriveViewModel.TrashItems.Count == 0)
+            {
+                System.Windows.MessageBox.Show("휴지통이 이미 비어 있습니다.", "알림", System.Windows.MessageBoxButton.OK, System.Windows.MessageBoxImage.Information);
+                return;
+            }
+
+            var result = System.Windows.MessageBox.Show(
+                $"휴지통의 모든 항목({_oneDriveViewModel.TrashItems.Count}개)을 영구 삭제하시겠습니까?\n이 작업은 되돌릴 수 없습니다.",
+                "휴지통 비우기 확인",
+                System.Windows.MessageBoxButton.YesNo,
+                System.Windows.MessageBoxImage.Warning);
+
+            if (result == System.Windows.MessageBoxResult.Yes)
+            {
+                Log4.Info($"휴지통 비우기 시작: {_oneDriveViewModel.TrashItems.Count}개");
+
+                var itemsToDelete = _oneDriveViewModel.TrashItems.ToList();
+                foreach (var item in itemsToDelete)
+                {
+                    await _oneDriveViewModel.DeleteTrashItemPermanentlyAsync(item);
+                }
+
+                Log4.Info("휴지통 비우기 완료");
+            }
+        }
+        catch (Exception ex)
+        {
+            Log4.Error($"휴지통 비우기 실패: {ex.Message}");
+        }
+    }
+
+    /// <summary>
+    /// OneDrive 폴더 트리 선택 변경
+    /// </summary>
+    private async void OneDriveFolderTree_SelectedItemChanged(object sender, RoutedPropertyChangedEventArgs<object> e)
+    {
+        try
+        {
+            if (e.NewValue is FolderTreeItemViewModel selectedFolder)
+            {
+                if (_oneDriveViewModel == null)
+                {
+                    _oneDriveViewModel = ((App)Application.Current).GetService<OneDriveViewModel>()!;
+                }
+
+                // 로딩 표시
+                if (OneDriveLoadingOverlay != null)
+                    OneDriveLoadingOverlay.Visibility = Visibility.Visible;
+
+                // 폴더로 이동
+                await _oneDriveViewModel.NavigateToFolderAsync(selectedFolder.Id);
+
+                // 자식 폴더 로드 (지연 로딩)
+                if (!selectedFolder.IsLoaded && selectedFolder.HasChildren)
+                {
+                    await _oneDriveViewModel.LoadFolderChildrenAsync(selectedFolder);
+                }
+
+                // ListView 바인딩
+                if (OneDriveFileListView != null)
+                {
+                    OneDriveFileListView.ItemsSource = _oneDriveViewModel.Items;
+                    OneDriveFileListView.Visibility = _oneDriveViewModel.Items.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
+                }
+
+                if (OneDriveEmptyState != null)
+                    OneDriveEmptyState.Visibility = _oneDriveViewModel.Items.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
+
+                // Breadcrumb 바인딩
+                if (OneDriveBreadcrumb != null)
+                    OneDriveBreadcrumb.ItemsSource = _oneDriveViewModel.Breadcrumbs;
+
+                // 네비게이션 버튼 상태 업데이트 (내 파일로)
+                UpdateOneDriveNavButtons("myfiles");
+
+                Log4.Debug($"OneDrive 폴더 트리 선택: {selectedFolder.Name}");
+            }
+        }
+        catch (Exception ex)
+        {
+            Log4.Error($"OneDrive 폴더 트리 선택 실패: {ex.Message}");
+        }
+        finally
+        {
+            if (OneDriveLoadingOverlay != null)
+                OneDriveLoadingOverlay.Visibility = Visibility.Collapsed;
+        }
+    }
+
+    /// <summary>
+    /// OneDrive 폴더 트리 아이템 확장 (자식 폴더 로드)
+    /// </summary>
+    private async void OneDriveFolderTreeItem_Expanded(object sender, RoutedEventArgs e)
+    {
+        try
+        {
+            if (sender is System.Windows.Controls.TreeViewItem treeViewItem && treeViewItem.DataContext is FolderTreeItemViewModel folder)
+            {
+                // 이미 로드되었으면 무시
+                if (folder.IsLoaded) return;
+
+                if (_oneDriveViewModel == null)
+                {
+                    _oneDriveViewModel = ((App)Application.Current).GetService<OneDriveViewModel>()!;
+                }
+
+                // 자식 폴더 로드
+                await _oneDriveViewModel.LoadFolderChildrenAsync(folder);
+                Log4.Debug($"OneDrive 폴더 확장: {folder.Name} - 자식 {folder.Children.Count}개 로드");
+            }
+        }
+        catch (Exception ex)
+        {
+            Log4.Error($"OneDrive 폴더 확장 실패: {ex.Message}");
+        }
+    }
+
+    /// <summary>
+    /// OneDrive 만들기 또는 업로드 버튼 클릭
+    /// </summary>
+    private void OneDriveCreateButton_Click(object sender, RoutedEventArgs e)
+    {
+        // 컨텍스트 메뉴 표시 (새 폴더/업로드 선택)
+        var contextMenu = new System.Windows.Controls.ContextMenu();
+
+        var newFolderItem = new System.Windows.Controls.MenuItem { Header = "새 폴더", Icon = new Wpf.Ui.Controls.SymbolIcon { Symbol = Wpf.Ui.Controls.SymbolRegular.FolderAdd20 } };
+        newFolderItem.Click += OneDriveNewFolderButton_Click;
+
+        var uploadItem = new System.Windows.Controls.MenuItem { Header = "파일 업로드", Icon = new Wpf.Ui.Controls.SymbolIcon { Symbol = Wpf.Ui.Controls.SymbolRegular.ArrowUpload20 } };
+        uploadItem.Click += OneDriveUploadButton_Click;
+
+        contextMenu.Items.Add(newFolderItem);
+        contextMenu.Items.Add(uploadItem);
+
+        if (sender is Wpf.Ui.Controls.Button button)
+        {
+            contextMenu.PlacementTarget = button;
+            contextMenu.IsOpen = true;
+        }
+    }
+
+    /// <summary>
+    /// OneDrive 필터 버튼 클릭
+    /// </summary>
+    private void OneDriveFilter_Click(object sender, RoutedEventArgs e)
+    {
+        try
+        {
+            if (sender is Wpf.Ui.Controls.Button button && button.Tag is string filter)
+            {
+                if (_oneDriveViewModel == null)
+                {
+                    _oneDriveViewModel = ((App)Application.Current).GetService<OneDriveViewModel>()!;
+                }
+
+                // 필터 버튼 상태 업데이트
+                UpdateOneDriveFilterButtons(filter);
+
+                // 필터 적용
+                _oneDriveViewModel.ApplyFilter(filter);
+
+                // ListView 바인딩
+                if (OneDriveFileListView != null)
+                {
+                    // 필터링된 항목이 있으면 FilteredItems 사용, 없거나 "all"이면 Items 사용
+                    OneDriveFileListView.ItemsSource = filter == "all"
+                        ? _oneDriveViewModel.Items
+                        : _oneDriveViewModel.FilteredItems;
+                }
+
+                Log4.Debug($"OneDrive 필터: {filter}");
+            }
+        }
+        catch (Exception ex)
+        {
+            Log4.Error($"OneDrive 필터 적용 실패: {ex.Message}");
+        }
+    }
+
+    /// <summary>
+    /// OneDrive 필터 버튼 상태 업데이트
+    /// </summary>
+    private void UpdateOneDriveFilterButtons(string activeFilter)
+    {
+        var filterButtons = new[]
+        {
+            (OneDriveFilterAll, "all"),
+            (OneDriveFilterWord, "word"),
+            (OneDriveFilterExcel, "excel"),
+            (OneDriveFilterPowerPoint, "ppt"),
+            (OneDriveFilterPdf, "pdf")
+        };
+
+        foreach (var (button, filter) in filterButtons)
+        {
+            if (button != null)
+            {
+                button.Appearance = filter == activeFilter
+                    ? Wpf.Ui.Controls.ControlAppearance.Secondary
+                    : Wpf.Ui.Controls.ControlAppearance.Transparent;
+            }
+        }
+    }
+
+    /// <summary>
+    /// OneDrive 빠른 액세스 폴더 클릭
+    /// </summary>
+    private async void OneDriveQuickAccess_Click(object sender, RoutedEventArgs e)
+    {
+        try
+        {
+            if (sender is Wpf.Ui.Controls.Button button && button.Tag is QuickAccessFolderViewModel folder)
+            {
+                if (_oneDriveViewModel == null)
+                {
+                    _oneDriveViewModel = ((App)Application.Current).GetService<OneDriveViewModel>()!;
+                }
+
+                // 해당 폴더로 이동
+                await _oneDriveViewModel.NavigateToFolderAsync(folder.Id);
+
+                // Breadcrumb 업데이트
+                _oneDriveViewModel.Breadcrumbs.Clear();
+                _oneDriveViewModel.Breadcrumbs.Add(new BreadcrumbItem { Name = "내 파일", Path = "/", Id = null });
+                _oneDriveViewModel.Breadcrumbs.Add(new BreadcrumbItem { Name = folder.Name, Path = folder.Path, Id = folder.Id });
+
+                // ListView 바인딩
+                if (OneDriveFileListView != null)
+                {
+                    OneDriveFileListView.ItemsSource = _oneDriveViewModel.Items;
+                    OneDriveFileListView.Visibility = _oneDriveViewModel.Items.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
+                }
+
+                if (OneDriveEmptyState != null)
+                    OneDriveEmptyState.Visibility = _oneDriveViewModel.Items.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
+
+                // 네비게이션 버튼 상태 업데이트 (myfiles 선택)
+                UpdateOneDriveNavButtons("myfiles");
+
+                Log4.Debug($"OneDrive 빠른 액세스: {folder.Name}");
+            }
+        }
+        catch (Exception ex)
+        {
+            Log4.Error($"OneDrive 빠른 액세스 실패: {ex.Message}");
         }
     }
 

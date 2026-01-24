@@ -327,7 +327,7 @@ namespace mailX.Services.Graph
         /// <summary>
         /// 현재 액세스 토큰 반환 (자동 갱신)
         /// </summary>
-        private async Task<string> GetAccessTokenAsync()
+        public async Task<string> GetAccessTokenAsync()
         {
             if (_authResult == null)
             {
@@ -342,6 +342,88 @@ namespace mailX.Services.Graph
             }
 
             return _authResult.AccessToken;
+        }
+
+        /// <summary>
+        /// SharePoint REST API용 토큰 획득
+        /// </summary>
+        /// <param name="sharePointUrl">SharePoint 사이트 URL (예: https://tenant-my.sharepoint.com)</param>
+        /// <returns>SharePoint용 액세스 토큰</returns>
+        public async Task<string?> GetSharePointAccessTokenAsync(string sharePointUrl)
+        {
+            try
+            {
+                if (!IsConfigured || _msalClient == null)
+                {
+                    Log4.Warn("[GraphAuthService] MSAL 클라이언트가 구성되지 않음");
+                    return null;
+                }
+
+                // SharePoint URL에서 테넌트 기본 URL 추출
+                // 예: https://tenant-my.sharepoint.com/personal/user_domain_com -> https://tenant-my.sharepoint.com
+                var uri = new Uri(sharePointUrl);
+                var baseUrl = $"{uri.Scheme}://{uri.Host}";
+
+                // SharePoint용 스코프 설정
+                var sharePointScopes = new[] { $"{baseUrl}/AllSites.Manage" };
+                Log4.Debug($"[GraphAuthService] SharePoint 토큰 요청 - 스코프: {string.Join(", ", sharePointScopes)}");
+
+                var accounts = await _msalClient.GetAccountsAsync();
+                var account = accounts.FirstOrDefault();
+
+                if (account == null)
+                {
+                    Log4.Warn("[GraphAuthService] 캐시된 계정 없음 - SharePoint 토큰 획득 불가");
+                    return null;
+                }
+
+                try
+                {
+                    // Silent 토큰 획득 시도
+                    var result = await _msalClient
+                        .AcquireTokenSilent(sharePointScopes, account)
+                        .ExecuteAsync();
+
+                    Log4.Info($"[GraphAuthService] SharePoint 토큰 획득 성공");
+                    return result.AccessToken;
+                }
+                catch (MsalUiRequiredException uiEx)
+                {
+                    // 대화형 로그인 필요
+                    Log4.Debug($"[GraphAuthService] SharePoint 토큰 - 대화형 로그인 필요: {uiEx.ErrorCode}");
+                    try
+                    {
+                        Log4.Debug("[GraphAuthService] SharePoint 대화형 로그인 팝업 시작...");
+                        var result = await _msalClient
+                            .AcquireTokenInteractive(sharePointScopes)
+                            .WithUseEmbeddedWebView(false) // 시스템 브라우저 사용
+                            .ExecuteAsync();
+
+                        Log4.Info($"[GraphAuthService] SharePoint 대화형 토큰 획득 성공");
+                        return result.AccessToken;
+                    }
+                    catch (MsalClientException ex) when (ex.ErrorCode == "authentication_canceled")
+                    {
+                        Log4.Debug("[GraphAuthService] SharePoint 토큰 - 사용자 취소");
+                        return null;
+                    }
+                    catch (MsalServiceException msalEx)
+                    {
+                        Log4.Error($"[GraphAuthService] SharePoint 대화형 로그인 MSAL 서비스 오류: {msalEx.ErrorCode} - {msalEx.Message}");
+                        return null;
+                    }
+                    catch (Exception interactiveEx)
+                    {
+                        Log4.Error($"[GraphAuthService] SharePoint 대화형 로그인 실패: {interactiveEx.GetType().Name} - {interactiveEx.Message}");
+                        return null;
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                Log4.Error($"[GraphAuthService] SharePoint 토큰 획득 실패: {ex.Message}");
+                return null;
+            }
         }
     }
 

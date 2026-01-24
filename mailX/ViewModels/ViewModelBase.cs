@@ -1,6 +1,7 @@
 using System;
 using System.Threading.Tasks;
 using CommunityToolkit.Mvvm.ComponentModel;
+using mailX.Utils;
 
 namespace mailX.ViewModels;
 
@@ -45,6 +46,7 @@ public partial class ViewModelBase : ObservableObject
             ErrorMessage = string.IsNullOrEmpty(errorPrefix)
                 ? ex.Message
                 : $"{errorPrefix}: {ex.Message}";
+            Log4.Error($"[ViewModelBase] ExecuteAsync 에러 ({errorPrefix ?? "N/A"}): {ex.Message}");
         }
         finally
         {
@@ -72,6 +74,7 @@ public partial class ViewModelBase : ObservableObject
             ErrorMessage = string.IsNullOrEmpty(errorPrefix)
                 ? ex.Message
                 : $"{errorPrefix}: {ex.Message}";
+            Log4.Error($"[ViewModelBase] ExecuteAsync<T> 에러 ({errorPrefix ?? "N/A"}): {ex.Message}");
             return default;
         }
         finally

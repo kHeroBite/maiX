@@ -82,6 +82,11 @@ public class RestApiServer
     public event EventHandler<int>? PlannerPlanSelectRequested;
 
     /// <summary>
+    /// OneDrive 네비게이션 요청 이벤트 (뷰 전환)
+    /// </summary>
+    public event EventHandler<string>? OneDriveNavigateRequested;
+
+    /// <summary>
     /// 지원하는 탭 목록
     /// </summary>
     private static readonly string[] ValidTabs = new[]
@@ -279,6 +284,13 @@ public class RestApiServer
                         {
                             SendResponse(response, 400, new { error = "Invalid index", path = path });
                         }
+                    }
+                    // 동적 경로 매칭: /api/onedrive/{view}
+                    else if (method == "POST" && path.StartsWith("/api/onedrive/"))
+                    {
+                        var view = path.Substring("/api/onedrive/".Length).ToLowerInvariant();
+                        Log4.Info($"[RestAPI] POST /api/onedrive/{view} 라우팅 매칭됨");
+                        HandleOneDriveNavigate(view, response);
                     }
                     else
                     {
@@ -817,6 +829,53 @@ public class RestApiServer
         catch (Exception ex)
         {
             SendResponse(response, 500, new { error = "플랜 선택 실패", message = ex.Message });
+        }
+    }
+
+    /// <summary>
+    /// POST /api/onedrive/{view} - OneDrive 뷰 전환 (home, myfiles, shared, favorites, trash)
+    /// </summary>
+    private static readonly string[] ValidOneDriveViews = new[]
+    {
+        "home", "myfiles", "shared", "favorites", "trash", "people", "meetings", "media"
+    };
+
+    private void HandleOneDriveNavigate(string view, HttpListenerResponse response)
+    {
+        try
+        {
+            if (string.IsNullOrEmpty(view))
+            {
+                SendResponse(response, 400, new { error = "뷰 이름이 필요합니다.", validViews = ValidOneDriveViews });
+                return;
+            }
+
+            if (!ValidOneDriveViews.Contains(view))
+            {
+                SendResponse(response, 400, new { error = $"유효하지 않은 뷰: {view}", validViews = ValidOneDriveViews });
+                return;
+            }
+
+            Log4.Info($"[RestAPI] OneDrive 뷰 전환 요청: {view}");
+
+            // UI 스레드에서 뷰 전환 실행
+            Log4.Debug($"[RestAPI] OneDrive 이벤트 발생 시도 - 핸들러 등록 여부: {OneDriveNavigateRequested != null}");
+            _app.Dispatcher.Invoke(() =>
+            {
+                Log4.Debug($"[RestAPI] Dispatcher 내부 - 이벤트 호출 시작");
+                OneDriveNavigateRequested?.Invoke(this, view);
+                Log4.Debug($"[RestAPI] Dispatcher 내부 - 이벤트 호출 완료");
+            });
+
+            SendResponse(response, 200, new
+            {
+                message = "OneDrive view navigation requested",
+                view = view
+            });
+        }
+        catch (Exception ex)
+        {
+            SendResponse(response, 500, new { error = "OneDrive 뷰 전환 실패", message = ex.Message });
         }
     }
 

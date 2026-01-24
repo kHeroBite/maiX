@@ -426,6 +426,9 @@ public partial class App : Application
                     var mainWindow = _host.Services.GetRequiredService<MainWindow>();
                     Log4.Debug("MainWindow 생성 완료");
 
+                    // 저장된 창 위치/크기 복원
+                    mainWindow.RestoreWindowState();
+
                     // 로딩 화면 닫기 및 메인 윈도우 표시
                     loadingWindow.Close();
 
@@ -461,6 +464,18 @@ public partial class App : Application
                                 if (mainWindow is Views.MainWindow mw)
                                 {
                                     mw.SelectPlannerPlanByIndex(index);
+                                }
+                            });
+                        };
+
+                        // OneDrive 뷰 전환 이벤트 연결
+                        _restApiServer.OneDriveNavigateRequested += (sender, view) =>
+                        {
+                            Dispatcher.Invoke(() =>
+                            {
+                                if (mainWindow is Views.MainWindow mw)
+                                {
+                                    mw.NavigateToOneDriveView(view);
                                 }
                             });
                         };
