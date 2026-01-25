@@ -353,6 +353,23 @@ public partial class App : Application
     /// </summary>
     protected override async void OnStartup(StartupEventArgs e)
     {
+        // 전역 예외 핸들러 등록
+        AppDomain.CurrentDomain.UnhandledException += (s, args) =>
+        {
+            var ex = args.ExceptionObject as Exception;
+            Log4.Error($"[UnhandledException] {ex?.Message}\n{ex?.StackTrace}");
+        };
+        DispatcherUnhandledException += (s, args) =>
+        {
+            Log4.Error($"[DispatcherUnhandledException] {args.Exception.Message}\n{args.Exception.StackTrace}");
+            args.Handled = true; // 앱 종료 방지
+        };
+        TaskScheduler.UnobservedTaskException += (s, args) =>
+        {
+            Log4.Error($"[UnobservedTaskException] {args.Exception.Message}\n{args.Exception.StackTrace}");
+            args.SetObserved();
+        };
+
         // 명령줄 인수 파싱 (--gpumode=true/false)
         bool? gpuModeOverride = null;
         foreach (var arg in e.Args)

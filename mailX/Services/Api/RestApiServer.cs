@@ -265,6 +265,14 @@ public class RestApiServer
                     HandleGetCurrentTab(response);
                     break;
 
+                case ("POST", "/api/theme/toggle"):
+                    HandleThemeToggle(response);
+                    break;
+
+                case ("GET", "/api/theme"):
+                    HandleGetTheme(response);
+                    break;
+
                 default:
                     // 동적 경로 매칭: /api/navigate/{tab}
                     if (method == "POST" && path.StartsWith("/api/navigate/"))
@@ -742,6 +750,51 @@ public class RestApiServer
         catch (Exception ex)
         {
             SendResponse(response, 500, new { error = "창 활성화 실패", message = ex.Message });
+        }
+    }
+
+    /// <summary>
+    /// POST /api/theme/toggle - 테마 전환 (다크/라이트)
+    /// </summary>
+    private void HandleThemeToggle(HttpListenerResponse response)
+    {
+        try
+        {
+            _app.Dispatcher.Invoke(() =>
+            {
+                Services.Theme.ThemeService.Instance.ToggleTheme();
+            });
+
+            var isDark = Services.Theme.ThemeService.Instance.IsDarkMode;
+            SendResponse(response, 200, new
+            {
+                message = "Theme toggled",
+                theme = isDark ? "dark" : "light"
+            });
+        }
+        catch (Exception ex)
+        {
+            SendResponse(response, 500, new { error = "테마 전환 실패", message = ex.Message });
+        }
+    }
+
+    /// <summary>
+    /// GET /api/theme - 현재 테마 조회
+    /// </summary>
+    private void HandleGetTheme(HttpListenerResponse response)
+    {
+        try
+        {
+            var isDark = Services.Theme.ThemeService.Instance.IsDarkMode;
+            SendResponse(response, 200, new
+            {
+                theme = isDark ? "dark" : "light",
+                isDarkMode = isDark
+            });
+        }
+        catch (Exception ex)
+        {
+            SendResponse(response, 500, new { error = "테마 조회 실패", message = ex.Message });
         }
     }
 

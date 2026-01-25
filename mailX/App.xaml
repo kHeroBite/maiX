@@ -45,6 +45,9 @@
             <converters:DueStatusToForegroundConverter x:Key="DueStatusToForegroundConverter"/>
             <!-- 채팅 시간 표시 컨버터 -->
             <converters:DateTimeToRelativeTimeConverter x:Key="DateTimeToRelativeTimeConverter"/>
+            <!-- 녹음 파일 출처 컨버터 -->
+            <converters:RecordingSourceToVisibilityConverter x:Key="RecordingSourceToVisibilityConverter"/>
+            <converters:RecordingSourceToBackgroundConverter x:Key="RecordingSourceToBackgroundConverter"/>
 
             <!-- ========== 기능별 AccentColor 리소스 ========== -->
             <!-- 기본값: Outlook Blue (ThemeService에서 동적으로 업데이트) -->

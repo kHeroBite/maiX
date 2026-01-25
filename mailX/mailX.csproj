@@ -66,6 +66,9 @@
     <!-- 클라우드 다운로드 (Google Drive) -->
     <PackageReference Include="Google.Apis.Drive.v3" Version="1.73.0.3996" />
     <PackageReference Include="Google.Apis.Auth" Version="1.73.0" />
+
+    <!-- 오디오 녹음 (OneNote AI 기능) -->
+    <PackageReference Include="NAudio" Version="2.2.1" />
   </ItemGroup>
 
   <!-- log4net.config 파일을 출력 디렉토리에 복사 -->
