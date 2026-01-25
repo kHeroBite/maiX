@@ -1005,6 +1005,328 @@ public class GraphOneNoteService
     }
 
     /// <summary>
+    /// OneNote 페이지의 오디오/미디어 리소스 목록 가져오기
+    /// 페이지 HTML에서 object 태그로 포함된 미디어를 검색
+    /// </summary>
+    /// <param name="pageId">페이지 ID</param>
+    /// <returns>오디오 리소스 정보 목록</returns>
+    public async Task<List<PageAudioResource>> GetPageAudioResourcesAsync(string pageId)
+    {
+        var resources = new List<PageAudioResource>();
+
+        if (string.IsNullOrEmpty(pageId))
+            return resources;
+
+        try
+        {
+            var accessToken = await _authService.GetAccessTokenAsync();
+            using var httpClient = new HttpClient();
+            httpClient.DefaultRequestHeaders.Authorization =
+                new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", accessToken);
+
+            // 페이지 콘텐츠 가져오기
+            var url = $"https://graph.microsoft.com/v1.0/me/onenote/pages/{pageId}/content";
+            var response = await httpClient.GetAsync(url);
+
+            if (!response.IsSuccessStatusCode)
+            {
+                _logger.Warning("페이지 오디오 리소스 조회 실패: PageId={PageId}", pageId);
+                return resources;
+            }
+
+            var html = await response.Content.ReadAsStringAsync();
+
+            Log4.Info($"[OneNote Audio] 페이지 {pageId} HTML 길이: {html?.Length ?? 0}자");
+
+            // 디버깅용: HTML 전체를 파일로 저장
+            try
+            {
+                var debugDir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "mailX", "debug");
+                Directory.CreateDirectory(debugDir);
+                var debugFile = Path.Combine(debugDir, $"page_{pageId.Replace("!", "_").Replace("-", "_")}.html");
+                File.WriteAllText(debugFile, html);
+                Log4.Info($"[OneNote Audio] HTML 저장됨: {debugFile}");
+            }
+            catch (Exception ex)
+            {
+                Log4.Warn($"[OneNote Audio] HTML 저장 실패: {ex.Message}");
+            }
+
+            // HTML 내용 디버깅 (키워드 검색)
+            if (!string.IsNullOrEmpty(html))
+            {
+                var hasAudio = html.Contains("audio", StringComparison.OrdinalIgnoreCase);
+                var hasObject = html.Contains("<object", StringComparison.OrdinalIgnoreCase);
+                var hasRecording = html.Contains("녹음", StringComparison.OrdinalIgnoreCase) ||
+                                   html.Contains("Recording", StringComparison.OrdinalIgnoreCase);
+                var hasResource = html.Contains("resources/", StringComparison.OrdinalIgnoreCase);
+
+                Log4.Info($"[OneNote Audio] 키워드 검색: audio={hasAudio}, object={hasObject}, recording={hasRecording}, resources={hasResource}");
+
+                // object 태그 내용 추출 (닫힘 태그 포함 + 자체 닫힘 태그)
+                var objectMatches = Regex.Matches(html, @"<object[^>]*(?:>.*?</object>|/>)",
+                    RegexOptions.IgnoreCase | RegexOptions.Singleline);
+                Log4.Info($"[OneNote Audio] object 태그 수 (닫힘+자체닫힘): {objectMatches.Count}");
+                foreach (Match m in objectMatches)
+                {
+                    Log4.Info($"[OneNote Audio] object 태그: {m.Value.Substring(0, Math.Min(500, m.Value.Length))}");
+                }
+
+                // object 시작 태그만 찾기 (디버깅용)
+                var objectStartTags = Regex.Matches(html, @"<object[^>]*>",
+                    RegexOptions.IgnoreCase | RegexOptions.Singleline);
+                Log4.Info($"[OneNote Audio] object 시작 태그 수: {objectStartTags.Count}");
+                foreach (Match m in objectStartTags)
+                {
+                    Log4.Info($"[OneNote Audio] object 시작 태그: {m.Value.Substring(0, Math.Min(500, m.Value.Length))}");
+                }
+
+                // 녹음 관련 텍스트 주변 100자 추출
+                if (hasRecording)
+                {
+                    var idx = html.IndexOf("녹음", StringComparison.OrdinalIgnoreCase);
+                    if (idx == -1) idx = html.IndexOf("Recording", StringComparison.OrdinalIgnoreCase);
+                    if (idx >= 0)
+                    {
+                        var start = Math.Max(0, idx - 50);
+                        var len = Math.Min(200, html.Length - start);
+                        Log4.Info($"[OneNote Audio] 녹음 텍스트 주변: {html.Substring(start, len)}");
+                    }
+                }
+
+                // audio 문자열 주변 컨텍스트 확인
+                if (hasAudio)
+                {
+                    var idx = html.IndexOf("audio", StringComparison.OrdinalIgnoreCase);
+                    while (idx >= 0)
+                    {
+                        var start = Math.Max(0, idx - 50);
+                        var len = Math.Min(300, html.Length - start);
+                        Log4.Info($"[OneNote Audio] audio 문자열 주변 (위치 {idx}): {html.Substring(start, len)}");
+                        idx = html.IndexOf("audio", idx + 1, StringComparison.OrdinalIgnoreCase);
+                    }
+                }
+
+                // resources/ 문자열 주변 컨텍스트 확인
+                if (hasResource)
+                {
+                    var idx = html.IndexOf("resources/", StringComparison.OrdinalIgnoreCase);
+                    while (idx >= 0)
+                    {
+                        var start = Math.Max(0, idx - 20);
+                        var len = Math.Min(200, html.Length - start);
+                        Log4.Info($"[OneNote Audio] resources 문자열 (위치 {idx}): {html.Substring(start, len)}");
+                        idx = html.IndexOf("resources/", idx + 10, StringComparison.OrdinalIgnoreCase);
+                    }
+                }
+            }
+
+            // OneNote 오디오 녹음의 다양한 패턴 검색
+
+            // 패턴 1: <object data="..." data-attachment="..." type="audio/...">
+            var objectRegex1 = new Regex(
+                @"<object[^>]*data=""([^""]+)""[^>]*data-attachment=""([^""]+)""[^>]*type=""(audio/[^""]+)""[^>]*>",
+                RegexOptions.IgnoreCase | RegexOptions.Singleline);
+
+            foreach (Match match in objectRegex1.Matches(html))
+            {
+                var resourceUrl = match.Groups[1].Value;
+                var fileName = match.Groups[2].Value;
+                var mimeType = match.Groups[3].Value;
+
+                var resourceIdMatch = Regex.Match(resourceUrl, @"resources/([^/]+)/");
+                var resourceId = resourceIdMatch.Success ? resourceIdMatch.Groups[1].Value : string.Empty;
+
+                Log4.Info($"[OneNote] 패턴1 오디오 발견: {fileName}");
+                resources.Add(new PageAudioResource
+                {
+                    ResourceId = resourceId,
+                    ResourceUrl = resourceUrl,
+                    FileName = fileName,
+                    MimeType = mimeType,
+                    PageId = pageId
+                });
+            }
+
+            // 패턴 2: <object type="audio/..." data="..." data-attachment="..."> (속성 순서 다름)
+            var objectRegex2 = new Regex(
+                @"<object[^>]*type=""(audio/[^""]+)""[^>]*data=""([^""]+)""[^>]*data-attachment=""([^""]+)""[^>]*>",
+                RegexOptions.IgnoreCase | RegexOptions.Singleline);
+
+            foreach (Match match in objectRegex2.Matches(html))
+            {
+                var mimeType = match.Groups[1].Value;
+                var resourceUrl = match.Groups[2].Value;
+                var fileName = match.Groups[3].Value;
+
+                if (resources.Any(r => r.ResourceUrl == resourceUrl))
+                    continue;
+
+                var resourceIdMatch = Regex.Match(resourceUrl, @"resources/([^/]+)/");
+                var resourceId = resourceIdMatch.Success ? resourceIdMatch.Groups[1].Value : string.Empty;
+
+                Log4.Info($"[OneNote] 패턴2 오디오 발견: {fileName}");
+                resources.Add(new PageAudioResource
+                {
+                    ResourceId = resourceId,
+                    ResourceUrl = resourceUrl,
+                    FileName = fileName,
+                    MimeType = mimeType,
+                    PageId = pageId
+                });
+            }
+
+            // 패턴 3: 모든 object 태그에서 audio 타입 검색 (더 유연한 패턴 - 자체 닫힘 태그 포함)
+            // 자체 닫힘: <object ... />  또는  닫힘 태그: <object ...>...</object>
+            var objectRegex3 = new Regex(
+                @"<object\s+([^>]*)(?:/>|>.*?</object>)",
+                RegexOptions.IgnoreCase | RegexOptions.Singleline);
+
+            foreach (Match match in objectRegex3.Matches(html))
+            {
+                var objectAttrs = match.Groups[1].Value; // 속성들만 추출
+
+                Log4.Info($"[OneNote Audio] 패턴3 object 속성: {objectAttrs.Substring(0, Math.Min(300, objectAttrs.Length))}");
+
+                // audio 타입인지 확인
+                if (!objectAttrs.Contains("audio/", StringComparison.OrdinalIgnoreCase))
+                    continue;
+
+                // data URL 추출
+                var dataMatch = Regex.Match(objectAttrs, @"data=""([^""]+)""", RegexOptions.IgnoreCase);
+                if (!dataMatch.Success)
+                    continue;
+
+                var resourceUrl = dataMatch.Groups[1].Value;
+                if (resources.Any(r => r.ResourceUrl == resourceUrl))
+                    continue;
+
+                // 파일명 추출
+                var attachmentMatch = Regex.Match(objectAttrs, @"data-attachment=""([^""]+)""", RegexOptions.IgnoreCase);
+                var fileName = attachmentMatch.Success ? attachmentMatch.Groups[1].Value : "recording.wav";
+
+                // 타입 추출
+                var typeMatch = Regex.Match(objectAttrs, @"type=""(audio/[^""]+)""", RegexOptions.IgnoreCase);
+                var mimeType = typeMatch.Success ? typeMatch.Groups[1].Value : "audio/wav";
+
+                var resourceIdMatch = Regex.Match(resourceUrl, @"resources/([^/]+)/");
+                var resourceId = resourceIdMatch.Success ? resourceIdMatch.Groups[1].Value : string.Empty;
+
+                Log4.Info($"[OneNote Audio] 패턴3 오디오 발견: {fileName}, URL={resourceUrl}");
+                resources.Add(new PageAudioResource
+                {
+                    ResourceId = resourceId,
+                    ResourceUrl = resourceUrl,
+                    FileName = fileName,
+                    MimeType = mimeType,
+                    PageId = pageId
+                });
+            }
+
+            // 패턴 4: 녹음 시작 텍스트가 있는 경우 근처의 리소스 검색
+            // "오디오 녹음 시작:" 텍스트 패턴
+            if (html.Contains("오디오 녹음") || html.Contains("Audio Recording") || html.Contains("녹음 시작"))
+            {
+                _logger.Debug("페이지에 오디오 녹음 텍스트 발견, 리소스 검색 중...");
+
+                // resources URL 패턴으로 직접 검색
+                var resourceUrlRegex = new Regex(
+                    @"https://graph\.microsoft\.com[^""'\s]+resources/([^/""'\s]+)/\$value",
+                    RegexOptions.IgnoreCase);
+
+                foreach (Match match in resourceUrlRegex.Matches(html))
+                {
+                    var resourceUrl = match.Value;
+                    var resourceId = match.Groups[1].Value;
+
+                    if (resources.Any(r => r.ResourceId == resourceId))
+                        continue;
+
+                    _logger.Debug("패턴4 리소스 URL 발견: {ResourceId}", resourceId);
+                    resources.Add(new PageAudioResource
+                    {
+                        ResourceId = resourceId,
+                        ResourceUrl = resourceUrl,
+                        FileName = $"recording_{resourceId}.wav",
+                        MimeType = "audio/wav",
+                        PageId = pageId
+                    });
+                }
+            }
+
+            _logger.Information("페이지 {PageId} 오디오 리소스 {Count}개 발견", pageId, resources.Count);
+
+            // HTML에서 object 태그 샘플 로깅 (디버깅용)
+            if (resources.Count == 0)
+            {
+                var objectTags = Regex.Matches(html, @"<object[^>]*>", RegexOptions.IgnoreCase);
+                _logger.Debug("페이지 object 태그 {Count}개 발견", objectTags.Count);
+                foreach (Match tag in objectTags.Take(5))
+                {
+                    _logger.Debug("Object 태그 샘플: {Tag}", tag.Value.Substring(0, Math.Min(200, tag.Value.Length)));
+                }
+            }
+            return resources;
+        }
+        catch (Exception ex)
+        {
+            _logger.Warning(ex, "페이지 오디오 리소스 조회 예외: PageId={PageId}", pageId);
+            return resources;
+        }
+    }
+
+    /// <summary>
+    /// OneNote 오디오 리소스를 로컬 파일로 다운로드
+    /// </summary>
+    /// <param name="resourceUrl">리소스 URL</param>
+    /// <param name="fileName">저장할 파일명</param>
+    /// <param name="saveDir">저장 디렉토리</param>
+    /// <returns>저장된 파일 경로</returns>
+    public async Task<string?> DownloadAudioResourceAsync(string resourceUrl, string fileName, string saveDir)
+    {
+        if (string.IsNullOrEmpty(resourceUrl))
+            return null;
+
+        try
+        {
+            var accessToken = await _authService.GetAccessTokenAsync();
+            using var httpClient = new HttpClient();
+            httpClient.DefaultRequestHeaders.Authorization =
+                new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", accessToken);
+
+            var bytes = await httpClient.GetByteArrayAsync(resourceUrl);
+
+            if (!Directory.Exists(saveDir))
+                Directory.CreateDirectory(saveDir);
+
+            // 안전한 파일명 생성
+            var safeFileName = Path.GetInvalidFileNameChars()
+                .Aggregate(fileName, (current, c) => current.Replace(c, '_'));
+            var filePath = Path.Combine(saveDir, safeFileName);
+
+            // 중복 파일명 처리
+            var baseName = Path.GetFileNameWithoutExtension(safeFileName);
+            var extension = Path.GetExtension(safeFileName);
+            var counter = 1;
+            while (File.Exists(filePath))
+            {
+                safeFileName = $"{baseName}_{counter}{extension}";
+                filePath = Path.Combine(saveDir, safeFileName);
+                counter++;
+            }
+
+            await File.WriteAllBytesAsync(filePath, bytes);
+            _logger.Debug("오디오 리소스 다운로드 완료: {FilePath}", filePath);
+            return filePath;
+        }
+        catch (Exception ex)
+        {
+            _logger.Warning(ex, "오디오 리소스 다운로드 실패: {Url}", resourceUrl);
+            return null;
+        }
+    }
+
+    /// <summary>
     /// 바이트 배열에서 MIME 타입 감지
     /// </summary>
     private static string DetectMimeType(byte[] bytes)
@@ -1090,4 +1412,35 @@ public enum NotebookSource
     /// SharePoint 사이트 노트북
     /// </summary>
     Site
+}
+
+/// <summary>
+/// OneNote 페이지의 오디오 리소스 정보
+/// </summary>
+public class PageAudioResource
+{
+    /// <summary>
+    /// 리소스 ID
+    /// </summary>
+    public string ResourceId { get; set; } = string.Empty;
+
+    /// <summary>
+    /// 리소스 URL (다운로드용)
+    /// </summary>
+    public string ResourceUrl { get; set; } = string.Empty;
+
+    /// <summary>
+    /// 원본 파일명
+    /// </summary>
+    public string FileName { get; set; } = string.Empty;
+
+    /// <summary>
+    /// MIME 타입 (audio/wav, audio/mp3 등)
+    /// </summary>
+    public string MimeType { get; set; } = string.Empty;
+
+    /// <summary>
+    /// 페이지 ID
+    /// </summary>
+    public string PageId { get; set; } = string.Empty;
 }

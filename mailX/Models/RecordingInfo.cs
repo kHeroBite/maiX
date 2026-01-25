@@ -1,4 +1,6 @@
 using System;
+using System.ComponentModel;
+using System.Runtime.CompilerServices;
 
 namespace mailX.Models;
 
@@ -13,6 +15,11 @@ public enum RecordingSource
     MailX,
 
     /// <summary>
+    /// OneNote 페이지에 첨부된 녹음
+    /// </summary>
+    OneNote,
+
+    /// <summary>
     /// 외부에서 가져온 파일
     /// </summary>
     External
@@ -21,27 +28,64 @@ public enum RecordingSource
 /// <summary>
 /// 녹음 파일 정보 모델
 /// </summary>
-public class RecordingInfo
+public class RecordingInfo : INotifyPropertyChanged
 {
+    public event PropertyChangedEventHandler? PropertyChanged;
+
+    protected void OnPropertyChanged([CallerMemberName] string? propertyName = null)
+    {
+        PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));
+    }
+
+    private string _filePath = string.Empty;
+    private string _fileName = string.Empty;
+    private DateTime _createdTime;
+    private TimeSpan _duration;
+    private RecordingSource _source = RecordingSource.External;
+    private bool _isPlaying;
+    private TimeSpan _currentPosition;
+
     /// <summary>
     /// 파일 경로
     /// </summary>
-    public string FilePath { get; set; } = string.Empty;
+    public string FilePath
+    {
+        get => _filePath;
+        set { _filePath = value; OnPropertyChanged(); }
+    }
 
     /// <summary>
     /// 파일 이름
     /// </summary>
-    public string FileName { get; set; } = string.Empty;
+    public string FileName
+    {
+        get => _fileName;
+        set { _fileName = value; OnPropertyChanged(); }
+    }
 
     /// <summary>
     /// 생성 시간
     /// </summary>
-    public DateTime CreatedTime { get; set; }
+    public DateTime CreatedTime
+    {
+        get => _createdTime;
+        set { _createdTime = value; OnPropertyChanged(); }
+    }
 
     /// <summary>
     /// 녹음 길이
     /// </summary>
-    public TimeSpan Duration { get; set; }
+    public TimeSpan Duration
+    {
+        get => _duration;
+        set
+        {
+            _duration = value;
+            OnPropertyChanged();
+            OnPropertyChanged(nameof(DurationDisplay));
+            OnPropertyChanged(nameof(Progress));
+        }
+    }
 
     /// <summary>
     /// 녹음 길이 표시 문자열
@@ -51,17 +95,65 @@ public class RecordingInfo
     /// <summary>
     /// 파일 출처 (mailX 녹음 vs 외부 파일)
     /// </summary>
-    public RecordingSource Source { get; set; } = RecordingSource.External;
+    public RecordingSource Source
+    {
+        get => _source;
+        set { _source = value; OnPropertyChanged(); OnPropertyChanged(nameof(SourceDisplay)); OnPropertyChanged(nameof(SourceIcon)); }
+    }
+
+    /// <summary>
+    /// 현재 재생 중 여부 (UI 바인딩용)
+    /// </summary>
+    public bool IsPlaying
+    {
+        get => _isPlaying;
+        set { _isPlaying = value; OnPropertyChanged(); }
+    }
+
+    /// <summary>
+    /// 현재 재생 위치 (UI 바인딩용)
+    /// </summary>
+    public TimeSpan CurrentPosition
+    {
+        get => _currentPosition;
+        set
+        {
+            _currentPosition = value;
+            OnPropertyChanged();
+            OnPropertyChanged(nameof(CurrentPositionDisplay));
+            OnPropertyChanged(nameof(Progress));
+        }
+    }
 
     /// <summary>
     /// 출처 표시 텍스트
     /// </summary>
-    public string SourceDisplay => Source == RecordingSource.MailX ? "mailX" : "외부";
+    public string SourceDisplay => Source switch
+    {
+        RecordingSource.MailX => "mailX",
+        RecordingSource.OneNote => "OneNote",
+        _ => "외부"
+    };
 
     /// <summary>
     /// 출처별 아이콘 심볼
     /// </summary>
-    public string SourceIcon => Source == RecordingSource.MailX ? "Mic24" : "Document24";
+    public string SourceIcon => Source switch
+    {
+        RecordingSource.MailX => "Mic24",
+        RecordingSource.OneNote => "Note24",
+        _ => "Document24"
+    };
+
+    /// <summary>
+    /// OneNote 리소스 ID (OneNote 녹음인 경우)
+    /// </summary>
+    public string? OneNoteResourceId { get; set; }
+
+    /// <summary>
+    /// OneNote 리소스 URL (다운로드용)
+    /// </summary>
+    public string? OneNoteResourceUrl { get; set; }
 
     /// <summary>
     /// 연결된 OneNote 페이지 ID (파일명에서 추출)
@@ -73,6 +165,46 @@ public class RecordingInfo
     /// 페이지 연결 여부
     /// </summary>
     public bool IsLinkedToPage => !string.IsNullOrEmpty(LinkedPageId);
+
+    /// <summary>
+    /// STT 결과 JSON 파일 경로
+    /// </summary>
+    public string? STTResultPath { get; set; }
+
+    /// <summary>
+    /// AI 요약 결과 JSON 파일 경로
+    /// </summary>
+    public string? SummaryResultPath { get; set; }
+
+    /// <summary>
+    /// STT 완료 여부
+    /// </summary>
+    public bool HasSTT => !string.IsNullOrEmpty(STTResultPath) && System.IO.File.Exists(STTResultPath);
+
+    /// <summary>
+    /// 요약 완료 여부
+    /// </summary>
+    public bool HasSummary => !string.IsNullOrEmpty(SummaryResultPath) && System.IO.File.Exists(SummaryResultPath);
+
+    /// <summary>
+    /// STT 상태 표시 아이콘
+    /// </summary>
+    public string STTStatusIcon => HasSTT ? "CheckmarkCircle24" : "Circle24";
+
+    /// <summary>
+    /// 요약 상태 표시 아이콘
+    /// </summary>
+    public string SummaryStatusIcon => HasSummary ? "CheckmarkCircle24" : "Circle24";
+
+    /// <summary>
+    /// 현재 재생 위치 표시
+    /// </summary>
+    public string CurrentPositionDisplay => CurrentPosition.ToString(@"mm\:ss");
+
+    /// <summary>
+    /// 진행률 (0.0 ~ 1.0)
+    /// </summary>
+    public double Progress => Duration.TotalSeconds > 0 ? CurrentPosition.TotalSeconds / Duration.TotalSeconds : 0;
 }
 
 /// <summary>

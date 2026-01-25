@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.IO;
 using System.Linq;
@@ -10,6 +11,7 @@ using mailX.Utils;
 using mailX.Services.Graph;
 using Newtonsoft.Json;
 using Serilog;
+using STJ = System.Text.Json;
 
 namespace mailX.ViewModels;
 
@@ -20,6 +22,7 @@ public partial class OneNoteViewModel : ViewModelBase
 {
     private readonly GraphOneNoteService _oneNoteService;
     private readonly ILogger _logger;
+    private readonly Services.Speech.SpeechRecognitionService _speechService;
 
     // 캐시 관련
     private static readonly string CacheDir = Path.Combine(
@@ -156,6 +159,116 @@ public partial class OneNoteViewModel : ViewModelBase
     private Services.Audio.AudioRecordingService? _recordingService;
 
     /// <summary>
+    /// 오디오 플레이어 서비스
+    /// </summary>
+    private Services.Audio.AudioPlayerService? _audioPlayerService;
+
+    /// <summary>
+    /// 현재 재생 중인 녹음
+    /// </summary>
+    [ObservableProperty]
+    private Models.RecordingInfo? _currentPlayingRecording;
+
+    /// <summary>
+    /// 현재 페이지의 녹음만 필터링 (페이지 연결된 녹음)
+    /// </summary>
+    [ObservableProperty]
+    private ObservableCollection<Models.RecordingInfo> _currentPageRecordings = new();
+
+    /// <summary>
+    /// 현재 선택된 녹음 (상세 패널 표시용)
+    /// </summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasSelectedRecording))]
+    private Models.RecordingInfo? _selectedRecording;
+
+    /// <summary>
+    /// 선택된 녹음의 STT 세그먼트 목록
+    /// </summary>
+    public ObservableCollection<Models.TranscriptSegment> STTSegments { get; } = new();
+
+    /// <summary>
+    /// 선택된 녹음의 요약 결과
+    /// </summary>
+    [ObservableProperty]
+    private Models.RecordingSummary? _currentSummary;
+
+    /// <summary>
+    /// 선택된 녹음이 있는지 여부
+    /// </summary>
+    public bool HasSelectedRecording => SelectedRecording != null;
+
+    /// <summary>
+    /// AI 분석 활성화 여부 (녹음 시 STT/요약 자동 수행)
+    /// </summary>
+    [ObservableProperty]
+    private bool _isAIAnalysisEnabled = true;
+
+    /// <summary>
+    /// STT 진행 중 여부
+    /// </summary>
+    [ObservableProperty]
+    private bool _isSTTInProgress;
+
+    /// <summary>
+    /// STT 진행률 (0.0 ~ 1.0)
+    /// </summary>
+    [ObservableProperty]
+    private double _sttProgress;
+
+    /// <summary>
+    /// STT 진행률 텍스트 (예: "분석 중...")
+    /// </summary>
+    [ObservableProperty]
+    private string _sttProgressText = string.Empty;
+
+    /// <summary>
+    /// STT 예상 남은 시간
+    /// </summary>
+    [ObservableProperty]
+    private string _sttTimeRemaining = string.Empty;
+
+    /// <summary>
+    /// STT 분석 시작 시간 (예상 시간 계산용)
+    /// </summary>
+    private DateTime? _sttStartTime;
+
+    /// <summary>
+    /// 요약 진행 중 여부
+    /// </summary>
+    [ObservableProperty]
+    private bool _isSummaryInProgress;
+
+    /// <summary>
+    /// 현재 활성 콘텐츠 탭 (note/recording)
+    /// </summary>
+    [ObservableProperty]
+    private string _activeContentTab = "note";
+
+    /// <summary>
+    /// 실시간 STT 세그먼트 (녹음 중 점진적 추가)
+    /// </summary>
+    public ObservableCollection<Models.TranscriptSegment> LiveSTTSegments { get; } = new();
+
+    /// <summary>
+    /// 실시간 요약 텍스트 (녹음 중 점진적 업데이트)
+    /// </summary>
+    [ObservableProperty]
+    private string _liveSummaryText = string.Empty;
+
+    /// <summary>
+    /// 현재 STT 결과
+    /// </summary>
+    [ObservableProperty]
+    private Models.TranscriptResult? _currentSTTResult;
+
+    /// <summary>
+    /// 현재 요약 결과
+    /// </summary>
+    [ObservableProperty]
+    private Models.RecordingSummary? _currentSummaryResult;
+
+    /// <summary>
     /// 녹음 중 여부
     /// </summary>
     [ObservableProperty]
@@ -213,6 +326,7 @@ public partial class OneNoteViewModel : ViewModelBase
     {
         _oneNoteService = oneNoteService ?? throw new ArgumentNullException(nameof(oneNoteService));
         _logger = Log.ForContext<OneNoteViewModel>();
+        _speechService = new Services.Speech.SpeechRecognitionService();
     }
 
     /// <summary>
@@ -379,7 +493,7 @@ public partial class OneNoteViewModel : ViewModelBase
     }
 
     /// <summary>
-    /// 녹음 파일 목록 로드
+    /// 녹음 파일 목록 로드 (모든 녹음)
     /// </summary>
     [RelayCommand]
     public void LoadRecordings()
@@ -391,7 +505,6 @@ public partial class OneNoteViewModel : ViewModelBase
             if (!Directory.Exists(RecordingsDir))
             {
                 Directory.CreateDirectory(RecordingsDir);
-                return;
             }
 
             // WAV, MP3, M4A, OGG 파일 검색
@@ -414,6 +527,24 @@ public partial class OneNoteViewModel : ViewModelBase
                         ? Models.RecordingSource.MailX
                         : Models.RecordingSource.External
                 };
+
+                // 파일명에서 페이지 ID 추출 (형식: recording_{pageId}_{timestamp}.wav)
+                if (recording.Source == Models.RecordingSource.MailX)
+                {
+                    var nameParts = Path.GetFileNameWithoutExtension(fileInfo.Name).Split('_');
+                    if (nameParts.Length >= 3)
+                    {
+                        // recording_{pageId}_{timestamp} - pageId는 가운데 부분들
+                        // timestamp는 마지막 부분 (숫자 14자리 이상)
+                        var lastPart = nameParts[^1];
+                        if (lastPart.Length >= 14 && lastPart.All(char.IsDigit))
+                        {
+                            // pageId는 recording_ 이후부터 마지막 timestamp 이전까지
+                            recording.LinkedPageId = string.Join("_", nameParts[1..^1]);
+                        }
+                    }
+                }
+
                 Recordings.Add(recording);
             }
 
@@ -421,10 +552,108 @@ public partial class OneNoteViewModel : ViewModelBase
                 Recordings.Count,
                 Recordings.Count(r => r.Source == Models.RecordingSource.MailX),
                 Recordings.Count(r => r.Source == Models.RecordingSource.External));
+
+            // 현재 페이지 필터링 적용
+            FilterRecordingsForCurrentPage();
         }
         catch (Exception ex)
         {
             _logger.Warning(ex, "녹음 파일 로드 실패");
+        }
+    }
+
+    /// <summary>
+    /// 현재 선택된 페이지의 녹음 목록 로드 (로컬 + OneNote)
+    /// </summary>
+    [RelayCommand]
+    public async Task LoadRecordingsForCurrentPageAsync()
+    {
+        Log4.Info("★★★ LoadRecordingsForCurrentPageAsync 호출됨 ★★★");
+        CurrentPageRecordings.Clear();
+
+        // 먼저 전체 녹음 로드
+        if (Recordings.Count == 0)
+        {
+            LoadRecordings();
+        }
+
+        // 페이지가 선택되지 않았으면 모든 녹음 표시
+        if (SelectedPage == null)
+        {
+            Log4.Debug($"페이지 미선택 - 모든 녹음 표시: {Recordings.Count}개");
+            foreach (var r in Recordings)
+            {
+                CurrentPageRecordings.Add(r);
+            }
+            return;
+        }
+
+        var pageId = SelectedPage.Id;
+        Log4.Info($"★★★ 페이지 {pageId} ({SelectedPage.Title}) 녹음 로드 시작 ★★★");
+
+        // 1. 해당 페이지에 연결된 mailX 녹음 추가
+        foreach (var recording in Recordings)
+        {
+            if (recording.LinkedPageId == pageId)
+            {
+                CurrentPageRecordings.Add(recording);
+            }
+        }
+
+        // 2. OneNote 페이지에서 오디오 리소스 가져오기
+        try
+        {
+            var oneNoteResources = await _oneNoteService.GetPageAudioResourcesAsync(pageId);
+            foreach (var resource in oneNoteResources)
+            {
+                // 이미 다운로드된 파일인지 확인 (리소스 ID 기반)
+                var existingDownloaded = CurrentPageRecordings.FirstOrDefault(r =>
+                    r.OneNoteResourceId == resource.ResourceId);
+
+                if (existingDownloaded == null)
+                {
+                    // OneNote 녹음 추가
+                    var oneNoteRecording = new Models.RecordingInfo
+                    {
+                        FileName = resource.FileName,
+                        Source = Models.RecordingSource.OneNote,
+                        LinkedPageId = pageId,
+                        OneNoteResourceId = resource.ResourceId,
+                        OneNoteResourceUrl = resource.ResourceUrl,
+                        CreatedTime = DateTime.Now
+                    };
+
+                    // 미리 다운로드하여 Duration 계산
+                    try
+                    {
+                        var downloadedPath = await _oneNoteService.DownloadAudioResourceAsync(
+                            resource.ResourceUrl,
+                            resource.FileName,
+                            RecordingsDir);
+
+                        if (!string.IsNullOrEmpty(downloadedPath))
+                        {
+                            oneNoteRecording.FilePath = downloadedPath;
+                            oneNoteRecording.Duration = GetAudioDuration(downloadedPath);
+                            Log4.Info($"[OneNote] 녹음 다운로드 완료: {resource.FileName}, Duration={oneNoteRecording.Duration}");
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        Log4.Warn($"[OneNote] 녹음 다운로드 실패: {resource.FileName} - {ex.Message}");
+                    }
+
+                    CurrentPageRecordings.Add(oneNoteRecording);
+                }
+            }
+
+            var mailxCount = CurrentPageRecordings.Count(r => r.Source == Models.RecordingSource.MailX);
+            var oneNoteCount = CurrentPageRecordings.Count(r => r.Source == Models.RecordingSource.OneNote);
+            Log4.Info($"★★★ 페이지 {pageId} 녹음 로드 완료: mailX {mailxCount}개, OneNote {oneNoteCount}개 ★★★");
+        }
+        catch (Exception ex)
+        {
+            _logger.Warning(ex, "OneNote 오디오 리소스 로드 실패");
         }
     }
 
@@ -435,36 +664,292 @@ public partial class OneNoteViewModel : ViewModelBase
     {
         try
         {
-            using var reader = new NAudio.Wave.AudioFileReader(filePath);
-            return reader.TotalTime;
+            var extension = Path.GetExtension(filePath).ToLowerInvariant();
+
+            // WMA, AAC 등은 MediaFoundationReader 사용
+            if (extension is ".wma" or ".wmv" or ".asf" or ".aac" or ".m4a" or ".mp4")
+            {
+                using var reader = new NAudio.Wave.MediaFoundationReader(filePath);
+                return reader.TotalTime;
+            }
+
+            // WAV, MP3 등은 AudioFileReader 사용
+            using var audioReader = new NAudio.Wave.AudioFileReader(filePath);
+            return audioReader.TotalTime;
         }
-        catch
+        catch (Exception ex)
         {
+            Log4.Warn($"오디오 길이 확인 실패: {filePath} - {ex.Message}");
             return TimeSpan.Zero;
         }
     }
 
     /// <summary>
-    /// 녹음 파일 재생
+    /// 녹음 파일 재생 (내장 플레이어 사용)
     /// </summary>
     [RelayCommand]
-    public void PlayRecording(Models.RecordingInfo? recording)
+    public async Task PlayRecordingAsync(Models.RecordingInfo? recording)
     {
-        if (recording == null || string.IsNullOrEmpty(recording.FilePath)) return;
+        if (recording == null) return;
+
+        Log4.Info($"[Audio] PlayRecordingAsync 호출됨: {recording.FileName}, Source={recording.Source}, FilePath={recording.FilePath ?? "null"}");
 
         try
         {
-            // Windows 기본 프로그램으로 재생
-            System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
+            // OneNote 녹음인 경우 다운로드 필요
+            if (recording.Source == Models.RecordingSource.OneNote &&
+                string.IsNullOrEmpty(recording.FilePath) &&
+                !string.IsNullOrEmpty(recording.OneNoteResourceUrl))
             {
-                FileName = recording.FilePath,
-                UseShellExecute = true
-            });
+                Log4.Info($"[Audio] OneNote 녹음 다운로드 시작: {recording.FileName}");
+                Log4.Info($"[Audio] URL: {recording.OneNoteResourceUrl}");
+
+                var downloadedPath = await _oneNoteService.DownloadAudioResourceAsync(
+                    recording.OneNoteResourceUrl,
+                    recording.FileName,
+                    RecordingsDir);
+
+                if (string.IsNullOrEmpty(downloadedPath))
+                {
+                    Log4.Warn($"[Audio] OneNote 녹음 다운로드 실패: {recording.FileName}");
+                    return;
+                }
+
+                recording.FilePath = downloadedPath;
+                recording.Duration = GetAudioDuration(downloadedPath);
+                Log4.Info($"[Audio] OneNote 녹음 다운로드 완료: {downloadedPath}, Duration={recording.Duration}");
+            }
+
+            if (string.IsNullOrEmpty(recording.FilePath))
+            {
+                Log4.Warn($"[Audio] 재생 실패 - FilePath가 비어있음");
+                return;
+            }
+
+            // 이미 같은 파일이 재생 중이면 일시정지/재개
+            if (CurrentPlayingRecording?.FilePath == recording.FilePath && _audioPlayerService != null)
+            {
+                Log4.Info($"[Audio] 같은 파일 감지, State={_audioPlayerService.State}, TotalDuration={_audioPlayerService.TotalDuration}");
+
+                // 파일이 로드되지 않은 경우 (Duration이 0) 새로 로드
+                if (_audioPlayerService.TotalDuration == TimeSpan.Zero)
+                {
+                    Log4.Info($"[Audio] 파일이 로드되지 않음, 새로 로드 시작");
+                    // 토글하지 않고 아래로 진행하여 새로 로드
+                }
+                else
+                {
+                    _audioPlayerService.TogglePlayPause();
+                    recording.IsPlaying = _audioPlayerService.IsPlaying;
+                    OnPropertyChanged(nameof(CurrentPlayingRecording));
+                    Log4.Info($"[Audio] 재생 토글: IsPlaying={recording.IsPlaying}");
+                    return;
+                }
+            }
+
+            // 다른 파일 재생 중이면 중지
+            StopPlayback();
+
+            // 오디오 플레이어 초기화 (이벤트는 한 번만 등록)
+            if (_audioPlayerService == null)
+            {
+                _audioPlayerService = new Services.Audio.AudioPlayerService();
+
+                // 이벤트 연결 (최초 한 번만)
+                _audioPlayerService.PositionChanged += OnAudioPositionChanged;
+                _audioPlayerService.PlaybackStopped += OnAudioPlaybackStopped;
+                _audioPlayerService.StateChanged += OnAudioStateChanged;
+            }
+
+            // 파일 로드 및 재생
+            Log4.Info($"[Audio] 파일 로드 시작: {recording.FilePath}");
+            _audioPlayerService.Load(recording.FilePath);
+            Log4.Info($"[Audio] 파일 로드 완료, TotalDuration={_audioPlayerService.TotalDuration}");
+
+            _audioPlayerService.Play();
+
+            recording.IsPlaying = true;
+            CurrentPlayingRecording = recording;
+            OnPropertyChanged(nameof(CurrentPlayingRecording));
+
+            Log4.Info($"[Audio] 재생 시작: {recording.FileName}");
         }
         catch (Exception ex)
         {
             _logger.Warning(ex, "녹음 파일 재생 실패: {File}", recording.FileName);
         }
+    }
+
+    /// <summary>
+    /// 오디오 위치 변경 이벤트 핸들러
+    /// </summary>
+    private void OnAudioPositionChanged(TimeSpan position)
+    {
+        System.Windows.Application.Current?.Dispatcher.Invoke(() =>
+        {
+            if (CurrentPlayingRecording != null)
+            {
+                CurrentPlayingRecording.CurrentPosition = position;
+                OnPropertyChanged(nameof(CurrentPlayingRecording));
+            }
+        });
+    }
+
+    /// <summary>
+    /// 오디오 재생 중지 이벤트 핸들러
+    /// </summary>
+    private void OnAudioPlaybackStopped()
+    {
+        System.Windows.Application.Current?.Dispatcher.Invoke(() =>
+        {
+            if (CurrentPlayingRecording != null)
+            {
+                CurrentPlayingRecording.IsPlaying = false;
+                CurrentPlayingRecording.CurrentPosition = TimeSpan.Zero;
+                OnPropertyChanged(nameof(CurrentPlayingRecording));
+            }
+            CurrentPlayingRecording = null;
+        });
+    }
+
+    /// <summary>
+    /// 오디오 상태 변경 이벤트 핸들러
+    /// </summary>
+    private void OnAudioStateChanged(NAudio.Wave.PlaybackState state)
+    {
+        System.Windows.Application.Current?.Dispatcher.Invoke(() =>
+        {
+            if (CurrentPlayingRecording != null)
+            {
+                CurrentPlayingRecording.IsPlaying = state == NAudio.Wave.PlaybackState.Playing;
+                OnPropertyChanged(nameof(CurrentPlayingRecording));
+            }
+        });
+    }
+
+    /// <summary>
+    /// 재생 정지
+    /// </summary>
+    [RelayCommand]
+    public void StopPlayback()
+    {
+        if (_audioPlayerService != null)
+        {
+            _audioPlayerService.Stop();
+            if (CurrentPlayingRecording != null)
+            {
+                CurrentPlayingRecording.IsPlaying = false;
+                CurrentPlayingRecording.CurrentPosition = TimeSpan.Zero;
+            }
+            CurrentPlayingRecording = null;
+        }
+    }
+
+    /// <summary>
+    /// 재생 일시정지/재개 (UI 버튼 및 키보드 단축키용)
+    /// </summary>
+    [RelayCommand]
+    public void TogglePlayPause()
+    {
+        if (_audioPlayerService == null || CurrentPlayingRecording == null) return;
+
+        _audioPlayerService.TogglePlayPause();
+        CurrentPlayingRecording.IsPlaying = _audioPlayerService.IsPlaying;
+        OnPropertyChanged(nameof(CurrentPlayingRecording));
+    }
+
+    /// <summary>
+    /// 5초 뒤로
+    /// </summary>
+    [RelayCommand]
+    public void SeekBackward()
+    {
+        _audioPlayerService?.SeekBackward();
+    }
+
+    /// <summary>
+    /// 5초 앞으로
+    /// </summary>
+    [RelayCommand]
+    public void SeekForward()
+    {
+        _audioPlayerService?.SeekForward();
+    }
+
+    /// <summary>
+    /// 특정 위치로 이동
+    /// </summary>
+    public void SeekToPosition(double seconds)
+    {
+        _audioPlayerService?.Seek(TimeSpan.FromSeconds(seconds));
+    }
+
+    /// <summary>
+    /// 특정 시간으로 이동 (STT 세그먼트 클릭 시 호출)
+    /// </summary>
+    public async void SeekToTime(TimeSpan time)
+    {
+        // 현재 선택된 녹음이 재생 중이 아니면 재생 시작
+        if (SelectedRecording != null && CurrentPlayingRecording?.FilePath != SelectedRecording.FilePath)
+        {
+            await PlayRecordingAsync(SelectedRecording);
+        }
+
+        // 해당 위치로 이동
+        _audioPlayerService?.Seek(time);
+    }
+
+    /// <summary>
+    /// 상대 위치로 이동 (초 단위)
+    /// </summary>
+    /// <param name="seconds">이동할 초 (양수: 앞으로, 음수: 뒤로)</param>
+    public void SeekRelative(double seconds)
+    {
+        if (_audioPlayerService == null) return;
+
+        var newPosition = _audioPlayerService.CurrentPosition + TimeSpan.FromSeconds(seconds);
+        var clampedSeconds = Math.Clamp(newPosition.TotalSeconds, 0, _audioPlayerService.TotalDuration.TotalSeconds);
+        _audioPlayerService.Seek(TimeSpan.FromSeconds(clampedSeconds));
+
+        // 현재 재생 중인 녹음의 위치 업데이트
+        if (CurrentPlayingRecording != null)
+        {
+            CurrentPlayingRecording.CurrentPosition = TimeSpan.FromSeconds(clampedSeconds);
+        }
+    }
+
+    /// <summary>
+    /// 현재 페이지의 녹음 파일만 필터링 (동기 버전 - LoadRecordings 내부 호출용)
+    /// </summary>
+    public void FilterRecordingsForCurrentPage()
+    {
+        CurrentPageRecordings.Clear();
+
+        if (SelectedPage == null)
+        {
+            // 페이지 선택 안 됨: 모든 mailX/외부 녹음 표시
+            foreach (var recording in Recordings)
+            {
+                CurrentPageRecordings.Add(recording);
+            }
+            _logger.Debug("페이지별 녹음 필터링: 전체 {Total}개 (페이지 미선택)",
+                Recordings.Count);
+            return;
+        }
+
+        // 현재 페이지 ID로 필터링
+        var pageId = SelectedPage.Id;
+        foreach (var recording in Recordings)
+        {
+            // 해당 페이지에 연결된 녹음만 추가
+            if (recording.LinkedPageId == pageId)
+            {
+                CurrentPageRecordings.Add(recording);
+            }
+        }
+
+        _logger.Debug("페이지별 녹음 필터링: 전체 {Total}개 중 {Filtered}개 (페이지 ID: {PageId})",
+            Recordings.Count, CurrentPageRecordings.Count, pageId);
     }
 
     /// <summary>
@@ -488,6 +973,630 @@ public partial class OneNoteViewModel : ViewModelBase
         {
             _logger.Warning(ex, "녹음 파일 삭제 실패: {File}", recording.FileName);
         }
+    }
+
+    /// <summary>
+    /// 선택된 녹음 변경 시 STT/요약 로드
+    /// </summary>
+    partial void OnSelectedRecordingChanged(Models.RecordingInfo? value)
+    {
+        if (value != null)
+        {
+            _logger.Information("[OneNote] OnSelectedRecordingChanged 호출됨: {FileName}", value.FileName);
+            LoadSTTResultAsync(value);
+            LoadSummaryResultAsync(value);
+        }
+        else
+        {
+            STTSegments.Clear();
+            CurrentSummary = null;
+        }
+    }
+
+    /// <summary>
+    /// 선택된 녹음의 STT/요약 결과를 수동으로 로드 (UI에서 직접 호출용)
+    /// </summary>
+    public void LoadSelectedRecordingResults()
+    {
+        if (SelectedRecording != null)
+        {
+            _logger.Information("[OneNote] LoadSelectedRecordingResults 호출: {FileName}", SelectedRecording.FileName);
+            LoadSTTResultAsync(SelectedRecording);
+            LoadSummaryResultAsync(SelectedRecording);
+        }
+    }
+
+    /// <summary>
+    /// 선택된 녹음의 STT 결과 로드
+    /// </summary>
+    private async void LoadSTTResultAsync(Models.RecordingInfo recording)
+    {
+        STTSegments.Clear();
+        _logger.Debug("[OneNote] STT 로드 시작: {FileName}, FilePath: {FilePath}", recording.FileName, recording.FilePath);
+
+        // STT 결과 파일 경로 (녹음 파일과 같은 위치에 .stt.json)
+        var sttPath = recording.STTResultPath;
+        if (string.IsNullOrEmpty(sttPath))
+        {
+            sttPath = Path.ChangeExtension(recording.FilePath, ".stt.json");
+        }
+        _logger.Debug("[OneNote] STT 기본 경로: {Path}, 존재: {Exists}", sttPath, File.Exists(sttPath ?? ""));
+
+        // STT 결과 파일이 없으면 같은 기본 파일명의 STT 파일 검색 (OneNote 녹음 재다운로드 대응)
+        if (string.IsNullOrEmpty(sttPath) || !File.Exists(sttPath))
+        {
+            var dir = Path.GetDirectoryName(recording.FilePath);
+            _logger.Debug("[OneNote] STT 기본명 검색 시작: 디렉토리={Dir}", dir);
+
+            if (!string.IsNullOrEmpty(dir) && Directory.Exists(dir))
+            {
+                // 파일명에서 기본 이름 추출 (예: "2025.03.04_92.wma" -> "2025.03.04")
+                var baseName = Path.GetFileNameWithoutExtension(recording.FileName);
+                var originalBaseName = baseName;
+                var underscoreIdx = baseName.LastIndexOf('_');
+                if (underscoreIdx > 0 && int.TryParse(baseName.Substring(underscoreIdx + 1), out _))
+                {
+                    baseName = baseName.Substring(0, underscoreIdx);
+                }
+                _logger.Debug("[OneNote] 기본명 추출: {Original} -> {BaseName}", originalBaseName, baseName);
+
+                // 가장 최근의 STT 결과 파일 찾기
+                var searchPattern = $"{baseName}*.stt.json";
+                _logger.Debug("[OneNote] 검색 패턴: {Pattern}", searchPattern);
+
+                var sttFiles = Directory.GetFiles(dir, searchPattern)
+                    .OrderByDescending(f => File.GetLastWriteTime(f))
+                    .ToArray();
+                _logger.Debug("[OneNote] 검색 결과: {Count}개 파일 발견", sttFiles.Length);
+
+                if (sttFiles.Length > 0)
+                {
+                    sttPath = sttFiles[0];
+                    _logger.Information("[OneNote] STT 결과 파일 발견 (기본명 검색): {Path}", sttPath);
+                }
+            }
+        }
+
+        if (string.IsNullOrEmpty(sttPath) || !File.Exists(sttPath))
+        {
+            _logger.Debug("[OneNote] STT 결과 없음: {FileName}", recording.FileName);
+            return;
+        }
+
+        try
+        {
+            var json = await File.ReadAllTextAsync(sttPath);
+            var result = STJ.JsonSerializer.Deserialize<Models.TranscriptResult>(json);
+            if (result?.Segments != null)
+            {
+                foreach (var segment in result.Segments)
+                {
+                    STTSegments.Add(segment);
+                }
+                recording.STTResultPath = sttPath;
+                _logger.Information("[OneNote] STT 결과 로드: {FileName}, {Count}개 세그먼트",
+                    recording.FileName, STTSegments.Count);
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.Warning(ex, "[OneNote] STT 결과 로드 실패: {FileName}", recording.FileName);
+        }
+    }
+
+    /// <summary>
+    /// 선택된 녹음의 요약 결과 로드
+    /// </summary>
+    private async void LoadSummaryResultAsync(Models.RecordingInfo recording)
+    {
+        CurrentSummary = null;
+        _logger.Debug("[OneNote] 요약 로드 시작: {FileName}, FilePath: {FilePath}", recording.FileName, recording.FilePath);
+
+        // 요약 결과 파일 경로 (녹음 파일과 같은 위치에 .summary.json)
+        var summaryPath = recording.SummaryResultPath;
+        if (string.IsNullOrEmpty(summaryPath))
+        {
+            summaryPath = Path.ChangeExtension(recording.FilePath, ".summary.json");
+        }
+        _logger.Debug("[OneNote] 요약 기본 경로: {Path}, 존재: {Exists}", summaryPath, File.Exists(summaryPath ?? ""));
+
+        // 요약 결과 파일이 없으면 같은 기본 파일명의 요약 파일 검색 (OneNote 녹음 재다운로드 대응)
+        if (string.IsNullOrEmpty(summaryPath) || !File.Exists(summaryPath))
+        {
+            var dir = Path.GetDirectoryName(recording.FilePath);
+            _logger.Debug("[OneNote] 요약 기본명 검색 시작: 디렉토리={Dir}", dir);
+
+            if (!string.IsNullOrEmpty(dir) && Directory.Exists(dir))
+            {
+                // 파일명에서 기본 이름 추출 (예: "2025.03.04_92.wma" -> "2025.03.04")
+                var baseName = Path.GetFileNameWithoutExtension(recording.FileName);
+                var originalBaseName = baseName;
+                var underscoreIdx = baseName.LastIndexOf('_');
+                if (underscoreIdx > 0 && int.TryParse(baseName.Substring(underscoreIdx + 1), out _))
+                {
+                    baseName = baseName.Substring(0, underscoreIdx);
+                }
+                _logger.Debug("[OneNote] 기본명 추출: {Original} -> {BaseName}", originalBaseName, baseName);
+
+                // 가장 최근의 요약 결과 파일 찾기
+                var searchPattern = $"{baseName}*.summary.json";
+                _logger.Debug("[OneNote] 검색 패턴: {Pattern}", searchPattern);
+
+                var summaryFiles = Directory.GetFiles(dir, searchPattern)
+                    .OrderByDescending(f => File.GetLastWriteTime(f))
+                    .ToArray();
+                _logger.Debug("[OneNote] 검색 결과: {Count}개 파일 발견", summaryFiles.Length);
+
+                if (summaryFiles.Length > 0)
+                {
+                    summaryPath = summaryFiles[0];
+                    _logger.Information("[OneNote] 요약 결과 파일 발견 (기본명 검색): {Path}", summaryPath);
+                }
+            }
+        }
+
+        if (string.IsNullOrEmpty(summaryPath) || !File.Exists(summaryPath))
+        {
+            _logger.Debug("[OneNote] 요약 결과 없음: {FileName}", recording.FileName);
+            return;
+        }
+
+        try
+        {
+            var json = await File.ReadAllTextAsync(summaryPath);
+            CurrentSummary = STJ.JsonSerializer.Deserialize<Models.RecordingSummary>(json);
+            if (CurrentSummary != null)
+            {
+                recording.SummaryResultPath = summaryPath;
+                _logger.Information("[OneNote] 요약 결과 로드: {FileName}", recording.FileName);
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.Warning(ex, "[OneNote] 요약 결과 로드 실패: {FileName}", recording.FileName);
+        }
+    }
+
+    /// <summary>
+    /// STT 분석 실행 (sherpa-onnx 사용)
+    /// </summary>
+    public async Task RunSTTAsync(Models.RecordingInfo recording)
+    {
+        if (recording == null || string.IsNullOrEmpty(recording.FilePath))
+        {
+            Utils.Log4.Warn("[OneNote] STT 실행 불가: 녹음 파일 없음");
+            return;
+        }
+
+        if (!File.Exists(recording.FilePath))
+        {
+            Utils.Log4.Warn($"[OneNote] STT 실행 불가: 파일이 존재하지 않음 - {recording.FilePath}");
+            return;
+        }
+
+        IsSTTInProgress = true;
+        SttProgress = 0;
+        SttProgressText = "준비 중...";
+        SttTimeRemaining = "예상 남은 시간: 계산 중...";
+        _sttStartTime = DateTime.Now;
+        STTSegments.Clear();
+
+        try
+        {
+            Utils.Log4.Info($"[OneNote] STT 분석 시작: {recording.FileName}");
+
+            // STT 서비스 초기화 (모델 다운로드 포함)
+            if (!_speechService.IsInitialized)
+            {
+                Utils.Log4.Info("[OneNote] STT 서비스 초기화 중...");
+                SttProgressText = "모델 다운로드 중...";
+
+                // 모델 다운로드 진행률 이벤트 구독
+                void OnDownloadProgress(double progress, string message)
+                {
+                    System.Windows.Application.Current.Dispatcher.Invoke(() =>
+                    {
+                        SttProgress = progress * 0.3; // 다운로드는 전체의 30%
+                        SttProgressText = message;
+                        Utils.Log4.Debug($"[OneNote] 모델 다운로드: {progress:P0} - {message}");
+                    });
+                }
+
+                _speechService.DownloadProgressChanged += OnDownloadProgress;
+
+                try
+                {
+                    var initialized = await _speechService.InitializeAsync();
+                    if (!initialized)
+                    {
+                        Utils.Log4.Error("[OneNote] STT 서비스 초기화 실패");
+                        return;
+                    }
+                }
+                finally
+                {
+                    _speechService.DownloadProgressChanged -= OnDownloadProgress;
+                }
+            }
+
+            SttProgress = 0.3;
+            SttProgressText = "음성 분석 중...";
+
+            // 실시간 세그먼트 수신 이벤트
+            void OnSegmentRecognized(Models.TranscriptSegment segment)
+            {
+                // UI 스레드에서 컬렉션 업데이트
+                System.Windows.Application.Current.Dispatcher.Invoke(() =>
+                {
+                    STTSegments.Add(segment);
+                    LiveSTTSegments.Add(segment);
+                });
+            }
+
+            // 진행률 이벤트 구독
+            void OnProgressChanged(double progress)
+            {
+                System.Windows.Application.Current.Dispatcher.Invoke(() =>
+                {
+                    // 다운로드(30%) + 분석(70%)
+                    SttProgress = 0.3 + (progress * 0.7);
+
+                    // 예상 남은 시간 계산
+                    if (_sttStartTime.HasValue && progress > 0.05)
+                    {
+                        var elapsed = DateTime.Now - _sttStartTime.Value;
+                        var estimatedTotal = TimeSpan.FromSeconds(elapsed.TotalSeconds / progress);
+                        var remaining = estimatedTotal - elapsed;
+
+                        if (remaining.TotalSeconds > 0)
+                        {
+                            if (remaining.TotalMinutes >= 1)
+                                SttTimeRemaining = $"예상 남은 시간: {remaining.Minutes}분 {remaining.Seconds}초";
+                            else
+                                SttTimeRemaining = $"예상 남은 시간: {remaining.Seconds}초";
+                        }
+                        else
+                        {
+                            SttTimeRemaining = "거의 완료됨...";
+                        }
+                    }
+
+                    SttProgressText = $"음성 분석 중... ({progress:P0})";
+                });
+            }
+
+            _speechService.SegmentRecognized += OnSegmentRecognized;
+            _speechService.ProgressChanged += OnProgressChanged;
+
+            try
+            {
+                // 실제 STT 수행
+                var result = await _speechService.TranscribeFileAsync(recording.FilePath);
+
+                SttProgress = 1.0;
+                SttProgressText = "완료!";
+                SttTimeRemaining = string.Empty;
+
+                // 결과 저장
+                var sttPath = Path.ChangeExtension(recording.FilePath, ".stt.json");
+                await _speechService.SaveResultAsync(result, sttPath);
+                recording.STTResultPath = sttPath;
+
+                // UI 갱신 (이미 실시간으로 추가되었지만, 최종 결과로 다시 설정)
+                STTSegments.Clear();
+                foreach (var segment in result.Segments)
+                {
+                    STTSegments.Add(segment);
+                }
+
+                Utils.Log4.Info($"[OneNote] STT 완료: {recording.FileName}, {result.Segments.Count}개 세그먼트, 화자 {result.Speakers.Count}명");
+            }
+            finally
+            {
+                _speechService.SegmentRecognized -= OnSegmentRecognized;
+                _speechService.ProgressChanged -= OnProgressChanged;
+            }
+        }
+        catch (Exception ex)
+        {
+            Utils.Log4.Error($"[OneNote] STT 실행 실패: {recording.FileName} - {ex.Message}");
+            SttProgressText = $"오류: {ex.Message}";
+        }
+        finally
+        {
+            IsSTTInProgress = false;
+            _sttStartTime = null;
+        }
+    }
+
+    /// <summary>
+    /// AI 요약 실행 - STT 결과를 기반으로 요약 생성
+    /// </summary>
+    public async Task RunSummaryAsync(Models.RecordingInfo recording)
+    {
+        if (recording == null)
+        {
+            Utils.Log4.Warn("[OneNote] 요약 실행 불가: 녹음 없음");
+            return;
+        }
+
+        if (STTSegments.Count == 0)
+        {
+            Utils.Log4.Warn("[OneNote] 요약 실행 불가: STT 결과 없음");
+            return;
+        }
+
+        IsSummaryInProgress = true;
+        try
+        {
+            Utils.Log4.Info($"[OneNote] 요약 생성 시작: {recording.FileName}, STT 세그먼트 {STTSegments.Count}개");
+
+            // STT 세그먼트에서 전체 텍스트 추출
+            var fullText = string.Join(" ", STTSegments.Select(s => s.Text));
+            var speakers = STTSegments.Select(s => s.Speaker).Distinct().ToList();
+            var totalDuration = STTSegments.LastOrDefault()?.EndTime ?? TimeSpan.Zero;
+
+            // AIService를 통해 실제 요약 생성 시도
+            string summaryText;
+            var keyPoints = new List<string>();
+            var actionItems = new List<Models.ActionItem>();
+            string modelName = "local-summary";
+
+            try
+            {
+                // App에서 AIService 가져오기
+                var aiService = (System.Windows.Application.Current as App)?.GetService<Services.AI.AIService>();
+                if (aiService != null && aiService.CurrentProvider != null)
+                {
+                    Utils.Log4.Info($"[OneNote] AI Provider 사용: {aiService.CurrentProviderName}");
+                    modelName = aiService.CurrentProviderName;
+
+                    // 요약 프롬프트 생성
+                    var prompt = BuildSummaryPrompt(fullText, speakers, totalDuration);
+
+                    // AI 요약 요청
+                    var response = await aiService.CompleteAsync(prompt);
+                    Utils.Log4.Debug($"[OneNote] AI 응답 길이: {response?.Length ?? 0}");
+
+                    // 응답 파싱
+                    ParseAISummaryResponse(response, out summaryText, out keyPoints, out actionItems);
+                }
+                else
+                {
+                    Utils.Log4.Info("[OneNote] AI Provider 없음, 로컬 요약 사용");
+                    // AI Provider 없으면 로컬 요약 생성
+                    summaryText = GenerateLocalSummary(fullText, speakers, totalDuration);
+                    keyPoints = ExtractKeyPointsLocal(fullText);
+                }
+            }
+            catch (Exception aiEx)
+            {
+                Utils.Log4.Warn($"[OneNote] AI 요약 실패, 로컬 요약 사용: {aiEx.Message}");
+                summaryText = GenerateLocalSummary(fullText, speakers, totalDuration);
+                keyPoints = ExtractKeyPointsLocal(fullText);
+            }
+
+            // RecordingSummary 객체 생성
+            var summary = new Models.RecordingSummary
+            {
+                AudioFilePath = recording.FilePath,
+                CreatedAt = DateTime.Now,
+                Summary = summaryText,
+                KeyPoints = keyPoints,
+                ActionItems = actionItems,
+                Participants = speakers,
+                RecordingType = DetectRecordingType(fullText, speakers),
+                ModelName = modelName,
+                SourceSTTPath = recording.STTResultPath
+            };
+
+            // 결과 저장
+            var summaryPath = Path.ChangeExtension(recording.FilePath, ".summary.json");
+            var options = new STJ.JsonSerializerOptions { WriteIndented = true };
+            await File.WriteAllTextAsync(summaryPath, STJ.JsonSerializer.Serialize(summary, options));
+            recording.SummaryResultPath = summaryPath;
+
+            // UI 갱신
+            CurrentSummary = summary;
+
+            Utils.Log4.Info($"[OneNote] 요약 완료: {recording.FileName}, 모델: {modelName}");
+        }
+        catch (Exception ex)
+        {
+            Utils.Log4.Error($"[OneNote] 요약 실행 실패: {recording.FileName} - {ex.Message}");
+        }
+        finally
+        {
+            IsSummaryInProgress = false;
+        }
+    }
+
+    /// <summary>
+    /// AI 요약용 프롬프트 생성
+    /// </summary>
+    private string BuildSummaryPrompt(string fullText, List<string> speakers, TimeSpan duration)
+    {
+        return $@"당신은 회의록 요약 전문가입니다. 다음 녹음 전사 내용을 분석하여 핵심을 정확하게 추출해주세요.
+
+## 녹음 정보
+- 길이: {duration.TotalMinutes:F1}분
+- 참여자: {string.Join(", ", speakers)}
+
+## 전사 내용
+{fullText}
+
+## 분석 지침
+1. **요약(summary)**: 이 대화의 핵심 주제와 결론을 2-4문장으로 작성하세요. 단순히 ""대화가 있었다""가 아닌, 무엇에 대해 논의했고 어떤 결론/방향이 나왔는지 명확히 작성하세요.
+
+2. **핵심 포인트(keyPoints)**: 대화에서 언급된 중요한 사실, 결정사항, 주요 논점을 구체적으로 추출하세요. ""~에 대해 이야기했다""가 아닌, 실제 내용을 요약하세요.
+   - 나쁜 예: ""개발 일정에 대해 논의함""
+   - 좋은 예: ""4월 말까지 검색 기능 개발 완료 예정""
+
+3. **액션 아이템(actionItems)**: 대화 중 언급된 해야 할 일, 결정된 업무, 담당자가 명확한 작업만 추출하세요. 담당자나 기한이 언급되지 않았다면 해당 필드는 비워두세요.
+
+4. **녹음 유형(recordingType)**: 회의, 강의, 인터뷰, 브레인스토밍, 일상 대화 중 가장 적합한 것을 선택하세요.
+
+## 응답 형식 (JSON)
+{{
+  ""summary"": ""핵심 주제와 결론을 담은 2-4문장 요약"",
+  ""keyPoints"": [
+    ""구체적인 핵심 포인트 1"",
+    ""구체적인 핵심 포인트 2"",
+    ""구체적인 핵심 포인트 3""
+  ],
+  ""actionItems"": [
+    {{""description"": ""구체적인 할 일"", ""assignee"": ""담당자명 또는 null"", ""priority"": ""높음/중간/낮음""}}
+  ],
+  ""recordingType"": ""회의/강의/인터뷰/브레인스토밍/일상 대화""
+}}
+
+반드시 위 JSON 형식으로만 응답하세요. 설명이나 부연은 포함하지 마세요.";
+    }
+
+    /// <summary>
+    /// AI 응답 파싱
+    /// </summary>
+    private void ParseAISummaryResponse(string? response, out string summary, out List<string> keyPoints, out List<Models.ActionItem> actionItems)
+    {
+        summary = string.Empty;
+        keyPoints = new List<string>();
+        actionItems = new List<Models.ActionItem>();
+
+        if (string.IsNullOrEmpty(response))
+            return;
+
+        try
+        {
+            // JSON 블록 추출
+            var jsonStart = response.IndexOf('{');
+            var jsonEnd = response.LastIndexOf('}');
+
+            if (jsonStart >= 0 && jsonEnd > jsonStart)
+            {
+                var jsonStr = response.Substring(jsonStart, jsonEnd - jsonStart + 1);
+                using var doc = STJ.JsonDocument.Parse(jsonStr);
+                var root = doc.RootElement;
+
+                if (root.TryGetProperty("summary", out var summaryProp))
+                    summary = summaryProp.GetString() ?? string.Empty;
+
+                if (root.TryGetProperty("keyPoints", out var kpProp) && kpProp.ValueKind == STJ.JsonValueKind.Array)
+                {
+                    foreach (var item in kpProp.EnumerateArray())
+                    {
+                        var text = item.GetString();
+                        if (!string.IsNullOrEmpty(text))
+                            keyPoints.Add(text);
+                    }
+                }
+
+                if (root.TryGetProperty("actionItems", out var aiProp) && aiProp.ValueKind == STJ.JsonValueKind.Array)
+                {
+                    foreach (var item in aiProp.EnumerateArray())
+                    {
+                        var actionItem = new Models.ActionItem
+                        {
+                            Description = item.TryGetProperty("description", out var desc) ? desc.GetString() ?? "" : "",
+                            Assignee = item.TryGetProperty("assignee", out var assignee) ? assignee.GetString() : null,
+                            Priority = item.TryGetProperty("priority", out var priority) ? priority.GetString() ?? "중간" : "중간"
+                        };
+                        if (!string.IsNullOrEmpty(actionItem.Description))
+                            actionItems.Add(actionItem);
+                    }
+                }
+            }
+            else
+            {
+                // JSON이 아닌 경우 전체를 요약으로 사용
+                summary = response;
+            }
+        }
+        catch (Exception ex)
+        {
+            Utils.Log4.Warn($"[OneNote] AI 응답 파싱 실패: {ex.Message}");
+            summary = response;
+        }
+    }
+
+    /// <summary>
+    /// 로컬 요약 생성 (AI 없이)
+    /// </summary>
+    private string GenerateLocalSummary(string fullText, List<string> speakers, TimeSpan duration)
+    {
+        var speakerInfo = speakers.Count > 1 ? $"{speakers.Count}명의 참여자" : "1명의 화자";
+        var durationInfo = duration.TotalMinutes >= 1 ? $"{duration.TotalMinutes:F0}분" : $"{duration.TotalSeconds:F0}초";
+
+        // 텍스트 길이에 따른 요약
+        var wordCount = fullText.Split(new[] { ' ', '\n', '\r' }, StringSplitOptions.RemoveEmptyEntries).Length;
+
+        if (wordCount < 50)
+        {
+            return $"짧은 녹음입니다. {speakerInfo}가 {durationInfo} 동안 대화했습니다. 내용: {fullText.Substring(0, Math.Min(200, fullText.Length))}";
+        }
+
+        // 첫 문장과 마지막 문장 추출
+        var sentences = fullText.Split(new[] { '.', '!', '?' }, StringSplitOptions.RemoveEmptyEntries)
+            .Select(s => s.Trim())
+            .Where(s => s.Length > 5)
+            .ToList();
+
+        var firstPart = sentences.FirstOrDefault() ?? "";
+        var lastPart = sentences.Count > 1 ? sentences.LastOrDefault() ?? "" : "";
+
+        return $"이 녹음은 {speakerInfo}가 {durationInfo} 동안 진행한 대화입니다. " +
+               $"대화는 \"{firstPart}\"로 시작하여 " +
+               $"\"{lastPart}\"로 마무리됩니다. " +
+               $"총 {wordCount}개 단어가 포함되어 있습니다.";
+    }
+
+    /// <summary>
+    /// 로컬 핵심 포인트 추출
+    /// </summary>
+    private List<string> ExtractKeyPointsLocal(string fullText)
+    {
+        var keyPoints = new List<string>();
+
+        // 문장 단위로 분리하여 가장 긴 3개 문장을 핵심 포인트로 선택
+        var sentences = fullText.Split(new[] { '.', '!', '?' }, StringSplitOptions.RemoveEmptyEntries)
+            .Select(s => s.Trim())
+            .Where(s => s.Length > 10)
+            .OrderByDescending(s => s.Length)
+            .Take(3)
+            .ToList();
+
+        for (int i = 0; i < sentences.Count; i++)
+        {
+            var sentence = sentences[i];
+            if (sentence.Length > 100)
+                sentence = sentence.Substring(0, 100) + "...";
+            keyPoints.Add($"포인트 {i + 1}: {sentence}");
+        }
+
+        if (keyPoints.Count == 0)
+        {
+            keyPoints.Add("녹음 내용이 너무 짧아 핵심 포인트를 추출할 수 없습니다.");
+        }
+
+        return keyPoints;
+    }
+
+    /// <summary>
+    /// 녹음 유형 감지
+    /// </summary>
+    private string DetectRecordingType(string fullText, List<string> speakers)
+    {
+        var text = fullText.ToLower();
+
+        if (text.Contains("회의") || text.Contains("안건") || text.Contains("결정"))
+            return "회의";
+        if (text.Contains("질문") && text.Contains("답변"))
+            return "인터뷰";
+        if (speakers.Count == 1)
+            return "독백/강의";
+        if (speakers.Count == 2)
+            return "1:1 대화";
+
+        return "일반 대화";
     }
 
     /// <summary>
@@ -645,6 +1754,8 @@ public partial class OneNoteViewModel : ViewModelBase
     /// </summary>
     partial void OnSelectedPageChanged(PageItemViewModel? oldValue, PageItemViewModel? newValue)
     {
+        Log4.Info($"★★★ OnSelectedPageChanged 호출됨 ★★★ - Old: {oldValue?.Title ?? "null"} -> New: {newValue?.Title ?? "null"}");
+
         // 이전 페이지에 저장되지 않은 변경사항이 있으면 즉시 저장
         if (HasUnsavedChanges && !string.IsNullOrEmpty(_previousPageId) && !string.IsNullOrEmpty(_editingContent))
         {
@@ -657,11 +1768,17 @@ public partial class OneNoteViewModel : ViewModelBase
         {
             _previousPageId = newValue.Id;
             _ = LoadPageContentAsync(newValue.Id);
+
+            // 녹음 목록 새로고침 (페이지에 연결된 녹음 + OneNote 녹음)
+            _ = LoadRecordingsForCurrentPageAsync();
         }
         else
         {
             _previousPageId = null;
             CurrentPageContent = null;
+
+            // 페이지 미선택 시 모든 녹음 표시
+            FilterRecordingsForCurrentPage();
         }
     }
 
@@ -1046,13 +2163,19 @@ public partial class OneNoteViewModel : ViewModelBase
     }
 
     /// <summary>
-    /// 자동저장 타이머 정리
+    /// 자동저장 타이머 및 리소스 정리
     /// </summary>
     public void Dispose()
     {
         _autoSaveTimer?.Stop();
         _autoSaveTimer?.Dispose();
         _autoSaveTimer = null;
+
+        _audioPlayerService?.Dispose();
+        _audioPlayerService = null;
+
+        _recordingService?.Dispose();
+        _recordingService = null;
     }
 
     #region 즐겨찾기 기능
