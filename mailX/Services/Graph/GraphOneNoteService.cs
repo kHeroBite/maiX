@@ -38,7 +38,7 @@ public class GraphOneNoteService
     }
 
     /// <summary>
-    /// 노트북 목록 조회
+    /// 개인 노트북 목록 조회
     /// </summary>
     /// <returns>노트북 목록</returns>
     public async Task<IEnumerable<Notebook>> GetNotebooksAsync()
@@ -48,7 +48,7 @@ public class GraphOneNoteService
             var client = _authService.GetGraphClient();
             var response = await client.Me.Onenote.Notebooks.GetAsync();
 
-            _logger.Debug("노트북 {Count}개 조회", response?.Value?.Count ?? 0);
+            _logger.Debug("개인 노트북 {Count}개 조회", response?.Value?.Count ?? 0);
             return response?.Value ?? new List<Notebook>();
         }
         catch (Exception ex)
@@ -56,6 +56,173 @@ public class GraphOneNoteService
             _logger.Error(ex, "노트북 목록 조회 실패");
             throw;
         }
+    }
+
+    /// <summary>
+    /// 사용자가 멤버인 그룹 목록 조회
+    /// </summary>
+    /// <returns>그룹 목록</returns>
+    public async Task<IEnumerable<Microsoft.Graph.Models.Group>> GetUserGroupsAsync()
+    {
+        try
+        {
+            var client = _authService.GetGraphClient();
+            var response = await client.Me.MemberOf.GetAsync(config =>
+            {
+                config.QueryParameters.Top = 100;
+            });
+
+            var groups = response?.Value?
+                .OfType<Microsoft.Graph.Models.Group>()
+                .Where(g => g.GroupTypes?.Contains("Unified") == true) // Microsoft 365 그룹만
+                .ToList() ?? new List<Microsoft.Graph.Models.Group>();
+
+            _logger.Debug("사용자 그룹 {Count}개 조회", groups.Count);
+            return groups;
+        }
+        catch (Exception ex)
+        {
+            _logger.Warning(ex, "사용자 그룹 목록 조회 실패");
+            return new List<Microsoft.Graph.Models.Group>();
+        }
+    }
+
+    /// <summary>
+    /// 그룹의 노트북 목록 조회
+    /// </summary>
+    /// <param name="groupId">그룹 ID</param>
+    /// <returns>노트북 목록</returns>
+    public async Task<IEnumerable<Notebook>> GetGroupNotebooksAsync(string groupId)
+    {
+        if (string.IsNullOrEmpty(groupId))
+            return new List<Notebook>();
+
+        try
+        {
+            var client = _authService.GetGraphClient();
+            var response = await client.Groups[groupId].Onenote.Notebooks.GetAsync();
+
+            _logger.Debug("그룹 {GroupId} 노트북 {Count}개 조회", groupId, response?.Value?.Count ?? 0);
+            return response?.Value ?? new List<Notebook>();
+        }
+        catch (Exception ex)
+        {
+            _logger.Warning(ex, "그룹 노트북 조회 실패: GroupId={GroupId}", groupId);
+            return new List<Notebook>();
+        }
+    }
+
+    /// <summary>
+    /// 그룹 노트북의 섹션 목록 조회
+    /// </summary>
+    public async Task<IEnumerable<OnenoteSection>> GetGroupSectionsAsync(string groupId, string notebookId)
+    {
+        if (string.IsNullOrEmpty(groupId) || string.IsNullOrEmpty(notebookId))
+            return new List<OnenoteSection>();
+
+        try
+        {
+            var client = _authService.GetGraphClient();
+            var response = await client.Groups[groupId].Onenote.Notebooks[notebookId].Sections.GetAsync();
+
+            _logger.Debug("그룹 {GroupId} 노트북 {NotebookId} 섹션 {Count}개 조회",
+                groupId, notebookId, response?.Value?.Count ?? 0);
+            return response?.Value ?? new List<OnenoteSection>();
+        }
+        catch (Exception ex)
+        {
+            _logger.Warning(ex, "그룹 섹션 조회 실패: GroupId={GroupId}, NotebookId={NotebookId}", groupId, notebookId);
+            return new List<OnenoteSection>();
+        }
+    }
+
+    /// <summary>
+    /// 그룹 섹션의 페이지 목록 조회
+    /// </summary>
+    public async Task<IEnumerable<OnenotePage>> GetGroupPagesAsync(string groupId, string sectionId)
+    {
+        if (string.IsNullOrEmpty(groupId) || string.IsNullOrEmpty(sectionId))
+            return new List<OnenotePage>();
+
+        try
+        {
+            var client = _authService.GetGraphClient();
+            var response = await client.Groups[groupId].Onenote.Sections[sectionId].Pages.GetAsync(config =>
+            {
+                config.QueryParameters.Top = 100;
+                config.QueryParameters.Orderby = new[] { "createdDateTime desc" };
+            });
+
+            _logger.Debug("그룹 {GroupId} 섹션 {SectionId} 페이지 {Count}개 조회",
+                groupId, sectionId, response?.Value?.Count ?? 0);
+            return response?.Value ?? new List<OnenotePage>();
+        }
+        catch (Exception ex)
+        {
+            _logger.Warning(ex, "그룹 페이지 조회 실패: GroupId={GroupId}, SectionId={SectionId}", groupId, sectionId);
+            return new List<OnenotePage>();
+        }
+    }
+
+    /// <summary>
+    /// 모든 노트북 통합 조회 (개인 + 그룹)
+    /// </summary>
+    /// <returns>출처 정보가 포함된 노트북 목록</returns>
+    public async Task<IEnumerable<NotebookWithSource>> GetAllNotebooksAsync()
+    {
+        var result = new List<NotebookWithSource>();
+
+        try
+        {
+            // 1. 개인 노트북 조회
+            var personalNotebooks = await GetNotebooksAsync();
+            foreach (var nb in personalNotebooks)
+            {
+                result.Add(new NotebookWithSource
+                {
+                    Notebook = nb,
+                    Source = NotebookSource.Personal,
+                    SourceName = "개인"
+                });
+            }
+            _logger.Debug("개인 노트북 {Count}개 추가", personalNotebooks.Count());
+
+            // 2. 그룹 노트북 조회 (병렬 처리)
+            var groups = await GetUserGroupsAsync();
+            var groupTasks = groups.Select(async group =>
+            {
+                try
+                {
+                    var notebooks = await GetGroupNotebooksAsync(group.Id ?? string.Empty);
+                    return notebooks.Select(nb => new NotebookWithSource
+                    {
+                        Notebook = nb,
+                        Source = NotebookSource.Group,
+                        SourceName = group.DisplayName ?? "팀",
+                        GroupId = group.Id ?? string.Empty
+                    }).ToList();
+                }
+                catch
+                {
+                    return new List<NotebookWithSource>();
+                }
+            });
+
+            var groupResults = await Task.WhenAll(groupTasks);
+            foreach (var groupNotebooks in groupResults)
+            {
+                result.AddRange(groupNotebooks);
+            }
+
+            _logger.Information("전체 노트북 조회 완료: 개인 {PersonalCount}개, 그룹 {GroupCount}개",
+                personalNotebooks.Count(), result.Count - personalNotebooks.Count());
+        }
+        catch (Exception ex)
+        {
+            _logger.Error(ex, "전체 노트북 조회 실패");
+        }
+
+        return result;
     }
 
     /// <summary>
@@ -871,4 +1038,56 @@ public class GraphOneNoteService
         // 기본값
         return "image/png";
     }
+}
+
+/// <summary>
+/// 출처 정보가 포함된 노트북
+/// </summary>
+public class NotebookWithSource
+{
+    /// <summary>
+    /// 노트북 정보
+    /// </summary>
+    public Notebook Notebook { get; set; } = new();
+
+    /// <summary>
+    /// 노트북 출처
+    /// </summary>
+    public NotebookSource Source { get; set; }
+
+    /// <summary>
+    /// 출처 이름 (그룹/사이트 이름)
+    /// </summary>
+    public string SourceName { get; set; } = string.Empty;
+
+    /// <summary>
+    /// 그룹 ID (그룹 노트북인 경우)
+    /// </summary>
+    public string GroupId { get; set; } = string.Empty;
+
+    /// <summary>
+    /// 사이트 ID (사이트 노트북인 경우)
+    /// </summary>
+    public string SiteId { get; set; } = string.Empty;
+}
+
+/// <summary>
+/// 노트북 출처
+/// </summary>
+public enum NotebookSource
+{
+    /// <summary>
+    /// 개인 노트북
+    /// </summary>
+    Personal,
+
+    /// <summary>
+    /// Microsoft 365 그룹 노트북
+    /// </summary>
+    Group,
+
+    /// <summary>
+    /// SharePoint 사이트 노트북
+    /// </summary>
+    Site
 }

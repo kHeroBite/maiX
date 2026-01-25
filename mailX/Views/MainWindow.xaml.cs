@@ -3966,6 +3966,15 @@ public partial class MainWindow : FluentWindow
         if (TitleBarSearchBox.IsFocused)
             return;
 
+        // Delete 키는 메일 목록(EmailListBox)에 포커스가 있을 때만 메일 삭제 동작
+        // 그 외의 경우 (에디터 등)에서는 기본 동작 허용
+        if (e.Key == Key.Delete)
+        {
+            // 메일 목록에 포커스가 있을 때만 메일 삭제 처리
+            if (!EmailListBox.IsKeyboardFocusWithin)
+                return;
+        }
+
         // Ctrl 키 조합
         if (Keyboard.Modifiers == ModifierKeys.Control)
         {
@@ -7227,24 +7236,18 @@ public partial class MainWindow : FluentWindow
         {
             Log4.Debug("[OneNote] TinyMCE 에디터 초기화 시작");
 
-            // WebView2 환경 생성
-            var userDataFolder = System.IO.Path.Combine(
-                Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
-                "mailX", "WebView2Cache", "OneNoteEditor");
-            System.IO.Directory.CreateDirectory(userDataFolder);
-
-            var env = await Microsoft.Web.WebView2.Core.CoreWebView2Environment.CreateAsync(null, userDataFolder);
-            await OneNoteEditorWebView.EnsureCoreWebView2Async(env);
+            // DraftBodyWebView와 동일하게 기본 환경 사용 (Delete 키 동작을 위해)
+            await OneNoteEditorWebView.EnsureCoreWebView2Async();
 
             // WebView2 설정
             OneNoteEditorWebView.CoreWebView2.Settings.IsScriptEnabled = true;
             OneNoteEditorWebView.CoreWebView2.Settings.AreDefaultContextMenusEnabled = false;
             OneNoteEditorWebView.CoreWebView2.Settings.IsStatusBarEnabled = false;
 
-            // 로컬 TinyMCE 파일에 접근할 수 있도록 가상 호스트 매핑
+            // 로컬 TinyMCE 파일에 접근할 수 있도록 가상 호스트 매핑 (고유 호스트명 사용)
             var tinymcePath = System.IO.Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Assets", "tinymce");
             OneNoteEditorWebView.CoreWebView2.SetVirtualHostNameToFolderMapping(
-                "tinymce.local", tinymcePath,
+                "tinymce-onenote.local", tinymcePath,
                 Microsoft.Web.WebView2.Core.CoreWebView2HostResourceAccessKind.Allow);
 
             // 테마 감지
@@ -7255,6 +7258,7 @@ public partial class MainWindow : FluentWindow
 
             // 메시지 수신 핸들러
             OneNoteEditorWebView.CoreWebView2.WebMessageReceived += OneNoteEditorWebView_WebMessageReceived;
+
             OneNoteEditorWebView.CoreWebView2.NavigateToString(editorHtml);
 
             _oneNoteEditorInitialized = true;
@@ -7281,7 +7285,7 @@ public partial class MainWindow : FluentWindow
 <head>
     <meta charset=""UTF-8"">
     <meta name=""viewport"" content=""width=device-width, initial-scale=1.0"">
-    <script src=""https://tinymce.local/tinymce.min.js""></script>
+    <script src=""https://tinymce-onenote.local/tinymce.min.js""></script>
     <style>
         * {{ margin: 0; padding: 0; box-sizing: border-box; }}
         html, body {{
@@ -7297,39 +7301,30 @@ public partial class MainWindow : FluentWindow
 <body>
     <textarea id=""editor""></textarea>
     <script>
+        let editor;
+
         tinymce.init({{
             selector: '#editor',
             height: '100%',
             menubar: false,
             statusbar: false,
+            base_url: 'https://tinymce-onenote.local',
+            suffix: '.min',
             skin: '{skin}',
-            content_css: '{contentCss}',
+            skin_url: 'https://tinymce-onenote.local/skins/ui/{skin}',
+            content_css: 'https://tinymce-onenote.local/skins/content/{contentCss}/content.min.css',
             plugins: 'lists link image table code checklist',
             toolbar: 'undo redo | bold italic underline | bullist numlist checklist | link image table | code',
             content_style: 'body {{ font-family: -apple-system, BlinkMacSystemFont, ""Segoe UI"", Roboto, sans-serif; font-size: 14px; color: {textColor}; background-color: {bgColor}; padding: 16px; }}',
-            setup: function(editor) {{
-                editor.on('init', function() {{
-                    console.log('[TinyMCE] 에디터 초기화 완료');
-                    window.chrome.webview.postMessage(JSON.stringify({{ type: 'ready' }}));
+            browser_spellcheck: true,
+            contextmenu: false,
+            setup: function(ed) {{
+                editor = ed;
+                ed.on('init', function() {{
+                    window.chrome.webview.postMessage({{ type: 'ready' }});
                 }});
-
-                // Ctrl+S 단축키: 즉시 저장
-                editor.on('keydown', function(e) {{
-                    if ((e.ctrlKey || e.metaKey) && e.keyCode === 83) {{
-                        e.preventDefault();
-                        window.chrome.webview.postMessage(JSON.stringify({{
-                            type: 'save',
-                            content: editor.getContent()
-                        }}));
-                    }}
-                }});
-
-                // 콘텐츠 변경 감지
-                editor.on('input change', function() {{
-                    window.chrome.webview.postMessage(JSON.stringify({{
-                        type: 'contentChanged',
-                        content: editor.getContent()
-                    }}));
+                ed.on('input change', function() {{
+                    window.chrome.webview.postMessage({{ type: 'contentChanged', content: ed.getContent() }});
                 }});
             }}
         }});
@@ -7359,17 +7354,16 @@ public partial class MainWindow : FluentWindow
     }
 
     /// <summary>
-    /// OneNote 에디터 WebView2 메시지 수신
+    /// OneNote 에디터 WebView2 메시지 수신 (DraftEditor와 동일한 방식)
     /// </summary>
     private void OneNoteEditorWebView_WebMessageReceived(object? sender, Microsoft.Web.WebView2.Core.CoreWebView2WebMessageReceivedEventArgs e)
     {
         try
         {
-            var message = e.TryGetWebMessageAsString();
-            if (string.IsNullOrEmpty(message)) return;
+            var message = System.Text.Json.JsonSerializer.Deserialize<Dictionary<string, object>>(e.WebMessageAsJson);
+            if (message == null || !message.TryGetValue("type", out var typeObj)) return;
 
-            var json = System.Text.Json.JsonDocument.Parse(message);
-            var type = json.RootElement.GetProperty("type").GetString();
+            var type = typeObj?.ToString();
 
             switch (type)
             {
@@ -7378,38 +7372,13 @@ public partial class MainWindow : FluentWindow
                     Log4.Debug("[OneNote] TinyMCE 에디터 준비 완료");
                     break;
                 case "contentChanged":
-                    // 콘텐츠 변경 시 자동저장 트리거
-                    if (json.RootElement.TryGetProperty("content", out var contentElement))
+                    if (message.TryGetValue("content", out var contentObj))
                     {
-                        var content = contentElement.GetString();
+                        var content = contentObj?.ToString();
                         if (!string.IsNullOrEmpty(content))
                         {
                             Log4.Debug($"[OneNote] contentChanged 수신: {content.Length}자");
                             _oneNoteViewModel?.OnContentChanged(content);
-                        }
-                    }
-                    break;
-                case "save":
-                    // Ctrl+S 저장 요청
-                    Log4.Debug("[OneNote] Ctrl+S 저장 요청 수신");
-                    if (json.RootElement.TryGetProperty("content", out var saveContentElement))
-                    {
-                        var content = saveContentElement.GetString();
-                        Log4.Debug($"[OneNote] 저장할 콘텐츠: {content?.Length ?? 0}자, SelectedPage: {_oneNoteViewModel?.SelectedPage?.Id ?? "null"}");
-                        if (!string.IsNullOrEmpty(content) && _oneNoteViewModel != null)
-                        {
-                            // 직접 저장 실행 (OnContentChanged 대신)
-                            _oneNoteViewModel.OnContentChanged(content);
-                            // SaveAsync 호출
-                            _ = Task.Run(async () =>
-                            {
-                                await Task.Delay(100); // OnContentChanged가 상태 설정할 시간 확보
-                                await Dispatcher.InvokeAsync(async () =>
-                                {
-                                    Log4.Debug($"[OneNote] SaveAsync 호출 전: HasUnsavedChanges={_oneNoteViewModel.HasUnsavedChanges}");
-                                    await _oneNoteViewModel.SaveAsync();
-                                });
-                            });
                         }
                     }
                     break;
@@ -7418,6 +7387,39 @@ public partial class MainWindow : FluentWindow
         catch (Exception ex)
         {
             Log4.Warn($"[OneNote] WebView2 메시지 처리 실패 (무시): {ex.Message}");
+        }
+    }
+
+    /// <summary>
+    /// OneNote 에디터 PreviewKeyDown - Delete 키 처리
+    /// </summary>
+    private async void OneNoteEditorWebView_PreviewKeyDown(object sender, KeyEventArgs e)
+    {
+        // Delete 키
+        if (e.Key == Key.Delete && _oneNoteEditorReady && OneNoteEditorWebView?.CoreWebView2 != null)
+        {
+            try
+            {
+                Log4.Debug("[OneNote] Delete 키 감지 - JavaScript로 전달");
+                // TinyMCE에 Delete 명령 전달
+                await OneNoteEditorWebView.CoreWebView2.ExecuteScriptAsync(
+                    "if(tinymce.activeEditor && tinymce.activeEditor.selection) { " +
+                    "  var sel = tinymce.activeEditor.selection; " +
+                    "  if (!sel.isCollapsed()) { " +
+                    "    tinymce.activeEditor.execCommand('Delete'); " +
+                    "  } else { " +
+                    "    var rng = sel.getRng(); " +
+                    "    rng.setEnd(rng.endContainer, rng.endOffset + 1); " +
+                    "    sel.setRng(rng); " +
+                    "    tinymce.activeEditor.execCommand('Delete'); " +
+                    "  } " +
+                    "}");
+                e.Handled = true;
+            }
+            catch (Exception ex)
+            {
+                Log4.Warn($"[OneNote] Delete 키 처리 실패: {ex.Message}");
+            }
         }
     }
 
@@ -7586,35 +7588,73 @@ public partial class MainWindow : FluentWindow
                 _oneNoteViewModel.SearchQuery = query;
                 await _oneNoteViewModel.SearchPagesAsync();
 
-                // 검색 결과를 최근 노트 목록에 표시
-                if (OneNoteRecentListBox != null)
-                    OneNoteRecentListBox.ItemsSource = _oneNoteViewModel.SearchResults;
+                // 검색 결과를 즐겨찾기 목록에 임시 표시
+                if (OneNoteFavoritesListBox != null)
+                    OneNoteFavoritesListBox.ItemsSource = _oneNoteViewModel.SearchResults;
             }
         }
         else if (e.Key == Key.Escape && OneNoteSearchBox != null)
         {
             OneNoteSearchBox.Text = string.Empty;
-            // 최근 노트 목록 복원
-            if (_oneNoteViewModel != null && OneNoteRecentListBox != null)
-                OneNoteRecentListBox.ItemsSource = _oneNoteViewModel.RecentPages;
+            // 즐겨찾기 목록 복원
+            if (_oneNoteViewModel != null && OneNoteFavoritesListBox != null)
+                OneNoteFavoritesListBox.ItemsSource = _oneNoteViewModel.FavoritePages;
         }
     }
 
     /// <summary>
-    /// OneNote 최근 노트 목록 선택 변경
+    /// OneNote 즐겨찾기 목록 선택 변경
     /// </summary>
-    private async void OneNoteRecentListBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    private async void OneNoteFavoritesListBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
     {
-        Log4.Debug($"[OneNote] RecentListBox SelectionChanged 이벤트 발생");
+        Log4.Debug($"[OneNote] FavoritesListBox SelectionChanged 이벤트 발생");
         var listBox = sender as ListBox;
         if (listBox?.SelectedItem is PageItemViewModel selectedPage && _oneNoteViewModel != null)
         {
-            Log4.Debug($"[OneNote] 최근 노트 페이지 선택: {selectedPage.Title}");
+            Log4.Debug($"[OneNote] 즐겨찾기 페이지 선택: {selectedPage.Title}");
             await LoadOneNotePageAsync(selectedPage);
         }
         else
         {
             Log4.Debug($"[OneNote] 선택된 항목이 PageItemViewModel이 아님: {listBox?.SelectedItem?.GetType().Name ?? "null"}");
+        }
+    }
+
+    /// <summary>
+    /// 즐겨찾기 추가 컨텍스트 메뉴 클릭
+    /// </summary>
+    private void AddToFavorites_Click(object sender, RoutedEventArgs e)
+    {
+        if (_oneNoteViewModel == null) return;
+
+        // 메뉴 아이템의 DataContext에서 페이지 가져오기
+        if (sender is System.Windows.Controls.MenuItem menuItem)
+        {
+            var page = menuItem.DataContext as PageItemViewModel;
+            if (page != null)
+            {
+                _oneNoteViewModel.AddToFavorites(page);
+                Log4.Info($"[OneNote] 즐겨찾기 추가: {page.Title}");
+            }
+        }
+    }
+
+    /// <summary>
+    /// 즐겨찾기 제거 컨텍스트 메뉴 클릭
+    /// </summary>
+    private void RemoveFromFavorites_Click(object sender, RoutedEventArgs e)
+    {
+        if (_oneNoteViewModel == null) return;
+
+        // 메뉴 아이템의 DataContext에서 페이지 가져오기
+        if (sender is System.Windows.Controls.MenuItem menuItem)
+        {
+            var page = menuItem.DataContext as PageItemViewModel;
+            if (page != null)
+            {
+                _oneNoteViewModel.RemoveFromFavorites(page);
+                Log4.Info($"[OneNote] 즐겨찾기 제거: {page.Title}");
+            }
         }
     }
 
@@ -7689,6 +7729,22 @@ public partial class MainWindow : FluentWindow
                 if (oneNoteService != null)
                 {
                     _oneNoteViewModel = new OneNoteViewModel(oneNoteService);
+                    // HasUnsavedChanges 변경 시 ● 표시 업데이트
+                    _oneNoteViewModel.PropertyChanged += (s, e) =>
+                    {
+                        if (e.PropertyName == nameof(OneNoteViewModel.HasUnsavedChanges))
+                        {
+                            Dispatcher.Invoke(() =>
+                            {
+                                if (OneNoteUnsavedIndicator != null)
+                                {
+                                    OneNoteUnsavedIndicator.Visibility = _oneNoteViewModel.HasUnsavedChanges
+                                        ? Visibility.Visible
+                                        : Visibility.Collapsed;
+                                }
+                            });
+                        }
+                    };
                 }
             }
             catch (Exception ex)
@@ -7705,17 +7761,20 @@ public partial class MainWindow : FluentWindow
             if (OneNoteLoadingOverlay != null)
                 OneNoteLoadingOverlay.Visibility = Visibility.Visible;
 
+            // 즐겨찾기 먼저 로드 (빠른 UI 표시)
+            _oneNoteViewModel.LoadFavorites();
+            if (OneNoteFavoritesListBox != null)
+                OneNoteFavoritesListBox.ItemsSource = _oneNoteViewModel.FavoritePages;
+
             await _oneNoteViewModel.LoadNotebooksAsync();
 
             if (OneNoteTreeView != null)
                 OneNoteTreeView.ItemsSource = _oneNoteViewModel.Notebooks;
 
-            // 최근 페이지도 로드
-            await _oneNoteViewModel.LoadRecentPagesAsync();
-            if (OneNoteRecentListBox != null)
-                OneNoteRecentListBox.ItemsSource = _oneNoteViewModel.RecentPages;
+            // 노트북 로드 후 즐겨찾기 상태 동기화
+            _oneNoteViewModel.SyncFavoriteStatus();
 
-            Log4.Info($"OneNote 노트북 로드 완료: {_oneNoteViewModel.Notebooks.Count}개");
+            Log4.Info($"OneNote 노트북 로드 완료: {_oneNoteViewModel.Notebooks.Count}개, 즐겨찾기: {_oneNoteViewModel.FavoritePages.Count}개");
         }
         catch (Exception ex)
         {

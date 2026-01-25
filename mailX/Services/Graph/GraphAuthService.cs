@@ -47,6 +47,7 @@ namespace mailX.Services.Graph
             // OneNote 권한
             "Notes.Read",
             "Notes.ReadWrite",
+            "Notes.Read.All",    // 그룹/사이트 노트북 읽기
             // OneDrive 권한 (Files.Read.All 이미 있음)
             "Files.ReadWrite.All",
             // Planner 권한

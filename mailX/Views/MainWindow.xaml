@@ -5894,17 +5894,26 @@
                         <!-- 노트북/섹션/페이지 트리뷰 -->
                         <ScrollViewer Grid.Row="2" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
                             <StackPanel>
-                                <!-- 최근 노트 섹션 -->
-                                <Expander x:Name="OneNoteRecentExpander" IsExpanded="True" Margin="8,4">
+                                <!-- 즐겨찾기 섹션 -->
+                                <Expander x:Name="OneNoteFavoritesExpander" IsExpanded="True" Margin="8,4">
                                     <Expander.Header>
                                         <StackPanel Orientation="Horizontal">
-                                            <ui:SymbolIcon Symbol="History24" FontSize="16" Margin="0,0,8,0"
-                                                           Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
-                                            <TextBlock Text="최근 노트" FontWeight="SemiBold" VerticalAlignment="Center"/>
+                                            <ui:SymbolIcon Symbol="Star24" FontSize="16" Margin="0,0,8,0"
+                                                           Foreground="#FFD700"/>
+                                            <TextBlock Text="즐겨찾기" FontWeight="SemiBold" VerticalAlignment="Center"/>
                                         </StackPanel>
                                     </Expander.Header>
-                                    <ListBox x:Name="OneNoteRecentListBox" Background="Transparent" BorderThickness="0"
-                                             SelectionChanged="OneNoteRecentListBox_SelectionChanged" Margin="0,4,0,0">
+                                    <ListBox x:Name="OneNoteFavoritesListBox" Background="Transparent" BorderThickness="0"
+                                             SelectionChanged="OneNoteFavoritesListBox_SelectionChanged" Margin="0,4,0,0">
+                                        <ListBox.ContextMenu>
+                                            <ContextMenu>
+                                                <MenuItem Header="즐겨찾기 제거" Click="RemoveFromFavorites_Click">
+                                                    <MenuItem.Icon>
+                                                        <ui:SymbolIcon Symbol="StarOff24"/>
+                                                    </MenuItem.Icon>
+                                                </MenuItem>
+                                            </ContextMenu>
+                                        </ListBox.ContextMenu>
                                         <ListBox.ItemTemplate>
                                             <DataTemplate>
                                                 <Grid Margin="4,6">
@@ -5913,8 +5922,8 @@
                                                         <ColumnDefinition Width="*"/>
                                                         <ColumnDefinition Width="Auto"/>
                                                     </Grid.ColumnDefinitions>
-                                                    <ui:SymbolIcon Grid.Column="0" Symbol="Document24" FontSize="16"
-                                                                   Foreground="{StaticResource OneNoteAccentBrush}" Margin="0,0,10,0"/>
+                                                    <ui:SymbolIcon Grid.Column="0" Symbol="Star24" FontSize="16"
+                                                                   Foreground="#FFD700" Margin="0,0,10,0"/>
                                                     <StackPanel Grid.Column="1">
                                                         <TextBlock Text="{Binding Title}" FontWeight="Medium" TextTrimming="CharacterEllipsis"/>
                                                         <TextBlock Text="{Binding LocationDisplay}" FontSize="11"
@@ -5942,8 +5951,16 @@
                                         <TreeView.ItemTemplate>
                                             <HierarchicalDataTemplate ItemsSource="{Binding Sections}">
                                                 <StackPanel Orientation="Horizontal" Margin="2,4">
+                                                    <!-- 공유 아이콘 (그룹 노트북인 경우) -->
+                                                    <ui:SymbolIcon Symbol="People24" FontSize="12" Foreground="#0078D4" Margin="0,0,4,0"
+                                                                   Visibility="{Binding IsShared, Converter={StaticResource BoolToVisibilityConverter}}"
+                                                                   ToolTip="{Binding SourceName}"/>
                                                     <ui:SymbolIcon Symbol="Notebook24" FontSize="16" Foreground="{StaticResource OneNoteAccentBrush}" Margin="0,0,8,0"/>
                                                     <TextBlock Text="{Binding DisplayName}" VerticalAlignment="Center"/>
+                                                    <!-- 출처 라벨 (그룹 노트북인 경우) -->
+                                                    <TextBlock Text="{Binding SourceName, StringFormat=' [{0}]'}" FontSize="11"
+                                                               Foreground="{DynamicResource TextFillColorTertiaryBrush}" VerticalAlignment="Center"
+                                                               Visibility="{Binding IsShared, Converter={StaticResource BoolToVisibilityConverter}}"/>
                                                 </StackPanel>
                                                 <HierarchicalDataTemplate.ItemTemplate>
                                                     <HierarchicalDataTemplate ItemsSource="{Binding Pages}">
@@ -5954,6 +5971,25 @@
                                                         <HierarchicalDataTemplate.ItemTemplate>
                                                             <DataTemplate>
                                                                 <StackPanel Orientation="Horizontal" Margin="2,2">
+                                                                    <StackPanel.ContextMenu>
+                                                                        <ContextMenu>
+                                                                            <MenuItem Header="즐겨찾기 추가" Click="AddToFavorites_Click"
+                                                                                      Visibility="{Binding IsFavorite, Converter={StaticResource BoolToVisibilityConverter}, ConverterParameter=Invert}">
+                                                                                <MenuItem.Icon>
+                                                                                    <ui:SymbolIcon Symbol="Star24"/>
+                                                                                </MenuItem.Icon>
+                                                                            </MenuItem>
+                                                                            <MenuItem Header="즐겨찾기 제거" Click="RemoveFromFavorites_Click"
+                                                                                      Visibility="{Binding IsFavorite, Converter={StaticResource BoolToVisibilityConverter}}">
+                                                                                <MenuItem.Icon>
+                                                                                    <ui:SymbolIcon Symbol="StarOff24"/>
+                                                                                </MenuItem.Icon>
+                                                                            </MenuItem>
+                                                                        </ContextMenu>
+                                                                    </StackPanel.ContextMenu>
+                                                                    <!-- 즐겨찾기 별 아이콘 (즐겨찾기인 경우) -->
+                                                                    <ui:SymbolIcon Symbol="Star24" FontSize="10" Foreground="#FFD700" Margin="0,0,4,0"
+                                                                                   Visibility="{Binding IsFavorite, Converter={StaticResource BoolToVisibilityConverter}}"/>
                                                                     <ui:SymbolIcon Symbol="Document24" FontSize="12"
                                                                                    Foreground="{DynamicResource TextFillColorSecondaryBrush}" Margin="0,0,6,0"/>
                                                                     <TextBlock Text="{Binding Title}" VerticalAlignment="Center"/>
@@ -5997,7 +6033,12 @@
                                     <ColumnDefinition Width="Auto"/>
                                 </Grid.ColumnDefinitions>
                                 <StackPanel Grid.Column="0">
-                                    <TextBlock x:Name="OneNotePageTitleText" Text="페이지 제목" FontSize="18" FontWeight="SemiBold"/>
+                                    <StackPanel Orientation="Horizontal">
+                                        <TextBlock x:Name="OneNotePageTitleText" Text="페이지 제목" FontSize="18" FontWeight="SemiBold"/>
+                                        <!-- 저장 대상 표시 (●) - 미저장 변경사항 있을 때 표시 -->
+                                        <TextBlock x:Name="OneNoteUnsavedIndicator" Text=" ●" FontSize="18" FontWeight="Bold"
+                                                   Foreground="#FF6B6B" Visibility="Collapsed" ToolTip="저장되지 않은 변경사항 있음"/>
+                                    </StackPanel>
                                     <TextBlock x:Name="OneNotePageLocationText" Text="노트북 > 섹션" FontSize="12"
                                                Foreground="{DynamicResource TextFillColorSecondaryBrush}" Margin="0,4,0,0"/>
                                 </StackPanel>

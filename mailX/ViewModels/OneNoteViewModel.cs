@@ -67,6 +67,18 @@ public partial class OneNoteViewModel : ViewModelBase
     private ObservableCollection<PageItemViewModel> _recentPages = new();
 
     /// <summary>
+    /// 즐겨찾기 페이지 목록
+    /// </summary>
+    [ObservableProperty]
+    private ObservableCollection<PageItemViewModel> _favoritePages = new();
+
+    /// <summary>
+    /// 즐겨찾기 저장 파일 경로
+    /// </summary>
+    private static readonly string FavoritesFile = Path.Combine(
+        Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "mailX", "onenote_favorites.json");
+
+    /// <summary>
     /// 검색어
     /// </summary>
     [ObservableProperty]
@@ -120,6 +132,11 @@ public partial class OneNoteViewModel : ViewModelBase
     /// 현재 편집 중인 콘텐츠 (에디터에서 업데이트)
     /// </summary>
     private string? _editingContent;
+
+    /// <summary>
+    /// 이전 페이지 ID (페이지 전환 시 자동저장용)
+    /// </summary>
+    private string? _previousPageId;
 
     /// <summary>
     /// 녹음 파일 목록
@@ -222,22 +239,36 @@ public partial class OneNoteViewModel : ViewModelBase
         {
             try
             {
-                var notebooks = await _oneNoteService.GetNotebooksAsync();
+                // 개인 + 그룹 노트북 통합 조회
+                var allNotebooks = await _oneNoteService.GetAllNotebooksAsync();
                 var newList = new System.Collections.Generic.List<NotebookItemViewModel>();
 
-                foreach (var notebook in notebooks)
+                foreach (var nbWithSource in allNotebooks)
                 {
+                    var notebook = nbWithSource.Notebook;
                     var notebookItem = new NotebookItemViewModel
                     {
                         Id = notebook.Id ?? string.Empty,
                         DisplayName = notebook.DisplayName ?? "Untitled",
                         CreatedDateTime = notebook.CreatedDateTime?.DateTime,
                         LastModifiedDateTime = notebook.LastModifiedDateTime?.DateTime,
-                        IsExpanded = true  // 기본적으로 확장
+                        IsExpanded = true,  // 기본적으로 확장
+                        Source = nbWithSource.Source.ToString(),
+                        SourceName = nbWithSource.SourceName,
+                        GroupId = nbWithSource.GroupId
                     };
 
-                    // 섹션 로드
-                    var sections = await _oneNoteService.GetSectionsAsync(notebook.Id ?? string.Empty);
+                    // 섹션 로드 (그룹/개인에 따라 다른 API 사용)
+                    System.Collections.Generic.IEnumerable<Microsoft.Graph.Models.OnenoteSection> sections;
+                    if (nbWithSource.Source == NotebookSource.Group)
+                    {
+                        sections = await _oneNoteService.GetGroupSectionsAsync(nbWithSource.GroupId, notebook.Id ?? string.Empty);
+                    }
+                    else
+                    {
+                        sections = await _oneNoteService.GetSectionsAsync(notebook.Id ?? string.Empty);
+                    }
+
                     foreach (var section in sections)
                     {
                         var sectionItem = new SectionItemViewModel
@@ -246,11 +277,21 @@ public partial class OneNoteViewModel : ViewModelBase
                             DisplayName = section.DisplayName ?? "Untitled",
                             NotebookId = notebook.Id ?? string.Empty,
                             NotebookName = notebook.DisplayName ?? string.Empty,
-                            IsDefault = section.IsDefault ?? false
+                            IsDefault = section.IsDefault ?? false,
+                            GroupId = nbWithSource.GroupId
                         };
 
                         // 섹션의 페이지도 미리 로드 (캐시용)
-                        var pages = await _oneNoteService.GetPagesAsync(section.Id ?? string.Empty);
+                        System.Collections.Generic.IEnumerable<Microsoft.Graph.Models.OnenotePage> pages;
+                        if (nbWithSource.Source == NotebookSource.Group)
+                        {
+                            pages = await _oneNoteService.GetGroupPagesAsync(nbWithSource.GroupId, section.Id ?? string.Empty);
+                        }
+                        else
+                        {
+                            pages = await _oneNoteService.GetPagesAsync(section.Id ?? string.Empty);
+                        }
+
                         foreach (var page in pages)
                         {
                             sectionItem.Pages.Add(new PageItemViewModel
@@ -259,6 +300,7 @@ public partial class OneNoteViewModel : ViewModelBase
                                 Title = page.Title ?? "Untitled",
                                 SectionId = section.Id ?? string.Empty,
                                 SectionName = section.DisplayName ?? string.Empty,
+                                NotebookName = notebook.DisplayName ?? string.Empty,
                                 CreatedDateTime = page.CreatedDateTime?.DateTime,
                                 LastModifiedDateTime = page.LastModifiedDateTime?.DateTime
                             });
@@ -276,12 +318,18 @@ public partial class OneNoteViewModel : ViewModelBase
                     Notebooks.Clear();
                     foreach (var nb in newList)
                         Notebooks.Add(nb);
+
+                    // 즐겨찾기 상태 동기화
+                    SyncFavoriteStatus();
                 });
 
                 // 캐시 저장
                 SaveNotebooksToCache(newList);
 
-                _logger.Information("서버에서 노트북 {Count}개 동기화 완료", Notebooks.Count);
+                var personalCount = newList.Count(n => n.Source == "Personal");
+                var groupCount = newList.Count(n => n.Source == "Group");
+                _logger.Information("서버에서 노트북 동기화 완료: 개인 {PersonalCount}개, 그룹 {GroupCount}개",
+                    personalCount, groupCount);
             }
             catch (Exception ex)
             {
@@ -595,15 +643,49 @@ public partial class OneNoteViewModel : ViewModelBase
     /// <summary>
     /// 선택된 페이지 변경 시 콘텐츠 로드
     /// </summary>
-    partial void OnSelectedPageChanged(PageItemViewModel? value)
+    partial void OnSelectedPageChanged(PageItemViewModel? oldValue, PageItemViewModel? newValue)
     {
-        if (value != null)
+        // 이전 페이지에 저장되지 않은 변경사항이 있으면 즉시 저장
+        if (HasUnsavedChanges && !string.IsNullOrEmpty(_previousPageId) && !string.IsNullOrEmpty(_editingContent))
         {
-            _ = LoadPageContentAsync(value.Id);
+            _logger.Information("페이지 전환 - 이전 페이지 자동저장: {PageId}", _previousPageId);
+            _ = SavePreviousPageAsync(_previousPageId, _editingContent);
+        }
+
+        // 새 페이지 로드
+        if (newValue != null)
+        {
+            _previousPageId = newValue.Id;
+            _ = LoadPageContentAsync(newValue.Id);
         }
         else
         {
+            _previousPageId = null;
             CurrentPageContent = null;
+        }
+    }
+
+    /// <summary>
+    /// 이전 페이지 저장 (페이지 전환 시 호출)
+    /// </summary>
+    private async Task SavePreviousPageAsync(string pageId, string content)
+    {
+        try
+        {
+            _logger.Debug("이전 페이지 저장 시작: {PageId}", pageId);
+            var success = await _oneNoteService.UpdatePageContentAsync(pageId, content);
+            if (success)
+            {
+                _logger.Information("이전 페이지 저장 완료: {PageId}", pageId);
+            }
+            else
+            {
+                _logger.Warning("이전 페이지 저장 실패: {PageId}", pageId);
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.Error(ex, "이전 페이지 저장 예외: {PageId}", pageId);
         }
     }
 
@@ -972,6 +1054,229 @@ public partial class OneNoteViewModel : ViewModelBase
         _autoSaveTimer?.Dispose();
         _autoSaveTimer = null;
     }
+
+    #region 즐겨찾기 기능
+
+    /// <summary>
+    /// 즐겨찾기 목록 로드
+    /// </summary>
+    public void LoadFavorites()
+    {
+        try
+        {
+            FavoritePages.Clear();
+
+            if (!File.Exists(FavoritesFile))
+            {
+                _logger.Debug("즐겨찾기 파일 없음");
+                return;
+            }
+
+            var json = File.ReadAllText(FavoritesFile);
+            var favorites = JsonConvert.DeserializeObject<FavoritesData>(json);
+
+            if (favorites?.Favorites != null)
+            {
+                foreach (var fav in favorites.Favorites.OrderByDescending(f => f.AddedAt))
+                {
+                    FavoritePages.Add(new PageItemViewModel
+                    {
+                        Id = fav.PageId,
+                        Title = fav.Title,
+                        NotebookName = fav.NotebookName,
+                        SectionName = fav.SectionName,
+                        IsFavorite = true,
+                        FavoritedAt = fav.AddedAt
+                    });
+                }
+            }
+
+            _logger.Information("즐겨찾기 {Count}개 로드", FavoritePages.Count);
+        }
+        catch (Exception ex)
+        {
+            _logger.Warning(ex, "즐겨찾기 로드 실패");
+        }
+    }
+
+    /// <summary>
+    /// 즐겨찾기에 페이지 추가
+    /// </summary>
+    /// <param name="page">추가할 페이지</param>
+    public void AddToFavorites(PageItemViewModel page)
+    {
+        if (page == null || string.IsNullOrEmpty(page.Id))
+            return;
+
+        // 이미 즐겨찾기에 있는지 확인
+        if (FavoritePages.Any(f => f.Id == page.Id))
+        {
+            _logger.Debug("이미 즐겨찾기에 있음: {PageId}", page.Id);
+            return;
+        }
+
+        // 페이지 정보 복사 및 즐겨찾기 설정
+        var favoritePage = new PageItemViewModel
+        {
+            Id = page.Id,
+            Title = page.Title,
+            SectionId = page.SectionId,
+            SectionName = page.SectionName,
+            NotebookName = page.NotebookName,
+            CreatedDateTime = page.CreatedDateTime,
+            LastModifiedDateTime = page.LastModifiedDateTime,
+            IsFavorite = true,
+            FavoritedAt = DateTime.Now
+        };
+
+        FavoritePages.Insert(0, favoritePage); // 최신 항목을 맨 위에
+        page.IsFavorite = true;
+        page.FavoritedAt = favoritePage.FavoritedAt;
+
+        SaveFavorites();
+        _logger.Information("즐겨찾기 추가: {Title}", page.Title);
+    }
+
+    /// <summary>
+    /// 즐겨찾기에서 페이지 제거
+    /// </summary>
+    /// <param name="page">제거할 페이지</param>
+    public void RemoveFromFavorites(PageItemViewModel page)
+    {
+        if (page == null || string.IsNullOrEmpty(page.Id))
+            return;
+
+        var toRemove = FavoritePages.FirstOrDefault(f => f.Id == page.Id);
+        if (toRemove != null)
+        {
+            FavoritePages.Remove(toRemove);
+        }
+
+        page.IsFavorite = false;
+        page.FavoritedAt = null;
+
+        // 트리뷰의 페이지도 업데이트
+        UpdatePageFavoriteStatus(page.Id, false);
+
+        SaveFavorites();
+        _logger.Information("즐겨찾기 제거: {Title}", page.Title);
+    }
+
+    /// <summary>
+    /// 페이지 즐겨찾기 상태 토글
+    /// </summary>
+    /// <param name="page">토글할 페이지</param>
+    public void ToggleFavorite(PageItemViewModel page)
+    {
+        if (page == null)
+            return;
+
+        if (page.IsFavorite)
+            RemoveFromFavorites(page);
+        else
+            AddToFavorites(page);
+    }
+
+    /// <summary>
+    /// 트리뷰의 페이지 즐겨찾기 상태 업데이트
+    /// </summary>
+    private void UpdatePageFavoriteStatus(string pageId, bool isFavorite)
+    {
+        foreach (var notebook in Notebooks)
+        {
+            foreach (var section in notebook.Sections)
+            {
+                var page = section.Pages.FirstOrDefault(p => p.Id == pageId);
+                if (page != null)
+                {
+                    page.IsFavorite = isFavorite;
+                    if (!isFavorite)
+                        page.FavoritedAt = null;
+                    return;
+                }
+            }
+        }
+    }
+
+    /// <summary>
+    /// 즐겨찾기 저장
+    /// </summary>
+    private void SaveFavorites()
+    {
+        try
+        {
+            var dir = Path.GetDirectoryName(FavoritesFile);
+            if (!string.IsNullOrEmpty(dir) && !Directory.Exists(dir))
+                Directory.CreateDirectory(dir);
+
+            var data = new FavoritesData
+            {
+                Favorites = FavoritePages.Select(p => new FavoriteItem
+                {
+                    PageId = p.Id,
+                    Title = p.Title,
+                    NotebookName = p.NotebookName,
+                    SectionName = p.SectionName,
+                    AddedAt = p.FavoritedAt ?? DateTime.Now
+                }).ToList()
+            };
+
+            var json = JsonConvert.SerializeObject(data, Formatting.Indented);
+            File.WriteAllText(FavoritesFile, json);
+            _logger.Debug("즐겨찾기 저장 완료: {Count}개", FavoritePages.Count);
+        }
+        catch (Exception ex)
+        {
+            _logger.Warning(ex, "즐겨찾기 저장 실패");
+        }
+    }
+
+    /// <summary>
+    /// 노트북 로드 후 즐겨찾기 상태 동기화
+    /// </summary>
+    public void SyncFavoriteStatus()
+    {
+        var favoriteIds = FavoritePages.Select(f => f.Id).ToHashSet();
+
+        foreach (var notebook in Notebooks)
+        {
+            foreach (var section in notebook.Sections)
+            {
+                foreach (var page in section.Pages)
+                {
+                    if (favoriteIds.Contains(page.Id))
+                    {
+                        page.IsFavorite = true;
+                        var favPage = FavoritePages.FirstOrDefault(f => f.Id == page.Id);
+                        if (favPage != null)
+                            page.FavoritedAt = favPage.FavoritedAt;
+                    }
+                }
+            }
+        }
+    }
+
+    #endregion
+}
+
+/// <summary>
+/// 즐겨찾기 데이터 (JSON 저장용)
+/// </summary>
+public class FavoritesData
+{
+    public List<FavoriteItem> Favorites { get; set; } = new();
+}
+
+/// <summary>
+/// 즐겨찾기 항목
+/// </summary>
+public class FavoriteItem
+{
+    public string PageId { get; set; } = string.Empty;
+    public string Title { get; set; } = string.Empty;
+    public string NotebookName { get; set; } = string.Empty;
+    public string SectionName { get; set; } = string.Empty;
+    public DateTime AddedAt { get; set; }
 }
 
 /// <summary>
@@ -996,6 +1301,34 @@ public partial class NotebookItemViewModel : ObservableObject
 
     [ObservableProperty]
     private ObservableCollection<SectionItemViewModel> _sections = new();
+
+    /// <summary>
+    /// 노트북 출처 (Personal, Group, Site)
+    /// </summary>
+    [ObservableProperty]
+    private string _source = "Personal";
+
+    /// <summary>
+    /// 출처 이름 (그룹명/사이트명)
+    /// </summary>
+    [ObservableProperty]
+    private string _sourceName = "개인";
+
+    /// <summary>
+    /// 그룹 ID (그룹 노트북인 경우)
+    /// </summary>
+    [ObservableProperty]
+    private string _groupId = string.Empty;
+
+    /// <summary>
+    /// 공유 노트북 여부
+    /// </summary>
+    public bool IsShared => Source != "Personal";
+
+    /// <summary>
+    /// 표시용 이름 (출처 포함)
+    /// </summary>
+    public string DisplayNameWithSource => IsShared ? $"{DisplayName} [{SourceName}]" : DisplayName;
 
     /// <summary>
     /// 표시용 날짜
@@ -1039,6 +1372,17 @@ public partial class SectionItemViewModel : ObservableObject
 
     [ObservableProperty]
     private ObservableCollection<PageItemViewModel> _pages = new();
+
+    /// <summary>
+    /// 그룹 ID (그룹 노트북인 경우)
+    /// </summary>
+    [ObservableProperty]
+    private string _groupId = string.Empty;
+
+    /// <summary>
+    /// 그룹 노트북 여부
+    /// </summary>
+    public bool IsGroupNotebook => !string.IsNullOrEmpty(GroupId);
 }
 
 /// <summary>
@@ -1066,6 +1410,18 @@ public partial class PageItemViewModel : ObservableObject
 
     [ObservableProperty]
     private DateTime? _lastModifiedDateTime;
+
+    /// <summary>
+    /// 즐겨찾기 여부
+    /// </summary>
+    [ObservableProperty]
+    private bool _isFavorite;
+
+    /// <summary>
+    /// 즐겨찾기 추가 시간
+    /// </summary>
+    [ObservableProperty]
+    private DateTime? _favoritedAt;
 
     /// <summary>
     /// 시간 표시 문자열
