@@ -1,13 +1,17 @@
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 using System.Net.Http;
 using System.Text;
+using System.Text.Json;
+using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Graph;
 using Microsoft.Graph.Models;
 using mailX.Data;
+using mailX.Utils;
 using Serilog;
 
 // 모호한 참조 해결을 위한 별칭
@@ -552,5 +556,319 @@ public class GraphOneNoteService
             _logger.Error(ex, "페이지 생성 실패: Title={Title}", title);
             throw;
         }
+    }
+
+    /// <summary>
+    /// 페이지 내용 업데이트 (PATCH API)
+    /// OneNote Graph API는 generated ID를 사용한 replace만 지원
+    /// 전략: editorRoot div의 generated ID를 찾아서 replace, 없으면 append
+    /// </summary>
+    /// <param name="pageId">페이지 ID</param>
+    /// <param name="htmlContent">새 HTML 콘텐츠</param>
+    /// <returns>성공 여부</returns>
+    public async Task<bool> UpdatePageContentAsync(string pageId, string htmlContent)
+    {
+        Log4.Debug($"[GraphOneNote] UpdatePageContentAsync 진입: PageId={pageId}, ContentLength={htmlContent?.Length ?? 0}");
+
+        if (string.IsNullOrEmpty(pageId))
+            throw new ArgumentNullException(nameof(pageId));
+
+        try
+        {
+            var accessToken = await _authService.GetAccessTokenAsync();
+            Log4.Debug("[GraphOneNote] 액세스 토큰 획득 완료");
+
+            using var httpClient = new HttpClient();
+            httpClient.DefaultRequestHeaders.Authorization =
+                new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", accessToken);
+
+            // HTML에서 body 내용만 추출
+            var bodyContent = htmlContent;
+            var bodyMatch = Regex.Match(htmlContent, @"<body[^>]*>(.*?)</body>", RegexOptions.Singleline | RegexOptions.IgnoreCase);
+            if (bodyMatch.Success)
+            {
+                bodyContent = bodyMatch.Groups[1].Value;
+                Log4.Debug($"[GraphOneNote] body 태그 내용 추출: {bodyContent.Length}자");
+            }
+
+            // 내용이 비어있으면 최소 내용 유지
+            if (string.IsNullOrWhiteSpace(bodyContent) || bodyContent.Trim() == "<p></p>" || bodyContent.Trim() == "<p><br></p>")
+            {
+                bodyContent = "<p>&nbsp;</p>";
+                Log4.Debug("[GraphOneNote] 빈 콘텐츠 → 최소 내용으로 대체");
+            }
+
+            // 현재 페이지에서 editorRoot의 generated ID 조회
+            Log4.Debug("[GraphOneNote] editorRoot generated ID 조회 중...");
+            var editorRootGeneratedId = await GetEditorRootGeneratedIdAsync(httpClient, pageId);
+            Log4.Debug($"[GraphOneNote] editorRoot generated ID: {editorRootGeneratedId ?? "없음"}");
+
+            var url = $"https://graph.microsoft.com/v1.0/me/onenote/pages/{pageId}/content";
+
+            object[] patchOperations;
+
+            if (!string.IsNullOrEmpty(editorRootGeneratedId))
+            {
+                // generated ID가 있으면 replace 사용 (중복 추가 방지)
+                Log4.Debug($"[GraphOneNote] replace 사용: target={editorRootGeneratedId}");
+                patchOperations = new object[]
+                {
+                    new
+                    {
+                        target = editorRootGeneratedId,
+                        action = "replace",
+                        content = $"<div data-id=\"editorRoot\">{bodyContent}</div>"
+                    }
+                };
+            }
+            else
+            {
+                // generated ID가 없으면 최초 저장 - append 사용
+                Log4.Debug("[GraphOneNote] 최초 저장: append 사용");
+                patchOperations = new object[]
+                {
+                    new
+                    {
+                        target = "body",
+                        action = "append",
+                        content = $"<div data-id=\"editorRoot\">{bodyContent}</div>"
+                    }
+                };
+            }
+
+            var patchJson = JsonSerializer.Serialize(patchOperations);
+            Log4.Debug($"[GraphOneNote] PATCH 요청 전송: PageId={pageId}, JSON길이={patchJson.Length}");
+
+            var patchContent = new StringContent(patchJson, Encoding.UTF8, "application/json");
+            var response = await httpClient.PatchAsync(url, patchContent);
+            Log4.Debug($"[GraphOneNote] PATCH 응답: StatusCode={response.StatusCode}");
+
+            if (response.IsSuccessStatusCode)
+            {
+                Log4.Info($"[GraphOneNote] 페이지 업데이트 완료: {pageId}");
+                return true;
+            }
+            else
+            {
+                var errorContent = await response.Content.ReadAsStringAsync();
+                Log4.Warn($"[GraphOneNote] 페이지 업데이트 실패: StatusCode={response.StatusCode}, Error={errorContent}");
+                return false;
+            }
+        }
+        catch (Exception ex)
+        {
+            Log4.Error($"[GraphOneNote] 페이지 업데이트 예외: PageId={pageId}, Error={ex.Message}\n{ex.StackTrace}");
+            return false;
+        }
+    }
+
+
+    /// <summary>
+    /// 페이지에서 editorRoot div의 generated ID를 조회
+    /// includeIDs=true로 페이지 콘텐츠를 조회하여 data-id="editorRoot"를 가진 div의 id 속성 추출
+    /// 예: <div id="div:{guid}{index}" data-id="editorRoot">
+    /// </summary>
+    private async Task<string?> GetEditorRootGeneratedIdAsync(HttpClient httpClient, string pageId)
+    {
+        try
+        {
+            var url = $"https://graph.microsoft.com/v1.0/me/onenote/pages/{pageId}/content?includeIDs=true";
+            Log4.Debug($"[GraphOneNote] editorRoot generated ID GET: {url}");
+
+            var response = await httpClient.GetAsync(url);
+            Log4.Debug($"[GraphOneNote] editorRoot 조회 응답: StatusCode={response.StatusCode}");
+
+            if (response.IsSuccessStatusCode)
+            {
+                var html = await response.Content.ReadAsStringAsync();
+                Log4.Debug($"[GraphOneNote] 페이지 HTML 길이: {html?.Length ?? 0}");
+
+                if (string.IsNullOrEmpty(html))
+                    return null;
+
+                // 먼저 data-id="editorRoot"가 있는지 확인
+                var editorRootIndex = html.IndexOf("data-id=\"editorRoot\"", StringComparison.OrdinalIgnoreCase);
+                if (editorRootIndex == -1)
+                {
+                    Log4.Debug("[GraphOneNote] data-id=\"editorRoot\" 없음 (최초 저장)");
+                    return null;
+                }
+
+                // editorRoot 주변 HTML 샘플 추출 (디버깅용)
+                var sampleStart = Math.Max(0, editorRootIndex - 200);
+                var sampleEnd = Math.Min(html.Length, editorRootIndex + 100);
+                var sample = html.Substring(sampleStart, sampleEnd - sampleStart);
+                Log4.Debug($"[GraphOneNote] editorRoot 주변 HTML: {sample}");
+
+                // data-id="editorRoot"를 가진 div의 id 속성(generated ID) 추출
+                // OneNote generated ID 형식: div:{guid}{number} 또는 다른 형식일 수 있음
+                // 더 유연한 패턴: id="..."를 캡처
+                var match = Regex.Match(html,
+                    @"<div[^>]*\bid=""([^""]+)""[^>]*data-id=""editorRoot""[^>]*>|<div[^>]*data-id=""editorRoot""[^>]*\bid=""([^""]+)""[^>]*>",
+                    RegexOptions.IgnoreCase);
+
+                if (match.Success)
+                {
+                    // 두 캡처 그룹 중 하나가 매칭됨
+                    var generatedId = !string.IsNullOrEmpty(match.Groups[1].Value)
+                        ? match.Groups[1].Value
+                        : match.Groups[2].Value;
+                    Log4.Debug($"[GraphOneNote] editorRoot generated ID 찾음: {generatedId}");
+                    return generatedId;
+                }
+
+                Log4.Debug("[GraphOneNote] editorRoot div의 id 속성을 찾을 수 없음");
+                return null;
+            }
+            else
+            {
+                var errorContent = await response.Content.ReadAsStringAsync();
+                Log4.Warn($"[GraphOneNote] 페이지 콘텐츠 조회 실패: StatusCode={response.StatusCode}, Error={errorContent}");
+            }
+            return null;
+        }
+        catch (Exception ex)
+        {
+            Log4.Warn($"[GraphOneNote] editorRoot generated ID 조회 예외: {ex.Message}");
+            return null;
+        }
+    }
+
+    /// <summary>
+    /// 페이지 콘텐츠에서 editorRoot 내용만 추출
+    /// editorRoot가 없으면 body 전체 반환
+    /// </summary>
+    public string ExtractEditorRootContent(string html)
+    {
+        if (string.IsNullOrEmpty(html))
+            return string.Empty;
+
+        // data-id="editorRoot" div의 내용 추출
+        var match = Regex.Match(html,
+            @"<div[^>]*data-id=""editorRoot""[^>]*>(.*?)</div>",
+            RegexOptions.Singleline | RegexOptions.IgnoreCase);
+
+        if (match.Success)
+        {
+            _logger.Debug("editorRoot 콘텐츠 추출: {Length}자", match.Groups[1].Value.Length);
+            return match.Groups[1].Value;
+        }
+
+        // editorRoot가 없으면 body 전체 반환
+        var bodyMatch = Regex.Match(html, @"<body[^>]*>(.*?)</body>", RegexOptions.Singleline | RegexOptions.IgnoreCase);
+        if (bodyMatch.Success)
+        {
+            _logger.Debug("body 콘텐츠 추출 (editorRoot 없음): {Length}자", bodyMatch.Groups[1].Value.Length);
+            return bodyMatch.Groups[1].Value;
+        }
+
+        return html;
+    }
+
+    /// <summary>
+    /// HTML 콘텐츠의 이미지 URL을 Base64 데이터 URL로 변환
+    /// Graph API 인증이 필요한 이미지를 인라인으로 변환하여 WebView2에서 표시 가능하게 함
+    /// </summary>
+    /// <param name="htmlContent">원본 HTML 콘텐츠</param>
+    /// <returns>이미지가 Base64로 변환된 HTML</returns>
+    public async Task<string> ConvertImagesToBase64Async(string htmlContent)
+    {
+        if (string.IsNullOrEmpty(htmlContent))
+            return htmlContent;
+
+        try
+        {
+            // Graph API URL 이미지 패턴 (OneNote 리소스)
+            // 패턴: src="https://graph.microsoft.com/.../resources/{id}/$value" 또는
+            //       src="https://graph.microsoft.com/.../resources/{id}/content"
+            var imgRegex = new Regex(
+                @"src=""(https://graph\.microsoft\.com[^""]+(?:resources/[^""]+|\$value|/content)[^""]*)""",
+                RegexOptions.IgnoreCase);
+
+            var matches = imgRegex.Matches(htmlContent);
+            if (matches.Count == 0)
+            {
+                _logger.Debug("변환할 Graph API 이미지 없음");
+                return htmlContent;
+            }
+
+            _logger.Debug("변환할 이미지 {Count}개 발견", matches.Count);
+
+            var accessToken = await _authService.GetAccessTokenAsync();
+            using var httpClient = new HttpClient();
+            httpClient.DefaultRequestHeaders.Authorization =
+                new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", accessToken);
+
+            foreach (Match match in matches)
+            {
+                var imageUrl = match.Groups[1].Value;
+                try
+                {
+                    // 이미지 다운로드
+                    var imageBytes = await httpClient.GetByteArrayAsync(imageUrl);
+
+                    // MIME 타입 감지
+                    var mimeType = DetectMimeType(imageBytes);
+
+                    // Base64 인코딩
+                    var base64 = Convert.ToBase64String(imageBytes);
+                    var dataUrl = $"data:{mimeType};base64,{base64}";
+
+                    // HTML에서 URL 교체
+                    htmlContent = htmlContent.Replace(imageUrl, dataUrl);
+
+                    _logger.Debug("이미지 변환 완료: {Url} -> Base64 ({Size}bytes)",
+                        imageUrl.Substring(0, Math.Min(50, imageUrl.Length)) + "...",
+                        imageBytes.Length);
+                }
+                catch (Exception ex)
+                {
+                    _logger.Warning(ex, "이미지 변환 실패 (원본 유지): {Url}", imageUrl);
+                    // 실패 시 원본 URL 유지
+                }
+            }
+
+            return htmlContent;
+        }
+        catch (Exception ex)
+        {
+            _logger.Error(ex, "이미지 Base64 변환 실패");
+            return htmlContent; // 실패 시 원본 반환
+        }
+    }
+
+    /// <summary>
+    /// 바이트 배열에서 MIME 타입 감지
+    /// </summary>
+    private static string DetectMimeType(byte[] bytes)
+    {
+        if (bytes.Length < 4)
+            return "image/png";
+
+        // PNG: 89 50 4E 47
+        if (bytes[0] == 0x89 && bytes[1] == 0x50 && bytes[2] == 0x4E && bytes[3] == 0x47)
+            return "image/png";
+
+        // JPEG: FF D8 FF
+        if (bytes[0] == 0xFF && bytes[1] == 0xD8 && bytes[2] == 0xFF)
+            return "image/jpeg";
+
+        // GIF: 47 49 46 38
+        if (bytes[0] == 0x47 && bytes[1] == 0x49 && bytes[2] == 0x46 && bytes[3] == 0x38)
+            return "image/gif";
+
+        // BMP: 42 4D
+        if (bytes[0] == 0x42 && bytes[1] == 0x4D)
+            return "image/bmp";
+
+        // WebP: 52 49 46 46 ... 57 45 42 50
+        if (bytes.Length > 12 && bytes[0] == 0x52 && bytes[1] == 0x49 && bytes[2] == 0x46 && bytes[3] == 0x46)
+        {
+            if (bytes[8] == 0x57 && bytes[9] == 0x45 && bytes[10] == 0x42 && bytes[11] == 0x50)
+                return "image/webp";
+        }
+
+        // 기본값
+        return "image/png";
     }
 }

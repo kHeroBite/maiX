@@ -5836,9 +5836,9 @@
             </Grid>
         </Border>
 
-        <!-- ========== OneNote 뷰 컨테이너 (Column 1-5 전체 사용, 초기에는 숨김) ========== -->
+        <!-- ========== OneNote 뷰 컨테이너 (Column 1-6 사용, AI 패널은 Column 7에서 표시) ========== -->
         <Border x:Name="OneNoteViewBorder"
-                Grid.Column="1" Grid.ColumnSpan="5"
+                Grid.Column="1" Grid.ColumnSpan="6"
                 Visibility="Collapsed"
                 Background="{DynamicResource ApplicationBackgroundBrush}">
             <Grid>
@@ -6002,6 +6002,9 @@
                                                Foreground="{DynamicResource TextFillColorSecondaryBrush}" Margin="0,4,0,0"/>
                                 </StackPanel>
                                 <StackPanel Grid.Column="1" Orientation="Horizontal">
+                                    <ui:Button x:Name="OneNoteSaveButton" Icon="{ui:SymbolIcon Save24}"
+                                               Appearance="Transparent" ToolTip="저장 (Ctrl+S)" Padding="8"
+                                               Click="OneNoteSaveButton_Click"/>
                                     <ui:Button x:Name="OneNoteEditButton" Icon="{ui:SymbolIcon Edit24}"
                                                Appearance="Transparent" ToolTip="편집" Padding="8"/>
                                     <ui:Button x:Name="OneNoteShareButton" Icon="{ui:SymbolIcon Share24}"
@@ -6026,14 +6029,11 @@
                                            Margin="0,24,0,0" Padding="16,10" Click="OneNoteNewPageButton_Click"/>
                             </StackPanel>
 
-                            <!-- 페이지 콘텐츠 (HTML 렌더링용) -->
-                            <Border x:Name="OneNoteContentBorder" Visibility="Collapsed" Background="White" Margin="16">
-                                <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Auto">
-                                    <RichTextBox x:Name="OneNoteContentRichTextBox"
-                                                 IsReadOnly="True" BorderThickness="0"
-                                                 Padding="20" FontSize="14"
-                                                 Background="White" Foreground="Black"/>
-                                </ScrollViewer>
+                            <!-- 페이지 콘텐츠 (TinyMCE WebView2 에디터) -->
+                            <Border x:Name="OneNoteContentBorder" Visibility="Collapsed" CornerRadius="8" Margin="8"
+                                    Background="{DynamicResource ApplicationBackgroundBrush}">
+                                <wv2:WebView2 x:Name="OneNoteEditorWebView"
+                                              DefaultBackgroundColor="Transparent"/>
                             </Border>
 
                             <!-- 로딩 인디케이터 -->
@@ -6475,6 +6475,255 @@
                             </StackPanel>
                         </StackPanel>
                     </ScrollViewer>
+                </Border>
+
+                <!-- ========== OneNote AI 패널 (OneNote 탭 활성 시 표시) ========== -->
+                <Border x:Name="OneNoteMainAIPanel" Grid.Row="0" Grid.RowSpan="2"
+                        Visibility="Collapsed">
+                    <Grid>
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="*"/>
+                        </Grid.RowDefinitions>
+
+                        <!-- AI 패널 헤더 -->
+                        <Border Grid.Row="0" Padding="12,10"
+                                BorderBrush="{DynamicResource ControlElevationBorderBrush}"
+                                BorderThickness="0,0,0,1">
+                            <StackPanel Orientation="Horizontal">
+                                <ui:SymbolIcon Symbol="Sparkle24" FontSize="20" Margin="0,0,8,0" Foreground="#7FB8D8"/>
+                                <TextBlock Text="AI 분석" FontSize="15" FontWeight="SemiBold" VerticalAlignment="Center"/>
+                            </StackPanel>
+                        </Border>
+
+                        <!-- AI 탭 버튼들 -->
+                        <Border Grid.Row="1" Padding="8,8"
+                                BorderBrush="{DynamicResource ControlElevationBorderBrush}"
+                                BorderThickness="0,0,0,1">
+                            <UniformGrid Rows="1" Columns="5">
+                                <ui:Button x:Name="OneNoteAITabRecord" Content="녹음"
+                                           Appearance="Transparent" Padding="6,4" Margin="1"
+                                           Click="OneNoteAITab_Click" Tag="record"
+                                           HorizontalAlignment="Stretch" FontSize="11"/>
+                                <ui:Button x:Name="OneNoteAITabSTT" Content="STT"
+                                           Appearance="Transparent" Padding="6,4" Margin="1"
+                                           Click="OneNoteAITab_Click" Tag="stt"
+                                           HorizontalAlignment="Stretch" FontSize="11"/>
+                                <ui:Button x:Name="OneNoteAITabSummary" Content="요약"
+                                           Appearance="Transparent" Padding="6,4" Margin="1"
+                                           Click="OneNoteAITab_Click" Tag="summary"
+                                           HorizontalAlignment="Stretch" FontSize="11"/>
+                                <ui:Button x:Name="OneNoteAITabAuto" Content="자동화"
+                                           Appearance="Transparent" Padding="6,4" Margin="1"
+                                           Click="OneNoteAITab_Click" Tag="automation"
+                                           HorizontalAlignment="Stretch" FontSize="11"/>
+                                <ui:Button x:Name="OneNoteAITabAgent" Content="AI"
+                                           Appearance="Secondary" Padding="6,4" Margin="1"
+                                           Click="OneNoteAITab_Click" Tag="agent"
+                                           HorizontalAlignment="Stretch" FontSize="11"/>
+                            </UniformGrid>
+                        </Border>
+
+                        <!-- AI 탭 컨텐츠 -->
+                        <ScrollViewer Grid.Row="2" VerticalScrollBarVisibility="Auto">
+                            <Grid>
+                                <!-- 녹음 탭 -->
+                                <Border x:Name="OneNoteAIRecordPanel" Visibility="Collapsed" Padding="12">
+                                    <StackPanel>
+                                        <TextBlock Text="음성 녹음" FontWeight="SemiBold" FontSize="13" Margin="0,0,0,12"/>
+
+                                        <!-- 녹음 컨트롤 -->
+                                        <Border Background="{DynamicResource ControlFillColorDefaultBrush}"
+                                                CornerRadius="8" Padding="16" Margin="0,0,0,16">
+                                            <StackPanel>
+                                                <!-- 녹음 상태 표시 -->
+                                                <TextBlock x:Name="OneNoteRecordingStatus"
+                                                           Text="대기 중"
+                                                           HorizontalAlignment="Center"
+                                                           FontSize="14" FontWeight="SemiBold"
+                                                           Margin="0,0,0,8"/>
+
+                                                <!-- 녹음 시간 -->
+                                                <TextBlock x:Name="OneNoteRecordingTime"
+                                                           Text="00:00"
+                                                           HorizontalAlignment="Center"
+                                                           FontSize="28" FontWeight="Bold"
+                                                           Foreground="{DynamicResource AccentTextFillColorPrimaryBrush}"
+                                                           Margin="0,0,0,8"/>
+
+                                                <!-- 볼륨 레벨 바 -->
+                                                <ProgressBar x:Name="OneNoteVolumeLevel"
+                                                             Height="6" Minimum="0" Maximum="1" Value="0"
+                                                             Margin="0,0,0,16"/>
+
+                                                <!-- 녹음 버튼들 -->
+                                                <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
+                                                    <!-- 녹음 시작/중지 버튼 -->
+                                                    <ui:Button x:Name="OneNoteRecordStartButton"
+                                                               Icon="{ui:SymbolIcon Mic24}"
+                                                               Appearance="Primary"
+                                                               ToolTip="녹음 시작"
+                                                               Width="48" Height="48"
+                                                               Margin="4"
+                                                               Click="OneNoteRecordStart_Click"/>
+
+                                                    <!-- 일시정지/재개 버튼 -->
+                                                    <ui:Button x:Name="OneNoteRecordPauseButton"
+                                                               Icon="{ui:SymbolIcon Pause24}"
+                                                               Appearance="Secondary"
+                                                               ToolTip="일시정지"
+                                                               Width="48" Height="48"
+                                                               Margin="4"
+                                                               IsEnabled="False"
+                                                               Click="OneNoteRecordPause_Click"/>
+
+                                                    <!-- 취소 버튼 -->
+                                                    <ui:Button x:Name="OneNoteRecordCancelButton"
+                                                               Icon="{ui:SymbolIcon Delete24}"
+                                                               Appearance="Caution"
+                                                               ToolTip="녹음 취소"
+                                                               Width="48" Height="48"
+                                                               Margin="4"
+                                                               IsEnabled="False"
+                                                               Click="OneNoteRecordCancel_Click"/>
+                                                </StackPanel>
+                                            </StackPanel>
+                                        </Border>
+
+                                        <!-- 녹음 파일 목록 헤더 -->
+                                        <Grid Margin="0,0,0,8">
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="*"/>
+                                                <ColumnDefinition Width="Auto"/>
+                                            </Grid.ColumnDefinitions>
+                                            <TextBlock Text="녹음 파일" FontWeight="SemiBold" FontSize="12"
+                                                       VerticalAlignment="Center"/>
+                                            <ui:Button Grid.Column="1"
+                                                       Icon="{ui:SymbolIcon ArrowSync24}"
+                                                       Appearance="Transparent"
+                                                       ToolTip="새로고침"
+                                                       Padding="4"
+                                                       Click="OneNoteRecordingsRefresh_Click"/>
+                                        </Grid>
+
+                                        <!-- 녹음 파일 목록 -->
+                                        <ItemsControl x:Name="OneNoteRecordingsList" MaxHeight="300">
+                                            <ItemsControl.ItemTemplate>
+                                                <DataTemplate>
+                                                    <Border Background="{DynamicResource ControlFillColorDefaultBrush}"
+                                                            CornerRadius="6" Padding="10" Margin="0,0,0,6"
+                                                            BorderBrush="{DynamicResource ControlElevationBorderBrush}"
+                                                            BorderThickness="1">
+                                                        <Grid>
+                                                            <Grid.ColumnDefinitions>
+                                                                <ColumnDefinition Width="*"/>
+                                                                <ColumnDefinition Width="Auto"/>
+                                                            </Grid.ColumnDefinitions>
+                                                            <StackPanel VerticalAlignment="Center">
+                                                                <TextBlock Text="{Binding FileName}"
+                                                                           FontSize="12" FontWeight="Medium"
+                                                                           TextTrimming="CharacterEllipsis"/>
+                                                                <StackPanel Orientation="Horizontal" Margin="0,4,0,0">
+                                                                    <TextBlock Text="{Binding DurationDisplay}"
+                                                                               FontSize="11"
+                                                                               Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
+                                                                    <TextBlock Text=" · "
+                                                                               FontSize="11"
+                                                                               Foreground="{DynamicResource TextFillColorTertiaryBrush}"/>
+                                                                    <TextBlock Text="{Binding SourceDisplay}"
+                                                                               FontSize="11"
+                                                                               Foreground="{DynamicResource TextFillColorTertiaryBrush}"/>
+                                                                </StackPanel>
+                                                            </StackPanel>
+                                                            <StackPanel Grid.Column="1" Orientation="Horizontal">
+                                                                <ui:Button Icon="{ui:SymbolIcon Play24}"
+                                                                           Appearance="Transparent"
+                                                                           ToolTip="재생"
+                                                                           Padding="6"
+                                                                           Tag="{Binding}"
+                                                                           Click="OneNoteRecordingPlay_Click"/>
+                                                                <ui:Button Icon="{ui:SymbolIcon Delete24}"
+                                                                           Appearance="Transparent"
+                                                                           ToolTip="삭제"
+                                                                           Padding="6"
+                                                                           Tag="{Binding}"
+                                                                           Click="OneNoteRecordingDelete_Click"/>
+                                                            </StackPanel>
+                                                        </Grid>
+                                                    </Border>
+                                                </DataTemplate>
+                                            </ItemsControl.ItemTemplate>
+                                        </ItemsControl>
+
+                                        <!-- 녹음 파일 없을 때 -->
+                                        <TextBlock x:Name="OneNoteNoRecordingsText"
+                                                   Text="녹음 파일이 없습니다"
+                                                   Foreground="{DynamicResource TextFillColorTertiaryBrush}"
+                                                   FontSize="12"
+                                                   HorizontalAlignment="Center"
+                                                   Margin="0,20,0,0"
+                                                   Visibility="Collapsed"/>
+                                    </StackPanel>
+                                </Border>
+
+                                <!-- STT 탭 -->
+                                <Border x:Name="OneNoteAISTTPanel" Visibility="Collapsed" Padding="12">
+                                    <StackPanel>
+                                        <TextBlock Text="음성 → 텍스트" FontWeight="SemiBold" FontSize="13" Margin="0,0,0,12"/>
+                                        <TextBlock Text="STT 기능 준비 중..."
+                                                   Foreground="{DynamicResource TextFillColorTertiaryBrush}"/>
+                                    </StackPanel>
+                                </Border>
+
+                                <!-- 요약 탭 -->
+                                <Border x:Name="OneNoteAISummaryPanel" Visibility="Collapsed" Padding="12">
+                                    <StackPanel>
+                                        <TextBlock Text="AI 요약" FontWeight="SemiBold" FontSize="13" Margin="0,0,0,12"/>
+                                        <TextBlock Text="요약 기능 준비 중..."
+                                                   Foreground="{DynamicResource TextFillColorTertiaryBrush}"/>
+                                    </StackPanel>
+                                </Border>
+
+                                <!-- 자동화 탭 -->
+                                <Border x:Name="OneNoteAIAutomationPanel" Visibility="Collapsed" Padding="12">
+                                    <StackPanel>
+                                        <TextBlock Text="자동화" FontWeight="SemiBold" FontSize="13" Margin="0,0,0,12"/>
+                                        <TextBlock Text="자동화 기능 준비 중..."
+                                                   Foreground="{DynamicResource TextFillColorTertiaryBrush}"/>
+                                    </StackPanel>
+                                </Border>
+
+                                <!-- AI 에이전트 탭 -->
+                                <Border x:Name="OneNoteAIAgentPanel" Visibility="Visible" Padding="12">
+                                    <Grid>
+                                        <Grid.RowDefinitions>
+                                            <RowDefinition Height="Auto"/>
+                                            <RowDefinition Height="*"/>
+                                            <RowDefinition Height="Auto"/>
+                                        </Grid.RowDefinitions>
+                                        <TextBlock Grid.Row="0" Text="AI 채팅" FontWeight="SemiBold" FontSize="13" Margin="0,0,0,8"/>
+                                        <Border Grid.Row="1" Background="{DynamicResource ControlFillColorDefaultBrush}"
+                                                CornerRadius="8" Padding="6" MinHeight="200">
+                                            <TextBlock Text="AI 채팅 기능 준비 중..."
+                                                       Foreground="{DynamicResource TextFillColorTertiaryBrush}"
+                                                       VerticalAlignment="Center" HorizontalAlignment="Center"/>
+                                        </Border>
+                                        <Grid Grid.Row="2" Margin="0,8,0,0">
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="*"/>
+                                                <ColumnDefinition Width="Auto"/>
+                                            </Grid.ColumnDefinitions>
+                                            <ui:TextBox x:Name="OneNoteAgentInputBox" Grid.Column="0"
+                                                        PlaceholderText="메시지 입력..." FontSize="11"/>
+                                            <ui:Button Grid.Column="1" Icon="{ui:SymbolIcon Send24}"
+                                                       Appearance="Primary" Margin="4,0,0,0"/>
+                                        </Grid>
+                                    </Grid>
+                                </Border>
+                            </Grid>
+                        </ScrollViewer>
+                    </Grid>
                 </Border>
 
                 <!-- AI 패널 헤더 -->

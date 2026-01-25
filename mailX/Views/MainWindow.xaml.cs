@@ -83,7 +83,7 @@ public partial class MainWindow : FluentWindow
         // 테마 변경 시 메일 목록 새로고침 (글자색 업데이트) + WebView2 테마 갱신 + Mica 백드롭 재적용
         Services.Theme.ThemeService.Instance.ThemeChanged += (_, _) =>
         {
-            Dispatcher.Invoke(() =>
+            Dispatcher.Invoke(async () =>
             {
                 // Mica 백드롭 재적용 (테마 전환 시 유지되도록)
                 WindowBackdrop.RemoveBackground(this);
@@ -100,6 +100,12 @@ public partial class MainWindow : FluentWindow
                 if (_viewModel.SelectedEmail != null)
                 {
                     LoadMailBodyAsync(_viewModel.SelectedEmail);
+                }
+
+                // OneNote TinyMCE 에디터 테마 갱신
+                if (OneNoteViewBorder?.Visibility == Visibility.Visible && _oneNoteEditorInitialized)
+                {
+                    await RefreshOneNoteTinyMCEThemeAsync();
                 }
             });
         };
@@ -4530,6 +4536,11 @@ public partial class MainWindow : FluentWindow
         if (AIPanelBorder != null) AIPanelBorder.Visibility = Visibility.Collapsed;
         if (CalendarDetailPanel != null) CalendarDetailPanel.Visibility = Visibility.Collapsed;
         if (OneDriveSidePanel != null) OneDriveSidePanel.Visibility = Visibility.Collapsed;
+        if (OneNoteMainAIPanel != null) OneNoteMainAIPanel.Visibility = Visibility.Collapsed;
+
+        // 메일용 AI 패널 콘텐츠 초기화 (숨김 상태)
+        if (AIPanelHeader != null) AIPanelHeader.Visibility = Visibility.Collapsed;
+        if (AIPanelContent != null) AIPanelContent.Visibility = Visibility.Collapsed;
 
         _viewModel.IsCalendarViewActive = false;
         _viewModel.IsCalendarMode = false;
@@ -4905,15 +4916,295 @@ public partial class MainWindow : FluentWindow
     /// <summary>
     /// OneNote 뷰 표시
     /// </summary>
-    private void ShowOneNoteView()
+    private async void ShowOneNoteView()
     {
         HideAllViews();
 
         if (OneNoteViewBorder != null) OneNoteViewBorder.Visibility = Visibility.Visible;
 
+        // 우측 AI 패널 표시 (메인 Grid의 Column 7)
+        if (AIPanelBorder != null) AIPanelBorder.Visibility = Visibility.Visible;
+        // 메일용 AI 패널 콘텐츠 숨김
+        if (AIPanelHeader != null) AIPanelHeader.Visibility = Visibility.Collapsed;
+        if (AIPanelContent != null) AIPanelContent.Visibility = Visibility.Collapsed;
+        // OneNote용 AI 패널 표시 (메인 AI 패널 내부)
+        if (OneNoteMainAIPanel != null) OneNoteMainAIPanel.Visibility = Visibility.Visible;
+
         _viewModel.StatusMessage = "OneNote";
         Services.Theme.ThemeService.Instance.ApplyFeatureTheme("onenote");
+
+        // OneNote 노트북 로드 (최초 1회)
+        if (_oneNoteViewModel == null || _oneNoteViewModel.Notebooks.Count == 0)
+        {
+            await LoadOneNoteNotebooksAsync();
+        }
     }
+
+    /// <summary>
+    /// OneNote AI 패널 탭 클릭 이벤트 핸들러
+    /// </summary>
+    private void OneNoteAITab_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is not Wpf.Ui.Controls.Button button || button.Tag is not string tabName)
+            return;
+
+        // 모든 탭 버튼 비활성 스타일로 변경
+        if (OneNoteAITabRecord != null) OneNoteAITabRecord.Appearance = Wpf.Ui.Controls.ControlAppearance.Transparent;
+        if (OneNoteAITabSTT != null) OneNoteAITabSTT.Appearance = Wpf.Ui.Controls.ControlAppearance.Transparent;
+        if (OneNoteAITabSummary != null) OneNoteAITabSummary.Appearance = Wpf.Ui.Controls.ControlAppearance.Transparent;
+        if (OneNoteAITabAuto != null) OneNoteAITabAuto.Appearance = Wpf.Ui.Controls.ControlAppearance.Transparent;
+        if (OneNoteAITabAgent != null) OneNoteAITabAgent.Appearance = Wpf.Ui.Controls.ControlAppearance.Transparent;
+
+        // 클릭한 탭 버튼 활성 스타일로 변경
+        button.Appearance = Wpf.Ui.Controls.ControlAppearance.Secondary;
+
+        // 모든 탭 패널 숨김
+        if (OneNoteAIRecordPanel != null) OneNoteAIRecordPanel.Visibility = Visibility.Collapsed;
+        if (OneNoteAISTTPanel != null) OneNoteAISTTPanel.Visibility = Visibility.Collapsed;
+        if (OneNoteAISummaryPanel != null) OneNoteAISummaryPanel.Visibility = Visibility.Collapsed;
+        if (OneNoteAIAutomationPanel != null) OneNoteAIAutomationPanel.Visibility = Visibility.Collapsed;
+        if (OneNoteAIAgentPanel != null) OneNoteAIAgentPanel.Visibility = Visibility.Collapsed;
+
+        // 선택한 탭 패널만 표시
+        switch (tabName)
+        {
+            case "record":
+                if (OneNoteAIRecordPanel != null) OneNoteAIRecordPanel.Visibility = Visibility.Visible;
+                // 녹음 목록 로드
+                LoadOneNoteRecordings();
+                break;
+            case "stt":
+                if (OneNoteAISTTPanel != null) OneNoteAISTTPanel.Visibility = Visibility.Visible;
+                break;
+            case "summary":
+                if (OneNoteAISummaryPanel != null) OneNoteAISummaryPanel.Visibility = Visibility.Visible;
+                break;
+            case "automation":
+                if (OneNoteAIAutomationPanel != null) OneNoteAIAutomationPanel.Visibility = Visibility.Visible;
+                break;
+            case "agent":
+                if (OneNoteAIAgentPanel != null) OneNoteAIAgentPanel.Visibility = Visibility.Visible;
+                break;
+        }
+    }
+
+    #region OneNote 녹음 이벤트 핸들러
+
+    /// <summary>
+    /// 녹음 목록 로드
+    /// </summary>
+    private void LoadOneNoteRecordings()
+    {
+        if (_oneNoteViewModel == null) return;
+
+        _oneNoteViewModel.LoadRecordings();
+
+        // UI에 녹음 목록 바인딩
+        if (OneNoteRecordingsList != null)
+        {
+            OneNoteRecordingsList.ItemsSource = _oneNoteViewModel.Recordings;
+        }
+
+        // 녹음 파일 없을 때 텍스트 표시
+        if (OneNoteNoRecordingsText != null)
+        {
+            OneNoteNoRecordingsText.Visibility = _oneNoteViewModel.Recordings.Count == 0
+                ? Visibility.Visible
+                : Visibility.Collapsed;
+        }
+    }
+
+    /// <summary>
+    /// 녹음 시작/중지 버튼 클릭
+    /// </summary>
+    private void OneNoteRecordStart_Click(object sender, RoutedEventArgs e)
+    {
+        if (_oneNoteViewModel == null) return;
+
+        if (_oneNoteViewModel.IsRecording)
+        {
+            // 녹음 중지
+            _oneNoteViewModel.StopRecording();
+            UpdateRecordingUI(false);
+        }
+        else
+        {
+            // 녹음 시작
+            try
+            {
+                _oneNoteViewModel.StartRecording();
+                UpdateRecordingUI(true);
+
+                // 이벤트 구독하여 UI 업데이트
+                if (_oneNoteViewModel != null)
+                {
+                    _oneNoteViewModel.PropertyChanged += OneNoteViewModel_PropertyChanged;
+                }
+            }
+            catch (Exception ex)
+            {
+                Log4.Error($"[OneNote] 녹음 시작 실패: {ex.Message}");
+                UpdateRecordingUI(false);
+            }
+        }
+    }
+
+    /// <summary>
+    /// ViewModel 속성 변경 시 UI 업데이트
+    /// </summary>
+    private void OneNoteViewModel_PropertyChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
+    {
+        if (_oneNoteViewModel == null) return;
+
+        Dispatcher.Invoke(() =>
+        {
+            switch (e.PropertyName)
+            {
+                case nameof(ViewModels.OneNoteViewModel.RecordingDuration):
+                    if (OneNoteRecordingTime != null)
+                    {
+                        OneNoteRecordingTime.Text = _oneNoteViewModel.RecordingDuration.ToString(@"mm\:ss");
+                    }
+                    break;
+                case nameof(ViewModels.OneNoteViewModel.RecordingVolume):
+                    if (OneNoteVolumeLevel != null)
+                    {
+                        OneNoteVolumeLevel.Value = _oneNoteViewModel.RecordingVolume;
+                    }
+                    break;
+                case nameof(ViewModels.OneNoteViewModel.RecordingStatusText):
+                    if (OneNoteRecordingStatus != null)
+                    {
+                        OneNoteRecordingStatus.Text = _oneNoteViewModel.RecordingStatusText;
+                    }
+                    break;
+                case nameof(ViewModels.OneNoteViewModel.IsRecording):
+                    UpdateRecordingUI(_oneNoteViewModel.IsRecording);
+                    if (!_oneNoteViewModel.IsRecording)
+                    {
+                        // 녹음 완료 시 목록 새로고침
+                        LoadOneNoteRecordings();
+                    }
+                    break;
+                case nameof(ViewModels.OneNoteViewModel.IsRecordingPaused):
+                    UpdatePauseButtonUI(_oneNoteViewModel.IsRecordingPaused);
+                    break;
+            }
+        });
+    }
+
+    /// <summary>
+    /// 녹음 일시정지/재개 버튼 클릭
+    /// </summary>
+    private void OneNoteRecordPause_Click(object sender, RoutedEventArgs e)
+    {
+        _oneNoteViewModel?.TogglePauseRecording();
+    }
+
+    /// <summary>
+    /// 녹음 취소 버튼 클릭
+    /// </summary>
+    private void OneNoteRecordCancel_Click(object sender, RoutedEventArgs e)
+    {
+        _oneNoteViewModel?.CancelRecording();
+        UpdateRecordingUI(false);
+    }
+
+    /// <summary>
+    /// 녹음 파일 목록 새로고침 버튼 클릭
+    /// </summary>
+    private void OneNoteRecordingsRefresh_Click(object sender, RoutedEventArgs e)
+    {
+        LoadOneNoteRecordings();
+    }
+
+    /// <summary>
+    /// 녹음 파일 재생 버튼 클릭
+    /// </summary>
+    private void OneNoteRecordingPlay_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is Wpf.Ui.Controls.Button button && button.Tag is Models.RecordingInfo recording)
+        {
+            _oneNoteViewModel?.PlayRecording(recording);
+        }
+    }
+
+    /// <summary>
+    /// 녹음 파일 삭제 버튼 클릭
+    /// </summary>
+    private void OneNoteRecordingDelete_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is Wpf.Ui.Controls.Button button && button.Tag is Models.RecordingInfo recording)
+        {
+            _oneNoteViewModel?.DeleteRecording(recording);
+            LoadOneNoteRecordings(); // 목록 새로고침
+        }
+    }
+
+    /// <summary>
+    /// 녹음 UI 상태 업데이트
+    /// </summary>
+    private void UpdateRecordingUI(bool isRecording)
+    {
+        Dispatcher.Invoke(() =>
+        {
+            if (OneNoteRecordStartButton != null)
+            {
+                OneNoteRecordStartButton.Icon = isRecording
+                    ? new Wpf.Ui.Controls.SymbolIcon(Wpf.Ui.Controls.SymbolRegular.Stop24)
+                    : new Wpf.Ui.Controls.SymbolIcon(Wpf.Ui.Controls.SymbolRegular.Mic24);
+                OneNoteRecordStartButton.ToolTip = isRecording ? "녹음 중지" : "녹음 시작";
+                OneNoteRecordStartButton.Appearance = isRecording
+                    ? Wpf.Ui.Controls.ControlAppearance.Danger
+                    : Wpf.Ui.Controls.ControlAppearance.Primary;
+            }
+
+            if (OneNoteRecordPauseButton != null)
+            {
+                OneNoteRecordPauseButton.IsEnabled = isRecording;
+            }
+
+            if (OneNoteRecordCancelButton != null)
+            {
+                OneNoteRecordCancelButton.IsEnabled = isRecording;
+            }
+
+            if (OneNoteRecordingStatus != null)
+            {
+                OneNoteRecordingStatus.Text = isRecording ? "녹음 중..." : "대기 중";
+            }
+
+            if (!isRecording)
+            {
+                if (OneNoteRecordingTime != null) OneNoteRecordingTime.Text = "00:00";
+                if (OneNoteVolumeLevel != null) OneNoteVolumeLevel.Value = 0;
+            }
+        });
+    }
+
+    /// <summary>
+    /// 일시정지 버튼 UI 업데이트
+    /// </summary>
+    private void UpdatePauseButtonUI(bool isPaused)
+    {
+        Dispatcher.Invoke(() =>
+        {
+            if (OneNoteRecordPauseButton != null)
+            {
+                OneNoteRecordPauseButton.Icon = isPaused
+                    ? new Wpf.Ui.Controls.SymbolIcon(Wpf.Ui.Controls.SymbolRegular.Play24)
+                    : new Wpf.Ui.Controls.SymbolIcon(Wpf.Ui.Controls.SymbolRegular.Pause24);
+                OneNoteRecordPauseButton.ToolTip = isPaused ? "재개" : "일시정지";
+            }
+
+            if (OneNoteRecordingStatus != null)
+            {
+                OneNoteRecordingStatus.Text = isPaused ? "일시정지" : "녹음 중...";
+            }
+        });
+    }
+
+    #endregion
 
     /// <summary>
     /// 통화 뷰 표시
@@ -6922,6 +7213,331 @@ public partial class MainWindow : FluentWindow
     #region OneNote 이벤트 핸들러
 
     private OneNoteViewModel? _oneNoteViewModel;
+    private bool _oneNoteEditorInitialized = false;
+    private bool _oneNoteEditorReady = false;
+
+    /// <summary>
+    /// OneNote TinyMCE 에디터 초기화
+    /// </summary>
+    private async Task InitializeOneNoteTinyMCEAsync()
+    {
+        if (_oneNoteEditorInitialized || OneNoteEditorWebView == null) return;
+
+        try
+        {
+            Log4.Debug("[OneNote] TinyMCE 에디터 초기화 시작");
+
+            // WebView2 환경 생성
+            var userDataFolder = System.IO.Path.Combine(
+                Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
+                "mailX", "WebView2Cache", "OneNoteEditor");
+            System.IO.Directory.CreateDirectory(userDataFolder);
+
+            var env = await Microsoft.Web.WebView2.Core.CoreWebView2Environment.CreateAsync(null, userDataFolder);
+            await OneNoteEditorWebView.EnsureCoreWebView2Async(env);
+
+            // WebView2 설정
+            OneNoteEditorWebView.CoreWebView2.Settings.IsScriptEnabled = true;
+            OneNoteEditorWebView.CoreWebView2.Settings.AreDefaultContextMenusEnabled = false;
+            OneNoteEditorWebView.CoreWebView2.Settings.IsStatusBarEnabled = false;
+
+            // 로컬 TinyMCE 파일에 접근할 수 있도록 가상 호스트 매핑
+            var tinymcePath = System.IO.Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Assets", "tinymce");
+            OneNoteEditorWebView.CoreWebView2.SetVirtualHostNameToFolderMapping(
+                "tinymce.local", tinymcePath,
+                Microsoft.Web.WebView2.Core.CoreWebView2HostResourceAccessKind.Allow);
+
+            // 테마 감지
+            var isDark = Services.Theme.ThemeService.Instance.CurrentTheme == Wpf.Ui.Appearance.ApplicationTheme.Dark;
+
+            // TinyMCE 에디터 HTML 생성
+            var editorHtml = GenerateOneNoteTinyMCEHtml(isDark);
+
+            // 메시지 수신 핸들러
+            OneNoteEditorWebView.CoreWebView2.WebMessageReceived += OneNoteEditorWebView_WebMessageReceived;
+            OneNoteEditorWebView.CoreWebView2.NavigateToString(editorHtml);
+
+            _oneNoteEditorInitialized = true;
+            Log4.Debug("[OneNote] TinyMCE 에디터 초기화 완료");
+        }
+        catch (Exception ex)
+        {
+            Log4.Error($"[OneNote] TinyMCE 초기화 실패: {ex.Message}");
+        }
+    }
+
+    /// <summary>
+    /// OneNote TinyMCE 에디터 HTML 생성
+    /// </summary>
+    private string GenerateOneNoteTinyMCEHtml(bool isDark)
+    {
+        var skin = isDark ? "oxide-dark" : "oxide";
+        var contentCss = isDark ? "dark" : "default";
+        var bgColor = isDark ? "#1e1e1e" : "#ffffff";
+        var textColor = isDark ? "#e0e0e0" : "#333333";
+
+        return $@"<!DOCTYPE html>
+<html>
+<head>
+    <meta charset=""UTF-8"">
+    <meta name=""viewport"" content=""width=device-width, initial-scale=1.0"">
+    <script src=""https://tinymce.local/tinymce.min.js""></script>
+    <style>
+        * {{ margin: 0; padding: 0; box-sizing: border-box; }}
+        html, body {{
+            height: 100%;
+            overflow: hidden;
+            background-color: {bgColor};
+        }}
+        .tox-tinymce {{ border: none !important; }}
+        .tox .tox-edit-area::before {{ border: none !important; }}
+        .tox .tox-edit-area__iframe {{ background-color: {bgColor} !important; }}
+    </style>
+</head>
+<body>
+    <textarea id=""editor""></textarea>
+    <script>
+        tinymce.init({{
+            selector: '#editor',
+            height: '100%',
+            menubar: false,
+            statusbar: false,
+            skin: '{skin}',
+            content_css: '{contentCss}',
+            plugins: 'lists link image table code checklist',
+            toolbar: 'undo redo | bold italic underline | bullist numlist checklist | link image table | code',
+            content_style: 'body {{ font-family: -apple-system, BlinkMacSystemFont, ""Segoe UI"", Roboto, sans-serif; font-size: 14px; color: {textColor}; background-color: {bgColor}; padding: 16px; }}',
+            setup: function(editor) {{
+                editor.on('init', function() {{
+                    console.log('[TinyMCE] 에디터 초기화 완료');
+                    window.chrome.webview.postMessage(JSON.stringify({{ type: 'ready' }}));
+                }});
+
+                // Ctrl+S 단축키: 즉시 저장
+                editor.on('keydown', function(e) {{
+                    if ((e.ctrlKey || e.metaKey) && e.keyCode === 83) {{
+                        e.preventDefault();
+                        window.chrome.webview.postMessage(JSON.stringify({{
+                            type: 'save',
+                            content: editor.getContent()
+                        }}));
+                    }}
+                }});
+
+                // 콘텐츠 변경 감지
+                editor.on('input change', function() {{
+                    window.chrome.webview.postMessage(JSON.stringify({{
+                        type: 'contentChanged',
+                        content: editor.getContent()
+                    }}));
+                }});
+            }}
+        }});
+
+        // C#에서 호출하는 함수들
+        function setContent(html) {{
+            if (tinymce.activeEditor) {{
+                tinymce.activeEditor.setContent(html || '');
+            }}
+        }}
+
+        function getContent() {{
+            if (tinymce.activeEditor) {{
+                return tinymce.activeEditor.getContent();
+            }}
+            return '';
+        }}
+
+        function setReadOnly(readOnly) {{
+            if (tinymce.activeEditor) {{
+                tinymce.activeEditor.mode.set(readOnly ? 'readonly' : 'design');
+            }}
+        }}
+    </script>
+</body>
+</html>";
+    }
+
+    /// <summary>
+    /// OneNote 에디터 WebView2 메시지 수신
+    /// </summary>
+    private void OneNoteEditorWebView_WebMessageReceived(object? sender, Microsoft.Web.WebView2.Core.CoreWebView2WebMessageReceivedEventArgs e)
+    {
+        try
+        {
+            var message = e.TryGetWebMessageAsString();
+            if (string.IsNullOrEmpty(message)) return;
+
+            var json = System.Text.Json.JsonDocument.Parse(message);
+            var type = json.RootElement.GetProperty("type").GetString();
+
+            switch (type)
+            {
+                case "ready":
+                    _oneNoteEditorReady = true;
+                    Log4.Debug("[OneNote] TinyMCE 에디터 준비 완료");
+                    break;
+                case "contentChanged":
+                    // 콘텐츠 변경 시 자동저장 트리거
+                    if (json.RootElement.TryGetProperty("content", out var contentElement))
+                    {
+                        var content = contentElement.GetString();
+                        if (!string.IsNullOrEmpty(content))
+                        {
+                            Log4.Debug($"[OneNote] contentChanged 수신: {content.Length}자");
+                            _oneNoteViewModel?.OnContentChanged(content);
+                        }
+                    }
+                    break;
+                case "save":
+                    // Ctrl+S 저장 요청
+                    Log4.Debug("[OneNote] Ctrl+S 저장 요청 수신");
+                    if (json.RootElement.TryGetProperty("content", out var saveContentElement))
+                    {
+                        var content = saveContentElement.GetString();
+                        Log4.Debug($"[OneNote] 저장할 콘텐츠: {content?.Length ?? 0}자, SelectedPage: {_oneNoteViewModel?.SelectedPage?.Id ?? "null"}");
+                        if (!string.IsNullOrEmpty(content) && _oneNoteViewModel != null)
+                        {
+                            // 직접 저장 실행 (OnContentChanged 대신)
+                            _oneNoteViewModel.OnContentChanged(content);
+                            // SaveAsync 호출
+                            _ = Task.Run(async () =>
+                            {
+                                await Task.Delay(100); // OnContentChanged가 상태 설정할 시간 확보
+                                await Dispatcher.InvokeAsync(async () =>
+                                {
+                                    Log4.Debug($"[OneNote] SaveAsync 호출 전: HasUnsavedChanges={_oneNoteViewModel.HasUnsavedChanges}");
+                                    await _oneNoteViewModel.SaveAsync();
+                                });
+                            });
+                        }
+                    }
+                    break;
+            }
+        }
+        catch (Exception ex)
+        {
+            Log4.Warn($"[OneNote] WebView2 메시지 처리 실패 (무시): {ex.Message}");
+        }
+    }
+
+    /// <summary>
+    /// OneNote 에디터에 콘텐츠 설정
+    /// </summary>
+    private async Task SetOneNoteEditorContentAsync(string htmlContent)
+    {
+        if (!_oneNoteEditorReady || OneNoteEditorWebView?.CoreWebView2 == null)
+        {
+            Log4.Warn("[OneNote] 에디터가 준비되지 않음");
+            return;
+        }
+
+        try
+        {
+            // HTML 콘텐츠를 이스케이프하여 JavaScript로 전달
+            var escapedContent = htmlContent
+                .Replace("\\", "\\\\")
+                .Replace("'", "\\'")
+                .Replace("\n", "\\n")
+                .Replace("\r", "\\r");
+
+            await OneNoteEditorWebView.CoreWebView2.ExecuteScriptAsync($"setContent('{escapedContent}')");
+            Log4.Debug($"[OneNote] 에디터 콘텐츠 설정 완료: {htmlContent.Length}자");
+        }
+        catch (Exception ex)
+        {
+            Log4.Error($"[OneNote] 에디터 콘텐츠 설정 실패: {ex.Message}");
+        }
+    }
+
+    /// <summary>
+    /// OneNote TinyMCE 에디터 테마 갱신 (테마 변경 시 호출)
+    /// </summary>
+    private async Task RefreshOneNoteTinyMCEThemeAsync()
+    {
+        if (!_oneNoteEditorInitialized || OneNoteEditorWebView?.CoreWebView2 == null) return;
+
+        try
+        {
+            // ViewModel에서 현재 콘텐츠 가져오기 (에디터에서 백업하지 않음)
+            string? currentContent = null;
+            if (_oneNoteViewModel != null)
+            {
+                currentContent = _oneNoteViewModel.CurrentPageContent;
+            }
+
+            // 테마 감지
+            var isDark = Services.Theme.ThemeService.Instance.CurrentTheme == Wpf.Ui.Appearance.ApplicationTheme.Dark;
+
+            // WebView2 배경색 업데이트
+            OneNoteEditorWebView.DefaultBackgroundColor = isDark
+                ? System.Drawing.Color.FromArgb(255, 30, 30, 30)
+                : System.Drawing.Color.FromArgb(255, 255, 255, 255);
+
+            // 새 테마로 에디터 재로드
+            _oneNoteEditorReady = false;
+            var editorHtml = GenerateOneNoteTinyMCEHtml(isDark);
+            OneNoteEditorWebView.CoreWebView2.NavigateToString(editorHtml);
+
+            // 에디터가 준비될 때까지 대기
+            var waitCount = 0;
+            while (!_oneNoteEditorReady && waitCount < 50)
+            {
+                await Task.Delay(100);
+                waitCount++;
+            }
+
+            // 콘텐츠 복원
+            if (!string.IsNullOrEmpty(currentContent) && _oneNoteEditorReady)
+            {
+                await SetOneNoteEditorContentAsync(currentContent);
+            }
+
+            Log4.Debug($"[OneNote] TinyMCE 테마 갱신 완료 (isDark: {isDark})");
+        }
+        catch (Exception ex)
+        {
+            Log4.Error($"[OneNote] TinyMCE 테마 갱신 실패: {ex.Message}");
+        }
+    }
+
+    /// <summary>
+    /// OneNote 저장 버튼 클릭
+    /// </summary>
+    private async void OneNoteSaveButton_Click(object sender, RoutedEventArgs e)
+    {
+        Log4.Debug("[OneNote] 저장 버튼 클릭");
+
+        if (_oneNoteViewModel == null)
+        {
+            Log4.Warn("[OneNote] ViewModel이 null");
+            return;
+        }
+
+        // TinyMCE에서 현재 콘텐츠 가져오기
+        if (_oneNoteEditorReady && OneNoteEditorWebView?.CoreWebView2 != null)
+        {
+            try
+            {
+                var contentJson = await OneNoteEditorWebView.CoreWebView2.ExecuteScriptAsync("getContent()");
+                var content = System.Text.Json.JsonSerializer.Deserialize<string>(contentJson);
+
+                Log4.Debug($"[OneNote] 에디터에서 콘텐츠 가져옴: {content?.Length ?? 0}자");
+
+                if (!string.IsNullOrEmpty(content))
+                {
+                    _oneNoteViewModel.OnContentChanged(content);
+                }
+            }
+            catch (Exception ex)
+            {
+                Log4.Warn($"[OneNote] 에디터 콘텐츠 가져오기 실패: {ex.Message}");
+            }
+        }
+
+        // 저장 실행
+        await _oneNoteViewModel.SaveAsync();
+    }
 
     /// <summary>
     /// OneNote 새로고침 버튼 클릭
@@ -6989,11 +7605,16 @@ public partial class MainWindow : FluentWindow
     /// </summary>
     private async void OneNoteRecentListBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
     {
+        Log4.Debug($"[OneNote] RecentListBox SelectionChanged 이벤트 발생");
         var listBox = sender as ListBox;
         if (listBox?.SelectedItem is PageItemViewModel selectedPage && _oneNoteViewModel != null)
         {
-            Log4.Debug($"OneNote 페이지 선택: {selectedPage.Title}");
+            Log4.Debug($"[OneNote] 최근 노트 페이지 선택: {selectedPage.Title}");
             await LoadOneNotePageAsync(selectedPage);
+        }
+        else
+        {
+            Log4.Debug($"[OneNote] 선택된 항목이 PageItemViewModel이 아님: {listBox?.SelectedItem?.GetType().Name ?? "null"}");
         }
     }
 
@@ -7116,14 +7737,33 @@ public partial class MainWindow : FluentWindow
 
         try
         {
+            // SelectedPage 설정 (저장 기능에 필요)
+            _oneNoteViewModel.SelectedPage = page;
+            Log4.Debug($"[OneNote] SelectedPage 설정: {page.Title} (ID: {page.Id})");
+
             // 로딩 표시
             if (OneNoteLoadingOverlay != null)
                 OneNoteLoadingOverlay.Visibility = Visibility.Visible;
             if (OneNoteEmptyState != null)
                 OneNoteEmptyState.Visibility = Visibility.Collapsed;
 
+            // TinyMCE 에디터 초기화 (최초 1회)
+            if (!_oneNoteEditorInitialized)
+            {
+                await InitializeOneNoteTinyMCEAsync();
+                // 에디터가 준비될 때까지 잠시 대기
+                var waitCount = 0;
+                while (!_oneNoteEditorReady && waitCount < 50)
+                {
+                    await Task.Delay(100);
+                    waitCount++;
+                }
+            }
+
             // 페이지 콘텐츠 로드
+            Log4.Debug($"OneNote 페이지 콘텐츠 로드 시작: {page.Title} (ID: {page.Id})");
             await _oneNoteViewModel.LoadPageContentAsync(page.Id);
+            Log4.Debug($"OneNote 페이지 콘텐츠 로드 완료: Content={(string.IsNullOrEmpty(_oneNoteViewModel.CurrentPageContent) ? "NULL/EMPTY" : $"{_oneNoteViewModel.CurrentPageContent.Length}자")}");
 
             // 헤더 업데이트
             if (OneNotePageHeaderBorder != null)
@@ -7133,19 +7773,19 @@ public partial class MainWindow : FluentWindow
             if (OneNotePageLocationText != null)
                 OneNotePageLocationText.Text = page.LocationDisplay;
 
-            // 콘텐츠 표시 (HTML을 텍스트로 변환하여 표시)
-            if (OneNoteContentBorder != null && _oneNoteViewModel.CurrentPageContent != null)
+            // 콘텐츠 표시 (TinyMCE 에디터에 HTML 로드)
+            if (OneNoteContentBorder != null)
             {
                 OneNoteContentBorder.Visibility = Visibility.Visible;
 
-                // HTML에서 텍스트만 추출하여 RichTextBox에 표시
-                if (OneNoteContentRichTextBox != null)
+                var content = _oneNoteViewModel.CurrentPageContent;
+                if (!string.IsNullOrEmpty(content))
                 {
-                    var plainText = StripHtmlForDisplay(_oneNoteViewModel.CurrentPageContent);
-                    var paragraph = new System.Windows.Documents.Paragraph(
-                        new System.Windows.Documents.Run(plainText));
-                    OneNoteContentRichTextBox.Document.Blocks.Clear();
-                    OneNoteContentRichTextBox.Document.Blocks.Add(paragraph);
+                    await SetOneNoteEditorContentAsync(content);
+                }
+                else
+                {
+                    await SetOneNoteEditorContentAsync("<p style='color: gray;'>페이지 내용을 불러올 수 없습니다.</p>");
                 }
             }
 
