@@ -5911,22 +5911,81 @@
                                               AllowDrop="True"
                                               DragOver="OneNoteFavoritesTreeView_DragOver"
                                               Drop="OneNoteFavoritesTreeView_Drop">
-                                        <!-- 비활성 창 선택 배경색 오버라이드 -->
-                                        <TreeView.Resources>
-                                            <SolidColorBrush x:Key="{x:Static SystemColors.InactiveSelectionHighlightBrushKey}" Color="{DynamicResource SystemAccentColorSecondary}"/>
-                                            <SolidColorBrush x:Key="{x:Static SystemColors.InactiveSelectionHighlightTextBrushKey}" Color="{DynamicResource TextFillColorPrimary}"/>
-                                        </TreeView.Resources>
                                         <TreeView.ItemContainerStyle>
                                             <Style TargetType="TreeViewItem">
                                                 <EventSetter Event="Expanded" Handler="FavoriteTreeViewItem_Expanded"/>
                                                 <EventSetter Event="PreviewMouseLeftButtonDown" Handler="FavoriteTreeViewItem_PreviewMouseLeftButtonDown"/>
                                                 <EventSetter Event="PreviewMouseMove" Handler="FavoriteTreeViewItem_PreviewMouseMove"/>
-                                                <Style.Triggers>
-                                                    <Trigger Property="IsSelected" Value="True">
-                                                        <Setter Property="Background" Value="{DynamicResource SystemAccentColorSecondaryBrush}"/>
-                                                        <Setter Property="Foreground" Value="{DynamicResource TextFillColorPrimaryBrush}"/>
-                                                    </Trigger>
-                                                </Style.Triggers>
+                                                <Setter Property="Background" Value="Transparent"/>
+                                                <Setter Property="Foreground" Value="{DynamicResource TextFillColorPrimaryBrush}"/>
+                                                <Setter Property="Padding" Value="4,2"/>
+                                                <Setter Property="Template">
+                                                    <Setter.Value>
+                                                        <ControlTemplate TargetType="TreeViewItem">
+                                                            <Grid>
+                                                                <Grid.ColumnDefinitions>
+                                                                    <ColumnDefinition Width="Auto" MinWidth="19"/>
+                                                                    <ColumnDefinition Width="*"/>
+                                                                </Grid.ColumnDefinitions>
+                                                                <Grid.RowDefinitions>
+                                                                    <RowDefinition Height="Auto"/>
+                                                                    <RowDefinition/>
+                                                                </Grid.RowDefinitions>
+                                                                <!-- 확장/축소 토글 버튼 -->
+                                                                <ToggleButton x:Name="Expander" Grid.Column="0" ClickMode="Press"
+                                                                              IsChecked="{Binding IsExpanded, RelativeSource={RelativeSource TemplatedParent}}"
+                                                                              Focusable="False" Width="16" Height="16">
+                                                                    <ToggleButton.Template>
+                                                                        <ControlTemplate TargetType="ToggleButton">
+                                                                            <Border Background="Transparent" Width="16" Height="16" Padding="4">
+                                                                                <Path x:Name="ExpandPath" Data="M 0 2 L 4 6 L 0 10 Z"
+                                                                                      Fill="{DynamicResource TextFillColorSecondaryBrush}"
+                                                                                      Stroke="{DynamicResource TextFillColorSecondaryBrush}" StrokeThickness="1"/>
+                                                                            </Border>
+                                                                            <ControlTemplate.Triggers>
+                                                                                <Trigger Property="IsChecked" Value="True">
+                                                                                    <Setter TargetName="ExpandPath" Property="Data" Value="M 0 2 L 8 2 L 4 6 Z"/>
+                                                                                </Trigger>
+                                                                                <Trigger Property="IsMouseOver" Value="True">
+                                                                                    <Setter TargetName="ExpandPath" Property="Fill" Value="{DynamicResource TextFillColorPrimaryBrush}"/>
+                                                                                    <Setter TargetName="ExpandPath" Property="Stroke" Value="{DynamicResource TextFillColorPrimaryBrush}"/>
+                                                                                </Trigger>
+                                                                            </ControlTemplate.Triggers>
+                                                                        </ControlTemplate>
+                                                                    </ToggleButton.Template>
+                                                                </ToggleButton>
+                                                                <!-- 콘텐츠 영역 (선택 배경 적용) -->
+                                                                <Border x:Name="ContentBorder" Grid.Column="1" Background="Transparent"
+                                                                        CornerRadius="4" Padding="{TemplateBinding Padding}" SnapsToDevicePixels="True">
+                                                                    <ContentPresenter x:Name="PART_Header" ContentSource="Header"
+                                                                                      HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}"/>
+                                                                </Border>
+                                                                <!-- 자식 항목 영역 -->
+                                                                <ItemsPresenter x:Name="ItemsHost" Grid.Row="1" Grid.Column="1"/>
+                                                            </Grid>
+                                                            <ControlTemplate.Triggers>
+                                                                <Trigger Property="IsExpanded" Value="False">
+                                                                    <Setter TargetName="ItemsHost" Property="Visibility" Value="Collapsed"/>
+                                                                </Trigger>
+                                                                <Trigger Property="HasItems" Value="False">
+                                                                    <Setter TargetName="Expander" Property="Visibility" Value="Hidden"/>
+                                                                </Trigger>
+                                                                <!-- 선택됨 (활성/비활성 창 모두 동일) -->
+                                                                <Trigger Property="IsSelected" Value="True">
+                                                                    <Setter TargetName="ContentBorder" Property="Background" Value="{DynamicResource SystemAccentColorSecondaryBrush}"/>
+                                                                </Trigger>
+                                                                <!-- 마우스 오버 (선택 안됨) -->
+                                                                <MultiTrigger>
+                                                                    <MultiTrigger.Conditions>
+                                                                        <Condition Property="IsMouseOver" Value="True"/>
+                                                                        <Condition Property="IsSelected" Value="False"/>
+                                                                    </MultiTrigger.Conditions>
+                                                                    <Setter TargetName="ContentBorder" Property="Background" Value="{DynamicResource SubtleFillColorSecondaryBrush}"/>
+                                                                </MultiTrigger>
+                                                            </ControlTemplate.Triggers>
+                                                        </ControlTemplate>
+                                                    </Setter.Value>
+                                                </Setter>
                                             </Style>
                                         </TreeView.ItemContainerStyle>
                                         <TreeView.ItemTemplate>
@@ -6006,20 +6065,79 @@
                                     <TreeView x:Name="OneNoteTreeView" Background="Transparent" BorderThickness="0" Margin="-19,4,0,0"
                                               SelectedItemChanged="OneNoteTreeView_SelectedItemChanged"
                                               ScrollViewer.HorizontalScrollBarVisibility="Disabled">
-                                        <!-- 비활성 창 선택 배경색 오버라이드 -->
-                                        <TreeView.Resources>
-                                            <SolidColorBrush x:Key="{x:Static SystemColors.InactiveSelectionHighlightBrushKey}" Color="{DynamicResource SystemAccentColorSecondary}"/>
-                                            <SolidColorBrush x:Key="{x:Static SystemColors.InactiveSelectionHighlightTextBrushKey}" Color="{DynamicResource TextFillColorPrimary}"/>
-                                        </TreeView.Resources>
                                         <TreeView.ItemContainerStyle>
                                             <Style TargetType="TreeViewItem">
                                                 <EventSetter Event="Expanded" Handler="OneNoteTreeViewItem_Expanded"/>
-                                                <Style.Triggers>
-                                                    <Trigger Property="IsSelected" Value="True">
-                                                        <Setter Property="Background" Value="{DynamicResource SystemAccentColorSecondaryBrush}"/>
-                                                        <Setter Property="Foreground" Value="{DynamicResource TextFillColorPrimaryBrush}"/>
-                                                    </Trigger>
-                                                </Style.Triggers>
+                                                <Setter Property="Background" Value="Transparent"/>
+                                                <Setter Property="Foreground" Value="{DynamicResource TextFillColorPrimaryBrush}"/>
+                                                <Setter Property="Padding" Value="4,2"/>
+                                                <Setter Property="Template">
+                                                    <Setter.Value>
+                                                        <ControlTemplate TargetType="TreeViewItem">
+                                                            <Grid>
+                                                                <Grid.ColumnDefinitions>
+                                                                    <ColumnDefinition Width="Auto" MinWidth="19"/>
+                                                                    <ColumnDefinition Width="*"/>
+                                                                </Grid.ColumnDefinitions>
+                                                                <Grid.RowDefinitions>
+                                                                    <RowDefinition Height="Auto"/>
+                                                                    <RowDefinition/>
+                                                                </Grid.RowDefinitions>
+                                                                <!-- 확장/축소 토글 버튼 -->
+                                                                <ToggleButton x:Name="Expander" Grid.Column="0" ClickMode="Press"
+                                                                              IsChecked="{Binding IsExpanded, RelativeSource={RelativeSource TemplatedParent}}"
+                                                                              Focusable="False" Width="16" Height="16">
+                                                                    <ToggleButton.Template>
+                                                                        <ControlTemplate TargetType="ToggleButton">
+                                                                            <Border Background="Transparent" Width="16" Height="16" Padding="4">
+                                                                                <Path x:Name="ExpandPath" Data="M 0 2 L 4 6 L 0 10 Z"
+                                                                                      Fill="{DynamicResource TextFillColorSecondaryBrush}"
+                                                                                      Stroke="{DynamicResource TextFillColorSecondaryBrush}" StrokeThickness="1"/>
+                                                                            </Border>
+                                                                            <ControlTemplate.Triggers>
+                                                                                <Trigger Property="IsChecked" Value="True">
+                                                                                    <Setter TargetName="ExpandPath" Property="Data" Value="M 0 2 L 8 2 L 4 6 Z"/>
+                                                                                </Trigger>
+                                                                                <Trigger Property="IsMouseOver" Value="True">
+                                                                                    <Setter TargetName="ExpandPath" Property="Fill" Value="{DynamicResource TextFillColorPrimaryBrush}"/>
+                                                                                    <Setter TargetName="ExpandPath" Property="Stroke" Value="{DynamicResource TextFillColorPrimaryBrush}"/>
+                                                                                </Trigger>
+                                                                            </ControlTemplate.Triggers>
+                                                                        </ControlTemplate>
+                                                                    </ToggleButton.Template>
+                                                                </ToggleButton>
+                                                                <!-- 콘텐츠 영역 (선택 배경 적용) -->
+                                                                <Border x:Name="ContentBorder" Grid.Column="1" Background="Transparent"
+                                                                        CornerRadius="4" Padding="{TemplateBinding Padding}" SnapsToDevicePixels="True">
+                                                                    <ContentPresenter x:Name="PART_Header" ContentSource="Header"
+                                                                                      HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}"/>
+                                                                </Border>
+                                                                <!-- 자식 항목 영역 -->
+                                                                <ItemsPresenter x:Name="ItemsHost" Grid.Row="1" Grid.Column="1"/>
+                                                            </Grid>
+                                                            <ControlTemplate.Triggers>
+                                                                <Trigger Property="IsExpanded" Value="False">
+                                                                    <Setter TargetName="ItemsHost" Property="Visibility" Value="Collapsed"/>
+                                                                </Trigger>
+                                                                <Trigger Property="HasItems" Value="False">
+                                                                    <Setter TargetName="Expander" Property="Visibility" Value="Hidden"/>
+                                                                </Trigger>
+                                                                <!-- 선택됨 (활성/비활성 창 모두 동일) -->
+                                                                <Trigger Property="IsSelected" Value="True">
+                                                                    <Setter TargetName="ContentBorder" Property="Background" Value="{DynamicResource SystemAccentColorSecondaryBrush}"/>
+                                                                </Trigger>
+                                                                <!-- 마우스 오버 (선택 안됨) -->
+                                                                <MultiTrigger>
+                                                                    <MultiTrigger.Conditions>
+                                                                        <Condition Property="IsMouseOver" Value="True"/>
+                                                                        <Condition Property="IsSelected" Value="False"/>
+                                                                    </MultiTrigger.Conditions>
+                                                                    <Setter TargetName="ContentBorder" Property="Background" Value="{DynamicResource SubtleFillColorSecondaryBrush}"/>
+                                                                </MultiTrigger>
+                                                            </ControlTemplate.Triggers>
+                                                        </ControlTemplate>
+                                                    </Setter.Value>
+                                                </Setter>
                                             </Style>
                                         </TreeView.ItemContainerStyle>
                                         <TreeView.ItemTemplate>
