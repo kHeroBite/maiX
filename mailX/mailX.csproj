@@ -72,6 +72,19 @@
 
     <!-- 음성 인식 STT (sherpa-onnx) -->
     <PackageReference Include="org.k2fsa.sherpa.onnx" Version="1.12.22" />
+
+    <!-- Whisper STT (고정밀 한국어 음성인식) -->
+    <PackageReference Include="Whisper.net" Version="1.8.0" />
+    <PackageReference Include="Whisper.net.Runtime" Version="1.8.0" />
+    <!-- GPU 가속 런타임 (Intel Arc GPU = OpenVINO 최적화) -->
+    <PackageReference Include="Whisper.net.Runtime.OpenVino" Version="1.8.0" />
+    <!-- Vulkan GPU 가속 (범용 GPU 지원) -->
+    <PackageReference Include="Whisper.net.Runtime.Vulkan" Version="1.8.0" />
+    <!-- CUDA GPU 가속 (NVidia GPU + CUDA 12.1+ 필요) -->
+    <PackageReference Include="Whisper.net.Runtime.Cuda" Version="1.8.0" />
+
+    <!-- 화자분리 모델 압축 해제 (tar.bz2) -->
+    <PackageReference Include="SharpZipLib" Version="1.4.2" />
   </ItemGroup>
 
   <!-- log4net.config 파일을 출력 디렉토리에 복사 -->

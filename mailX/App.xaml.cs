@@ -389,6 +389,7 @@ public partial class App : Application
         Services.Theme.RenderModeService.Instance.SettingsManager = Settings;
         Services.Theme.RenderModeService.Instance.LoadSavedRenderMode(gpuModeOverride);
 
+        Log4.Info("========== mailX 앱 시작 (빌드: 2026-01-26 20:48) ==========");
         Log4.Debug("OnStartup 시작");
         await _host.StartAsync();
         Log4.Debug("Host 시작 완료");

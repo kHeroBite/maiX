@@ -43,21 +43,25 @@ namespace mailX.Services.AI
                 {
                     new { role = "user", content = prompt }
                 },
-                max_tokens = 4096
+                max_completion_tokens = 16384
             };
 
             var json = JsonSerializer.Serialize(requestBody, JsonOptions);
             var content = new StringContent(json, Encoding.UTF8, "application/json");
 
-            _logger.Debug("OpenAI API 요청: Model={Model}", _model);
+            Utils.Log4.Info($"[OpenAI] API 요청: Model={_model}, BaseUrl={_baseUrl}");
 
             var response = await _httpClient.PostAsync(_baseUrl, content, ct);
+            Utils.Log4.Info($"[OpenAI] API 응답 상태: {response.StatusCode}");
             if (!response.IsSuccessStatusCode)
             {
                 await HandleErrorResponseAsync(response);
             }
 
             var responseJson = await response.Content.ReadAsStringAsync(ct);
+            var logResponse = responseJson.Length > 500 ? responseJson.Substring(0, 500) + "..." : responseJson;
+            Utils.Log4.Info($"[OpenAI] API 응답 (처음 500자): {logResponse}");
+
             using var doc = JsonDocument.Parse(responseJson);
             var root = doc.RootElement;
 
@@ -93,7 +97,7 @@ namespace mailX.Services.AI
                 {
                     new { role = "user", content = prompt }
                 },
-                max_tokens = 4096,
+                max_completion_tokens = 16384,
                 stream = true
             };
 

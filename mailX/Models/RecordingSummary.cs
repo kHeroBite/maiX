@@ -19,6 +19,11 @@ public class RecordingSummary
     public DateTime CreatedAt { get; set; } = DateTime.Now;
 
     /// <summary>
+    /// 회의/녹음 제목
+    /// </summary>
+    public string Title { get; set; } = string.Empty;
+
+    /// <summary>
     /// 전체 요약 텍스트
     /// </summary>
     public string Summary { get; set; } = string.Empty;
@@ -77,32 +82,78 @@ public class RecordingSummary
 /// <summary>
 /// 액션 아이템 (할 일)
 /// </summary>
-public class ActionItem
+public class ActionItem : CommunityToolkit.Mvvm.ComponentModel.ObservableObject
 {
+    private string _description = string.Empty;
+    private string? _assignee;
+    private string? _dueDate;
+    private string _priority = "중간";
+    private bool _isCompleted;
+    private bool _isAddedToTodo;
+    private string? _todoTaskId;
+
     /// <summary>
     /// 액션 내용
     /// </summary>
-    public string Description { get; set; } = string.Empty;
+    public string Description
+    {
+        get => _description;
+        set => SetProperty(ref _description, value);
+    }
 
     /// <summary>
     /// 담당자 (화자 기반)
     /// </summary>
-    public string? Assignee { get; set; }
+    public string? Assignee
+    {
+        get => _assignee;
+        set => SetProperty(ref _assignee, value);
+    }
 
     /// <summary>
     /// 기한 (언급된 경우)
     /// </summary>
-    public string? DueDate { get; set; }
+    public string? DueDate
+    {
+        get => _dueDate;
+        set => SetProperty(ref _dueDate, value);
+    }
 
     /// <summary>
     /// 우선순위 (높음/중간/낮음)
     /// </summary>
-    public string Priority { get; set; } = "중간";
+    public string Priority
+    {
+        get => _priority;
+        set => SetProperty(ref _priority, value);
+    }
 
     /// <summary>
     /// 완료 여부
     /// </summary>
-    public bool IsCompleted { get; set; }
+    public bool IsCompleted
+    {
+        get => _isCompleted;
+        set => SetProperty(ref _isCompleted, value);
+    }
+
+    /// <summary>
+    /// Microsoft To Do에 추가되었는지 여부 (체크박스 상태)
+    /// </summary>
+    public bool IsAddedToTodo
+    {
+        get => _isAddedToTodo;
+        set => SetProperty(ref _isAddedToTodo, value);
+    }
+
+    /// <summary>
+    /// Microsoft To Do 작업 ID (삭제 시 필요)
+    /// </summary>
+    public string? TodoTaskId
+    {
+        get => _todoTaskId;
+        set => SetProperty(ref _todoTaskId, value);
+    }
 
     /// <summary>
     /// 표시 문자열
