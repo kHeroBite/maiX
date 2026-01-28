@@ -5912,30 +5912,10 @@
                                               DragOver="OneNoteFavoritesTreeView_DragOver"
                                               Drop="OneNoteFavoritesTreeView_Drop">
                                         <TreeView.ItemContainerStyle>
-                                            <Style TargetType="TreeViewItem">
+                                            <Style TargetType="TreeViewItem" BasedOn="{StaticResource OneNoteTreeViewItemStyle}">
                                                 <EventSetter Event="Expanded" Handler="FavoriteTreeViewItem_Expanded"/>
                                                 <EventSetter Event="PreviewMouseLeftButtonDown" Handler="FavoriteTreeViewItem_PreviewMouseLeftButtonDown"/>
                                                 <EventSetter Event="PreviewMouseMove" Handler="FavoriteTreeViewItem_PreviewMouseMove"/>
-                                                <Style.Triggers>
-                                                    <!-- 활성 창에서 선택됨 -->
-                                                    <MultiTrigger>
-                                                        <MultiTrigger.Conditions>
-                                                            <Condition Property="IsSelected" Value="True"/>
-                                                            <Condition Property="IsSelectionActive" Value="True"/>
-                                                        </MultiTrigger.Conditions>
-                                                        <Setter Property="Background" Value="{DynamicResource SystemAccentColorSecondaryBrush}"/>
-                                                        <Setter Property="Foreground" Value="{DynamicResource TextFillColorPrimaryBrush}"/>
-                                                    </MultiTrigger>
-                                                    <!-- 비활성 창에서 선택됨 (동일한 배경색 유지) -->
-                                                    <MultiTrigger>
-                                                        <MultiTrigger.Conditions>
-                                                            <Condition Property="IsSelected" Value="True"/>
-                                                            <Condition Property="IsSelectionActive" Value="False"/>
-                                                        </MultiTrigger.Conditions>
-                                                        <Setter Property="Background" Value="{DynamicResource SystemAccentColorSecondaryBrush}"/>
-                                                        <Setter Property="Foreground" Value="{DynamicResource TextFillColorPrimaryBrush}"/>
-                                                    </MultiTrigger>
-                                                </Style.Triggers>
                                             </Style>
                                         </TreeView.ItemContainerStyle>
                                         <TreeView.ItemTemplate>
@@ -6016,28 +5996,8 @@
                                               SelectedItemChanged="OneNoteTreeView_SelectedItemChanged"
                                               ScrollViewer.HorizontalScrollBarVisibility="Disabled">
                                         <TreeView.ItemContainerStyle>
-                                            <Style TargetType="TreeViewItem">
+                                            <Style TargetType="TreeViewItem" BasedOn="{StaticResource OneNoteTreeViewItemStyle}">
                                                 <EventSetter Event="Expanded" Handler="OneNoteTreeViewItem_Expanded"/>
-                                                <Style.Triggers>
-                                                    <!-- 활성 창에서 선택됨 -->
-                                                    <MultiTrigger>
-                                                        <MultiTrigger.Conditions>
-                                                            <Condition Property="IsSelected" Value="True"/>
-                                                            <Condition Property="IsSelectionActive" Value="True"/>
-                                                        </MultiTrigger.Conditions>
-                                                        <Setter Property="Background" Value="{DynamicResource SystemAccentColorSecondaryBrush}"/>
-                                                        <Setter Property="Foreground" Value="{DynamicResource TextFillColorPrimaryBrush}"/>
-                                                    </MultiTrigger>
-                                                    <!-- 비활성 창에서 선택됨 (동일한 배경색 유지) -->
-                                                    <MultiTrigger>
-                                                        <MultiTrigger.Conditions>
-                                                            <Condition Property="IsSelected" Value="True"/>
-                                                            <Condition Property="IsSelectionActive" Value="False"/>
-                                                        </MultiTrigger.Conditions>
-                                                        <Setter Property="Background" Value="{DynamicResource SystemAccentColorSecondaryBrush}"/>
-                                                        <Setter Property="Foreground" Value="{DynamicResource TextFillColorPrimaryBrush}"/>
-                                                    </MultiTrigger>
-                                                </Style.Triggers>
                                             </Style>
                                         </TreeView.ItemContainerStyle>
                                         <TreeView.ItemTemplate>

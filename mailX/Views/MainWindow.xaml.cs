@@ -9370,6 +9370,9 @@ public partial class MainWindow : FluentWindow
         {
             Log4.Debug($"[OneNote] 즐겨찾기 항목 선택: {selectedItem.Title}, Type={selectedItem.ItemType}");
 
+            // 노트북 TreeView 선택 해제
+            ClearTreeViewSelection(OneNoteTreeView);
+
             // 페이지 선택 시 콘텐츠 로드
             if (selectedItem.ItemType == FavoriteItemType.Page)
             {
@@ -9381,6 +9384,41 @@ public partial class MainWindow : FluentWindow
                 await LoadOneNotePageAsync(selectedItem);
             }
             // 노트북/섹션은 확장만 하면 됨 (Expanded 이벤트에서 자식 로드)
+        }
+    }
+
+    /// <summary>
+    /// TreeView의 선택을 해제합니다
+    /// </summary>
+    private void ClearTreeViewSelection(System.Windows.Controls.TreeView treeView)
+    {
+        if (treeView == null) return;
+
+        // TreeView의 모든 TreeViewItem을 순회하여 선택 해제
+        foreach (var item in treeView.Items)
+        {
+            var container = treeView.ItemContainerGenerator.ContainerFromItem(item) as System.Windows.Controls.TreeViewItem;
+            if (container != null)
+            {
+                ClearTreeViewItemSelection(container);
+            }
+        }
+    }
+
+    /// <summary>
+    /// TreeViewItem과 그 하위 항목들의 선택을 해제합니다
+    /// </summary>
+    private void ClearTreeViewItemSelection(System.Windows.Controls.TreeViewItem item)
+    {
+        item.IsSelected = false;
+
+        foreach (var child in item.Items)
+        {
+            var childContainer = item.ItemContainerGenerator.ContainerFromItem(child) as System.Windows.Controls.TreeViewItem;
+            if (childContainer != null)
+            {
+                ClearTreeViewItemSelection(childContainer);
+            }
         }
     }
 
@@ -9877,6 +9915,12 @@ public partial class MainWindow : FluentWindow
     /// </summary>
     private async void OneNoteTreeView_SelectedItemChanged(object sender, RoutedPropertyChangedEventArgs<object> e)
     {
+        if (e.NewValue != null)
+        {
+            // 즐겨찾기 TreeView 선택 해제
+            ClearTreeViewSelection(OneNoteFavoritesTreeView);
+        }
+
         if (e.NewValue is PageItemViewModel selectedPage && _oneNoteViewModel != null)
         {
             Log4.Debug($"OneNote 페이지 선택 (트리뷰): {selectedPage.Title}, GroupId={selectedPage.GroupId ?? "N/A"}, SiteId={selectedPage.SiteId ?? "N/A"}");
