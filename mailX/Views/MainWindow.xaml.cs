@@ -5653,8 +5653,8 @@ public partial class MainWindow : FluentWindow
         OneNoteTabRecordingContent.BorderBrush = Brushes.Transparent;
         var recIcon = OneNoteTabRecordingContent.Child is StackPanel recPanel && recPanel.Children[0] is Wpf.Ui.Controls.SymbolIcon ri ? ri : null;
         var recText = OneNoteTabRecordingContent.Child is StackPanel rp && rp.Children[1] is System.Windows.Controls.TextBlock rt ? rt : null;
-        if (recIcon != null) recIcon.Foreground = (Brush)FindResource("TextFillColorSecondaryBrush");
-        if (recText != null) { recText.Foreground = (Brush)FindResource("TextFillColorSecondaryBrush"); recText.FontWeight = FontWeights.Normal; }
+        if (recIcon != null) recIcon.Foreground = (Brush)FindResource("TextFillColorTertiaryBrush");
+        if (recText != null) { recText.Foreground = (Brush)FindResource("TextFillColorTertiaryBrush"); recText.FontWeight = FontWeights.Normal; }
 
         // 패널 표시 전환
         OneNoteNoteContentPanel.Visibility = Visibility.Visible;
@@ -5675,8 +5675,8 @@ public partial class MainWindow : FluentWindow
         OneNoteTabNoteContent.BorderBrush = Brushes.Transparent;
         var noteIcon = OneNoteTabNoteContent.Child is StackPanel notePanel && notePanel.Children[0] is Wpf.Ui.Controls.SymbolIcon ni ? ni : null;
         var noteText = OneNoteTabNoteContent.Child is StackPanel np && np.Children[1] is System.Windows.Controls.TextBlock nt ? nt : null;
-        if (noteIcon != null) noteIcon.Foreground = (Brush)FindResource("TextFillColorSecondaryBrush");
-        if (noteText != null) { noteText.Foreground = (Brush)FindResource("TextFillColorSecondaryBrush"); noteText.FontWeight = FontWeights.Normal; }
+        if (noteIcon != null) noteIcon.Foreground = (Brush)FindResource("TextFillColorTertiaryBrush");
+        if (noteText != null) { noteText.Foreground = (Brush)FindResource("TextFillColorTertiaryBrush"); noteText.FontWeight = FontWeights.Normal; }
 
         // 탭 스타일 변경 - 녹음내용 활성화
         OneNoteTabRecordingContent.Background = (Brush)FindResource("ApplicationBackgroundBrush");
