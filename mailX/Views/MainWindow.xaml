@@ -5911,11 +5911,22 @@
                                               AllowDrop="True"
                                               DragOver="OneNoteFavoritesTreeView_DragOver"
                                               Drop="OneNoteFavoritesTreeView_Drop">
+                                        <!-- 비활성 창 선택 배경색 오버라이드 -->
+                                        <TreeView.Resources>
+                                            <SolidColorBrush x:Key="{x:Static SystemColors.InactiveSelectionHighlightBrushKey}" Color="{DynamicResource SystemAccentColorSecondary}"/>
+                                            <SolidColorBrush x:Key="{x:Static SystemColors.InactiveSelectionHighlightTextBrushKey}" Color="{DynamicResource TextFillColorPrimary}"/>
+                                        </TreeView.Resources>
                                         <TreeView.ItemContainerStyle>
-                                            <Style TargetType="TreeViewItem" BasedOn="{StaticResource OneNoteTreeViewItemStyle}">
+                                            <Style TargetType="TreeViewItem">
                                                 <EventSetter Event="Expanded" Handler="FavoriteTreeViewItem_Expanded"/>
                                                 <EventSetter Event="PreviewMouseLeftButtonDown" Handler="FavoriteTreeViewItem_PreviewMouseLeftButtonDown"/>
                                                 <EventSetter Event="PreviewMouseMove" Handler="FavoriteTreeViewItem_PreviewMouseMove"/>
+                                                <Style.Triggers>
+                                                    <Trigger Property="IsSelected" Value="True">
+                                                        <Setter Property="Background" Value="{DynamicResource SystemAccentColorSecondaryBrush}"/>
+                                                        <Setter Property="Foreground" Value="{DynamicResource TextFillColorPrimaryBrush}"/>
+                                                    </Trigger>
+                                                </Style.Triggers>
                                             </Style>
                                         </TreeView.ItemContainerStyle>
                                         <TreeView.ItemTemplate>
@@ -5995,9 +6006,20 @@
                                     <TreeView x:Name="OneNoteTreeView" Background="Transparent" BorderThickness="0" Margin="-19,4,0,0"
                                               SelectedItemChanged="OneNoteTreeView_SelectedItemChanged"
                                               ScrollViewer.HorizontalScrollBarVisibility="Disabled">
+                                        <!-- 비활성 창 선택 배경색 오버라이드 -->
+                                        <TreeView.Resources>
+                                            <SolidColorBrush x:Key="{x:Static SystemColors.InactiveSelectionHighlightBrushKey}" Color="{DynamicResource SystemAccentColorSecondary}"/>
+                                            <SolidColorBrush x:Key="{x:Static SystemColors.InactiveSelectionHighlightTextBrushKey}" Color="{DynamicResource TextFillColorPrimary}"/>
+                                        </TreeView.Resources>
                                         <TreeView.ItemContainerStyle>
-                                            <Style TargetType="TreeViewItem" BasedOn="{StaticResource OneNoteTreeViewItemStyle}">
+                                            <Style TargetType="TreeViewItem">
                                                 <EventSetter Event="Expanded" Handler="OneNoteTreeViewItem_Expanded"/>
+                                                <Style.Triggers>
+                                                    <Trigger Property="IsSelected" Value="True">
+                                                        <Setter Property="Background" Value="{DynamicResource SystemAccentColorSecondaryBrush}"/>
+                                                        <Setter Property="Foreground" Value="{DynamicResource TextFillColorPrimaryBrush}"/>
+                                                    </Trigger>
+                                                </Style.Triggers>
                                             </Style>
                                         </TreeView.ItemContainerStyle>
                                         <TreeView.ItemTemplate>
