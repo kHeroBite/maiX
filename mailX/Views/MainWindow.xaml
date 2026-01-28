@@ -5899,43 +5899,88 @@
                                 <Expander x:Name="OneNoteFavoritesExpander" IsExpanded="True" Margin="8,4">
                                     <Expander.Header>
                                         <StackPanel Orientation="Horizontal">
-                                            <ui:SymbolIcon Symbol="Star24" FontSize="16" Margin="0,0,8,0"
+                                            <ui:SymbolIcon Symbol="Star24" FontSize="14" Margin="0,0,6,0"
                                                            Foreground="#FFD700"/>
-                                            <TextBlock Text="즐겨찾기" FontWeight="SemiBold" VerticalAlignment="Center"/>
+                                            <TextBlock Text="즐겨찾기" FontWeight="SemiBold" FontSize="13" VerticalAlignment="Center"/>
                                         </StackPanel>
                                     </Expander.Header>
-                                    <ListBox x:Name="OneNoteFavoritesListBox" Background="Transparent" BorderThickness="0"
-                                             SelectionChanged="OneNoteFavoritesListBox_SelectionChanged" Margin="0,4,0,0">
-                                        <ListBox.ContextMenu>
-                                            <ContextMenu>
-                                                <MenuItem Header="즐겨찾기 제거" Click="RemoveFromFavorites_Click">
-                                                    <MenuItem.Icon>
-                                                        <ui:SymbolIcon Symbol="StarOff24"/>
-                                                    </MenuItem.Icon>
-                                                </MenuItem>
-                                            </ContextMenu>
-                                        </ListBox.ContextMenu>
-                                        <ListBox.ItemTemplate>
-                                            <DataTemplate>
-                                                <Grid Margin="4,6">
-                                                    <Grid.ColumnDefinitions>
-                                                        <ColumnDefinition Width="Auto"/>
-                                                        <ColumnDefinition Width="*"/>
-                                                        <ColumnDefinition Width="Auto"/>
-                                                    </Grid.ColumnDefinitions>
-                                                    <ui:SymbolIcon Grid.Column="0" Symbol="Star24" FontSize="16"
-                                                                   Foreground="#FFD700" Margin="0,0,10,0"/>
-                                                    <StackPanel Grid.Column="1">
-                                                        <TextBlock Text="{Binding Title}" FontWeight="Medium" TextTrimming="CharacterEllipsis"/>
-                                                        <TextBlock Text="{Binding LocationDisplay}" FontSize="11"
-                                                                   Foreground="{DynamicResource TextFillColorTertiaryBrush}"/>
+                                    <TreeView x:Name="OneNoteFavoritesTreeView" Background="Transparent" BorderThickness="0"
+                                              SelectedItemChanged="OneNoteFavoritesTreeView_SelectedItemChanged" Margin="-19,4,0,0"
+                                              ScrollViewer.HorizontalScrollBarVisibility="Disabled"
+                                              VirtualizingStackPanel.IsVirtualizing="False"
+                                              AllowDrop="True"
+                                              DragOver="OneNoteFavoritesTreeView_DragOver"
+                                              Drop="OneNoteFavoritesTreeView_Drop">
+                                        <TreeView.ItemContainerStyle>
+                                            <Style TargetType="TreeViewItem">
+                                                <EventSetter Event="Expanded" Handler="FavoriteTreeViewItem_Expanded"/>
+                                                <EventSetter Event="PreviewMouseLeftButtonDown" Handler="FavoriteTreeViewItem_PreviewMouseLeftButtonDown"/>
+                                                <EventSetter Event="PreviewMouseMove" Handler="FavoriteTreeViewItem_PreviewMouseMove"/>
+                                            </Style>
+                                        </TreeView.ItemContainerStyle>
+                                        <TreeView.ItemTemplate>
+                                            <!-- 노트북/섹션용 계층형 템플릿 (자식 있음) -->
+                                            <HierarchicalDataTemplate ItemsSource="{Binding Children}">
+                                                <StackPanel Orientation="Horizontal" Margin="2,4">
+                                                    <StackPanel.ContextMenu>
+                                                        <ContextMenu>
+                                                            <MenuItem Header="즐겨찾기 제거" Click="FavoriteListItem_RemoveClick">
+                                                                <MenuItem.Icon>
+                                                                    <ui:SymbolIcon Symbol="StarOff24"/>
+                                                                </MenuItem.Icon>
+                                                            </MenuItem>
+                                                        </ContextMenu>
+                                                    </StackPanel.ContextMenu>
+                                                    <!-- 타입별 아이콘 (노트북/섹션/페이지) -->
+                                                    <ui:SymbolIcon Symbol="{Binding ItemType, Converter={StaticResource FavoriteItemTypeToIconConverter}}" FontSize="14"
+                                                                   Foreground="{Binding ItemType, Converter={StaticResource FavoriteItemTypeToColorConverter}}" Margin="0,0,6,0" VerticalAlignment="Center"
+                                                                   Visibility="{Binding IsLoadingChildren, Converter={StaticResource BoolToVisibilityConverter}, ConverterParameter=Invert}"/>
+                                                    <!-- 로딩 스피너 -->
+                                                    <ui:ProgressRing IsIndeterminate="True" Width="14" Height="14" Margin="0,0,6,0"
+                                                                     Visibility="{Binding IsLoadingChildren, Converter={StaticResource BoolToVisibilityConverter}}"/>
+                                                    <StackPanel VerticalAlignment="Center" Margin="0,-2,0,-2">
+                                                        <TextBlock Text="{Binding Title}" FontSize="12" TextTrimming="CharacterEllipsis"/>
+                                                        <TextBlock Text="{Binding LocationDisplay}" FontSize="9" Margin="0,-1,0,0"
+                                                                   Foreground="{DynamicResource TextFillColorTertiaryBrush}" TextTrimming="CharacterEllipsis"/>
                                                     </StackPanel>
-                                                    <TextBlock Grid.Column="2" Text="{Binding TimeDisplay}" FontSize="11"
-                                                               Foreground="{DynamicResource TextFillColorTertiaryBrush}" VerticalAlignment="Center"/>
-                                                </Grid>
-                                            </DataTemplate>
-                                        </ListBox.ItemTemplate>
-                                    </ListBox>
+                                                </StackPanel>
+                                                <!-- 자식 항목 템플릿 (섹션→페이지, 노트북→섹션) -->
+                                                <HierarchicalDataTemplate.ItemTemplate>
+                                                    <HierarchicalDataTemplate ItemsSource="{Binding Children}">
+                                                        <StackPanel Orientation="Horizontal" Margin="2,3">
+                                                            <StackPanel.ContextMenu>
+                                                                <ContextMenu>
+                                                                    <MenuItem Header="즐겨찾기 제거" Click="FavoriteListItem_RemoveClick">
+                                                                        <MenuItem.Icon>
+                                                                            <ui:SymbolIcon Symbol="StarOff24"/>
+                                                                        </MenuItem.Icon>
+                                                                    </MenuItem>
+                                                                </ContextMenu>
+                                                            </StackPanel.ContextMenu>
+                                                            <!-- 타입별 아이콘 -->
+                                                            <ui:SymbolIcon Symbol="{Binding ItemType, Converter={StaticResource FavoriteItemTypeToIconConverter}}" FontSize="14"
+                                                                           Foreground="{Binding ItemType, Converter={StaticResource FavoriteItemTypeToColorConverter}}" Margin="0,0,6,0" VerticalAlignment="Center"
+                                                                           Visibility="{Binding IsLoadingChildren, Converter={StaticResource BoolToVisibilityConverter}, ConverterParameter=Invert}"/>
+                                                            <!-- 로딩 스피너 -->
+                                                            <ui:ProgressRing IsIndeterminate="True" Width="14" Height="14" Margin="0,0,6,0"
+                                                                             Visibility="{Binding IsLoadingChildren, Converter={StaticResource BoolToVisibilityConverter}}"/>
+                                                            <TextBlock Text="{Binding Title}" FontSize="12" VerticalAlignment="Center" TextTrimming="CharacterEllipsis"/>
+                                                        </StackPanel>
+                                                        <!-- 3단계 자식 (노트북→섹션→페이지) -->
+                                                        <HierarchicalDataTemplate.ItemTemplate>
+                                                            <DataTemplate>
+                                                                <StackPanel Orientation="Horizontal" Margin="2,2">
+                                                                    <ui:SymbolIcon Symbol="{Binding ItemType, Converter={StaticResource FavoriteItemTypeToIconConverter}}" FontSize="12"
+                                                                                   Foreground="{Binding ItemType, Converter={StaticResource FavoriteItemTypeToColorConverter}}" Margin="0,0,6,0" VerticalAlignment="Center"/>
+                                                                    <TextBlock Text="{Binding Title}" FontSize="12" VerticalAlignment="Center" TextTrimming="CharacterEllipsis"/>
+                                                                </StackPanel>
+                                                            </DataTemplate>
+                                                        </HierarchicalDataTemplate.ItemTemplate>
+                                                    </HierarchicalDataTemplate>
+                                                </HierarchicalDataTemplate.ItemTemplate>
+                                            </HierarchicalDataTemplate>
+                                        </TreeView.ItemTemplate>
+                                    </TreeView>
                                 </Expander>
 
                                 <!-- 노트북 목록 -->
@@ -5947,16 +5992,46 @@
                                             <TextBlock Text="노트북" FontWeight="SemiBold" VerticalAlignment="Center"/>
                                         </StackPanel>
                                     </Expander.Header>
-                                    <TreeView x:Name="OneNoteTreeView" Background="Transparent" BorderThickness="0" Margin="0,4,0,0"
-                                              SelectedItemChanged="OneNoteTreeView_SelectedItemChanged">
+                                    <TreeView x:Name="OneNoteTreeView" Background="Transparent" BorderThickness="0" Margin="-19,4,0,0"
+                                              SelectedItemChanged="OneNoteTreeView_SelectedItemChanged"
+                                              ScrollViewer.HorizontalScrollBarVisibility="Disabled">
+                                        <TreeView.ItemContainerStyle>
+                                            <Style TargetType="TreeViewItem">
+                                                <EventSetter Event="Expanded" Handler="OneNoteTreeViewItem_Expanded"/>
+                                            </Style>
+                                        </TreeView.ItemContainerStyle>
                                         <TreeView.ItemTemplate>
                                             <HierarchicalDataTemplate ItemsSource="{Binding Sections}">
                                                 <StackPanel Orientation="Horizontal" Margin="2,4">
+                                                    <StackPanel.ContextMenu>
+                                                        <ContextMenu>
+                                                            <MenuItem Header="즐겨찾기 추가" Click="NotebookAddToFavorites_Click"
+                                                                      Visibility="{Binding IsFavorite, Converter={StaticResource BoolToVisibilityConverter}, ConverterParameter=Invert}">
+                                                                <MenuItem.Icon>
+                                                                    <ui:SymbolIcon Symbol="Star24"/>
+                                                                </MenuItem.Icon>
+                                                            </MenuItem>
+                                                            <MenuItem Header="즐겨찾기 제거" Click="NotebookRemoveFromFavorites_Click"
+                                                                      Visibility="{Binding IsFavorite, Converter={StaticResource BoolToVisibilityConverter}}">
+                                                                <MenuItem.Icon>
+                                                                    <ui:SymbolIcon Symbol="StarOff24"/>
+                                                                </MenuItem.Icon>
+                                                            </MenuItem>
+                                                        </ContextMenu>
+                                                    </StackPanel.ContextMenu>
+                                                    <!-- 즐겨찾기 별 아이콘 -->
+                                                    <ui:SymbolIcon Symbol="Star24" FontSize="10" Foreground="#FFD700" Margin="0,0,4,0"
+                                                                   Visibility="{Binding IsFavorite, Converter={StaticResource BoolToVisibilityConverter}}"/>
+                                                    <!-- 노트북 아이콘 (로딩 중이 아닐 때) -->
+                                                    <ui:SymbolIcon Symbol="Notebook24" FontSize="16" Foreground="{StaticResource OneNoteAccentBrush}" Margin="0,0,4,0"
+                                                                   Visibility="{Binding IsLoadingSections, Converter={StaticResource BoolToVisibilityConverter}, ConverterParameter=Invert}"/>
+                                                    <!-- 로딩 스피너 (로딩 중일 때) -->
+                                                    <ui:ProgressRing IsIndeterminate="True" Width="16" Height="16" Margin="0,0,4,0"
+                                                                     Visibility="{Binding IsLoadingSections, Converter={StaticResource BoolToVisibilityConverter}}"/>
                                                     <!-- 공유 아이콘 (그룹 노트북인 경우) -->
                                                     <ui:SymbolIcon Symbol="People24" FontSize="12" Foreground="#0078D4" Margin="0,0,4,0"
                                                                    Visibility="{Binding IsShared, Converter={StaticResource BoolToVisibilityConverter}}"
                                                                    ToolTip="{Binding SourceName}"/>
-                                                    <ui:SymbolIcon Symbol="Notebook24" FontSize="16" Foreground="{StaticResource OneNoteAccentBrush}" Margin="0,0,8,0"/>
                                                     <TextBlock Text="{Binding DisplayName}" VerticalAlignment="Center"/>
                                                     <!-- 출처 라벨 (그룹 노트북인 경우) -->
                                                     <TextBlock Text="{Binding SourceName, StringFormat=' [{0}]'}" FontSize="11"
@@ -5966,6 +6041,25 @@
                                                 <HierarchicalDataTemplate.ItemTemplate>
                                                     <HierarchicalDataTemplate ItemsSource="{Binding Pages}">
                                                         <StackPanel Orientation="Horizontal" Margin="2,3">
+                                                            <StackPanel.ContextMenu>
+                                                                <ContextMenu>
+                                                                    <MenuItem Header="즐겨찾기 추가" Click="SectionAddToFavorites_Click"
+                                                                              Visibility="{Binding IsFavorite, Converter={StaticResource BoolToVisibilityConverter}, ConverterParameter=Invert}">
+                                                                        <MenuItem.Icon>
+                                                                            <ui:SymbolIcon Symbol="Star24"/>
+                                                                        </MenuItem.Icon>
+                                                                    </MenuItem>
+                                                                    <MenuItem Header="즐겨찾기 제거" Click="SectionRemoveFromFavorites_Click"
+                                                                              Visibility="{Binding IsFavorite, Converter={StaticResource BoolToVisibilityConverter}}">
+                                                                        <MenuItem.Icon>
+                                                                            <ui:SymbolIcon Symbol="StarOff24"/>
+                                                                        </MenuItem.Icon>
+                                                                    </MenuItem>
+                                                                </ContextMenu>
+                                                            </StackPanel.ContextMenu>
+                                                            <!-- 즐겨찾기 별 아이콘 -->
+                                                            <ui:SymbolIcon Symbol="Star24" FontSize="10" Foreground="#FFD700" Margin="0,0,4,0"
+                                                                           Visibility="{Binding IsFavorite, Converter={StaticResource BoolToVisibilityConverter}}"/>
                                                             <ui:SymbolIcon Symbol="FolderOpen24" FontSize="14" Foreground="#107C10" Margin="0,0,8,0"/>
                                                             <TextBlock Text="{Binding DisplayName}" VerticalAlignment="Center"/>
                                                         </StackPanel>
@@ -6035,7 +6129,15 @@
                                 </Grid.ColumnDefinitions>
                                 <StackPanel Grid.Column="0">
                                     <StackPanel Orientation="Horizontal">
-                                        <TextBlock x:Name="OneNotePageTitleText" Text="페이지 제목" FontSize="18" FontWeight="SemiBold"/>
+                                        <!-- 제목 표시 (클릭 시 편집 모드) -->
+                                        <TextBlock x:Name="OneNotePageTitleText" Text="페이지 제목" FontSize="18" FontWeight="SemiBold"
+                                                   Cursor="Hand" ToolTip="클릭하여 제목 수정"
+                                                   MouseLeftButtonDown="OneNotePageTitle_Click"/>
+                                        <!-- 제목 편집 (기본 숨김) -->
+                                        <TextBox x:Name="OneNotePageTitleEdit" FontSize="18" FontWeight="SemiBold"
+                                                 MinWidth="200" Visibility="Collapsed"
+                                                 LostFocus="OneNotePageTitleEdit_LostFocus"
+                                                 KeyDown="OneNotePageTitleEdit_KeyDown"/>
                                         <!-- 저장 대상 표시 (●) - 미저장 변경사항 있을 때 표시 -->
                                         <TextBlock x:Name="OneNoteUnsavedIndicator" Text=" ●" FontSize="18" FontWeight="Bold"
                                                    Foreground="#FF6B6B" Visibility="Collapsed" ToolTip="저장되지 않은 변경사항 있음"/>
@@ -6167,15 +6269,26 @@
                                                         <Ellipse x:Name="OneNoteSTTLiveIndicator" Width="8" Height="8" Fill="#10B981" Margin="8,0,4,0" Visibility="Collapsed"/>
                                                         <TextBlock x:Name="OneNoteSTTLiveText" Text="실시간" FontSize="11" Foreground="#10B981" Visibility="Collapsed"/>
                                                     </StackPanel>
-                                                    <!-- STT 분석 버튼 -->
-                                                    <ui:Button x:Name="OneNoteTabRunSTTButton"
-                                                               Grid.Column="1"
-                                                               Content="STT 분석"
-                                                               Icon="{ui:SymbolIcon Play24}"
-                                                               Appearance="Primary"
-                                                               FontSize="11"
-                                                               Padding="10,5"
-                                                               Click="OneNoteTabRunSTT_Click"/>
+                                                    <!-- STT 분석 버튼 + 모델 선택 -->
+                                                    <StackPanel Grid.Column="1" Orientation="Horizontal">
+                                                        <ui:Button x:Name="OneNoteTabRunSTTButton"
+                                                                   Content="STT 분석"
+                                                                   Icon="{ui:SymbolIcon Play24}"
+                                                                   Appearance="Primary"
+                                                                   FontSize="11"
+                                                                   Padding="10,5"
+                                                                   Click="OneNoteTabRunSTT_Click"/>
+                                                        <!-- STT 모델 선택 드롭다운 -->
+                                                        <ComboBox x:Name="STTModelSelector"
+                                                                  Width="160" Margin="8,0,0,0"
+                                                                  FontSize="11"
+                                                                  SelectedIndex="2"
+                                                                  ToolTip="STT 모델 선택:&#x0a;• SenseVoice: 빠른 속도, 보통 정확도&#x0a;• Whisper (CPU): 느린 속도, 높은 정확도&#x0a;• Whisper (GPU): 빠른 속도, 높은 정확도 (CUDA 필요)">
+                                                            <ComboBoxItem Content="SenseVoice" Tag="sensevoice"/>
+                                                            <ComboBoxItem Content="Whisper (CPU)" Tag="whisper"/>
+                                                            <ComboBoxItem Content="Whisper (GPU)" Tag="whispergpu"/>
+                                                        </ComboBox>
+                                                    </StackPanel>
 
                                                     <!-- STT 진행률 표시 -->
                                                     <Border x:Name="OneNoteSTTProgressPanel" Grid.Row="1" Grid.ColumnSpan="2"
@@ -6286,6 +6399,8 @@
                                                         <TextBlock Text="AI 요약" FontSize="15" FontWeight="SemiBold"/>
                                                         <!-- 진행 중 표시기 -->
                                                         <ui:ProgressRing x:Name="OneNoteSummaryProgress" Width="16" Height="16" Margin="8,0,0,0" IsIndeterminate="True" Visibility="Collapsed"/>
+                                                        <TextBlock x:Name="OneNoteSummaryProgressText" Text="" FontSize="12" Margin="8,0,0,0"
+                                                                   Foreground="{DynamicResource TextFillColorSecondaryBrush}" VerticalAlignment="Center"/>
                                                     </StackPanel>
                                                     <!-- AI 요약 버튼 -->
                                                     <ui:Button x:Name="OneNoteTabRunSummaryButton"
@@ -6308,6 +6423,14 @@
 
                                                         <!-- 요약 결과 -->
                                                         <StackPanel x:Name="OneNoteSummaryContent" Visibility="Collapsed">
+                                                            <!-- 회의 제목 (맨 위에 표시) -->
+                                                            <Border x:Name="OneNoteSummaryTitlePanel" Padding="16" CornerRadius="8" Margin="0,0,20,12"
+                                                                    Background="{DynamicResource AccentFillColorDefaultBrush}" Visibility="Collapsed">
+                                                                <TextBlock x:Name="OneNoteSummaryTitleTextBlock"
+                                                                           TextWrapping="Wrap" FontSize="15" FontWeight="Bold"
+                                                                           Foreground="White" TextAlignment="Center"/>
+                                                            </Border>
+
                                                             <!-- 요약 텍스트 -->
                                                             <Border Padding="14" CornerRadius="8" Margin="0,0,0,12"
                                                                     Background="{DynamicResource ControlFillColorDefaultBrush}">
@@ -6337,16 +6460,34 @@
                                                             </Border>
 
                                                             <!-- 액션 아이템 -->
-                                                            <Border x:Name="OneNoteActionItemsPanel" Padding="14" CornerRadius="8"
+                                                            <Border x:Name="OneNoteActionItemsPanel" Padding="14" CornerRadius="8" Margin="0,0,20,0"
                                                                     Background="{DynamicResource ControlFillColorDefaultBrush}" Visibility="Collapsed">
                                                                 <StackPanel>
                                                                     <TextBlock Text="액션 아이템" FontWeight="SemiBold" FontSize="12" Margin="0,0,0,8"/>
                                                                     <ItemsControl x:Name="OneNoteActionItemsList">
                                                                         <ItemsControl.ItemTemplate>
                                                                             <DataTemplate>
-                                                                                <CheckBox IsChecked="{Binding IsCompleted, Mode=TwoWay}"
-                                                                                          Content="{Binding Description}"
-                                                                                          FontSize="12" Margin="0,0,0,4"/>
+                                                                                <Border Padding="8,6" Margin="0,0,0,6" CornerRadius="6"
+                                                                                        Background="{DynamicResource ControlFillColorSecondaryBrush}">
+                                                                                    <Grid>
+                                                                                        <Grid.ColumnDefinitions>
+                                                                                            <ColumnDefinition Width="*"/>
+                                                                                            <ColumnDefinition Width="Auto"/>
+                                                                                        </Grid.ColumnDefinitions>
+                                                                                        <TextBlock Grid.Column="0" Text="{Binding Description}"
+                                                                                                   TextWrapping="Wrap" FontSize="12"
+                                                                                                   VerticalAlignment="Center" Margin="0,0,8,0"/>
+                                                                                        <ui:Button Grid.Column="1" x:Name="AddToTodoButton"
+                                                                                                   Appearance="{Binding IsAddedToTodo, Converter={StaticResource BoolToAppearanceConverter}}"
+                                                                                                   ToolTip="{Binding IsAddedToTodo, Converter={StaticResource BoolToTodoTooltipConverter}}"
+                                                                                                   Padding="6,4" Loaded="AddToTodoButton_Loaded"
+                                                                                                   Click="AddToTodoButton_Click">
+                                                                                            <StackPanel Orientation="Horizontal">
+                                                                                                <ui:SymbolIcon Symbol="{Binding IsAddedToTodo, Converter={StaticResource BoolToTodoIconConverter}}" FontSize="14"/>
+                                                                                            </StackPanel>
+                                                                                        </ui:Button>
+                                                                                    </Grid>
+                                                                                </Border>
                                                                             </DataTemplate>
                                                                         </ItemsControl.ItemTemplate>
                                                                     </ItemsControl>
@@ -6976,7 +7117,7 @@
                                         </Grid>
 
                                         <!-- 녹음 파일 목록 (선택 가능) -->
-                                        <ListBox x:Name="OneNoteRecordingsList" MaxHeight="250"
+                                        <ListBox x:Name="OneNoteRecordingsList"
                                                  Background="Transparent"
                                                  BorderThickness="0"
                                                  SelectionChanged="OneNoteRecordingsList_SelectionChanged">
@@ -7234,6 +7375,18 @@
                                                       Visibility="Collapsed"
                                                       VerticalScrollBarVisibility="Auto">
                                             <StackPanel>
+                                                <!-- 제목 섹션 -->
+                                                <Border x:Name="OneNoteSummaryTitleBorder" Margin="0,0,0,8" Padding="12" CornerRadius="6"
+                                                        Background="{DynamicResource AccentFillColorDefaultBrush}"
+                                                        Visibility="Collapsed">
+                                                    <TextBlock x:Name="OneNoteSummaryTitleText"
+                                                               TextWrapping="Wrap"
+                                                               FontWeight="Bold"
+                                                               FontSize="14"
+                                                               Foreground="White"
+                                                               TextAlignment="Center"/>
+                                                </Border>
+
                                                 <!-- 요약 섹션 -->
                                                 <Border Margin="0,0,0,8" Padding="10" CornerRadius="6"
                                                         Background="{DynamicResource ControlFillColorDefaultBrush}">
@@ -7275,8 +7428,9 @@
                                                             <ItemsControl.ItemTemplate>
                                                                 <DataTemplate>
                                                                     <StackPanel Orientation="Horizontal" Margin="0,2">
-                                                                        <CheckBox IsChecked="{Binding IsCompleted}"
-                                                                                  Margin="0,0,6,0"/>
+                                                                        <CheckBox IsChecked="{Binding IsAddedToTodo, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                                                                  Margin="0,0,6,0"
+                                                                                  Loaded="ActionItemCheckBox_Loaded"/>
                                                                         <TextBlock Text="{Binding DisplayText}"
                                                                                    TextWrapping="Wrap"
                                                                                    FontSize="12"
@@ -7553,6 +7707,7 @@
                                 <Grid.ColumnDefinitions>
                                     <ColumnDefinition Width="*"/>
                                     <ColumnDefinition Width="Auto"/>
+                                    <ColumnDefinition Width="Auto"/>
                                 </Grid.ColumnDefinitions>
                                 <StackPanel Grid.Column="0" Orientation="Horizontal">
                                     <ui:SymbolIcon Symbol="TaskListLtr24" FontSize="20" Margin="0,0,8,0"/>
@@ -7562,6 +7717,16 @@
                                                VerticalAlignment="Center"/>
                                 </StackPanel>
                                 <ui:Button Grid.Column="1"
+                                           x:Name="RefreshTodoButton"
+                                           Appearance="Secondary"
+                                           ToolTip="새로고침"
+                                           Width="28" Height="28"
+                                           Padding="0"
+                                           Margin="0,0,4,0"
+                                           Click="RefreshTodoButton_Click">
+                                    <ui:SymbolIcon Symbol="ArrowSync24" FontSize="14"/>
+                                </ui:Button>
+                                <ui:Button Grid.Column="2"
                                            Appearance="Secondary"
                                            ToolTip="새 할 일 추가"
                                            Width="28" Height="28"
@@ -7576,15 +7741,73 @@
                         <ScrollViewer Grid.Row="1"
                                       Padding="16"
                                       VerticalScrollBarVisibility="Auto">
-                            <StackPanel x:Name="TodoListContent">
+                            <StackPanel>
+                                <!-- 로딩 인디케이터 -->
+                                <StackPanel x:Name="TodoLoadingPanel" Visibility="Collapsed"
+                                            HorizontalAlignment="Center" Margin="0,32">
+                                    <ui:ProgressRing IsIndeterminate="True" Width="24" Height="24"/>
+                                    <TextBlock Text="불러오는 중..." FontSize="12" Margin="0,8,0,0"
+                                               Foreground="{DynamicResource TextFillColorTertiaryBrush}"/>
+                                </StackPanel>
+
                                 <!-- TODO 항목 없을 때 -->
                                 <TextBlock x:Name="NoTodoText"
                                            Text="할 일이 없습니다."
                                            FontSize="12"
                                            Foreground="{DynamicResource TextFillColorTertiaryBrush}"
                                            HorizontalAlignment="Center"
-                                           Margin="0,32"/>
-                                <!-- TODO 항목들이 동적으로 추가됨 -->
+                                           Margin="0,32"
+                                           Visibility="Collapsed"/>
+
+                                <!-- TODO 목록 -->
+                                <ItemsControl x:Name="TodoItemsControl">
+                                    <ItemsControl.ItemTemplate>
+                                        <DataTemplate>
+                                            <Border Padding="8,10" Margin="0,0,0,6" CornerRadius="6"
+                                                    Background="{DynamicResource ControlFillColorDefaultBrush}"
+                                                    BorderBrush="{DynamicResource ControlElevationBorderBrush}"
+                                                    BorderThickness="1">
+                                                <Grid>
+                                                    <Grid.ColumnDefinitions>
+                                                        <ColumnDefinition Width="Auto"/>
+                                                        <ColumnDefinition Width="*"/>
+                                                        <ColumnDefinition Width="Auto"/>
+                                                    </Grid.ColumnDefinitions>
+
+                                                    <!-- 체크박스 -->
+                                                    <CheckBox Grid.Column="0"
+                                                              IsChecked="{Binding IsCompleted, Mode=TwoWay}"
+                                                              VerticalAlignment="Top"
+                                                              Margin="0,2,8,0"
+                                                              Loaded="TodoItemCheckBox_Loaded"/>
+
+                                                    <!-- 제목 및 마감일 -->
+                                                    <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                                                        <TextBlock Text="{Binding Title}"
+                                                                   FontSize="13"
+                                                                   TextWrapping="Wrap"
+                                                                   TextTrimming="CharacterEllipsis"
+                                                                   MaxHeight="40"/>
+                                                        <TextBlock Text="{Binding DueDateDisplay}"
+                                                                   FontSize="11"
+                                                                   Foreground="{DynamicResource TextFillColorTertiaryBrush}"
+                                                                   Visibility="{Binding DueDate, Converter={StaticResource NullToVisibilityConverter}}"
+                                                                   Margin="0,2,0,0"/>
+                                                    </StackPanel>
+
+                                                    <!-- 중요도 아이콘 -->
+                                                    <ui:SymbolIcon Grid.Column="2"
+                                                                   Symbol="Star24"
+                                                                   FontSize="14"
+                                                                   Foreground="#FFD700"
+                                                                   VerticalAlignment="Top"
+                                                                   Margin="4,4,0,0"
+                                                                   Visibility="{Binding IsImportant, Converter={StaticResource BoolToVisibilityConverter}}"/>
+                                                </Grid>
+                                            </Border>
+                                        </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
                             </StackPanel>
                         </ScrollViewer>
                     </Grid>

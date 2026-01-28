@@ -4513,6 +4513,9 @@ public partial class MainWindow : FluentWindow
         // 캘린더 데이터 로드
         LoadCalendarDataAsync();
 
+        // To Do 목록 로드
+        _ = LoadTodoListAsync();
+
         // 기능별 테마 적용
         Services.Theme.ThemeService.Instance.ApplyFeatureTheme("calendar");
     }
@@ -4944,9 +4947,24 @@ public partial class MainWindow : FluentWindow
         Services.Theme.ThemeService.Instance.ApplyFeatureTheme("onenote");
 
         // OneNote 노트북 로드 (최초 1회)
+        Log4.Debug($"[OneNote] ShowOneNoteView: _oneNoteViewModel={(_oneNoteViewModel != null ? "있음" : "null")}, Notebooks.Count={_oneNoteViewModel?.Notebooks?.Count ?? -1}");
         if (_oneNoteViewModel == null || _oneNoteViewModel.Notebooks.Count == 0)
         {
+            Log4.Info("[OneNote] ShowOneNoteView: LoadOneNoteNotebooksAsync 호출");
             await LoadOneNoteNotebooksAsync();
+        }
+        else
+        {
+            Log4.Debug($"[OneNote] ShowOneNoteView: 노트북 이미 로드됨 ({_oneNoteViewModel.Notebooks.Count}개)");
+
+            // 즐겨찾기가 로드되지 않았으면 로드 (확장 아이콘 표시를 위해)
+            if (_oneNoteViewModel.FavoritePages.Count == 0)
+            {
+                Log4.Debug("[OneNote] ShowOneNoteView: 즐겨찾기 재로드");
+                _oneNoteViewModel.LoadFavorites();
+                if (OneNoteFavoritesTreeView != null)
+                    OneNoteFavoritesTreeView.ItemsSource = _oneNoteViewModel.FavoritePages;
+            }
         }
 
         // 페이지가 이미 선택되어 있으면 녹음 파일 로드 (SelectedPage가 설정된 이후에만)
@@ -5715,6 +5733,22 @@ public partial class MainWindow : FluentWindow
         {
             OneNoteSummaryEmptyText.Visibility = Visibility.Collapsed;
             OneNoteSummaryContent.Visibility = Visibility.Visible;
+
+            // 제목 표시 (회의 제목을 맨 위에 한 줄로)
+            if (OneNoteSummaryTitlePanel != null && OneNoteSummaryTitleTextBlock != null)
+            {
+                if (!string.IsNullOrEmpty(summary.Title))
+                {
+                    OneNoteSummaryTitlePanel.Visibility = Visibility.Visible;
+                    OneNoteSummaryTitleTextBlock.Text = summary.Title;
+                    Log4.Debug($"[OneNote] 회의 제목 표시: {summary.Title}");
+                }
+                else
+                {
+                    OneNoteSummaryTitlePanel.Visibility = Visibility.Collapsed;
+                }
+            }
+
             OneNoteSummaryText.Text = summary.Summary;
 
             // 핵심 포인트
@@ -5732,7 +5766,24 @@ public partial class MainWindow : FluentWindow
             if (summary.ActionItems?.Count > 0)
             {
                 OneNoteActionItemsPanel.Visibility = Visibility.Visible;
+
+                // 기존 이벤트 해제 후 새로 연결
+                foreach (var item in summary.ActionItems)
+                {
+                    item.PropertyChanged -= ActionItem_PropertyChanged;
+                    item.PropertyChanged += ActionItem_PropertyChanged;
+                }
+
+                OneNoteActionItemsList.ItemsSource = null; // 먼저 초기화
                 OneNoteActionItemsList.ItemsSource = summary.ActionItems;
+
+                // ItemsControl 로드 완료 후 체크박스 이벤트 연결
+                OneNoteActionItemsList.Dispatcher.BeginInvoke(new Action(() =>
+                {
+                    AttachCheckBoxEvents(OneNoteActionItemsList);
+                }), System.Windows.Threading.DispatcherPriority.Loaded);
+
+                Log4.Info($"[OneNote] UpdateRecordingContentPanel: 액션아이템 {summary.ActionItems.Count}개 로드됨");
             }
             else
             {
@@ -5782,7 +5833,20 @@ public partial class MainWindow : FluentWindow
             return;
         }
 
-        Log4.Debug($"[OneNote] STT 분석 대상: {recording.FileName}, FilePath: {recording.FilePath}");
+        // 선택된 STT 모델 유형 확인
+        var selectedModel = Services.Speech.STTModelType.SenseVoice;
+        if (STTModelSelector?.SelectedItem is System.Windows.Controls.ComboBoxItem selectedItem)
+        {
+            var tag = selectedItem.Tag?.ToString()?.ToLowerInvariant();
+            selectedModel = tag switch
+            {
+                "whisper" => Services.Speech.STTModelType.Whisper,
+                "whispergpu" => Services.Speech.STTModelType.WhisperGpu,
+                _ => Services.Speech.STTModelType.SenseVoice
+            };
+        }
+
+        Log4.Debug($"[OneNote] STT 분석 대상: {recording.FileName}, FilePath: {recording.FilePath}, Model: {selectedModel}");
 
         // 기존 STT 결과 확인
         if (recording.HasSTT)
@@ -5801,7 +5865,7 @@ public partial class MainWindow : FluentWindow
         }
 
         Log4.Debug("[OneNote] RunSTTAsync 호출 시작");
-        await _oneNoteViewModel.RunSTTAsync(recording);
+        await _oneNoteViewModel.RunSTTAsync(recording, selectedModel);
         Log4.Debug("[OneNote] RunSTTAsync 호출 완료");
 
         // 좌측 녹음내용 패널 갱신
@@ -5821,7 +5885,10 @@ public partial class MainWindow : FluentWindow
             return;
         }
 
-        var recording = _oneNoteViewModel.SelectedRecording;
+        // SelectedRecording이 null이면 현재 페이지의 녹음 목록에서 첫 번째 녹음 사용
+        var recording = _oneNoteViewModel.SelectedRecording
+            ?? _oneNoteViewModel.CurrentPageRecordings?.FirstOrDefault();
+
         if (recording == null)
         {
             Log4.Warn("[OneNote] STT 분석 불가: SelectedRecording이 null");
@@ -5833,6 +5900,12 @@ public partial class MainWindow : FluentWindow
             return;
         }
 
+        // ViewModel에 선택된 녹음 동기화
+        if (_oneNoteViewModel.SelectedRecording == null)
+        {
+            _oneNoteViewModel.SelectedRecording = recording;
+        }
+
         await RunSTTAnalysisAsync(recording);
     }
 
@@ -5841,7 +5914,7 @@ public partial class MainWindow : FluentWindow
     /// </summary>
     private async void OneNoteTabRunSummary_Click(object sender, RoutedEventArgs e)
     {
-        Log4.Debug("[OneNote] 탭 AI 요약 버튼 클릭됨");
+        Log4.Info("[OneNote] ★★★ AI 요약 버튼 클릭됨 (빌드: 2026-01-26 20:48) ★★★");
 
         if (_oneNoteViewModel == null)
         {
@@ -5849,9 +5922,11 @@ public partial class MainWindow : FluentWindow
             return;
         }
 
-        // SelectedRecording이 null이면 ListBox에서 직접 가져옴
+        // SelectedRecording이 null이면 현재 페이지의 녹음 목록에서 첫 번째 녹음 사용
         var recording = _oneNoteViewModel.SelectedRecording
-            ?? OneNoteRecordingsList?.SelectedItem as Models.RecordingInfo;
+            ?? _oneNoteViewModel.CurrentPageRecordings?.FirstOrDefault();
+
+        Log4.Info($"[OneNote] 녹음 선택됨: {recording?.FileName ?? "null"}, STT세그먼트: {_oneNoteViewModel.STTSegments.Count}개");
 
         if (recording == null)
         {
@@ -5867,21 +5942,35 @@ public partial class MainWindow : FluentWindow
         // ViewModel에 선택된 녹음 동기화
         if (_oneNoteViewModel.SelectedRecording == null)
         {
+            Log4.Info("[OneNote] SelectedRecording 동기화");
             _oneNoteViewModel.SelectedRecording = recording;
         }
 
-        // STT 결과 확인
+        // STT 결과 확인 - 없으면 기존 STT 파일에서 로드 시도
         if (_oneNoteViewModel.STTSegments.Count == 0)
         {
-            System.Windows.MessageBox.Show(
-                "먼저 STT 분석을 실행해주세요.",
-                "AI 요약",
-                System.Windows.MessageBoxButton.OK,
-                System.Windows.MessageBoxImage.Information);
-            return;
+            Log4.Info($"[OneNote] STT 세그먼트 없음, 파일에서 로드 시도. HasSTT={recording.HasSTT}, Path={recording.STTResultPath}");
+            // STT 결과 파일 자동 검색 및 로드 시도 (LoadSTTResultAsync 내부에서 파일명 기반 검색 수행)
+            Log4.Info($"[OneNote] AI 요약: STT 결과 로드 시도 - {recording.FileName}");
+            await _oneNoteViewModel.LoadSTTResultAsync(recording);
+            Log4.Info($"[OneNote] STT 로드 완료. 세그먼트 수: {_oneNoteViewModel.STTSegments.Count}");
+
+            // 로드 후에도 없으면 에러
+            if (_oneNoteViewModel.STTSegments.Count == 0)
+            {
+                Log4.Warn("[OneNote] STT 로드 후에도 세그먼트 없음 - 에러 표시");
+                System.Windows.MessageBox.Show(
+                    "먼저 STT 분석을 실행해주세요.",
+                    "AI 요약",
+                    System.Windows.MessageBoxButton.OK,
+                    System.Windows.MessageBoxImage.Information);
+                return;
+            }
         }
 
+        Log4.Info($"[OneNote] RunSummaryAnalysisAsync 호출 시작");
         await RunSummaryAnalysisAsync(recording);
+        Log4.Info($"[OneNote] RunSummaryAnalysisAsync 호출 완료");
     }
 
     /// <summary>
@@ -5891,7 +5980,20 @@ public partial class MainWindow : FluentWindow
     {
         if (_oneNoteViewModel == null) return;
 
-        Log4.Debug($"[OneNote] STT 분석 대상: {recording.FileName}, FilePath: {recording.FilePath}");
+        // 선택된 STT 모델 유형 확인
+        var selectedModel = Services.Speech.STTModelType.SenseVoice;
+        if (STTModelSelector?.SelectedItem is System.Windows.Controls.ComboBoxItem selectedItem)
+        {
+            var tag = selectedItem.Tag?.ToString()?.ToLowerInvariant();
+            selectedModel = tag switch
+            {
+                "whisper" => Services.Speech.STTModelType.Whisper,
+                "whispergpu" => Services.Speech.STTModelType.WhisperGpu,
+                _ => Services.Speech.STTModelType.SenseVoice
+            };
+        }
+
+        Log4.Debug($"[OneNote] STT 분석 대상: {recording.FileName}, FilePath: {recording.FilePath}, Model: {selectedModel}");
 
         // 기존 STT 결과 확인
         if (recording.HasSTT)
@@ -5956,7 +6058,7 @@ public partial class MainWindow : FluentWindow
         try
         {
             Log4.Debug("[OneNote] RunSTTAsync 호출 시작");
-            await _oneNoteViewModel.RunSTTAsync(recording);
+            await _oneNoteViewModel.RunSTTAsync(recording, selectedModel);
             Log4.Debug("[OneNote] RunSTTAsync 호출 완료");
 
             // UI 갱신
@@ -6021,17 +6123,35 @@ public partial class MainWindow : FluentWindow
             OneNoteSummaryProgress.Visibility = Visibility.Visible;
         }
 
+        // 진행 상태 텍스트 업데이트 이벤트 핸들러
+        void OnPropertyChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
+        {
+            Dispatcher.Invoke(() =>
+            {
+                if (e.PropertyName == nameof(_oneNoteViewModel.SummaryProgressText))
+                {
+                    if (OneNoteSummaryProgressText != null)
+                        OneNoteSummaryProgressText.Text = _oneNoteViewModel.SummaryProgressText;
+                }
+            });
+        }
+
+        _oneNoteViewModel.PropertyChanged += OnPropertyChanged;
+
         try
         {
-            Log4.Debug("[OneNote] RunSummaryAsync 호출 시작");
+            Log4.Info("[OneNote] ★ RunSummaryAsync 호출 시작 ★");
             await _oneNoteViewModel.RunSummaryAsync(recording);
-            Log4.Debug("[OneNote] RunSummaryAsync 호출 완료");
+            Log4.Info("[OneNote] ★ RunSummaryAsync 호출 완료 ★");
 
             // UI 갱신
             UpdateSummaryContentPanel();
         }
         finally
         {
+            // 이벤트 구독 해제
+            _oneNoteViewModel.PropertyChanged -= OnPropertyChanged;
+
             // AI 요약 버튼 다시 활성화
             if (OneNoteTabRunSummaryButton != null)
             {
@@ -6044,6 +6164,279 @@ public partial class MainWindow : FluentWindow
             {
                 OneNoteSummaryProgress.Visibility = Visibility.Collapsed;
             }
+
+            // 진행 상태 텍스트 초기화
+            if (OneNoteSummaryProgressText != null)
+            {
+                OneNoteSummaryProgressText.Text = string.Empty;
+            }
+        }
+    }
+
+    /// <summary>
+    /// 액션아이템 PropertyChanged 이벤트 핸들러 - UI 바인딩 갱신용 (To Do 연동은 버튼 클릭에서 처리)
+    /// </summary>
+    private void ActionItem_PropertyChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
+    {
+        // 버튼 방식으로 전환되어 PropertyChanged에서는 To Do 연동하지 않음
+        // UI 바인딩 갱신은 자동으로 처리됨
+        if (e.PropertyName == nameof(Models.ActionItem.IsAddedToTodo) && sender is Models.ActionItem actionItem)
+        {
+            Log4.Debug($"[OneNote] ActionItem PropertyChanged: IsAddedToTodo={actionItem.IsAddedToTodo}");
+        }
+    }
+
+    /// <summary>
+    /// ItemsControl 내부의 체크박스에 이벤트 핸들러 연결
+    /// </summary>
+    private void AttachCheckBoxEvents(System.Windows.Controls.ItemsControl itemsControl)
+    {
+        Log4.Info($"[OneNote] AttachCheckBoxEvents 호출됨, Items.Count={itemsControl.Items.Count}");
+
+        foreach (var item in itemsControl.Items)
+        {
+            var container = itemsControl.ItemContainerGenerator.ContainerFromItem(item) as System.Windows.Controls.ContentPresenter;
+            if (container != null)
+            {
+                var checkBox = FindVisualChild<System.Windows.Controls.CheckBox>(container);
+                if (checkBox != null)
+                {
+                    // 기존 이벤트 제거 후 재연결
+                    checkBox.Checked -= DirectCheckBox_Checked;
+                    checkBox.Unchecked -= DirectCheckBox_Unchecked;
+                    checkBox.Checked += DirectCheckBox_Checked;
+                    checkBox.Unchecked += DirectCheckBox_Unchecked;
+                    Log4.Debug($"[OneNote] 체크박스 이벤트 연결됨: {(item as Models.ActionItem)?.Description}");
+                }
+            }
+        }
+    }
+
+    /// <summary>
+    /// VisualTree에서 특정 타입의 자식 요소 찾기
+    /// </summary>
+    private T? FindVisualChild<T>(System.Windows.DependencyObject parent) where T : System.Windows.DependencyObject
+    {
+        for (int i = 0; i < System.Windows.Media.VisualTreeHelper.GetChildrenCount(parent); i++)
+        {
+            var child = System.Windows.Media.VisualTreeHelper.GetChild(parent, i);
+            if (child is T result)
+                return result;
+
+            var descendant = FindVisualChild<T>(child);
+            if (descendant != null)
+                return descendant;
+        }
+        return null;
+    }
+
+    /// <summary>
+    /// 체크박스 직접 체크됨 이벤트
+    /// </summary>
+    private async void DirectCheckBox_Checked(object sender, RoutedEventArgs e)
+    {
+        Log4.Info("[OneNote] DirectCheckBox_Checked 이벤트 발생!");
+
+        if (sender is System.Windows.Controls.CheckBox checkBox &&
+            checkBox.DataContext is Models.ActionItem actionItem)
+        {
+            Log4.Info($"[OneNote] 액션아이템 체크됨: {actionItem.Description}");
+            actionItem.IsAddedToTodo = true;
+            await AddActionItemToTodoAsync(actionItem);
+        }
+    }
+
+    /// <summary>
+    /// 체크박스 직접 해제됨 이벤트
+    /// </summary>
+    private async void DirectCheckBox_Unchecked(object sender, RoutedEventArgs e)
+    {
+        Log4.Info("[OneNote] DirectCheckBox_Unchecked 이벤트 발생!");
+
+        if (sender is System.Windows.Controls.CheckBox checkBox &&
+            checkBox.DataContext is Models.ActionItem actionItem)
+        {
+            Log4.Info($"[OneNote] 액션아이템 체크 해제됨: {actionItem.Description}");
+            actionItem.IsAddedToTodo = false;
+            await RemoveActionItemFromTodoAsync(actionItem);
+        }
+    }
+
+    /// <summary>
+    /// To Do 추가 버튼 Loaded 이벤트
+    /// </summary>
+    private void AddToTodoButton_Loaded(object sender, RoutedEventArgs e)
+    {
+        if (sender is Wpf.Ui.Controls.Button button &&
+            button.DataContext is Models.ActionItem actionItem)
+        {
+            Log4.Debug($"[OneNote] To Do 버튼 Loaded: {actionItem.Description}, IsAddedToTodo={actionItem.IsAddedToTodo}");
+        }
+    }
+
+    /// <summary>
+    /// To Do 추가/제거 버튼 클릭 이벤트
+    /// </summary>
+    private async void AddToTodoButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is Wpf.Ui.Controls.Button button &&
+            button.DataContext is Models.ActionItem actionItem)
+        {
+            Log4.Info($"[OneNote] To Do 버튼 클릭: {actionItem.Description}, 현재 상태={actionItem.IsAddedToTodo}");
+
+            if (actionItem.IsAddedToTodo)
+            {
+                // To Do에서 제거
+                await RemoveActionItemFromTodoAsync(actionItem);
+            }
+            else
+            {
+                // To Do에 추가
+                await AddActionItemToTodoAsync(actionItem);
+            }
+        }
+    }
+
+    // 기존 체크박스 핸들러 (하위 호환성 유지)
+    private void ActionItemCheckBox_Loaded(object sender, RoutedEventArgs e)
+    {
+        // 버튼 방식으로 전환됨 - 이 핸들러는 더 이상 사용되지 않음
+    }
+
+    private async void OnActionItemCheckBox_Checked(object sender, RoutedEventArgs e) { }
+    private async void OnActionItemCheckBox_Unchecked(object sender, RoutedEventArgs e) { }
+
+    /// <summary>
+    /// 액션아이템을 Microsoft To Do에 추가
+    /// </summary>
+    private async Task AddActionItemToTodoAsync(Models.ActionItem actionItem)
+    {
+        try
+        {
+            Log4.Debug($"[OneNote] 액션아이템 To Do 추가 시작: {actionItem.Description}");
+
+            // GraphToDoService 초기화
+            if (_graphToDoService == null)
+            {
+                var authService = ((App)Application.Current).GetService<Services.Graph.GraphAuthService>();
+                if (authService == null || !authService.IsLoggedIn)
+                {
+                    Log4.Warn("[OneNote] Graph 로그인이 필요합니다");
+                    actionItem.IsAddedToTodo = false;
+                    return;
+                }
+                _graphToDoService = new Services.Graph.GraphToDoService(authService);
+            }
+
+            // 마감일 파싱
+            DateTime? dueDate = null;
+            if (!string.IsNullOrEmpty(actionItem.DueDate))
+            {
+                if (DateTime.TryParse(actionItem.DueDate, out var parsed))
+                {
+                    dueDate = parsed;
+                }
+            }
+
+            // To Do 작업 생성
+            var taskId = await _graphToDoService.CreateTaskAsync(
+                actionItem.Description,
+                dueDate,
+                $"담당자: {actionItem.Assignee ?? "미지정"}\n우선순위: {actionItem.Priority}");
+
+            if (!string.IsNullOrEmpty(taskId))
+            {
+                actionItem.TodoTaskId = taskId;
+                actionItem.IsAddedToTodo = true;
+                Log4.Info($"[OneNote] 액션아이템 To Do 추가 완료: {actionItem.Description} (ID: {taskId})");
+
+                // 요약 파일 저장
+                await SaveCurrentSummaryAsync();
+            }
+            else
+            {
+                Log4.Warn("[OneNote] To Do 작업 생성 실패");
+                actionItem.IsAddedToTodo = false;
+            }
+        }
+        catch (Exception ex)
+        {
+            Log4.Error($"[OneNote] 액션아이템 To Do 추가 실패: {ex.Message}");
+            actionItem.IsAddedToTodo = false;
+        }
+    }
+
+    /// <summary>
+    /// 액션아이템을 Microsoft To Do에서 삭제
+    /// </summary>
+    private async Task RemoveActionItemFromTodoAsync(Models.ActionItem actionItem)
+    {
+        try
+        {
+            if (string.IsNullOrEmpty(actionItem.TodoTaskId))
+            {
+                Log4.Debug("[OneNote] TodoTaskId가 없어서 삭제 생략");
+                return;
+            }
+
+            Log4.Debug($"[OneNote] 액션아이템 To Do 삭제 시작: {actionItem.Description}");
+
+            // GraphToDoService 초기화
+            if (_graphToDoService == null)
+            {
+                var authService = ((App)Application.Current).GetService<Services.Graph.GraphAuthService>();
+                if (authService == null || !authService.IsLoggedIn)
+                {
+                    Log4.Warn("[OneNote] Graph 로그인이 필요합니다");
+                    return;
+                }
+                _graphToDoService = new Services.Graph.GraphToDoService(authService);
+            }
+
+            // To Do 작업 삭제
+            var deleted = await _graphToDoService.DeleteTaskAsync(actionItem.TodoTaskId);
+
+            if (deleted)
+            {
+                Log4.Info($"[OneNote] 액션아이템 To Do 삭제 완료: {actionItem.Description}");
+                actionItem.TodoTaskId = null;
+                actionItem.IsAddedToTodo = false;
+
+                // 요약 파일 저장
+                await SaveCurrentSummaryAsync();
+            }
+            else
+            {
+                Log4.Warn("[OneNote] To Do 작업 삭제 실패");
+            }
+        }
+        catch (Exception ex)
+        {
+            Log4.Error($"[OneNote] 액션아이템 To Do 삭제 실패: {ex.Message}");
+        }
+    }
+
+    /// <summary>
+    /// 현재 요약 파일 저장
+    /// </summary>
+    private async Task SaveCurrentSummaryAsync()
+    {
+        Log4.Debug($"[OneNote] SaveCurrentSummaryAsync 호출 - SelectedRecording: {_oneNoteViewModel?.SelectedRecording?.FileName ?? "null"}, CurrentSummary: {(_oneNoteViewModel?.CurrentSummary != null ? "있음" : "null")}");
+
+        if (_oneNoteViewModel?.SelectedRecording == null || _oneNoteViewModel?.CurrentSummary == null)
+        {
+            Log4.Warn("[OneNote] 요약 저장 스킵: SelectedRecording 또는 CurrentSummary가 null");
+            return;
+        }
+
+        try
+        {
+            await _oneNoteViewModel.SaveSummaryAsync(_oneNoteViewModel.SelectedRecording);
+            Log4.Debug("[OneNote] 요약 파일 저장 완료");
+        }
+        catch (Exception ex)
+        {
+            Log4.Error($"[OneNote] 요약 파일 저장 실패: {ex.Message}");
         }
     }
 
@@ -6052,9 +6445,17 @@ public partial class MainWindow : FluentWindow
     /// </summary>
     private void UpdateSummaryContentPanel()
     {
-        if (_oneNoteViewModel == null) return;
+        Log4.Debug("[OneNote] UpdateSummaryContentPanel 호출됨");
+
+        if (_oneNoteViewModel == null)
+        {
+            Log4.Debug("[OneNote] _oneNoteViewModel이 null");
+            return;
+        }
 
         var summary = _oneNoteViewModel.CurrentSummary;
+        Log4.Debug($"[OneNote] CurrentSummary: {(summary != null ? $"있음, ActionItems={summary.ActionItems?.Count ?? 0}" : "null")}");
+
         if (summary != null)
         {
             // 빈 상태 숨기고 결과 표시
@@ -6062,6 +6463,21 @@ public partial class MainWindow : FluentWindow
                 OneNoteSummaryEmptyText.Visibility = Visibility.Collapsed;
             if (OneNoteSummaryContent != null)
                 OneNoteSummaryContent.Visibility = Visibility.Visible;
+
+            // 제목 표시 (회의 제목을 맨 위에 한 줄로)
+            if (OneNoteSummaryTitlePanel != null && OneNoteSummaryTitleTextBlock != null)
+            {
+                if (!string.IsNullOrEmpty(summary.Title))
+                {
+                    OneNoteSummaryTitlePanel.Visibility = Visibility.Visible;
+                    OneNoteSummaryTitleTextBlock.Text = summary.Title;
+                    Log4.Debug($"[OneNote] 회의 제목 표시: {summary.Title}");
+                }
+                else
+                {
+                    OneNoteSummaryTitlePanel.Visibility = Visibility.Collapsed;
+                }
+            }
 
             // 요약 텍스트
             if (OneNoteSummaryText != null)
@@ -6087,7 +6503,23 @@ public partial class MainWindow : FluentWindow
                 if (summary.ActionItems?.Count > 0)
                 {
                     OneNoteActionItemsPanel.Visibility = Visibility.Visible;
+
+                    // PropertyChanged 이벤트 연결
+                    foreach (var item in summary.ActionItems)
+                    {
+                        item.PropertyChanged -= ActionItem_PropertyChanged;
+                        item.PropertyChanged += ActionItem_PropertyChanged;
+                    }
+
                     OneNoteActionItemsList.ItemsSource = summary.ActionItems;
+                    Log4.Info($"[OneNote] UpdateSummaryContentPanel: 액션아이템 {summary.ActionItems.Count}개 로드됨");
+
+                    // UI 렌더링 후 체크박스 이벤트 연결
+                    OneNoteActionItemsList.Dispatcher.BeginInvoke(new Action(() =>
+                    {
+                        Log4.Info("[OneNote] Dispatcher.BeginInvoke - 체크박스 이벤트 연결 시작");
+                        AttachCheckBoxEvents(OneNoteActionItemsList);
+                    }), System.Windows.Threading.DispatcherPriority.Loaded);
                 }
                 else
                 {
@@ -7332,11 +7764,207 @@ public partial class MainWindow : FluentWindow
     /// <summary>
     /// TODO 추가 버튼 클릭 (캘린더 패널 To Do 탭)
     /// </summary>
-    private void AddTodoButton_Click(object sender, RoutedEventArgs e)
+    private async void AddTodoButton_Click(object sender, RoutedEventArgs e)
     {
-        // TODO: Graph API Tasks 연동하여 할 일 추가 다이얼로그 열기
-        Log4.Info("TODO 추가 버튼 클릭");
-        _viewModel.StatusMessage = "할 일 추가 기능은 추후 지원 예정입니다.";
+        Log4.Info("[ToDo] 추가 버튼 클릭");
+
+        // 간단한 입력 다이얼로그로 할 일 추가
+        var dialog = new Wpf.Ui.Controls.MessageBox
+        {
+            Title = "새 할 일 추가",
+            Content = new System.Windows.Controls.TextBox
+            {
+                Width = 300,
+                Height = 60,
+                TextWrapping = TextWrapping.Wrap,
+                AcceptsReturn = true,
+                VerticalScrollBarVisibility = ScrollBarVisibility.Auto
+            },
+            PrimaryButtonText = "추가",
+            CloseButtonText = "취소"
+        };
+
+        var result = await dialog.ShowDialogAsync();
+        if (result == Wpf.Ui.Controls.MessageBoxResult.Primary)
+        {
+            var textBox = dialog.Content as System.Windows.Controls.TextBox;
+            var title = textBox?.Text?.Trim();
+
+            if (!string.IsNullOrEmpty(title))
+            {
+                try
+                {
+                    var authService = ((App)Application.Current).GetService<Services.Graph.GraphAuthService>();
+                    if (authService == null || !authService.IsLoggedIn)
+                    {
+                        _viewModel.StatusMessage = "Microsoft 계정 로그인이 필요합니다.";
+                        return;
+                    }
+
+                    _graphToDoService ??= new Services.Graph.GraphToDoService(authService);
+                    var taskId = await _graphToDoService.CreateTaskAsync(title);
+
+                    if (!string.IsNullOrEmpty(taskId))
+                    {
+                        _viewModel.StatusMessage = $"할 일이 추가되었습니다: {title}";
+                        await LoadTodoListAsync(); // 목록 새로고침
+                    }
+                    else
+                    {
+                        _viewModel.StatusMessage = "할 일 추가에 실패했습니다.";
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Log4.Error($"[ToDo] 할 일 추가 실패: {ex.Message}");
+                    _viewModel.StatusMessage = $"오류: {ex.Message}";
+                }
+            }
+        }
+    }
+
+    /// <summary>
+    /// TODO 새로고침 버튼 클릭
+    /// </summary>
+    private async void RefreshTodoButton_Click(object sender, RoutedEventArgs e)
+    {
+        Log4.Info("[ToDo] 새로고침 버튼 클릭");
+        await LoadTodoListAsync();
+    }
+
+    /// <summary>
+    /// Microsoft To Do 목록 로드
+    /// </summary>
+    private async Task LoadTodoListAsync()
+    {
+        try
+        {
+            Log4.Info("[ToDo] 목록 로드 시작");
+
+            // 로딩 표시
+            if (TodoLoadingPanel != null) TodoLoadingPanel.Visibility = Visibility.Visible;
+            if (NoTodoText != null) NoTodoText.Visibility = Visibility.Collapsed;
+            if (TodoItemsControl != null) TodoItemsControl.ItemsSource = null;
+
+            var authService = ((App)Application.Current).GetService<Services.Graph.GraphAuthService>();
+            if (authService == null || !authService.IsLoggedIn)
+            {
+                Log4.Warn("[ToDo] Graph 로그인이 필요합니다");
+                if (TodoLoadingPanel != null) TodoLoadingPanel.Visibility = Visibility.Collapsed;
+                if (NoTodoText != null)
+                {
+                    NoTodoText.Text = "로그인이 필요합니다.";
+                    NoTodoText.Visibility = Visibility.Visible;
+                }
+                return;
+            }
+
+            _graphToDoService ??= new Services.Graph.GraphToDoService(authService);
+            var tasks = await _graphToDoService.GetTasksAsync(includeCompleted: false);
+
+            // 로딩 숨기기
+            if (TodoLoadingPanel != null) TodoLoadingPanel.Visibility = Visibility.Collapsed;
+
+            if (tasks.Count == 0)
+            {
+                if (NoTodoText != null)
+                {
+                    NoTodoText.Text = "할 일이 없습니다.";
+                    NoTodoText.Visibility = Visibility.Visible;
+                }
+                Log4.Info("[ToDo] 할 일 없음");
+            }
+            else
+            {
+                if (NoTodoText != null) NoTodoText.Visibility = Visibility.Collapsed;
+                if (TodoItemsControl != null) TodoItemsControl.ItemsSource = tasks;
+                Log4.Info($"[ToDo] {tasks.Count}개 작업 로드됨");
+            }
+
+            _viewModel.StatusMessage = $"할 일 {tasks.Count}개";
+        }
+        catch (Exception ex)
+        {
+            Log4.Error($"[ToDo] 목록 로드 실패: {ex.Message}");
+            if (TodoLoadingPanel != null) TodoLoadingPanel.Visibility = Visibility.Collapsed;
+            if (NoTodoText != null)
+            {
+                NoTodoText.Text = "로드 실패";
+                NoTodoText.Visibility = Visibility.Visible;
+            }
+        }
+    }
+
+    /// <summary>
+    /// To Do 항목 체크박스 Loaded 이벤트
+    /// </summary>
+    private void TodoItemCheckBox_Loaded(object sender, RoutedEventArgs e)
+    {
+        if (sender is System.Windows.Controls.CheckBox checkBox)
+        {
+            // 체크박스 이벤트 연결
+            checkBox.Checked -= OnTodoItemCheckBox_Checked;
+            checkBox.Unchecked -= OnTodoItemCheckBox_Unchecked;
+            checkBox.Checked += OnTodoItemCheckBox_Checked;
+            checkBox.Unchecked += OnTodoItemCheckBox_Unchecked;
+        }
+    }
+
+    /// <summary>
+    /// To Do 항목 체크 (완료 처리)
+    /// </summary>
+    private async void OnTodoItemCheckBox_Checked(object sender, RoutedEventArgs e)
+    {
+        if (sender is System.Windows.Controls.CheckBox checkBox &&
+            checkBox.DataContext is Services.Graph.TodoTaskItem task)
+        {
+            Log4.Info($"[ToDo] 작업 완료 처리: {task.Title}");
+
+            try
+            {
+                if (_graphToDoService != null)
+                {
+                    var success = await _graphToDoService.UpdateTaskCompletionAsync(task.Id, true);
+                    if (success)
+                    {
+                        _viewModel.StatusMessage = $"완료: {task.Title}";
+                        // 잠시 후 목록에서 제거 (완료된 항목)
+                        await Task.Delay(500);
+                        await LoadTodoListAsync();
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                Log4.Error($"[ToDo] 완료 처리 실패: {ex.Message}");
+                task.IsCompleted = false; // 롤백
+            }
+        }
+    }
+
+    /// <summary>
+    /// To Do 항목 체크 해제 (미완료 처리)
+    /// </summary>
+    private async void OnTodoItemCheckBox_Unchecked(object sender, RoutedEventArgs e)
+    {
+        if (sender is System.Windows.Controls.CheckBox checkBox &&
+            checkBox.DataContext is Services.Graph.TodoTaskItem task)
+        {
+            Log4.Info($"[ToDo] 작업 미완료 처리: {task.Title}");
+
+            try
+            {
+                if (_graphToDoService != null)
+                {
+                    await _graphToDoService.UpdateTaskCompletionAsync(task.Id, false);
+                }
+            }
+            catch (Exception ex)
+            {
+                Log4.Error($"[ToDo] 미완료 처리 실패: {ex.Message}");
+                task.IsCompleted = true; // 롤백
+            }
+        }
     }
 
     /// <summary>
@@ -8266,6 +8894,7 @@ public partial class MainWindow : FluentWindow
     private OneNoteViewModel? _oneNoteViewModel;
     private bool _oneNoteEditorInitialized = false;
     private bool _oneNoteEditorReady = false;
+    private Services.Graph.GraphToDoService? _graphToDoService;
 
     /// <summary>
     /// OneNote TinyMCE 에디터 초기화
@@ -8546,6 +9175,93 @@ public partial class MainWindow : FluentWindow
     }
 
     /// <summary>
+    /// OneNote 페이지 제목 클릭 - 편집 모드로 전환
+    /// </summary>
+    private void OneNotePageTitle_Click(object sender, System.Windows.Input.MouseButtonEventArgs e)
+    {
+        if (OneNotePageTitleText == null || OneNotePageTitleEdit == null) return;
+
+        // 편집 모드로 전환
+        OneNotePageTitleEdit.Text = OneNotePageTitleText.Text;
+        OneNotePageTitleText.Visibility = Visibility.Collapsed;
+        OneNotePageTitleEdit.Visibility = Visibility.Visible;
+        OneNotePageTitleEdit.Focus();
+        OneNotePageTitleEdit.SelectAll();
+
+        Log4.Debug($"[OneNote] 제목 편집 모드: {OneNotePageTitleEdit.Text}");
+    }
+
+    /// <summary>
+    /// OneNote 페이지 제목 편집 완료 (포커스 잃음)
+    /// </summary>
+    private async void OneNotePageTitleEdit_LostFocus(object sender, RoutedEventArgs e)
+    {
+        await SavePageTitleAsync();
+    }
+
+    /// <summary>
+    /// OneNote 페이지 제목 편집 중 키 입력
+    /// </summary>
+    private async void OneNotePageTitleEdit_KeyDown(object sender, System.Windows.Input.KeyEventArgs e)
+    {
+        if (e.Key == System.Windows.Input.Key.Enter)
+        {
+            await SavePageTitleAsync();
+            e.Handled = true;
+        }
+        else if (e.Key == System.Windows.Input.Key.Escape)
+        {
+            // 취소 - 원래 제목으로 복원
+            if (OneNotePageTitleText != null && OneNotePageTitleEdit != null)
+            {
+                OneNotePageTitleEdit.Visibility = Visibility.Collapsed;
+                OneNotePageTitleText.Visibility = Visibility.Visible;
+            }
+            e.Handled = true;
+        }
+    }
+
+    /// <summary>
+    /// 페이지 제목 저장
+    /// </summary>
+    private async Task SavePageTitleAsync()
+    {
+        if (OneNotePageTitleText == null || OneNotePageTitleEdit == null) return;
+
+        var newTitle = OneNotePageTitleEdit.Text?.Trim();
+        var oldTitle = OneNotePageTitleText.Text;
+
+        // 표시 모드로 전환
+        OneNotePageTitleEdit.Visibility = Visibility.Collapsed;
+        OneNotePageTitleText.Visibility = Visibility.Visible;
+
+        if (string.IsNullOrEmpty(newTitle) || newTitle == oldTitle)
+        {
+            return; // 변경 없음
+        }
+
+        // 제목 업데이트
+        OneNotePageTitleText.Text = newTitle;
+        Log4.Info($"[OneNote] 제목 변경: {oldTitle} -> {newTitle}");
+
+        // ViewModel에 제목 변경 알림
+        if (_oneNoteViewModel != null)
+        {
+            try
+            {
+                await _oneNoteViewModel.UpdatePageTitleAsync(newTitle);
+                _viewModel.StatusMessage = $"제목이 '{newTitle}'으로 변경되었습니다.";
+            }
+            catch (Exception ex)
+            {
+                Log4.Error($"[OneNote] 제목 변경 실패: {ex.Message}");
+                OneNotePageTitleText.Text = oldTitle; // 롤백
+                _viewModel.StatusMessage = "제목 변경에 실패했습니다.";
+            }
+        }
+    }
+
+    /// <summary>
     /// OneNote 저장 버튼 클릭
     /// </summary>
     private async void OneNoteSaveButton_Click(object sender, RoutedEventArgs e)
@@ -8631,35 +9347,401 @@ public partial class MainWindow : FluentWindow
                 await _oneNoteViewModel.SearchPagesAsync();
 
                 // 검색 결과를 즐겨찾기 목록에 임시 표시
-                if (OneNoteFavoritesListBox != null)
-                    OneNoteFavoritesListBox.ItemsSource = _oneNoteViewModel.SearchResults;
+                if (OneNoteFavoritesTreeView != null)
+                    OneNoteFavoritesTreeView.ItemsSource = _oneNoteViewModel.SearchResults;
             }
         }
         else if (e.Key == Key.Escape && OneNoteSearchBox != null)
         {
             OneNoteSearchBox.Text = string.Empty;
             // 즐겨찾기 목록 복원
-            if (_oneNoteViewModel != null && OneNoteFavoritesListBox != null)
-                OneNoteFavoritesListBox.ItemsSource = _oneNoteViewModel.FavoritePages;
+            if (_oneNoteViewModel != null && OneNoteFavoritesTreeView != null)
+                OneNoteFavoritesTreeView.ItemsSource = _oneNoteViewModel.FavoritePages;
         }
     }
 
     /// <summary>
-    /// OneNote 즐겨찾기 목록 선택 변경
+    /// OneNote 즐겨찾기 트리뷰 선택 변경
     /// </summary>
-    private async void OneNoteFavoritesListBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    private async void OneNoteFavoritesTreeView_SelectedItemChanged(object sender, RoutedPropertyChangedEventArgs<object> e)
     {
-        Log4.Debug($"[OneNote] FavoritesListBox SelectionChanged 이벤트 발생");
-        var listBox = sender as ListBox;
-        if (listBox?.SelectedItem is PageItemViewModel selectedPage && _oneNoteViewModel != null)
+        Log4.Debug($"[OneNote] FavoritesTreeView SelectedItemChanged 이벤트 발생");
+        if (e.NewValue is PageItemViewModel selectedItem && _oneNoteViewModel != null)
         {
-            Log4.Debug($"[OneNote] 즐겨찾기 페이지 선택: {selectedPage.Title}");
-            await LoadOneNotePageAsync(selectedPage);
+            Log4.Debug($"[OneNote] 즐겨찾기 항목 선택: {selectedItem.Title}, Type={selectedItem.ItemType}");
+
+            // 페이지 선택 시 콘텐츠 로드
+            if (selectedItem.ItemType == FavoriteItemType.Page)
+            {
+                // 즐겨찾기 페이지에 GroupId/SiteId가 없으면 노트북 목록에서 찾아서 채움
+                if (string.IsNullOrEmpty(selectedItem.GroupId) && string.IsNullOrEmpty(selectedItem.SiteId))
+                {
+                    FillPageGroupAndSiteInfo(selectedItem);
+                }
+                await LoadOneNotePageAsync(selectedItem);
+            }
+            // 노트북/섹션은 확장만 하면 됨 (Expanded 이벤트에서 자식 로드)
         }
+    }
+
+    #region 즐겨찾기 드래그&드롭
+
+    private Point _favoriteDragStartPoint;
+    private PageItemViewModel? _draggedFavoriteItem;
+    private bool _isFavoriteDragging;
+
+    /// <summary>
+    /// 즐겨찾기 드래그 시작 지점 기록
+    /// </summary>
+    private void FavoriteTreeViewItem_PreviewMouseLeftButtonDown(object sender, System.Windows.Input.MouseButtonEventArgs e)
+    {
+        _favoriteDragStartPoint = e.GetPosition(null);
+        _isFavoriteDragging = false;
+
+        if (sender is System.Windows.Controls.TreeViewItem treeViewItem &&
+            treeViewItem.DataContext is PageItemViewModel item)
+        {
+            // 최상위 즐겨찾기 항목만 드래그 가능 (FavoritePages에 직접 포함된 항목)
+            if (_oneNoteViewModel?.FavoritePages.Contains(item) == true)
+            {
+                _draggedFavoriteItem = item;
+            }
+            else
+            {
+                _draggedFavoriteItem = null;
+            }
+        }
+    }
+
+    /// <summary>
+    /// 즐겨찾기 드래그 동작 감지
+    /// </summary>
+    private void FavoriteTreeViewItem_PreviewMouseMove(object sender, System.Windows.Input.MouseEventArgs e)
+    {
+        if (e.LeftButton != System.Windows.Input.MouseButtonState.Pressed || _draggedFavoriteItem == null)
+            return;
+
+        Point currentPosition = e.GetPosition(null);
+        Vector diff = _favoriteDragStartPoint - currentPosition;
+
+        // 최소 드래그 거리 체크
+        if (Math.Abs(diff.X) > SystemParameters.MinimumHorizontalDragDistance ||
+            Math.Abs(diff.Y) > SystemParameters.MinimumVerticalDragDistance)
+        {
+            if (!_isFavoriteDragging)
+            {
+                _isFavoriteDragging = true;
+                var data = new DataObject("FavoriteItem", _draggedFavoriteItem);
+                DragDrop.DoDragDrop(OneNoteFavoritesTreeView, data, DragDropEffects.Move);
+                _isFavoriteDragging = false;
+                _draggedFavoriteItem = null;
+            }
+        }
+    }
+
+    /// <summary>
+    /// 즐겨찾기 드래그 오버 (드롭 가능 여부 표시)
+    /// </summary>
+    private void OneNoteFavoritesTreeView_DragOver(object sender, DragEventArgs e)
+    {
+        if (!e.Data.GetDataPresent("FavoriteItem"))
+        {
+            e.Effects = DragDropEffects.None;
+            e.Handled = true;
+            return;
+        }
+
+        e.Effects = DragDropEffects.Move;
+        e.Handled = true;
+    }
+
+    /// <summary>
+    /// 즐겨찾기 드롭 처리
+    /// </summary>
+    private void OneNoteFavoritesTreeView_Drop(object sender, DragEventArgs e)
+    {
+        if (!e.Data.GetDataPresent("FavoriteItem") || _oneNoteViewModel == null)
+            return;
+
+        var draggedItem = e.Data.GetData("FavoriteItem") as PageItemViewModel;
+        if (draggedItem == null)
+            return;
+
+        // 드롭 위치에서 대상 항목 찾기
+        var targetElement = e.OriginalSource as DependencyObject;
+        PageItemViewModel? targetItem = null;
+
+        while (targetElement != null)
+        {
+            if (targetElement is System.Windows.Controls.TreeViewItem treeViewItem &&
+                treeViewItem.DataContext is PageItemViewModel item)
+            {
+                // 최상위 즐겨찾기 항목만 대상으로
+                if (_oneNoteViewModel.FavoritePages.Contains(item))
+                {
+                    targetItem = item;
+                    break;
+                }
+            }
+            targetElement = VisualTreeHelper.GetParent(targetElement);
+        }
+
+        // 같은 항목이거나 대상이 없으면 무시
+        if (targetItem == null || targetItem == draggedItem)
+            return;
+
+        // 순서 변경
+        int sourceIndex = _oneNoteViewModel.FavoritePages.IndexOf(draggedItem);
+        int targetIndex = _oneNoteViewModel.FavoritePages.IndexOf(targetItem);
+
+        if (sourceIndex >= 0 && targetIndex >= 0 && sourceIndex != targetIndex)
+        {
+            _oneNoteViewModel.FavoritePages.Move(sourceIndex, targetIndex);
+            _oneNoteViewModel.SaveFavorites();
+            Log4.Info($"[OneNote] 즐겨찾기 순서 변경: {draggedItem.Title} → 위치 {targetIndex}");
+        }
+
+        e.Handled = true;
+    }
+
+    #endregion
+
+    /// <summary>
+    /// 즐겨찾기 트리뷰 아이템 확장 시 자식 항목 로드
+    /// </summary>
+    private async void FavoriteTreeViewItem_Expanded(object sender, RoutedEventArgs e)
+    {
+        if (sender is System.Windows.Controls.TreeViewItem treeViewItem &&
+            treeViewItem.DataContext is PageItemViewModel item &&
+            _oneNoteViewModel != null)
+        {
+            // 이미 로드되었거나 페이지인 경우 무시
+            if (item.IsChildrenLoaded || item.ItemType == FavoriteItemType.Page)
+                return;
+
+            Log4.Debug($"[OneNote] 즐겨찾기 자식 로드 시작: {item.Title}, Type={item.ItemType}");
+            item.IsLoadingChildren = true;
+
+            try
+            {
+                if (item.ItemType == FavoriteItemType.Notebook)
+                {
+                    // 노트북 확장 시 섹션 로드
+                    await LoadFavoriteNotebookSectionsAsync(item);
+                }
+                else if (item.ItemType == FavoriteItemType.Section)
+                {
+                    // 섹션 확장 시 페이지 로드
+                    await LoadFavoriteSectionPagesAsync(item);
+                }
+
+                item.IsChildrenLoaded = true;
+            }
+            catch (Exception ex)
+            {
+                Log4.Warn($"[OneNote] 즐겨찾기 자식 로드 실패: {ex.Message}");
+            }
+            finally
+            {
+                item.IsLoadingChildren = false;
+            }
+        }
+    }
+
+    /// <summary>
+    /// 즐겨찾기 노트북의 섹션 로드
+    /// </summary>
+    private async Task LoadFavoriteNotebookSectionsAsync(PageItemViewModel favoriteNotebook)
+    {
+        if (_oneNoteViewModel == null) return;
+
+        // 더미 자식("로딩 중...") 제거
+        favoriteNotebook.Children.Clear();
+
+        // 먼저 이미 로드된 노트북에서 섹션 찾기
+        var notebook = _oneNoteViewModel.Notebooks.FirstOrDefault(n => n.Id == favoriteNotebook.Id);
+        if (notebook != null && notebook.Sections.Any())
+        {
+            foreach (var section in notebook.Sections)
+            {
+                favoriteNotebook.Children.Add(new PageItemViewModel
+                {
+                    Id = section.Id,
+                    Title = section.DisplayName,
+                    ItemType = FavoriteItemType.Section,
+                    NotebookName = favoriteNotebook.Title,
+                    GroupId = notebook.GroupId,
+                    SiteId = notebook.SiteId
+                });
+            }
+            Log4.Debug($"[OneNote] 즐겨찾기 노트북 섹션 {favoriteNotebook.Children.Count}개 로드 (캐시)");
+            return;
+        }
+
+        // 캐시에 없으면 API로 로드
+        using var scope = ((App)Application.Current).ServiceProvider.CreateScope();
+        var graphService = scope.ServiceProvider.GetService<GraphOneNoteService>();
+        if (graphService == null) return;
+
+        var sections = await graphService.GetSectionsAsync(favoriteNotebook.Id);
+        foreach (var section in sections)
+        {
+            favoriteNotebook.Children.Add(new PageItemViewModel
+            {
+                Id = section.Id ?? string.Empty,
+                Title = section.DisplayName ?? "섹션",
+                ItemType = FavoriteItemType.Section,
+                NotebookName = favoriteNotebook.Title,
+                GroupId = favoriteNotebook.GroupId,
+                SiteId = favoriteNotebook.SiteId
+            });
+        }
+        Log4.Debug($"[OneNote] 즐겨찾기 노트북 섹션 {favoriteNotebook.Children.Count}개 로드 (API)");
+    }
+
+    /// <summary>
+    /// 즐겨찾기 섹션의 페이지 로드
+    /// </summary>
+    private async Task LoadFavoriteSectionPagesAsync(PageItemViewModel favoriteSection)
+    {
+        if (_oneNoteViewModel == null) return;
+
+        // 더미 자식("로딩 중...") 제거
+        favoriteSection.Children.Clear();
+
+        // 먼저 이미 로드된 노트북에서 페이지 찾기
+        foreach (var notebook in _oneNoteViewModel.Notebooks)
+        {
+            var section = notebook.Sections.FirstOrDefault(s => s.Id == favoriteSection.Id);
+            if (section != null && section.Pages.Any())
+            {
+                foreach (var page in section.Pages)
+                {
+                    favoriteSection.Children.Add(new PageItemViewModel
+                    {
+                        Id = page.Id,
+                        Title = page.Title,
+                        ItemType = FavoriteItemType.Page,
+                        SectionId = section.Id,
+                        SectionName = section.DisplayName,
+                        NotebookName = notebook.DisplayName,
+                        GroupId = notebook.GroupId,
+                        SiteId = notebook.SiteId
+                    });
+                }
+                Log4.Debug($"[OneNote] 즐겨찾기 섹션 페이지 {favoriteSection.Children.Count}개 로드 (캐시)");
+                return;
+            }
+        }
+
+        // 캐시에 없으면 API로 로드
+        using var scope = ((App)Application.Current).ServiceProvider.CreateScope();
+        var graphService = scope.ServiceProvider.GetService<GraphOneNoteService>();
+        if (graphService == null) return;
+
+        IEnumerable<Microsoft.Graph.Models.OnenotePage> pages;
+
+        // 그룹 노트북인 경우 그룹 API 사용
+        if (!string.IsNullOrEmpty(favoriteSection.GroupId))
+        {
+            Log4.Debug($"[OneNote] 그룹 노트북 페이지 로드 - GroupId={favoriteSection.GroupId}, SectionId={favoriteSection.Id}");
+            pages = await graphService.GetGroupPagesAsync(favoriteSection.GroupId, favoriteSection.Id);
+        }
+        // 사이트 노트북인 경우 사이트 API 사용
+        else if (!string.IsNullOrEmpty(favoriteSection.SiteId))
+        {
+            Log4.Debug($"[OneNote] 사이트 노트북 페이지 로드 - SiteId={favoriteSection.SiteId}, SectionId={favoriteSection.Id}");
+            pages = await graphService.GetSitePagesAsync(favoriteSection.SiteId, favoriteSection.Id);
+        }
+        // 개인 노트북인 경우 일반 API 사용
         else
         {
-            Log4.Debug($"[OneNote] 선택된 항목이 PageItemViewModel이 아님: {listBox?.SelectedItem?.GetType().Name ?? "null"}");
+            Log4.Debug($"[OneNote] 개인 노트북 페이지 로드 - SectionId={favoriteSection.Id}");
+            pages = await graphService.GetPagesAsync(favoriteSection.Id);
         }
+
+        foreach (var page in pages)
+        {
+            favoriteSection.Children.Add(new PageItemViewModel
+            {
+                Id = page.Id ?? string.Empty,
+                Title = page.Title ?? "페이지",
+                ItemType = FavoriteItemType.Page,
+                SectionId = favoriteSection.Id,
+                SectionName = favoriteSection.Title,
+                NotebookName = favoriteSection.NotebookName,
+                GroupId = favoriteSection.GroupId,
+                SiteId = favoriteSection.SiteId
+            });
+        }
+        Log4.Debug($"[OneNote] 즐겨찾기 섹션 페이지 {favoriteSection.Children.Count}개 로드 (API)");
+    }
+
+    /// <summary>
+    /// 트리뷰에서 노트북을 확장하고 선택
+    /// </summary>
+    private void ExpandAndSelectNotebook(NotebookItemViewModel notebook)
+    {
+        if (OneNoteTreeView == null) return;
+
+        // 트리뷰 아이템 컨테이너를 찾아서 확장 및 선택
+        var container = OneNoteTreeView.ItemContainerGenerator.ContainerFromItem(notebook) as System.Windows.Controls.TreeViewItem;
+        if (container != null)
+        {
+            container.IsExpanded = true;
+            container.IsSelected = true;
+            container.BringIntoView();
+        }
+    }
+
+    /// <summary>
+    /// 트리뷰에서 섹션의 노트북을 확장하고 섹션 선택
+    /// </summary>
+    private void ExpandAndSelectSection(NotebookItemViewModel notebook, SectionItemViewModel section)
+    {
+        if (OneNoteTreeView == null) return;
+
+        // 먼저 노트북 컨테이너 찾기
+        var notebookContainer = OneNoteTreeView.ItemContainerGenerator.ContainerFromItem(notebook) as System.Windows.Controls.TreeViewItem;
+        if (notebookContainer != null)
+        {
+            notebookContainer.IsExpanded = true;
+            notebookContainer.UpdateLayout();
+
+            // 섹션 컨테이너 찾기
+            var sectionContainer = notebookContainer.ItemContainerGenerator.ContainerFromItem(section) as System.Windows.Controls.TreeViewItem;
+            if (sectionContainer != null)
+            {
+                sectionContainer.IsExpanded = true;
+                sectionContainer.IsSelected = true;
+                sectionContainer.BringIntoView();
+            }
+        }
+    }
+
+    /// <summary>
+    /// 페이지에 GroupId/SiteId 정보가 없을 때 노트북 목록에서 찾아 채움
+    /// </summary>
+    private void FillPageGroupAndSiteInfo(PageItemViewModel page)
+    {
+        if (_oneNoteViewModel == null) return;
+
+        foreach (var notebook in _oneNoteViewModel.Notebooks)
+        {
+            foreach (var section in notebook.Sections)
+            {
+                var foundPage = section.Pages.FirstOrDefault(p => p.Id == page.Id);
+                if (foundPage != null)
+                {
+                    page.GroupId = foundPage.GroupId;
+                    page.SiteId = foundPage.SiteId;
+                    Log4.Debug($"[OneNote] 페이지 {page.Title}에 GroupId/SiteId 설정: GroupId={page.GroupId ?? "N/A"}, SiteId={page.SiteId ?? "N/A"}");
+                    return;
+                }
+            }
+        }
+
+        Log4.Debug($"[OneNote] 페이지 {page.Title}의 GroupId/SiteId를 찾을 수 없음");
     }
 
     /// <summary>
@@ -8701,13 +9783,103 @@ public partial class MainWindow : FluentWindow
     }
 
     /// <summary>
+    /// 노트북 즐겨찾기 추가 컨텍스트 메뉴 클릭
+    /// </summary>
+    private void NotebookAddToFavorites_Click(object sender, RoutedEventArgs e)
+    {
+        if (_oneNoteViewModel == null) return;
+
+        if (sender is System.Windows.Controls.MenuItem menuItem)
+        {
+            var notebook = menuItem.DataContext as NotebookItemViewModel;
+            if (notebook != null)
+            {
+                _oneNoteViewModel.AddToFavorites(notebook);
+                Log4.Info($"[OneNote] 노트북 즐겨찾기 추가: {notebook.DisplayName}");
+            }
+        }
+    }
+
+    /// <summary>
+    /// 노트북 즐겨찾기 제거 컨텍스트 메뉴 클릭
+    /// </summary>
+    private void NotebookRemoveFromFavorites_Click(object sender, RoutedEventArgs e)
+    {
+        if (_oneNoteViewModel == null) return;
+
+        if (sender is System.Windows.Controls.MenuItem menuItem)
+        {
+            var notebook = menuItem.DataContext as NotebookItemViewModel;
+            if (notebook != null)
+            {
+                _oneNoteViewModel.RemoveFromFavorites(notebook);
+                Log4.Info($"[OneNote] 노트북 즐겨찾기 제거: {notebook.DisplayName}");
+            }
+        }
+    }
+
+    /// <summary>
+    /// 섹션 즐겨찾기 추가 컨텍스트 메뉴 클릭
+    /// </summary>
+    private void SectionAddToFavorites_Click(object sender, RoutedEventArgs e)
+    {
+        if (_oneNoteViewModel == null) return;
+
+        if (sender is System.Windows.Controls.MenuItem menuItem)
+        {
+            var section = menuItem.DataContext as SectionItemViewModel;
+            if (section != null)
+            {
+                _oneNoteViewModel.AddToFavorites(section);
+                Log4.Info($"[OneNote] 섹션 즐겨찾기 추가: {section.DisplayName}");
+            }
+        }
+    }
+
+    /// <summary>
+    /// 섹션 즐겨찾기 제거 컨텍스트 메뉴 클릭
+    /// </summary>
+    private void SectionRemoveFromFavorites_Click(object sender, RoutedEventArgs e)
+    {
+        if (_oneNoteViewModel == null) return;
+
+        if (sender is System.Windows.Controls.MenuItem menuItem)
+        {
+            var section = menuItem.DataContext as SectionItemViewModel;
+            if (section != null)
+            {
+                _oneNoteViewModel.RemoveFromFavorites(section);
+                Log4.Info($"[OneNote] 섹션 즐겨찾기 제거: {section.DisplayName}");
+            }
+        }
+    }
+
+    /// <summary>
+    /// 즐겨찾기 리스트에서 항목 제거 (노트북/섹션/페이지 공용)
+    /// </summary>
+    private void FavoriteListItem_RemoveClick(object sender, RoutedEventArgs e)
+    {
+        if (_oneNoteViewModel == null) return;
+
+        if (sender is System.Windows.Controls.MenuItem menuItem)
+        {
+            var page = menuItem.DataContext as PageItemViewModel;
+            if (page != null)
+            {
+                _oneNoteViewModel.RemoveFromFavoritesById(page.Id);
+                Log4.Info($"[OneNote] 즐겨찾기 제거 (리스트): {page.Title}, Type={page.ItemType}");
+            }
+        }
+    }
+
+    /// <summary>
     /// OneNote 트리뷰 선택 변경
     /// </summary>
     private async void OneNoteTreeView_SelectedItemChanged(object sender, RoutedPropertyChangedEventArgs<object> e)
     {
         if (e.NewValue is PageItemViewModel selectedPage && _oneNoteViewModel != null)
         {
-            Log4.Debug($"OneNote 페이지 선택 (트리뷰): {selectedPage.Title}");
+            Log4.Debug($"OneNote 페이지 선택 (트리뷰): {selectedPage.Title}, GroupId={selectedPage.GroupId ?? "N/A"}, SiteId={selectedPage.SiteId ?? "N/A"}");
             await LoadOneNotePageAsync(selectedPage);
         }
         else if (e.NewValue is SectionItemViewModel selectedSection && _oneNoteViewModel != null)
@@ -8719,6 +9891,22 @@ public partial class MainWindow : FluentWindow
         {
             Log4.Debug($"OneNote 노트북 선택: {selectedNotebook.DisplayName}");
             _oneNoteViewModel.SelectedNotebook = selectedNotebook;
+        }
+    }
+
+    /// <summary>
+    /// OneNote 트리뷰 아이템 확장 시 섹션 on-demand 로드
+    /// </summary>
+    private async void OneNoteTreeViewItem_Expanded(object sender, RoutedEventArgs e)
+    {
+        if (sender is System.Windows.Controls.TreeViewItem treeViewItem && treeViewItem.DataContext is NotebookItemViewModel notebook)
+        {
+            // 이미 로드된 경우 무시
+            if (notebook.HasSectionsLoaded)
+                return;
+
+            Log4.Debug($"OneNote 노트북 확장: {notebook.DisplayName} - 섹션 on-demand 로드 시작");
+            await _oneNoteViewModel?.LoadSectionsForNotebookAsync(notebook)!;
         }
     }
 
@@ -8761,8 +9949,11 @@ public partial class MainWindow : FluentWindow
     /// </summary>
     private async Task LoadOneNoteNotebooksAsync()
     {
+        Log4.Info("[OneNote] ★★★ LoadOneNoteNotebooksAsync 진입 ★★★");
+
         if (_oneNoteViewModel == null)
         {
+            Log4.Info("[OneNote] _oneNoteViewModel가 null, 초기화 시작");
             // OneNoteViewModel 초기화
             try
             {
@@ -8863,8 +10054,8 @@ public partial class MainWindow : FluentWindow
 
             // 즐겨찾기 먼저 로드 (빠른 UI 표시)
             _oneNoteViewModel.LoadFavorites();
-            if (OneNoteFavoritesListBox != null)
-                OneNoteFavoritesListBox.ItemsSource = _oneNoteViewModel.FavoritePages;
+            if (OneNoteFavoritesTreeView != null)
+                OneNoteFavoritesTreeView.ItemsSource = _oneNoteViewModel.FavoritePages;
 
             await _oneNoteViewModel.LoadNotebooksAsync();
 

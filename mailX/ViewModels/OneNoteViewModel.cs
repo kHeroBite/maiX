@@ -29,6 +29,7 @@ public partial class OneNoteViewModel : ViewModelBase
         Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "mailX", "cache");
     private static readonly string NotebooksCacheFile = Path.Combine(CacheDir, "onenote_notebooks.json");
     private bool _isInitialLoadFromCache = false;
+    private bool _isBackgroundSyncRunning = false;
 
     /// <summary>
     /// 노트북 목록
@@ -240,6 +241,12 @@ public partial class OneNoteViewModel : ViewModelBase
     private bool _isSummaryInProgress;
 
     /// <summary>
+    /// 요약 진행 상태 텍스트
+    /// </summary>
+    [ObservableProperty]
+    private string _summaryProgressText = string.Empty;
+
+    /// <summary>
     /// 현재 활성 콘텐츠 탭 (note/recording)
     /// </summary>
     [ObservableProperty]
@@ -335,6 +342,8 @@ public partial class OneNoteViewModel : ViewModelBase
     [RelayCommand]
     public async Task LoadNotebooksAsync()
     {
+        Log4.Info("[OneNote] ★★★ LoadNotebooksAsync 시작 ★★★");
+
         // 1. 캐시에서 먼저 로드 (빠른 UI 표시) - 로딩 인디케이터 없이 즉시 표시
         if (Notebooks.Count == 0 && !_isInitialLoadFromCache)
         {
@@ -343,113 +352,243 @@ public partial class OneNoteViewModel : ViewModelBase
             if (cached != null && cached.Count > 0)
             {
                 foreach (var nb in cached)
+                {
+                    // 캐시에서 로드된 노트북도 더미 섹션 추가 (확장 화살표 표시용)
+                    nb.HasSectionsLoaded = false;
+                    nb.Sections.Clear();
+                    nb.Sections.Add(new SectionItemViewModel
+                    {
+                        Id = "dummy",
+                        DisplayName = "로딩 중...",
+                        IsDummyItem = true
+                    });
                     Notebooks.Add(nb);
-                _logger.Information("캐시에서 노트북 {Count}개 로드", Notebooks.Count);
+                }
+                Log4.Info($"[OneNote] 캐시에서 노트북 {Notebooks.Count}개 로드");
+            }
+            else
+            {
+                Log4.Info("[OneNote] 캐시 없음 - 서버에서 로드 필요");
             }
         }
 
-        // 2. 백그라운드에서 서버 동기화 (로딩 인디케이터 없이)
+        // 2. 백그라운드에서 서버 동기화 (로딩 인디케이터 없이) - 중복 실행 방지
+        if (_isBackgroundSyncRunning)
+        {
+            Log4.Debug("[OneNote] 백그라운드 동기화 이미 진행 중 - 건너뜀");
+            return;
+        }
+
+        _isBackgroundSyncRunning = true;
         _ = Task.Run(async () =>
         {
             try
             {
+                Log4.Info("[OneNote] ★★★ 백그라운드 노트북 동기화 시작 ★★★");
+
                 // 개인 + 그룹 노트북 통합 조회
                 var allNotebooks = await _oneNoteService.GetAllNotebooksAsync();
-                var newList = new System.Collections.Generic.List<NotebookItemViewModel>();
+                var allNotebooksList = allNotebooks.ToList();
+                Log4.Info($"[OneNote] GetAllNotebooksAsync 완료: {allNotebooksList.Count}개");
 
-                foreach (var nbWithSource in allNotebooks)
+                // 1단계: 먼저 노트북 목록만 빠르게 표시 (섹션/페이지 없이)
+                var notebookOnlyList = new System.Collections.Generic.List<NotebookItemViewModel>();
+                foreach (var nbWithSource in allNotebooksList)
                 {
                     var notebook = nbWithSource.Notebook;
-                    var notebookItem = new NotebookItemViewModel
+                    var nbViewModel = new NotebookItemViewModel
                     {
                         Id = notebook.Id ?? string.Empty,
                         DisplayName = notebook.DisplayName ?? "Untitled",
                         CreatedDateTime = notebook.CreatedDateTime?.DateTime,
                         LastModifiedDateTime = notebook.LastModifiedDateTime?.DateTime,
-                        IsExpanded = true,  // 기본적으로 확장
+                        IsExpanded = false,  // 초기에는 접힘 상태
                         Source = nbWithSource.Source.ToString(),
                         SourceName = nbWithSource.SourceName,
-                        GroupId = nbWithSource.GroupId
+                        GroupId = nbWithSource.GroupId,
+                        SiteId = nbWithSource.SiteId,
+                        HasSectionsLoaded = false  // 아직 섹션 로드 안 됨
                     };
 
-                    // 섹션 로드 (그룹/개인에 따라 다른 API 사용)
-                    System.Collections.Generic.IEnumerable<Microsoft.Graph.Models.OnenoteSection> sections;
-                    if (nbWithSource.Source == NotebookSource.Group)
+                    // 더미 섹션 추가 (TreeView 확장 화살표 표시용)
+                    nbViewModel.Sections.Add(new SectionItemViewModel
                     {
-                        sections = await _oneNoteService.GetGroupSectionsAsync(nbWithSource.GroupId, notebook.Id ?? string.Empty);
+                        Id = "dummy",
+                        DisplayName = "로딩 중...",
+                        IsDummyItem = true
+                    });
+
+                    notebookOnlyList.Add(nbViewModel);
+                }
+
+                // UI에 노트북 목록만 먼저 표시
+                System.Windows.Application.Current?.Dispatcher.Invoke(() =>
+                {
+                    Notebooks.Clear();
+                    foreach (var nb in notebookOnlyList)
+                        Notebooks.Add(nb);
+                    Log4.Info($"[OneNote] 노트북 목록 UI 표시 완료: {Notebooks.Count}개 (섹션/페이지 로딩 중)");
+                });
+
+                // 2단계: 노트북 목록만 저장 (섹션/페이지는 on-demand 로드 - Rate Limit 방지)
+                // 섹션/페이지는 노트북 확장 시 LoadSectionsForNotebookAsync에서 로드
+                Log4.Info($"[OneNote] 노트북 {notebookOnlyList.Count}개 처리 완료");
+
+                // 즐겨찾기 상태 동기화
+                System.Windows.Application.Current?.Dispatcher.Invoke(() =>
+                {
+                    SyncFavoriteStatus();
+                    Log4.Info($"[OneNote] UI 업데이트 완료: {Notebooks.Count}개 노트북");
+                });
+
+                // 캐시 저장 (0개인 경우 기존 캐시 보호)
+                if (notebookOnlyList.Count > 0)
+                {
+                    SaveNotebooksToCache(notebookOnlyList);
+                }
+                else
+                {
+                    Log4.Debug("[OneNote] API에서 0개 반환 - 기존 캐시 유지");
+                }
+
+                var personalCount = notebookOnlyList.Count(n => n.Source == "Personal");
+                var groupCount = notebookOnlyList.Count(n => n.Source == "Group");
+                Log4.Info($"[OneNote] ★★★ 서버에서 노트북 동기화 완료 ★★★: 개인 {personalCount}개, 그룹 {groupCount}개");
+                _logger.Information("서버에서 노트북 동기화 완료: 개인 {PersonalCount}개, 그룹 {GroupCount}개",
+                    personalCount, groupCount);
+            }
+            catch (Exception ex)
+            {
+                Log4.Error($"[OneNote] ★★★ 백그라운드 노트북 동기화 실패 ★★★: {ex.Message}");
+                _logger.Warning(ex, "백그라운드 노트북 동기화 실패");
+            }
+            finally
+            {
+                _isBackgroundSyncRunning = false;
+            }
+        });
+    }
+
+    /// <summary>
+    /// 노트북의 섹션과 페이지를 on-demand로 로드 (Rate Limit 방지)
+    /// </summary>
+    public async Task LoadSectionsForNotebookAsync(NotebookItemViewModel notebook)
+    {
+        if (notebook == null || notebook.HasSectionsLoaded || notebook.IsLoadingSections)
+        {
+            // 이미 로드됨 또는 로딩 중
+            return;
+        }
+
+        try
+        {
+            // 로딩 시작 표시
+            notebook.IsLoadingSections = true;
+            Log4.Info($"[OneNote] 노트북 '{notebook.DisplayName}' 섹션 로드 시작");
+
+            // 더미 아이템 제거
+            var dummyItems = notebook.Sections.Where(s => s.IsDummyItem).ToList();
+            foreach (var dummy in dummyItems)
+            {
+                notebook.Sections.Remove(dummy);
+            }
+
+            // 노트북 소스에 따라 다른 API 사용
+            System.Collections.Generic.IEnumerable<Microsoft.Graph.Models.OnenoteSection> sections;
+            if (notebook.Source == "Group" && !string.IsNullOrEmpty(notebook.GroupId))
+            {
+                sections = await _oneNoteService.GetGroupSectionsAsync(notebook.GroupId, notebook.Id);
+            }
+            else if (notebook.Source == "Site" && !string.IsNullOrEmpty(notebook.SiteId))
+            {
+                sections = await _oneNoteService.GetSiteSectionsAsync(notebook.SiteId, notebook.Id);
+            }
+            else
+            {
+                sections = await _oneNoteService.GetSectionsAsync(notebook.Id);
+            }
+
+            // 1단계: 섹션 목록 먼저 생성하고 UI에 추가 (빠른 응답)
+            var sectionList = sections.ToList();
+            var sectionItems = new System.Collections.Generic.List<SectionItemViewModel>();
+
+            foreach (var section in sectionList)
+            {
+                var sectionItem = new SectionItemViewModel
+                {
+                    Id = section.Id ?? string.Empty,
+                    DisplayName = section.DisplayName ?? "Untitled",
+                    NotebookId = notebook.Id,
+                    NotebookName = notebook.DisplayName,
+                    IsDefault = section.IsDefault ?? false,
+                    GroupId = notebook.GroupId,
+                    SiteId = notebook.SiteId
+                };
+                sectionItems.Add(sectionItem);
+                notebook.Sections.Add(sectionItem);  // UI에 즉시 추가
+            }
+
+            // 2단계: 페이지를 병렬로 로드 (백그라운드)
+            var loadPagesTasks = sectionItems.Select(async sectionItem =>
+            {
+                try
+                {
+                    System.Collections.Generic.IEnumerable<Microsoft.Graph.Models.OnenotePage> pages;
+                    if (notebook.Source == "Group" && !string.IsNullOrEmpty(notebook.GroupId))
+                    {
+                        pages = await _oneNoteService.GetGroupPagesAsync(notebook.GroupId, sectionItem.Id);
+                    }
+                    else if (notebook.Source == "Site" && !string.IsNullOrEmpty(notebook.SiteId))
+                    {
+                        pages = await _oneNoteService.GetSitePagesAsync(notebook.SiteId, sectionItem.Id);
                     }
                     else
                     {
-                        sections = await _oneNoteService.GetSectionsAsync(notebook.Id ?? string.Empty);
+                        pages = await _oneNoteService.GetPagesAsync(sectionItem.Id);
                     }
 
-                    foreach (var section in sections)
+                    // UI 스레드에서 페이지 추가
+                    System.Windows.Application.Current?.Dispatcher.Invoke(() =>
                     {
-                        var sectionItem = new SectionItemViewModel
-                        {
-                            Id = section.Id ?? string.Empty,
-                            DisplayName = section.DisplayName ?? "Untitled",
-                            NotebookId = notebook.Id ?? string.Empty,
-                            NotebookName = notebook.DisplayName ?? string.Empty,
-                            IsDefault = section.IsDefault ?? false,
-                            GroupId = nbWithSource.GroupId
-                        };
-
-                        // 섹션의 페이지도 미리 로드 (캐시용)
-                        System.Collections.Generic.IEnumerable<Microsoft.Graph.Models.OnenotePage> pages;
-                        if (nbWithSource.Source == NotebookSource.Group)
-                        {
-                            pages = await _oneNoteService.GetGroupPagesAsync(nbWithSource.GroupId, section.Id ?? string.Empty);
-                        }
-                        else
-                        {
-                            pages = await _oneNoteService.GetPagesAsync(section.Id ?? string.Empty);
-                        }
-
                         foreach (var page in pages)
                         {
                             sectionItem.Pages.Add(new PageItemViewModel
                             {
                                 Id = page.Id ?? string.Empty,
                                 Title = page.Title ?? "Untitled",
-                                SectionId = section.Id ?? string.Empty,
-                                SectionName = section.DisplayName ?? string.Empty,
-                                NotebookName = notebook.DisplayName ?? string.Empty,
+                                SectionId = sectionItem.Id,
+                                SectionName = sectionItem.DisplayName,
+                                NotebookName = notebook.DisplayName,
                                 CreatedDateTime = page.CreatedDateTime?.DateTime,
-                                LastModifiedDateTime = page.LastModifiedDateTime?.DateTime
+                                LastModifiedDateTime = page.LastModifiedDateTime?.DateTime,
+                                GroupId = notebook.GroupId,
+                                SiteId = notebook.SiteId
                             });
                         }
-
-                        notebookItem.Sections.Add(sectionItem);
-                    }
-
-                    newList.Add(notebookItem);
+                    });
                 }
-
-                // UI 스레드에서 업데이트
-                System.Windows.Application.Current?.Dispatcher.Invoke(() =>
+                catch (Exception pageEx)
                 {
-                    Notebooks.Clear();
-                    foreach (var nb in newList)
-                        Notebooks.Add(nb);
+                    Log4.Debug($"[OneNote] 페이지 로드 실패 (섹션: {sectionItem.DisplayName}): {pageEx.Message}");
+                }
+            }).ToList();
 
-                    // 즐겨찾기 상태 동기화
-                    SyncFavoriteStatus();
-                });
+            // 모든 페이지 로드 완료 대기
+            await Task.WhenAll(loadPagesTasks);
 
-                // 캐시 저장
-                SaveNotebooksToCache(newList);
-
-                var personalCount = newList.Count(n => n.Source == "Personal");
-                var groupCount = newList.Count(n => n.Source == "Group");
-                _logger.Information("서버에서 노트북 동기화 완료: 개인 {PersonalCount}개, 그룹 {GroupCount}개",
-                    personalCount, groupCount);
-            }
-            catch (Exception ex)
-            {
-                _logger.Warning(ex, "백그라운드 노트북 동기화 실패");
-            }
-        });
+            // 로드 완료 표시
+            notebook.HasSectionsLoaded = true;
+            Log4.Info($"[OneNote] 노트북 '{notebook.DisplayName}' 섹션 {notebook.Sections.Count}개 로드 완료");
+        }
+        catch (Exception ex)
+        {
+            Log4.Error($"[OneNote] 노트북 '{notebook.DisplayName}' 섹션 로드 실패: {ex.Message}");
+        }
+        finally
+        {
+            // 로딩 종료 표시
+            notebook.IsLoadingSections = false;
+        }
     }
 
     /// <summary>
@@ -1009,7 +1148,7 @@ public partial class OneNoteViewModel : ViewModelBase
     /// <summary>
     /// 선택된 녹음의 STT 결과 로드
     /// </summary>
-    private async void LoadSTTResultAsync(Models.RecordingInfo recording)
+    public async Task LoadSTTResultAsync(Models.RecordingInfo recording)
     {
         STTSegments.Clear();
         _logger.Debug("[OneNote] STT 로드 시작: {FileName}, FilePath: {FilePath}", recording.FileName, recording.FilePath);
@@ -1158,9 +1297,11 @@ public partial class OneNoteViewModel : ViewModelBase
     }
 
     /// <summary>
-    /// STT 분석 실행 (sherpa-onnx 사용)
+    /// STT 분석 실행 (sherpa-onnx SenseVoice 또는 Whisper 사용)
     /// </summary>
-    public async Task RunSTTAsync(Models.RecordingInfo recording)
+    /// <param name="recording">녹음 정보</param>
+    /// <param name="modelType">STT 모델 유형 (기본: SenseVoice)</param>
+    public async Task RunSTTAsync(Models.RecordingInfo recording, Services.Speech.STTModelType modelType = Services.Speech.STTModelType.SenseVoice)
     {
         if (recording == null || string.IsNullOrEmpty(recording.FilePath))
         {
@@ -1183,40 +1324,66 @@ public partial class OneNoteViewModel : ViewModelBase
 
         try
         {
-            Utils.Log4.Info($"[OneNote] STT 분석 시작: {recording.FileName}");
-
-            // STT 서비스 초기화 (모델 다운로드 포함)
-            if (!_speechService.IsInitialized)
+            var modelName = modelType switch
             {
-                Utils.Log4.Info("[OneNote] STT 서비스 초기화 중...");
-                SttProgressText = "모델 다운로드 중...";
+                Services.Speech.STTModelType.Whisper => "Whisper (CPU)",
+                Services.Speech.STTModelType.WhisperGpu => "Whisper (GPU)",
+                _ => "SenseVoice"
+            };
+            Utils.Log4.Info($"[OneNote] STT 분석 시작: {recording.FileName}, 모델: {modelName}");
 
-                // 모델 다운로드 진행률 이벤트 구독
-                void OnDownloadProgress(double progress, string message)
+            // 모델 다운로드 진행률 이벤트 구독
+            void OnDownloadProgress(double progress, string message)
+            {
+                System.Windows.Application.Current.Dispatcher.Invoke(() =>
                 {
-                    System.Windows.Application.Current.Dispatcher.Invoke(() =>
+                    SttProgress = progress * 0.3; // 다운로드는 전체의 30%
+                    SttProgressText = message;
+                    Utils.Log4.Debug($"[OneNote] 모델 다운로드: {progress:P0} - {message}");
+                });
+            }
+
+            _speechService.DownloadProgressChanged += OnDownloadProgress;
+
+            try
+            {
+                // STT 서비스 초기화 (선택된 모델에 따라)
+                bool needsInit = modelType switch
+                {
+                    Services.Speech.STTModelType.Whisper => !_speechService.IsWhisperInitialized,
+                    Services.Speech.STTModelType.WhisperGpu => !_speechService.IsWhisperGpuInitialized,
+                    _ => !_speechService.IsSenseVoiceInitialized
+                };
+
+                if (needsInit)
+                {
+                    Utils.Log4.Info($"[OneNote] {modelName} 서비스 초기화 중...");
+                    SttProgressText = $"{modelName} 모델 다운로드 중...";
+
+                    bool initialized;
+                    if (modelType == Services.Speech.STTModelType.Whisper)
                     {
-                        SttProgress = progress * 0.3; // 다운로드는 전체의 30%
-                        SttProgressText = message;
-                        Utils.Log4.Debug($"[OneNote] 모델 다운로드: {progress:P0} - {message}");
-                    });
-                }
+                        initialized = await _speechService.InitializeWhisperAsync(useGpu: false);
+                    }
+                    else if (modelType == Services.Speech.STTModelType.WhisperGpu)
+                    {
+                        initialized = await _speechService.InitializeWhisperAsync(useGpu: true);
+                    }
+                    else
+                    {
+                        initialized = await _speechService.InitializeSenseVoiceAsync();
+                    }
 
-                _speechService.DownloadProgressChanged += OnDownloadProgress;
-
-                try
-                {
-                    var initialized = await _speechService.InitializeAsync();
                     if (!initialized)
                     {
-                        Utils.Log4.Error("[OneNote] STT 서비스 초기화 실패");
+                        Utils.Log4.Error($"[OneNote] {modelName} 서비스 초기화 실패");
                         return;
                     }
                 }
-                finally
-                {
-                    _speechService.DownloadProgressChanged -= OnDownloadProgress;
-                }
+            }
+            finally
+            {
+                _speechService.DownloadProgressChanged -= OnDownloadProgress;
             }
 
             SttProgress = 0.3;
@@ -1270,8 +1437,8 @@ public partial class OneNoteViewModel : ViewModelBase
 
             try
             {
-                // 실제 STT 수행
-                var result = await _speechService.TranscribeFileAsync(recording.FilePath);
+                // 실제 STT 수행 (선택된 모델로)
+                var result = await _speechService.TranscribeFileAsync(recording.FilePath, modelType);
 
                 SttProgress = 1.0;
                 SttProgressText = "완료!";
@@ -1327,16 +1494,19 @@ public partial class OneNoteViewModel : ViewModelBase
         }
 
         IsSummaryInProgress = true;
+        SummaryProgressText = "준비 중...";
         try
         {
             Utils.Log4.Info($"[OneNote] 요약 생성 시작: {recording.FileName}, STT 세그먼트 {STTSegments.Count}개");
 
+            SummaryProgressText = "STT 결과 분석 중...";
             // STT 세그먼트에서 전체 텍스트 추출
             var fullText = string.Join(" ", STTSegments.Select(s => s.Text));
             var speakers = STTSegments.Select(s => s.Speaker).Distinct().ToList();
             var totalDuration = STTSegments.LastOrDefault()?.EndTime ?? TimeSpan.Zero;
 
             // AIService를 통해 실제 요약 생성 시도
+            string titleText = string.Empty;
             string summaryText;
             var keyPoints = new List<string>();
             var actionItems = new List<Models.ActionItem>();
@@ -1351,19 +1521,31 @@ public partial class OneNoteViewModel : ViewModelBase
                     Utils.Log4.Info($"[OneNote] AI Provider 사용: {aiService.CurrentProviderName}");
                     modelName = aiService.CurrentProviderName;
 
+                    SummaryProgressText = $"AI 요약 생성 중... ({modelName})";
+
                     // 요약 프롬프트 생성
                     var prompt = BuildSummaryPrompt(fullText, speakers, totalDuration);
 
                     // AI 요약 요청
                     var response = await aiService.CompleteAsync(prompt);
-                    Utils.Log4.Debug($"[OneNote] AI 응답 길이: {response?.Length ?? 0}");
+                    Utils.Log4.Info($"[OneNote] AI 응답 길이: {response?.Length ?? 0}");
 
-                    // 응답 파싱
-                    ParseAISummaryResponse(response, out summaryText, out keyPoints, out actionItems);
+                    // AI 응답 내용 로깅 (디버깅용, 처음 500자만)
+                    if (!string.IsNullOrEmpty(response))
+                    {
+                        var logResponse = response.Length > 500 ? response.Substring(0, 500) + "..." : response;
+                        Utils.Log4.Info($"[OneNote] AI 응답 내용: {logResponse}");
+                    }
+
+                    SummaryProgressText = "응답 분석 중...";
+                    // 응답 파싱 (title 포함)
+                    ParseAISummaryResponse(response, out titleText, out summaryText, out keyPoints, out actionItems);
+                    Utils.Log4.Info($"[OneNote] 파싱된 제목: '{titleText}'");
                 }
                 else
                 {
                     Utils.Log4.Info("[OneNote] AI Provider 없음, 로컬 요약 사용");
+                    SummaryProgressText = "로컬 요약 생성 중...";
                     // AI Provider 없으면 로컬 요약 생성
                     summaryText = GenerateLocalSummary(fullText, speakers, totalDuration);
                     keyPoints = ExtractKeyPointsLocal(fullText);
@@ -1372,15 +1554,18 @@ public partial class OneNoteViewModel : ViewModelBase
             catch (Exception aiEx)
             {
                 Utils.Log4.Warn($"[OneNote] AI 요약 실패, 로컬 요약 사용: {aiEx.Message}");
+                SummaryProgressText = "로컬 요약으로 대체 중...";
                 summaryText = GenerateLocalSummary(fullText, speakers, totalDuration);
                 keyPoints = ExtractKeyPointsLocal(fullText);
             }
 
+            SummaryProgressText = "결과 저장 중...";
             // RecordingSummary 객체 생성
             var summary = new Models.RecordingSummary
             {
                 AudioFilePath = recording.FilePath,
                 CreatedAt = DateTime.Now,
+                Title = titleText,
                 Summary = summaryText,
                 KeyPoints = keyPoints,
                 ActionItems = actionItems,
@@ -1398,8 +1583,9 @@ public partial class OneNoteViewModel : ViewModelBase
 
             // UI 갱신
             CurrentSummary = summary;
+            SummaryProgressText = "완료!";
 
-            Utils.Log4.Info($"[OneNote] 요약 완료: {recording.FileName}, 모델: {modelName}");
+            Utils.Log4.Info($"[OneNote] 요약 완료: {recording.FileName}, 제목: {titleText}, 모델: {modelName}");
         }
         catch (Exception ex)
         {
@@ -1412,52 +1598,88 @@ public partial class OneNoteViewModel : ViewModelBase
     }
 
     /// <summary>
+    /// 현재 요약 결과를 파일에 저장 (액션아이템 상태 변경 시 호출)
+    /// </summary>
+    /// <param name="recording">녹음 정보</param>
+    public async Task SaveSummaryAsync(Models.RecordingInfo recording)
+    {
+        if (recording == null || CurrentSummary == null)
+        {
+            Utils.Log4.Warn("[OneNote] 요약 저장 불가: 녹음 또는 요약 없음");
+            return;
+        }
+
+        try
+        {
+            var summaryPath = Path.ChangeExtension(recording.FilePath, ".summary.json");
+            var options = new STJ.JsonSerializerOptions { WriteIndented = true };
+            await File.WriteAllTextAsync(summaryPath, STJ.JsonSerializer.Serialize(CurrentSummary, options));
+            recording.SummaryResultPath = summaryPath;
+
+            Utils.Log4.Debug($"[OneNote] 요약 저장 완료: {summaryPath}");
+        }
+        catch (Exception ex)
+        {
+            Utils.Log4.Error($"[OneNote] 요약 저장 실패: {ex.Message}");
+            throw;
+        }
+    }
+
+    /// <summary>
     /// AI 요약용 프롬프트 생성
     /// </summary>
     private string BuildSummaryPrompt(string fullText, List<string> speakers, TimeSpan duration)
     {
-        return $@"당신은 회의록 요약 전문가입니다. 다음 녹음 전사 내용을 분석하여 핵심을 정확하게 추출해주세요.
+        // 전사 내용이 너무 길면 앞부분과 뒷부분 위주로 요약용 텍스트 생성
+        var summaryText = fullText;
+        if (fullText.Length > 15000)
+        {
+            // 앞 7000자 + 중간 표시 + 뒤 7000자
+            summaryText = fullText.Substring(0, 7000) + 
+                "\n\n... [중간 내용 생략] ...\n\n" + 
+                fullText.Substring(fullText.Length - 7000);
+        }
+
+        return $@"당신은 한국어 회의록 요약 전문가입니다. 아래 녹음 전사 내용을 꼼꼼히 읽고 핵심을 정확하게 추출하세요.
 
 ## 녹음 정보
-- 길이: {duration.TotalMinutes:F1}분
-- 참여자: {string.Join(", ", speakers)}
+- 총 길이: {duration.TotalMinutes:F1}분
+- 참여자 수: {speakers.Count}명
 
 ## 전사 내용
-{fullText}
+{summaryText}
 
-## 분석 지침
-1. **요약(summary)**: 이 대화의 핵심 주제와 결론을 2-4문장으로 작성하세요. 단순히 ""대화가 있었다""가 아닌, 무엇에 대해 논의했고 어떤 결론/방향이 나왔는지 명확히 작성하세요.
-
-2. **핵심 포인트(keyPoints)**: 대화에서 언급된 중요한 사실, 결정사항, 주요 논점을 구체적으로 추출하세요. ""~에 대해 이야기했다""가 아닌, 실제 내용을 요약하세요.
-   - 나쁜 예: ""개발 일정에 대해 논의함""
-   - 좋은 예: ""4월 말까지 검색 기능 개발 완료 예정""
-
-3. **액션 아이템(actionItems)**: 대화 중 언급된 해야 할 일, 결정된 업무, 담당자가 명확한 작업만 추출하세요. 담당자나 기한이 언급되지 않았다면 해당 필드는 비워두세요.
-
-4. **녹음 유형(recordingType)**: 회의, 강의, 인터뷰, 브레인스토밍, 일상 대화 중 가장 적합한 것을 선택하세요.
+## 중요 지침
+- 전사 내용에 실제로 언급된 내용만 추출하세요.
+- '>> 사이렌', '감사합니다' 같은 노이즈/인사말은 무시하세요.
+- 구체적인 날짜, 회사명, 프로젝트명, 업무 내용을 정확히 추출하세요.
 
 ## 응답 형식 (JSON)
 {{
-  ""summary"": ""핵심 주제와 결론을 담은 2-4문장 요약"",
+  ""title"": ""회의 주제를 나타내는 10~20자 제목 (예: 'Q2 마케팅 전략 회의', '신규 프로젝트 킥오프')"",
+  ""summary"": ""이 회의/대화의 핵심 내용을 3~5문장으로 요약. 누가 무엇을 논의했고, 어떤 결론이 났는지 구체적으로 작성"",
   ""keyPoints"": [
-    ""구체적인 핵심 포인트 1"",
-    ""구체적인 핵심 포인트 2"",
-    ""구체적인 핵심 포인트 3""
+    ""구체적 사실/결정사항 1 (예: '삼성생명 프로젝트 4월 말 완료 예정')"",
+    ""구체적 사실/결정사항 2"",
+    ""구체적 사실/결정사항 3"",
+    ""구체적 사실/결정사항 4 (필요시)"",
+    ""구체적 사실/결정사항 5 (필요시)""
   ],
   ""actionItems"": [
-    {{""description"": ""구체적인 할 일"", ""assignee"": ""담당자명 또는 null"", ""priority"": ""높음/중간/낮음""}}
+    {{""description"": ""구체적인 할 일"", ""assignee"": ""담당자명 또는 null"", ""dueDate"": ""기한 또는 null"", ""priority"": ""높음/중간/낮음""}}
   ],
-  ""recordingType"": ""회의/강의/인터뷰/브레인스토밍/일상 대화""
+  ""recordingType"": ""회의/강의/인터뷰/브레인스토밍/일상대화/전화통화""
 }}
 
-반드시 위 JSON 형식으로만 응답하세요. 설명이나 부연은 포함하지 마세요.";
+반드시 위 JSON 형식으로만 응답하세요. 마크다운이나 설명 없이 순수 JSON만 출력하세요.";
     }
 
     /// <summary>
     /// AI 응답 파싱
     /// </summary>
-    private void ParseAISummaryResponse(string? response, out string summary, out List<string> keyPoints, out List<Models.ActionItem> actionItems)
+    private void ParseAISummaryResponse(string? response, out string title, out string summary, out List<string> keyPoints, out List<Models.ActionItem> actionItems)
     {
+        title = string.Empty;
         summary = string.Empty;
         keyPoints = new List<string>();
         actionItems = new List<Models.ActionItem>();
@@ -1476,6 +1698,10 @@ public partial class OneNoteViewModel : ViewModelBase
                 var jsonStr = response.Substring(jsonStart, jsonEnd - jsonStart + 1);
                 using var doc = STJ.JsonDocument.Parse(jsonStr);
                 var root = doc.RootElement;
+
+                // 제목 추출
+                if (root.TryGetProperty("title", out var titleProp))
+                    title = titleProp.GetString() ?? string.Empty;
 
                 if (root.TryGetProperty("summary", out var summaryProp))
                     summary = summaryProp.GetString() ?? string.Empty;
@@ -1858,7 +2084,12 @@ public partial class OneNoteViewModel : ViewModelBase
             SaveStatus = "저장됨";
             _editingContent = null;
 
-            var content = await _oneNoteService.GetPageContentAsync(pageId);
+            // 선택된 페이지에서 GroupId/SiteId 가져오기
+            var groupId = SelectedPage?.GroupId;
+            var siteId = SelectedPage?.SiteId;
+            Log4.Debug($"[OneNote] LoadPageContentAsync: PageId={pageId}, GroupId={groupId ?? "N/A"}, SiteId={siteId ?? "N/A"}");
+
+            var content = await _oneNoteService.GetPageContentAsync(pageId, groupId, siteId);
 
             // editorRoot 콘텐츠 추출 (중복 추가 방지)
             if (!string.IsNullOrEmpty(content))
@@ -2096,6 +2327,49 @@ public partial class OneNoteViewModel : ViewModelBase
     }
 
     /// <summary>
+    /// 페이지 제목 업데이트 (Graph API PATCH)
+    /// </summary>
+    public async Task UpdatePageTitleAsync(string newTitle)
+    {
+        if (SelectedPage == null || string.IsNullOrEmpty(SelectedPage.Id))
+        {
+            Log4.Warn("[OneNote] 제목 업데이트 실패: 선택된 페이지 없음");
+            return;
+        }
+
+        if (string.IsNullOrWhiteSpace(newTitle))
+        {
+            Log4.Warn("[OneNote] 제목 업데이트 실패: 새 제목이 비어있음");
+            return;
+        }
+
+        try
+        {
+            Log4.Info($"[OneNote] 페이지 제목 업데이트 시작: {SelectedPage.Title} -> {newTitle}");
+
+            var success = await _oneNoteService.UpdatePageTitleAsync(SelectedPage.Id, newTitle);
+
+            if (success)
+            {
+                // 로컬 상태 업데이트
+                SelectedPage.Title = newTitle;
+                OnPropertyChanged(nameof(SelectedPage));
+                Log4.Info($"[OneNote] 페이지 제목 업데이트 완료: {newTitle}");
+            }
+            else
+            {
+                Log4.Warn("[OneNote] 페이지 제목 업데이트 실패");
+                throw new Exception("Graph API 호출 실패");
+            }
+        }
+        catch (Exception ex)
+        {
+            Log4.Error($"[OneNote] 페이지 제목 업데이트 오류: {ex.Message}");
+            throw;
+        }
+    }
+
+    /// <summary>
     /// 페이지 저장 (Graph API PATCH)
     /// </summary>
     [RelayCommand]
@@ -2200,21 +2474,48 @@ public partial class OneNoteViewModel : ViewModelBase
 
             if (favorites?.Favorites != null)
             {
+                Log4.Info($"[OneNote] 즐겨찾기 JSON 로드: {favorites.Favorites.Count}개");
                 foreach (var fav in favorites.Favorites.OrderByDescending(f => f.AddedAt))
                 {
-                    FavoritePages.Add(new PageItemViewModel
+                    Log4.Info($"[OneNote] 즐겨찾기 항목: {fav.Title}, ItemType={fav.ItemType} ({(int)fav.ItemType})");
+                    var favPage = new PageItemViewModel
                     {
                         Id = fav.PageId,
                         Title = fav.Title,
                         NotebookName = fav.NotebookName,
                         SectionName = fav.SectionName,
                         IsFavorite = true,
-                        FavoritedAt = fav.AddedAt
-                    });
+                        FavoritedAt = fav.AddedAt,
+                        GroupId = fav.GroupId ?? string.Empty,
+                        SiteId = fav.SiteId ?? string.Empty,
+                        ItemType = fav.ItemType,
+                        SectionId = fav.NotebookId ?? string.Empty,
+                        Source = fav.Source ?? string.Empty
+                    };
+
+                    // 노트북/섹션인 경우 확장 아이콘 표시를 위한 더미 자식 추가
+                    if (fav.ItemType == FavoriteItemType.Notebook || fav.ItemType == FavoriteItemType.Section)
+                    {
+                        favPage.Children.Add(new PageItemViewModel { Title = "로딩 중...", ItemType = FavoriteItemType.Page });
+                        Log4.Info($"[OneNote] 즐겨찾기 더미 자식 추가: {fav.Title}, Type={fav.ItemType}, Children={favPage.Children.Count}");
+                    }
+
+                    FavoritePages.Add(favPage);
                 }
             }
 
             _logger.Information("즐겨찾기 {Count}개 로드", FavoritePages.Count);
+
+            // 첫 번째 섹션/노트북의 Children 확인
+            var firstExpandable = FavoritePages.FirstOrDefault(f => f.ItemType == FavoriteItemType.Section || f.ItemType == FavoriteItemType.Notebook);
+            if (firstExpandable != null)
+            {
+                Log4.Info($"[OneNote] 첫 번째 확장 가능 항목: {firstExpandable.Title}, Type={firstExpandable.ItemType}, Children.Count={firstExpandable.Children.Count}");
+            }
+            else
+            {
+                Log4.Info("[OneNote] 확장 가능한 즐겨찾기 항목 없음 (모두 Page 타입)");
+            }
         }
         catch (Exception ex)
         {
@@ -2249,7 +2550,9 @@ public partial class OneNoteViewModel : ViewModelBase
             CreatedDateTime = page.CreatedDateTime,
             LastModifiedDateTime = page.LastModifiedDateTime,
             IsFavorite = true,
-            FavoritedAt = DateTime.Now
+            FavoritedAt = DateTime.Now,
+            GroupId = page.GroupId,
+            SiteId = page.SiteId
         };
 
         FavoritePages.Insert(0, favoritePage); // 최신 항목을 맨 위에
@@ -2301,6 +2604,165 @@ public partial class OneNoteViewModel : ViewModelBase
     }
 
     /// <summary>
+    /// 즐겨찾기에 노트북 추가
+    /// </summary>
+    public void AddToFavorites(NotebookItemViewModel notebook)
+    {
+        if (notebook == null || string.IsNullOrEmpty(notebook.Id))
+            return;
+
+        // 이미 즐겨찾기에 있는지 확인
+        if (FavoritePages.Any(f => f.Id == notebook.Id))
+        {
+            _logger.Debug("이미 즐겨찾기에 있음: {NotebookId}", notebook.Id);
+            return;
+        }
+
+        var favoritePage = new PageItemViewModel
+        {
+            Id = notebook.Id,
+            Title = notebook.DisplayName,
+            NotebookName = notebook.DisplayName,
+            SectionName = string.Empty,
+            IsFavorite = true,
+            FavoritedAt = DateTime.Now,
+            GroupId = notebook.GroupId,
+            SiteId = notebook.SiteId,
+            ItemType = FavoriteItemType.Notebook,
+            Source = notebook.Source
+        };
+
+        // 확장 아이콘 표시를 위한 더미 자식 추가
+        favoritePage.Children.Add(new PageItemViewModel { Title = "로딩 중...", ItemType = FavoriteItemType.Page });
+
+        FavoritePages.Insert(0, favoritePage);
+        notebook.IsFavorite = true;
+
+        SaveFavorites();
+        _logger.Information("즐겨찾기 추가 (노트북): {Title}", notebook.DisplayName);
+    }
+
+    /// <summary>
+    /// 즐겨찾기에서 노트북 제거
+    /// </summary>
+    public void RemoveFromFavorites(NotebookItemViewModel notebook)
+    {
+        if (notebook == null || string.IsNullOrEmpty(notebook.Id))
+            return;
+
+        var toRemove = FavoritePages.FirstOrDefault(f => f.Id == notebook.Id);
+        if (toRemove != null)
+        {
+            FavoritePages.Remove(toRemove);
+        }
+
+        notebook.IsFavorite = false;
+
+        SaveFavorites();
+        _logger.Information("즐겨찾기 제거 (노트북): {Title}", notebook.DisplayName);
+    }
+
+    /// <summary>
+    /// 즐겨찾기에 섹션 추가
+    /// </summary>
+    public void AddToFavorites(SectionItemViewModel section)
+    {
+        if (section == null || string.IsNullOrEmpty(section.Id))
+            return;
+
+        // 이미 즐겨찾기에 있는지 확인
+        if (FavoritePages.Any(f => f.Id == section.Id))
+        {
+            _logger.Debug("이미 즐겨찾기에 있음: {SectionId}", section.Id);
+            return;
+        }
+
+        var favoritePage = new PageItemViewModel
+        {
+            Id = section.Id,
+            Title = section.DisplayName,
+            NotebookName = section.NotebookName,
+            SectionName = section.DisplayName,
+            SectionId = section.NotebookId,
+            IsFavorite = true,
+            FavoritedAt = DateTime.Now,
+            GroupId = section.GroupId,
+            SiteId = section.SiteId,
+            ItemType = FavoriteItemType.Section
+        };
+
+        // 확장 아이콘 표시를 위한 더미 자식 추가
+        favoritePage.Children.Add(new PageItemViewModel { Title = "로딩 중...", ItemType = FavoriteItemType.Page });
+
+        FavoritePages.Insert(0, favoritePage);
+        section.IsFavorite = true;
+
+        SaveFavorites();
+        _logger.Information("즐겨찾기 추가 (섹션): {Title}", section.DisplayName);
+    }
+
+    /// <summary>
+    /// 즐겨찾기에서 섹션 제거
+    /// </summary>
+    public void RemoveFromFavorites(SectionItemViewModel section)
+    {
+        if (section == null || string.IsNullOrEmpty(section.Id))
+            return;
+
+        var toRemove = FavoritePages.FirstOrDefault(f => f.Id == section.Id);
+        if (toRemove != null)
+        {
+            FavoritePages.Remove(toRemove);
+        }
+
+        section.IsFavorite = false;
+
+        SaveFavorites();
+        _logger.Information("즐겨찾기 제거 (섹션): {Title}", section.DisplayName);
+    }
+
+    /// <summary>
+    /// 즐겨찾기에서 항목 제거 (ID 기반 - UI 리스트박스용)
+    /// </summary>
+    public void RemoveFromFavoritesById(string id)
+    {
+        if (string.IsNullOrEmpty(id))
+            return;
+
+        var toRemove = FavoritePages.FirstOrDefault(f => f.Id == id);
+        if (toRemove != null)
+        {
+            FavoritePages.Remove(toRemove);
+
+            // 트리뷰에서도 즐겨찾기 상태 업데이트
+            switch (toRemove.ItemType)
+            {
+                case FavoriteItemType.Notebook:
+                    var notebook = Notebooks.FirstOrDefault(n => n.Id == id);
+                    if (notebook != null) notebook.IsFavorite = false;
+                    break;
+                case FavoriteItemType.Section:
+                    foreach (var nb in Notebooks)
+                    {
+                        var section = nb.Sections.FirstOrDefault(s => s.Id == id);
+                        if (section != null)
+                        {
+                            section.IsFavorite = false;
+                            break;
+                        }
+                    }
+                    break;
+                case FavoriteItemType.Page:
+                    UpdatePageFavoriteStatus(id, false);
+                    break;
+            }
+
+            SaveFavorites();
+            _logger.Information("즐겨찾기 제거 (ID): {Id}", id);
+        }
+    }
+
+    /// <summary>
     /// 트리뷰의 페이지 즐겨찾기 상태 업데이트
     /// </summary>
     private void UpdatePageFavoriteStatus(string pageId, bool isFavorite)
@@ -2322,9 +2784,9 @@ public partial class OneNoteViewModel : ViewModelBase
     }
 
     /// <summary>
-    /// 즐겨찾기 저장
+    /// 즐겨찾기 파일로 저장
     /// </summary>
-    private void SaveFavorites()
+    public void SaveFavorites()
     {
         try
         {
@@ -2340,7 +2802,12 @@ public partial class OneNoteViewModel : ViewModelBase
                     Title = p.Title,
                     NotebookName = p.NotebookName,
                     SectionName = p.SectionName,
-                    AddedAt = p.FavoritedAt ?? DateTime.Now
+                    AddedAt = p.FavoritedAt ?? DateTime.Now,
+                    GroupId = p.GroupId,
+                    SiteId = p.SiteId,
+                    ItemType = p.ItemType,
+                    NotebookId = p.SectionId,
+                    Source = p.Source
                 }).ToList()
             };
 
@@ -2360,6 +2827,7 @@ public partial class OneNoteViewModel : ViewModelBase
     public void SyncFavoriteStatus()
     {
         var favoriteIds = FavoritePages.Select(f => f.Id).ToHashSet();
+        var hasUpdates = false;
 
         foreach (var notebook in Notebooks)
         {
@@ -2372,10 +2840,27 @@ public partial class OneNoteViewModel : ViewModelBase
                         page.IsFavorite = true;
                         var favPage = FavoritePages.FirstOrDefault(f => f.Id == page.Id);
                         if (favPage != null)
+                        {
                             page.FavoritedAt = favPage.FavoritedAt;
+                            // 즐겨찾기 페이지의 GroupId/SiteId도 동기화
+                            if (favPage.GroupId != page.GroupId || favPage.SiteId != page.SiteId)
+                            {
+                                favPage.GroupId = page.GroupId;
+                                favPage.SiteId = page.SiteId;
+                                hasUpdates = true;
+                                Log4.Debug($"[OneNote] 즐겨찾기 GroupId/SiteId 업데이트: {favPage.Title}, GroupId={page.GroupId}, SiteId={page.SiteId}");
+                            }
+                        }
                     }
                 }
             }
+        }
+
+        // GroupId/SiteId가 업데이트되었으면 즐겨찾기 파일 저장
+        if (hasUpdates)
+        {
+            SaveFavorites();
+            Log4.Info("[OneNote] 즐겨찾기 GroupId/SiteId 업데이트로 인한 저장 완료");
         }
     }
 
@@ -2391,15 +2876,30 @@ public class FavoritesData
 }
 
 /// <summary>
+/// 즐겨찾기 항목 타입
+/// </summary>
+public enum FavoriteItemType
+{
+    Page,
+    Section,
+    Notebook
+}
+
+/// <summary>
 /// 즐겨찾기 항목
 /// </summary>
 public class FavoriteItem
 {
-    public string PageId { get; set; } = string.Empty;
+    public string PageId { get; set; } = string.Empty;  // ID (Page/Section/Notebook 공용)
     public string Title { get; set; } = string.Empty;
     public string NotebookName { get; set; } = string.Empty;
     public string SectionName { get; set; } = string.Empty;
     public DateTime AddedAt { get; set; }
+    public string? GroupId { get; set; }
+    public string? SiteId { get; set; }
+    public FavoriteItemType ItemType { get; set; } = FavoriteItemType.Page;  // 항목 타입
+    public string? NotebookId { get; set; }  // 노트북 ID (섹션인 경우)
+    public string? Source { get; set; }  // 노트북 출처 (Personal/Group/Site)
 }
 
 /// <summary>
@@ -2442,6 +2942,30 @@ public partial class NotebookItemViewModel : ObservableObject
     /// </summary>
     [ObservableProperty]
     private string _groupId = string.Empty;
+
+    /// <summary>
+    /// 사이트 ID (사이트 노트북인 경우)
+    /// </summary>
+    [ObservableProperty]
+    private string _siteId = string.Empty;
+
+    /// <summary>
+    /// 섹션 로드 완료 여부 (on-demand 로딩용)
+    /// </summary>
+    [ObservableProperty]
+    private bool _hasSectionsLoaded;
+
+    /// <summary>
+    /// 섹션 로딩 중 여부 (로딩 스피너 표시용)
+    /// </summary>
+    [ObservableProperty]
+    private bool _isLoadingSections;
+
+    /// <summary>
+    /// 즐겨찾기 여부
+    /// </summary>
+    [ObservableProperty]
+    private bool _isFavorite;
 
     /// <summary>
     /// 공유 노트북 여부
@@ -2503,9 +3027,32 @@ public partial class SectionItemViewModel : ObservableObject
     private string _groupId = string.Empty;
 
     /// <summary>
+    /// 사이트 ID (SharePoint 사이트 노트북인 경우)
+    /// </summary>
+    [ObservableProperty]
+    private string _siteId = string.Empty;
+
+    /// <summary>
+    /// 더미 아이템 여부 (on-demand 로딩용)
+    /// </summary>
+    [ObservableProperty]
+    private bool _isDummyItem;
+
+    /// <summary>
+    /// 즐겨찾기 여부
+    /// </summary>
+    [ObservableProperty]
+    private bool _isFavorite;
+
+    /// <summary>
     /// 그룹 노트북 여부
     /// </summary>
     public bool IsGroupNotebook => !string.IsNullOrEmpty(GroupId);
+
+    /// <summary>
+    /// 사이트 노트북 여부
+    /// </summary>
+    public bool IsSiteNotebook => !string.IsNullOrEmpty(SiteId);
 }
 
 /// <summary>
@@ -2567,6 +3114,58 @@ public partial class PageItemViewModel : ObservableObject
             return LastModifiedDateTime.Value.ToString("MM/dd");
         }
     }
+
+    /// <summary>
+    /// 그룹 ID (그룹 노트북인 경우)
+    /// </summary>
+    [ObservableProperty]
+    private string _groupId = string.Empty;
+
+    /// <summary>
+    /// 사이트 ID (SharePoint 사이트 노트북인 경우)
+    /// </summary>
+    [ObservableProperty]
+    private string _siteId = string.Empty;
+
+    /// <summary>
+    /// 그룹 노트북 여부
+    /// </summary>
+    public bool IsGroupNotebook => !string.IsNullOrEmpty(GroupId);
+
+    /// <summary>
+    /// 사이트 노트북 여부
+    /// </summary>
+    public bool IsSiteNotebook => !string.IsNullOrEmpty(SiteId);
+
+    /// <summary>
+    /// 즐겨찾기 항목 타입 (Page/Section/Notebook)
+    /// </summary>
+    [ObservableProperty]
+    private FavoriteItemType _itemType = FavoriteItemType.Page;
+
+    /// <summary>
+    /// 노트북 출처 (Personal/Group/Site) - 노트북 즐겨찾기인 경우
+    /// </summary>
+    [ObservableProperty]
+    private string _source = string.Empty;
+
+    /// <summary>
+    /// 즐겨찾기 자식 항목 (노트북→섹션, 섹션→페이지)
+    /// </summary>
+    [ObservableProperty]
+    private ObservableCollection<PageItemViewModel> _children = new();
+
+    /// <summary>
+    /// 자식 항목 로드 여부
+    /// </summary>
+    [ObservableProperty]
+    private bool _isChildrenLoaded;
+
+    /// <summary>
+    /// 자식 로딩 중 여부
+    /// </summary>
+    [ObservableProperty]
+    private bool _isLoadingChildren;
 
     /// <summary>
     /// 위치 표시 (노트북 > 섹션)
