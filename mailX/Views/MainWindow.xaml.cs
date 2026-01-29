@@ -4001,6 +4001,15 @@ public partial class MainWindow : FluentWindow
                     OpenComposeWindow(ComposeMode.New, null);
                     e.Handled = true;
                     break;
+
+                case Key.S:
+                    // Ctrl+S: 저장 (OneNote 모드일 때)
+                    if (OneNoteViewBorder?.Visibility == Visibility.Visible && _oneNoteViewModel != null)
+                    {
+                        _ = SaveOneNoteAsync();
+                        e.Handled = true;
+                    }
+                    break;
             }
         }
         // Ctrl+Shift 키 조합
@@ -8896,6 +8905,11 @@ public partial class MainWindow : FluentWindow
     private bool _oneNoteEditorReady = false;
     private Services.Graph.GraphToDoService? _graphToDoService;
 
+    // 새 노트 생성 관련
+    private bool _isNewPage = false;  // 새 노트 생성 모드 여부
+    private SectionItemViewModel? _newPageSection = null;  // 새 노트가 생성될 섹션 (노트북 트리에서)
+    private PageItemViewModel? _newPageFavoriteSection = null;  // 새 노트가 생성될 섹션 (즐겨찾기에서)
+
     /// <summary>
     /// OneNote TinyMCE 에디터 초기화
     /// </summary>
@@ -8986,7 +9000,7 @@ public partial class MainWindow : FluentWindow
             content_css: 'https://tinymce-onenote.local/skins/content/{contentCss}/content.min.css',
             plugins: 'lists link image table code checklist',
             toolbar: 'undo redo | bold italic underline | bullist numlist checklist | link image table | code',
-            content_style: 'body {{ font-family: -apple-system, BlinkMacSystemFont, ""Segoe UI"", Roboto, sans-serif; font-size: 14px; color: {textColor}; background-color: {bgColor}; padding: 16px; }}',
+            content_style: 'body {{ font-family: -apple-system, BlinkMacSystemFont, ""Segoe UI"", Roboto, sans-serif; font-size: 14px; color: {textColor}; background-color: {bgColor}; padding: 16px; }} * {{ color: inherit; }} table {{ border-collapse: collapse; }} table td, table th {{ color: {textColor} !important; border: 1px solid {(isDark ? "#555" : "#ccc")}; padding: 4px 8px; }} table td *, table th * {{ color: {textColor} !important; }} table th {{ background-color: {(isDark ? "#333" : "#f5f5f5")}; }} span, font, b, strong, i, em, u {{ color: inherit !important; }}',
             browser_spellcheck: true,
             contextmenu: false,
             setup: function(ed) {{
@@ -9196,7 +9210,82 @@ public partial class MainWindow : FluentWindow
     /// </summary>
     private async void OneNotePageTitleEdit_LostFocus(object sender, RoutedEventArgs e)
     {
+        Log4.Info("[OneNote] OneNotePageTitleEdit_LostFocus 이벤트 발생");
         await SavePageTitleAsync();
+    }
+
+
+    /// <summary>
+    /// OneNote 페이지 제목 텍스트 변경 시 (새 노트 모드에서 저장 버튼 활성화)
+    /// </summary>
+    private void OneNotePageTitleEdit_TextChanged(object sender, System.Windows.Controls.TextChangedEventArgs e)
+    {
+        // 새 노트 생성 모드인 경우
+        if (_isNewPage)
+        {
+            var hasTitle = !string.IsNullOrWhiteSpace(OneNotePageTitleEdit.Text);
+            OneNoteSaveButton.IsEnabled = hasTitle;
+            OneNoteUnsavedIndicator.Visibility = hasTitle ? Visibility.Visible : Visibility.Collapsed;
+        }
+        else
+        {
+            // 기존 노트 제목 변경 시
+            var currentTitle = OneNotePageTitleEdit.Text?.Trim();
+            // 원본 제목은 OneNotePageTitleText.Text에서 가져옴 (읽기 모드 텍스트, 저장 전까지 변경 안 됨)
+            var originalTitle = OneNotePageTitleText?.Text?.Trim();
+            var hasChanges = !string.IsNullOrEmpty(currentTitle) && currentTitle != originalTitle;
+
+            if (hasChanges)
+            {
+                // 미저장 표시
+                OneNoteSaveButton.IsEnabled = true;
+                OneNoteUnsavedIndicator.Visibility = Visibility.Visible;
+
+                // ViewModel에도 변경 상태 알림 (자동저장 트리거용)
+                if (_oneNoteViewModel != null)
+                {
+                    _oneNoteViewModel.HasUnsavedChanges = true;
+                    _oneNoteViewModel.PendingTitleChange = currentTitle;
+                }
+
+                // 목록에 실시간 반영
+                if (_oneNoteViewModel?.SelectedPage != null)
+                {
+                    _oneNoteViewModel.SelectedPage.Title = currentTitle;
+                }
+            }
+            else
+            {
+                // 원래 제목으로 되돌린 경우 미저장 표시 제거
+                OneNoteSaveButton.IsEnabled = false;
+                OneNoteUnsavedIndicator.Visibility = Visibility.Collapsed;
+                if (_oneNoteViewModel != null)
+                {
+                    _oneNoteViewModel.HasUnsavedChanges = false;
+                    _oneNoteViewModel.PendingTitleChange = null;
+                }
+                // 목록도 원래 제목으로 복원
+                if (_oneNoteViewModel?.SelectedPage != null)
+                {
+                    _oneNoteViewModel.SelectedPage.Title = originalTitle;
+                }
+            }
+        }
+    }
+
+
+    /// <summary>
+    /// OneNote 에디터 WebView2가 포커스를 받을 때 (제목 편집 완료 처리)
+    /// </summary>
+    private async void OneNoteEditorWebView_GotFocus(object sender, RoutedEventArgs e)
+    {
+        Log4.Info("[OneNote] OneNoteEditorWebView_GotFocus 이벤트 발생");
+        
+        // 제목 편집 중이면 저장 처리
+        if (OneNotePageTitleEdit?.Visibility == Visibility.Visible)
+        {
+            await SavePageTitleAsync();
+        }
     }
 
     /// <summary>
@@ -9211,11 +9300,19 @@ public partial class MainWindow : FluentWindow
         }
         else if (e.Key == System.Windows.Input.Key.Escape)
         {
-            // 취소 - 원래 제목으로 복원
-            if (OneNotePageTitleText != null && OneNotePageTitleEdit != null)
+            // 새 노트 생성 모드인 경우 취소
+            if (_isNewPage)
             {
-                OneNotePageTitleEdit.Visibility = Visibility.Collapsed;
-                OneNotePageTitleText.Visibility = Visibility.Visible;
+                CancelNewPage();
+            }
+            else
+            {
+                // 취소 - 원래 제목으로 복원
+                if (OneNotePageTitleText != null && OneNotePageTitleEdit != null)
+                {
+                    OneNotePageTitleEdit.Visibility = Visibility.Collapsed;
+                    OneNotePageTitleText.Visibility = Visibility.Visible;
+                }
             }
             e.Handled = true;
         }
@@ -9226,10 +9323,34 @@ public partial class MainWindow : FluentWindow
     /// </summary>
     private async Task SavePageTitleAsync()
     {
+        Log4.Info($"[OneNote] SavePageTitleAsync 호출됨, _isNewPage={_isNewPage}");
+        
         if (OneNotePageTitleText == null || OneNotePageTitleEdit == null) return;
 
         var newTitle = OneNotePageTitleEdit.Text?.Trim();
+        Log4.Info($"[OneNote] SavePageTitleAsync: newTitle='{newTitle}'");
+
+        // 새 노트 생성 모드인 경우
+        if (_isNewPage)
+        {
+            if (!string.IsNullOrEmpty(newTitle))
+            {
+                Log4.Info("[OneNote] SavePageTitleAsync: 새 노트 저장 시작");
+                await SaveNewPageAsync();
+            }
+            else
+            {
+                // 빈 제목으로 포커스 잃으면 새 노트 취소
+                Log4.Info("[OneNote] SavePageTitleAsync: 빈 제목으로 새 노트 취소");
+                CancelNewPage();
+            }
+            return;
+        }
+
+        // OneNotePageTitleText.Text는 원본 제목을 유지 (TextChanged에서 업데이트 안 함)
         var oldTitle = OneNotePageTitleText.Text;
+
+        Log4.Info($"[OneNote] SavePageTitleAsync: oldTitle='{oldTitle}', newTitle='{newTitle}'");
 
         // 표시 모드로 전환
         OneNotePageTitleEdit.Visibility = Visibility.Collapsed;
@@ -9237,7 +9358,12 @@ public partial class MainWindow : FluentWindow
 
         if (string.IsNullOrEmpty(newTitle) || newTitle == oldTitle)
         {
-            return; // 변경 없음
+            // 변경 없음 - PendingTitleChange 초기화
+            if (_oneNoteViewModel != null)
+            {
+                _oneNoteViewModel.PendingTitleChange = null;
+            }
+            return;
         }
 
         // 제목 업데이트
@@ -9250,15 +9376,81 @@ public partial class MainWindow : FluentWindow
             try
             {
                 await _oneNoteViewModel.UpdatePageTitleAsync(newTitle);
+                _oneNoteViewModel.PendingTitleChange = null; // 저장 완료 후 초기화
+                _oneNoteViewModel.HasUnsavedChanges = false;
+                OneNoteUnsavedIndicator.Visibility = Visibility.Collapsed;
+                OneNoteSaveButton.IsEnabled = false;
                 _viewModel.StatusMessage = $"제목이 '{newTitle}'으로 변경되었습니다.";
             }
             catch (Exception ex)
             {
                 Log4.Error($"[OneNote] 제목 변경 실패: {ex.Message}");
-                OneNotePageTitleText.Text = oldTitle; // 롤백
+                // 롤백
+                OneNotePageTitleText.Text = oldTitle;
+                if (_oneNoteViewModel.SelectedPage != null)
+                    _oneNoteViewModel.SelectedPage.Title = oldTitle;
                 _viewModel.StatusMessage = "제목 변경에 실패했습니다.";
             }
         }
+    }
+
+
+    /// <summary>
+    /// OneNote 저장 (Ctrl+S)
+    /// </summary>
+    private async Task SaveOneNoteAsync()
+    {
+        Log4.Info("[OneNote] Ctrl+S 저장 요청");
+
+        // 새 노트 모드인 경우
+        if (_isNewPage)
+        {
+            var title = OneNotePageTitleEdit?.Text?.Trim();
+            if (!string.IsNullOrEmpty(title))
+            {
+                await SaveNewPageAsync();
+            }
+            return;
+        }
+
+        // 제목 편집 중인 경우
+        if (OneNotePageTitleEdit?.Visibility == Visibility.Visible)
+        {
+            await SavePageTitleAsync();
+            return;
+        }
+
+        // 제목 변경이 대기 중인 경우
+        if (_oneNoteViewModel?.PendingTitleChange != null)
+        {
+            await SavePageTitleAsync();
+        }
+
+        // 내용 변경이 있는 경우
+        if (_oneNoteViewModel?.HasUnsavedChanges == true)
+        {
+            await _oneNoteViewModel.SaveAsync();
+        }
+    }
+
+    /// <summary>
+    /// 새 노트 생성 취소
+    /// </summary>
+    private void CancelNewPage()
+    {
+        _isNewPage = false;
+        _newPageSection = null;
+        _newPageFavoriteSection = null;
+
+        // 빈 상태 패널 표시
+        OneNoteNoteContentPanel.Visibility = Visibility.Collapsed;
+        OneNoteEmptyState.Visibility = Visibility.Visible;
+
+        // 제목 편집 모드 해제
+        OneNotePageTitleEdit.Visibility = Visibility.Collapsed;
+        OneNotePageTitleText.Visibility = Visibility.Visible;
+
+        Log4.Info("[OneNote] 새 노트 생성 취소");
     }
 
     /// <summary>
@@ -9266,7 +9458,7 @@ public partial class MainWindow : FluentWindow
     /// </summary>
     private async void OneNoteSaveButton_Click(object sender, RoutedEventArgs e)
     {
-        Log4.Debug("[OneNote] 저장 버튼 클릭");
+        Log4.Debug($"[OneNote] 저장 버튼 클릭 - _isNewPage={_isNewPage}");
 
         if (_oneNoteViewModel == null)
         {
@@ -9295,8 +9487,21 @@ public partial class MainWindow : FluentWindow
             }
         }
 
-        // 저장 실행
-        await _oneNoteViewModel.SaveAsync();
+        // 새 노트 모드인 경우 새 노트 저장
+        if (_isNewPage)
+        {
+            // 제목이 비어있으면 기본 제목 설정
+            if (string.IsNullOrWhiteSpace(OneNotePageTitleEdit.Text))
+            {
+                OneNotePageTitleEdit.Text = "제목 없음";
+            }
+            await SaveNewPageAsync();
+        }
+        else
+        {
+            // 기존 노트 저장
+            await _oneNoteViewModel.SaveAsync();
+        }
     }
 
     /// <summary>
@@ -9328,6 +9533,90 @@ public partial class MainWindow : FluentWindow
             {
                 await _oneNoteViewModel.CreateNotebookAsync($"새 노트북 {DateTime.Now:yyyyMMdd_HHmmss}");
                 await LoadOneNoteNotebooksAsync();
+            }
+        }
+    }
+
+    /// <summary>
+    /// SharePoint 사이트 추가 버튼 클릭
+    /// </summary>
+    private async void OneNoteAddSiteButton_Click(object sender, RoutedEventArgs e)
+    {
+        // 입력 텍스트 박스를 포함한 다이얼로그 생성
+        var inputTextBox = new Wpf.Ui.Controls.TextBox
+        {
+            PlaceholderText = "예: AI785-1 또는 sites/AI785-1",
+            Margin = new Thickness(0, 10, 0, 0),
+            MinWidth = 300
+        };
+
+        var contentPanel = new StackPanel
+        {
+            Children =
+            {
+                new System.Windows.Controls.TextBlock
+                {
+                    Text = "SharePoint 사이트 경로를 입력하세요.\n팔로우하지 않은 사이트의 노트북도 추가할 수 있습니다.",
+                    TextWrapping = TextWrapping.Wrap
+                },
+                inputTextBox
+            }
+        };
+
+        var dialog = new Wpf.Ui.Controls.MessageBox
+        {
+            Title = "SharePoint 사이트 추가",
+            Content = contentPanel,
+            PrimaryButtonText = "추가",
+            CloseButtonText = "취소"
+        };
+
+        var result = await dialog.ShowDialogAsync();
+        if (result == Wpf.Ui.Controls.MessageBoxResult.Primary)
+        {
+            var sitePath = inputTextBox.Text?.Trim();
+            if (!string.IsNullOrEmpty(sitePath) && _oneNoteViewModel != null)
+            {
+                try
+                {
+                    // 로딩 표시
+                    OneNoteAddSiteButton.IsEnabled = false;
+
+                    var addedCount = await _oneNoteViewModel.AddSiteNotebooksAsync(sitePath);
+
+                    // 결과 메시지
+                    var resultDialog = new Wpf.Ui.Controls.MessageBox
+                    {
+                        Title = "사이트 추가 완료",
+                        Content = addedCount > 0
+                            ? $"'{sitePath}' 사이트에서 {addedCount}개의 노트북을 추가했습니다."
+                            : $"'{sitePath}' 사이트에서 노트북을 찾지 못했거나 이미 추가된 노트북입니다.",
+                        CloseButtonText = "확인"
+                    };
+                    await resultDialog.ShowDialogAsync();
+
+                    // 트리뷰 갱신
+                    if (addedCount > 0)
+                    {
+                        OneNoteTreeView.ItemsSource = null;
+                        OneNoteTreeView.ItemsSource = _oneNoteViewModel.Notebooks;
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Log4.Error($"[OneNote] 사이트 추가 실패: {ex.Message}");
+                    var errorDialog = new Wpf.Ui.Controls.MessageBox
+                    {
+                        Title = "사이트 추가 실패",
+                        Content = $"사이트 '{sitePath}'에 접근할 수 없습니다.\n\n오류: {ex.Message}\n\n• 사이트 경로가 올바른지 확인하세요\n• 해당 사이트에 대한 접근 권한이 있는지 확인하세요",
+                        CloseButtonText = "확인"
+                    };
+                    await errorDialog.ShowDialogAsync();
+                }
+                finally
+                {
+                    OneNoteAddSiteButton.IsEnabled = true;
+                }
             }
         }
     }
@@ -9422,6 +9711,93 @@ public partial class MainWindow : FluentWindow
         }
     }
 
+    /// <summary>
+    /// 양쪽 트리에서 동일한 페이지를 하이라이트합니다 (IsSelected 설정)
+    /// </summary>
+    private void HighlightSelectedPageInBothTrees(string pageId)
+    {
+        if (_oneNoteViewModel == null || string.IsNullOrEmpty(pageId)) return;
+
+        // 모든 페이지의 IsSelected를 false로 초기화
+        ClearAllPageSelections();
+
+        // 즐겨찾기 트리에서 해당 페이지 찾아서 IsSelected = true
+        SetPageSelectedInCollection(_oneNoteViewModel.FavoritePages, pageId);
+
+        // 노트북 트리에서 해당 페이지 찾아서 IsSelected = true
+        foreach (var notebook in _oneNoteViewModel.Notebooks)
+        {
+            foreach (var section in notebook.Sections)
+            {
+                foreach (var page in section.Pages)
+                {
+                    if (page.Id == pageId)
+                    {
+                        page.IsSelected = true;
+                    }
+                }
+            }
+        }
+    }
+
+    /// <summary>
+    /// 모든 페이지의 IsSelected를 false로 초기화합니다
+    /// </summary>
+    private void ClearAllPageSelections()
+    {
+        if (_oneNoteViewModel == null) return;
+
+        // 즐겨찾기 트리
+        ClearPageSelectionsInCollection(_oneNoteViewModel.FavoritePages);
+
+        // 노트북 트리
+        foreach (var notebook in _oneNoteViewModel.Notebooks)
+        {
+            foreach (var section in notebook.Sections)
+            {
+                foreach (var page in section.Pages)
+                {
+                    page.IsSelected = false;
+                }
+            }
+        }
+    }
+
+    /// <summary>
+    /// 컬렉션 내 모든 페이지의 IsSelected를 false로 설정합니다 (재귀)
+    /// </summary>
+    private void ClearPageSelectionsInCollection(IEnumerable<PageItemViewModel> pages)
+    {
+        foreach (var page in pages)
+        {
+            page.IsSelected = false;
+            if (page.Children.Count > 0)
+            {
+                ClearPageSelectionsInCollection(page.Children);
+            }
+        }
+    }
+
+    /// <summary>
+    /// 컬렉션에서 해당 ID의 페이지를 찾아 IsSelected = true로 설정합니다 (재귀)
+    /// </summary>
+    private bool SetPageSelectedInCollection(IEnumerable<PageItemViewModel> pages, string pageId)
+    {
+        foreach (var page in pages)
+        {
+            if (page.Id == pageId && page.ItemType == FavoriteItemType.Page)
+            {
+                page.IsSelected = true;
+                return true;
+            }
+            if (page.Children.Count > 0 && SetPageSelectedInCollection(page.Children, pageId))
+            {
+                return true;
+            }
+        }
+        return false;
+    }
+
     #region 즐겨찾기 드래그&드롭
 
     private Point _favoriteDragStartPoint;
@@ -9439,6 +9815,23 @@ public partial class MainWindow : FluentWindow
         if (sender is System.Windows.Controls.TreeViewItem treeViewItem &&
             treeViewItem.DataContext is PageItemViewModel item)
         {
+            // 직접 클릭된 TreeViewItem인지 확인 (버블링된 이벤트 무시)
+            var clickedTreeViewItem = FindParentTreeViewItem(e.OriginalSource as DependencyObject);
+            if (clickedTreeViewItem != treeViewItem)
+            {
+                // 자식 항목에서 버블링된 이벤트는 무시
+                return;
+            }
+
+            // 노트북/섹션은 선택하지 않고 토글만 (페이지만 선택 가능)
+            if (item.ItemType == FavoriteItemType.Notebook || item.ItemType == FavoriteItemType.Section)
+            {
+                treeViewItem.IsExpanded = !treeViewItem.IsExpanded;
+                e.Handled = true;
+                _draggedFavoriteItem = null;
+                return;
+            }
+
             // 최상위 즐겨찾기 항목만 드래그 가능 (FavoritePages에 직접 포함된 항목)
             if (_oneNoteViewModel?.FavoritePages.Contains(item) == true)
             {
@@ -9449,6 +9842,20 @@ public partial class MainWindow : FluentWindow
                 _draggedFavoriteItem = null;
             }
         }
+    }
+
+    /// <summary>
+    /// OriginalSource에서 가장 가까운 TreeViewItem 찾기
+    /// </summary>
+    private System.Windows.Controls.TreeViewItem? FindParentTreeViewItem(DependencyObject? source)
+    {
+        while (source != null)
+        {
+            if (source is System.Windows.Controls.TreeViewItem tvi)
+                return tvi;
+            source = VisualTreeHelper.GetParent(source);
+        }
+        return null;
     }
 
     /// <summary>
@@ -9700,10 +10107,15 @@ public partial class MainWindow : FluentWindow
 
         foreach (var page in pages)
         {
+            // 빈 제목 또는 "Untitled" 페이지는 건너뛰기
+            var title = page.Title?.Trim();
+            if (string.IsNullOrEmpty(title) || title.Equals("Untitled", StringComparison.OrdinalIgnoreCase))
+                continue;
+
             favoriteSection.Children.Add(new PageItemViewModel
             {
                 Id = page.Id ?? string.Empty,
-                Title = page.Title ?? "페이지",
+                Title = title,
                 ItemType = FavoriteItemType.Page,
                 SectionId = favoriteSection.Id,
                 SectionName = favoriteSection.Title,
@@ -9857,6 +10269,240 @@ public partial class MainWindow : FluentWindow
     }
 
     /// <summary>
+    /// 노트북에 새 섹션 추가 (아직 미구현 - 향후 구현 예정)
+    /// </summary>
+    private async void NotebookAddSection_Click(object sender, RoutedEventArgs e)
+    {
+        if (_oneNoteViewModel == null) return;
+
+        if (sender is System.Windows.Controls.MenuItem menuItem)
+        {
+            var notebook = menuItem.DataContext as NotebookItemViewModel;
+            if (notebook != null)
+            {
+                // TODO: 새 섹션 추가 다이얼로그 표시 후 Graph API로 섹션 생성
+                Log4.Info($"[OneNote] 새 섹션 추가 요청: {notebook.DisplayName}");
+
+                // 현재는 메시지 표시
+                var messageBox = new Wpf.Ui.Controls.MessageBox
+                {
+                    Title = "새 섹션 추가",
+                    Content = "새 섹션 추가 기능은 향후 업데이트에서 지원될 예정입니다.",
+                    PrimaryButtonText = "확인"
+                };
+                await messageBox.ShowDialogAsync();
+            }
+        }
+    }
+
+    /// <summary>
+    /// 섹션에 새 노트 추가
+    /// </summary>
+    private void SectionAddPage_Click(object sender, RoutedEventArgs e)
+    {
+        if (_oneNoteViewModel == null) return;
+
+        if (sender is System.Windows.Controls.MenuItem menuItem)
+        {
+            var section = menuItem.DataContext as SectionItemViewModel;
+            if (section != null)
+            {
+                Log4.Info($"[OneNote] 새 노트 추가 요청: 섹션={section.DisplayName}");
+                CreateNewPage(section);
+            }
+        }
+    }
+
+    /// <summary>
+    /// 새 노트 생성 (저장 전 상태)
+    /// </summary>
+    private async void CreateNewPage(SectionItemViewModel section)
+    {
+        // 새 노트 생성 모드 설정
+        _isNewPage = true;
+        _newPageSection = section;
+
+        // 선택된 페이지 해제
+        if (_oneNoteViewModel != null)
+        {
+            _oneNoteViewModel.SelectedPage = null;
+        }
+
+        // UI 표시 설정
+        OneNoteNoteContentPanel.Visibility = Visibility.Visible;
+        OneNoteContentBorder.Visibility = Visibility.Visible;  // 내부 Border도 Visible로 설정
+        OneNotePageHeaderBorder.Visibility = Visibility.Visible;  // 페이지 헤더 Border도 Visible로 설정
+        OneNoteEmptyState.Visibility = Visibility.Collapsed;
+        OneNoteRecordingContentPanel.Visibility = Visibility.Collapsed;  // 녹음 패널 숨김
+
+        // 제목 설정 (빈 제목으로 시작)
+        OneNotePageTitleText.Visibility = Visibility.Collapsed;
+        OneNotePageTitleEdit.Visibility = Visibility.Visible;
+        OneNotePageTitleEdit.Text = "";
+        OneNotePageTitleEdit.Focus();
+        OneNotePageTitleEdit.SelectAll();
+
+        // 위치 표시
+        var notebook = _oneNoteViewModel?.Notebooks.FirstOrDefault(n => n.Sections.Contains(section));
+        OneNotePageLocationText.Text = $"{notebook?.DisplayName ?? "노트북"} > {section.DisplayName}";
+
+        // TinyMCE 에디터 초기화 (아직 초기화되지 않은 경우)
+        if (!_oneNoteEditorInitialized)
+        {
+            await InitializeOneNoteTinyMCEAsync();
+            // 에디터가 준비될 때까지 대기
+            var waitCount = 0;
+            while (!_oneNoteEditorReady && waitCount < 50)
+            {
+                await Task.Delay(100);
+                waitCount++;
+            }
+        }
+
+        // 에디터 내용 초기화
+        if (_oneNoteEditorReady && OneNoteEditorWebView != null)
+        {
+            await OneNoteEditorWebView.ExecuteScriptAsync("if(editor) editor.setContent('');");
+        }
+
+        // 저장 버튼 비활성화 (아직 저장할 내용 없음)
+        OneNoteSaveButton.IsEnabled = false;
+        OneNoteUnsavedIndicator.Visibility = Visibility.Collapsed;
+
+        Log4.Info($"[OneNote] 새 노트 생성 모드 진입: 섹션={section.DisplayName}");
+    }
+
+    /// <summary>
+    /// 새 노트 자동 저장 (제목 또는 내용 변경 시)
+    /// </summary>
+    private async Task SaveNewPageAsync()
+    {
+        if (!_isNewPage) return;
+
+        // 중복 호출 방지: 메서드 시작 시 즉시 플래그 해제
+        _isNewPage = false;
+
+        // 섹션 ID 결정 (노트북 트리 또는 즐겨찾기)
+        string? sectionId = null;
+        string? sectionName = null;
+
+        if (_newPageSection != null)
+        {
+            sectionId = _newPageSection.Id;
+            sectionName = _newPageSection.DisplayName;
+        }
+        else if (_newPageFavoriteSection != null)
+        {
+            sectionId = _newPageFavoriteSection.Id;
+            sectionName = _newPageFavoriteSection.Title;
+        }
+
+        if (string.IsNullOrEmpty(sectionId))
+        {
+            Log4.Error("[OneNote] 새 노트 저장 실패: 섹션 ID가 없습니다.");
+            return;
+        }
+
+        var title = OneNotePageTitleEdit.Text.Trim();
+        if (string.IsNullOrEmpty(title))
+        {
+            title = "제목 없음";
+        }
+
+        // 에디터에서 현재 내용 가져오기
+        string? editorContent = null;
+        if (_oneNoteEditorReady && OneNoteEditorWebView?.CoreWebView2 != null)
+        {
+            try
+            {
+                var contentJson = await OneNoteEditorWebView.CoreWebView2.ExecuteScriptAsync("getContent()");
+                editorContent = System.Text.Json.JsonSerializer.Deserialize<string>(contentJson);
+                Log4.Debug($"[OneNote] 새 노트 에디터 내용: {editorContent?.Length ?? 0}자");
+            }
+            catch (Exception ex)
+            {
+                Log4.Warn($"[OneNote] 에디터 콘텐츠 가져오기 실패: {ex.Message}");
+            }
+        }
+
+        try
+        {
+            Log4.Info($"[OneNote] 새 노트 저장 시작: 제목={title}, 섹션={sectionName}, 내용={editorContent?.Length ?? 0}자");
+
+            // Graph API로 페이지 생성
+            var graphService = ((App)Application.Current).GetService<Services.Graph.GraphOneNoteService>();
+            if (graphService == null)
+            {
+                Log4.Error("[OneNote] GraphOneNoteService를 가져올 수 없습니다.");
+                return;
+            }
+
+            var newPage = await graphService.CreatePageAsync(sectionId, title, editorContent);
+            if (newPage != null)
+            {
+                Log4.Info($"[OneNote] 새 노트 생성 완료: Id={newPage.Id}, Title={newPage.Title}");
+
+                // 새 페이지를 섹션의 Pages 목록에 추가
+                var pageVm = new PageItemViewModel
+                {
+                    Id = newPage.Id ?? string.Empty,
+                    Title = newPage.Title ?? title,
+                    CreatedDateTime = newPage.CreatedDateTime?.DateTime,
+                    LastModifiedDateTime = newPage.LastModifiedDateTime?.DateTime
+                };
+
+                // 노트북 트리의 섹션인 경우
+                if (_newPageSection != null)
+                {
+                    _newPageSection.Pages.Insert(0, pageVm);
+                }
+                // 즐겨찾기 섹션인 경우
+                else if (_newPageFavoriteSection != null)
+                {
+                    _newPageFavoriteSection.Children.Insert(0, pageVm);
+                }
+
+                // 섹션 참조 해제 (새 노트 모드는 메서드 시작 시 이미 해제됨)
+                _newPageSection = null;
+                _newPageFavoriteSection = null;
+
+                // 새로 생성된 페이지 선택
+                if (_oneNoteViewModel != null)
+                {
+                    _oneNoteViewModel.SelectedPage = pageVm;
+                }
+
+                // 제목 텍스트 모드로 전환
+                OneNotePageTitleText.Text = pageVm.Title;
+                OneNotePageTitleText.Visibility = Visibility.Visible;
+                OneNotePageTitleEdit.Visibility = Visibility.Collapsed;
+
+                // 에디터로 포커스 이동 (내용 입력 가능하도록)
+                if (_oneNoteEditorReady && OneNoteEditorWebView != null)
+                {
+                    await OneNoteEditorWebView.ExecuteScriptAsync("if(editor) editor.focus();");
+                    Log4.Info("[OneNote] 새 노트 생성 후 에디터로 포커스 이동");
+                }
+
+                // 미저장 상태 해제
+                if (_oneNoteViewModel != null)
+                {
+                    _oneNoteViewModel.HasUnsavedChanges = false;
+                }
+                OneNoteUnsavedIndicator.Visibility = Visibility.Collapsed;
+                OneNoteSaveButton.IsEnabled = false;
+
+                _viewModel.StatusMessage = $"새 노트 '{pageVm.Title}'이(가) 생성되었습니다.";
+            }
+        }
+        catch (Exception ex)
+        {
+            Log4.Error($"[OneNote] 새 노트 저장 실패: {ex.Message}");
+            _viewModel.StatusMessage = "새 노트 생성에 실패했습니다.";
+        }
+    }
+
+    /// <summary>
     /// 섹션 즐겨찾기 추가 컨텍스트 메뉴 클릭
     /// </summary>
     private void SectionAddToFavorites_Click(object sender, RoutedEventArgs e)
@@ -9870,6 +10516,136 @@ public partial class MainWindow : FluentWindow
             {
                 _oneNoteViewModel.AddToFavorites(section);
                 Log4.Info($"[OneNote] 섹션 즐겨찾기 추가: {section.DisplayName}");
+            }
+        }
+    }
+
+    /// <summary>
+    /// 섹션 삭제 컨텍스트 메뉴 클릭
+    /// </summary>
+    private async void SectionDelete_Click(object sender, RoutedEventArgs e)
+    {
+        if (_oneNoteViewModel == null) return;
+
+        if (sender is System.Windows.Controls.MenuItem menuItem)
+        {
+            var section = menuItem.DataContext as SectionItemViewModel;
+            if (section != null)
+            {
+                // 확인 대화상자
+                var result = System.Windows.MessageBox.Show(
+                    $"'{section.DisplayName}' 섹션을 삭제하시겠습니까?\n\n이 섹션의 모든 노트가 함께 삭제됩니다.",
+                    "섹션 삭제 확인",
+                    System.Windows.MessageBoxButton.YesNo,
+                    System.Windows.MessageBoxImage.Warning);
+
+                if (result == System.Windows.MessageBoxResult.Yes)
+                {
+                    Log4.Info($"[OneNote] 섹션 삭제 요청: {section.DisplayName} (ID: {section.Id})");
+                    try
+                    {
+                        var graphService = ((App)Application.Current).GetService<Services.Graph.GraphOneNoteService>();
+                        if (graphService != null)
+                        {
+                            await graphService.DeleteSectionAsync(section.Id);
+                            
+                            // 트리에서 섹션 제거
+                            foreach (var notebook in _oneNoteViewModel.Notebooks)
+                            {
+                                if (notebook.Sections.Contains(section))
+                                {
+                                    notebook.Sections.Remove(section);
+                                    break;
+                                }
+                            }
+                            
+                            _viewModel.StatusMessage = $"'{section.DisplayName}' 섹션이 삭제되었습니다.";
+                            Log4.Info($"[OneNote] 섹션 삭제 완료: {section.DisplayName}");
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        Log4.Error($"[OneNote] 섹션 삭제 실패: {ex.Message}");
+                        System.Windows.MessageBox.Show(
+                            $"섹션 삭제에 실패했습니다.\n\n{ex.Message}",
+                            "오류",
+                            System.Windows.MessageBoxButton.OK,
+                            System.Windows.MessageBoxImage.Error);
+                    }
+                }
+            }
+        }
+    }
+
+    /// <summary>
+    /// 노트(페이지) 삭제 컨텍스트 메뉴 클릭
+    /// </summary>
+    private async void PageDelete_Click(object sender, RoutedEventArgs e)
+    {
+        if (_oneNoteViewModel == null) return;
+
+        if (sender is System.Windows.Controls.MenuItem menuItem)
+        {
+            var page = menuItem.DataContext as PageItemViewModel;
+            if (page != null)
+            {
+                // 확인 대화상자
+                var result = System.Windows.MessageBox.Show(
+                    $"'{page.Title}' 노트를 삭제하시겠습니까?",
+                    "노트 삭제 확인",
+                    System.Windows.MessageBoxButton.YesNo,
+                    System.Windows.MessageBoxImage.Warning);
+
+                if (result == System.Windows.MessageBoxResult.Yes)
+                {
+                    Log4.Info($"[OneNote] 노트 삭제 요청: {page.Title} (ID: {page.Id})");
+                    try
+                    {
+                        var graphService = ((App)Application.Current).GetService<Services.Graph.GraphOneNoteService>();
+                        if (graphService != null)
+                        {
+                            await graphService.DeletePageAsync(page.Id);
+                            
+                            // 즐겨찾기에서도 제거 (트리 제거 전에 먼저 호출)
+                            RemovePageFromFavorites(page.Id);
+
+                            // 트리에서 페이지 제거
+                            foreach (var notebook in _oneNoteViewModel.Notebooks)
+                            {
+                                foreach (var section in notebook.Sections)
+                                {
+                                    if (section.Pages.Contains(page))
+                                    {
+                                        section.Pages.Remove(page);
+
+                                        // 현재 선택된 페이지라면 선택 해제
+                                        if (_oneNoteViewModel.SelectedPage == page)
+                                        {
+                                            _oneNoteViewModel.SelectedPage = null;
+                                            OneNoteEmptyState.Visibility = Visibility.Visible;
+                                            OneNoteNoteContentPanel.Visibility = Visibility.Collapsed;
+                                            OneNotePageHeaderBorder.Visibility = Visibility.Collapsed;
+                                        }
+
+                                        break;
+                                    }
+                                }
+                            }
+
+                            _viewModel.StatusMessage = $"'{page.Title}' 노트가 삭제되었습니다.";
+                            Log4.Info($"[OneNote] 노트 삭제 완료: {page.Title}");
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        Log4.Error($"[OneNote] 노트 삭제 실패: {ex.Message}");
+                        System.Windows.MessageBox.Show(
+                            $"노트 삭제에 실패했습니다.\n\n{ex.Message}",
+                            "오류",
+                            System.Windows.MessageBoxButton.OK,
+                            System.Windows.MessageBoxImage.Error);
+                    }
+                }
             }
         }
     }
@@ -9890,6 +10666,319 @@ public partial class MainWindow : FluentWindow
                 Log4.Info($"[OneNote] 섹션 즐겨찾기 제거: {section.DisplayName}");
             }
         }
+    }
+
+    /// <summary>
+    /// 즐겨찾기 노트북에 새 섹션 추가 (아직 미구현)
+    /// </summary>
+    private async void FavoriteNotebookAddSection_Click(object sender, RoutedEventArgs e)
+    {
+        if (_oneNoteViewModel == null) return;
+
+        if (sender is System.Windows.Controls.MenuItem menuItem)
+        {
+            var page = menuItem.DataContext as PageItemViewModel;
+            if (page != null && page.ItemType == FavoriteItemType.Notebook)
+            {
+                Log4.Info($"[OneNote] 즐겨찾기 노트북에 새 섹션 추가 요청: {page.Title}");
+
+                var messageBox = new Wpf.Ui.Controls.MessageBox
+                {
+                    Title = "새 섹션 추가",
+                    Content = "새 섹션 추가 기능은 향후 업데이트에서 지원될 예정입니다.",
+                    PrimaryButtonText = "확인"
+                };
+                await messageBox.ShowDialogAsync();
+            }
+        }
+    }
+
+    /// <summary>
+    /// 즐겨찾기 섹션에 새 노트 추가
+    /// </summary>
+    private void FavoriteSectionAddPage_Click(object sender, RoutedEventArgs e)
+    {
+        Log4.Info($"[OneNote] FavoriteSectionAddPage_Click 호출됨");
+
+        if (_oneNoteViewModel == null)
+        {
+            Log4.Warn("[OneNote] _oneNoteViewModel is null");
+            return;
+        }
+
+        if (sender is System.Windows.Controls.MenuItem menuItem)
+        {
+            Log4.Info($"[OneNote] MenuItem DataContext 타입: {menuItem.DataContext?.GetType().Name ?? "null"}");
+
+            var page = menuItem.DataContext as PageItemViewModel;
+            if (page != null)
+            {
+                Log4.Info($"[OneNote] PageItemViewModel: Title={page.Title}, ItemType={page.ItemType}, Id={page.Id}");
+
+                if (page.ItemType == FavoriteItemType.Section)
+                {
+                    Log4.Info($"[OneNote] 즐겨찾기 섹션에 새 노트 추가 요청: {page.Title}");
+                    CreateNewPageFromFavoriteSection(page);
+                }
+                else
+                {
+                    Log4.Warn($"[OneNote] ItemType이 Section이 아님: {page.ItemType}");
+                }
+            }
+            else
+            {
+                Log4.Warn("[OneNote] DataContext를 PageItemViewModel로 캐스팅 실패");
+            }
+        }
+        else
+        {
+            Log4.Warn($"[OneNote] sender가 MenuItem이 아님: {sender?.GetType().Name ?? "null"}");
+        }
+    }
+
+    /// <summary>
+    /// 즐겨찾기 섹션 삭제 컨텍스트 메뉴 클릭
+    /// </summary>
+    private async void FavoriteSectionDelete_Click(object sender, RoutedEventArgs e)
+    {
+        if (_oneNoteViewModel == null) return;
+
+        if (sender is System.Windows.Controls.MenuItem menuItem)
+        {
+            var favoriteItem = menuItem.DataContext as PageItemViewModel;
+            if (favoriteItem != null && favoriteItem.ItemType == FavoriteItemType.Section)
+            {
+                // 확인 대화상자
+                var result = System.Windows.MessageBox.Show(
+                    $"'{favoriteItem.Title}' 섹션을 삭제하시겠습니까?\n\n이 섹션의 모든 노트가 함께 삭제됩니다.",
+                    "섹션 삭제 확인",
+                    System.Windows.MessageBoxButton.YesNo,
+                    System.Windows.MessageBoxImage.Warning);
+
+                if (result == System.Windows.MessageBoxResult.Yes)
+                {
+                    Log4.Info($"[OneNote] 즐겨찾기 섹션 삭제 요청: {favoriteItem.Title} (ID: {favoriteItem.Id})");
+                    try
+                    {
+                        var graphService = ((App)Application.Current).GetService<Services.Graph.GraphOneNoteService>();
+                        if (graphService != null)
+                        {
+                            await graphService.DeleteSectionAsync(favoriteItem.Id);
+
+                            // 즐겨찾기 목록에서 제거
+                            _oneNoteViewModel.RemoveFromFavorites(favoriteItem);
+
+                            // 노트북 트리에서도 해당 섹션 제거
+                            foreach (var notebook in _oneNoteViewModel.Notebooks)
+                            {
+                                var sectionToRemove = notebook.Sections.FirstOrDefault(s => s.Id == favoriteItem.Id);
+                                if (sectionToRemove != null)
+                                {
+                                    notebook.Sections.Remove(sectionToRemove);
+                                    break;
+                                }
+                            }
+
+                            _viewModel.StatusMessage = $"'{favoriteItem.Title}' 섹션이 삭제되었습니다.";
+                            Log4.Info($"[OneNote] 즐겨찾기 섹션 삭제 완료: {favoriteItem.Title}");
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        Log4.Error($"[OneNote] 즐겨찾기 섹션 삭제 실패: {ex.Message}");
+                        System.Windows.MessageBox.Show(
+                            $"섹션 삭제에 실패했습니다.\n\n{ex.Message}",
+                            "오류",
+                            System.Windows.MessageBoxButton.OK,
+                            System.Windows.MessageBoxImage.Error);
+                    }
+                }
+            }
+        }
+    }
+
+    /// <summary>
+    /// 즐겨찾기 노트(페이지) 삭제 컨텍스트 메뉴 클릭
+    /// </summary>
+    private async void FavoritePageDelete_Click(object sender, RoutedEventArgs e)
+    {
+        if (_oneNoteViewModel == null) return;
+
+        if (sender is System.Windows.Controls.MenuItem menuItem)
+        {
+            var favoriteItem = menuItem.DataContext as PageItemViewModel;
+            if (favoriteItem != null && favoriteItem.ItemType == FavoriteItemType.Page)
+            {
+                // 확인 대화상자
+                var result = System.Windows.MessageBox.Show(
+                    $"'{favoriteItem.Title}' 노트를 삭제하시겠습니까?",
+                    "노트 삭제 확인",
+                    System.Windows.MessageBoxButton.YesNo,
+                    System.Windows.MessageBoxImage.Warning);
+
+                if (result == System.Windows.MessageBoxResult.Yes)
+                {
+                    Log4.Info($"[OneNote] 즐겨찾기 노트 삭제 요청: {favoriteItem.Title} (ID: {favoriteItem.Id})");
+                    try
+                    {
+                        var graphService = ((App)Application.Current).GetService<Services.Graph.GraphOneNoteService>();
+                        if (graphService != null)
+                        {
+                            await graphService.DeletePageAsync(favoriteItem.Id);
+
+                            // 즐겨찾기 목록에서 제거 (재귀 탐색)
+                            RemovePageFromFavorites(favoriteItem.Id);
+
+                            // 노트북 트리에서도 해당 페이지 제거
+                            foreach (var notebook in _oneNoteViewModel.Notebooks)
+                            {
+                                foreach (var section in notebook.Sections)
+                                {
+                                    var pageToRemove = section.Pages.FirstOrDefault(p => p.Id == favoriteItem.Id);
+                                    if (pageToRemove != null)
+                                    {
+                                        section.Pages.Remove(pageToRemove);
+
+                                        // 현재 선택된 페이지라면 선택 해제
+                                        if (_oneNoteViewModel.SelectedPage?.Id == favoriteItem.Id)
+                                        {
+                                            _oneNoteViewModel.SelectedPage = null;
+                                            OneNoteEmptyState.Visibility = Visibility.Visible;
+                                            OneNoteNoteContentPanel.Visibility = Visibility.Collapsed;
+                                            OneNotePageHeaderBorder.Visibility = Visibility.Collapsed;
+                                        }
+
+                                        break;
+                                    }
+                                }
+                            }
+
+                            _viewModel.StatusMessage = $"'{favoriteItem.Title}' 노트가 삭제되었습니다.";
+                            Log4.Info($"[OneNote] 즐겨찾기 노트 삭제 완료: {favoriteItem.Title}");
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        Log4.Error($"[OneNote] 즐겨찾기 노트 삭제 실패: {ex.Message}");
+                        System.Windows.MessageBox.Show(
+                            $"노트 삭제에 실패했습니다.\n\n{ex.Message}",
+                            "오류",
+                            System.Windows.MessageBoxButton.OK,
+                            System.Windows.MessageBoxImage.Error);
+                    }
+                }
+            }
+        }
+    }
+
+    /// <summary>
+    /// 즐겨찾기 목록에서 페이지 제거 (ID 기반, 자식 포함 재귀 탐색)
+    /// </summary>
+    private void RemovePageFromFavorites(string pageId)
+    {
+        if (_oneNoteViewModel == null || string.IsNullOrEmpty(pageId)) return;
+
+        // 1단계: 루트 레벨에서 직접 제거
+        var directFavorite = _oneNoteViewModel.FavoritePages.FirstOrDefault(f => f.Id == pageId);
+        if (directFavorite != null)
+        {
+            _oneNoteViewModel.FavoritePages.Remove(directFavorite);
+            Log4.Info($"[OneNote] 즐겨찾기 루트에서 페이지 제거: {pageId}");
+            return;
+        }
+
+        // 2단계: 자식 목록에서 재귀적으로 제거
+        foreach (var favorite in _oneNoteViewModel.FavoritePages.ToList())
+        {
+            if (RemovePageFromFavoriteChildren(favorite.Children, pageId))
+            {
+                Log4.Info($"[OneNote] 즐겨찾기 자식에서 페이지 제거: {pageId}");
+                return;
+            }
+        }
+    }
+
+    /// <summary>
+    /// 자식 목록에서 페이지 제거 (재귀)
+    /// </summary>
+    private bool RemovePageFromFavoriteChildren(ObservableCollection<PageItemViewModel> children, string pageId)
+    {
+        if (children == null) return false;
+
+        var toRemove = children.FirstOrDefault(c => c.Id == pageId);
+        if (toRemove != null)
+        {
+            children.Remove(toRemove);
+            return true;
+        }
+
+        // 자식의 자식도 탐색
+        foreach (var child in children)
+        {
+            if (RemovePageFromFavoriteChildren(child.Children, pageId))
+                return true;
+        }
+
+        return false;
+    }
+
+    /// <summary>
+    /// 즐겨찾기 섹션에서 새 노트 생성
+    /// </summary>
+    private async void CreateNewPageFromFavoriteSection(PageItemViewModel favoriteSection)
+    {
+        // 새 노트 생성 모드 설정
+        _isNewPage = true;
+        _newPageSection = null;  // SectionItemViewModel은 없으므로 null
+        _newPageFavoriteSection = favoriteSection;  // 대신 PageItemViewModel 사용
+
+        // 선택된 페이지 해제
+        if (_oneNoteViewModel != null)
+        {
+            _oneNoteViewModel.SelectedPage = null;
+        }
+
+        // UI 표시 설정
+        OneNoteNoteContentPanel.Visibility = Visibility.Visible;
+        OneNoteContentBorder.Visibility = Visibility.Visible;  // 내부 Border도 Visible로 설정
+        OneNotePageHeaderBorder.Visibility = Visibility.Visible;  // 페이지 헤더 Border도 Visible로 설정
+        OneNoteEmptyState.Visibility = Visibility.Collapsed;
+        OneNoteRecordingContentPanel.Visibility = Visibility.Collapsed;  // 녹음 패널 숨김
+
+        // 제목 설정 (빈 제목으로 시작)
+        OneNotePageTitleText.Visibility = Visibility.Collapsed;
+        OneNotePageTitleEdit.Visibility = Visibility.Visible;
+        OneNotePageTitleEdit.Text = "";
+        OneNotePageTitleEdit.Focus();
+        OneNotePageTitleEdit.SelectAll();
+
+        // 위치 표시
+        OneNotePageLocationText.Text = $"{favoriteSection.NotebookName} > {favoriteSection.Title}";
+
+        // TinyMCE 에디터 초기화 (아직 초기화되지 않은 경우)
+        if (!_oneNoteEditorInitialized)
+        {
+            await InitializeOneNoteTinyMCEAsync();
+            // 에디터가 준비될 때까지 대기
+            var waitCount = 0;
+            while (!_oneNoteEditorReady && waitCount < 50)
+            {
+                await Task.Delay(100);
+                waitCount++;
+            }
+        }
+
+        // 에디터 내용 초기화
+        if (_oneNoteEditorReady && OneNoteEditorWebView != null)
+        {
+            await OneNoteEditorWebView.ExecuteScriptAsync("if(editor) editor.setContent('');");
+        }
+
+        // 저장 버튼 비활성화
+        OneNoteSaveButton.IsEnabled = false;
+        OneNoteUnsavedIndicator.Visibility = Visibility.Collapsed;
+
+        Log4.Info($"[OneNote] 새 노트 생성 모드 진입 (즐겨찾기 섹션): {favoriteSection.Title}");
     }
 
     /// <summary>
@@ -9935,6 +11024,34 @@ public partial class MainWindow : FluentWindow
         {
             Log4.Debug($"OneNote 노트북 선택: {selectedNotebook.DisplayName}");
             _oneNoteViewModel.SelectedNotebook = selectedNotebook;
+        }
+    }
+
+    /// <summary>
+    /// OneNote 트리뷰 아이템 클릭 시 노트북/섹션은 선택하지 않고 토글만
+    /// </summary>
+    private void OneNoteTreeViewItem_PreviewMouseLeftButtonDown(object sender, System.Windows.Input.MouseButtonEventArgs e)
+    {
+        if (sender is System.Windows.Controls.TreeViewItem treeViewItem)
+        {
+            // 직접 클릭된 TreeViewItem인지 확인 (버블링된 이벤트 무시)
+            var clickedTreeViewItem = FindParentTreeViewItem(e.OriginalSource as DependencyObject);
+            if (clickedTreeViewItem != treeViewItem)
+            {
+                // 자식 항목에서 버블링된 이벤트는 무시
+                return;
+            }
+
+            // 노트북 또는 섹션인 경우 선택을 방지하고 확장/축소만 토글
+            if (treeViewItem.DataContext is NotebookItemViewModel || treeViewItem.DataContext is SectionItemViewModel)
+            {
+                // 확장/축소 토글
+                treeViewItem.IsExpanded = !treeViewItem.IsExpanded;
+
+                // 선택 방지
+                e.Handled = true;
+            }
+            // 페이지는 기본 동작 (선택)
         }
     }
 
@@ -10018,6 +11135,11 @@ public partial class MainWindow : FluentWindow
                                     OneNoteUnsavedIndicator.Visibility = _oneNoteViewModel.HasUnsavedChanges
                                         ? Visibility.Visible
                                         : Visibility.Collapsed;
+                                }
+                                // 저장 버튼 활성화/비활성화
+                                if (OneNoteSaveButton != null)
+                                {
+                                    OneNoteSaveButton.IsEnabled = _oneNoteViewModel.HasUnsavedChanges;
                                 }
                             });
                         }
@@ -10131,9 +11253,46 @@ public partial class MainWindow : FluentWindow
 
         try
         {
+            // 새 노트 생성 모드 해제 (다른 노트 선택 시)
+            if (_isNewPage)
+            {
+                // 새 노트 모드에서 제목이 있으면 저장 후 전환
+                var newTitle = OneNotePageTitleEdit?.Text?.Trim();
+                if (!string.IsNullOrEmpty(newTitle))
+                {
+                    Log4.Info($"[OneNote] 다른 노트 선택 - 새 노트 먼저 저장: {newTitle}");
+                    await SaveNewPageAsync();
+                }
+                else
+                {
+                    CancelNewPage();
+                }
+            }
+            
+            // 기존 노트의 제목 변경이 있으면 저장
+            if (_oneNoteViewModel.HasUnsavedChanges && !string.IsNullOrEmpty(_oneNoteViewModel.PendingTitleChange))
+            {
+                var previousPage = _oneNoteViewModel.SelectedPage;
+                if (previousPage != null && previousPage.Id != page.Id)
+                {
+                    Log4.Info($"[OneNote] 다른 노트 선택 - 이전 노트 제목 저장: {_oneNoteViewModel.PendingTitleChange}");
+                    await _oneNoteViewModel.UpdatePageTitleAsync(_oneNoteViewModel.PendingTitleChange);
+                    _oneNoteViewModel.PendingTitleChange = null;
+                }
+            }
+
+            // 제목 편집 모드 해제 (항상)
+            if (OneNotePageTitleEdit != null)
+                OneNotePageTitleEdit.Visibility = Visibility.Collapsed;
+            if (OneNotePageTitleText != null)
+                OneNotePageTitleText.Visibility = Visibility.Visible;
+
             // SelectedPage 설정 (저장 기능에 필요)
             _oneNoteViewModel.SelectedPage = page;
             Log4.Debug($"[OneNote] SelectedPage 설정: {page.Title} (ID: {page.Id})");
+
+            // 양쪽 트리에서 동일한 페이지 하이라이트 (IsSelected 설정)
+            HighlightSelectedPageInBothTrees(page.Id);
 
             // 페이지 선택 시: 녹음 선택 해제 및 노트내용 탭으로 전환
             _oneNoteViewModel.SelectedRecording = null;

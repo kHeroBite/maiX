@@ -5878,6 +5878,9 @@
                                     <ui:Button x:Name="OneNoteRefreshButton" Icon="{ui:SymbolIcon ArrowSync24}"
                                                Appearance="Transparent" ToolTip="새로고침" Click="OneNoteRefreshButton_Click"
                                                Padding="6" Margin="0,0,4,0"/>
+                                    <ui:Button x:Name="OneNoteAddSiteButton" Icon="{ui:SymbolIcon Globe24}"
+                                               Appearance="Transparent" ToolTip="SharePoint 사이트 추가" Click="OneNoteAddSiteButton_Click"
+                                               Padding="6" Margin="0,0,4,0"/>
                                     <ui:Button x:Name="OneNoteNewNotebookButton" Icon="{ui:SymbolIcon Add24}"
                                                Appearance="Transparent" ToolTip="새 노트북" Click="OneNoteNewNotebookButton_Click"
                                                Padding="6"/>
@@ -5905,7 +5908,7 @@
                                         </StackPanel>
                                     </Expander.Header>
                                     <TreeView x:Name="OneNoteFavoritesTreeView" Background="Transparent" BorderThickness="0"
-                                              SelectedItemChanged="OneNoteFavoritesTreeView_SelectedItemChanged" Margin="-19,4,0,0"
+                                              SelectedItemChanged="OneNoteFavoritesTreeView_SelectedItemChanged" Margin="-14,4,0,0"
                                               ScrollViewer.HorizontalScrollBarVisibility="Disabled"
                                               VirtualizingStackPanel.IsVirtualizing="False"
                                               AllowDrop="True"
@@ -5919,6 +5922,7 @@
                                                 <Setter Property="Background" Value="Transparent"/>
                                                 <Setter Property="Foreground" Value="{DynamicResource TextFillColorPrimaryBrush}"/>
                                                 <Setter Property="Padding" Value="4,2"/>
+                                                <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
                                                 <Setter Property="Template">
                                                     <Setter.Value>
                                                         <ControlTemplate TargetType="TreeViewItem">
@@ -5970,18 +5974,11 @@
                                                                 <Trigger Property="HasItems" Value="False">
                                                                     <Setter TargetName="Expander" Property="Visibility" Value="Hidden"/>
                                                                 </Trigger>
-                                                                <!-- 선택됨 (활성/비활성 창 모두 동일) -->
-                                                                <Trigger Property="IsSelected" Value="True">
-                                                                    <Setter TargetName="ContentBorder" Property="Background" Value="{DynamicResource SystemAccentColorSecondaryBrush}"/>
-                                                                </Trigger>
-                                                                <!-- 마우스 오버 (선택 안됨) -->
-                                                                <MultiTrigger>
-                                                                    <MultiTrigger.Conditions>
-                                                                        <Condition Property="IsMouseOver" Value="True"/>
-                                                                        <Condition Property="IsSelected" Value="False"/>
-                                                                    </MultiTrigger.Conditions>
+                                                                <!-- TreeViewItem 선택 스타일 제거 - 데이터 바인딩(IsSelected)으로 페이지만 하이라이트 -->
+                                                                <!-- 마우스 오버 -->
+                                                                <Trigger Property="IsMouseOver" Value="True">
                                                                     <Setter TargetName="ContentBorder" Property="Background" Value="{DynamicResource SubtleFillColorSecondaryBrush}"/>
-                                                                </MultiTrigger>
+                                                                </Trigger>
                                                             </ControlTemplate.Triggers>
                                                         </ControlTemplate>
                                                     </Setter.Value>
@@ -5989,61 +5986,117 @@
                                             </Style>
                                         </TreeView.ItemContainerStyle>
                                         <TreeView.ItemTemplate>
-                                            <!-- 노트북/섹션용 계층형 템플릿 (자식 있음) -->
+                                            <!-- 노트북/섹션/페이지 계층형 템플릿 - 페이지만 IsSelected로 하이라이트 -->
                                             <HierarchicalDataTemplate ItemsSource="{Binding Children}">
-                                                <StackPanel Orientation="Horizontal" Margin="2,4">
-                                                    <StackPanel.ContextMenu>
+                                                <Grid HorizontalAlignment="Stretch" Background="{Binding IsSelected, Converter={StaticResource IsSelectedToBackgroundConverter}}" Margin="2,4">
+                                                    <Grid.ContextMenu>
                                                         <ContextMenu>
-                                                            <MenuItem Header="즐겨찾기 제거" Click="FavoriteListItem_RemoveClick">
+                                                            <MenuItem Header="노트 추가" Click="FavoriteSectionAddPage_Click"
+                                                                      Visibility="{Binding ItemType, Converter={StaticResource FavoriteItemTypeToSectionVisibilityConverter}}">
+                                                                <MenuItem.Icon>
+                                                                    <ui:SymbolIcon Symbol="Add24"/>
+                                                                </MenuItem.Icon>
+                                                            </MenuItem>
+                                                            <MenuItem Header="즐겨찾기 제거" Click="FavoriteListItem_RemoveClick"
+                                                                      Visibility="{Binding IsDirectFavorite, Converter={StaticResource DirectFavoriteToVisibilityConverter}}">
                                                                 <MenuItem.Icon>
                                                                     <ui:SymbolIcon Symbol="StarOff24"/>
                                                                 </MenuItem.Icon>
                                                             </MenuItem>
+                                                            <Separator Visibility="{Binding ItemType, Converter={StaticResource FavoriteItemTypeToNotSectionVisibilityConverter}}"/>
+                                                            <MenuItem Header="섹션 삭제" Click="FavoriteSectionDelete_Click" Foreground="#E74856"
+                                                                      Visibility="{Binding ItemType, Converter={StaticResource FavoriteItemTypeToSectionVisibilityConverter}}">
+                                                                <MenuItem.Icon>
+                                                                    <ui:SymbolIcon Symbol="Delete24" Foreground="#E74856"/>
+                                                                </MenuItem.Icon>
+                                                            </MenuItem>
                                                         </ContextMenu>
-                                                    </StackPanel.ContextMenu>
-                                                    <!-- 타입별 아이콘 (노트북/섹션/페이지) -->
-                                                    <ui:SymbolIcon Symbol="{Binding ItemType, Converter={StaticResource FavoriteItemTypeToIconConverter}}" FontSize="14"
-                                                                   Foreground="{Binding ItemType, Converter={StaticResource FavoriteItemTypeToColorConverter}}" Margin="0,0,6,0" VerticalAlignment="Center"
-                                                                   Visibility="{Binding IsLoadingChildren, Converter={StaticResource BoolToVisibilityConverter}, ConverterParameter=Invert}"/>
-                                                    <!-- 로딩 스피너 -->
-                                                    <ui:ProgressRing IsIndeterminate="True" Width="14" Height="14" Margin="0,0,6,0"
-                                                                     Visibility="{Binding IsLoadingChildren, Converter={StaticResource BoolToVisibilityConverter}}"/>
-                                                    <StackPanel VerticalAlignment="Center" Margin="0,-2,0,-2">
-                                                        <TextBlock Text="{Binding Title}" TextTrimming="CharacterEllipsis" Foreground="{DynamicResource TextFillColorPrimaryBrush}"/>
-                                                        <TextBlock Text="{Binding LocationDisplay}" FontSize="11" Margin="0,-1,0,0"
-                                                                   Foreground="{DynamicResource TextFillColorTertiaryBrush}" TextTrimming="CharacterEllipsis"/>
+                                                    </Grid.ContextMenu>
+                                                    <StackPanel Orientation="Horizontal">
+                                                        <!-- 타입별 아이콘 (노트북/섹션/페이지) -->
+                                                        <ui:SymbolIcon Symbol="{Binding ItemType, Converter={StaticResource FavoriteItemTypeToIconConverter}}" FontSize="14"
+                                                                       Foreground="{Binding ItemType, Converter={StaticResource FavoriteItemTypeToColorConverter}}" Margin="0,0,6,0" VerticalAlignment="Center"
+                                                                       Visibility="{Binding IsLoadingChildren, Converter={StaticResource BoolToVisibilityConverter}, ConverterParameter=Invert}"/>
+                                                        <!-- 로딩 스피너 -->
+                                                        <ui:ProgressRing IsIndeterminate="True" Width="14" Height="14" Margin="0,0,6,0"
+                                                                         Visibility="{Binding IsLoadingChildren, Converter={StaticResource BoolToVisibilityConverter}}"/>
+                                                        <StackPanel VerticalAlignment="Center" Margin="0,-2,0,-2">
+                                                            <TextBlock Text="{Binding Title}" TextTrimming="CharacterEllipsis" Foreground="{DynamicResource TextFillColorPrimaryBrush}"/>
+                                                            <TextBlock Text="{Binding LocationDisplay}" FontSize="11" Margin="0,-1,0,0"
+                                                                       Foreground="{DynamicResource TextFillColorTertiaryBrush}" TextTrimming="CharacterEllipsis"/>
+                                                        </StackPanel>
                                                     </StackPanel>
-                                                </StackPanel>
-                                                <!-- 자식 항목 템플릿 (섹션→페이지, 노트북→섹션) -->
+                                                </Grid>
+                                                <!-- 2단계 자식 항목 템플릿 - 페이지만 IsSelected로 하이라이트 -->
                                                 <HierarchicalDataTemplate.ItemTemplate>
                                                     <HierarchicalDataTemplate ItemsSource="{Binding Children}">
-                                                        <StackPanel Orientation="Horizontal" Margin="2,3">
-                                                            <StackPanel.ContextMenu>
+                                                        <Grid HorizontalAlignment="Stretch" Background="{Binding IsSelected, Converter={StaticResource IsSelectedToBackgroundConverter}}" Margin="2,3">
+                                                            <Grid.ContextMenu>
                                                                 <ContextMenu>
-                                                                    <MenuItem Header="즐겨찾기 제거" Click="FavoriteListItem_RemoveClick">
+                                                                    <MenuItem Header="노트 추가" Click="FavoriteSectionAddPage_Click"
+                                                                              Visibility="{Binding ItemType, Converter={StaticResource FavoriteItemTypeToSectionVisibilityConverter}}">
+                                                                        <MenuItem.Icon>
+                                                                            <ui:SymbolIcon Symbol="Add24"/>
+                                                                        </MenuItem.Icon>
+                                                                    </MenuItem>
+                                                                    <MenuItem Header="즐겨찾기 제거" Click="FavoriteListItem_RemoveClick"
+                                                                              Visibility="{Binding IsDirectFavorite, Converter={StaticResource DirectFavoriteToVisibilityConverter}}">
                                                                         <MenuItem.Icon>
                                                                             <ui:SymbolIcon Symbol="StarOff24"/>
                                                                         </MenuItem.Icon>
                                                                     </MenuItem>
+                                                                    <Separator Visibility="{Binding ItemType, Converter={StaticResource FavoriteItemTypeToNotSectionVisibilityConverter}}"/>
+                                                                    <MenuItem Header="섹션 삭제" Click="FavoriteSectionDelete_Click" Foreground="#E74856"
+                                                                              Visibility="{Binding ItemType, Converter={StaticResource FavoriteItemTypeToSectionVisibilityConverter}}">
+                                                                        <MenuItem.Icon>
+                                                                            <ui:SymbolIcon Symbol="Delete24" Foreground="#E74856"/>
+                                                                        </MenuItem.Icon>
+                                                                    </MenuItem>
+                                                                    <MenuItem Header="노트 삭제" Click="FavoritePageDelete_Click" Foreground="#E74856"
+                                                                              Visibility="{Binding ItemType, Converter={StaticResource FavoriteItemTypeToPageVisibilityConverter}}">
+                                                                        <MenuItem.Icon>
+                                                                            <ui:SymbolIcon Symbol="Delete24" Foreground="#E74856"/>
+                                                                        </MenuItem.Icon>
+                                                                    </MenuItem>
                                                                 </ContextMenu>
-                                                            </StackPanel.ContextMenu>
-                                                            <!-- 타입별 아이콘 -->
-                                                            <ui:SymbolIcon Symbol="{Binding ItemType, Converter={StaticResource FavoriteItemTypeToIconConverter}}" FontSize="14"
-                                                                           Foreground="{Binding ItemType, Converter={StaticResource FavoriteItemTypeToColorConverter}}" Margin="0,0,6,0" VerticalAlignment="Center"
-                                                                           Visibility="{Binding IsLoadingChildren, Converter={StaticResource BoolToVisibilityConverter}, ConverterParameter=Invert}"/>
-                                                            <!-- 로딩 스피너 -->
-                                                            <ui:ProgressRing IsIndeterminate="True" Width="14" Height="14" Margin="0,0,6,0"
-                                                                             Visibility="{Binding IsLoadingChildren, Converter={StaticResource BoolToVisibilityConverter}}"/>
-                                                            <TextBlock Text="{Binding Title}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" Foreground="{DynamicResource TextFillColorPrimaryBrush}"/>
-                                                        </StackPanel>
-                                                        <!-- 3단계 자식 (노트북→섹션→페이지) -->
+                                                            </Grid.ContextMenu>
+                                                            <StackPanel Orientation="Horizontal">
+                                                                <!-- 타입별 아이콘 -->
+                                                                <ui:SymbolIcon Symbol="{Binding ItemType, Converter={StaticResource FavoriteItemTypeToIconConverter}}" FontSize="14"
+                                                                               Foreground="{Binding ItemType, Converter={StaticResource FavoriteItemTypeToColorConverter}}" Margin="0,0,6,0" VerticalAlignment="Center"
+                                                                               Visibility="{Binding IsLoadingChildren, Converter={StaticResource BoolToVisibilityConverter}, ConverterParameter=Invert}"/>
+                                                                <!-- 로딩 스피너 -->
+                                                                <ui:ProgressRing IsIndeterminate="True" Width="14" Height="14" Margin="0,0,6,0"
+                                                                                 Visibility="{Binding IsLoadingChildren, Converter={StaticResource BoolToVisibilityConverter}}"/>
+                                                                <TextBlock Text="{Binding Title}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" Foreground="{DynamicResource TextFillColorPrimaryBrush}"/>
+                                                            </StackPanel>
+                                                        </Grid>
+                                                        <!-- 3단계 자식 (노트북→섹션→페이지) - 페이지만 IsSelected로 하이라이트 -->
                                                         <HierarchicalDataTemplate.ItemTemplate>
                                                             <DataTemplate>
-                                                                <StackPanel Orientation="Horizontal" Margin="2,2">
-                                                                    <ui:SymbolIcon Symbol="{Binding ItemType, Converter={StaticResource FavoriteItemTypeToIconConverter}}" FontSize="12"
-                                                                                   Foreground="{Binding ItemType, Converter={StaticResource FavoriteItemTypeToColorConverter}}" Margin="0,0,6,0" VerticalAlignment="Center"/>
-                                                                    <TextBlock Text="{Binding Title}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" Foreground="{DynamicResource TextFillColorPrimaryBrush}"/>
-                                                                </StackPanel>
+                                                                <Grid HorizontalAlignment="Stretch" Background="{Binding IsSelected, Converter={StaticResource IsSelectedToBackgroundConverter}}" Margin="2,2">
+                                                                    <Grid.ContextMenu>
+                                                                        <ContextMenu>
+                                                                            <MenuItem Header="즐겨찾기 제거" Click="FavoriteListItem_RemoveClick"
+                                                                                      Visibility="{Binding IsDirectFavorite, Converter={StaticResource DirectFavoriteToVisibilityConverter}}">
+                                                                                <MenuItem.Icon>
+                                                                                    <ui:SymbolIcon Symbol="StarOff24"/>
+                                                                                </MenuItem.Icon>
+                                                                            </MenuItem>
+                                                                            <Separator Visibility="{Binding IsDirectFavorite, Converter={StaticResource DirectFavoriteToVisibilityConverter}}"/>
+                                                                            <MenuItem Header="노트 삭제" Click="FavoritePageDelete_Click" Foreground="#E74856">
+                                                                                <MenuItem.Icon>
+                                                                                    <ui:SymbolIcon Symbol="Delete24" Foreground="#E74856"/>
+                                                                                </MenuItem.Icon>
+                                                                            </MenuItem>
+                                                                        </ContextMenu>
+                                                                    </Grid.ContextMenu>
+                                                                    <StackPanel Orientation="Horizontal">
+                                                                        <ui:SymbolIcon Symbol="{Binding ItemType, Converter={StaticResource FavoriteItemTypeToIconConverter}}" FontSize="12"
+                                                                                       Foreground="{Binding ItemType, Converter={StaticResource FavoriteItemTypeToColorConverter}}" Margin="0,0,6,0" VerticalAlignment="Center"/>
+                                                                        <TextBlock Text="{Binding Title}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" Foreground="{DynamicResource TextFillColorPrimaryBrush}"/>
+                                                                    </StackPanel>
+                                                                </Grid>
                                                             </DataTemplate>
                                                         </HierarchicalDataTemplate.ItemTemplate>
                                                     </HierarchicalDataTemplate>
@@ -6062,15 +6115,17 @@
                                             <TextBlock Text="노트북" FontWeight="SemiBold" VerticalAlignment="Center"/>
                                         </StackPanel>
                                     </Expander.Header>
-                                    <TreeView x:Name="OneNoteTreeView" Background="Transparent" BorderThickness="0" Margin="-19,4,0,0"
+                                    <TreeView x:Name="OneNoteTreeView" Background="Transparent" BorderThickness="0" Margin="-14,4,0,0"
                                               SelectedItemChanged="OneNoteTreeView_SelectedItemChanged"
                                               ScrollViewer.HorizontalScrollBarVisibility="Disabled">
                                         <TreeView.ItemContainerStyle>
                                             <Style TargetType="TreeViewItem">
                                                 <EventSetter Event="Expanded" Handler="OneNoteTreeViewItem_Expanded"/>
+                                                <EventSetter Event="PreviewMouseLeftButtonDown" Handler="OneNoteTreeViewItem_PreviewMouseLeftButtonDown"/>
                                                 <Setter Property="Background" Value="Transparent"/>
                                                 <Setter Property="Foreground" Value="{DynamicResource TextFillColorPrimaryBrush}"/>
                                                 <Setter Property="Padding" Value="4,2"/>
+                                                <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
                                                 <Setter Property="Template">
                                                     <Setter.Value>
                                                         <ControlTemplate TargetType="TreeViewItem">
@@ -6122,18 +6177,11 @@
                                                                 <Trigger Property="HasItems" Value="False">
                                                                     <Setter TargetName="Expander" Property="Visibility" Value="Hidden"/>
                                                                 </Trigger>
-                                                                <!-- 선택됨 (활성/비활성 창 모두 동일) -->
-                                                                <Trigger Property="IsSelected" Value="True">
-                                                                    <Setter TargetName="ContentBorder" Property="Background" Value="{DynamicResource SystemAccentColorSecondaryBrush}"/>
-                                                                </Trigger>
-                                                                <!-- 마우스 오버 (선택 안됨) -->
-                                                                <MultiTrigger>
-                                                                    <MultiTrigger.Conditions>
-                                                                        <Condition Property="IsMouseOver" Value="True"/>
-                                                                        <Condition Property="IsSelected" Value="False"/>
-                                                                    </MultiTrigger.Conditions>
+                                                                <!-- TreeViewItem 선택 스타일 제거 - 데이터 바인딩(IsSelected)으로 페이지만 하이라이트 -->
+                                                                <!-- 마우스 오버 -->
+                                                                <Trigger Property="IsMouseOver" Value="True">
                                                                     <Setter TargetName="ContentBorder" Property="Background" Value="{DynamicResource SubtleFillColorSecondaryBrush}"/>
-                                                                </MultiTrigger>
+                                                                </Trigger>
                                                             </ControlTemplate.Triggers>
                                                         </ControlTemplate>
                                                     </Setter.Value>
@@ -6159,9 +6207,6 @@
                                                             </MenuItem>
                                                         </ContextMenu>
                                                     </StackPanel.ContextMenu>
-                                                    <!-- 즐겨찾기 별 아이콘 -->
-                                                    <ui:SymbolIcon Symbol="Star24" FontSize="10" Foreground="#FFD700" Margin="0,0,4,0"
-                                                                   Visibility="{Binding IsFavorite, Converter={StaticResource BoolToVisibilityConverter}}"/>
                                                     <!-- 노트북 아이콘 (로딩 중이 아닐 때) -->
                                                     <ui:SymbolIcon Symbol="Notebook24" FontSize="16" Foreground="{StaticResource OneNoteAccentBrush}" Margin="0,0,4,0"
                                                                    Visibility="{Binding IsLoadingSections, Converter={StaticResource BoolToVisibilityConverter}, ConverterParameter=Invert}"/>
@@ -6172,6 +6217,9 @@
                                                     <ui:SymbolIcon Symbol="People24" FontSize="12" Foreground="#0078D4" Margin="0,0,4,0"
                                                                    Visibility="{Binding IsShared, Converter={StaticResource BoolToVisibilityConverter}}"
                                                                    ToolTip="{Binding SourceName}"/>
+                                                    <!-- 즐겨찾기 별 아이콘 (아이콘 뒤, 명칭 앞) -->
+                                                    <ui:SymbolIcon Symbol="Star24" FontSize="10" Foreground="#FFD700" Margin="0,0,4,0"
+                                                                   Visibility="{Binding IsFavorite, Converter={StaticResource BoolToVisibilityConverter}}"/>
                                                     <TextBlock Text="{Binding DisplayName}" VerticalAlignment="Center" Foreground="{DynamicResource TextFillColorPrimaryBrush}"/>
                                                     <!-- 출처 라벨 (그룹 노트북인 경우) -->
                                                     <TextBlock Text="{Binding SourceName, StringFormat=' [{0}]'}" FontSize="11"
@@ -6180,9 +6228,15 @@
                                                 </StackPanel>
                                                 <HierarchicalDataTemplate.ItemTemplate>
                                                     <HierarchicalDataTemplate ItemsSource="{Binding Pages}">
-                                                        <StackPanel Orientation="Horizontal" Margin="2,3">
-                                                            <StackPanel.ContextMenu>
+                                                        <Grid HorizontalAlignment="Stretch" Background="Transparent" Margin="2,3">
+                                                            <Grid.ContextMenu>
                                                                 <ContextMenu>
+                                                                    <MenuItem Header="노트 추가" Click="SectionAddPage_Click">
+                                                                        <MenuItem.Icon>
+                                                                            <ui:SymbolIcon Symbol="Add24"/>
+                                                                        </MenuItem.Icon>
+                                                                    </MenuItem>
+                                                                    <Separator/>
                                                                     <MenuItem Header="즐겨찾기 추가" Click="SectionAddToFavorites_Click"
                                                                               Visibility="{Binding IsFavorite, Converter={StaticResource BoolToVisibilityConverter}, ConverterParameter=Invert}">
                                                                         <MenuItem.Icon>
@@ -6195,18 +6249,27 @@
                                                                             <ui:SymbolIcon Symbol="StarOff24"/>
                                                                         </MenuItem.Icon>
                                                                     </MenuItem>
+                                                                    <Separator/>
+                                                                    <MenuItem Header="섹션 삭제" Click="SectionDelete_Click" Foreground="#E74856">
+                                                                        <MenuItem.Icon>
+                                                                            <ui:SymbolIcon Symbol="Delete24" Foreground="#E74856"/>
+                                                                        </MenuItem.Icon>
+                                                                    </MenuItem>
                                                                 </ContextMenu>
-                                                            </StackPanel.ContextMenu>
-                                                            <!-- 즐겨찾기 별 아이콘 -->
-                                                            <ui:SymbolIcon Symbol="Star24" FontSize="10" Foreground="#FFD700" Margin="0,0,4,0"
-                                                                           Visibility="{Binding IsFavorite, Converter={StaticResource BoolToVisibilityConverter}}"/>
-                                                            <ui:SymbolIcon Symbol="FolderOpen24" FontSize="14" Foreground="#107C10" Margin="0,0,8,0"/>
-                                                            <TextBlock Text="{Binding DisplayName}" VerticalAlignment="Center" Foreground="{DynamicResource TextFillColorPrimaryBrush}"/>
-                                                        </StackPanel>
+                                                            </Grid.ContextMenu>
+                                                            <StackPanel Orientation="Horizontal">
+                                                                <ui:SymbolIcon Symbol="FolderOpen24" FontSize="14" Foreground="#107C10" Margin="0,0,4,0"/>
+                                                                <!-- 즐겨찾기 별 아이콘 (아이콘 뒤, 명칭 앞) -->
+                                                                <ui:SymbolIcon Symbol="Star24" FontSize="10" Foreground="#FFD700" Margin="0,0,4,0"
+                                                                               Visibility="{Binding IsFavorite, Converter={StaticResource BoolToVisibilityConverter}}"/>
+                                                                <TextBlock Text="{Binding DisplayName}" VerticalAlignment="Center" Foreground="{DynamicResource TextFillColorPrimaryBrush}"/>
+                                                            </StackPanel>
+                                                        </Grid>
+                                                        <!-- 3단계 자식 (노트북→섹션→페이지) - 페이지만 IsSelected로 하이라이트 -->
                                                         <HierarchicalDataTemplate.ItemTemplate>
                                                             <DataTemplate>
-                                                                <StackPanel Orientation="Horizontal" Margin="2,2">
-                                                                    <StackPanel.ContextMenu>
+                                                                <Grid HorizontalAlignment="Stretch" Background="{Binding IsSelected, Converter={StaticResource IsSelectedToBackgroundConverter}}" Margin="2,2">
+                                                                    <Grid.ContextMenu>
                                                                         <ContextMenu>
                                                                             <MenuItem Header="즐겨찾기 추가" Click="AddToFavorites_Click"
                                                                                       Visibility="{Binding IsFavorite, Converter={StaticResource BoolToVisibilityConverter}, ConverterParameter=Invert}">
@@ -6220,15 +6283,23 @@
                                                                                     <ui:SymbolIcon Symbol="StarOff24"/>
                                                                                 </MenuItem.Icon>
                                                                             </MenuItem>
+                                                                            <Separator/>
+                                                                            <MenuItem Header="노트 삭제" Click="PageDelete_Click" Foreground="#E74856">
+                                                                                <MenuItem.Icon>
+                                                                                    <ui:SymbolIcon Symbol="Delete24" Foreground="#E74856"/>
+                                                                                </MenuItem.Icon>
+                                                                            </MenuItem>
                                                                         </ContextMenu>
-                                                                    </StackPanel.ContextMenu>
-                                                                    <!-- 즐겨찾기 별 아이콘 (즐겨찾기인 경우) -->
-                                                                    <ui:SymbolIcon Symbol="Star24" FontSize="10" Foreground="#FFD700" Margin="0,0,4,0"
-                                                                                   Visibility="{Binding IsFavorite, Converter={StaticResource BoolToVisibilityConverter}}"/>
-                                                                    <ui:SymbolIcon Symbol="Document24" FontSize="12"
-                                                                                   Foreground="{DynamicResource TextFillColorSecondaryBrush}" Margin="0,0,6,0"/>
-                                                                    <TextBlock Text="{Binding Title}" VerticalAlignment="Center"/>
-                                                                </StackPanel>
+                                                                    </Grid.ContextMenu>
+                                                                    <StackPanel Orientation="Horizontal">
+                                                                        <ui:SymbolIcon Symbol="Document24" FontSize="12"
+                                                                                       Foreground="{DynamicResource TextFillColorSecondaryBrush}" Margin="0,0,4,0"/>
+                                                                        <!-- 즐겨찾기 별 아이콘 (아이콘 뒤, 명칭 앞) -->
+                                                                        <ui:SymbolIcon Symbol="Star24" FontSize="10" Foreground="#FFD700" Margin="0,0,4,0"
+                                                                                       Visibility="{Binding IsFavorite, Converter={StaticResource BoolToVisibilityConverter}}"/>
+                                                                        <TextBlock Text="{Binding Title}" VerticalAlignment="Center"/>
+                                                                    </StackPanel>
+                                                                </Grid>
                                                             </DataTemplate>
                                                         </HierarchicalDataTemplate.ItemTemplate>
                                                     </HierarchicalDataTemplate>
@@ -6277,7 +6348,8 @@
                                         <TextBox x:Name="OneNotePageTitleEdit" FontSize="18" FontWeight="SemiBold"
                                                  MinWidth="200" Visibility="Collapsed"
                                                  LostFocus="OneNotePageTitleEdit_LostFocus"
-                                                 KeyDown="OneNotePageTitleEdit_KeyDown"/>
+                                                 KeyDown="OneNotePageTitleEdit_KeyDown"
+                                                 TextChanged="OneNotePageTitleEdit_TextChanged"/>
                                         <!-- 저장 대상 표시 (●) - 미저장 변경사항 있을 때 표시 -->
                                         <TextBlock x:Name="OneNoteUnsavedIndicator" Text=" ●" FontSize="18" FontWeight="Bold"
                                                    Foreground="#FF6B6B" Visibility="Collapsed" ToolTip="저장되지 않은 변경사항 있음"/>
@@ -6368,7 +6440,8 @@
                                         <Border x:Name="OneNoteContentBorder" Visibility="Collapsed" CornerRadius="8" Margin="8"
                                                 Background="{DynamicResource ApplicationBackgroundBrush}">
                                             <wv2:WebView2 x:Name="OneNoteEditorWebView"
-                                                          DefaultBackgroundColor="Transparent"/>
+                                                          DefaultBackgroundColor="Transparent"
+                                                          GotFocus="OneNoteEditorWebView_GotFocus"/>
                                         </Border>
                                     </Grid>
                                 </Border>
