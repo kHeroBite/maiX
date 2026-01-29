@@ -205,6 +205,57 @@ public class RecordingInfo : INotifyPropertyChanged
     /// 진행률 (0.0 ~ 1.0)
     /// </summary>
     public double Progress => Duration.TotalSeconds > 0 ? CurrentPosition.TotalSeconds / Duration.TotalSeconds : 0;
+
+    /// <summary>
+    /// 녹음 생성 시간 표시 (사용자 친화적)
+    /// 예: "01/30 06:49" 또는 "어제 14:30"
+    /// </summary>
+    public string CreatedTimeDisplay
+    {
+        get
+        {
+            var now = DateTime.Now;
+            var created = CreatedTime;
+
+            if (created.Date == now.Date)
+            {
+                // 오늘
+                return $"오늘 {created:HH:mm}";
+            }
+            else if (created.Date == now.Date.AddDays(-1))
+            {
+                // 어제
+                return $"어제 {created:HH:mm}";
+            }
+            else if (created.Year == now.Year)
+            {
+                // 올해
+                return created.ToString("MM/dd HH:mm");
+            }
+            else
+            {
+                // 다른 해
+                return created.ToString("yy/MM/dd HH:mm");
+            }
+        }
+    }
+
+    /// <summary>
+    /// 짧은 표시명 (날짜/시간 기반)
+    /// </summary>
+    public string DisplayName
+    {
+        get
+        {
+            var prefix = Source switch
+            {
+                RecordingSource.MailX => "🎙️",
+                RecordingSource.OneNote => "📓",
+                _ => "📁"
+            };
+            return $"{prefix} {CreatedTimeDisplay}";
+        }
+    }
 }
 
 /// <summary>

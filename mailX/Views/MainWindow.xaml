@@ -7372,20 +7372,13 @@
                                                 <DataTemplate>
                                                         <StackPanel>
                                                             <!-- 상단: 파일 정보 -->
-                                                            <StackPanel>
-                                                                <TextBlock Text="{Binding FileName}"
-                                                                           FontSize="12" FontWeight="Medium"
-                                                                           TextTrimming="CharacterEllipsis"/>
+                                                            <StackPanel ToolTip="{Binding FileName}">
+                                                                <TextBlock Text="{Binding DisplayName}"
+                                                                           FontSize="12" FontWeight="Medium"/>
                                                                 <StackPanel Orientation="Horizontal" Margin="0,4,0,0">
                                                                     <TextBlock Text="{Binding DurationDisplay}"
                                                                                FontSize="11"
                                                                                Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
-                                                                    <TextBlock Text=" · "
-                                                                               FontSize="11"
-                                                                               Foreground="{DynamicResource TextFillColorTertiaryBrush}"/>
-                                                                    <TextBlock Text="{Binding SourceDisplay}"
-                                                                               FontSize="11"
-                                                                               Foreground="{DynamicResource TextFillColorTertiaryBrush}"/>
                                                                     <!-- STT/요약 상태 표시 -->
                                                                     <TextBlock Text=" · STT"
                                                                                FontSize="11"
