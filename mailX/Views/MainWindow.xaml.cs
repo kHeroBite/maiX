@@ -5184,11 +5184,10 @@ public partial class MainWindow : FluentWindow
             _oneNoteViewModel.StopRecording();
             UpdateRecordingUI(false);
 
-            // 녹음 중지 시 탭 바 숨김 (녹음 선택된 게 없으면)
+            // 녹음 중지 시 노트내용 탭으로 전환 (녹음 선택된 게 없으면)
             if (_oneNoteViewModel.SelectedRecording == null)
             {
-                OneNoteContentTabBar.Visibility = Visibility.Collapsed;
-                // 노트내용 탭으로 전환
+                // 탭 바는 항상 표시
                 SwitchToNoteContentTab();
             }
         }
@@ -5200,8 +5199,7 @@ public partial class MainWindow : FluentWindow
                 _oneNoteViewModel.StartRecording();
                 UpdateRecordingUI(true);
 
-                // 녹음 시작 시 탭 바 표시 및 녹음내용 탭으로 전환
-                OneNoteContentTabBar.Visibility = Visibility.Visible;
+                // 녹음 시작 시 녹음내용 탭으로 전환 (탭 바는 항상 표시)
                 SwitchToRecordingContentTab();
                 UpdateRecordingContentPanel();
 
@@ -5724,16 +5722,33 @@ public partial class MainWindow : FluentWindow
             OneNoteSTTSegmentsList.Visibility = Visibility.Collapsed;
         }
 
-        // 녹음 중 실시간 표시기
-        if (_oneNoteViewModel.IsRecording)
+        // 녹음 중 실시간 표시기 및 STT 버튼 상태
+        if (_oneNoteViewModel.IsRecording && _oneNoteViewModel.IsAIAnalysisEnabled)
         {
+            // 실시간 STT 진행 중
             OneNoteSTTLiveIndicator.Visibility = Visibility.Visible;
             OneNoteSTTLiveText.Visibility = Visibility.Visible;
+            OneNoteTabRunSTTButton.Content = "실시간 STT 중...";
+            OneNoteTabRunSTTButton.IsEnabled = false;
+            STTModelSelector.IsEnabled = false;
+        }
+        else if (_oneNoteViewModel.IsRecording)
+        {
+            // 녹음 중이지만 AI 분석 비활성화
+            OneNoteSTTLiveIndicator.Visibility = Visibility.Collapsed;
+            OneNoteSTTLiveText.Visibility = Visibility.Collapsed;
+            OneNoteTabRunSTTButton.Content = "녹음 중...";
+            OneNoteTabRunSTTButton.IsEnabled = false;
+            STTModelSelector.IsEnabled = false;
         }
         else
         {
+            // 녹음 중 아님 - 정상 상태
             OneNoteSTTLiveIndicator.Visibility = Visibility.Collapsed;
             OneNoteSTTLiveText.Visibility = Visibility.Collapsed;
+            OneNoteTabRunSTTButton.Content = "STT 분석";
+            OneNoteTabRunSTTButton.IsEnabled = true;
+            STTModelSelector.IsEnabled = true;
         }
 
         // 요약 결과 업데이트
@@ -11294,9 +11309,8 @@ public partial class MainWindow : FluentWindow
             // 양쪽 트리에서 동일한 페이지 하이라이트 (IsSelected 설정)
             HighlightSelectedPageInBothTrees(page.Id);
 
-            // 페이지 선택 시: 녹음 선택 해제 및 노트내용 탭으로 전환
+            // 페이지 선택 시: 녹음 선택 해제 및 노트내용 탭으로 전환 (탭 바는 항상 표시)
             _oneNoteViewModel.SelectedRecording = null;
-            OneNoteContentTabBar.Visibility = Visibility.Collapsed;
             SwitchToNoteContentTab();
             OneNoteNoteContentPanel.Visibility = Visibility.Visible;
 

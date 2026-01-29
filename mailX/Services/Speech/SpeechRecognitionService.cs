@@ -424,6 +424,157 @@ public class SpeechRecognitionService : IDisposable
         return await TranscribeWithSenseVoiceAsync(audioPath, cancellationToken);
     }
 
+    /// <summary>
+    /// 실시간 오디오 청크 처리 (녹음 중 STT용)
+    /// byte[] 형태의 raw PCM 데이터를 받아서 바로 STT 처리
+    /// </summary>
+    /// <param name="audioData">44100Hz, 16bit, Mono PCM 데이터</param>
+    /// <param name="chunkStartTime">이 청크의 시작 시간</param>
+    /// <param name="sampleRate">샘플레이트 (기본 44100)</param>
+    /// <param name="cancellationToken">취소 토큰</param>
+    /// <returns>인식된 세그먼트 리스트 (비어있을 수 있음)</returns>
+    public async Task<List<Models.TranscriptSegment>> ProcessRealtimeChunkAsync(
+        byte[] audioData,
+        TimeSpan chunkStartTime,
+        int sampleRate = 44100,
+        CancellationToken cancellationToken = default)
+    {
+        var segments = new List<Models.TranscriptSegment>();
+
+        if (audioData == null || audioData.Length == 0)
+            return segments;
+
+        try
+        {
+            // SenseVoice 초기화 확인
+            if (!_isSenseVoiceInitialized || _recognizer == null)
+            {
+                var initialized = await InitializeSenseVoiceAsync(cancellationToken);
+                if (!initialized)
+                {
+                    Utils.Log4.Warn("[STT] 실시간 청크 처리 불가: SenseVoice 초기화 실패");
+                    return segments;
+                }
+            }
+
+            Utils.Log4.Debug($"[STT] 실시간 청크 처리 시작: {chunkStartTime:mm\\:ss}, {audioData.Length} bytes");
+
+            // byte[] → float[] 변환 (16bit PCM)
+            var sampleCount = audioData.Length / 2;
+            var samples = new float[sampleCount];
+            for (int i = 0; i < sampleCount; i++)
+            {
+                short sample = (short)(audioData[i * 2 + 1] << 8 | audioData[i * 2]);
+                samples[i] = sample / 32768f;
+            }
+
+            // 16kHz로 리샘플링 필요
+            const int targetSampleRate = 16000;
+            float[] resampledSamples;
+
+            if (sampleRate != targetSampleRate)
+            {
+                var ratio = (double)targetSampleRate / sampleRate;
+                var targetLength = (int)(samples.Length * ratio);
+                resampledSamples = new float[targetLength];
+
+                for (int i = 0; i < targetLength; i++)
+                {
+                    var srcIndex = i / ratio;
+                    var srcIndexInt = (int)srcIndex;
+                    var frac = srcIndex - srcIndexInt;
+
+                    if (srcIndexInt + 1 < samples.Length)
+                    {
+                        resampledSamples[i] = (float)(samples[srcIndexInt] * (1 - frac) + samples[srcIndexInt + 1] * frac);
+                    }
+                    else if (srcIndexInt < samples.Length)
+                    {
+                        resampledSamples[i] = samples[srcIndexInt];
+                    }
+                }
+            }
+            else
+            {
+                resampledSamples = samples;
+            }
+
+            // 음성 구간 감지
+            var voiceSegments = DetectVoiceSegments(resampledSamples, targetSampleRate);
+
+            if (voiceSegments.Count == 0)
+            {
+                // 음성 구간 없으면 전체를 하나로 처리
+                voiceSegments.Add((0, resampledSamples.Length));
+            }
+
+            Utils.Log4.Debug($"[STT] 실시간 청크: 음성 구간 {voiceSegments.Count}개 감지");
+
+            // 각 음성 구간 STT 수행
+            int speakerIndex = 1;
+            foreach (var (startSample, endSample) in voiceSegments)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+
+                var length = endSample - startSample;
+                if (length < targetSampleRate * 0.3) // 0.3초 미만 스킵
+                    continue;
+
+                var chunk = new float[length];
+                Array.Copy(resampledSamples, startSample, chunk, 0, length);
+
+                // 청크 내 시작/종료 시간
+                var segmentStartOffset = TimeSpan.FromSeconds((double)startSample / targetSampleRate);
+                var segmentEndOffset = TimeSpan.FromSeconds((double)endSample / targetSampleRate);
+
+                // 전체 녹음 기준 시간
+                var segmentStartTime = chunkStartTime + segmentStartOffset;
+                var segmentEndTime = chunkStartTime + segmentEndOffset;
+
+                // STT 수행
+                using var stream = _recognizer!.CreateStream();
+                stream.AcceptWaveform(targetSampleRate, chunk);
+                _recognizer.Decode(stream);
+                var result = stream.Result;
+
+                var text = result.Text?.Trim() ?? string.Empty;
+
+                if (!string.IsNullOrWhiteSpace(text))
+                {
+                    var segment = new Models.TranscriptSegment
+                    {
+                        StartTime = segmentStartTime,
+                        EndTime = segmentEndTime,
+                        Speaker = $"화자 {speakerIndex}", // 간단한 화자 할당 (실시간용)
+                        Text = text,
+                        Confidence = 0.85
+                    };
+
+                    segments.Add(segment);
+                    SegmentRecognized?.Invoke(segment);
+
+                    var displayText = text.Length > 40 ? text[..40] + "..." : text;
+                    Utils.Log4.Debug($"[STT] 실시간 세그먼트: [{segmentStartTime:mm\\:ss}] {displayText}");
+                }
+
+                speakerIndex++;
+            }
+
+            Utils.Log4.Debug($"[STT] 실시간 청크 처리 완료: {segments.Count}개 세그먼트");
+            return segments;
+        }
+        catch (OperationCanceledException)
+        {
+            Utils.Log4.Debug("[STT] 실시간 청크 처리 취소됨");
+            throw;
+        }
+        catch (Exception ex)
+        {
+            Utils.Log4.Error($"[STT] 실시간 청크 처리 실패: {ex.Message}");
+            return segments;
+        }
+    }
+
     // 긴 오디오 파일 청크 처리 설정
     private const int CHUNK_DURATION_SECONDS = 180; // 3분 단위로 청크 분할
     private const int CHUNK_OVERLAP_SECONDS = 5; // 청크 간 5초 오버랩 (문맥 유지)

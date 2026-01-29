@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
 using NAudio.Wave;
 using Serilog;
@@ -20,6 +21,13 @@ public class AudioRecordingService : IDisposable
     private DateTime _recordingStartTime;
     private TimeSpan _pausedDuration;
     private DateTime _pauseStartTime;
+
+    // 실시간 STT용 버퍼
+    private List<byte> _realtimeBuffer = new();
+    private int _realtimeChunkSeconds = 15; // 15초 단위 청크
+    private bool _realtimeEnabled = false;
+    private int _totalBytesProcessed = 0;
+    private readonly object _bufferLock = new();
 
     /// <summary>
     /// 녹음 중 여부
@@ -72,6 +80,30 @@ public class AudioRecordingService : IDisposable
     /// 녹음 오류 이벤트
     /// </summary>
     public event Action<string>? RecordingError;
+
+    /// <summary>
+    /// 실시간 오디오 청크 준비 이벤트 (byte[] audioData, TimeSpan chunkStartTime)
+    /// 녹음 중 지정된 시간(기본 15초)마다 발생
+    /// </summary>
+    public event Action<byte[], TimeSpan>? RealtimeAudioChunkReady;
+
+    /// <summary>
+    /// 실시간 STT 활성화 여부
+    /// </summary>
+    public bool RealtimeEnabled
+    {
+        get => _realtimeEnabled;
+        set => _realtimeEnabled = value;
+    }
+
+    /// <summary>
+    /// 실시간 청크 간격 (초 단위, 기본 15초)
+    /// </summary>
+    public int RealtimeChunkSeconds
+    {
+        get => _realtimeChunkSeconds;
+        set => _realtimeChunkSeconds = Math.Max(5, Math.Min(60, value)); // 5~60초 범위
+    }
 
     /// <summary>
     /// 녹음 파일 저장 디렉토리
@@ -250,6 +282,37 @@ public class AudioRecordingService : IDisposable
 
             VolumeChanged?.Invoke(maxVolume);
             DurationChanged?.Invoke(RecordingDuration);
+
+            // 실시간 STT용 버퍼링
+            if (_realtimeEnabled && _waveIn != null)
+            {
+                lock (_bufferLock)
+                {
+                    // 버퍼에 데이터 추가
+                    var dataToAdd = new byte[e.BytesRecorded];
+                    Array.Copy(e.Buffer, dataToAdd, e.BytesRecorded);
+                    _realtimeBuffer.AddRange(dataToAdd);
+
+                    // 청크 크기 계산: 44100Hz, 16bit, Mono = 88200 bytes/sec
+                    var bytesPerSecond = _waveIn.WaveFormat.AverageBytesPerSecond;
+                    var chunkSizeBytes = bytesPerSecond * _realtimeChunkSeconds;
+
+                    // 버퍼가 청크 크기 이상이면 이벤트 발생
+                    if (_realtimeBuffer.Count >= chunkSizeBytes)
+                    {
+                        var chunkData = _realtimeBuffer.ToArray();
+                        var chunkStartTime = TimeSpan.FromSeconds((double)_totalBytesProcessed / bytesPerSecond);
+
+                        _totalBytesProcessed += _realtimeBuffer.Count;
+                        _realtimeBuffer.Clear();
+
+                        _logger.Debug("실시간 청크 준비: {StartTime}, {Size} bytes", chunkStartTime, chunkData.Length);
+
+                        // 이벤트 발생 (비동기 처리를 위해 복사된 데이터 전달)
+                        RealtimeAudioChunkReady?.Invoke(chunkData, chunkStartTime);
+                    }
+                }
+            }
         }
         catch (Exception ex)
         {
@@ -260,6 +323,23 @@ public class AudioRecordingService : IDisposable
     private void OnRecordingStopped(object? sender, StoppedEventArgs e)
     {
         var filePath = _currentFilePath;
+
+        // 실시간 모드에서 남은 버퍼 처리
+        if (_realtimeEnabled && _waveIn != null)
+        {
+            lock (_bufferLock)
+            {
+                if (_realtimeBuffer.Count > 0)
+                {
+                    var chunkData = _realtimeBuffer.ToArray();
+                    var bytesPerSecond = _waveIn.WaveFormat.AverageBytesPerSecond;
+                    var chunkStartTime = TimeSpan.FromSeconds((double)_totalBytesProcessed / bytesPerSecond);
+
+                    _logger.Debug("실시간 최종 청크 처리: {StartTime}, {Size} bytes", chunkStartTime, chunkData.Length);
+                    RealtimeAudioChunkReady?.Invoke(chunkData, chunkStartTime);
+                }
+            }
+        }
 
         Cleanup();
 
@@ -295,6 +375,13 @@ public class AudioRecordingService : IDisposable
         }
 
         _currentFilePath = null;
+
+        // 실시간 버퍼 초기화
+        lock (_bufferLock)
+        {
+            _realtimeBuffer.Clear();
+            _totalBytesProcessed = 0;
+        }
     }
 
     /// <summary>

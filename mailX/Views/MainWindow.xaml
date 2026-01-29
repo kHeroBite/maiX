@@ -6378,13 +6378,13 @@
                                 <RowDefinition Height="*"/>
                             </Grid.RowDefinitions>
 
-                            <!-- 콘텐츠 탭 바 (녹음 선택 시 또는 녹음 중일 때만 표시) -->
+                            <!-- 콘텐츠 탭 바 (항상 표시) -->
                             <!-- 탭 바 (진짜 탭 스타일) -->
                             <Border x:Name="OneNoteContentTabBar" Grid.Row="0"
                                     BorderBrush="{DynamicResource ControlElevationBorderBrush}"
                                     BorderThickness="0,0,0,1"
                                     Background="{DynamicResource ControlFillColorDefaultBrush}"
-                                    Visibility="Collapsed">
+                                    Visibility="Visible">
                                 <StackPanel Orientation="Horizontal" Margin="0,0,0,-1">
                                     <!-- 노트내용 탭 -->
                                     <Border x:Name="OneNoteTabNoteContent"

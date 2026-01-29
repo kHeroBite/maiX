@@ -169,6 +169,21 @@ public partial class OneNoteViewModel : ViewModelBase
     private Services.Audio.AudioRecordingService? _recordingService;
 
     /// <summary>
+    /// 실시간 STT 취소 토큰
+    /// </summary>
+    private CancellationTokenSource? _realtimeSTTCts;
+
+    /// <summary>
+    /// 실시간 요약 업데이트 타이머
+    /// </summary>
+    private System.Timers.Timer? _realtimeSummaryTimer;
+
+    /// <summary>
+    /// 실시간 요약 마지막 업데이트 세그먼트 수
+    /// </summary>
+    private int _lastSummarySegmentCount = 0;
+
+    /// <summary>
     /// 오디오 플레이어 서비스
     /// </summary>
     private Services.Audio.AudioPlayerService? _audioPlayerService;
@@ -958,19 +973,33 @@ public partial class OneNoteViewModel : ViewModelBase
                         : Models.RecordingSource.External
                 };
 
-                // 파일명에서 페이지 ID 추출 (형식: recording_{pageId}_{timestamp}.wav)
+                // 파일명에서 페이지 ID 추출 (형식: recording_{pageId}_{yyyyMMdd}_{HHmmss}.wav)
                 if (recording.Source == Models.RecordingSource.MailX)
                 {
                     var nameParts = Path.GetFileNameWithoutExtension(fileInfo.Name).Split('_');
-                    if (nameParts.Length >= 3)
+                    // 최소 4개 부분: recording, pageId, yyyyMMdd, HHmmss
+                    if (nameParts.Length >= 4)
                     {
-                        // recording_{pageId}_{timestamp} - pageId는 가운데 부분들
-                        // timestamp는 마지막 부분 (숫자 14자리 이상)
-                        var lastPart = nameParts[^1];
-                        if (lastPart.Length >= 14 && lastPart.All(char.IsDigit))
+                        // timestamp는 마지막 2개 부분 (yyyyMMdd_HHmmss)
+                        var datePart = nameParts[^2]; // yyyyMMdd (8자리)
+                        var timePart = nameParts[^1]; // HHmmss (6자리)
+                        if (datePart.Length == 8 && datePart.All(char.IsDigit) &&
+                            timePart.Length == 6 && timePart.All(char.IsDigit))
                         {
-                            // pageId는 recording_ 이후부터 마지막 timestamp 이전까지
-                            recording.LinkedPageId = string.Join("_", nameParts[1..^1]);
+                            // pageId는 recording_ 이후부터 timestamp 이전까지
+                            recording.LinkedPageId = string.Join("_", nameParts[1..^2]);
+                        }
+                    }
+                    // 페이지 ID 없이 녹음된 파일 (형식: recording_{yyyyMMdd}_{HHmmss}.wav)
+                    else if (nameParts.Length == 3)
+                    {
+                        var datePart = nameParts[1];
+                        var timePart = nameParts[2];
+                        if (datePart.Length == 8 && datePart.All(char.IsDigit) &&
+                            timePart.Length == 6 && timePart.All(char.IsDigit))
+                        {
+                            // 페이지 ID 없음
+                            recording.LinkedPageId = null;
                         }
                     }
                 }
@@ -1367,19 +1396,34 @@ public partial class OneNoteViewModel : ViewModelBase
             return;
         }
 
-        // 현재 페이지 ID로 필터링
+        // 현재 페이지 ID를 SanitizePageId와 동일한 방식으로 변환
         var pageId = SelectedPage.Id;
+        var sanitizedPageId = SanitizePageId(pageId);
+
         foreach (var recording in Recordings)
         {
-            // 해당 페이지에 연결된 녹음만 추가
-            if (recording.LinkedPageId == pageId)
+            // 해당 페이지에 연결된 녹음만 추가 (sanitized ID로 비교)
+            if (recording.LinkedPageId == sanitizedPageId)
             {
                 CurrentPageRecordings.Add(recording);
             }
         }
 
-        _logger.Debug("페이지별 녹음 필터링: 전체 {Total}개 중 {Filtered}개 (페이지 ID: {PageId})",
-            Recordings.Count, CurrentPageRecordings.Count, pageId);
+        _logger.Debug("페이지별 녹음 필터링: 전체 {Total}개 중 {Filtered}개 (페이지 ID: {PageId}, Sanitized: {SanitizedId})",
+            Recordings.Count, CurrentPageRecordings.Count, pageId, sanitizedPageId);
+    }
+
+    /// <summary>
+    /// 페이지 ID를 파일명에 사용 가능하도록 정리 (AudioRecordingService와 동일한 로직)
+    /// </summary>
+    private static string SanitizePageId(string pageId)
+    {
+        var sanitized = string.Join("", pageId.Split(Path.GetInvalidFileNameChars()));
+        if (sanitized.Length > 20)
+        {
+            sanitized = sanitized.Substring(0, 20);
+        }
+        return sanitized;
     }
 
     /// <summary>
@@ -2119,6 +2163,11 @@ public partial class OneNoteViewModel : ViewModelBase
     /// <summary>
     /// 녹음 시작
     /// </summary>
+    // 녹음 서비스 이벤트 핸들러 (중복 등록 방지용)
+    private Action<float>? _volumeChangedHandler;
+    private Action<TimeSpan>? _durationChangedHandler;
+    private Action<string>? _recordingErrorHandler;
+
     [RelayCommand]
     public void StartRecording()
     {
@@ -2126,37 +2175,58 @@ public partial class OneNoteViewModel : ViewModelBase
 
         try
         {
+            // 이전 이벤트 핸들러 해제
+            if (_recordingService != null)
+            {
+                if (_volumeChangedHandler != null)
+                    _recordingService.VolumeChanged -= _volumeChangedHandler;
+                if (_durationChangedHandler != null)
+                    _recordingService.DurationChanged -= _durationChangedHandler;
+                _recordingService.RecordingCompleted -= OnRecordingCompleted;
+                if (_recordingErrorHandler != null)
+                    _recordingService.RecordingError -= _recordingErrorHandler;
+            }
+
             _recordingService ??= new Services.Audio.AudioRecordingService();
 
-            // 이벤트 연결
-            _recordingService.VolumeChanged += volume =>
+            // 이벤트 핸들러 생성
+            _volumeChangedHandler = volume =>
             {
                 System.Windows.Application.Current?.Dispatcher.Invoke(() => RecordingVolume = volume);
             };
-            _recordingService.DurationChanged += duration =>
+            _durationChangedHandler = duration =>
             {
                 System.Windows.Application.Current?.Dispatcher.Invoke(() => RecordingDuration = duration);
             };
-            _recordingService.RecordingCompleted += filePath =>
-            {
-                System.Windows.Application.Current?.Dispatcher.Invoke(() =>
-                {
-                    IsRecording = false;
-                    IsRecordingPaused = false;
-                    RecordingDuration = TimeSpan.Zero;
-                    RecordingVolume = 0;
-                    LoadRecordings(); // 목록 새로고침
-                });
-            };
-            _recordingService.RecordingError += error =>
+            _recordingErrorHandler = error =>
             {
                 System.Windows.Application.Current?.Dispatcher.Invoke(() =>
                 {
                     IsRecording = false;
                     IsRecordingPaused = false;
                     _logger.Error("녹음 오류: {Error}", error);
+                    StopRealtimeSTT();
                 });
             };
+
+            // 이벤트 연결
+            _recordingService.VolumeChanged += _volumeChangedHandler;
+            _recordingService.DurationChanged += _durationChangedHandler;
+            _recordingService.RecordingCompleted += OnRecordingCompleted;
+            _recordingService.RecordingError += _recordingErrorHandler;
+
+            // 실시간 STT 초기화 (이전 녹음의 결과도 클리어)
+            LiveSTTSegments.Clear();
+            STTSegments.Clear();
+            CurrentSummary = null;
+            LiveSummaryText = string.Empty;
+            _lastSummarySegmentCount = 0;
+
+            // AI 분석 활성화 시 실시간 STT 시작
+            if (IsAIAnalysisEnabled)
+            {
+                StartRealtimeSTT();
+            }
 
             // 현재 선택된 페이지 ID와 연결 (있으면)
             var pageId = SelectedPage?.Id;
@@ -2164,12 +2234,297 @@ public partial class OneNoteViewModel : ViewModelBase
 
             IsRecording = true;
             IsRecordingPaused = false;
-            _logger.Information("녹음 시작됨 (페이지 연결: {PageId})", pageId ?? "없음");
+            _logger.Information("녹음 시작됨 (페이지 연결: {PageId}, 실시간 STT: {RealtimeSTT})",
+                pageId ?? "없음", IsAIAnalysisEnabled);
         }
         catch (Exception ex)
         {
             _logger.Error(ex, "녹음 시작 실패");
             IsRecording = false;
+            StopRealtimeSTT();
+        }
+    }
+
+    /// <summary>
+    /// 녹음 완료 이벤트 핸들러
+    /// </summary>
+    private void OnRecordingCompleted(string filePath)
+    {
+        _logger.Information("[녹음] 녹음 완료 이벤트 수신: {FilePath}", filePath);
+
+        System.Windows.Application.Current?.Dispatcher.Invoke(() =>
+        {
+            _logger.Information("[녹음] 녹음 완료 처리 시작");
+
+            IsRecording = false;
+            IsRecordingPaused = false;
+            RecordingDuration = TimeSpan.Zero;
+            RecordingVolume = 0;
+
+            // 실시간 STT 정리
+            StopRealtimeSTT();
+
+            // 녹음 목록 새로고침 (동기)
+            _logger.Information("[녹음] 녹음 목록 새로고침 호출");
+            LoadRecordings();
+            _logger.Information("[녹음] 녹음 목록 새로고침 완료 - CurrentPageRecordings: {Count}개", CurrentPageRecordings.Count);
+        });
+
+        // 비동기 작업은 별도로 처리 (fire-and-forget이지만 명시적으로)
+        _ = Task.Run(async () =>
+        {
+            try
+            {
+                // 실시간 STT 결과가 있으면 저장
+                if (LiveSTTSegments.Count > 0)
+                {
+                    await SaveRealtimeSTTResultAsync(filePath);
+                }
+
+                // 실시간 요약이 있으면 저장
+                if (!string.IsNullOrWhiteSpace(LiveSummaryText))
+                {
+                    await SaveRealtimeSummaryAsync(filePath);
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.Error(ex, "[녹음] 실시간 STT/요약 저장 실패");
+            }
+        });
+    }
+
+    /// <summary>
+    /// 실시간 STT 시작
+    /// </summary>
+    private void StartRealtimeSTT()
+    {
+        if (_recordingService == null) return;
+
+        _realtimeSTTCts?.Cancel();
+        _realtimeSTTCts = new CancellationTokenSource();
+
+        // 실시간 모드 활성화 (15초 청크)
+        _recordingService.RealtimeEnabled = true;
+        _recordingService.RealtimeChunkSeconds = 15;
+
+        // 실시간 청크 이벤트 연결
+        _recordingService.RealtimeAudioChunkReady += OnRealtimeAudioChunk;
+
+        // 실시간 요약 업데이트 타이머 (30초마다)
+        _realtimeSummaryTimer = new System.Timers.Timer(30000);
+        _realtimeSummaryTimer.Elapsed += async (s, e) => await UpdateRealtimeSummaryAsync();
+        _realtimeSummaryTimer.Start();
+
+        _logger.Information("[녹음] 실시간 STT 모드 활성화 (15초 청크)");
+    }
+
+    /// <summary>
+    /// 실시간 STT 중지
+    /// </summary>
+    private void StopRealtimeSTT()
+    {
+        _realtimeSTTCts?.Cancel();
+        _realtimeSTTCts = null;
+
+        _realtimeSummaryTimer?.Stop();
+        _realtimeSummaryTimer?.Dispose();
+        _realtimeSummaryTimer = null;
+
+        if (_recordingService != null)
+        {
+            _recordingService.RealtimeEnabled = false;
+            _recordingService.RealtimeAudioChunkReady -= OnRealtimeAudioChunk;
+        }
+
+        _logger.Information("[녹음] 실시간 STT 모드 비활성화");
+    }
+
+    /// <summary>
+    /// 실시간 오디오 청크 처리
+    /// </summary>
+    private async void OnRealtimeAudioChunk(byte[] audioData, TimeSpan chunkStartTime)
+    {
+        if (_realtimeSTTCts == null || _realtimeSTTCts.IsCancellationRequested)
+            return;
+
+        try
+        {
+            _logger.Debug($"[녹음] 실시간 청크 수신: {chunkStartTime:mm\\:ss}, {audioData.Length} bytes");
+
+            // STT 서비스로 청크 처리
+            var segments = await _speechService.ProcessRealtimeChunkAsync(
+                audioData, chunkStartTime, 44100, _realtimeSTTCts.Token);
+
+            if (segments.Count > 0)
+            {
+                System.Windows.Application.Current?.Dispatcher.Invoke(() =>
+                {
+                    foreach (var segment in segments)
+                    {
+                        LiveSTTSegments.Add(segment);
+                    }
+
+                    _logger.Information("[녹음] 실시간 STT: {Count}개 세그먼트 추가 (총 {Total}개)", segments.Count, LiveSTTSegments.Count);
+                });
+            }
+        }
+        catch (OperationCanceledException)
+        {
+            // 취소됨 - 무시
+        }
+        catch (Exception ex)
+        {
+            _logger.Error($"[녹음] 실시간 청크 처리 실패: {ex.Message}");
+        }
+    }
+
+    /// <summary>
+    /// 실시간 요약 업데이트
+    /// </summary>
+    private async Task UpdateRealtimeSummaryAsync()
+    {
+        if (_realtimeSTTCts == null || _realtimeSTTCts.IsCancellationRequested)
+            return;
+
+        // 새 세그먼트가 없으면 스킵
+        if (LiveSTTSegments.Count <= _lastSummarySegmentCount)
+            return;
+
+        try
+        {
+            var segmentsCopy = System.Windows.Application.Current?.Dispatcher.Invoke(() =>
+                LiveSTTSegments.ToList());
+
+            if (segmentsCopy == null || segmentsCopy.Count == 0)
+                return;
+
+            // 전체 텍스트 추출
+            var fullText = string.Join(" ", segmentsCopy.Select(s => s.Text));
+            if (string.IsNullOrWhiteSpace(fullText) || fullText.Length < 50)
+                return;
+
+            var speakers = segmentsCopy.Select(s => s.Speaker).Distinct().ToList();
+            var duration = segmentsCopy.LastOrDefault()?.EndTime ?? TimeSpan.Zero;
+
+            _logger.Information("[녹음] 실시간 요약 업데이트 시작: {Count}개 세그먼트, {Length}자", segmentsCopy.Count, fullText.Length);
+
+            // AI 요약 시도
+            var aiService = (System.Windows.Application.Current as App)?.GetService<Services.AI.AIService>();
+            string summaryText;
+
+            if (aiService?.CurrentProvider != null)
+            {
+                var prompt = BuildRealtimeSummaryPrompt(fullText, speakers, duration);
+                var response = await aiService.CompleteAsync(prompt);
+                summaryText = response ?? GenerateLocalSummary(fullText, speakers, duration);
+            }
+            else
+            {
+                summaryText = GenerateLocalSummary(fullText, speakers, duration);
+            }
+
+            System.Windows.Application.Current?.Dispatcher.Invoke(() =>
+            {
+                LiveSummaryText = summaryText;
+                _lastSummarySegmentCount = segmentsCopy.Count;
+            });
+
+            _logger.Information("[녹음] 실시간 요약 업데이트 완료");
+        }
+        catch (Exception ex)
+        {
+            _logger.Error($"[녹음] 실시간 요약 업데이트 실패: {ex.Message}");
+        }
+    }
+
+    /// <summary>
+    /// 실시간 요약 프롬프트 생성
+    /// </summary>
+    private string BuildRealtimeSummaryPrompt(string fullText, List<string> speakers, TimeSpan duration)
+    {
+        return $@"다음은 진행 중인 녹음의 실시간 음성 인식 결과입니다. 현재까지의 내용을 간략히 요약해주세요.
+
+**참여자**: {string.Join(", ", speakers)}
+**경과 시간**: {duration:mm\:ss}
+
+**대화 내용**:
+{fullText}
+
+---
+위 내용을 3-5문장으로 간략히 요약해주세요.
+- 주요 논의 사항
+- 참여자들의 주요 발언
+형식: 간단한 텍스트 (마크다운 불필요)";
+    }
+
+    /// <summary>
+    /// 실시간 STT 결과 저장
+    /// </summary>
+    private async Task SaveRealtimeSTTResultAsync(string audioFilePath)
+    {
+        if (LiveSTTSegments.Count == 0) return;
+
+        try
+        {
+            var result = new Models.TranscriptResult
+            {
+                AudioFilePath = audioFilePath,
+                CreatedAt = DateTime.Now,
+                ModelName = "SenseVoice-Realtime",
+                Language = "ko",
+                TotalDuration = LiveSTTSegments.LastOrDefault()?.EndTime ?? TimeSpan.Zero,
+                Speakers = LiveSTTSegments.Select(s => s.Speaker).Distinct().ToList()
+            };
+
+            result.Segments.AddRange(LiveSTTSegments);
+
+            var sttPath = Path.ChangeExtension(audioFilePath, ".stt.json");
+            await _speechService.SaveResultAsync(result, sttPath);
+
+            _logger.Information("[녹음] 실시간 STT 결과 저장: {Path}", sttPath);
+        }
+        catch (Exception ex)
+        {
+            _logger.Error($"[녹음] 실시간 STT 결과 저장 실패: {ex.Message}");
+        }
+    }
+
+    /// <summary>
+    /// 실시간 요약 결과 저장
+    /// </summary>
+    private async Task SaveRealtimeSummaryAsync(string audioFilePath)
+    {
+        if (string.IsNullOrWhiteSpace(LiveSummaryText)) return;
+
+        try
+        {
+            var speakers = LiveSTTSegments.Select(s => s.Speaker).Distinct().ToList();
+            var fullText = string.Join(" ", LiveSTTSegments.Select(s => s.Text));
+
+            var summary = new Models.RecordingSummary
+            {
+                AudioFilePath = audioFilePath,
+                CreatedAt = DateTime.Now,
+                Title = "실시간 녹음",
+                Summary = LiveSummaryText,
+                KeyPoints = new List<string>(),
+                ActionItems = new List<Models.ActionItem>(),
+                Participants = speakers,
+                RecordingType = DetectRecordingType(fullText, speakers),
+                ModelName = "Realtime-Summary",
+                SourceSTTPath = Path.ChangeExtension(audioFilePath, ".stt.json")
+            };
+
+            var summaryPath = Path.ChangeExtension(audioFilePath, ".summary.json");
+            var options = new System.Text.Json.JsonSerializerOptions { WriteIndented = true };
+            await File.WriteAllTextAsync(summaryPath, System.Text.Json.JsonSerializer.Serialize(summary, options));
+
+            _logger.Information("[녹음] 실시간 요약 결과 저장: {Path}", summaryPath);
+        }
+        catch (Exception ex)
+        {
+            _logger.Error($"[녹음] 실시간 요약 결과 저장 실패: {ex.Message}");
         }
     }
 
@@ -2285,6 +2640,13 @@ public partial class OneNoteViewModel : ViewModelBase
         {
             _previousPageId = newValue.Id;
             _ = LoadPageContentAsync(newValue.Id);
+
+            // 녹음 관련 데이터 초기화 (페이지 변경 시)
+            SelectedRecording = null;
+            STTSegments.Clear();
+            LiveSTTSegments.Clear();
+            CurrentSummary = null;
+            LiveSummaryText = string.Empty;
 
             // 녹음 목록 새로고침 (페이지에 연결된 녹음 + OneNote 녹음)
             _ = LoadRecordingsForCurrentPageAsync();
