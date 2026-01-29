@@ -58,6 +58,12 @@
             <!-- OneNote 즐겨찾기 컨버터 -->
             <converters:FavoriteItemTypeToIconConverter x:Key="FavoriteItemTypeToIconConverter"/>
             <converters:FavoriteItemTypeToColorConverter x:Key="FavoriteItemTypeToColorConverter"/>
+            <converters:FavoriteItemTypeToNotebookVisibilityConverter x:Key="FavoriteItemTypeToNotebookVisibilityConverter"/>
+            <converters:FavoriteItemTypeToSectionVisibilityConverter x:Key="FavoriteItemTypeToSectionVisibilityConverter"/>
+            <converters:FavoriteItemTypeToNotSectionVisibilityConverter x:Key="FavoriteItemTypeToNotSectionVisibilityConverter"/>
+            <converters:FavoriteItemTypeToPageVisibilityConverter x:Key="FavoriteItemTypeToPageVisibilityConverter"/>
+            <converters:DirectFavoriteToVisibilityConverter x:Key="DirectFavoriteToVisibilityConverter"/>
+            <converters:IsSelectedToBackgroundConverter x:Key="IsSelectedToBackgroundConverter"/>
 
             <!-- ========== 기능별 AccentColor 리소스 ========== -->
             <!-- 기본값: Outlook Blue (ThemeService에서 동적으로 업데이트) -->
