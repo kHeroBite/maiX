@@ -1048,12 +1048,13 @@ public partial class OneNoteViewModel : ViewModelBase
         }
 
         var pageId = SelectedPage.Id;
-        Log4.Info($"★★★ 페이지 {pageId} ({SelectedPage.Title}) 녹음 로드 시작 ★★★");
+        var sanitizedPageId = SanitizePageId(pageId);
+        Log4.Info($"★★★ 페이지 {pageId} ({SelectedPage.Title}) 녹음 로드 시작 (Sanitized: {sanitizedPageId}) ★★★");
 
-        // 1. 해당 페이지에 연결된 mailX 녹음 추가
+        // 1. 해당 페이지에 연결된 mailX 녹음 추가 (sanitized ID로 비교)
         foreach (var recording in Recordings)
         {
-            if (recording.LinkedPageId == pageId)
+            if (recording.LinkedPageId == sanitizedPageId)
             {
                 CurrentPageRecordings.Add(recording);
             }
