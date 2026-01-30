@@ -224,10 +224,21 @@ public partial class OneNoteViewModel : ViewModelBase
     public bool HasSelectedRecording => SelectedRecording != null;
 
     /// <summary>
-    /// AI 분석 활성화 여부 (녹음 시 STT/요약 자동 수행)
+    /// 자동 STT 분석 활성화 여부 (녹음 시 실시간 음성인식)
     /// </summary>
     [ObservableProperty]
-    private bool _isAIAnalysisEnabled = true;
+    private bool _isAutoSTTEnabled = true;
+
+    /// <summary>
+    /// 자동 요약 활성화 여부 (STT 결과 AI 요약)
+    /// </summary>
+    [ObservableProperty]
+    private bool _isAutoSummaryEnabled = true;
+
+    /// <summary>
+    /// AI 분석 활성화 여부 (STT가 활성화되어 있으면 true)
+    /// </summary>
+    public bool IsAIAnalysisEnabled => IsAutoSTTEnabled;
 
     /// <summary>
     /// STT 진행 중 여부

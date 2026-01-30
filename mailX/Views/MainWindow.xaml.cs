@@ -6597,28 +6597,46 @@ public partial class MainWindow : FluentWindow
     }
 
     /// <summary>
-    /// AI 분석 토글 버튼 클릭
+    /// 자동 STT 토글 버튼 클릭
     /// </summary>
-    private void OneNoteAIToggle_Click(object sender, RoutedEventArgs e)
+    private void OneNoteAutoSTTToggle_Click(object sender, RoutedEventArgs e)
     {
         if (sender is System.Windows.Controls.Primitives.ToggleButton toggleButton && _oneNoteViewModel != null)
         {
-            _oneNoteViewModel.IsAIAnalysisEnabled = toggleButton.IsChecked == true;
+            _oneNoteViewModel.IsAutoSTTEnabled = toggleButton.IsChecked == true;
 
-            // 상태 텍스트 업데이트
-            if (OneNoteAIStatusText != null)
+            // STT가 비활성화되면 요약도 비활성화
+            if (!_oneNoteViewModel.IsAutoSTTEnabled)
             {
-                if (_oneNoteViewModel.IsAIAnalysisEnabled)
-                {
-                    OneNoteAIStatusText.Text = "AI 분석: ON (녹음 시 자동 STT/요약)";
-                    OneNoteAIStatusText.Foreground = (System.Windows.Media.Brush)FindResource("SystemFillColorSuccessBrush");
-                }
-                else
-                {
-                    OneNoteAIStatusText.Text = "AI 분석: OFF (녹음만)";
-                    OneNoteAIStatusText.Foreground = (System.Windows.Media.Brush)FindResource("TextFillColorTertiaryBrush");
-                }
+                _oneNoteViewModel.IsAutoSummaryEnabled = false;
+                OneNoteAutoSummaryToggle.IsChecked = false;
+                OneNoteAutoSummaryToggle.IsEnabled = false;
             }
+            else
+            {
+                OneNoteAutoSummaryToggle.IsEnabled = true;
+            }
+
+            Log4.Debug($"[OneNote] 자동 STT: {_oneNoteViewModel.IsAutoSTTEnabled}, 자동 요약: {_oneNoteViewModel.IsAutoSummaryEnabled}");
+        }
+    }
+
+    /// <summary>
+    /// 자동 요약 토글 버튼 클릭
+    /// </summary>
+    private void OneNoteAutoSummaryToggle_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is System.Windows.Controls.Primitives.ToggleButton toggleButton && _oneNoteViewModel != null)
+        {
+            // STT가 활성화되어 있어야만 요약 활성화 가능
+            if (!_oneNoteViewModel.IsAutoSTTEnabled)
+            {
+                toggleButton.IsChecked = false;
+                return;
+            }
+
+            _oneNoteViewModel.IsAutoSummaryEnabled = toggleButton.IsChecked == true;
+            Log4.Debug($"[OneNote] 자동 요약: {_oneNoteViewModel.IsAutoSummaryEnabled}");
         }
     }
 

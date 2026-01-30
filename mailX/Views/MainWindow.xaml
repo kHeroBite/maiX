@@ -7240,77 +7240,94 @@
                                         <!-- 녹음 컨트롤 -->
                                         <Border Background="{DynamicResource ControlFillColorDefaultBrush}"
                                                 CornerRadius="8" Padding="16" Margin="0,0,0,16">
-                                            <StackPanel>
-                                                <!-- 녹음 상태 표시 -->
-                                                <TextBlock x:Name="OneNoteRecordingStatus"
-                                                           Text="대기 중"
-                                                           HorizontalAlignment="Center"
-                                                           FontSize="14" FontWeight="SemiBold"
-                                                           Margin="0,0,0,8"/>
+                                            <Grid>
+                                                <Grid.RowDefinitions>
+                                                    <RowDefinition Height="Auto"/>
+                                                    <RowDefinition Height="*"/>
+                                                </Grid.RowDefinitions>
 
-                                                <!-- 녹음 시간 -->
-                                                <TextBlock x:Name="OneNoteRecordingTime"
-                                                           Text="00:00"
-                                                           HorizontalAlignment="Center"
-                                                           FontSize="28" FontWeight="Bold"
-                                                           Foreground="{DynamicResource AccentTextFillColorPrimaryBrush}"
-                                                           Margin="0,0,0,8"/>
-
-                                                <!-- 볼륨 레벨 바 -->
-                                                <ProgressBar x:Name="OneNoteVolumeLevel"
-                                                             Height="6" Minimum="0" Maximum="1" Value="0"
-                                                             Margin="0,0,0,16"/>
-
-                                                <!-- 녹음 버튼들 -->
-                                                <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
-                                                    <!-- AI 분석 토글 버튼 -->
-                                                    <ToggleButton x:Name="OneNoteAIToggleButton"
+                                                <!-- 좌측 상단: 자동 분석 토글 버튼들 -->
+                                                <StackPanel Grid.Row="0" Orientation="Horizontal" HorizontalAlignment="Left" Margin="0,0,0,8">
+                                                    <!-- 자동 STT 토글 -->
+                                                    <ToggleButton x:Name="OneNoteAutoSTTToggle"
                                                                   IsChecked="True"
-                                                                  ToolTip="AI 분석 활성화 (녹음→STT→요약)"
-                                                                  Width="40" Height="40"
-                                                                  Margin="4"
-                                                                  Click="OneNoteAIToggle_Click">
-                                                        <ui:SymbolIcon Symbol="Sparkle24"/>
+                                                                  ToolTip="자동 STT 분석 (녹음 시 실시간 음성인식)"
+                                                                  Width="20" Height="20"
+                                                                  Padding="0"
+                                                                  Click="OneNoteAutoSTTToggle_Click">
+                                                        <ui:SymbolIcon Symbol="Mic16" FontSize="10"/>
                                                     </ToggleButton>
+                                                    <TextBlock Text="STT" FontSize="9" VerticalAlignment="Center" Margin="2,0,8,0"
+                                                               Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
 
-                                                    <!-- 녹음 시작/중지 버튼 -->
-                                                    <ui:Button x:Name="OneNoteRecordStartButton"
-                                                               Icon="{ui:SymbolIcon Mic24}"
-                                                               Appearance="Primary"
-                                                               ToolTip="녹음 시작"
-                                                               Width="48" Height="48"
-                                                               Margin="4"
-                                                               Click="OneNoteRecordStart_Click"/>
-
-                                                    <!-- 일시정지/재개 버튼 -->
-                                                    <ui:Button x:Name="OneNoteRecordPauseButton"
-                                                               Icon="{ui:SymbolIcon Pause24}"
-                                                               Appearance="Secondary"
-                                                               ToolTip="일시정지"
-                                                               Width="48" Height="48"
-                                                               Margin="4"
-                                                               IsEnabled="False"
-                                                               Click="OneNoteRecordPause_Click"/>
-
-                                                    <!-- 취소 버튼 -->
-                                                    <ui:Button x:Name="OneNoteRecordCancelButton"
-                                                               Icon="{ui:SymbolIcon Delete24}"
-                                                               Appearance="Caution"
-                                                               ToolTip="녹음 취소"
-                                                               Width="48" Height="48"
-                                                               Margin="4"
-                                                               IsEnabled="False"
-                                                               Click="OneNoteRecordCancel_Click"/>
+                                                    <!-- 자동 요약 토글 -->
+                                                    <ToggleButton x:Name="OneNoteAutoSummaryToggle"
+                                                                  IsChecked="True"
+                                                                  ToolTip="자동 요약 (STT 결과를 AI로 요약)"
+                                                                  Width="20" Height="20"
+                                                                  Padding="0"
+                                                                  Click="OneNoteAutoSummaryToggle_Click">
+                                                        <ui:SymbolIcon Symbol="Sparkle16" FontSize="10"/>
+                                                    </ToggleButton>
+                                                    <TextBlock Text="요약" FontSize="9" VerticalAlignment="Center" Margin="2,0,0,0"
+                                                               Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
                                                 </StackPanel>
 
-                                                <!-- AI 분석 상태 표시 -->
-                                                <TextBlock x:Name="OneNoteAIStatusText"
-                                                           Text="AI 분석: ON (녹음 시 자동 STT/요약)"
-                                                           FontSize="10"
-                                                           Foreground="{DynamicResource SystemFillColorSuccessBrush}"
-                                                           HorizontalAlignment="Center"
-                                                           Margin="0,4,0,0"/>
-                                            </StackPanel>
+                                                <!-- 메인 녹음 컨트롤 -->
+                                                <StackPanel Grid.Row="1">
+                                                    <!-- 녹음 상태 표시 -->
+                                                    <TextBlock x:Name="OneNoteRecordingStatus"
+                                                               Text="대기 중"
+                                                               HorizontalAlignment="Center"
+                                                               FontSize="14" FontWeight="SemiBold"
+                                                               Margin="0,0,0,8"/>
+
+                                                    <!-- 녹음 시간 -->
+                                                    <TextBlock x:Name="OneNoteRecordingTime"
+                                                               Text="00:00"
+                                                               HorizontalAlignment="Center"
+                                                               FontSize="28" FontWeight="Bold"
+                                                               Foreground="{DynamicResource AccentTextFillColorPrimaryBrush}"
+                                                               Margin="0,0,0,8"/>
+
+                                                    <!-- 볼륨 레벨 바 -->
+                                                    <ProgressBar x:Name="OneNoteVolumeLevel"
+                                                                 Height="6" Minimum="0" Maximum="1" Value="0"
+                                                                 Margin="0,0,0,16"/>
+
+                                                    <!-- 녹음 버튼들 -->
+                                                    <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
+                                                        <!-- 녹음 시작/중지 버튼 -->
+                                                        <ui:Button x:Name="OneNoteRecordStartButton"
+                                                                   Icon="{ui:SymbolIcon Mic24}"
+                                                                   Appearance="Primary"
+                                                                   ToolTip="녹음 시작"
+                                                                   Width="48" Height="48"
+                                                                   Margin="4"
+                                                                   Click="OneNoteRecordStart_Click"/>
+
+                                                        <!-- 일시정지/재개 버튼 -->
+                                                        <ui:Button x:Name="OneNoteRecordPauseButton"
+                                                                   Icon="{ui:SymbolIcon Pause24}"
+                                                                   Appearance="Secondary"
+                                                                   ToolTip="일시정지"
+                                                                   Width="48" Height="48"
+                                                                   Margin="4"
+                                                                   IsEnabled="False"
+                                                                   Click="OneNoteRecordPause_Click"/>
+
+                                                        <!-- 취소 버튼 -->
+                                                        <ui:Button x:Name="OneNoteRecordCancelButton"
+                                                                   Icon="{ui:SymbolIcon Delete24}"
+                                                                   Appearance="Caution"
+                                                                   ToolTip="녹음 취소"
+                                                                   Width="48" Height="48"
+                                                                   Margin="4"
+                                                                   IsEnabled="False"
+                                                                   Click="OneNoteRecordCancel_Click"/>
+                                                    </StackPanel>
+                                                </StackPanel>
+                                            </Grid>
                                         </Border>
 
                                         <!-- 녹음 파일 목록 헤더 -->
