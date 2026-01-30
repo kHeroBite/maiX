@@ -24,6 +24,11 @@ public partial class OneNoteViewModel : ViewModelBase
     private readonly ILogger _logger;
     private readonly Services.Speech.SpeechRecognitionService _speechService;
 
+    /// <summary>
+    /// 녹음 완료 후 새 파일이 선택되었을 때 발생하는 이벤트
+    /// </summary>
+    public event Action<Models.RecordingInfo>? NewRecordingSelected;
+
     // 캐시 관련
     private static readonly string CacheDir = Path.Combine(
         Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "mailX", "cache");
@@ -184,6 +189,16 @@ public partial class OneNoteViewModel : ViewModelBase
     private int _lastSummarySegmentCount = 0;
 
     /// <summary>
+    /// STT 청크 간격 (초), 기본 15초
+    /// </summary>
+    private int _sttChunkIntervalSeconds = 15;
+
+    /// <summary>
+    /// 요약 업데이트 간격 (초), 기본 30초
+    /// </summary>
+    private int _summaryIntervalSeconds = 30;
+
+    /// <summary>
     /// 오디오 플레이어 서비스
     /// </summary>
     private Services.Audio.AudioPlayerService? _audioPlayerService;
@@ -276,6 +291,12 @@ public partial class OneNoteViewModel : ViewModelBase
     private bool _isSummaryInProgress;
 
     /// <summary>
+    /// 실시간 요약 진행 중 여부
+    /// </summary>
+    [ObservableProperty]
+    private bool _isRealtimeSummaryInProgress;
+
+    /// <summary>
     /// 요약 진행 상태 텍스트
     /// </summary>
     [ObservableProperty]
@@ -316,6 +337,11 @@ public partial class OneNoteViewModel : ViewModelBase
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(RecordingStatusText))]
     private bool _isRecording;
+
+    /// <summary>
+    /// 녹음 완료 직후 플래그 (STT 결과 파일 로드 건너뛰기용)
+    /// </summary>
+    private bool _skipLoadSTTOnSelectionChange;
 
     /// <summary>
     /// 녹음 일시정지 여부
@@ -369,6 +395,46 @@ public partial class OneNoteViewModel : ViewModelBase
         _oneNoteService = oneNoteService ?? throw new ArgumentNullException(nameof(oneNoteService));
         _logger = Log.ForContext<OneNoteViewModel>();
         _speechService = new Services.Speech.SpeechRecognitionService();
+
+        // 녹음 목록에 새 파일 추가 시 자동 선택
+        _currentPageRecordings.CollectionChanged += OnCurrentPageRecordingsChanged;
+    }
+
+    // 녹음 완료 직후 플래그 (자동 선택용)
+    private bool _recordingJustCompleted;
+    private string? _lastCompletedRecordingPath;
+
+    /// <summary>
+    /// 녹음 목록 변경 시 처리 (새 파일 추가 시 자동 선택)
+    /// </summary>
+    private void OnCurrentPageRecordingsChanged(object? sender, System.Collections.Specialized.NotifyCollectionChangedEventArgs e)
+    {
+        // 새 아이템 추가 시
+        if (e.Action == System.Collections.Specialized.NotifyCollectionChangedAction.Add && e.NewItems != null)
+        {
+            // 녹음 중이면 무시
+            if (IsRecording) return;
+
+            // 녹음 완료 직후가 아니면 무시
+            if (!_recordingJustCompleted) return;
+
+            // 완료된 녹음 파일 찾기
+            foreach (Models.RecordingInfo? recording in e.NewItems)
+            {
+                if (recording != null && recording.FilePath == _lastCompletedRecordingPath)
+                {
+                    Log4.Info($"[녹음] ★ 새 녹음 파일 추가됨 - 자동 선택: {recording.FileName}");
+                    _skipLoadSTTOnSelectionChange = true;
+                    SelectedRecording = recording;
+                    NewRecordingSelected?.Invoke(recording);
+
+                    // 플래그 리셋
+                    _recordingJustCompleted = false;
+                    _lastCompletedRecordingPath = null;
+                    break;
+                }
+            }
+        }
     }
 
     /// <summary>
@@ -1468,9 +1534,19 @@ public partial class OneNoteViewModel : ViewModelBase
     {
         if (value != null)
         {
-            _logger.Information("[OneNote] OnSelectedRecordingChanged 호출됨: {FileName}", value.FileName);
-            LoadSTTResultAsync(value);
-            LoadSummaryResultAsync(value);
+            _logger.Information("[OneNote] OnSelectedRecordingChanged 호출됨: {FileName}, SkipLoad: {Skip}", value.FileName, _skipLoadSTTOnSelectionChange);
+
+            // 녹음 완료 직후에는 이미 메모리에 STT 결과가 있으므로 파일에서 로드하지 않음
+            if (!_skipLoadSTTOnSelectionChange)
+            {
+                LoadSTTResultAsync(value);
+                LoadSummaryResultAsync(value);
+            }
+            else
+            {
+                _skipLoadSTTOnSelectionChange = false; // 플래그 리셋
+                _logger.Information("[OneNote] 녹음 완료 직후 - 파일 로드 건너뜀, 메모리 STT 결과 유지: {Count}개", STTSegments.Count);
+            }
         }
         else
         {
@@ -1486,6 +1562,14 @@ public partial class OneNoteViewModel : ViewModelBase
     {
         if (SelectedRecording != null)
         {
+            // 녹음 완료 직후에는 메모리 결과 유지
+            if (_skipLoadSTTOnSelectionChange)
+            {
+                _logger.Information("[OneNote] LoadSelectedRecordingResults 건너뜀 (녹음 완료 직후): {FileName}", SelectedRecording.FileName);
+                _skipLoadSTTOnSelectionChange = false;
+                return;
+            }
+
             _logger.Information("[OneNote] LoadSelectedRecordingResults 호출: {FileName}", SelectedRecording.FileName);
             LoadSTTResultAsync(SelectedRecording);
             LoadSummaryResultAsync(SelectedRecording);
@@ -2185,6 +2269,8 @@ public partial class OneNoteViewModel : ViewModelBase
     {
         if (IsRecording) return;
 
+        Log4.Info("[녹음] ★ 녹음 시작 요청");
+
         try
         {
             // 이전 이벤트 핸들러 해제
@@ -2216,7 +2302,7 @@ public partial class OneNoteViewModel : ViewModelBase
                 {
                     IsRecording = false;
                     IsRecordingPaused = false;
-                    _logger.Error("녹음 오류: {Error}", error);
+                    Log4.Error($"[녹음] ★ 녹음 오류: {error}");
                     StopRealtimeSTT();
                 });
             };
@@ -2235,6 +2321,7 @@ public partial class OneNoteViewModel : ViewModelBase
             _lastSummarySegmentCount = 0;
 
             // AI 분석 활성화 시 실시간 STT 시작
+            Log4.Info($"[녹음] ★ IsAIAnalysisEnabled: {IsAIAnalysisEnabled}");
             if (IsAIAnalysisEnabled)
             {
                 StartRealtimeSTT();
@@ -2246,12 +2333,11 @@ public partial class OneNoteViewModel : ViewModelBase
 
             IsRecording = true;
             IsRecordingPaused = false;
-            _logger.Information("녹음 시작됨 (페이지 연결: {PageId}, 실시간 STT: {RealtimeSTT})",
-                pageId ?? "없음", IsAIAnalysisEnabled);
+            Log4.Info($"[녹음] ★ 녹음 시작됨 (페이지: {pageId ?? "없음"}, 실시간 STT: {IsAIAnalysisEnabled})");
         }
         catch (Exception ex)
         {
-            _logger.Error(ex, "녹음 시작 실패");
+            Log4.Error($"[녹음] ★ 녹음 시작 실패: {ex.Message}");
             IsRecording = false;
             StopRealtimeSTT();
         }
@@ -2262,11 +2348,11 @@ public partial class OneNoteViewModel : ViewModelBase
     /// </summary>
     private void OnRecordingCompleted(string filePath)
     {
-        _logger.Information("[녹음] 녹음 완료 이벤트 수신: {FilePath}", filePath);
+        Log4.Info($"[녹음] ★ 녹음 완료 이벤트 수신: {filePath}");
 
         System.Windows.Application.Current?.Dispatcher.Invoke(() =>
         {
-            _logger.Information("[녹음] 녹음 완료 처리 시작");
+            Log4.Info("[녹음] ★ 녹음 완료 처리 시작");
 
             IsRecording = false;
             IsRecordingPaused = false;
@@ -2276,19 +2362,50 @@ public partial class OneNoteViewModel : ViewModelBase
             // 실시간 STT 정리
             StopRealtimeSTT();
 
+            // 실시간 STT 결과를 STTSegments로 복사 (중복 방지를 위해 먼저 클리어)
+            STTSegments.Clear();
+            foreach (var segment in LiveSTTSegments)
+            {
+                STTSegments.Add(segment);
+            }
+            Log4.Info($"[녹음] ★ 실시간 STT 결과 복사: {STTSegments.Count}개");
+
+            // LiveSTTSegments 클리어
+            LiveSTTSegments.Clear();
+
             // 녹음 목록 새로고침 (동기)
-            _logger.Information("[녹음] 녹음 목록 새로고침 호출");
+            Log4.Info("[녹음] ★ 녹음 목록 새로고침 호출");
             LoadRecordings();
-            _logger.Information("[녹음] 녹음 목록 새로고침 완료 - CurrentPageRecordings: {Count}개", CurrentPageRecordings.Count);
+            Log4.Info($"[녹음] ★ 녹음 목록 새로고침 완료 - CurrentPageRecordings: {CurrentPageRecordings.Count}개");
+
+            // 새로 녹음된 파일 선택 (플래그 설정하여 파일 로드 건너뛰기)
+            var newRecording = CurrentPageRecordings.FirstOrDefault(r => r.FilePath == filePath);
+            Log4.Info($"[녹음] ★ 새 녹음 파일 검색 결과: {(newRecording != null ? newRecording.FileName : "찾지 못함")}");
+
+            if (newRecording != null)
+            {
+                _skipLoadSTTOnSelectionChange = true; // 파일에서 로드하지 않고 메모리 결과 유지
+                SelectedRecording = newRecording;
+                Log4.Info($"[녹음] ★ 새 녹음 파일 선택됨: {newRecording.FileName}");
+
+                // UI에 새 녹음 선택 알림 (ListBox 업데이트용)
+                Log4.Info($"[녹음] ★ NewRecordingSelected 이벤트 발생 전");
+                NewRecordingSelected?.Invoke(newRecording);
+                Log4.Info($"[녹음] ★ NewRecordingSelected 이벤트 발생 완료");
+            }
+            else
+            {
+                Log4.Warn($"[녹음] ★ 새 녹음 파일을 목록에서 찾지 못함: {filePath}");
+            }
         });
 
-        // 비동기 작업은 별도로 처리 (fire-and-forget이지만 명시적으로)
+        // 비동기 작업은 별도로 처리
         _ = Task.Run(async () =>
         {
             try
             {
-                // 실시간 STT 결과가 있으면 저장
-                if (LiveSTTSegments.Count > 0)
+                // 실시간 STT 결과가 있으면 저장 (STTSegments 기준)
+                if (STTSegments.Count > 0)
                 {
                     await SaveRealtimeSTTResultAsync(filePath);
                 }
@@ -2313,22 +2430,27 @@ public partial class OneNoteViewModel : ViewModelBase
     {
         if (_recordingService == null) return;
 
+        Log4.Info("[녹음] ★ 실시간 STT 시작");
+
         _realtimeSTTCts?.Cancel();
         _realtimeSTTCts = new CancellationTokenSource();
 
-        // 실시간 모드 활성화 (15초 청크)
+        // 실시간 모드 활성화 (설정된 청크 간격 사용)
         _recordingService.RealtimeEnabled = true;
-        _recordingService.RealtimeChunkSeconds = 15;
+        _recordingService.RealtimeChunkSeconds = _sttChunkIntervalSeconds;
 
-        // 실시간 청크 이벤트 연결
+        // 이벤트 중복 등록 방지: 먼저 해제 후 등록
+        _recordingService.RealtimeAudioChunkReady -= OnRealtimeAudioChunk;
         _recordingService.RealtimeAudioChunkReady += OnRealtimeAudioChunk;
 
-        // 실시간 요약 업데이트 타이머 (30초마다)
-        _realtimeSummaryTimer = new System.Timers.Timer(30000);
+        // 실시간 요약 업데이트 타이머 (설정된 간격 사용)
+        _realtimeSummaryTimer?.Stop();
+        _realtimeSummaryTimer?.Dispose();
+        _realtimeSummaryTimer = new System.Timers.Timer(_summaryIntervalSeconds * 1000);
         _realtimeSummaryTimer.Elapsed += async (s, e) => await UpdateRealtimeSummaryAsync();
         _realtimeSummaryTimer.Start();
 
-        _logger.Information("[녹음] 실시간 STT 모드 활성화 (15초 청크)");
+        Log4.Info($"[녹음] ★ 실시간 STT 모드 활성화 (STT: {_sttChunkIntervalSeconds}초, 요약: {_summaryIntervalSeconds}초)");
     }
 
     /// <summary>
@@ -2362,11 +2484,13 @@ public partial class OneNoteViewModel : ViewModelBase
 
         try
         {
-            _logger.Debug($"[녹음] 실시간 청크 수신: {chunkStartTime:mm\\:ss}, {audioData.Length} bytes");
+            Log4.Info($"[녹음] ★ 실시간 청크 수신: {chunkStartTime:mm\\:ss}, {audioData.Length} bytes");
 
             // STT 서비스로 청크 처리
             var segments = await _speechService.ProcessRealtimeChunkAsync(
                 audioData, chunkStartTime, 44100, _realtimeSTTCts.Token);
+
+            Log4.Info($"[녹음] ★ STT 처리 결과: {segments.Count}개 세그먼트");
 
             if (segments.Count > 0)
             {
@@ -2377,7 +2501,7 @@ public partial class OneNoteViewModel : ViewModelBase
                         LiveSTTSegments.Add(segment);
                     }
 
-                    _logger.Information("[녹음] 실시간 STT: {Count}개 세그먼트 추가 (총 {Total}개)", segments.Count, LiveSTTSegments.Count);
+                    Log4.Info($"[녹음] ★ 실시간 STT: {segments.Count}개 세그먼트 추가 (총 {LiveSTTSegments.Count}개)");
                 });
             }
         }
@@ -2387,7 +2511,7 @@ public partial class OneNoteViewModel : ViewModelBase
         }
         catch (Exception ex)
         {
-            _logger.Error($"[녹음] 실시간 청크 처리 실패: {ex.Message}");
+            Log4.Error($"[녹음] ★ 실시간 청크 처리 실패: {ex.Message}");
         }
     }
 
@@ -2396,30 +2520,52 @@ public partial class OneNoteViewModel : ViewModelBase
     /// </summary>
     private async Task UpdateRealtimeSummaryAsync()
     {
+        Log4.Info($"[녹음] ★ 실시간 요약 타이머 발동 - CTS: {_realtimeSTTCts != null}, 세그먼트: {LiveSTTSegments.Count}, 마지막: {_lastSummarySegmentCount}");
+
         if (_realtimeSTTCts == null || _realtimeSTTCts.IsCancellationRequested)
+        {
+            Log4.Info("[녹음] ★ 실시간 요약 스킵 - CTS 취소됨");
             return;
+        }
 
         // 새 세그먼트가 없으면 스킵
         if (LiveSTTSegments.Count <= _lastSummarySegmentCount)
+        {
+            Log4.Info($"[녹음] ★ 실시간 요약 스킵 - 새 세그먼트 없음 ({LiveSTTSegments.Count} <= {_lastSummarySegmentCount})");
             return;
+        }
 
         try
         {
+            // 실시간 요약 진행 중 표시
+            System.Windows.Application.Current?.Dispatcher.Invoke(() =>
+            {
+                IsRealtimeSummaryInProgress = true;
+            });
+
             var segmentsCopy = System.Windows.Application.Current?.Dispatcher.Invoke(() =>
                 LiveSTTSegments.ToList());
 
             if (segmentsCopy == null || segmentsCopy.Count == 0)
+            {
+                Log4.Info("[녹음] ★ 실시간 요약 스킵 - 세그먼트 복사 실패");
                 return;
+            }
 
             // 전체 텍스트 추출
             var fullText = string.Join(" ", segmentsCopy.Select(s => s.Text));
+            Log4.Info($"[녹음] ★ 실시간 요약 - 텍스트 길이: {fullText.Length}자");
+
             if (string.IsNullOrWhiteSpace(fullText) || fullText.Length < 50)
+            {
+                Log4.Info($"[녹음] ★ 실시간 요약 스킵 - 텍스트 너무 짧음 ({fullText.Length}자 < 50자)");
                 return;
+            }
 
             var speakers = segmentsCopy.Select(s => s.Speaker).Distinct().ToList();
             var duration = segmentsCopy.LastOrDefault()?.EndTime ?? TimeSpan.Zero;
 
-            _logger.Information("[녹음] 실시간 요약 업데이트 시작: {Count}개 세그먼트, {Length}자", segmentsCopy.Count, fullText.Length);
+            Log4.Info($"[녹음] ★ 실시간 요약 시작: {segmentsCopy.Count}개 세그먼트, {fullText.Length}자");
 
             // AI 요약 시도
             var aiService = (System.Windows.Application.Current as App)?.GetService<Services.AI.AIService>();
@@ -2427,12 +2573,15 @@ public partial class OneNoteViewModel : ViewModelBase
 
             if (aiService?.CurrentProvider != null)
             {
+                Log4.Info($"[녹음] ★ AI 요약 요청 중: {aiService.CurrentProviderName}");
                 var prompt = BuildRealtimeSummaryPrompt(fullText, speakers, duration);
                 var response = await aiService.CompleteAsync(prompt);
                 summaryText = response ?? GenerateLocalSummary(fullText, speakers, duration);
+                Log4.Info($"[녹음] ★ AI 요약 응답: {summaryText?.Length ?? 0}자");
             }
             else
             {
+                Log4.Info("[녹음] ★ AI Provider 없음, 로컬 요약 사용");
                 summaryText = GenerateLocalSummary(fullText, speakers, duration);
             }
 
@@ -2442,11 +2591,19 @@ public partial class OneNoteViewModel : ViewModelBase
                 _lastSummarySegmentCount = segmentsCopy.Count;
             });
 
-            _logger.Information("[녹음] 실시간 요약 업데이트 완료");
+            Log4.Info($"[녹음] ★ 실시간 요약 완료: {summaryText?.Length ?? 0}자");
         }
         catch (Exception ex)
         {
-            _logger.Error($"[녹음] 실시간 요약 업데이트 실패: {ex.Message}");
+            Log4.Error($"[녹음] ★ 실시간 요약 실패: {ex.Message}");
+        }
+        finally
+        {
+            // 실시간 요약 진행 완료
+            System.Windows.Application.Current?.Dispatcher.Invoke(() =>
+            {
+                IsRealtimeSummaryInProgress = false;
+            });
         }
     }
 
@@ -2475,7 +2632,7 @@ public partial class OneNoteViewModel : ViewModelBase
     /// </summary>
     private async Task SaveRealtimeSTTResultAsync(string audioFilePath)
     {
-        if (LiveSTTSegments.Count == 0) return;
+        if (STTSegments.Count == 0) return;
 
         try
         {
@@ -2485,11 +2642,11 @@ public partial class OneNoteViewModel : ViewModelBase
                 CreatedAt = DateTime.Now,
                 ModelName = "SenseVoice-Realtime",
                 Language = "ko",
-                TotalDuration = LiveSTTSegments.LastOrDefault()?.EndTime ?? TimeSpan.Zero,
-                Speakers = LiveSTTSegments.Select(s => s.Speaker).Distinct().ToList()
+                TotalDuration = STTSegments.LastOrDefault()?.EndTime ?? TimeSpan.Zero,
+                Speakers = STTSegments.Select(s => s.Speaker).Distinct().ToList()
             };
 
-            result.Segments.AddRange(LiveSTTSegments);
+            result.Segments.AddRange(STTSegments);
 
             var sttPath = Path.ChangeExtension(audioFilePath, ".stt.json");
             await _speechService.SaveResultAsync(result, sttPath);
@@ -2552,6 +2709,60 @@ public partial class OneNoteViewModel : ViewModelBase
         {
             var filePath = _recordingService.StopRecording();
             _logger.Information("녹음 중지됨: {FilePath}", filePath);
+
+            // 녹음 완료 플래그 설정 (CollectionChanged에서 자동 선택용)
+            if (!string.IsNullOrEmpty(filePath))
+            {
+                _recordingJustCompleted = true;
+                _lastCompletedRecordingPath = filePath;
+                Log4.Info($"[녹음] ★ 녹음 중지 - 완료 플래그 설정: {filePath}");
+            }
+
+            // 녹음 상태 즉시 업데이트
+            IsRecording = false;
+            IsRecordingPaused = false;
+            RecordingDuration = TimeSpan.Zero;
+            RecordingVolume = 0;
+
+            // 실시간 STT 정리
+            StopRealtimeSTT();
+
+            // 실시간 STT 결과를 STTSegments로 복사
+            STTSegments.Clear();
+            foreach (var segment in LiveSTTSegments)
+            {
+                STTSegments.Add(segment);
+            }
+            Log4.Info($"[녹음] ★ 실시간 STT 결과 복사: {STTSegments.Count}개");
+            LiveSTTSegments.Clear();
+
+            // 녹음 목록 새로고침 (CollectionChanged 이벤트 발생 → 자동 선택)
+            Log4.Info("[녹음] ★ 녹음 목록 새로고침 호출");
+            LoadRecordings();
+            Log4.Info($"[녹음] ★ 녹음 목록 새로고침 완료 - CurrentPageRecordings: {CurrentPageRecordings.Count}개");
+
+            // 비동기 작업 (STT/요약 저장)
+            if (!string.IsNullOrEmpty(filePath))
+            {
+                _ = Task.Run(async () =>
+                {
+                    try
+                    {
+                        if (STTSegments.Count > 0)
+                        {
+                            await SaveRealtimeSTTResultAsync(filePath);
+                        }
+                        if (!string.IsNullOrWhiteSpace(LiveSummaryText))
+                        {
+                            await SaveRealtimeSummaryAsync(filePath);
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.Error(ex, "[녹음] 실시간 STT/요약 저장 실패");
+                    }
+                });
+            }
         }
         catch (Exception ex)
         {
@@ -3098,6 +3309,38 @@ public partial class OneNoteViewModel : ViewModelBase
         {
             IsSaving = false;
             Log4.Debug("[OneNote] SaveAsync 완료, IsSaving=false");
+        }
+    }
+
+    /// <summary>
+    /// STT 청크 간격 설정 (초 단위)
+    /// </summary>
+    public void SetSTTChunkInterval(int seconds)
+    {
+        _sttChunkIntervalSeconds = Math.Max(5, Math.Min(60, seconds));
+        Log4.Info($"[녹음] STT 청크 간격 설정: {_sttChunkIntervalSeconds}초");
+
+        // 녹음 중이면 즉시 적용
+        if (_recordingService != null && IsRecording)
+        {
+            _recordingService.RealtimeChunkSeconds = _sttChunkIntervalSeconds;
+        }
+    }
+
+    /// <summary>
+    /// 요약 업데이트 간격 설정 (초 단위)
+    /// </summary>
+    public void SetSummaryInterval(int seconds)
+    {
+        _summaryIntervalSeconds = Math.Max(10, Math.Min(600, seconds));
+        Log4.Info($"[녹음] 요약 간격 설정: {_summaryIntervalSeconds}초");
+
+        // 녹음 중이고 타이머가 실행 중이면 타이머 재설정
+        if (_realtimeSummaryTimer != null && IsRecording)
+        {
+            _realtimeSummaryTimer.Stop();
+            _realtimeSummaryTimer.Interval = _summaryIntervalSeconds * 1000;
+            _realtimeSummaryTimer.Start();
         }
     }
 

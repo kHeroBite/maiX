@@ -6482,26 +6482,14 @@
                                                         <Ellipse x:Name="OneNoteSTTLiveIndicator" Width="8" Height="8" Fill="#10B981" Margin="8,0,4,0" Visibility="Collapsed"/>
                                                         <TextBlock x:Name="OneNoteSTTLiveText" Text="실시간" FontSize="11" Foreground="#10B981" Visibility="Collapsed"/>
                                                     </StackPanel>
-                                                    <!-- STT 분석 버튼 + 모델 선택 -->
-                                                    <StackPanel Grid.Column="1" Orientation="Horizontal">
-                                                        <ui:Button x:Name="OneNoteTabRunSTTButton"
-                                                                   Content="STT 분석"
-                                                                   Icon="{ui:SymbolIcon Play24}"
-                                                                   Appearance="Primary"
-                                                                   FontSize="11"
-                                                                   Padding="10,5"
-                                                                   Click="OneNoteTabRunSTT_Click"/>
-                                                        <!-- STT 모델 선택 드롭다운 -->
-                                                        <ComboBox x:Name="STTModelSelector"
-                                                                  Width="160" Margin="8,0,0,0"
-                                                                  FontSize="11"
-                                                                  SelectedIndex="2"
-                                                                  ToolTip="STT 모델 선택:&#x0a;• SenseVoice: 빠른 속도, 보통 정확도&#x0a;• Whisper (CPU): 느린 속도, 높은 정확도&#x0a;• Whisper (GPU): 빠른 속도, 높은 정확도 (CUDA 필요)">
-                                                            <ComboBoxItem Content="SenseVoice" Tag="sensevoice"/>
-                                                            <ComboBoxItem Content="Whisper (CPU)" Tag="whisper"/>
-                                                            <ComboBoxItem Content="Whisper (GPU)" Tag="whispergpu"/>
-                                                        </ComboBox>
-                                                    </StackPanel>
+                                                    <!-- STT 분석 버튼 (녹음탭의 모델 설정 사용) -->
+                                                    <ui:Button x:Name="OneNoteTabRunSTTButton" Grid.Column="1"
+                                                               Content="STT 분석"
+                                                               Icon="{ui:SymbolIcon Play24}"
+                                                               Appearance="Primary"
+                                                               FontSize="11"
+                                                               Padding="10,5"
+                                                               Click="OneNoteTabRunSTT_Click"/>
 
                                                     <!-- STT 진행률 표시 -->
                                                     <Border x:Name="OneNoteSTTProgressPanel" Grid.Row="1" Grid.ColumnSpan="2"
@@ -7246,32 +7234,103 @@
                                                     <RowDefinition Height="*"/>
                                                 </Grid.RowDefinitions>
 
-                                                <!-- 좌측 상단: 자동 분석 토글 버튼들 -->
-                                                <StackPanel Grid.Row="0" Orientation="Horizontal" HorizontalAlignment="Left" Margin="0,0,0,8">
-                                                    <!-- 자동 STT 토글 -->
-                                                    <ToggleButton x:Name="OneNoteAutoSTTToggle"
-                                                                  IsChecked="True"
-                                                                  ToolTip="자동 STT 분석 (녹음 시 실시간 음성인식)"
-                                                                  Width="20" Height="20"
-                                                                  Padding="0"
-                                                                  Click="OneNoteAutoSTTToggle_Click">
-                                                        <ui:SymbolIcon Symbol="Mic16" FontSize="10"/>
-                                                    </ToggleButton>
-                                                    <TextBlock Text="STT" FontSize="9" VerticalAlignment="Center" Margin="2,0,8,0"
-                                                               Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
+                                                <!-- 상단: STT/요약 설정 박스 -->
+                                                <Border Grid.Row="0" Background="{DynamicResource ControlFillColorSecondaryBrush}"
+                                                        CornerRadius="6" Padding="10,8" Margin="0,0,0,12">
+                                                    <Grid>
+                                                        <Grid.ColumnDefinitions>
+                                                            <ColumnDefinition Width="Auto"/>
+                                                            <ColumnDefinition Width="Auto"/>
+                                                            <ColumnDefinition Width="*"/>
+                                                        </Grid.ColumnDefinitions>
+                                                        <Grid.RowDefinitions>
+                                                            <RowDefinition Height="Auto"/>
+                                                            <RowDefinition Height="Auto"/>
+                                                            <RowDefinition Height="Auto"/>
+                                                        </Grid.RowDefinitions>
 
-                                                    <!-- 자동 요약 토글 -->
-                                                    <ToggleButton x:Name="OneNoteAutoSummaryToggle"
-                                                                  IsChecked="True"
-                                                                  ToolTip="자동 요약 (STT 결과를 AI로 요약)"
-                                                                  Width="20" Height="20"
-                                                                  Padding="0"
-                                                                  Click="OneNoteAutoSummaryToggle_Click">
-                                                        <ui:SymbolIcon Symbol="Sparkle16" FontSize="10"/>
-                                                    </ToggleButton>
-                                                    <TextBlock Text="요약" FontSize="9" VerticalAlignment="Center" Margin="2,0,0,0"
-                                                               Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
-                                                </StackPanel>
+                                                        <!-- 첫 번째 줄: STT 주기 -->
+                                                        <ToggleButton x:Name="OneNoteAutoSTTToggle" Grid.Row="0" Grid.Column="0"
+                                                                      IsChecked="True"
+                                                                      ToolTip="자동 STT 분석 (녹음 시 실시간 음성인식)"
+                                                                      Width="24" Height="24"
+                                                                      Padding="0" Margin="0,0,6,6"
+                                                                      Click="OneNoteAutoSTTToggle_Click">
+                                                            <ui:SymbolIcon Symbol="Mic16" FontSize="12" Foreground="#333333"/>
+                                                        </ToggleButton>
+                                                        <TextBlock Grid.Row="0" Grid.Column="1" Text="STT" FontSize="12" FontWeight="SemiBold"
+                                                                   VerticalAlignment="Center" Margin="0,0,8,6"
+                                                                   Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
+                                                        <ComboBox x:Name="OneNoteSTTIntervalSelector" Grid.Row="0" Grid.Column="2"
+                                                                  Width="90" Height="28"
+                                                                  FontSize="11"
+                                                                  Padding="8,4"
+                                                                  SelectedIndex="2"
+                                                                  HorizontalAlignment="Left"
+                                                                  Margin="0,0,0,6"
+                                                                  Background="{DynamicResource ControlFillColorDefaultBrush}"
+                                                                  BorderBrush="{DynamicResource ControlStrokeColorDefaultBrush}"
+                                                                  BorderThickness="1"
+                                                                  SelectionChanged="OneNoteSTTIntervalSelector_SelectionChanged"
+                                                                  ToolTip="STT 분석 주기 (실시간 청크 간격)">
+                                                            <ComboBoxItem Content="5초" Tag="5"/>
+                                                            <ComboBoxItem Content="10초" Tag="10"/>
+                                                            <ComboBoxItem Content="15초" Tag="15"/>
+                                                            <ComboBoxItem Content="20초" Tag="20"/>
+                                                            <ComboBoxItem Content="30초" Tag="30"/>
+                                                            <ComboBoxItem Content="1분" Tag="60"/>
+                                                        </ComboBox>
+
+                                                        <!-- 두 번째 줄: STT 모델 선택 -->
+                                                        <ComboBox x:Name="OneNoteSTTModelSelector" Grid.Row="1" Grid.Column="2"
+                                                                  Width="140" Height="28"
+                                                                  FontSize="11"
+                                                                  Padding="8,4"
+                                                                  SelectedIndex="2"
+                                                                  HorizontalAlignment="Left"
+                                                                  Margin="0,0,0,6"
+                                                                  Background="{DynamicResource ControlFillColorDefaultBrush}"
+                                                                  BorderBrush="{DynamicResource ControlStrokeColorDefaultBrush}"
+                                                                  BorderThickness="1"
+                                                                  SelectionChanged="OneNoteSTTModelSelector_SelectionChanged"
+                                                                  ToolTip="STT 모델 선택">
+                                                            <ComboBoxItem Content="SenseVoice" Tag="sensevoice"/>
+                                                            <ComboBoxItem Content="Whisper" Tag="whisper"/>
+                                                            <ComboBoxItem Content="Whisper (GPU)" Tag="whispergpu"/>
+                                                        </ComboBox>
+
+                                                        <!-- 세 번째 줄: 요약 주기 -->
+                                                        <ToggleButton x:Name="OneNoteAutoSummaryToggle" Grid.Row="2" Grid.Column="0"
+                                                                      IsChecked="True"
+                                                                      ToolTip="자동 요약 (STT 결과를 AI로 요약)"
+                                                                      Width="24" Height="24"
+                                                                      Padding="0" Margin="0,0,6,0"
+                                                                      Click="OneNoteAutoSummaryToggle_Click">
+                                                            <ui:SymbolIcon Symbol="Sparkle16" FontSize="12" Foreground="#333333"/>
+                                                        </ToggleButton>
+                                                        <TextBlock Grid.Row="2" Grid.Column="1" Text="요약" FontSize="12" FontWeight="SemiBold"
+                                                                   VerticalAlignment="Center" Margin="0,0,8,0"
+                                                                   Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
+                                                        <ComboBox x:Name="OneNoteSummaryIntervalSelector" Grid.Row="2" Grid.Column="2"
+                                                                  Width="90" Height="28"
+                                                                  FontSize="11"
+                                                                  Padding="8,4"
+                                                                  SelectedIndex="2"
+                                                                  HorizontalAlignment="Left"
+                                                                  Background="{DynamicResource ControlFillColorDefaultBrush}"
+                                                                  BorderBrush="{DynamicResource ControlStrokeColorDefaultBrush}"
+                                                                  BorderThickness="1"
+                                                                  SelectionChanged="OneNoteSummaryIntervalSelector_SelectionChanged"
+                                                                  ToolTip="AI 요약 주기">
+                                                            <ComboBoxItem Content="10초" Tag="10"/>
+                                                            <ComboBoxItem Content="20초" Tag="20"/>
+                                                            <ComboBoxItem Content="30초" Tag="30"/>
+                                                            <ComboBoxItem Content="1분" Tag="60"/>
+                                                            <ComboBoxItem Content="5분" Tag="300"/>
+                                                            <ComboBoxItem Content="10분" Tag="600"/>
+                                                        </ComboBox>
+                                                    </Grid>
+                                                </Border>
 
                                                 <!-- 메인 녹음 컨트롤 -->
                                                 <StackPanel Grid.Row="1">
@@ -7350,6 +7409,7 @@
                                         <ListBox x:Name="OneNoteRecordingsList"
                                                  Background="Transparent"
                                                  BorderThickness="0"
+                                                 SelectedItem="{Binding SelectedRecording, Mode=TwoWay}"
                                                  SelectionChanged="OneNoteRecordingsList_SelectionChanged">
                                             <ListBox.ItemContainerStyle>
                                                 <Style TargetType="ListBoxItem">
@@ -7679,7 +7739,7 @@
                                 </Border>
 
                                 <!-- AI 에이전트 탭 -->
-                                <Border x:Name="OneNoteAIAgentPanel" Visibility="Visible" Padding="12">
+                                <Border x:Name="OneNoteAIAgentPanel" Visibility="Collapsed" Padding="12">
                                     <Grid>
                                         <Grid.RowDefinitions>
                                             <RowDefinition Height="Auto"/>

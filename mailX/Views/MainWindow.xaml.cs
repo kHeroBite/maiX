@@ -4949,7 +4949,7 @@ public partial class MainWindow : FluentWindow
         // 메일용 AI 패널 콘텐츠 숨김
         if (AIPanelHeader != null) AIPanelHeader.Visibility = Visibility.Collapsed;
         if (AIPanelContent != null) AIPanelContent.Visibility = Visibility.Collapsed;
-        // OneNote용 AI 패널 표시 (메인 AI 패널 내부)
+        // OneNote용 AI 패널: 항상 표시 (기본 UI는 노트 선택 여부와 상관없이 보임)
         if (OneNoteMainAIPanel != null) OneNoteMainAIPanel.Visibility = Visibility.Visible;
 
         _viewModel.StatusMessage = "OneNote";
@@ -5602,7 +5602,14 @@ public partial class MainWindow : FluentWindow
 
         if (sender is System.Windows.Controls.ListBox listBox)
         {
-            _oneNoteViewModel.SelectedRecording = listBox.SelectedItem as Models.RecordingInfo;
+            var selectedRecording = listBox.SelectedItem as Models.RecordingInfo;
+
+            // ViewModel의 SelectedRecording과 다른 경우에만 업데이트
+            // (ViewModel에서 이미 설정된 경우 중복 설정 방지)
+            if (_oneNoteViewModel.SelectedRecording != selectedRecording)
+            {
+                _oneNoteViewModel.SelectedRecording = selectedRecording;
+            }
 
             // 녹음 선택 시 탭 바 표시 및 녹음내용 탭으로 자동 전환
             if (_oneNoteViewModel.SelectedRecording != null)
@@ -5610,9 +5617,7 @@ public partial class MainWindow : FluentWindow
                 OneNoteContentTabBar.Visibility = Visibility.Visible;
                 SwitchToRecordingContentTab();
 
-                // STT/요약 결과 명시적 로드
-                _oneNoteViewModel.LoadSelectedRecordingResults();
-
+                // OnSelectedRecordingChanged에서 이미 STT/요약 로드 처리됨
                 // STT/요약 로드가 완료될 때까지 대기 후 UI 갱신
                 await Task.Delay(300);
                 UpdateRecordingContentPanel();
@@ -5710,11 +5715,32 @@ public partial class MainWindow : FluentWindow
         if (_oneNoteViewModel == null) return;
 
         // STT 세그먼트 목록 업데이트
-        if (_oneNoteViewModel.STTSegments.Count > 0)
+        // 녹음 중일 때는 LiveSTTSegments, 그 외에는 STTSegments 표시
+        var segmentsToShow = _oneNoteViewModel.IsRecording && _oneNoteViewModel.IsAIAnalysisEnabled
+            ? _oneNoteViewModel.LiveSTTSegments
+            : _oneNoteViewModel.STTSegments;
+
+        if (segmentsToShow.Count > 0)
         {
             OneNoteSTTEmptyText.Visibility = Visibility.Collapsed;
             OneNoteSTTSegmentsList.Visibility = Visibility.Visible;
-            OneNoteSTTSegmentsList.ItemsSource = _oneNoteViewModel.STTSegments;
+            OneNoteSTTSegmentsList.ItemsSource = segmentsToShow;
+            
+            // 실시간 STT 중일 때 자동 스크롤
+            if (_oneNoteViewModel.IsRecording && _oneNoteViewModel.IsAIAnalysisEnabled)
+            {
+                OneNoteSTTSegmentsList.Dispatcher.BeginInvoke(new Action(() =>
+                {
+                    // ItemsControl의 부모 ScrollViewer를 찾아 맨 아래로 스크롤
+                    var scrollViewer = FindVisualChild<ScrollViewer>(OneNoteSTTSegmentsList);
+                    if (scrollViewer == null)
+                    {
+                        // 부모에서 ScrollViewer 찾기
+                        scrollViewer = FindVisualParent<ScrollViewer>(OneNoteSTTSegmentsList);
+                    }
+                    scrollViewer?.ScrollToEnd();
+                }), System.Windows.Threading.DispatcherPriority.Background);
+            }
         }
         else
         {
@@ -5730,7 +5756,7 @@ public partial class MainWindow : FluentWindow
             OneNoteSTTLiveText.Visibility = Visibility.Visible;
             OneNoteTabRunSTTButton.Content = "실시간 STT 중...";
             OneNoteTabRunSTTButton.IsEnabled = false;
-            STTModelSelector.IsEnabled = false;
+            OneNoteSTTModelSelector.IsEnabled = false;
         }
         else if (_oneNoteViewModel.IsRecording)
         {
@@ -5739,7 +5765,7 @@ public partial class MainWindow : FluentWindow
             OneNoteSTTLiveText.Visibility = Visibility.Collapsed;
             OneNoteTabRunSTTButton.Content = "녹음 중...";
             OneNoteTabRunSTTButton.IsEnabled = false;
-            STTModelSelector.IsEnabled = false;
+            OneNoteSTTModelSelector.IsEnabled = false;
         }
         else
         {
@@ -5748,81 +5774,143 @@ public partial class MainWindow : FluentWindow
             OneNoteSTTLiveText.Visibility = Visibility.Collapsed;
             OneNoteTabRunSTTButton.Content = "STT 분석";
             OneNoteTabRunSTTButton.IsEnabled = true;
-            STTModelSelector.IsEnabled = true;
+            OneNoteSTTModelSelector.IsEnabled = true;
         }
 
         // 요약 결과 업데이트
-        var summary = _oneNoteViewModel.CurrentSummary;
-        if (summary != null)
+        // 녹음 중이고 AI 분석 활성화 시: LiveSummaryText 사용
+        // 그 외: CurrentSummary 사용
+        if (_oneNoteViewModel.IsRecording && _oneNoteViewModel.IsAIAnalysisEnabled)
         {
-            OneNoteSummaryEmptyText.Visibility = Visibility.Collapsed;
-            OneNoteSummaryContent.Visibility = Visibility.Visible;
-
-            // 제목 표시 (회의 제목을 맨 위에 한 줄로)
-            if (OneNoteSummaryTitlePanel != null && OneNoteSummaryTitleTextBlock != null)
+            // 실시간 요약 표시
+            var liveSummary = _oneNoteViewModel.LiveSummaryText;
+            if (!string.IsNullOrWhiteSpace(liveSummary))
             {
-                if (!string.IsNullOrEmpty(summary.Title))
-                {
-                    OneNoteSummaryTitlePanel.Visibility = Visibility.Visible;
-                    OneNoteSummaryTitleTextBlock.Text = summary.Title;
-                    Log4.Debug($"[OneNote] 회의 제목 표시: {summary.Title}");
-                }
-                else
+                OneNoteSummaryEmptyText.Visibility = Visibility.Collapsed;
+                OneNoteSummaryContent.Visibility = Visibility.Visible;
+                
+                // 실시간 요약은 제목/핵심포인트/액션아이템 없이 요약 텍스트만 표시
+                if (OneNoteSummaryTitlePanel != null)
                 {
                     OneNoteSummaryTitlePanel.Visibility = Visibility.Collapsed;
                 }
-            }
-
-            OneNoteSummaryText.Text = summary.Summary;
-
-            // 핵심 포인트
-            if (summary.KeyPoints?.Count > 0)
-            {
-                OneNoteKeyPointsPanel.Visibility = Visibility.Visible;
-                OneNoteKeyPointsList.ItemsSource = summary.KeyPoints;
-            }
-            else
-            {
+                OneNoteSummaryText.Text = liveSummary;
                 OneNoteKeyPointsPanel.Visibility = Visibility.Collapsed;
-            }
-
-            // 액션 아이템
-            if (summary.ActionItems?.Count > 0)
-            {
-                OneNoteActionItemsPanel.Visibility = Visibility.Visible;
-
-                // 기존 이벤트 해제 후 새로 연결
-                foreach (var item in summary.ActionItems)
-                {
-                    item.PropertyChanged -= ActionItem_PropertyChanged;
-                    item.PropertyChanged += ActionItem_PropertyChanged;
-                }
-
-                OneNoteActionItemsList.ItemsSource = null; // 먼저 초기화
-                OneNoteActionItemsList.ItemsSource = summary.ActionItems;
-
-                // ItemsControl 로드 완료 후 체크박스 이벤트 연결
-                OneNoteActionItemsList.Dispatcher.BeginInvoke(new Action(() =>
-                {
-                    AttachCheckBoxEvents(OneNoteActionItemsList);
-                }), System.Windows.Threading.DispatcherPriority.Loaded);
-
-                Log4.Info($"[OneNote] UpdateRecordingContentPanel: 액션아이템 {summary.ActionItems.Count}개 로드됨");
+                OneNoteActionItemsPanel.Visibility = Visibility.Collapsed;
+                
+                Log4.Debug($"[OneNote] 실시간 요약 UI 업데이트: {liveSummary.Length}자");
             }
             else
             {
-                OneNoteActionItemsPanel.Visibility = Visibility.Collapsed;
+                // 아직 실시간 요약 없음
+                OneNoteSummaryEmptyText.Text = "실시간 요약 대기 중...";
+                OneNoteSummaryEmptyText.Visibility = Visibility.Visible;
+                OneNoteSummaryContent.Visibility = Visibility.Collapsed;
+            }
+            
+            // 실시간 요약 진행 중 표시기 및 버튼 상태
+            if (_oneNoteViewModel.IsRealtimeSummaryInProgress)
+            {
+                OneNoteSummaryProgress.Visibility = Visibility.Visible;
+                // 프로그레스 텍스트가 있으면 업데이트
+                if (OneNoteSummaryProgressText != null)
+                {
+                    OneNoteSummaryProgressText.Text = "실시간 AI 요약 중...";
+                }
+                // AI 요약 버튼도 실시간 요약 중 표시
+                if (OneNoteTabRunSummaryButton != null)
+                {
+                    OneNoteTabRunSummaryButton.Content = "실시간 AI요약 중...";
+                    OneNoteTabRunSummaryButton.IsEnabled = false;
+                }
+            }
+            else
+            {
+                OneNoteSummaryProgress.Visibility = Visibility.Collapsed;
+                // 녹음 중이면 버튼 비활성화 (실시간 요약 대기)
+                if (OneNoteTabRunSummaryButton != null)
+                {
+                    OneNoteTabRunSummaryButton.Content = "실시간 요약 대기...";
+                    OneNoteTabRunSummaryButton.IsEnabled = false;
+                }
             }
         }
         else
         {
-            OneNoteSummaryEmptyText.Visibility = Visibility.Visible;
-            OneNoteSummaryContent.Visibility = Visibility.Collapsed;
-        }
+            // 일반 요약 표시 (녹음 완료 후)
+            var summary = _oneNoteViewModel.CurrentSummary;
+            if (summary != null)
+            {
+                OneNoteSummaryEmptyText.Visibility = Visibility.Collapsed;
+                OneNoteSummaryContent.Visibility = Visibility.Visible;
 
-        // 요약 진행 중 표시
-        OneNoteSummaryProgress.Visibility = _oneNoteViewModel.IsSummaryInProgress
-            ? Visibility.Visible : Visibility.Collapsed;
+                // 제목 표시 (회의 제목을 맨 위에 한 줄로)
+                if (OneNoteSummaryTitlePanel != null && OneNoteSummaryTitleTextBlock != null)
+                {
+                    if (!string.IsNullOrEmpty(summary.Title))
+                    {
+                        OneNoteSummaryTitlePanel.Visibility = Visibility.Visible;
+                        OneNoteSummaryTitleTextBlock.Text = summary.Title;
+                        Log4.Debug($"[OneNote] 회의 제목 표시: {summary.Title}");
+                    }
+                    else
+                    {
+                        OneNoteSummaryTitlePanel.Visibility = Visibility.Collapsed;
+                    }
+                }
+
+                OneNoteSummaryText.Text = summary.Summary;
+
+                // 핵심 포인트
+                if (summary.KeyPoints?.Count > 0)
+                {
+                    OneNoteKeyPointsPanel.Visibility = Visibility.Visible;
+                    OneNoteKeyPointsList.ItemsSource = summary.KeyPoints;
+                }
+                else
+                {
+                    OneNoteKeyPointsPanel.Visibility = Visibility.Collapsed;
+                }
+
+                // 액션 아이템
+                if (summary.ActionItems?.Count > 0)
+                {
+                    OneNoteActionItemsPanel.Visibility = Visibility.Visible;
+
+                    // 기존 이벤트 해제 후 새로 연결
+                    foreach (var item in summary.ActionItems)
+                    {
+                        item.PropertyChanged -= ActionItem_PropertyChanged;
+                        item.PropertyChanged += ActionItem_PropertyChanged;
+                    }
+
+                    OneNoteActionItemsList.ItemsSource = null; // 먼저 초기화
+                    OneNoteActionItemsList.ItemsSource = summary.ActionItems;
+
+                    // ItemsControl 로드 완료 후 체크박스 이벤트 연결
+                    OneNoteActionItemsList.Dispatcher.BeginInvoke(new Action(() =>
+                    {
+                        AttachCheckBoxEvents(OneNoteActionItemsList);
+                    }), System.Windows.Threading.DispatcherPriority.Loaded);
+
+                    Log4.Info($"[OneNote] UpdateRecordingContentPanel: 액션아이템 {summary.ActionItems.Count}개 로드됨");
+                }
+                else
+                {
+                    OneNoteActionItemsPanel.Visibility = Visibility.Collapsed;
+                }
+            }
+            else
+            {
+                OneNoteSummaryEmptyText.Text = "AI 요약이 없습니다.";
+                OneNoteSummaryEmptyText.Visibility = Visibility.Visible;
+                OneNoteSummaryContent.Visibility = Visibility.Collapsed;
+            }
+
+            // 요약 진행 중 표시
+            OneNoteSummaryProgress.Visibility = _oneNoteViewModel.IsSummaryInProgress
+                ? Visibility.Visible : Visibility.Collapsed;
+        }
     }
 
     /// <summary>
@@ -5859,7 +5947,7 @@ public partial class MainWindow : FluentWindow
 
         // 선택된 STT 모델 유형 확인
         var selectedModel = Services.Speech.STTModelType.SenseVoice;
-        if (STTModelSelector?.SelectedItem is System.Windows.Controls.ComboBoxItem selectedItem)
+        if (OneNoteSTTModelSelector?.SelectedItem is System.Windows.Controls.ComboBoxItem selectedItem)
         {
             var tag = selectedItem.Tag?.ToString()?.ToLowerInvariant();
             selectedModel = tag switch
@@ -6006,7 +6094,7 @@ public partial class MainWindow : FluentWindow
 
         // 선택된 STT 모델 유형 확인
         var selectedModel = Services.Speech.STTModelType.SenseVoice;
-        if (STTModelSelector?.SelectedItem is System.Windows.Controls.ComboBoxItem selectedItem)
+        if (OneNoteSTTModelSelector?.SelectedItem is System.Windows.Controls.ComboBoxItem selectedItem)
         {
             var tag = selectedItem.Tag?.ToString()?.ToLowerInvariant();
             selectedModel = tag switch
@@ -6250,6 +6338,21 @@ public partial class MainWindow : FluentWindow
             var descendant = FindVisualChild<T>(child);
             if (descendant != null)
                 return descendant;
+        }
+        return null;
+    }
+
+    /// <summary>
+    /// VisualTree에서 특정 타입의 부모 요소 찾기
+    /// </summary>
+    private T? FindVisualParent<T>(System.Windows.DependencyObject child) where T : System.Windows.DependencyObject
+    {
+        var parent = System.Windows.Media.VisualTreeHelper.GetParent(child);
+        while (parent != null)
+        {
+            if (parent is T result)
+                return result;
+            parent = System.Windows.Media.VisualTreeHelper.GetParent(parent);
         }
         return null;
     }
@@ -6637,6 +6740,180 @@ public partial class MainWindow : FluentWindow
 
             _oneNoteViewModel.IsAutoSummaryEnabled = toggleButton.IsChecked == true;
             Log4.Debug($"[OneNote] 자동 요약: {_oneNoteViewModel.IsAutoSummaryEnabled}");
+        }
+    }
+
+    /// <summary>
+    /// STT 모델 선택 변경
+    /// </summary>
+    private void OneNoteSTTModelSelector_SelectionChanged(object sender, System.Windows.Controls.SelectionChangedEventArgs e)
+    {
+        if (sender is System.Windows.Controls.ComboBox comboBox && comboBox.SelectedItem is System.Windows.Controls.ComboBoxItem selectedItem)
+        {
+            var modelTag = selectedItem.Tag?.ToString() ?? "whispergpu";
+            SaveOneNoteRecordingSettings();
+            Log4.Debug($"[OneNote] STT 모델 변경: {modelTag}");
+        }
+    }
+
+    /// <summary>
+    /// STT 분석 주기 선택 변경
+    /// </summary>
+    private void OneNoteSTTIntervalSelector_SelectionChanged(object sender, System.Windows.Controls.SelectionChangedEventArgs e)
+    {
+        if (sender is System.Windows.Controls.ComboBox comboBox && comboBox.SelectedItem is System.Windows.Controls.ComboBoxItem selectedItem)
+        {
+            if (int.TryParse(selectedItem.Tag?.ToString(), out int seconds))
+            {
+                // ViewModel에 청크 간격 설정
+                if (_oneNoteViewModel != null)
+                {
+                    _oneNoteViewModel.SetSTTChunkInterval(seconds);
+                }
+                SaveOneNoteRecordingSettings();
+                Log4.Debug($"[OneNote] STT 분석 주기 변경: {seconds}초");
+            }
+        }
+    }
+
+    /// <summary>
+    /// 요약 주기 선택 변경
+    /// </summary>
+    private void OneNoteSummaryIntervalSelector_SelectionChanged(object sender, System.Windows.Controls.SelectionChangedEventArgs e)
+    {
+        if (sender is System.Windows.Controls.ComboBox comboBox && comboBox.SelectedItem is System.Windows.Controls.ComboBoxItem selectedItem)
+        {
+            if (int.TryParse(selectedItem.Tag?.ToString(), out int seconds))
+            {
+                // ViewModel에 요약 간격 설정
+                if (_oneNoteViewModel != null)
+                {
+                    _oneNoteViewModel.SetSummaryInterval(seconds);
+                }
+                SaveOneNoteRecordingSettings();
+                Log4.Debug($"[OneNote] 요약 주기 변경: {seconds}초");
+            }
+        }
+    }
+
+    /// <summary>
+    /// OneNote 녹음 설정 저장
+    /// </summary>
+    private void SaveOneNoteRecordingSettings()
+    {
+        try
+        {
+            var settings = new
+            {
+                STTModel = (OneNoteSTTModelSelector?.SelectedItem as System.Windows.Controls.ComboBoxItem)?.Tag?.ToString() ?? "whispergpu",
+                STTIntervalSeconds = int.TryParse((OneNoteSTTIntervalSelector?.SelectedItem as System.Windows.Controls.ComboBoxItem)?.Tag?.ToString(), out int sttInterval) ? sttInterval : 15,
+                SummaryIntervalSeconds = int.TryParse((OneNoteSummaryIntervalSelector?.SelectedItem as System.Windows.Controls.ComboBoxItem)?.Tag?.ToString(), out int summaryInterval) ? summaryInterval : 30
+            };
+
+            var settingsPath = System.IO.Path.Combine(
+                Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
+                "mailX", "settings", "onenote_recording.json");
+
+            var settingsDir = System.IO.Path.GetDirectoryName(settingsPath);
+            if (!string.IsNullOrEmpty(settingsDir) && !System.IO.Directory.Exists(settingsDir))
+            {
+                System.IO.Directory.CreateDirectory(settingsDir);
+            }
+
+            var json = System.Text.Json.JsonSerializer.Serialize(settings, new System.Text.Json.JsonSerializerOptions { WriteIndented = true });
+            System.IO.File.WriteAllText(settingsPath, json);
+
+            Log4.Debug($"[OneNote] 녹음 설정 저장: {settingsPath}");
+        }
+        catch (Exception ex)
+        {
+            Log4.Error($"[OneNote] 녹음 설정 저장 실패: {ex.Message}");
+        }
+    }
+
+    /// <summary>
+    /// OneNote 녹음 설정 로드
+    /// </summary>
+    private void LoadOneNoteRecordingSettings()
+    {
+        try
+        {
+            var settingsPath = System.IO.Path.Combine(
+                Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
+                "mailX", "settings", "onenote_recording.json");
+
+            Log4.Debug($"[OneNote] 녹음 설정 파일 경로: {settingsPath}");
+
+            if (!System.IO.File.Exists(settingsPath))
+            {
+                Log4.Debug("[OneNote] 녹음 설정 파일 없음, 기본값 사용");
+                return;
+            }
+
+            var json = System.IO.File.ReadAllText(settingsPath);
+            Log4.Debug($"[OneNote] 녹음 설정 JSON 로드됨: {json}");
+            using var doc = System.Text.Json.JsonDocument.Parse(json);
+            var root = doc.RootElement;
+
+            // STT 모델 선택
+            if (root.TryGetProperty("STTModel", out var sttModelProp))
+            {
+                var modelTag = sttModelProp.GetString();
+                Log4.Debug($"[OneNote] STT 모델 설정: {modelTag}");
+                for (int i = 0; i < OneNoteSTTModelSelector.Items.Count; i++)
+                {
+                    if (OneNoteSTTModelSelector.Items[i] is System.Windows.Controls.ComboBoxItem item &&
+                        item.Tag?.ToString() == modelTag)
+                    {
+                        OneNoteSTTModelSelector.SelectedIndex = i;
+                        break;
+                    }
+                }
+            }
+
+            // STT 분석 주기
+            if (root.TryGetProperty("STTIntervalSeconds", out var sttIntervalProp))
+            {
+                var intervalSeconds = sttIntervalProp.GetInt32();
+                Log4.Debug($"[OneNote] STT 주기 설정: {intervalSeconds}초");
+                for (int i = 0; i < OneNoteSTTIntervalSelector.Items.Count; i++)
+                {
+                    if (OneNoteSTTIntervalSelector.Items[i] is System.Windows.Controls.ComboBoxItem item &&
+                        int.TryParse(item.Tag?.ToString(), out int itemSeconds) &&
+                        itemSeconds == intervalSeconds)
+                    {
+                        OneNoteSTTIntervalSelector.SelectedIndex = i;
+                        break;
+                    }
+                }
+                // ViewModel에도 설정
+                _oneNoteViewModel?.SetSTTChunkInterval(intervalSeconds);
+            }
+
+            // 요약 주기
+            if (root.TryGetProperty("SummaryIntervalSeconds", out var summaryIntervalProp))
+            {
+                var intervalSeconds = summaryIntervalProp.GetInt32();
+                Log4.Debug($"[OneNote] 요약 주기 설정: {intervalSeconds}초");
+                for (int i = 0; i < OneNoteSummaryIntervalSelector.Items.Count; i++)
+                {
+                    if (OneNoteSummaryIntervalSelector.Items[i] is System.Windows.Controls.ComboBoxItem item &&
+                        int.TryParse(item.Tag?.ToString(), out int itemSeconds) &&
+                        itemSeconds == intervalSeconds)
+                    {
+                        OneNoteSummaryIntervalSelector.SelectedIndex = i;
+                        break;
+                    }
+                }
+                // ViewModel에도 설정
+                _oneNoteViewModel?.SetSummaryInterval(intervalSeconds);
+            }
+
+            Log4.Info($"[OneNote] 녹음 설정 로드 완료: STT모델={root.GetProperty("STTModel").GetString()}, STT주기={root.GetProperty("STTIntervalSeconds").GetInt32()}초, 요약주기={root.GetProperty("SummaryIntervalSeconds").GetInt32()}초");
+        }
+        catch (Exception ex)
+        {
+            Log4.Error($"[OneNote] 녹음 설정 로드 실패: {ex.Message}");
         }
     }
 
@@ -11156,6 +11433,50 @@ public partial class MainWindow : FluentWindow
                 if (oneNoteService != null)
                 {
                     _oneNoteViewModel = new OneNoteViewModel(oneNoteService);
+
+                    // 녹음 완료 후 새 파일 선택 이벤트 핸들러
+                    _oneNoteViewModel.NewRecordingSelected += (newRecording) =>
+                    {
+                        Dispatcher.Invoke(() =>
+                        {
+                            if (OneNoteRecordingsList != null && newRecording != null)
+                            {
+                                Log4.Info($"[MainWindow] NewRecordingSelected 이벤트 시작 - 파일: {newRecording.FileName}");
+                                Log4.Info($"[MainWindow] CurrentPageRecordings 개수: {_oneNoteViewModel.CurrentPageRecordings.Count}");
+
+                                // ItemsSource가 CurrentPageRecordings와 동일한지 확인
+                                if (OneNoteRecordingsList.ItemsSource != _oneNoteViewModel.CurrentPageRecordings)
+                                {
+                                    Log4.Info($"[MainWindow] ItemsSource 재설정 필요 - 현재 ItemsSource와 CurrentPageRecordings 불일치");
+                                    OneNoteRecordingsList.ItemsSource = _oneNoteViewModel.CurrentPageRecordings;
+                                }
+
+                                Log4.Info($"[MainWindow] ListBox Items 개수: {OneNoteRecordingsList.Items.Count}");
+                                Log4.Info($"[MainWindow] ListBox 현재 SelectedItem: {(OneNoteRecordingsList.SelectedItem as Models.RecordingInfo)?.FileName ?? "null"}");
+
+                                // 새 녹음 파일이 ItemsSource에 있는지 확인
+                                var existsInList = _oneNoteViewModel.CurrentPageRecordings.Any(r => r.FilePath == newRecording.FilePath);
+                                Log4.Info($"[MainWindow] 새 녹음 파일이 목록에 있음: {existsInList}");
+
+                                if (existsInList)
+                                {
+                                    // ListBox의 SelectedItem을 새 녹음 파일로 설정
+                                    OneNoteRecordingsList.SelectedItem = newRecording;
+                                    Log4.Info($"[MainWindow] ListBox.SelectedItem 설정 후: {(OneNoteRecordingsList.SelectedItem as Models.RecordingInfo)?.FileName ?? "null"}");
+
+                                    // 선택된 아이템이 보이도록 스크롤
+                                    OneNoteRecordingsList.ScrollIntoView(newRecording);
+                                }
+
+                                // UI 패널 업데이트
+                                UpdateRecordingContentPanel();
+                                UpdateSummaryContentPanel();
+
+                                Log4.Info($"[MainWindow] NewRecordingSelected 이벤트 완료");
+                            }
+                        });
+                    };
+
                     // HasUnsavedChanges 변경 시 ● 표시 업데이트 및 SelectedPage 변경 시 녹음 목록 업데이트
                     _oneNoteViewModel.PropertyChanged += (s, e) =>
                     {
@@ -11182,6 +11503,12 @@ public partial class MainWindow : FluentWindow
                             Log4.Info($"[MainWindow] SelectedPage PropertyChanged 감지 - 페이지: {_oneNoteViewModel?.SelectedPage?.Title ?? "null"}");
                             Dispatcher.Invoke(() =>
                             {
+                                // 노트 선택 시 우측 AI 패널은 항상 표시 (기본 UI 유지)
+                                if (OneNoteMainAIPanel != null)
+                                {
+                                    OneNoteMainAIPanel.Visibility = Visibility.Visible;
+                                    Log4.Debug($"[MainWindow] OneNoteMainAIPanel Visibility: Visible (페이지 선택: {_oneNoteViewModel?.SelectedPage?.Title ?? "없음"})");
+                                }
                                 // 녹음 목록 로드 완료까지 폴링 방식으로 대기
                                 _ = Task.Run(async () =>
                                 {
@@ -11201,40 +11528,86 @@ public partial class MainWindow : FluentWindow
                                             Log4.Info($"[MainWindow] SelectedPage 변경 - 녹음 목록 UI 업데이트: {_oneNoteViewModel.CurrentPageRecordings.Count}개");
 
                                             // 녹음 파일이 있으면 첫 번째 파일 자동 선택 및 UI 활성화
-                                            if (_oneNoteViewModel.CurrentPageRecordings.Count > 0)
+                                            // 단, 녹음 중이거나 SelectedRecording이 이미 설정되어 있으면 건너뜀
+                                            if (_oneNoteViewModel.CurrentPageRecordings.Count > 0 && !_oneNoteViewModel.IsRecording)
                                             {
-                                                var firstRecording = _oneNoteViewModel.CurrentPageRecordings[0];
-                                                _oneNoteViewModel.SelectedRecording = firstRecording;
+                                                // 이미 현재 페이지의 녹음 파일이 선택되어 있으면 건너뜀
+                                                var currentSelected = _oneNoteViewModel.SelectedRecording;
+                                                var isCurrentPageRecording = currentSelected != null &&
+                                                    _oneNoteViewModel.CurrentPageRecordings.Any(r => r.FilePath == currentSelected.FilePath);
 
-                                                // ListBox가 아이템을 렌더링한 후 선택 (다음 렌더링 사이클에서 실행)
-                                                Dispatcher.BeginInvoke(System.Windows.Threading.DispatcherPriority.Loaded, new Action(() =>
+                                                if (!isCurrentPageRecording)
                                                 {
-                                                    OneNoteRecordingsList.SelectedItem = firstRecording;
-                                                    Log4.Info($"[MainWindow] 첫 번째 녹음 파일 자동 선택: {firstRecording.FileName}");
+                                                    var firstRecording = _oneNoteViewModel.CurrentPageRecordings[0];
+                                                    _oneNoteViewModel.SelectedRecording = firstRecording;
 
-                                                    // 우측 AI 패널의 녹음 탭 활성화
-                                                    SwitchAITab("record");
+                                                    // ListBox가 아이템을 렌더링한 후 선택 (다음 렌더링 사이클에서 실행)
+                                                    Dispatcher.BeginInvoke(System.Windows.Threading.DispatcherPriority.Loaded, new Action(() =>
+                                                    {
+                                                        OneNoteRecordingsList.SelectedItem = firstRecording;
+                                                        Log4.Info($"[MainWindow] 첫 번째 녹음 파일 자동 선택: {firstRecording.FileName}");
 
-                                                    // 탭 바 표시 (노트내용 탭이 기본)
-                                                    if (OneNoteContentTabBar != null)
-                                                        OneNoteContentTabBar.Visibility = Visibility.Visible;
+                                                        // 우측 AI 패널의 녹음 탭 활성화
+                                                        SwitchAITab("record");
 
-                                                    // 노트 선택 시에는 노트내용 탭이 기본으로 열림 (녹음 탭 아님)
-                                                    SwitchToNoteContentTab();
+                                                        // 탭 바 표시 (노트내용 탭이 기본)
+                                                        if (OneNoteContentTabBar != null)
+                                                            OneNoteContentTabBar.Visibility = Visibility.Visible;
 
-                                                    // STT/요약 결과 명시적 로드 (partial 메서드가 호출되지 않을 수 있음)
-                                                    _oneNoteViewModel?.LoadSelectedRecordingResults();
+                                                        // 노트 선택 시에는 노트내용 탭이 기본으로 열림 (녹음 탭 아님)
+                                                        SwitchToNoteContentTab();
 
-                                                    UpdateRecordingContentPanel();
-                                                    UpdateSummaryContentPanel();
-                                                }));
+                                                        // STT/요약 결과 명시적 로드 (partial 메서드가 호출되지 않을 수 있음)
+                                                        _oneNoteViewModel?.LoadSelectedRecordingResults();
+
+                                                        UpdateRecordingContentPanel();
+                                                        UpdateSummaryContentPanel();
+                                                    }));
+                                                }
+                                                else
+                                                {
+                                                    Log4.Debug($"[MainWindow] 현재 페이지 녹음 파일 이미 선택됨: {currentSelected?.FileName}");
+                                                }
                                             }
                                         }
                                     });
                                 });
                             });
                         }
+                        // SelectedRecording 변경 시 ListBox 선택 동기화
+                        else if (e.PropertyName == nameof(OneNoteViewModel.SelectedRecording))
+                        {
+                            Dispatcher.Invoke(() =>
+                            {
+                                if (OneNoteRecordingsList != null && _oneNoteViewModel?.SelectedRecording != null)
+                                {
+                                    // ListBox의 SelectedItem을 ViewModel의 SelectedRecording과 동기화
+                                    if (OneNoteRecordingsList.SelectedItem != _oneNoteViewModel.SelectedRecording)
+                                    {
+                                        OneNoteRecordingsList.SelectedItem = _oneNoteViewModel.SelectedRecording;
+                                        Log4.Info($"[MainWindow] SelectedRecording 변경 - ListBox 선택 동기화: {_oneNoteViewModel.SelectedRecording.FileName}");
+                                    }
+                                }
+                            });
+                        }
                     };
+
+                    // 실시간 STT 세그먼트 추가 시 UI 업데이트
+                    _oneNoteViewModel.LiveSTTSegments.CollectionChanged += (s, e) =>
+                    {
+                        if (e.Action == System.Collections.Specialized.NotifyCollectionChangedAction.Add ||
+                            e.Action == System.Collections.Specialized.NotifyCollectionChangedAction.Reset)
+                        {
+                            Dispatcher.Invoke(() =>
+                            {
+                                Log4.Info($"[MainWindow] LiveSTTSegments 변경 - 실시간 UI 업데이트 ({_oneNoteViewModel.LiveSTTSegments.Count}개)");
+                                UpdateRecordingContentPanel();
+                            });
+                        }
+                    };
+
+                    // 녹음 설정 로드 (STT 모델, 분석 주기, 요약 주기)
+                    LoadOneNoteRecordingSettings();
                 }
             }
             catch (Exception ex)

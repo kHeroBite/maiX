@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 using NAudio.Wave;
 using Serilog;
+using mailX.Utils;
 
 namespace mailX.Services.Audio;
 
@@ -322,7 +323,9 @@ public class AudioRecordingService : IDisposable
 
     private void OnRecordingStopped(object? sender, StoppedEventArgs e)
     {
+        Log4.Info($"[AudioRecording] ★ OnRecordingStopped 진입");
         var filePath = _currentFilePath;
+        Log4.Info($"[AudioRecording] ★ 파일 경로: {filePath ?? "null"}");
 
         // 실시간 모드에서 남은 버퍼 처리
         if (_realtimeEnabled && _waveIn != null)
@@ -345,13 +348,21 @@ public class AudioRecordingService : IDisposable
 
         if (e.Exception != null)
         {
+            Log4.Error($"[AudioRecording] ★ 녹음 중 오류 발생: {e.Exception.Message}");
             _logger.Error(e.Exception, "녹음 중 오류 발생");
             RecordingError?.Invoke(e.Exception.Message);
         }
         else if (!string.IsNullOrEmpty(filePath))
         {
+            Log4.Info($"[AudioRecording] ★ 녹음 완료, RecordingCompleted 이벤트 발생 전");
+            Log4.Info($"[AudioRecording] ★ RecordingCompleted 핸들러 수: {RecordingCompleted?.GetInvocationList().Length ?? 0}");
             _logger.Information("녹음 완료: {FilePath}", filePath);
             RecordingCompleted?.Invoke(filePath);
+            Log4.Info($"[AudioRecording] ★ RecordingCompleted 이벤트 발생 완료");
+        }
+        else
+        {
+            Log4.Warn($"[AudioRecording] ★ 파일 경로가 비어있음, 이벤트 발생 안 함");
         }
     }
 
