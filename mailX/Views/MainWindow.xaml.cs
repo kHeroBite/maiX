@@ -468,7 +468,7 @@ public partial class MainWindow : FluentWindow
             skin: '{skin}',
             skin_url: 'https://tinymce-draft.local/skins/ui/{skin}',
             content_css: 'https://tinymce-draft.local/skins/content/{contentCss}/content.min.css',
-            content_style: 'body {{ font-family: Aptos, sans-serif; font-size: 14px; color: {textColor}; background-color: {backgroundColor}; padding: 16px; }}',
+            content_style: 'body {{ font-family: Aptos, sans-serif; font-size: 14px; color: {textColor}; background-color: {backgroundColor}; padding: 16px; }} table {{ border-collapse: collapse; }} table td, table th {{ color: {textColor} !important; background-color: {(isDark ? "#2d2d2d" : "inherit")} !important; border: 1px solid {(isDark ? "#555" : "#ccc")}; padding: 4px 8px; }} table td[style*=""background""], table th[style*=""background""] {{ background-color: {(isDark ? "#2d2d2d" : "inherit")} !important; }} table th {{ background-color: {(isDark ? "#333" : "#f5f5f5")} !important; }}',
             table_toolbar: 'tableprops tabledelete | tableinsertrowbefore tableinsertrowafter tabledeleterow | tableinsertcolbefore tableinsertcolafter tabledeletecol',
             table_appearance_options: true,
             table_default_attributes: {{ border: '1' }},
@@ -5193,6 +5193,21 @@ public partial class MainWindow : FluentWindow
         }
         else
         {
+            // 녹음 시작 전 노트 선택 확인
+            if (_oneNoteViewModel.SelectedPage == null)
+            {
+                Log4.Warn("[OneNote] 녹음 시작 실패: 노트가 선택되지 않음");
+
+                // 녹음 상태 텍스트로 알림 표시
+                if (OneNoteRecordingStatus != null)
+                {
+                    OneNoteRecordingStatus.Text = "⚠️ 먼저 노트를 선택해주세요";
+                    OneNoteRecordingStatus.Foreground = new System.Windows.Media.SolidColorBrush(
+                        System.Windows.Media.Color.FromRgb(255, 193, 7)); // 노란색 경고색
+                }
+                return;
+            }
+
             // 녹음 시작
             try
             {
@@ -5289,6 +5304,43 @@ public partial class MainWindow : FluentWindow
     /// <summary>
     /// 녹음 파일 재생 버튼 클릭
     /// </summary>
+    /// <summary>
+    /// 녹음 항목 선택 (버튼 클릭 시 자동 선택)
+    /// </summary>
+    private void SelectRecordingItem(Models.RecordingInfo recording)
+    {
+        if (_oneNoteViewModel == null || recording == null) return;
+
+        // 녹음 중에는 다른 녹음 파일 선택 불가
+        if (_oneNoteViewModel.IsRecording && _oneNoteViewModel.SelectedRecording != recording)
+        {
+            Log4.Warn("[OneNote] 녹음 중 - 다른 녹음 파일 선택 불가");
+            if (OneNoteRecordingStatus != null)
+            {
+                OneNoteRecordingStatus.Text = "⚠️ 녹음 중에는 다른 파일을 선택할 수 없습니다";
+                OneNoteRecordingStatus.Foreground = new System.Windows.Media.SolidColorBrush(
+                    System.Windows.Media.Color.FromRgb(255, 193, 7));
+            }
+            return;
+        }
+
+        if (_oneNoteViewModel.SelectedRecording != recording)
+        {
+            Log4.Info($"[OneNote] 녹음 항목 자동 선택: {recording.FileName}");
+            _oneNoteViewModel.SelectedRecording = recording;
+
+            // ListBox 선택 동기화
+            if (OneNoteRecordingsList != null)
+            {
+                OneNoteRecordingsList.SelectedItem = recording;
+            }
+
+            // 녹음내용 탭으로 전환
+            OneNoteContentTabBar.Visibility = Visibility.Visible;
+            SwitchToRecordingContentTab();
+        }
+    }
+
     private async void OneNoteRecordingPlay_Click(object sender, RoutedEventArgs e)
     {
         Log4.Info("[MainWindow] OneNoteRecordingPlay_Click 호출됨");
@@ -5315,6 +5367,9 @@ public partial class MainWindow : FluentWindow
         if (tag is Models.RecordingInfo recording)
         {
             Log4.Info($"[MainWindow] 재생할 녹음: {recording.FileName}, Source={recording.Source}");
+
+            // 녹음 항목 자동 선택
+            SelectRecordingItem(recording);
 
             if (_oneNoteViewModel != null)
             {
@@ -5439,6 +5494,27 @@ public partial class MainWindow : FluentWindow
     /// </summary>
     private void MainWindow_PreviewKeyDown(object sender, System.Windows.Input.KeyEventArgs e)
     {
+        // Ctrl+Tab: OneNote 노트내용/녹음내용 탭 토글
+        if (e.Key == System.Windows.Input.Key.Tab &&
+            (System.Windows.Input.Keyboard.Modifiers & System.Windows.Input.ModifierKeys.Control) != 0)
+        {
+            // OneNote 뷰가 활성화되어 있을 때만 처리
+            if (OneNoteViewBorder?.Visibility == System.Windows.Visibility.Visible && _oneNoteViewModel != null)
+            {
+                if (_oneNoteViewModel.ActiveContentTab == "note")
+                {
+                    SwitchToRecordingContentTab();
+                    UpdateRecordingContentPanel();
+                }
+                else
+                {
+                    SwitchToNoteContentTab();
+                }
+                e.Handled = true;
+                return;
+            }
+        }
+
         // OneNote 녹음 패널이 표시되고, 현재 재생 중인 녹음이 있을 때만 처리
         if (_oneNoteViewModel?.CurrentPlayingRecording == null &&
             (OneNoteAIRecordPanel?.Visibility != System.Windows.Visibility.Visible))
@@ -5504,12 +5580,8 @@ public partial class MainWindow : FluentWindow
 
         Log4.Debug($"[OneNote] 녹음 목록 STT 분석 클릭: {recording.FileName}");
 
-        // 1. 해당 녹음 선택
-        _oneNoteViewModel.SelectedRecording = recording;
-        OneNoteRecordingsList.SelectedItem = recording;
-
-        // 2. 녹음내용 탭으로 전환
-        SwitchToRecordingContentTab();
+        // 1. 해당 녹음 선택 및 탭 전환
+        SelectRecordingItem(recording);
 
         // 3. STT 분석 실행
         await RunSTTAnalysisAsync(recording);
@@ -5531,12 +5603,8 @@ public partial class MainWindow : FluentWindow
 
         Log4.Debug($"[OneNote] 녹음 목록 AI 요약 클릭: {recording.FileName}");
 
-        // 1. 해당 녹음 선택
-        _oneNoteViewModel.SelectedRecording = recording;
-        OneNoteRecordingsList.SelectedItem = recording;
-
-        // 2. 녹음내용 탭으로 전환
-        SwitchToRecordingContentTab();
+        // 1. 해당 녹음 선택 및 탭 전환
+        SelectRecordingItem(recording);
 
         // 3. STT 결과 확인
         if (_oneNoteViewModel.STTSegments.Count == 0)
@@ -5598,17 +5666,47 @@ public partial class MainWindow : FluentWindow
     /// </summary>
     private async void OneNoteRecordingsList_SelectionChanged(object sender, System.Windows.Controls.SelectionChangedEventArgs e)
     {
-        if (_oneNoteViewModel == null) return;
+        Log4.Info($"[OneNote] OneNoteRecordingsList_SelectionChanged 호출됨");
+
+        if (_oneNoteViewModel == null)
+        {
+            Log4.Warn("[OneNote] _oneNoteViewModel이 null");
+            return;
+        }
+
+        // 녹음 중에는 다른 녹음 파일 선택 불가
+        if (_oneNoteViewModel.IsRecording)
+        {
+            Log4.Warn("[OneNote] 녹음 중 - 다른 녹음 파일 선택 불가");
+            // 이전 선택으로 되돌리기
+            if (sender is System.Windows.Controls.ListBox lb && _oneNoteViewModel.SelectedRecording != null)
+            {
+                lb.SelectedItem = _oneNoteViewModel.SelectedRecording;
+            }
+            if (OneNoteRecordingStatus != null)
+            {
+                OneNoteRecordingStatus.Text = "⚠️ 녹음 중에는 다른 파일을 선택할 수 없습니다";
+                OneNoteRecordingStatus.Foreground = new System.Windows.Media.SolidColorBrush(
+                    System.Windows.Media.Color.FromRgb(255, 193, 7));
+            }
+            return;
+        }
 
         if (sender is System.Windows.Controls.ListBox listBox)
         {
             var selectedRecording = listBox.SelectedItem as Models.RecordingInfo;
+            Log4.Info($"[OneNote] 선택된 녹음: {selectedRecording?.FileName ?? "null"}, 현재 ViewModel 선택: {_oneNoteViewModel.SelectedRecording?.FileName ?? "null"}");
 
             // ViewModel의 SelectedRecording과 다른 경우에만 업데이트
             // (ViewModel에서 이미 설정된 경우 중복 설정 방지)
             if (_oneNoteViewModel.SelectedRecording != selectedRecording)
             {
+                Log4.Info($"[OneNote] SelectedRecording 변경: {selectedRecording?.FileName ?? "null"}");
                 _oneNoteViewModel.SelectedRecording = selectedRecording;
+            }
+            else
+            {
+                Log4.Info("[OneNote] SelectedRecording 동일 - 스킵");
             }
 
             // 녹음 선택 시 탭 바 표시 및 녹음내용 탭으로 자동 전환
@@ -6801,6 +6899,20 @@ public partial class MainWindow : FluentWindow
     /// </summary>
     private void SaveOneNoteRecordingSettings()
     {
+        // 설정 로드 중에는 저장하지 않음 (SelectionChanged 이벤트로 인한 중복 저장 방지)
+        if (_isLoadingOneNoteSettings)
+        {
+            Log4.Debug("[OneNote] 설정 로드 중 - 저장 스킵");
+            return;
+        }
+
+        // OneNote ViewModel이 초기화되지 않았으면 저장하지 않음 (XAML 로드 시 SelectionChanged 방지)
+        if (_oneNoteViewModel == null)
+        {
+            Log4.Debug("[OneNote] ViewModel 미초기화 - 저장 스킵");
+            return;
+        }
+
         try
         {
             var settings = new
@@ -6838,6 +6950,10 @@ public partial class MainWindow : FluentWindow
     {
         try
         {
+            // 로드 시작 - SelectionChanged 이벤트로 인한 저장 방지
+            _isLoadingOneNoteSettings = true;
+            Log4.Debug("[OneNote] 설정 로드 시작");
+
             var settingsPath = System.IO.Path.Combine(
                 Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
                 "mailX", "settings", "onenote_recording.json");
@@ -6914,6 +7030,12 @@ public partial class MainWindow : FluentWindow
         catch (Exception ex)
         {
             Log4.Error($"[OneNote] 녹음 설정 로드 실패: {ex.Message}");
+        }
+        finally
+        {
+            // 로드 완료 - SelectionChanged 이벤트 정상 동작
+            _isLoadingOneNoteSettings = false;
+            Log4.Debug("[OneNote] 설정 로드 완료 - 저장 활성화");
         }
     }
 
@@ -9213,10 +9335,13 @@ public partial class MainWindow : FluentWindow
     private OneNoteViewModel? _oneNoteViewModel;
     private bool _oneNoteEditorInitialized = false;
     private bool _oneNoteEditorReady = false;
+    private bool _isLoadingOneNoteSettings = false;  // 설정 로드 중 플래그 (SelectionChanged 이벤트 무시용)
     private Services.Graph.GraphToDoService? _graphToDoService;
 
     // 새 노트 생성 관련
     private bool _isNewPage = false;  // 새 노트 생성 모드 여부
+    private bool _isDeletingPage = false;  // 페이지 삭제 중 여부
+    private string? _deletedPageId = null;  // 삭제된 페이지 ID (자동 선택 방지용)
     private SectionItemViewModel? _newPageSection = null;  // 새 노트가 생성될 섹션 (노트북 트리에서)
     private PageItemViewModel? _newPageFavoriteSection = null;  // 새 노트가 생성될 섹션 (즐겨찾기에서)
 
@@ -9308,9 +9433,15 @@ public partial class MainWindow : FluentWindow
             skin: '{skin}',
             skin_url: 'https://tinymce-onenote.local/skins/ui/{skin}',
             content_css: 'https://tinymce-onenote.local/skins/content/{contentCss}/content.min.css',
-            plugins: 'lists link image table code checklist',
-            toolbar: 'undo redo | bold italic underline | bullist numlist checklist | link image table | code',
-            content_style: 'body {{ font-family: -apple-system, BlinkMacSystemFont, ""Segoe UI"", Roboto, sans-serif; font-size: 14px; color: {textColor}; background-color: {bgColor}; padding: 16px; }} * {{ color: inherit; }} table {{ border-collapse: collapse; }} table td, table th {{ color: {textColor} !important; border: 1px solid {(isDark ? "#555" : "#ccc")}; padding: 4px 8px; }} table td *, table th * {{ color: {textColor} !important; }} table th {{ background-color: {(isDark ? "#333" : "#f5f5f5")}; }} span, font, b, strong, i, em, u {{ color: inherit !important; }}',
+            plugins: 'table lists link image code checklist',
+            toolbar: 'bold italic underline strikethrough | forecolor backcolor | fontfamily fontsize | alignleft aligncenter alignright alignjustify | bullist numlist checklist outdent indent | table | link image | code removeformat',
+            toolbar_mode: 'wrap',
+            font_family_formats: 'Aptos=Aptos,sans-serif; 맑은 고딕=Malgun Gothic; 굴림=Gulim; 돋움=Dotum; 바탕=Batang; 궁서=Gungsuh; Segoe UI=Segoe UI,sans-serif; Arial=arial,helvetica,sans-serif; Arial Black=arial black,avant garde; Comic Sans MS=comic sans ms,sans-serif; Courier New=courier new,courier; Georgia=georgia,palatino; Helvetica=helvetica; Impact=impact,chicago; Tahoma=tahoma,arial,helvetica,sans-serif; Terminal=terminal,monaco; Times New Roman=times new roman,times; Verdana=verdana,geneva',
+            content_style: 'body {{ font-family: Aptos, sans-serif; font-size: 14px; color: {textColor}; background-color: {bgColor}; padding: 16px; }} * {{ color: inherit; }} table {{ border-collapse: collapse; }} table td, table th {{ color: {textColor} !important; background-color: {(isDark ? "#2d2d2d" : "inherit")} !important; border: 1px solid {(isDark ? "#555" : "#ccc")}; padding: 4px 8px; }} table td[style*=""background""], table th[style*=""background""] {{ background-color: {(isDark ? "#2d2d2d" : "inherit")} !important; }} table td *, table th * {{ color: {textColor} !important; }} table th {{ background-color: {(isDark ? "#333" : "#f5f5f5")} !important; }} span, font, b, strong, i, em, u {{ color: inherit !important; }}',
+            table_toolbar: 'tableprops tabledelete | tableinsertrowbefore tableinsertrowafter tabledeleterow | tableinsertcolbefore tableinsertcolafter tabledeletecol',
+            table_appearance_options: true,
+            table_default_attributes: {{ border: '1' }},
+            table_default_styles: {{ 'border-collapse': 'collapse', 'width': '100%' }},
             browser_spellcheck: true,
             contextmenu: false,
             setup: function(ed) {{
@@ -9341,6 +9472,12 @@ public partial class MainWindow : FluentWindow
         function setReadOnly(readOnly) {{
             if (tinymce.activeEditor) {{
                 tinymce.activeEditor.mode.set(readOnly ? 'readonly' : 'design');
+            }}
+        }}
+
+        function focus() {{
+            if (tinymce.activeEditor) {{
+                tinymce.activeEditor.focus();
             }}
         }}
     </script>
@@ -9625,6 +9762,20 @@ public partial class MainWindow : FluentWindow
                 }
             }
             e.Handled = true;
+        }
+        else if (e.Key == System.Windows.Input.Key.Tab)
+        {
+            // Tab 키 누르면 내용 편집기로 포커스 이동
+            e.Handled = true;
+            if (OneNoteEditorWebView != null)
+            {
+                // 1. WPF에서 WebView2로 포커스 이동
+                OneNoteEditorWebView.Focus();
+
+                // 2. TinyMCE 에디터에 포커스 이동
+                await OneNoteEditorWebView.ExecuteScriptAsync("if(typeof focus === 'function') focus();");
+                Log4.Debug("[OneNote] 제목에서 Tab 키 → 에디터로 포커스 이동");
+            }
         }
     }
 
@@ -9964,6 +10115,13 @@ public partial class MainWindow : FluentWindow
     /// </summary>
     private async void OneNoteFavoritesTreeView_SelectedItemChanged(object sender, RoutedPropertyChangedEventArgs<object> e)
     {
+        // 삭제 중일 때는 모든 선택 이벤트 무시
+        if (_isDeletingPage)
+        {
+            Log4.Debug($"[OneNote] 삭제 중 FavoritesTreeView 선택 이벤트 무시");
+            return;
+        }
+
         Log4.Debug($"[OneNote] FavoritesTreeView SelectedItemChanged 이벤트 발생");
         if (e.NewValue is PageItemViewModel selectedItem && _oneNoteViewModel != null)
         {
@@ -9984,6 +10142,132 @@ public partial class MainWindow : FluentWindow
             }
             // 노트북/섹션은 확장만 하면 됨 (Expanded 이벤트에서 자식 로드)
         }
+    }
+
+    /// <summary>
+    /// OneNote UI를 초기 상태로 완전히 리셋합니다 (노트 삭제 후 호출)
+    /// </summary>
+    private void ResetOneNoteUI()
+    {
+        Log4.Info("[OneNote] UI 전체 초기화 시작");
+
+        // 1. ViewModel 상태 초기화
+        if (_oneNoteViewModel != null)
+        {
+            _oneNoteViewModel.SelectedPage = null;
+            _oneNoteViewModel.SelectedRecording = null;
+            _oneNoteViewModel.CurrentPageContent = null;
+            _oneNoteViewModel.STTSegments.Clear();
+            _oneNoteViewModel.LiveSTTSegments.Clear();
+            _oneNoteViewModel.CurrentSummary = null;
+            _oneNoteViewModel.LiveSummaryText = string.Empty;
+            _oneNoteViewModel.CurrentPageRecordings.Clear();
+        }
+
+        // 2. TreeView 선택 해제
+        ClearTreeViewSelection(OneNoteTreeView);
+        ClearTreeViewSelection(OneNoteFavoritesTreeView);
+
+        // 3. UI 패널 상태 초기화
+        if (OneNoteEmptyState != null)
+            OneNoteEmptyState.Visibility = Visibility.Visible;
+        if (OneNoteNoteContentPanel != null)
+            OneNoteNoteContentPanel.Visibility = Visibility.Collapsed;
+        // 제목 영역은 항상 보이도록 유지 (사용자 요청)
+        // if (OneNotePageHeaderBorder != null)
+        //     OneNotePageHeaderBorder.Visibility = Visibility.Collapsed;
+
+        // 4. 제목 초기화
+        if (OneNotePageTitleText != null)
+            OneNotePageTitleText.Text = "";
+        if (OneNotePageTitleEdit != null)
+        {
+            OneNotePageTitleEdit.Text = "";
+            OneNotePageTitleEdit.Visibility = Visibility.Collapsed;
+        }
+
+        // 5. 에디터 내용 초기화
+        if (OneNoteEditorWebView != null)
+        {
+            _ = OneNoteEditorWebView.ExecuteScriptAsync("if(typeof setContent === 'function') setContent('');");
+        }
+
+        // 6. 녹음 목록 UI 초기화
+        if (OneNoteRecordingsList != null)
+            OneNoteRecordingsList.ItemsSource = null;
+
+        // 7. 녹음 관련 상태 초기화 (STT/요약 패널은 별도 컴포넌트 없음)
+
+        Log4.Info("[OneNote] UI 전체 초기화 완료");
+    }
+
+    // 컨텍스트 메뉴가 열릴 때 배경색을 유지할 TreeViewItem
+    private System.Windows.Controls.TreeViewItem? _contextMenuTargetItem;
+    private System.Windows.Media.Brush? _contextMenuOriginalBackground;
+
+    /// <summary>
+    /// OneNote 컨텍스트 메뉴 열림 - 마우스 오버 배경색 유지
+    /// </summary>
+    private void OneNoteContextMenu_Opened(object sender, RoutedEventArgs e)
+    {
+        if (sender is not System.Windows.Controls.ContextMenu contextMenu) return;
+
+        // ContextMenu의 PlacementTarget에서 부모 TreeViewItem 찾기
+        var placementTarget = contextMenu.PlacementTarget as System.Windows.FrameworkElement;
+        if (placementTarget == null) return;
+
+        // 부모 TreeViewItem 찾기
+        var treeViewItem = FindParentTreeViewItem(placementTarget);
+        if (treeViewItem == null) return;
+
+        // ContentBorder 찾기
+        var contentBorder = FindChildByName<System.Windows.Controls.Border>(treeViewItem, "ContentBorder");
+        if (contentBorder != null)
+        {
+            _contextMenuTargetItem = treeViewItem;
+            _contextMenuOriginalBackground = contentBorder.Background;
+
+            // 마우스 오버 배경색 적용
+            contentBorder.Background = (System.Windows.Media.Brush)FindResource("SubtleFillColorSecondaryBrush");
+            Log4.Debug("[OneNote] 컨텍스트 메뉴 열림 - 배경색 유지");
+        }
+    }
+
+    /// <summary>
+    /// OneNote 컨텍스트 메뉴 닫힘 - 배경색 복원
+    /// </summary>
+    private void OneNoteContextMenu_Closed(object sender, RoutedEventArgs e)
+    {
+        if (_contextMenuTargetItem != null)
+        {
+            var contentBorder = FindChildByName<System.Windows.Controls.Border>(_contextMenuTargetItem, "ContentBorder");
+            if (contentBorder != null && _contextMenuOriginalBackground != null)
+            {
+                contentBorder.Background = _contextMenuOriginalBackground;
+                Log4.Debug("[OneNote] 컨텍스트 메뉴 닫힘 - 배경색 복원");
+            }
+            _contextMenuTargetItem = null;
+            _contextMenuOriginalBackground = null;
+        }
+    }
+
+    /// <summary>
+    /// 이름으로 자식 요소 찾기
+    /// </summary>
+    private T? FindChildByName<T>(System.Windows.DependencyObject parent, string childName) where T : System.Windows.FrameworkElement
+    {
+        int childrenCount = System.Windows.Media.VisualTreeHelper.GetChildrenCount(parent);
+        for (int i = 0; i < childrenCount; i++)
+        {
+            var child = System.Windows.Media.VisualTreeHelper.GetChild(parent, i);
+            if (child is T frameworkElement && frameworkElement.Name == childName)
+                return frameworkElement;
+
+            var result = FindChildByName<T>(child, childName);
+            if (result != null)
+                return result;
+        }
+        return null;
     }
 
     /// <summary>
@@ -10776,7 +11060,8 @@ public partial class MainWindow : FluentWindow
                 _newPageSection = null;
                 _newPageFavoriteSection = null;
 
-                // 새로 생성된 페이지 선택
+                // 새로 생성된 페이지 선택 및 배경색 표시
+                pageVm.IsSelected = true;
                 if (_oneNoteViewModel != null)
                 {
                     _oneNoteViewModel.SelectedPage = pageVm;
@@ -10915,8 +11200,9 @@ public partial class MainWindow : FluentWindow
                         if (graphService != null)
                         {
                             await graphService.DeletePageAsync(page.Id);
-                            
-                            // 즐겨찾기에서도 제거 (트리 제거 전에 먼저 호출)
+                            Log4.Info($"[OneNote] 노트 삭제 완료 (Graph API): {page.Title}");
+
+                            // 즐겨찾기에서 제거
                             RemovePageFromFavorites(page.Id);
 
                             // 트리에서 페이지 제거
@@ -10924,22 +11210,20 @@ public partial class MainWindow : FluentWindow
                             {
                                 foreach (var section in notebook.Sections)
                                 {
-                                    if (section.Pages.Contains(page))
+                                    var pageToRemove = section.Pages.FirstOrDefault(p => p.Id == page.Id);
+                                    if (pageToRemove != null)
                                     {
-                                        section.Pages.Remove(page);
-
-                                        // 현재 선택된 페이지라면 선택 해제
-                                        if (_oneNoteViewModel.SelectedPage == page)
-                                        {
-                                            _oneNoteViewModel.SelectedPage = null;
-                                            OneNoteEmptyState.Visibility = Visibility.Visible;
-                                            OneNoteNoteContentPanel.Visibility = Visibility.Collapsed;
-                                            OneNotePageHeaderBorder.Visibility = Visibility.Collapsed;
-                                        }
-
+                                        section.Pages.Remove(pageToRemove);
                                         break;
                                     }
                                 }
+                            }
+
+                            // 현재 열린 노트를 삭제한 경우에만 UI 초기화
+                            if (_oneNoteViewModel.SelectedPage?.Id == page.Id)
+                            {
+                                ResetOneNoteUI();
+                                Log4.Info($"[OneNote] 현재 열린 노트 삭제 - UI 초기화 완료");
                             }
 
                             _viewModel.StatusMessage = $"'{page.Title}' 노트가 삭제되었습니다.";
@@ -11135,11 +11419,12 @@ public partial class MainWindow : FluentWindow
                         if (graphService != null)
                         {
                             await graphService.DeletePageAsync(favoriteItem.Id);
+                            Log4.Info($"[OneNote] 즐겨찾기 노트 삭제 완료 (Graph API): {favoriteItem.Title}");
 
-                            // 즐겨찾기 목록에서 제거 (재귀 탐색)
+                            // 즐겨찾기에서 제거
                             RemovePageFromFavorites(favoriteItem.Id);
 
-                            // 노트북 트리에서도 해당 페이지 제거
+                            // 트리에서 페이지 제거
                             foreach (var notebook in _oneNoteViewModel.Notebooks)
                             {
                                 foreach (var section in notebook.Sections)
@@ -11148,19 +11433,16 @@ public partial class MainWindow : FluentWindow
                                     if (pageToRemove != null)
                                     {
                                         section.Pages.Remove(pageToRemove);
-
-                                        // 현재 선택된 페이지라면 선택 해제
-                                        if (_oneNoteViewModel.SelectedPage?.Id == favoriteItem.Id)
-                                        {
-                                            _oneNoteViewModel.SelectedPage = null;
-                                            OneNoteEmptyState.Visibility = Visibility.Visible;
-                                            OneNoteNoteContentPanel.Visibility = Visibility.Collapsed;
-                                            OneNotePageHeaderBorder.Visibility = Visibility.Collapsed;
-                                        }
-
                                         break;
                                     }
                                 }
+                            }
+
+                            // 현재 열린 노트를 삭제한 경우에만 UI 초기화
+                            if (_oneNoteViewModel.SelectedPage?.Id == favoriteItem.Id)
+                            {
+                                ResetOneNoteUI();
+                                Log4.Info($"[OneNote] 현재 열린 노트 삭제 - UI 초기화 완료");
                             }
 
                             _viewModel.StatusMessage = $"'{favoriteItem.Title}' 노트가 삭제되었습니다.";
@@ -11314,6 +11596,13 @@ public partial class MainWindow : FluentWindow
     /// </summary>
     private async void OneNoteTreeView_SelectedItemChanged(object sender, RoutedPropertyChangedEventArgs<object> e)
     {
+        // 삭제 중일 때는 모든 선택 이벤트 무시
+        if (_isDeletingPage)
+        {
+            Log4.Debug($"[OneNote] 삭제 중 TreeView 선택 이벤트 무시");
+            return;
+        }
+
         if (e.NewValue != null)
         {
             // 즐겨찾기 TreeView 선택 해제
@@ -11606,6 +11895,29 @@ public partial class MainWindow : FluentWindow
                         }
                     };
 
+                    // STT 세그먼트 변경 시 UI 업데이트 (녹음 파일 선택 시)
+                    _oneNoteViewModel.STTSegments.CollectionChanged += (s, e) =>
+                    {
+                        Dispatcher.Invoke(() =>
+                        {
+                            Log4.Debug($"[MainWindow] STTSegments 변경 - UI 업데이트 ({_oneNoteViewModel.STTSegments.Count}개)");
+                            UpdateRecordingContentPanel();
+                        });
+                    };
+
+                    // CurrentSummary 변경 시 UI 업데이트
+                    _oneNoteViewModel.PropertyChanged += (s, e) =>
+                    {
+                        if (e.PropertyName == nameof(OneNoteViewModel.CurrentSummary))
+                        {
+                            Dispatcher.Invoke(() =>
+                            {
+                                Log4.Debug($"[MainWindow] CurrentSummary 변경 - UI 업데이트");
+                                UpdateSummaryContentPanel();
+                            });
+                        }
+                    };
+
                     // 녹음 설정 로드 (STT 모델, 분석 주기, 요약 주기)
                     LoadOneNoteRecordingSettings();
                 }
@@ -11656,6 +11968,13 @@ public partial class MainWindow : FluentWindow
     private async Task LoadOneNotePageAsync(PageItemViewModel page)
     {
         if (_oneNoteViewModel == null || page == null) return;
+
+        // 삭제 중일 때는 페이지 선택 무시
+        if (_isDeletingPage)
+        {
+            Log4.Debug($"[OneNote] 삭제 중 페이지 선택 무시: {page.Title}");
+            return;
+        }
 
         try
         {

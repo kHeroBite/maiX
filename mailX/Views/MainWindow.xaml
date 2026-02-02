@@ -5990,7 +5990,7 @@
                                             <HierarchicalDataTemplate ItemsSource="{Binding Children}">
                                                 <Grid HorizontalAlignment="Stretch" Background="{Binding IsSelected, Converter={StaticResource IsSelectedToBackgroundConverter}}" Margin="2,4">
                                                     <Grid.ContextMenu>
-                                                        <ContextMenu>
+                                                        <ContextMenu Opened="OneNoteContextMenu_Opened" Closed="OneNoteContextMenu_Closed">
                                                             <MenuItem Header="노트 추가" Click="FavoriteSectionAddPage_Click"
                                                                       Visibility="{Binding ItemType, Converter={StaticResource FavoriteItemTypeToSectionVisibilityConverter}}">
                                                                 <MenuItem.Icon>
@@ -6032,7 +6032,7 @@
                                                     <HierarchicalDataTemplate ItemsSource="{Binding Children}">
                                                         <Grid HorizontalAlignment="Stretch" Background="{Binding IsSelected, Converter={StaticResource IsSelectedToBackgroundConverter}}" Margin="2,3">
                                                             <Grid.ContextMenu>
-                                                                <ContextMenu>
+                                                                <ContextMenu Opened="OneNoteContextMenu_Opened" Closed="OneNoteContextMenu_Closed">
                                                                     <MenuItem Header="노트 추가" Click="FavoriteSectionAddPage_Click"
                                                                               Visibility="{Binding ItemType, Converter={StaticResource FavoriteItemTypeToSectionVisibilityConverter}}">
                                                                         <MenuItem.Icon>
@@ -6076,7 +6076,7 @@
                                                             <DataTemplate>
                                                                 <Grid HorizontalAlignment="Stretch" Background="{Binding IsSelected, Converter={StaticResource IsSelectedToBackgroundConverter}}" Margin="2,2">
                                                                     <Grid.ContextMenu>
-                                                                        <ContextMenu>
+                                                                        <ContextMenu Opened="OneNoteContextMenu_Opened" Closed="OneNoteContextMenu_Closed">
                                                                             <MenuItem Header="즐겨찾기 제거" Click="FavoriteListItem_RemoveClick"
                                                                                       Visibility="{Binding IsDirectFavorite, Converter={StaticResource DirectFavoriteToVisibilityConverter}}">
                                                                                 <MenuItem.Icon>
@@ -6192,7 +6192,7 @@
                                             <HierarchicalDataTemplate ItemsSource="{Binding Sections}">
                                                 <StackPanel Orientation="Horizontal" Margin="2,4">
                                                     <StackPanel.ContextMenu>
-                                                        <ContextMenu>
+                                                        <ContextMenu Opened="OneNoteContextMenu_Opened" Closed="OneNoteContextMenu_Closed">
                                                             <MenuItem Header="즐겨찾기 추가" Click="NotebookAddToFavorites_Click"
                                                                       Visibility="{Binding IsFavorite, Converter={StaticResource BoolToVisibilityConverter}, ConverterParameter=Invert}">
                                                                 <MenuItem.Icon>
@@ -6230,7 +6230,7 @@
                                                     <HierarchicalDataTemplate ItemsSource="{Binding Pages}">
                                                         <Grid HorizontalAlignment="Stretch" Background="Transparent" Margin="2,3">
                                                             <Grid.ContextMenu>
-                                                                <ContextMenu>
+                                                                <ContextMenu Opened="OneNoteContextMenu_Opened" Closed="OneNoteContextMenu_Closed">
                                                                     <MenuItem Header="노트 추가" Click="SectionAddPage_Click">
                                                                         <MenuItem.Icon>
                                                                             <ui:SymbolIcon Symbol="Add24"/>
@@ -6270,7 +6270,7 @@
                                                             <DataTemplate>
                                                                 <Grid HorizontalAlignment="Stretch" Background="{Binding IsSelected, Converter={StaticResource IsSelectedToBackgroundConverter}}" Margin="2,2">
                                                                     <Grid.ContextMenu>
-                                                                        <ContextMenu>
+                                                                        <ContextMenu Opened="OneNoteContextMenu_Opened" Closed="OneNoteContextMenu_Closed">
                                                                             <MenuItem Header="즐겨찾기 추가" Click="AddToFavorites_Click"
                                                                                       Visibility="{Binding IsFavorite, Converter={StaticResource BoolToVisibilityConverter}, ConverterParameter=Invert}">
                                                                                 <MenuItem.Icon>
