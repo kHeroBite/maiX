@@ -5172,6 +5172,52 @@ public partial class MainWindow : FluentWindow
     }
 
     /// <summary>
+    /// 녹음 탭 클릭 - 녹음 컨트롤 표시
+    /// </summary>
+    private void OneNoteRecordTab_Click(object sender, MouseButtonEventArgs e)
+    {
+        // 녹음 탭 활성화
+        OneNoteRecordTab.Background = (Brush)FindResource("ApplicationBackgroundBrush");
+        OneNoteRecordTab.BorderBrush = (Brush)FindResource("ControlElevationBorderBrush");
+        OneNoteRecordTab.BorderThickness = new Thickness(1);
+        OneNoteRecordTabIcon.ClearValue(Wpf.Ui.Controls.SymbolIcon.ForegroundProperty);
+        OneNoteRecordTabText.ClearValue(System.Windows.Controls.TextBlock.ForegroundProperty);
+
+        // 옵션 탭 비활성화
+        OneNoteOptionsTab.Background = Brushes.Transparent;
+        OneNoteOptionsTab.BorderThickness = new Thickness(0);
+        OneNoteOptionsTabIcon.Foreground = (Brush)FindResource("TextFillColorTertiaryBrush");
+        OneNoteOptionsTabText.Foreground = (Brush)FindResource("TextFillColorTertiaryBrush");
+
+        // 콘텐츠 전환
+        OneNoteRecordTabContent.Visibility = Visibility.Visible;
+        OneNoteOptionsTabContent.Visibility = Visibility.Collapsed;
+    }
+
+    /// <summary>
+    /// 옵션 탭 클릭 - STT/요약 설정 표시
+    /// </summary>
+    private void OneNoteOptionsTab_Click(object sender, MouseButtonEventArgs e)
+    {
+        // 옵션 탭 활성화
+        OneNoteOptionsTab.Background = (Brush)FindResource("ApplicationBackgroundBrush");
+        OneNoteOptionsTab.BorderBrush = (Brush)FindResource("ControlElevationBorderBrush");
+        OneNoteOptionsTab.BorderThickness = new Thickness(1);
+        OneNoteOptionsTabIcon.ClearValue(Wpf.Ui.Controls.SymbolIcon.ForegroundProperty);
+        OneNoteOptionsTabText.ClearValue(System.Windows.Controls.TextBlock.ForegroundProperty);
+
+        // 녹음 탭 비활성화
+        OneNoteRecordTab.Background = Brushes.Transparent;
+        OneNoteRecordTab.BorderThickness = new Thickness(0);
+        OneNoteRecordTabIcon.Foreground = (Brush)FindResource("TextFillColorTertiaryBrush");
+        OneNoteRecordTabText.Foreground = (Brush)FindResource("TextFillColorTertiaryBrush");
+
+        // 콘텐츠 전환
+        OneNoteRecordTabContent.Visibility = Visibility.Collapsed;
+        OneNoteOptionsTabContent.Visibility = Visibility.Visible;
+    }
+
+    /// <summary>
     /// 녹음 시작/중지 버튼 클릭
     /// </summary>
     private void OneNoteRecordStart_Click(object sender, RoutedEventArgs e)
@@ -5567,24 +5613,54 @@ public partial class MainWindow : FluentWindow
     /// <summary>
     /// STT 실행 (녹음 목록 버튼 또는 컨텍스트 메뉴)
     /// </summary>
+    // 우측 녹음 목록에서 클릭된 STT 버튼 참조 (상태 복원용)
+    private Wpf.Ui.Controls.Button? _clickedRecordingSTTButton;
+    // 우측 녹음 목록에서 클릭된 요약 버튼 참조 (상태 복원용)
+    private Wpf.Ui.Controls.Button? _clickedRecordingSummaryButton;
+
     private async void OneNoteRecordingRunSTT_Click(object sender, RoutedEventArgs e)
     {
+        if (_oneNoteViewModel == null) return;
+
+        var clickedButton = sender as Wpf.Ui.Controls.Button;
+
+        // 이미 진행 중이면 중지
+        if (_oneNoteViewModel.IsSTTInProgress)
+        {
+            Log4.Info("[OneNote] 녹음 목록 STT 분석 중지 요청");
+            _oneNoteViewModel.CancelSTT();
+            UpdateSTTButtonState(false);
+            UpdateRecordingListSTTButton(false);
+            return;
+        }
+
         // Button 또는 MenuItem에서 Tag로 RecordingInfo 가져오기
         Models.RecordingInfo? recording = null;
-        if (sender is Wpf.Ui.Controls.Button button)
-            recording = button.Tag as Models.RecordingInfo;
+        if (clickedButton != null)
+            recording = clickedButton.Tag as Models.RecordingInfo;
         else if (sender is System.Windows.Controls.MenuItem menuItem)
             recording = menuItem.Tag as Models.RecordingInfo;
 
-        if (recording == null || _oneNoteViewModel == null) return;
+        if (recording == null) return;
+
+        // 클릭된 버튼 저장 및 상태 변경
+        _clickedRecordingSTTButton = clickedButton;
 
         Log4.Debug($"[OneNote] 녹음 목록 STT 분석 클릭: {recording.FileName}");
 
         // 1. 해당 녹음 선택 및 탭 전환
         SelectRecordingItem(recording);
 
+        // 2. 버튼 상태 변경 (녹음내용 탭 + 녹음 파일 목록 동시 업데이트)
+        UpdateSTTButtonState(true);
+        UpdateRecordingListSTTButton(true);
+
         // 3. STT 분석 실행
         await RunSTTAnalysisAsync(recording);
+
+        // 완료 후 버튼 상태 복원
+        UpdateSTTButtonState(false);
+        UpdateRecordingListSTTButton(false);
     }
 
     /// <summary>
@@ -5592,21 +5668,38 @@ public partial class MainWindow : FluentWindow
     /// </summary>
     private async void OneNoteRecordingRunSummary_Click(object sender, RoutedEventArgs e)
     {
+        if (_oneNoteViewModel == null) return;
+
+        var clickedButton = sender as Wpf.Ui.Controls.Button;
+
+        // 이미 진행 중이면 중지
+        if (_oneNoteViewModel.IsSummaryInProgress)
+        {
+            Log4.Info("[OneNote] 녹음 목록 AI 요약 중지 요청");
+            _oneNoteViewModel.CancelSummary();
+            UpdateSummaryButtonState(false);
+            UpdateRecordingListSummaryButton(false);
+            return;
+        }
+
         // Button 또는 MenuItem에서 Tag로 RecordingInfo 가져오기
         Models.RecordingInfo? recording = null;
-        if (sender is Wpf.Ui.Controls.Button button)
-            recording = button.Tag as Models.RecordingInfo;
+        if (clickedButton != null)
+            recording = clickedButton.Tag as Models.RecordingInfo;
         else if (sender is System.Windows.Controls.MenuItem menuItem)
             recording = menuItem.Tag as Models.RecordingInfo;
 
-        if (recording == null || _oneNoteViewModel == null) return;
+        if (recording == null) return;
+
+        // 클릭된 버튼 저장 및 상태 변경
+        _clickedRecordingSummaryButton = clickedButton;
 
         Log4.Debug($"[OneNote] 녹음 목록 AI 요약 클릭: {recording.FileName}");
 
         // 1. 해당 녹음 선택 및 탭 전환
         SelectRecordingItem(recording);
 
-        // 3. STT 결과 확인
+        // 2. STT 결과 확인
         if (_oneNoteViewModel.STTSegments.Count == 0)
         {
             System.Windows.MessageBox.Show(
@@ -5617,8 +5710,16 @@ public partial class MainWindow : FluentWindow
             return;
         }
 
+        // 3. 버튼 상태 변경 (녹음내용 탭 + 녹음 파일 목록 동시 업데이트)
+        UpdateSummaryButtonState(true);
+        UpdateRecordingListSummaryButton(true);
+
         // 4. AI 요약 실행
         await RunSummaryAnalysisAsync(recording);
+
+        // 완료 후 버튼 상태 복원
+        UpdateSummaryButtonState(false);
+        UpdateRecordingListSummaryButton(false);
     }
 
     /// <summary>
@@ -5870,8 +5971,13 @@ public partial class MainWindow : FluentWindow
             // 녹음 중 아님 - 정상 상태
             OneNoteSTTLiveIndicator.Visibility = Visibility.Collapsed;
             OneNoteSTTLiveText.Visibility = Visibility.Collapsed;
-            OneNoteTabRunSTTButton.Content = "STT 분석";
-            OneNoteTabRunSTTButton.IsEnabled = true;
+
+            // STT 분석 진행 중이면 버튼 상태 유지 (덮어쓰지 않음)
+            if (_oneNoteViewModel.SelectedRecording?.IsSTTInProgress != true)
+            {
+                OneNoteTabRunSTTButton.Content = "STT 분석";
+                OneNoteTabRunSTTButton.IsEnabled = true;
+            }
             OneNoteSTTModelSelector.IsEnabled = true;
         }
 
@@ -6008,6 +6114,13 @@ public partial class MainWindow : FluentWindow
             // 요약 진행 중 표시
             OneNoteSummaryProgress.Visibility = _oneNoteViewModel.IsSummaryInProgress
                 ? Visibility.Visible : Visibility.Collapsed;
+
+            // 요약 버튼 상태 설정 (요약 진행 중이면 상태 유지)
+            if (OneNoteTabRunSummaryButton != null && _oneNoteViewModel.SelectedRecording?.IsSummaryInProgress != true)
+            {
+                OneNoteTabRunSummaryButton.Content = "AI 요약";
+                OneNoteTabRunSummaryButton.IsEnabled = true;
+            }
         }
     }
 
@@ -6095,6 +6208,15 @@ public partial class MainWindow : FluentWindow
             return;
         }
 
+        // 이미 진행 중이면 중지
+        if (_oneNoteViewModel.IsSTTInProgress)
+        {
+            Log4.Info("[OneNote] STT 분석 중지 요청");
+            _oneNoteViewModel.CancelSTT();
+            UpdateSTTButtonState(false);
+            return;
+        }
+
         // SelectedRecording이 null이면 현재 페이지의 녹음 목록에서 첫 번째 녹음 사용
         var recording = _oneNoteViewModel.SelectedRecording
             ?? _oneNoteViewModel.CurrentPageRecordings?.FirstOrDefault();
@@ -6120,15 +6242,44 @@ public partial class MainWindow : FluentWindow
     }
 
     /// <summary>
+    /// 화자분리 전/후 토글 버튼 클릭
+    /// </summary>
+    private bool _showingBeforeDiarization = false;
+    private void OneNoteDiarizationToggle_Click(object sender, RoutedEventArgs e)
+    {
+        if (_oneNoteViewModel == null) return;
+
+        _showingBeforeDiarization = !_showingBeforeDiarization;
+        _oneNoteViewModel.ToggleDiarizationView(_showingBeforeDiarization);
+
+        // 버튼 텍스트 업데이트
+        OneNoteDiarizationToggleButton.Content = _showingBeforeDiarization ? "화자분리 후" : "화자분리 전";
+        OneNoteDiarizationToggleButton.Appearance = _showingBeforeDiarization
+            ? Wpf.Ui.Controls.ControlAppearance.Primary
+            : Wpf.Ui.Controls.ControlAppearance.Secondary;
+
+        Log4.Debug($"[OneNote] 화자분리 토글: {(_showingBeforeDiarization ? "전" : "후")} 표시");
+    }
+
+    /// <summary>
     /// 녹음내용 탭 AI 요약 버튼 클릭
     /// </summary>
     private async void OneNoteTabRunSummary_Click(object sender, RoutedEventArgs e)
     {
-        Log4.Info("[OneNote] ★★★ AI 요약 버튼 클릭됨 (빌드: 2026-01-26 20:48) ★★★");
+        Log4.Info("[OneNote] AI 요약 버튼 클릭됨");
 
         if (_oneNoteViewModel == null)
         {
             Log4.Warn("[OneNote] AI 요약 불가: _oneNoteViewModel이 null");
+            return;
+        }
+
+        // 이미 진행 중이면 중지
+        if (_oneNoteViewModel.IsSummaryInProgress)
+        {
+            Log4.Info("[OneNote] AI 요약 중지 요청");
+            _oneNoteViewModel.CancelSummary();
+            UpdateSummaryButtonState(false);
             return;
         }
 
@@ -6221,12 +6372,8 @@ public partial class MainWindow : FluentWindow
             }
         }
 
-        // STT 분석 버튼 비활성화
-        if (OneNoteTabRunSTTButton != null)
-        {
-            OneNoteTabRunSTTButton.IsEnabled = false;
-            OneNoteTabRunSTTButton.Content = "분석 중...";
-        }
+        // STT 분석 버튼 상태 변경 (분석 중)
+        UpdateSTTButtonState(true);
 
         // 진행률 패널 표시
         if (OneNoteSTTProgressPanel != null)
@@ -6279,12 +6426,8 @@ public partial class MainWindow : FluentWindow
             // 이벤트 구독 해제
             _oneNoteViewModel.PropertyChanged -= OnPropertyChanged;
 
-            // STT 분석 버튼 다시 활성화
-            if (OneNoteTabRunSTTButton != null)
-            {
-                OneNoteTabRunSTTButton.IsEnabled = true;
-                OneNoteTabRunSTTButton.Content = "STT 분석";
-            }
+            // STT 분석 버튼 상태 복원
+            UpdateSTTButtonState(false);
 
             // 진행률 패널 숨김 (1초 후)
             await Task.Delay(1000);
@@ -6292,6 +6435,128 @@ public partial class MainWindow : FluentWindow
             {
                 OneNoteSTTProgressPanel.Visibility = Visibility.Collapsed;
             }
+        }
+    }
+
+    /// <summary>
+    /// STT 버튼 상태 업데이트 (진행 중/완료) - 녹음내용 탭
+    /// </summary>
+    private void UpdateSTTButtonState(bool isRunning)
+    {
+        // 노트 내용 탭의 STT 버튼 (녹음 파일 목록과 동일하게)
+        if (OneNoteTabRunSTTButton != null)
+        {
+            OneNoteTabRunSTTButton.Content = isRunning ? "분석 중..." : "STT 분석";
+            OneNoteTabRunSTTButton.Icon = isRunning
+                ? new Wpf.Ui.Controls.SymbolIcon { Symbol = Wpf.Ui.Controls.SymbolRegular.RecordStop24, Filled = true }
+                : new Wpf.Ui.Controls.SymbolIcon { Symbol = Wpf.Ui.Controls.SymbolRegular.Mic24 };
+            OneNoteTabRunSTTButton.Appearance = isRunning
+                ? Wpf.Ui.Controls.ControlAppearance.Primary
+                : Wpf.Ui.Controls.ControlAppearance.Secondary;
+        }
+
+        // 선택된 녹음의 진행 상태도 업데이트 (녹음 파일 목록과 동기화)
+        if (_oneNoteViewModel?.SelectedRecording != null)
+        {
+            _oneNoteViewModel.SelectedRecording.IsSTTInProgress = isRunning;
+            Log4.Debug($"[OneNote] SelectedRecording.IsSTTInProgress = {isRunning}, FileName: {_oneNoteViewModel.SelectedRecording.FileName}");
+        }
+        else
+        {
+            Log4.Warn("[OneNote] UpdateSTTButtonState: SelectedRecording is null");
+        }
+
+        // 화자분리 토글 버튼 가시성 업데이트 (STT 완료 후)
+        if (!isRunning && _oneNoteViewModel != null)
+        {
+            UpdateDiarizationToggleVisibility();
+        }
+    }
+
+    /// <summary>
+    /// 화자분리 토글 버튼 가시성 업데이트
+    /// </summary>
+    private void UpdateDiarizationToggleVisibility()
+    {
+        if (OneNoteDiarizationToggleButton != null && _oneNoteViewModel != null)
+        {
+            OneNoteDiarizationToggleButton.Visibility = _oneNoteViewModel.HasDiarizationComparison
+                ? Visibility.Visible
+                : Visibility.Collapsed;
+
+            // 상태 초기화
+            _showingBeforeDiarization = false;
+            OneNoteDiarizationToggleButton.Content = "화자분리 전";
+            OneNoteDiarizationToggleButton.Appearance = Wpf.Ui.Controls.ControlAppearance.Secondary;
+        }
+    }
+
+    /// <summary>
+    /// AI 요약 버튼 상태 업데이트 (진행 중/완료) - 녹음내용 탭
+    /// </summary>
+    private void UpdateSummaryButtonState(bool isRunning)
+    {
+        // 노트 내용 탭의 요약 버튼 (녹음 파일 목록과 동일하게)
+        if (OneNoteTabRunSummaryButton != null)
+        {
+            OneNoteTabRunSummaryButton.Content = isRunning ? "요약 중..." : "AI 요약";
+            OneNoteTabRunSummaryButton.Icon = isRunning
+                ? new Wpf.Ui.Controls.SymbolIcon { Symbol = Wpf.Ui.Controls.SymbolRegular.RecordStop24, Filled = true }
+                : new Wpf.Ui.Controls.SymbolIcon { Symbol = Wpf.Ui.Controls.SymbolRegular.Sparkle24 };
+            OneNoteTabRunSummaryButton.Appearance = isRunning
+                ? Wpf.Ui.Controls.ControlAppearance.Primary
+                : Wpf.Ui.Controls.ControlAppearance.Secondary;
+        }
+
+        // 선택된 녹음의 진행 상태도 업데이트 (녹음 파일 목록과 동기화)
+        if (_oneNoteViewModel?.SelectedRecording != null)
+        {
+            _oneNoteViewModel.SelectedRecording.IsSummaryInProgress = isRunning;
+            Log4.Debug($"[OneNote] SelectedRecording.IsSummaryInProgress = {isRunning}, FileName: {_oneNoteViewModel.SelectedRecording.FileName}");
+        }
+        else
+        {
+            Log4.Warn("[OneNote] UpdateSummaryButtonState: SelectedRecording is null");
+        }
+    }
+
+    /// <summary>
+    /// 녹음 목록 STT 버튼 상태 업데이트 (진행 중/완료)
+    /// </summary>
+    private void UpdateRecordingListSTTButton(bool isRunning)
+    {
+        // 모델의 상태 속성 업데이트 (바인딩으로 UI 자동 갱신)
+        if (_clickedRecordingSTTButton?.Tag is Models.RecordingInfo recording)
+        {
+            recording.IsSTTInProgress = isRunning;
+        }
+
+        // 아이콘은 바인딩 불가하므로 직접 변경
+        if (_clickedRecordingSTTButton != null)
+        {
+            _clickedRecordingSTTButton.Icon = isRunning
+                ? new Wpf.Ui.Controls.SymbolIcon { Symbol = Wpf.Ui.Controls.SymbolRegular.RecordStop24, Filled = true }
+                : new Wpf.Ui.Controls.SymbolIcon { Symbol = Wpf.Ui.Controls.SymbolRegular.Mic24 };
+        }
+    }
+
+    /// <summary>
+    /// 녹음 목록 요약 버튼 상태 업데이트 (진행 중/완료)
+    /// </summary>
+    private void UpdateRecordingListSummaryButton(bool isRunning)
+    {
+        // 모델의 상태 속성 업데이트 (바인딩으로 UI 자동 갱신)
+        if (_clickedRecordingSummaryButton?.Tag is Models.RecordingInfo recording)
+        {
+            recording.IsSummaryInProgress = isRunning;
+        }
+
+        // 아이콘은 바인딩 불가하므로 직접 변경
+        if (_clickedRecordingSummaryButton != null)
+        {
+            _clickedRecordingSummaryButton.Icon = isRunning
+                ? new Wpf.Ui.Controls.SymbolIcon { Symbol = Wpf.Ui.Controls.SymbolRegular.RecordStop24, Filled = true }
+                : new Wpf.Ui.Controls.SymbolIcon { Symbol = Wpf.Ui.Controls.SymbolRegular.Sparkle24 };
         }
     }
 
@@ -6320,12 +6585,8 @@ public partial class MainWindow : FluentWindow
             }
         }
 
-        // AI 요약 버튼 비활성화
-        if (OneNoteTabRunSummaryButton != null)
-        {
-            OneNoteTabRunSummaryButton.IsEnabled = false;
-            OneNoteTabRunSummaryButton.Content = "요약 중...";
-        }
+        // AI 요약 버튼 상태 변경 (진행 중)
+        UpdateSummaryButtonState(true);
 
         // 진행 표시기 표시
         if (OneNoteSummaryProgress != null)
@@ -6362,12 +6623,8 @@ public partial class MainWindow : FluentWindow
             // 이벤트 구독 해제
             _oneNoteViewModel.PropertyChanged -= OnPropertyChanged;
 
-            // AI 요약 버튼 다시 활성화
-            if (OneNoteTabRunSummaryButton != null)
-            {
-                OneNoteTabRunSummaryButton.IsEnabled = true;
-                OneNoteTabRunSummaryButton.Content = "AI 요약";
-            }
+            // AI 요약 버튼 상태 복원
+            UpdateSummaryButtonState(false);
 
             // 진행 표시기 숨김
             if (OneNoteSummaryProgress != null)
@@ -11914,6 +12171,15 @@ public partial class MainWindow : FluentWindow
                             {
                                 Log4.Debug($"[MainWindow] CurrentSummary 변경 - UI 업데이트");
                                 UpdateSummaryContentPanel();
+                            });
+                        }
+                        // 화자분리 전/후 비교 데이터 변경 시 토글 버튼 가시성 업데이트
+                        else if (e.PropertyName == nameof(OneNoteViewModel.HasDiarizationComparison))
+                        {
+                            Dispatcher.Invoke(() =>
+                            {
+                                Log4.Debug($"[MainWindow] HasDiarizationComparison 변경 - 토글 버튼 업데이트");
+                                UpdateDiarizationToggleVisibility();
                             });
                         }
                     };

@@ -75,6 +75,11 @@ public class SpeechRecognitionService : IDisposable
     private bool _useGpu;
     private bool _isDisposed;
 
+    // 실시간 STT 화자 추적용
+    private int _realtimeSpeakerIndex = 1;
+    private TimeSpan _lastSegmentEndTime = TimeSpan.Zero;
+    private const double SpeakerChangeSilenceThreshold = 2.0; // 2초 이상 침묵 시 화자 전환 가능성
+
     /// <summary>
     /// SenseVoice 초기화 완료 여부
     /// </summary>
@@ -511,7 +516,7 @@ public class SpeechRecognitionService : IDisposable
             Utils.Log4.Debug($"[STT] 실시간 청크: 음성 구간 {voiceSegments.Count}개 감지");
 
             // 각 음성 구간 STT 수행
-            int speakerIndex = 1;
+            // 실시간 STT에서는 일정 시간 이상 침묵 후 새 음성이면 화자 전환 가능성
             foreach (var (startSample, endSample) in voiceSegments)
             {
                 cancellationToken.ThrowIfCancellationRequested();
@@ -531,6 +536,18 @@ public class SpeechRecognitionService : IDisposable
                 var segmentStartTime = chunkStartTime + segmentStartOffset;
                 var segmentEndTime = chunkStartTime + segmentEndOffset;
 
+                // 화자 전환 감지: 이전 세그먼트와 일정 시간 이상 간격이 있으면 화자 전환 가능성
+                // (단, 최대 화자 수 제한: 10명)
+                if (_lastSegmentEndTime != TimeSpan.Zero)
+                {
+                    var silenceDuration = (segmentStartTime - _lastSegmentEndTime).TotalSeconds;
+                    if (silenceDuration > SpeakerChangeSilenceThreshold && _realtimeSpeakerIndex < 10)
+                    {
+                        _realtimeSpeakerIndex++;
+                        Utils.Log4.Debug($"[STT] 화자 전환 감지: {silenceDuration:F1}초 침묵 → 화자 {_realtimeSpeakerIndex}");
+                    }
+                }
+
                 // STT 수행
                 using var stream = _recognizer!.CreateStream();
                 stream.AcceptWaveform(targetSampleRate, chunk);
@@ -545,7 +562,7 @@ public class SpeechRecognitionService : IDisposable
                     {
                         StartTime = segmentStartTime,
                         EndTime = segmentEndTime,
-                        Speaker = $"화자 {speakerIndex}", // 간단한 화자 할당 (실시간용)
+                        Speaker = $"화자 {_realtimeSpeakerIndex}",
                         Text = text,
                         Confidence = 0.85
                     };
@@ -553,11 +570,12 @@ public class SpeechRecognitionService : IDisposable
                     segments.Add(segment);
                     SegmentRecognized?.Invoke(segment);
 
-                    var displayText = text.Length > 40 ? text[..40] + "..." : text;
-                    Utils.Log4.Debug($"[STT] 실시간 세그먼트: [{segmentStartTime:mm\\:ss}] {displayText}");
-                }
+                    // 마지막 세그먼트 종료 시간 업데이트
+                    _lastSegmentEndTime = segmentEndTime;
 
-                speakerIndex++;
+                    var displayText = text.Length > 40 ? text[..40] + "..." : text;
+                    Utils.Log4.Debug($"[STT] 실시간 세그먼트: [{segmentStartTime:mm\\:ss}] 화자{_realtimeSpeakerIndex}: {displayText}");
+                }
             }
 
             Utils.Log4.Debug($"[STT] 실시간 청크 처리 완료: {segments.Count}개 세그먼트");
@@ -740,6 +758,20 @@ public class SpeechRecognitionService : IDisposable
             }
 
             Utils.Log4.Info($"[STT] Whisper 전사 완료: {whisperSegments.Count}개 세그먼트");
+
+            // 3.5. 화자분리 적용 전 원본 세그먼트 저장 (비교용)
+            result.SegmentsBeforeDiarization = new List<Models.TranscriptSegment>();
+            foreach (var (start, end, text) in whisperSegments.OrderBy(s => s.start))
+            {
+                result.SegmentsBeforeDiarization.Add(new Models.TranscriptSegment
+                {
+                    StartTime = start,
+                    EndTime = end,
+                    Speaker = "화자", // 화자분리 전이므로 단일 화자로 표시
+                    Text = text,
+                    Confidence = 0.95
+                });
+            }
 
             // 4. Whisper 결과와 화자분리 결과 병합
             ProgressChanged?.Invoke(0.9);

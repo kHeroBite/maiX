@@ -148,14 +148,20 @@ public class RecordingSummaryService
     /// </summary>
     private string BuildSummaryPrompt(string transcriptText)
     {
-        return $@"다음은 녹음된 회의/대화의 전사 내용입니다:
+        return $@"## 배경 정보
+- 이 녹음은 **한국 회사**에서 진행된 회의/대화입니다.
+- STT(음성인식)로 변환된 텍스트이므로 오인식이 있을 수 있습니다.
+- 특히 중국어로 잘못 인식된 부분은 한국어 발음으로 해석해주세요.
+  (예: '中国' → 한국 관련 내용으로 해석)
 
+## 전사 내용
 {transcriptText}
 
+## 요청 사항
 위 내용을 분석하여 다음 형식의 JSON으로 응답해주세요:
 
 {{
-  ""summary"": ""전체 내용을 3-5문장으로 요약"",
+  ""summary"": ""전체 내용을 3-5문장으로 요약 (한국어로)"",
   ""keyPoints"": [""핵심 포인트 1"", ""핵심 포인트 2"", ...],
   ""actionItems"": [
     {{""description"": ""해야 할 일"", ""assignee"": ""담당자 (언급된 경우)"", ""dueDate"": ""기한 (언급된 경우)"", ""priority"": ""높음/중간/낮음""}}
@@ -165,7 +171,9 @@ public class RecordingSummaryService
   ""sentiment"": ""긍정적/부정적/중립적/건설적 등""
 }}
 
-반드시 유효한 JSON 형식으로만 응답하세요.";
+## 주의사항
+- STT 오인식을 고려하여 문맥에 맞게 해석하세요.
+- 반드시 유효한 JSON 형식으로만 응답하세요.";
     }
 
     /// <summary>

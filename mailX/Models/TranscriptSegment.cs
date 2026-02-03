@@ -103,4 +103,9 @@ public class TranscriptResult
     /// 언어 코드 (예: "ko", "en")
     /// </summary>
     public string Language { get; set; } = "ko";
+
+    /// <summary>
+    /// 화자분리 적용 전 원본 세그먼트 (비교용)
+    /// </summary>
+    public List<TranscriptSegment>? SegmentsBeforeDiarization { get; set; }
 }

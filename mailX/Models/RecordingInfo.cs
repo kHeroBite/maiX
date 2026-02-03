@@ -44,6 +44,8 @@ public class RecordingInfo : INotifyPropertyChanged
     private RecordingSource _source = RecordingSource.External;
     private bool _isPlaying;
     private TimeSpan _currentPosition;
+    private bool _isSTTInProgress;
+    private bool _isSummaryInProgress;
 
     /// <summary>
     /// 파일 경로
@@ -175,6 +177,56 @@ public class RecordingInfo : INotifyPropertyChanged
     /// AI 요약 결과 JSON 파일 경로
     /// </summary>
     public string? SummaryResultPath { get; set; }
+
+    /// <summary>
+    /// STT 분석 진행 중 여부
+    /// </summary>
+    public bool IsSTTInProgress
+    {
+        get => _isSTTInProgress;
+        set
+        {
+            _isSTTInProgress = value;
+            OnPropertyChanged();
+            OnPropertyChanged(nameof(STTButtonContent));
+            OnPropertyChanged(nameof(STTButtonAppearance));
+        }
+    }
+
+    /// <summary>
+    /// AI 요약 진행 중 여부
+    /// </summary>
+    public bool IsSummaryInProgress
+    {
+        get => _isSummaryInProgress;
+        set
+        {
+            _isSummaryInProgress = value;
+            OnPropertyChanged();
+            OnPropertyChanged(nameof(SummaryButtonContent));
+            OnPropertyChanged(nameof(SummaryButtonAppearance));
+        }
+    }
+
+    /// <summary>
+    /// STT 버튼 텍스트
+    /// </summary>
+    public string STTButtonContent => IsSTTInProgress ? "분석 중..." : "STT 분석";
+
+    /// <summary>
+    /// 요약 버튼 텍스트
+    /// </summary>
+    public string SummaryButtonContent => IsSummaryInProgress ? "요약 중..." : "요약";
+
+    /// <summary>
+    /// STT 버튼 외관 (Primary: 진행 중, Secondary: 기본)
+    /// </summary>
+    public string STTButtonAppearance => IsSTTInProgress ? "Primary" : "Secondary";
+
+    /// <summary>
+    /// 요약 버튼 외관
+    /// </summary>
+    public string SummaryButtonAppearance => IsSummaryInProgress ? "Primary" : "Secondary";
 
     /// <summary>
     /// STT 완료 여부

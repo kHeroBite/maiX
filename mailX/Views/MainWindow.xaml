@@ -6475,21 +6475,35 @@
                                                         <ColumnDefinition Width="*"/>
                                                         <ColumnDefinition Width="Auto"/>
                                                     </Grid.ColumnDefinitions>
-                                                    <StackPanel Orientation="Horizontal">
-                                                        <ui:SymbolIcon Symbol="Mic24" FontSize="18" Margin="0,0,8,0"/>
-                                                        <TextBlock Text="음성 인식 (STT)" FontSize="15" FontWeight="SemiBold"/>
+                                                    <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                                                        <ui:SymbolIcon Symbol="Mic24" FontSize="18" Margin="0,0,8,0" VerticalAlignment="Center"/>
+                                                        <TextBlock Text="음성 인식 (STT)" FontSize="15" FontWeight="SemiBold" VerticalAlignment="Center"/>
                                                         <!-- 실시간 표시기 (녹음 중일 때) -->
-                                                        <Ellipse x:Name="OneNoteSTTLiveIndicator" Width="8" Height="8" Fill="#10B981" Margin="8,0,4,0" Visibility="Collapsed"/>
-                                                        <TextBlock x:Name="OneNoteSTTLiveText" Text="실시간" FontSize="11" Foreground="#10B981" Visibility="Collapsed"/>
+                                                        <Ellipse x:Name="OneNoteSTTLiveIndicator" Width="8" Height="8" Fill="#10B981" Margin="8,0,4,0" VerticalAlignment="Center" Visibility="Collapsed"/>
+                                                        <TextBlock x:Name="OneNoteSTTLiveText" Text="실시간" FontSize="11" Foreground="#10B981" VerticalAlignment="Center" Visibility="Collapsed"/>
                                                     </StackPanel>
-                                                    <!-- STT 분석 버튼 (녹음탭의 모델 설정 사용) -->
-                                                    <ui:Button x:Name="OneNoteTabRunSTTButton" Grid.Column="1"
-                                                               Content="STT 분석"
-                                                               Icon="{ui:SymbolIcon Play24}"
-                                                               Appearance="Primary"
-                                                               FontSize="11"
-                                                               Padding="10,5"
-                                                               Click="OneNoteTabRunSTT_Click"/>
+                                                    <!-- 버튼 그룹 (화자분리 토글 + STT 분석) -->
+                                                    <StackPanel Grid.Column="1" Orientation="Horizontal">
+                                                        <!-- 화자분리 전/후 토글 버튼 -->
+                                                        <ui:Button x:Name="OneNoteDiarizationToggleButton"
+                                                                   Content="화자분리 전"
+                                                                   Icon="{ui:SymbolIcon People24}"
+                                                                   Appearance="Secondary"
+                                                                   FontSize="11"
+                                                                   Padding="10,5"
+                                                                   Margin="0,0,8,0"
+                                                                   Visibility="Collapsed"
+                                                                   ToolTip="화자분리 적용 전/후 비교"
+                                                                   Click="OneNoteDiarizationToggle_Click"/>
+                                                        <!-- STT 분석 버튼 (녹음탭의 모델 설정 사용) -->
+                                                        <ui:Button x:Name="OneNoteTabRunSTTButton"
+                                                                   Content="STT 분석"
+                                                                   Icon="{ui:SymbolIcon Mic24}"
+                                                                   Appearance="Secondary"
+                                                                   FontSize="11"
+                                                                   Padding="10,5"
+                                                                   Click="OneNoteTabRunSTT_Click"/>
+                                                    </StackPanel>
 
                                                     <!-- STT 진행률 표시 -->
                                                     <Border x:Name="OneNoteSTTProgressPanel" Grid.Row="1" Grid.ColumnSpan="2"
@@ -6508,8 +6522,10 @@
                                                                            Text="0%" FontSize="12" FontWeight="SemiBold"
                                                                            Foreground="{DynamicResource AccentTextFillColorPrimaryBrush}"/>
                                                             </Grid>
-                                                            <ProgressBar x:Name="OneNoteSTTProgressBar" Minimum="0" Maximum="100" Value="0"
-                                                                         Height="6" Margin="0,8,0,0"/>
+                                                            <Slider x:Name="OneNoteSTTProgressBar" Minimum="0" Maximum="100" Value="0"
+                                                                    Height="20" Margin="0,8,0,0"
+                                                                    IsHitTestVisible="False" Focusable="False"
+                                                                    ToolTip="STT 진행률"/>
                                                             <StackPanel Orientation="Horizontal" Margin="0,6,0,0">
                                                                 <ui:SymbolIcon Symbol="Timer24" FontSize="12"
                                                                                Foreground="{DynamicResource TextFillColorTertiaryBrush}"/>
@@ -6595,9 +6611,9 @@
                                                         <ColumnDefinition Width="*"/>
                                                         <ColumnDefinition Width="Auto"/>
                                                     </Grid.ColumnDefinitions>
-                                                    <StackPanel Orientation="Horizontal">
-                                                        <ui:SymbolIcon Symbol="Sparkle24" FontSize="18" Margin="0,0,8,0"/>
-                                                        <TextBlock Text="AI 요약" FontSize="15" FontWeight="SemiBold"/>
+                                                    <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                                                        <ui:SymbolIcon Symbol="Sparkle24" FontSize="18" Margin="0,0,8,0" VerticalAlignment="Center"/>
+                                                        <TextBlock Text="AI 요약" FontSize="15" FontWeight="SemiBold" VerticalAlignment="Center"/>
                                                         <!-- 진행 중 표시기 -->
                                                         <ui:ProgressRing x:Name="OneNoteSummaryProgress" Width="16" Height="16" Margin="8,0,0,0" IsIndeterminate="True" Visibility="Collapsed"/>
                                                         <TextBlock x:Name="OneNoteSummaryProgressText" Text="" FontSize="12" Margin="8,0,0,0"
@@ -6608,7 +6624,7 @@
                                                                Grid.Column="1"
                                                                Content="AI 요약"
                                                                Icon="{ui:SymbolIcon Sparkle24}"
-                                                               Appearance="Primary"
+                                                               Appearance="Secondary"
                                                                FontSize="11"
                                                                Padding="10,5"
                                                                Click="OneNoteTabRunSummary_Click"/>
@@ -7231,12 +7247,93 @@
                                             <Grid>
                                                 <Grid.RowDefinitions>
                                                     <RowDefinition Height="Auto"/>
-                                                    <RowDefinition Height="*"/>
+                                                    <RowDefinition Height="160"/>
                                                 </Grid.RowDefinitions>
 
-                                                <!-- 상단: STT/요약 설정 박스 -->
-                                                <Border Grid.Row="0" Background="{DynamicResource ControlFillColorSecondaryBrush}"
-                                                        CornerRadius="6" Padding="10,8" Margin="0,0,0,12">
+                                                <!-- 탭 헤더 -->
+                                                <StackPanel Grid.Row="0" Orientation="Horizontal" Margin="0,0,0,12">
+                                                    <Border x:Name="OneNoteRecordTab"
+                                                            Background="{DynamicResource ApplicationBackgroundBrush}"
+                                                            BorderBrush="{DynamicResource ControlElevationBorderBrush}"
+                                                            BorderThickness="1" CornerRadius="4" Padding="12,6"
+                                                            Cursor="Hand" MouseDown="OneNoteRecordTab_Click">
+                                                        <StackPanel Orientation="Horizontal">
+                                                            <ui:SymbolIcon x:Name="OneNoteRecordTabIcon" Symbol="Mic24" FontSize="14"/>
+                                                            <TextBlock x:Name="OneNoteRecordTabText" Text="녹음" FontSize="12" FontWeight="Medium" Margin="6,0,0,0"/>
+                                                        </StackPanel>
+                                                    </Border>
+                                                    <Border x:Name="OneNoteOptionsTab"
+                                                            Background="Transparent" BorderThickness="0"
+                                                            CornerRadius="4" Padding="12,6" Margin="4,0,0,0"
+                                                            Cursor="Hand" MouseDown="OneNoteOptionsTab_Click">
+                                                        <StackPanel Orientation="Horizontal">
+                                                            <ui:SymbolIcon x:Name="OneNoteOptionsTabIcon" Symbol="Settings24" FontSize="14"
+                                                                           Foreground="{DynamicResource TextFillColorTertiaryBrush}"/>
+                                                            <TextBlock x:Name="OneNoteOptionsTabText" Text="옵션" FontSize="12" Margin="6,0,0,0"
+                                                                       Foreground="{DynamicResource TextFillColorTertiaryBrush}"/>
+                                                        </StackPanel>
+                                                    </Border>
+                                                </StackPanel>
+
+                                                <!-- 녹음 탭 콘텐츠 (기본 표시) -->
+                                                <StackPanel x:Name="OneNoteRecordTabContent" Grid.Row="1" MinHeight="130">
+                                                    <!-- 녹음 상태 표시 -->
+                                                    <TextBlock x:Name="OneNoteRecordingStatus"
+                                                               Text="대기 중"
+                                                               HorizontalAlignment="Center"
+                                                               FontSize="14" FontWeight="SemiBold"
+                                                               Margin="0,0,0,8"/>
+
+                                                    <!-- 녹음 시간 -->
+                                                    <TextBlock x:Name="OneNoteRecordingTime"
+                                                               Text="00:00"
+                                                               HorizontalAlignment="Center"
+                                                               FontSize="28" FontWeight="Bold"
+                                                               Foreground="{DynamicResource AccentTextFillColorPrimaryBrush}"
+                                                               Margin="0,0,0,8"/>
+
+                                                    <!-- 볼륨 레벨 바 -->
+                                                    <ProgressBar x:Name="OneNoteVolumeLevel"
+                                                                 Height="6" Minimum="0" Maximum="1" Value="0"
+                                                                 Margin="0,0,0,16"/>
+
+                                                    <!-- 녹음 버튼들 -->
+                                                    <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
+                                                        <!-- 녹음 시작/중지 버튼 -->
+                                                        <ui:Button x:Name="OneNoteRecordStartButton"
+                                                                   Icon="{ui:SymbolIcon Mic24}"
+                                                                   Appearance="Primary"
+                                                                   ToolTip="녹음 시작"
+                                                                   Width="48" Height="48"
+                                                                   Margin="4"
+                                                                   Click="OneNoteRecordStart_Click"/>
+
+                                                        <!-- 일시정지/재개 버튼 -->
+                                                        <ui:Button x:Name="OneNoteRecordPauseButton"
+                                                                   Icon="{ui:SymbolIcon Pause24}"
+                                                                   Appearance="Secondary"
+                                                                   ToolTip="일시정지"
+                                                                   Width="48" Height="48"
+                                                                   Margin="4"
+                                                                   IsEnabled="False"
+                                                                   Click="OneNoteRecordPause_Click"/>
+
+                                                        <!-- 취소 버튼 -->
+                                                        <ui:Button x:Name="OneNoteRecordCancelButton"
+                                                                   Icon="{ui:SymbolIcon Delete24}"
+                                                                   Appearance="Caution"
+                                                                   ToolTip="녹음 취소"
+                                                                   Width="48" Height="48"
+                                                                   Margin="4"
+                                                                   IsEnabled="False"
+                                                                   Click="OneNoteRecordCancel_Click"/>
+                                                    </StackPanel>
+                                                </StackPanel>
+
+                                                <!-- 옵션 탭 콘텐츠 (기본 숨김) -->
+                                                <Border x:Name="OneNoteOptionsTabContent" Grid.Row="1" Visibility="Collapsed"
+                                                        Padding="10,8"
+                                                        VerticalAlignment="Stretch">
                                                     <Grid>
                                                         <Grid.ColumnDefinitions>
                                                             <ColumnDefinition Width="Auto"/>
@@ -7331,61 +7428,6 @@
                                                         </ComboBox>
                                                     </Grid>
                                                 </Border>
-
-                                                <!-- 메인 녹음 컨트롤 -->
-                                                <StackPanel Grid.Row="1">
-                                                    <!-- 녹음 상태 표시 -->
-                                                    <TextBlock x:Name="OneNoteRecordingStatus"
-                                                               Text="대기 중"
-                                                               HorizontalAlignment="Center"
-                                                               FontSize="14" FontWeight="SemiBold"
-                                                               Margin="0,0,0,8"/>
-
-                                                    <!-- 녹음 시간 -->
-                                                    <TextBlock x:Name="OneNoteRecordingTime"
-                                                               Text="00:00"
-                                                               HorizontalAlignment="Center"
-                                                               FontSize="28" FontWeight="Bold"
-                                                               Foreground="{DynamicResource AccentTextFillColorPrimaryBrush}"
-                                                               Margin="0,0,0,8"/>
-
-                                                    <!-- 볼륨 레벨 바 -->
-                                                    <ProgressBar x:Name="OneNoteVolumeLevel"
-                                                                 Height="6" Minimum="0" Maximum="1" Value="0"
-                                                                 Margin="0,0,0,16"/>
-
-                                                    <!-- 녹음 버튼들 -->
-                                                    <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
-                                                        <!-- 녹음 시작/중지 버튼 -->
-                                                        <ui:Button x:Name="OneNoteRecordStartButton"
-                                                                   Icon="{ui:SymbolIcon Mic24}"
-                                                                   Appearance="Primary"
-                                                                   ToolTip="녹음 시작"
-                                                                   Width="48" Height="48"
-                                                                   Margin="4"
-                                                                   Click="OneNoteRecordStart_Click"/>
-
-                                                        <!-- 일시정지/재개 버튼 -->
-                                                        <ui:Button x:Name="OneNoteRecordPauseButton"
-                                                                   Icon="{ui:SymbolIcon Pause24}"
-                                                                   Appearance="Secondary"
-                                                                   ToolTip="일시정지"
-                                                                   Width="48" Height="48"
-                                                                   Margin="4"
-                                                                   IsEnabled="False"
-                                                                   Click="OneNoteRecordPause_Click"/>
-
-                                                        <!-- 취소 버튼 -->
-                                                        <ui:Button x:Name="OneNoteRecordCancelButton"
-                                                                   Icon="{ui:SymbolIcon Delete24}"
-                                                                   Appearance="Caution"
-                                                                   ToolTip="녹음 취소"
-                                                                   Width="48" Height="48"
-                                                                   Margin="4"
-                                                                   IsEnabled="False"
-                                                                   Click="OneNoteRecordCancel_Click"/>
-                                                    </StackPanel>
-                                                </StackPanel>
                                             </Grid>
                                         </Border>
 
@@ -7521,17 +7563,17 @@
 
                                                                 <!-- STT분석, 요약 버튼 -->
                                                                 <StackPanel Orientation="Horizontal">
-                                                                    <ui:Button Content="STT 분석"
+                                                                    <ui:Button Content="{Binding STTButtonContent}"
                                                                                Icon="{ui:SymbolIcon Mic24}"
-                                                                               Appearance="Secondary"
+                                                                               Appearance="{Binding IsSTTInProgress, Converter={StaticResource BoolToAppearanceConverter}}"
                                                                                FontSize="11"
                                                                                Padding="8,4"
                                                                                Margin="0,0,6,0"
                                                                                Tag="{Binding}"
                                                                                Click="OneNoteRecordingRunSTT_Click"/>
-                                                                    <ui:Button Content="요약"
+                                                                    <ui:Button Content="{Binding SummaryButtonContent}"
                                                                                Icon="{ui:SymbolIcon Sparkle24}"
-                                                                               Appearance="Secondary"
+                                                                               Appearance="{Binding IsSummaryInProgress, Converter={StaticResource BoolToAppearanceConverter}}"
                                                                                FontSize="11"
                                                                                Padding="8,4"
                                                                                Tag="{Binding}"

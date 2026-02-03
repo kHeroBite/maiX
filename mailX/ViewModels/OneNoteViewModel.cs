@@ -179,6 +179,16 @@ public partial class OneNoteViewModel : ViewModelBase
     private CancellationTokenSource? _realtimeSTTCts;
 
     /// <summary>
+    /// 수동 STT 분석 취소 토큰
+    /// </summary>
+    private CancellationTokenSource? _manualSTTCts;
+
+    /// <summary>
+    /// 수동 요약 분석 취소 토큰
+    /// </summary>
+    private CancellationTokenSource? _manualSummaryCts;
+
+    /// <summary>
     /// 실시간 요약 업데이트 타이머
     /// </summary>
     private System.Timers.Timer? _realtimeSummaryTimer;
@@ -226,6 +236,26 @@ public partial class OneNoteViewModel : ViewModelBase
     /// 선택된 녹음의 STT 세그먼트 목록
     /// </summary>
     public ObservableCollection<Models.TranscriptSegment> STTSegments { get; } = new();
+
+    /// <summary>
+    /// 화자분리 적용 전 세그먼트 (비교용)
+    /// </summary>
+    private List<Models.TranscriptSegment>? _segmentsBeforeDiarization;
+
+    /// <summary>
+    /// 화자분리 적용 후 세그먼트 (원본)
+    /// </summary>
+    private List<Models.TranscriptSegment>? _segmentsAfterDiarization;
+
+    /// <summary>
+    /// 실시간 STT 화자분리 전 세그먼트 (녹음 중 임시 저장)
+    /// </summary>
+    private List<Models.TranscriptSegment>? _liveSegmentsBeforeDiarization;
+
+    /// <summary>
+    /// 화자분리 전/후 비교 데이터가 있는지 여부
+    /// </summary>
+    public bool HasDiarizationComparison => _segmentsBeforeDiarization != null && _segmentsBeforeDiarization.Count > 0;
 
     /// <summary>
     /// 선택된 녹음의 요약 결과
@@ -1107,19 +1137,25 @@ public partial class OneNoteViewModel : ViewModelBase
         Log4.Info("★★★ LoadRecordingsForCurrentPageAsync 호출됨 ★★★");
         CurrentPageRecordings.Clear();
 
-        // 먼저 전체 녹음 로드
+        // 먼저 전체 녹음 로드 (LoadRecordings 내부에서 FilterRecordingsForCurrentPage 호출됨)
+        var needsManualFilter = Recordings.Count > 0;
         if (Recordings.Count == 0)
         {
             LoadRecordings();
+            // LoadRecordings()가 FilterRecordingsForCurrentPage()를 호출하므로
+            // CurrentPageRecordings가 이미 채워져 있음 - mailX 녹음 추가 불필요
         }
 
         // 페이지가 선택되지 않았으면 모든 녹음 표시
         if (SelectedPage == null)
         {
-            Log4.Debug($"페이지 미선택 - 모든 녹음 표시: {Recordings.Count}개");
-            foreach (var r in Recordings)
+            if (needsManualFilter)
             {
-                CurrentPageRecordings.Add(r);
+                Log4.Debug($"페이지 미선택 - 모든 녹음 표시: {Recordings.Count}개");
+                foreach (var r in Recordings)
+                {
+                    CurrentPageRecordings.Add(r);
+                }
             }
             return;
         }
@@ -1129,11 +1165,15 @@ public partial class OneNoteViewModel : ViewModelBase
         Log4.Info($"★★★ 페이지 {pageId} ({SelectedPage.Title}) 녹음 로드 시작 (Sanitized: {sanitizedPageId}) ★★★");
 
         // 1. 해당 페이지에 연결된 mailX 녹음 추가 (sanitized ID로 비교)
-        foreach (var recording in Recordings)
+        // LoadRecordings()를 호출한 경우 이미 FilterRecordingsForCurrentPage에서 추가됨
+        if (needsManualFilter)
         {
-            if (recording.LinkedPageId == sanitizedPageId)
+            foreach (var recording in Recordings)
             {
-                CurrentPageRecordings.Add(recording);
+                if (recording.LinkedPageId == sanitizedPageId)
+                {
+                    CurrentPageRecordings.Add(recording);
+                }
             }
         }
 
@@ -1679,13 +1719,21 @@ public partial class OneNoteViewModel : ViewModelBase
             var result = STJ.JsonSerializer.Deserialize<Models.TranscriptResult>(json);
             if (result?.Segments != null)
             {
+                // 화자분리 전/후 데이터 저장
+                _segmentsBeforeDiarization = result.SegmentsBeforeDiarization;
+                _segmentsAfterDiarization = result.Segments.ToList();
+
                 foreach (var segment in result.Segments)
                 {
                     STTSegments.Add(segment);
                 }
                 recording.STTResultPath = sttPath;
-                _logger.Information("[OneNote] STT 결과 로드: {FileName}, {Count}개 세그먼트",
-                    recording.FileName, STTSegments.Count);
+
+                // 토글 버튼 가시성 업데이트
+                OnPropertyChanged(nameof(HasDiarizationComparison));
+
+                _logger.Information("[OneNote] STT 결과 로드: {FileName}, {Count}개 세그먼트, 화자분리 전: {BeforeCount}개",
+                    recording.FileName, STTSegments.Count, _segmentsBeforeDiarization?.Count ?? 0);
             }
         }
         catch (Exception ex)
@@ -1796,6 +1844,11 @@ public partial class OneNoteViewModel : ViewModelBase
             return;
         }
 
+        // 기존 취소 토큰 정리 및 새로 생성
+        _manualSTTCts?.Cancel();
+        _manualSTTCts?.Dispose();
+        _manualSTTCts = new CancellationTokenSource();
+
         IsSTTInProgress = true;
         SttProgress = 0;
         SttProgressText = "준비 중...";
@@ -1870,18 +1923,11 @@ public partial class OneNoteViewModel : ViewModelBase
             SttProgress = 0.3;
             SttProgressText = "음성 분석 중...";
 
-            // 실시간 세그먼트 수신 이벤트
-            void OnSegmentRecognized(Models.TranscriptSegment segment)
-            {
-                // UI 스레드에서 컬렉션 업데이트
-                // 실시간 녹음 중에는 LiveSTTSegments만 사용 (녹음 종료 시 STTSegments로 복사됨)
-                System.Windows.Application.Current.Dispatcher.Invoke(() =>
-                {
-                    LiveSTTSegments.Add(segment);
-                });
-            }
+            // 실제 분석 시작 시간 (VAD/화자분리 이후, progress > 15%부터)
+            DateTime? analysisStartTime = null;
+            double analysisStartProgress = 0;
 
-            // 진행률 이벤트 구독
+            // 진행률 이벤트 구독 (파일 분석에서는 SegmentRecognized 이벤트를 구독하지 않음 - 중복 표시 방지)
             void OnProgressChanged(double progress)
             {
                 System.Windows.Application.Current.Dispatcher.Invoke(() =>
@@ -1889,23 +1935,45 @@ public partial class OneNoteViewModel : ViewModelBase
                     // 다운로드(30%) + 분석(70%)
                     SttProgress = 0.3 + (progress * 0.7);
 
-                    // 예상 남은 시간 계산
-                    if (_sttStartTime.HasValue && progress > 0.05)
+                    // 예상 남은 시간 계산 (progress > 15% 이후부터, 실제 Whisper 분석 시작 기준)
+                    if (progress > 0.15)
                     {
-                        var elapsed = DateTime.Now - _sttStartTime.Value;
-                        var estimatedTotal = TimeSpan.FromSeconds(elapsed.TotalSeconds / progress);
-                        var remaining = estimatedTotal - elapsed;
-
-                        if (remaining.TotalSeconds > 0)
+                        // 분석 시작 시간 기록 (최초 1회)
+                        if (analysisStartTime == null)
                         {
-                            if (remaining.TotalMinutes >= 1)
-                                SttTimeRemaining = $"예상 남은 시간: {remaining.Minutes}분 {remaining.Seconds}초";
-                            else
-                                SttTimeRemaining = $"예상 남은 시간: {remaining.Seconds}초";
+                            analysisStartTime = DateTime.Now;
+                            analysisStartProgress = progress;
                         }
-                        else
+
+                        // 분석 시작 이후 경과 시간과 진행률로 예상 시간 계산
+                        var elapsed = DateTime.Now - analysisStartTime.Value;
+                        var progressSinceStart = progress - analysisStartProgress;
+
+                        if (progressSinceStart > 0.01 && elapsed.TotalSeconds > 2)
                         {
-                            SttTimeRemaining = "거의 완료됨...";
+                            // 남은 진행률 (1.0까지)
+                            var remainingProgress = 1.0 - progress;
+                            // 진행률당 소요 시간
+                            var secondsPerProgress = elapsed.TotalSeconds / progressSinceStart;
+                            // 예상 남은 시간
+                            var remainingSeconds = remainingProgress * secondsPerProgress;
+                            var remaining = TimeSpan.FromSeconds(remainingSeconds);
+
+                            if (remaining.TotalSeconds > 0 && remaining.TotalMinutes < 60)
+                            {
+                                if (remaining.TotalMinutes >= 1)
+                                    SttTimeRemaining = $"예상 남은 시간: {(int)remaining.TotalMinutes}분 {remaining.Seconds}초";
+                                else
+                                    SttTimeRemaining = $"예상 남은 시간: {(int)remaining.TotalSeconds}초";
+                            }
+                            else if (remaining.TotalSeconds <= 0)
+                            {
+                                SttTimeRemaining = "거의 완료됨...";
+                            }
+                            else
+                            {
+                                SttTimeRemaining = "예상 남은 시간: 계산 중...";
+                            }
                         }
                     }
 
@@ -1913,7 +1981,6 @@ public partial class OneNoteViewModel : ViewModelBase
                 });
             }
 
-            _speechService.SegmentRecognized += OnSegmentRecognized;
             _speechService.ProgressChanged += OnProgressChanged;
 
             try
@@ -1930,6 +1997,10 @@ public partial class OneNoteViewModel : ViewModelBase
                 await _speechService.SaveResultAsync(result, sttPath);
                 recording.STTResultPath = sttPath;
 
+                // 화자분리 전/후 데이터 저장
+                _segmentsBeforeDiarization = result.SegmentsBeforeDiarization;
+                _segmentsAfterDiarization = result.Segments.ToList();
+
                 // UI 갱신 (이미 실시간으로 추가되었지만, 최종 결과로 다시 설정)
                 STTSegments.Clear();
                 foreach (var segment in result.Segments)
@@ -1937,11 +2008,13 @@ public partial class OneNoteViewModel : ViewModelBase
                     STTSegments.Add(segment);
                 }
 
-                Utils.Log4.Info($"[OneNote] STT 완료: {recording.FileName}, {result.Segments.Count}개 세그먼트, 화자 {result.Speakers.Count}명");
+                // 화자분리 비교 데이터가 있으면 토글 버튼 표시 이벤트 발생
+                OnPropertyChanged(nameof(HasDiarizationComparison));
+
+                Utils.Log4.Info($"[OneNote] STT 완료: {recording.FileName}, {result.Segments.Count}개 세그먼트, 화자 {result.Speakers.Count}명, 화자분리 전 데이터: {(_segmentsBeforeDiarization?.Count ?? 0)}개");
             }
             finally
             {
-                _speechService.SegmentRecognized -= OnSegmentRecognized;
                 _speechService.ProgressChanged -= OnProgressChanged;
             }
         }
@@ -1954,6 +2027,83 @@ public partial class OneNoteViewModel : ViewModelBase
         {
             IsSTTInProgress = false;
             _sttStartTime = null;
+            _manualSTTCts?.Dispose();
+            _manualSTTCts = null;
+        }
+    }
+
+    /// <summary>
+    /// 수동 STT 분석 취소
+    /// </summary>
+    public void CancelSTT()
+    {
+        if (_manualSTTCts != null && !_manualSTTCts.IsCancellationRequested)
+        {
+            Utils.Log4.Info("[OneNote] STT 분석 취소 요청");
+            _manualSTTCts.Cancel();
+            IsSTTInProgress = false;
+            SttProgressText = "취소됨";
+        }
+    }
+
+    /// <summary>
+    /// 화자분리 전/후 세그먼트 토글 표시
+    /// </summary>
+    /// <param name="showBeforeDiarization">true: 화자분리 전 표시 (연속 텍스트), false: 화자분리 후 표시 (화자별 분리)</param>
+    public void ToggleDiarizationView(bool showBeforeDiarization)
+    {
+        if (showBeforeDiarization)
+        {
+            // 화자분리 전: 모든 세그먼트를 하나의 연속된 텍스트로 합쳐서 표시
+            if (_segmentsBeforeDiarization != null && _segmentsBeforeDiarization.Count > 0)
+            {
+                STTSegments.Clear();
+
+                // 전체 텍스트를 하나로 합침
+                var combinedText = string.Join(" ", _segmentsBeforeDiarization.Select(s => s.Text));
+                var firstSegment = _segmentsBeforeDiarization.First();
+                var lastSegment = _segmentsBeforeDiarization.Last();
+
+                // 하나의 세그먼트로 표시
+                var combinedSegment = new Models.TranscriptSegment
+                {
+                    StartTime = firstSegment.StartTime,
+                    EndTime = lastSegment.EndTime,
+                    Speaker = null,  // 화자 정보 없음
+                    Text = combinedText,
+                    Confidence = _segmentsBeforeDiarization.Average(s => s.Confidence)
+                };
+
+                STTSegments.Add(combinedSegment);
+                Utils.Log4.Debug($"[OneNote] 화자분리 전 표시: {_segmentsBeforeDiarization.Count}개 → 1개 연속 텍스트 ({combinedText.Length}자)");
+            }
+        }
+        else
+        {
+            // 화자분리 후 세그먼트 표시 (원본)
+            if (_segmentsAfterDiarization != null && _segmentsAfterDiarization.Count > 0)
+            {
+                STTSegments.Clear();
+                foreach (var segment in _segmentsAfterDiarization)
+                {
+                    STTSegments.Add(segment);
+                }
+                Utils.Log4.Debug($"[OneNote] 화자분리 후 세그먼트 표시: {_segmentsAfterDiarization.Count}개");
+            }
+        }
+    }
+
+    /// <summary>
+    /// 수동 요약 분석 취소
+    /// </summary>
+    public void CancelSummary()
+    {
+        if (_manualSummaryCts != null && !_manualSummaryCts.IsCancellationRequested)
+        {
+            Utils.Log4.Info("[OneNote] AI 요약 취소 요청");
+            _manualSummaryCts.Cancel();
+            IsSummaryInProgress = false;
+            SummaryProgressText = "취소됨";
         }
     }
 
@@ -1973,6 +2123,11 @@ public partial class OneNoteViewModel : ViewModelBase
             Utils.Log4.Warn("[OneNote] 요약 실행 불가: STT 결과 없음");
             return;
         }
+
+        // 기존 취소 토큰 정리 및 새로 생성
+        _manualSummaryCts?.Cancel();
+        _manualSummaryCts?.Dispose();
+        _manualSummaryCts = new CancellationTokenSource();
 
         IsSummaryInProgress = true;
         SummaryProgressText = "준비 중...";
@@ -2075,6 +2230,8 @@ public partial class OneNoteViewModel : ViewModelBase
         finally
         {
             IsSummaryInProgress = false;
+            _manualSummaryCts?.Dispose();
+            _manualSummaryCts = null;
         }
     }
 
@@ -2368,6 +2525,9 @@ public partial class OneNoteViewModel : ViewModelBase
             STTSegments.Clear();
             CurrentSummary = null;
             LiveSummaryText = string.Empty;
+            _liveSegmentsBeforeDiarization = null;
+            _segmentsBeforeDiarization = null;
+            _segmentsAfterDiarization = null;
             _lastSummarySegmentCount = 0;
 
             // AI 분석 활성화 시 실시간 STT 시작
@@ -2420,8 +2580,17 @@ public partial class OneNoteViewModel : ViewModelBase
             }
             Log4.Info($"[녹음] ★ 실시간 STT 결과 복사: {STTSegments.Count}개");
 
+            // 화자분리 전/후 데이터 복사 (토글 버튼용)
+            _segmentsBeforeDiarization = _liveSegmentsBeforeDiarization;
+            _segmentsAfterDiarization = LiveSTTSegments.ToList();
+            Log4.Info($"[녹음] ★ 화자분리 전/후 데이터 복사: 전={_segmentsBeforeDiarization?.Count ?? 0}개, 후={_segmentsAfterDiarization?.Count ?? 0}개");
+
+            // 토글 버튼 가시성 업데이트
+            OnPropertyChanged(nameof(HasDiarizationComparison));
+
             // LiveSTTSegments 클리어
             LiveSTTSegments.Clear();
+            _liveSegmentsBeforeDiarization = null;
 
             // 녹음 목록 새로고침 (동기)
             Log4.Info("[녹음] ★ 녹음 목록 새로고침 호출");
@@ -2546,8 +2715,21 @@ public partial class OneNoteViewModel : ViewModelBase
             {
                 System.Windows.Application.Current?.Dispatcher.Invoke(() =>
                 {
+                    // 화자분리 전 데이터 저장 (화자 정보 없이)
+                    _liveSegmentsBeforeDiarization ??= new List<Models.TranscriptSegment>();
                     foreach (var segment in segments)
                     {
+                        // 화자분리 전 버전 저장 (화자 없음)
+                        _liveSegmentsBeforeDiarization.Add(new Models.TranscriptSegment
+                        {
+                            StartTime = segment.StartTime,
+                            EndTime = segment.EndTime,
+                            Text = segment.Text,
+                            Confidence = segment.Confidence,
+                            Speaker = null  // 화자 정보 없음
+                        });
+
+                        // 원본 세그먼트 추가 (화자 정보 포함)
                         LiveSTTSegments.Add(segment);
                     }
 
@@ -2879,7 +3061,17 @@ public partial class OneNoteViewModel : ViewModelBase
                 STTSegments.Add(segment);
             }
             Log4.Info($"[녹음] ★ 실시간 STT 결과 복사: {STTSegments.Count}개");
+
+            // 화자분리 전/후 데이터 복사 (토글 버튼용)
+            _segmentsBeforeDiarization = _liveSegmentsBeforeDiarization;
+            _segmentsAfterDiarization = LiveSTTSegments.ToList();
+            Log4.Info($"[녹음] ★ 화자분리 전/후 데이터 복사: 전={_segmentsBeforeDiarization?.Count ?? 0}개, 후={_segmentsAfterDiarization?.Count ?? 0}개");
+
+            // 토글 버튼 가시성 업데이트
+            OnPropertyChanged(nameof(HasDiarizationComparison));
+
             LiveSTTSegments.Clear();
+            _liveSegmentsBeforeDiarization = null;
 
             // 녹음 목록 새로고침
             Log4.Info("[녹음] ★ 녹음 목록 새로고침 호출");
@@ -3038,6 +3230,9 @@ public partial class OneNoteViewModel : ViewModelBase
             LiveSTTSegments.Clear();
             CurrentSummary = null;
             LiveSummaryText = string.Empty;
+            _liveSegmentsBeforeDiarization = null;
+            _segmentsBeforeDiarization = null;
+            _segmentsAfterDiarization = null;
 
             // 녹음 목록 새로고침 (페이지에 연결된 녹음 + OneNote 녹음)
             _ = LoadRecordingsForCurrentPageAsync();
@@ -3053,6 +3248,9 @@ public partial class OneNoteViewModel : ViewModelBase
             LiveSTTSegments.Clear();
             CurrentSummary = null;
             LiveSummaryText = string.Empty;
+            _liveSegmentsBeforeDiarization = null;
+            _segmentsBeforeDiarization = null;
+            _segmentsAfterDiarization = null;
 
             // 페이지 미선택 시 모든 녹음 표시
             FilterRecordingsForCurrentPage();
