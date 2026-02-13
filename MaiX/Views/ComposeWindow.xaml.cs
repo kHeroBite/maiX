@@ -121,99 +121,18 @@ public partial class ComposeWindow : FluentWindow
     /// </summary>
     private async Task LoadTinyMCEEditorAsync()
     {
-        // ThemeService에서 정확한 테마 상태 가져오기
-        var isDark = ThemeService.Instance.IsDarkMode;
-
-        var backgroundColor = isDark ? "#1e1e1e" : "#ffffff";
-        var textColor = isDark ? "#ffffff" : "#000000";
-        var skin = isDark ? "oxide-dark" : "oxide";
-        var contentCss = isDark ? "dark" : "default";
-
         // 로컬 TinyMCE 폴더 경로 설정 (Self-hosted)
         var appDir = AppDomain.CurrentDomain.BaseDirectory;
         var tinymcePath = System.IO.Path.Combine(appDir, "Assets", "tinymce");
 
-        // WebView2에서 로컬 파일에 접근할 수 있도록 가상 호스트 매핑
+        // WebView2에서 로컬 파일에 접근할 수 있도록 가상 호스트 매핑 (공통 서비스에서 호스트명 취득)
+        var hostName = Services.Editor.TinyMCEEditorService.GetHostName(Services.Editor.TinyMCEEditorService.EditorType.Compose);
         EditorWebView.CoreWebView2.SetVirtualHostNameToFolderMapping(
-            "tinymce.local", tinymcePath,
+            hostName, tinymcePath,
             Microsoft.Web.WebView2.Core.CoreWebView2HostResourceAccessKind.Allow);
 
-        var editorHtml = $@"
-<!DOCTYPE html>
-<html>
-<head>
-    <meta charset='UTF-8'>
-    <script src='https://tinymce.local/tinymce.min.js'></script>
-    <style>
-        * {{ margin: 0; padding: 0; box-sizing: border-box; }}
-        html, body {{
-            height: 100%;
-            background-color: {backgroundColor};
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-        }}
-        .tox-tinymce {{ border: none !important; }}
-    </style>
-</head>
-<body>
-    <textarea id='editor'></textarea>
-    <script>
-        let editor;
-
-        tinymce.init({{
-            selector: '#editor',
-            height: '100%',
-            width: '100%',
-            menubar: false,
-            statusbar: false,
-            base_url: 'https://tinymce.local',
-            suffix: '.min',
-            plugins: 'table lists link image code',
-            toolbar: 'bold italic underline strikethrough | forecolor backcolor | fontfamily fontsize | alignleft aligncenter alignright alignjustify | bullist numlist outdent indent | table | link image | code removeformat',
-            toolbar_mode: 'wrap',
-            font_family_formats: 'Aptos=Aptos,sans-serif; 맑은 고딕=Malgun Gothic; 굴림=Gulim; 돋움=Dotum; 바탕=Batang; 궁서=Gungsuh; Segoe UI=Segoe UI,sans-serif; Arial=arial,helvetica,sans-serif; Arial Black=arial black,avant garde; Comic Sans MS=comic sans ms,sans-serif; Courier New=courier new,courier; Georgia=georgia,palatino; Helvetica=helvetica; Impact=impact,chicago; Tahoma=tahoma,arial,helvetica,sans-serif; Terminal=terminal,monaco; Times New Roman=times new roman,times; Verdana=verdana,geneva',
-            skin: '{skin}',
-            skin_url: 'https://tinymce.local/skins/ui/{skin}',
-            content_css: 'https://tinymce.local/skins/content/{contentCss}/content.min.css',
-            content_style: 'body {{ font-family: Aptos, sans-serif; font-size: 14px; color: {textColor}; background-color: {backgroundColor}; padding: 16px; }}',
-            table_toolbar: 'tableprops tabledelete | tableinsertrowbefore tableinsertrowafter tabledeleterow | tableinsertcolbefore tableinsertcolafter tabledeletecol',
-            table_appearance_options: true,
-            table_default_attributes: {{ border: '1' }},
-            table_default_styles: {{ 'border-collapse': 'collapse', 'width': '100%' }},
-            browser_spellcheck: true,
-            contextmenu: false,
-            setup: function(ed) {{
-                editor = ed;
-                ed.on('init', function() {{
-                    window.chrome.webview.postMessage({{ type: 'ready' }});
-                }});
-            }}
-        }});
-
-        // C#에서 호출하는 함수들
-        window.getContent = function() {{
-            return editor ? editor.getContent() : '';
-        }};
-
-        window.setContent = function(html) {{
-            if (editor) {{
-                editor.setContent(html || '');
-            }}
-        }};
-
-        window.insertContent = function(html) {{
-            if (editor) {{
-                editor.insertContent(html);
-            }}
-        }};
-
-        window.focus = function() {{
-            if (editor) {{
-                editor.focus();
-            }}
-        }};
-    </script>
-</body>
-</html>";
+        // TinyMCE 에디터 HTML 생성 (공통 서비스 사용)
+        var editorHtml = Services.Editor.TinyMCEEditorService.GenerateEditorHtml(Services.Editor.TinyMCEEditorService.EditorType.Compose);
 
         // WebView2로 HTML 로드
         EditorWebView.CoreWebView2.WebMessageReceived += CoreWebView2_WebMessageReceived;

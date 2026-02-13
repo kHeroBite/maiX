@@ -4,7 +4,7 @@ namespace MaiX.Services.Editor;
 
 /// <summary>
 /// TinyMCE 에디터 HTML 생성 서비스
-/// 메일 작성, OneNote 등 모든 TinyMCE 에디터에 공통 설정을 적용
+/// 메일 작성, 임시보관함, OneNote 등 모든 TinyMCE 에디터에 공통 설정을 적용
 /// </summary>
 public static class TinyMCEEditorService
 {
@@ -13,10 +13,27 @@ public static class TinyMCEEditorService
     /// </summary>
     public enum EditorType
     {
-        /// <summary>메일 작성 에디터</summary>
+        /// <summary>임시보관함 에디터 (MainWindow)</summary>
         Draft,
-        /// <summary>OneNote 에디터</summary>
+        /// <summary>메일 작성 에디터 (ComposeWindow)</summary>
+        Compose,
+        /// <summary>OneNote 에디터 (MainWindow)</summary>
         OneNote
+    }
+
+    /// <summary>
+    /// 에디터 유형별 가상 호스트명을 반환합니다.
+    /// WebView2 SetVirtualHostNameToFolderMapping 호출 시 사용.
+    /// </summary>
+    public static string GetHostName(EditorType editorType)
+    {
+        return editorType switch
+        {
+            EditorType.Draft => "tinymce-draft.local",
+            EditorType.Compose => "tinymce.local",
+            EditorType.OneNote => "tinymce-onenote.local",
+            _ => "tinymce-draft.local"
+        };
     }
 
     /// <summary>
@@ -37,14 +54,10 @@ public static class TinyMCEEditorService
         var textColor = dark ? "#e0e0e0" : "#333333";
 
         // 에디터별 base_url
-        var baseUrl = editorType switch
-        {
-            EditorType.Draft => "https://tinymce-draft.local",
-            EditorType.OneNote => "https://tinymce-onenote.local",
-            _ => "https://tinymce-draft.local"
-        };
+        var hostName = GetHostName(editorType);
+        var baseUrl = $"https://{hostName}";
 
-        // 공통 content_style (다크모드 표 배경색 포함)
+        // 공통 content_style (다크모드 표 배경색/인라인 스타일 오버라이드 포함)
         var contentStyle = GenerateContentStyle(dark, textColor, bgColor);
 
         // 공통 설정
@@ -109,30 +122,36 @@ public static class TinyMCEEditorService
         }});
 
         // C#에서 호출하는 함수들
-        function setContent(html) {{
+        window.setContent = function(html) {{
             if (tinymce.activeEditor) {{
                 tinymce.activeEditor.setContent(html || '');
             }}
-        }}
+        }};
 
-        function getContent() {{
+        window.getContent = function() {{
             if (tinymce.activeEditor) {{
                 return tinymce.activeEditor.getContent();
             }}
             return '';
-        }}
+        }};
 
-        function setReadOnly(readOnly) {{
+        window.insertContent = function(html) {{
+            if (tinymce.activeEditor) {{
+                tinymce.activeEditor.insertContent(html);
+            }}
+        }};
+
+        window.setReadOnly = function(readOnly) {{
             if (tinymce.activeEditor) {{
                 tinymce.activeEditor.mode.set(readOnly ? 'readonly' : 'design');
             }}
-        }}
+        }};
 
-        function focus() {{
+        window.focus = function() {{
             if (tinymce.activeEditor) {{
                 tinymce.activeEditor.focus();
             }}
-        }}
+        }};
     </script>
 </body>
 </html>";

@@ -411,97 +411,22 @@ public partial class MainWindow : FluentWindow
     }
 
     /// <summary>
-    /// 임시보관함 편집용 TinyMCE HTML 로드
+    /// 임시보관함 편집용 TinyMCE HTML 로드 (공통 서비스 사용)
     /// </summary>
     private async Task LoadDraftTinyMCEEditorAsync()
     {
-        // ThemeService에서 정확한 테마 상태 가져오기
-        var isDark = Services.Theme.ThemeService.Instance.IsDarkMode;
-
-        var backgroundColor = isDark ? "#1e1e1e" : "#ffffff";
-        var textColor = isDark ? "#ffffff" : "#000000";
-        var skin = isDark ? "oxide-dark" : "oxide";
-        var contentCss = isDark ? "dark" : "default";
-
         // 로컬 TinyMCE 폴더 경로 설정 (Self-hosted)
         var appDir = AppDomain.CurrentDomain.BaseDirectory;
         var tinymcePath = System.IO.Path.Combine(appDir, "Assets", "tinymce");
 
-        // WebView2에서 로컬 파일에 접근할 수 있도록 가상 호스트 매핑
+        // WebView2에서 로컬 파일에 접근할 수 있도록 가상 호스트 매핑 (공통 서비스에서 호스트명 취득)
+        var hostName = Services.Editor.TinyMCEEditorService.GetHostName(Services.Editor.TinyMCEEditorService.EditorType.Draft);
         DraftBodyWebView.CoreWebView2.SetVirtualHostNameToFolderMapping(
-            "tinymce-draft.local", tinymcePath,
+            hostName, tinymcePath,
             Microsoft.Web.WebView2.Core.CoreWebView2HostResourceAccessKind.Allow);
 
-        var editorHtml = $@"
-<!DOCTYPE html>
-<html>
-<head>
-    <meta charset='UTF-8'>
-    <script src='https://tinymce-draft.local/tinymce.min.js'></script>
-    <style>
-        * {{ margin: 0; padding: 0; box-sizing: border-box; }}
-        html, body {{
-            height: 100%;
-            background-color: {backgroundColor};
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-        }}
-        .tox-tinymce {{ border: none !important; }}
-    </style>
-</head>
-<body>
-    <textarea id='editor'></textarea>
-    <script>
-        let editor;
-
-        tinymce.init({{
-            selector: '#editor',
-            height: '100%',
-            width: '100%',
-            menubar: false,
-            statusbar: false,
-            base_url: 'https://tinymce-draft.local',
-            suffix: '.min',
-            plugins: 'table lists link image code',
-            toolbar: 'bold italic underline strikethrough | forecolor backcolor | fontfamily fontsize | alignleft aligncenter alignright alignjustify | bullist numlist outdent indent | table | link image | code removeformat',
-            toolbar_mode: 'wrap',
-            font_family_formats: 'Aptos=Aptos,sans-serif; 맑은 고딕=Malgun Gothic; 굴림=Gulim; 돋움=Dotum; 바탕=Batang; 궁서=Gungsuh; Segoe UI=Segoe UI,sans-serif; Arial=arial,helvetica,sans-serif; Arial Black=arial black,avant garde; Comic Sans MS=comic sans ms,sans-serif; Courier New=courier new,courier; Georgia=georgia,palatino; Helvetica=helvetica; Impact=impact,chicago; Tahoma=tahoma,arial,helvetica,sans-serif; Terminal=terminal,monaco; Times New Roman=times new roman,times; Verdana=verdana,geneva',
-            skin: '{skin}',
-            skin_url: 'https://tinymce-draft.local/skins/ui/{skin}',
-            content_css: 'https://tinymce-draft.local/skins/content/{contentCss}/content.min.css',
-            content_style: 'body {{ font-family: Aptos, sans-serif; font-size: 14px; color: {textColor}; background-color: {backgroundColor}; padding: 16px; }} table {{ border-collapse: collapse; }} table td, table th {{ color: {textColor} !important; background-color: {(isDark ? "#2d2d2d" : "inherit")} !important; border: 1px solid {(isDark ? "#555" : "#ccc")}; padding: 4px 8px; }} table td[style*=""background""], table th[style*=""background""] {{ background-color: {(isDark ? "#2d2d2d" : "inherit")} !important; }} table th {{ background-color: {(isDark ? "#333" : "#f5f5f5")} !important; }}',
-            table_toolbar: 'tableprops tabledelete | tableinsertrowbefore tableinsertrowafter tabledeleterow | tableinsertcolbefore tableinsertcolafter tabledeletecol',
-            table_appearance_options: true,
-            table_default_attributes: {{ border: '1' }},
-            table_default_styles: {{ 'border-collapse': 'collapse', 'width': '100%' }},
-            browser_spellcheck: true,
-            contextmenu: false,
-            setup: function(ed) {{
-                editor = ed;
-                ed.on('init', function() {{
-                    window.chrome.webview.postMessage({{ type: 'ready' }});
-                }});
-            }}
-        }});
-
-        // C#에서 호출하는 함수들
-        window.getContent = function() {{
-            return editor ? editor.getContent() : '';
-        }};
-
-        window.setContent = function(html) {{
-            if (editor) {{
-                editor.setContent(html || '');
-            }}
-        }};
-
-        window.focus = function() {{
-            if (editor) {{
-                editor.focus();
-            }}
-        }};
-    </script>
-</body>
-</html>";
+        // TinyMCE 에디터 HTML 생성 (공통 서비스 사용)
+        var editorHtml = Services.Editor.TinyMCEEditorService.GenerateEditorHtml(Services.Editor.TinyMCEEditorService.EditorType.Draft);
 
         // WebView2로 HTML 로드
         DraftBodyWebView.CoreWebView2.NavigateToString(editorHtml);
@@ -9621,17 +9546,15 @@ public partial class MainWindow : FluentWindow
             OneNoteEditorWebView.CoreWebView2.Settings.AreDefaultContextMenusEnabled = false;
             OneNoteEditorWebView.CoreWebView2.Settings.IsStatusBarEnabled = false;
 
-            // 로컬 TinyMCE 파일에 접근할 수 있도록 가상 호스트 매핑 (고유 호스트명 사용)
+            // 로컬 TinyMCE 파일에 접근할 수 있도록 가상 호스트 매핑 (공통 서비스에서 호스트명 취득)
             var tinymcePath = System.IO.Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Assets", "tinymce");
+            var hostName = Services.Editor.TinyMCEEditorService.GetHostName(Services.Editor.TinyMCEEditorService.EditorType.OneNote);
             OneNoteEditorWebView.CoreWebView2.SetVirtualHostNameToFolderMapping(
-                "tinymce-onenote.local", tinymcePath,
+                hostName, tinymcePath,
                 Microsoft.Web.WebView2.Core.CoreWebView2HostResourceAccessKind.Allow);
 
-            // 테마 감지
-            var isDark = Services.Theme.ThemeService.Instance.CurrentTheme == Wpf.Ui.Appearance.ApplicationTheme.Dark;
-
-            // TinyMCE 에디터 HTML 생성
-            var editorHtml = GenerateOneNoteTinyMCEHtml(isDark);
+            // TinyMCE 에디터 HTML 생성 (공통 서비스 사용)
+            var editorHtml = Services.Editor.TinyMCEEditorService.GenerateEditorHtml(Services.Editor.TinyMCEEditorService.EditorType.OneNote);
 
             // 메시지 수신 핸들러
             OneNoteEditorWebView.CoreWebView2.WebMessageReceived += OneNoteEditorWebView_WebMessageReceived;
@@ -9645,101 +9568,6 @@ public partial class MainWindow : FluentWindow
         {
             Log4.Error($"[OneNote] TinyMCE 초기화 실패: {ex.Message}");
         }
-    }
-
-    /// <summary>
-    /// OneNote TinyMCE 에디터 HTML 생성
-    /// </summary>
-    private string GenerateOneNoteTinyMCEHtml(bool isDark)
-    {
-        var skin = isDark ? "oxide-dark" : "oxide";
-        var contentCss = isDark ? "dark" : "default";
-        var bgColor = isDark ? "#1e1e1e" : "#ffffff";
-        var textColor = isDark ? "#e0e0e0" : "#333333";
-
-        return $@"<!DOCTYPE html>
-<html>
-<head>
-    <meta charset=""UTF-8"">
-    <meta name=""viewport"" content=""width=device-width, initial-scale=1.0"">
-    <script src=""https://tinymce-onenote.local/tinymce.min.js""></script>
-    <style>
-        * {{ margin: 0; padding: 0; box-sizing: border-box; }}
-        html, body {{
-            height: 100%;
-            overflow: hidden;
-            background-color: {bgColor};
-        }}
-        .tox-tinymce {{ border: none !important; }}
-        .tox .tox-edit-area::before {{ border: none !important; }}
-        .tox .tox-edit-area__iframe {{ background-color: {bgColor} !important; }}
-    </style>
-</head>
-<body>
-    <textarea id=""editor""></textarea>
-    <script>
-        let editor;
-
-        tinymce.init({{
-            selector: '#editor',
-            height: '100%',
-            menubar: false,
-            statusbar: false,
-            base_url: 'https://tinymce-onenote.local',
-            suffix: '.min',
-            skin: '{skin}',
-            skin_url: 'https://tinymce-onenote.local/skins/ui/{skin}',
-            content_css: 'https://tinymce-onenote.local/skins/content/{contentCss}/content.min.css',
-            plugins: 'table lists link image code checklist',
-            toolbar: 'bold italic underline strikethrough | forecolor backcolor | fontfamily fontsize | alignleft aligncenter alignright alignjustify | bullist numlist checklist outdent indent | table | link image | code removeformat',
-            toolbar_mode: 'wrap',
-            font_family_formats: 'Aptos=Aptos,sans-serif; 맑은 고딕=Malgun Gothic; 굴림=Gulim; 돋움=Dotum; 바탕=Batang; 궁서=Gungsuh; Segoe UI=Segoe UI,sans-serif; Arial=arial,helvetica,sans-serif; Arial Black=arial black,avant garde; Comic Sans MS=comic sans ms,sans-serif; Courier New=courier new,courier; Georgia=georgia,palatino; Helvetica=helvetica; Impact=impact,chicago; Tahoma=tahoma,arial,helvetica,sans-serif; Terminal=terminal,monaco; Times New Roman=times new roman,times; Verdana=verdana,geneva',
-            content_style: 'body {{ font-family: Aptos, sans-serif; font-size: 14px; color: {textColor}; background-color: {bgColor}; padding: 16px; }} * {{ color: inherit; }} table {{ border-collapse: collapse; }} table td, table th {{ color: {textColor} !important; background-color: {(isDark ? "#2d2d2d" : "inherit")} !important; border: 1px solid {(isDark ? "#555" : "#ccc")}; padding: 4px 8px; }} table td[style*=""background""], table th[style*=""background""] {{ background-color: {(isDark ? "#2d2d2d" : "inherit")} !important; }} table td *, table th * {{ color: {textColor} !important; }} table th {{ background-color: {(isDark ? "#333" : "#f5f5f5")} !important; }} span, font, b, strong, i, em, u {{ color: inherit !important; }}',
-            table_toolbar: 'tableprops tabledelete | tableinsertrowbefore tableinsertrowafter tabledeleterow | tableinsertcolbefore tableinsertcolafter tabledeletecol',
-            table_appearance_options: true,
-            table_default_attributes: {{ border: '1' }},
-            table_default_styles: {{ 'border-collapse': 'collapse', 'width': '100%' }},
-            browser_spellcheck: true,
-            contextmenu: false,
-            setup: function(ed) {{
-                editor = ed;
-                ed.on('init', function() {{
-                    window.chrome.webview.postMessage({{ type: 'ready' }});
-                }});
-                ed.on('input change', function() {{
-                    window.chrome.webview.postMessage({{ type: 'contentChanged', content: ed.getContent() }});
-                }});
-            }}
-        }});
-
-        // C#에서 호출하는 함수들
-        function setContent(html) {{
-            if (tinymce.activeEditor) {{
-                tinymce.activeEditor.setContent(html || '');
-            }}
-        }}
-
-        function getContent() {{
-            if (tinymce.activeEditor) {{
-                return tinymce.activeEditor.getContent();
-            }}
-            return '';
-        }}
-
-        function setReadOnly(readOnly) {{
-            if (tinymce.activeEditor) {{
-                tinymce.activeEditor.mode.set(readOnly ? 'readonly' : 'design');
-            }}
-        }}
-
-        function focus() {{
-            if (tinymce.activeEditor) {{
-                tinymce.activeEditor.focus();
-            }}
-        }}
-    </script>
-</body>
-</html>";
     }
 
     /// <summary>
@@ -9858,16 +9686,16 @@ public partial class MainWindow : FluentWindow
             }
 
             // 테마 감지
-            var isDark = Services.Theme.ThemeService.Instance.CurrentTheme == Wpf.Ui.Appearance.ApplicationTheme.Dark;
+            var isDark = Services.Theme.ThemeService.Instance.IsDarkMode;
 
             // WebView2 배경색 업데이트
             OneNoteEditorWebView.DefaultBackgroundColor = isDark
                 ? System.Drawing.Color.FromArgb(255, 30, 30, 30)
                 : System.Drawing.Color.FromArgb(255, 255, 255, 255);
 
-            // 새 테마로 에디터 재로드
+            // 새 테마로 에디터 재로드 (공통 서비스 사용)
             _oneNoteEditorReady = false;
-            var editorHtml = GenerateOneNoteTinyMCEHtml(isDark);
+            var editorHtml = Services.Editor.TinyMCEEditorService.GenerateEditorHtml(Services.Editor.TinyMCEEditorService.EditorType.OneNote);
             OneNoteEditorWebView.CoreWebView2.NavigateToString(editorHtml);
 
             // 에디터가 준비될 때까지 대기
