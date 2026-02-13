@@ -167,7 +167,12 @@ public static class TinyMCEEditorService
         var tableBorderColor = isDark ? "#555" : "#ccc";
 
         // 작은따옴표 내에서 큰따옴표는 그대로 사용 가능
-        return $@"body {{ font-family: Aptos, sans-serif; font-size: 14px; color: {textColor}; background-color: {bgColor}; padding: 16px; }} * {{ color: inherit; }} table {{ border-collapse: collapse; }} table td, table th {{ color: {textColor} !important; background-color: {tableBgColor} !important; border: 1px solid {tableBorderColor}; padding: 4px 8px; }} table td[style*=""background""], table th[style*=""background""] {{ background-color: {tableBgColor} !important; }} table td *, table th * {{ color: {textColor} !important; }} table th {{ background-color: {tableHeaderBgColor} !important; }} span, font, b, strong, i, em, u {{ color: inherit !important; }}";
+        // 다크모드: 모든 인라인 background/color를 강제 오버라이드 (OneNote HTML 등 외부 콘텐츠 대응)
+        var inlineOverride = isDark
+            ? $@" [style*=""background""] {{ background-color: transparent !important; background: transparent !important; }} [style*=""color""] {{ color: {textColor} !important; }} p, li, div, span, font, b, strong, i, em, u, a, h1, h2, h3, h4, h5, h6 {{ color: {textColor} !important; background-color: transparent !important; }}"
+            : "";
+
+        return $@"body {{ font-family: Aptos, sans-serif; font-size: 14px; color: {textColor}; background-color: {bgColor}; padding: 16px; }} * {{ color: inherit; }} table {{ border-collapse: collapse; }} table td, table th {{ color: {textColor} !important; background-color: {tableBgColor} !important; border: 1px solid {tableBorderColor}; padding: 4px 8px; }} table td[style*=""background""], table th[style*=""background""] {{ background-color: {tableBgColor} !important; }} table td *, table th * {{ color: {textColor} !important; }} table th {{ background-color: {tableHeaderBgColor} !important; }} span, font, b, strong, i, em, u {{ color: inherit !important; }}{inlineOverride}";
     }
 
     /// <summary>
