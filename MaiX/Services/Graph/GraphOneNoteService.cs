@@ -6,6 +6,7 @@ using System.Net.Http;
 using System.Text;
 using System.Text.Json;
 using System.Text.RegularExpressions;
+using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Graph;
@@ -1971,31 +1972,190 @@ public class GraphOneNoteService
     {
         var allPages = new List<OnenotePage>();
         var client = _authService.GetGraphClient();
-        var filter = $"contains(tolower(title),'{query.ToLower().Replace("'", "''")}')";
+        var escapedQuery = query.ToLower().Replace("'", "''");
+        var pageFilter = $"contains(tolower(title),'{escapedQuery}')";
 
-        var tasks = new List<Task<List<OnenotePage>>>();
+        // 1단계: 각 영역에서 전체 섹션 목록 수집 (병렬)
+        var sectionTasks = new List<Task<List<(string sectionId, string? groupId, string? siteId)>>>();
 
-        // 개인 노트북 검색
+        // 개인 노트북 섹션
+        sectionTasks.Add(Task.Run(async () =>
+        {
+            var result = new List<(string sectionId, string? groupId, string? siteId)>();
+            try
+            {
+                var response = await client.Me.Onenote.Sections.GetAsync(config =>
+                {
+                    config.QueryParameters.Top = 100;
+                    config.QueryParameters.Select = new[] { "id" };
+                });
+                if (response?.Value != null)
+                {
+                    foreach (var s in response.Value.Where(s => !string.IsNullOrEmpty(s.Id)))
+                        result.Add((s.Id!, null, null));
+                }
+            }
+            catch (Exception ex)
+            {
+                Log4.Warn($"[OneNote검색] 개인 섹션 목록 조회 실패: {ex.Message}");
+            }
+            return result;
+        }));
+
+        // 그룹별 섹션
+        foreach (var groupId in groupIds.Where(id => !string.IsNullOrEmpty(id)).Distinct())
+        {
+            var gid = groupId;
+            sectionTasks.Add(Task.Run(async () =>
+            {
+                var result = new List<(string sectionId, string? groupId, string? siteId)>();
+                try
+                {
+                    var response = await client.Groups[gid].Onenote.Sections.GetAsync(config =>
+                    {
+                        config.QueryParameters.Top = 100;
+                        config.QueryParameters.Select = new[] { "id" };
+                    });
+                    if (response?.Value != null)
+                    {
+                        foreach (var s in response.Value.Where(s => !string.IsNullOrEmpty(s.Id)))
+                            result.Add((s.Id!, gid, null));
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Log4.Warn($"[OneNote검색] 그룹 '{gid}' 섹션 목록 조회 실패: {ex.Message}");
+                }
+                return result;
+            }));
+        }
+
+        // 사이트별 섹션
+        foreach (var siteId in siteIds.Where(id => !string.IsNullOrEmpty(id)).Distinct())
+        {
+            var sid = siteId;
+            sectionTasks.Add(Task.Run(async () =>
+            {
+                var result = new List<(string sectionId, string? groupId, string? siteId)>();
+                try
+                {
+                    var response = await client.Sites[sid].Onenote.Sections.GetAsync(config =>
+                    {
+                        config.QueryParameters.Top = 100;
+                        config.QueryParameters.Select = new[] { "id" };
+                    });
+                    if (response?.Value != null)
+                    {
+                        foreach (var s in response.Value.Where(s => !string.IsNullOrEmpty(s.Id)))
+                            result.Add((s.Id!, null, sid));
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Log4.Warn($"[OneNote검색] 사이트 '{sid}' 섹션 목록 조회 실패: {ex.Message}");
+                }
+                return result;
+            }));
+        }
+
+        var sectionResults = await Task.WhenAll(sectionTasks);
+        var allSections = sectionResults.SelectMany(s => s).ToList();
+        Log4.Info($"[OneNote검색] 총 {allSections.Count}개 섹션에서 '{query}' 검색 시작");
+
+        // 2단계: 각 섹션에서 페이지 검색 (병렬, 동시 10개 제한)
+        var semaphore = new SemaphoreSlim(10);
+        var pageTasks = allSections.Select(async section =>
+        {
+            await semaphore.WaitAsync();
+            try
+            {
+                if (section.groupId != null)
+                {
+                    var response = await client.Groups[section.groupId].Onenote.Sections[section.sectionId].Pages.GetAsync(config =>
+                    {
+                        config.QueryParameters.Filter = pageFilter;
+                        config.QueryParameters.Top = 20;
+                        config.QueryParameters.Expand = new[] { "parentSection($select=id,displayName)", "parentNotebook($select=id,displayName)" };
+                    });
+                    return response?.Value?.ToList() ?? new List<OnenotePage>();
+                }
+                else if (section.siteId != null)
+                {
+                    var response = await client.Sites[section.siteId].Onenote.Sections[section.sectionId].Pages.GetAsync(config =>
+                    {
+                        config.QueryParameters.Filter = pageFilter;
+                        config.QueryParameters.Top = 20;
+                        config.QueryParameters.Expand = new[] { "parentSection($select=id,displayName)", "parentNotebook($select=id,displayName)" };
+                    });
+                    return response?.Value?.ToList() ?? new List<OnenotePage>();
+                }
+                else
+                {
+                    var response = await client.Me.Onenote.Sections[section.sectionId].Pages.GetAsync(config =>
+                    {
+                        config.QueryParameters.Filter = pageFilter;
+                        config.QueryParameters.Top = 20;
+                        config.QueryParameters.Expand = new[] { "parentSection($select=id,displayName)", "parentNotebook($select=id,displayName)" };
+                    });
+                    return response?.Value?.ToList() ?? new List<OnenotePage>();
+                }
+            }
+            catch (Exception ex)
+            {
+                Log4.Debug($"[OneNote검색] 섹션 '{section.sectionId}' 페이지 검색 실패: {ex.Message}");
+                return new List<OnenotePage>();
+            }
+            finally
+            {
+                semaphore.Release();
+            }
+        }).ToList();
+
+        var pageResults = await Task.WhenAll(pageTasks);
+        foreach (var pages in pageResults)
+        {
+            allPages.AddRange(pages);
+        }
+
+        Log4.Info($"[OneNote검색] 페이지 검색 완료: {allPages.Count}개 발견");
+
+        // 중복 제거 (같은 페이지가 여러 경로로 조회될 수 있음)
+        return allPages.GroupBy(p => p.Id).Select(g => g.First()).ToList();
+    }
+
+    /// <summary>
+    /// 섹션 이름으로 검색 (개인/그룹/사이트 병렬)
+    /// </summary>
+    public async Task<List<OnenoteSection>> SearchSectionsAsync(string query, IEnumerable<string> groupIds, IEnumerable<string> siteIds)
+    {
+        var allSections = new List<OnenoteSection>();
+        var client = _authService.GetGraphClient();
+        var escapedQuery = query.ToLower().Replace("'", "''");
+        var sectionFilter = $"contains(tolower(name),'{escapedQuery}')";
+
+        var tasks = new List<Task<List<OnenoteSection>>>();
+
+        // 개인 노트북 섹션 검색
         tasks.Add(Task.Run(async () =>
         {
             try
             {
-                var response = await client.Me.Onenote.Pages.GetAsync(config =>
+                var response = await client.Me.Onenote.Sections.GetAsync(config =>
                 {
-                    config.QueryParameters.Filter = filter;
+                    config.QueryParameters.Filter = sectionFilter;
                     config.QueryParameters.Top = 50;
-                    config.QueryParameters.Expand = new[] { "parentSection($select=id,displayName)", "parentNotebook($select=id,displayName)" };
+                    config.QueryParameters.Expand = new[] { "parentNotebook($select=id,displayName)" };
                 });
-                return response?.Value?.ToList() ?? new List<OnenotePage>();
+                return response?.Value?.ToList() ?? new List<OnenoteSection>();
             }
             catch (Exception ex)
             {
-                Log4.Warn($"[OneNote검색] 개인 노트북 검색 실패: {ex.Message}");
-                return new List<OnenotePage>();
+                Log4.Warn($"[OneNote검색] 개인 섹션 검색 실패: {ex.Message}");
+                return new List<OnenoteSection>();
             }
         }));
 
-        // 그룹별 검색
+        // 그룹별 섹션 검색
         foreach (var groupId in groupIds.Where(id => !string.IsNullOrEmpty(id)).Distinct())
         {
             var gid = groupId;
@@ -2003,23 +2163,23 @@ public class GraphOneNoteService
             {
                 try
                 {
-                    var response = await client.Groups[gid].Onenote.Pages.GetAsync(config =>
+                    var response = await client.Groups[gid].Onenote.Sections.GetAsync(config =>
                     {
-                        config.QueryParameters.Filter = filter;
+                        config.QueryParameters.Filter = sectionFilter;
                         config.QueryParameters.Top = 50;
-                        config.QueryParameters.Expand = new[] { "parentSection($select=id,displayName)", "parentNotebook($select=id,displayName)" };
+                        config.QueryParameters.Expand = new[] { "parentNotebook($select=id,displayName)" };
                     });
-                    return response?.Value?.ToList() ?? new List<OnenotePage>();
+                    return response?.Value?.ToList() ?? new List<OnenoteSection>();
                 }
                 catch (Exception ex)
                 {
-                    Log4.Warn($"[OneNote검색] 그룹 '{gid}' 검색 실패: {ex.Message}");
-                    return new List<OnenotePage>();
+                    Log4.Warn($"[OneNote검색] 그룹 '{gid}' 섹션 검색 실패: {ex.Message}");
+                    return new List<OnenoteSection>();
                 }
             }));
         }
 
-        // 사이트별 검색
+        // 사이트별 섹션 검색
         foreach (var siteId in siteIds.Where(id => !string.IsNullOrEmpty(id)).Distinct())
         {
             var sid = siteId;
@@ -2027,30 +2187,32 @@ public class GraphOneNoteService
             {
                 try
                 {
-                    var response = await client.Sites[sid].Onenote.Pages.GetAsync(config =>
+                    var response = await client.Sites[sid].Onenote.Sections.GetAsync(config =>
                     {
-                        config.QueryParameters.Filter = filter;
+                        config.QueryParameters.Filter = sectionFilter;
                         config.QueryParameters.Top = 50;
-                        config.QueryParameters.Expand = new[] { "parentSection($select=id,displayName)", "parentNotebook($select=id,displayName)" };
+                        config.QueryParameters.Expand = new[] { "parentNotebook($select=id,displayName)" };
                     });
-                    return response?.Value?.ToList() ?? new List<OnenotePage>();
+                    return response?.Value?.ToList() ?? new List<OnenoteSection>();
                 }
                 catch (Exception ex)
                 {
-                    Log4.Warn($"[OneNote검색] 사이트 '{sid}' 검색 실패: {ex.Message}");
-                    return new List<OnenotePage>();
+                    Log4.Warn($"[OneNote검색] 사이트 '{sid}' 섹션 검색 실패: {ex.Message}");
+                    return new List<OnenoteSection>();
                 }
             }));
         }
 
         var results = await Task.WhenAll(tasks);
-        foreach (var pages in results)
+        foreach (var sections in results)
         {
-            allPages.AddRange(pages);
+            allSections.AddRange(sections);
         }
 
-        // 중복 제거 (같은 페이지가 여러 경로로 조회될 수 있음)
-        return allPages.GroupBy(p => p.Id).Select(g => g.First()).ToList();
+        Log4.Info($"[OneNote검색] 섹션 검색 완료: '{query}' → {allSections.Count}개 발견");
+
+        // 중복 제거
+        return allSections.GroupBy(s => s.Id).Select(g => g.First()).ToList();
     }
 }
 

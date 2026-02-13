@@ -3463,7 +3463,7 @@ public partial class OneNoteViewModel : ViewModelBase
     }
 
     /// <summary>
-    /// 페이지 검색
+    /// 페이지 + 섹션 검색
     /// </summary>
     [RelayCommand]
     public async Task SearchPagesAsync()
@@ -3486,9 +3486,32 @@ public partial class OneNoteViewModel : ViewModelBase
 
         try
         {
-            var pages = await _oneNoteService.SearchPagesAsync(query, groupIds, siteIds);
+            // 페이지 검색 + 섹션 검색 병렬 실행
+            var pageTask = _oneNoteService.SearchPagesAsync(query, groupIds, siteIds);
+            var sectionTask = _oneNoteService.SearchSectionsAsync(query, groupIds, siteIds);
+            await Task.WhenAll(pageTask, sectionTask);
+
+            var pages = pageTask.Result;
+            var sections = sectionTask.Result;
 
             SearchResults.Clear();
+
+            // 섹션 검색 결과 추가 (페이지보다 먼저 표시)
+            foreach (var section in sections)
+            {
+                var notebookName = section.ParentNotebook?.DisplayName ?? string.Empty;
+
+                SearchResults.Add(new PageItemViewModel
+                {
+                    Id = section.Id ?? string.Empty,
+                    Title = $"📁 {section.DisplayName ?? "Untitled"}",
+                    SectionId = section.Id ?? string.Empty,
+                    SectionName = "[섹션]",
+                    NotebookName = notebookName,
+                });
+            }
+
+            // 페이지 검색 결과 추가
             foreach (var page in pages)
             {
                 var sectionName = page.ParentSection?.DisplayName ?? string.Empty;
@@ -3506,7 +3529,7 @@ public partial class OneNoteViewModel : ViewModelBase
                 });
             }
 
-            _logger.Information("검색 '{Query}': {Count}개 결과 (Graph API)", query, SearchResults.Count);
+            _logger.Information("검색 '{Query}': 페이지 {PageCount}개 + 섹션 {SectionCount}개 (Graph API)", query, pages.Count, sections.Count);
         }
         catch (Exception ex)
         {
