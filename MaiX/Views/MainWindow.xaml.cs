@@ -10351,12 +10351,19 @@ public partial class MainWindow : FluentWindow
             {
                 Log4.Debug($"OneNote 검색: {query}");
                 _oneNoteViewModel.SearchQuery = query;
+
+                // 로딩 표시
+                OneNoteSearchResultsHeader.Text = "검색 중...";
+                OneNoteSearchProgressRing.Visibility = Visibility.Visible;
+                OneNoteSearchResultsListBox.ItemsSource = null;
+                OneNoteSearchResultsPanel.Visibility = Visibility.Visible;
+
                 await _oneNoteViewModel.SearchPagesAsync();
 
-                // 검색 결과 패널에 표시
+                // 로딩 숨김 + 검색 결과 표시
+                OneNoteSearchProgressRing.Visibility = Visibility.Collapsed;
                 OneNoteSearchResultsListBox.ItemsSource = _oneNoteViewModel.SearchResults;
                 OneNoteSearchResultsHeader.Text = $"검색 결과 ({_oneNoteViewModel.SearchResults.Count}개)";
-                OneNoteSearchResultsPanel.Visibility = Visibility.Visible;
             }
         }
         else if (e.Key == Key.Escape && OneNoteSearchBox != null)

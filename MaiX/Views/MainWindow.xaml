@@ -5907,6 +5907,9 @@
                                         <DockPanel Margin="8,6,8,2">
                                             <ui:SymbolIcon Symbol="Search24" FontSize="14" Margin="0,0,6,0"
                                                            Foreground="{DynamicResource AccentTextFillColorPrimaryBrush}"/>
+                                            <ui:ProgressRing x:Name="OneNoteSearchProgressRing" IsIndeterminate="True"
+                                                             Width="14" Height="14" Margin="0,0,6,0"
+                                                             Visibility="Collapsed" VerticalAlignment="Center"/>
                                             <TextBlock x:Name="OneNoteSearchResultsHeader" Text="검색 결과"
                                                        FontWeight="SemiBold" FontSize="13" VerticalAlignment="Center"/>
                                             <Button x:Name="OneNoteSearchCloseButton" DockPanel.Dock="Right"
