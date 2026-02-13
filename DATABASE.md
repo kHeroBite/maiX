@@ -4,21 +4,21 @@
 
 ### 데이터베이스 정보
 - **종류**: SQLite (EF Core)
-- **경로**: `%APPDATA%\mailX\mailX.db`
+- **경로**: `%APPDATA%\MaiX\MaiX.db`
 - **ORM**: Entity Framework Core
-- **DbContext**: `mailX/Data/MailXDbContext.cs`
+- **DbContext**: `MaiX/Data/MaiXDbContext.cs`
 - **전체 테이블 수**: 14개
 
 ### 마이그레이션 관리
 ```bash
 # 마이그레이션 생성
-dotnet ef migrations add {Name} --project mailX
+dotnet ef migrations add {Name} --project MaiX
 
 # 데이터베이스 업데이트
-dotnet ef database update --project mailX
+dotnet ef database update --project MaiX
 
 # SQL 스크립트 생성
-dotnet ef migrations script --project mailX
+dotnet ef migrations script --project MaiX
 ```
 
 ---
@@ -48,7 +48,7 @@ dotnet ef migrations script --project mailX
 
 **설명**: Graph API에서 가져온 이메일과 AI 분석 결과를 저장
 
-**DbSet**: `MailXDbContext.Emails`
+**DbSet**: `MaiXDbContext.Emails`
 
 **컬럼 상세**:
 | 컬럼명 | 타입 | NULL | 키 | 기본값 | 설명 |
@@ -100,7 +100,7 @@ dotnet ef migrations script --project mailX
 
 **설명**: 이메일 첨부파일과 변환 상태 관리
 
-**DbSet**: `MailXDbContext.Attachments`
+**DbSet**: `MaiXDbContext.Attachments`
 
 **컬럼 상세**:
 | 컬럼명 | 타입 | NULL | 키 | 기본값 | 설명 |
@@ -135,7 +135,7 @@ dotnet ef migrations script --project mailX
 
 **설명**: Outlook 메일 폴더 정보
 
-**DbSet**: `MailXDbContext.Folders`
+**DbSet**: `MaiXDbContext.Folders`
 
 **컬럼 상세**:
 | 컬럼명 | 타입 | NULL | 키 | 기본값 | 설명 |
@@ -156,7 +156,7 @@ dotnet ef migrations script --project mailX
 
 **설명**: Microsoft 365 계정 정보 및 인증 토큰
 
-**DbSet**: `MailXDbContext.Accounts`
+**DbSet**: `MaiXDbContext.Accounts`
 
 **컬럼 상세**:
 | 컬럼명 | 타입 | NULL | 키 | 기본값 | 설명 |
@@ -173,7 +173,7 @@ dotnet ef migrations script --project mailX
 
 **설명**: AI가 이메일에서 추출한 할 일 항목
 
-**DbSet**: `MailXDbContext.Todos`
+**DbSet**: `MaiXDbContext.Todos`
 
 **컬럼 상세**:
 | 컬럼명 | 타입 | NULL | 키 | 기본값 | 설명 |
@@ -197,7 +197,7 @@ dotnet ef migrations script --project mailX
 
 **설명**: AI가 이메일에서 추출한 계약/사업 관련 정보 (Email과 1:1 관계)
 
-**DbSet**: `MailXDbContext.ContractInfos`
+**DbSet**: `MaiXDbContext.ContractInfos`
 
 **컬럼 상세**:
 | 컬럼명 | 타입 | NULL | 키 | 기본값 | 설명 |
@@ -221,7 +221,7 @@ dotnet ef migrations script --project mailX
 
 **설명**: LLM 제공자 및 API 설정
 
-**DbSet**: `MailXDbContext.AISettings`
+**DbSet**: `MaiXDbContext.AISettings`
 
 **컬럼 상세**:
 | 컬럼명 | 타입 | NULL | 키 | 기본값 | 설명 |
@@ -247,7 +247,7 @@ dotnet ef migrations script --project mailX
 
 **설명**: Graph API Delta 동기화 상태 관리
 
-**DbSet**: `MailXDbContext.SyncStates`
+**DbSet**: `MaiXDbContext.SyncStates`
 
 **컬럼 상세**:
 | 컬럼명 | 타입 | NULL | 키 | 기본값 | 설명 |
@@ -267,7 +267,7 @@ dotnet ef migrations script --project mailX
 
 **설명**: AI 프롬프트 템플릿 관리
 
-**DbSet**: `MailXDbContext.Prompts`
+**DbSet**: `MaiXDbContext.Prompts`
 
 **컬럼 상세**:
 | 컬럼명 | 타입 | NULL | 키 | 기본값 | 설명 |
@@ -290,7 +290,7 @@ dotnet ef migrations script --project mailX
 
 **설명**: 문서 변환기 설정 (확장자별 선택된 변환기)
 
-**DbSet**: `MailXDbContext.ConverterSettings`
+**DbSet**: `MaiXDbContext.ConverterSettings`
 
 **컬럼 상세**:
 | 컬럼명 | 타입 | NULL | 키 | 기본값 | 설명 |

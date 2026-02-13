@@ -1,0 +1,189 @@
+<ui:FluentWindow x:Class="MaiX.Views.Dialogs.SyncSettingsDialog"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
+        Title="동기화 기간 설정"
+        Width="750"
+        Height="680"
+        WindowStartupLocation="CenterOwner"
+        ResizeMode="NoResize"
+        ExtendsContentIntoTitleBar="True"
+        WindowBackdropType="Mica">
+
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+
+        <!-- 타이틀바 -->
+        <ui:TitleBar Grid.Row="0"
+                     Title="동기화 기간 설정"
+                     ShowMaximize="False"
+                     ShowMinimize="False"/>
+
+        <!-- 메인 콘텐츠 - 2열 레이아웃 -->
+        <Grid Grid.Row="1" Margin="16,8,16,8">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*"/>
+                <ColumnDefinition Width="16"/>
+                <ColumnDefinition Width="*"/>
+            </Grid.ColumnDefinitions>
+
+            <!-- 좌측: 메일 동기화 설정 -->
+            <ui:Card Grid.Column="0">
+                <StackPanel>
+                    <TextBlock Text="📧 메일 동기화 기간" FontSize="14" FontWeight="SemiBold" Margin="0,0,0,8"/>
+
+                    <RadioButton x:Name="MailCount" Content="건수 제한" GroupName="MailPeriod"
+                                 IsChecked="True" Checked="MailPeriodType_Changed" Margin="0,2"/>
+                    <StackPanel Orientation="Horizontal" Margin="20,0,0,4"
+                                IsEnabled="{Binding IsChecked, ElementName=MailCount}">
+                        <TextBlock Text="최근" VerticalAlignment="Center" Margin="0,0,6,0" FontSize="12"/>
+                        <ui:NumberBox x:Name="MailCountValue" Value="100" Minimum="1" Maximum="10000"
+                                      Width="90" SpinButtonPlacementMode="Compact"/>
+                        <TextBlock Text="건" VerticalAlignment="Center" Margin="6,0,0,0" FontSize="12"/>
+                    </StackPanel>
+
+                    <RadioButton x:Name="MailDays" Content="일 수" GroupName="MailPeriod"
+                                 Checked="MailPeriodType_Changed" Margin="0,2"/>
+                    <StackPanel Orientation="Horizontal" Margin="20,0,0,4"
+                                IsEnabled="{Binding IsChecked, ElementName=MailDays}">
+                        <TextBlock Text="최근" VerticalAlignment="Center" Margin="0,0,6,0" FontSize="12"/>
+                        <ui:NumberBox x:Name="MailDaysValue" Value="7" Minimum="1" Maximum="365"
+                                      Width="90" SpinButtonPlacementMode="Compact"/>
+                        <TextBlock Text="일" VerticalAlignment="Center" Margin="6,0,0,0" FontSize="12"/>
+                    </StackPanel>
+
+                    <RadioButton x:Name="MailWeeks" Content="주" GroupName="MailPeriod"
+                                 Checked="MailPeriodType_Changed" Margin="0,2"/>
+                    <StackPanel Orientation="Horizontal" Margin="20,0,0,4"
+                                IsEnabled="{Binding IsChecked, ElementName=MailWeeks}">
+                        <TextBlock Text="최근" VerticalAlignment="Center" Margin="0,0,6,0" FontSize="12"/>
+                        <ui:NumberBox x:Name="MailWeeksValue" Value="1" Minimum="1" Maximum="52"
+                                      Width="90" SpinButtonPlacementMode="Compact"/>
+                        <TextBlock Text="주" VerticalAlignment="Center" Margin="6,0,0,0" FontSize="12"/>
+                    </StackPanel>
+
+                    <RadioButton x:Name="MailMonths" Content="개월" GroupName="MailPeriod"
+                                 Checked="MailPeriodType_Changed" Margin="0,2"/>
+                    <StackPanel Orientation="Horizontal" Margin="20,0,0,4"
+                                IsEnabled="{Binding IsChecked, ElementName=MailMonths}">
+                        <TextBlock Text="최근" VerticalAlignment="Center" Margin="0,0,6,0" FontSize="12"/>
+                        <ui:NumberBox x:Name="MailMonthsValue" Value="1" Minimum="1" Maximum="24"
+                                      Width="90" SpinButtonPlacementMode="Compact"/>
+                        <TextBlock Text="개월" VerticalAlignment="Center" Margin="6,0,0,0" FontSize="12"/>
+                    </StackPanel>
+
+                    <RadioButton x:Name="MailYears" Content="년" GroupName="MailPeriod"
+                                 Checked="MailPeriodType_Changed" Margin="0,2"/>
+                    <StackPanel Orientation="Horizontal" Margin="20,0,0,4"
+                                IsEnabled="{Binding IsChecked, ElementName=MailYears}">
+                        <TextBlock Text="최근" VerticalAlignment="Center" Margin="0,0,6,0" FontSize="12"/>
+                        <ui:NumberBox x:Name="MailYearsValue" Value="1" Minimum="1" Maximum="10"
+                                      Width="90" SpinButtonPlacementMode="Compact"/>
+                        <TextBlock Text="년" VerticalAlignment="Center" Margin="6,0,0,0" FontSize="12"/>
+                    </StackPanel>
+
+                    <RadioButton x:Name="MailDateRange" Content="기간 지정" GroupName="MailPeriod"
+                                 Checked="MailPeriodType_Changed" Margin="0,2"/>
+                    <StackPanel Orientation="Horizontal" Margin="20,0,0,4"
+                                IsEnabled="{Binding IsChecked, ElementName=MailDateRange}">
+                        <DatePicker x:Name="MailStartDate" Width="115" SelectedDate="{x:Static sys:DateTime.Today}"
+                                    xmlns:sys="clr-namespace:System;assembly=mscorlib"/>
+                        <TextBlock Text="~" VerticalAlignment="Center" Margin="4,0"/>
+                        <DatePicker x:Name="MailEndDate" Width="115" SelectedDate="{x:Static sys:DateTime.Today}"
+                                    xmlns:sys="clr-namespace:System;assembly=mscorlib"/>
+                    </StackPanel>
+
+                    <RadioButton x:Name="MailAll" Content="전체 (제한 없음)" GroupName="MailPeriod"
+                                 Checked="MailPeriodType_Changed" Margin="0,2"/>
+                </StackPanel>
+            </ui:Card>
+
+            <!-- 우측: AI 분석 설정 -->
+            <ui:Card Grid.Column="2">
+                <StackPanel>
+                    <TextBlock Text="🤖 AI 분석 기간" FontSize="14" FontWeight="SemiBold" Margin="0,0,0,8"/>
+
+                    <RadioButton x:Name="AiCount" Content="건수 제한" GroupName="AiPeriod"
+                                 IsChecked="True" Checked="AiPeriodType_Changed" Margin="0,2"/>
+                    <StackPanel Orientation="Horizontal" Margin="20,0,0,4"
+                                IsEnabled="{Binding IsChecked, ElementName=AiCount}">
+                        <TextBlock Text="최근" VerticalAlignment="Center" Margin="0,0,6,0" FontSize="12"/>
+                        <ui:NumberBox x:Name="AiCountValue" Value="100" Minimum="1" Maximum="10000"
+                                      Width="90" SpinButtonPlacementMode="Compact"/>
+                        <TextBlock Text="건" VerticalAlignment="Center" Margin="6,0,0,0" FontSize="12"/>
+                    </StackPanel>
+
+                    <RadioButton x:Name="AiDays" Content="일 수" GroupName="AiPeriod"
+                                 Checked="AiPeriodType_Changed" Margin="0,2"/>
+                    <StackPanel Orientation="Horizontal" Margin="20,0,0,4"
+                                IsEnabled="{Binding IsChecked, ElementName=AiDays}">
+                        <TextBlock Text="최근" VerticalAlignment="Center" Margin="0,0,6,0" FontSize="12"/>
+                        <ui:NumberBox x:Name="AiDaysValue" Value="7" Minimum="1" Maximum="365"
+                                      Width="90" SpinButtonPlacementMode="Compact"/>
+                        <TextBlock Text="일" VerticalAlignment="Center" Margin="6,0,0,0" FontSize="12"/>
+                    </StackPanel>
+
+                    <RadioButton x:Name="AiWeeks" Content="주" GroupName="AiPeriod"
+                                 Checked="AiPeriodType_Changed" Margin="0,2"/>
+                    <StackPanel Orientation="Horizontal" Margin="20,0,0,4"
+                                IsEnabled="{Binding IsChecked, ElementName=AiWeeks}">
+                        <TextBlock Text="최근" VerticalAlignment="Center" Margin="0,0,6,0" FontSize="12"/>
+                        <ui:NumberBox x:Name="AiWeeksValue" Value="1" Minimum="1" Maximum="52"
+                                      Width="90" SpinButtonPlacementMode="Compact"/>
+                        <TextBlock Text="주" VerticalAlignment="Center" Margin="6,0,0,0" FontSize="12"/>
+                    </StackPanel>
+
+                    <RadioButton x:Name="AiMonths" Content="개월" GroupName="AiPeriod"
+                                 Checked="AiPeriodType_Changed" Margin="0,2"/>
+                    <StackPanel Orientation="Horizontal" Margin="20,0,0,4"
+                                IsEnabled="{Binding IsChecked, ElementName=AiMonths}">
+                        <TextBlock Text="최근" VerticalAlignment="Center" Margin="0,0,6,0" FontSize="12"/>
+                        <ui:NumberBox x:Name="AiMonthsValue" Value="1" Minimum="1" Maximum="24"
+                                      Width="90" SpinButtonPlacementMode="Compact"/>
+                        <TextBlock Text="개월" VerticalAlignment="Center" Margin="6,0,0,0" FontSize="12"/>
+                    </StackPanel>
+
+                    <RadioButton x:Name="AiYears" Content="년" GroupName="AiPeriod"
+                                 Checked="AiPeriodType_Changed" Margin="0,2"/>
+                    <StackPanel Orientation="Horizontal" Margin="20,0,0,4"
+                                IsEnabled="{Binding IsChecked, ElementName=AiYears}">
+                        <TextBlock Text="최근" VerticalAlignment="Center" Margin="0,0,6,0" FontSize="12"/>
+                        <ui:NumberBox x:Name="AiYearsValue" Value="1" Minimum="1" Maximum="10"
+                                      Width="90" SpinButtonPlacementMode="Compact"/>
+                        <TextBlock Text="년" VerticalAlignment="Center" Margin="6,0,0,0" FontSize="12"/>
+                    </StackPanel>
+
+                    <RadioButton x:Name="AiDateRange" Content="기간 지정" GroupName="AiPeriod"
+                                 Checked="AiPeriodType_Changed" Margin="0,2"/>
+                    <StackPanel Orientation="Horizontal" Margin="20,0,0,4"
+                                IsEnabled="{Binding IsChecked, ElementName=AiDateRange}">
+                        <DatePicker x:Name="AiStartDate" Width="115" SelectedDate="{x:Static sys:DateTime.Today}"
+                                    xmlns:sys="clr-namespace:System;assembly=mscorlib"/>
+                        <TextBlock Text="~" VerticalAlignment="Center" Margin="4,0"/>
+                        <DatePicker x:Name="AiEndDate" Width="115" SelectedDate="{x:Static sys:DateTime.Today}"
+                                    xmlns:sys="clr-namespace:System;assembly=mscorlib"/>
+                    </StackPanel>
+
+                    <RadioButton x:Name="AiAll" Content="전체 (제한 없음)" GroupName="AiPeriod"
+                                 Checked="AiPeriodType_Changed" Margin="0,2"/>
+                </StackPanel>
+            </ui:Card>
+        </Grid>
+
+        <!-- 버튼 영역 -->
+        <Border Grid.Row="2"
+                Background="{DynamicResource ControlFillColorDefaultBrush}"
+                BorderBrush="{DynamicResource ControlElevationBorderBrush}"
+                BorderThickness="0,1,0,0"
+                Padding="20,12">
+            <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
+                <ui:Button Content="취소" Appearance="Secondary" Width="80" Margin="0,0,8,0" Click="Cancel_Click"/>
+                <ui:Button Content="저장" Appearance="Primary" Width="80" Click="Save_Click"/>
+            </StackPanel>
+        </Border>
+    </Grid>
+</ui:FluentWindow>

@@ -1,0 +1,110 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net10.0-windows</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <UseWPF>true</UseWPF>
+    <ApplicationIcon>Assets\MaiX.ico</ApplicationIcon>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- MVVM -->
+    <PackageReference Include="CommunityToolkit.Mvvm" Version="8.4.0" />
+    <PackageReference Include="OpenMcdf" Version="3.1.0" />
+    <PackageReference Include="SixLabors.ImageSharp" Version="3.1.12" />
+
+    <!-- WPF UI (Fluent Design) -->
+    <PackageReference Include="WPF-UI" Version="4.2.0" />
+
+    <!-- WebView2 (메일 본문 렌더링) -->
+    <PackageReference Include="Microsoft.Web.WebView2" Version="1.0.3650.58" />
+
+    <!-- MS Graph API -->
+    <PackageReference Include="Microsoft.Graph" Version="5.100.0" />
+    <PackageReference Include="Azure.Identity" Version="1.17.1" />
+    <PackageReference Include="Microsoft.Identity.Client" Version="4.81.0" />
+
+    <!-- SQLite + EF Core -->
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" Version="10.0.2" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Design" Version="10.0.2">
+      <PrivateAssets>all</PrivateAssets>
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+    </PackageReference>
+
+    <!-- OCR + 문서 처리 -->
+    <PackageReference Include="Tesseract" Version="5.2.0" />
+    <PackageReference Include="MsgReader" Version="6.0.6" />
+    <PackageReference Include="MimeKit" Version="4.14.0" />
+
+    <!-- HWP 처리 -->
+    <PackageReference Include="HwpSharp" Version="1.0.0" />
+
+    <!-- 문서 변환기 추가 옵션 -->
+    <PackageReference Include="NPOI" Version="2.7.5" />
+    <PackageReference Include="DocumentFormat.OpenXml" Version="3.4.1" />
+    <PackageReference Include="ClosedXML" Version="0.105.0" />
+    <PackageReference Include="PdfPig" Version="0.1.13" />
+
+    <!-- 로깅 -->
+    <PackageReference Include="Serilog" Version="4.3.0" />
+    <PackageReference Include="Serilog.Sinks.File" Version="7.0.0" />
+    <PackageReference Include="Serilog.Extensions.Hosting" Version="10.0.0" />
+    <PackageReference Include="log4net" Version="3.2.0" />
+
+    <!-- DI -->
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection" Version="10.0.2" />
+    <PackageReference Include="Microsoft.Extensions.Hosting" Version="10.0.2" />
+
+    <!-- JSON -->
+    <PackageReference Include="Newtonsoft.Json" Version="13.0.4" />
+
+    <!-- System.Drawing for screenshot -->
+    <PackageReference Include="System.Drawing.Common" Version="10.0.2" />
+
+    <!-- 클라우드 다운로드 (Google Drive) -->
+    <PackageReference Include="Google.Apis.Drive.v3" Version="1.73.0.3996" />
+    <PackageReference Include="Google.Apis.Auth" Version="1.73.0" />
+
+    <!-- 오디오 녹음 (OneNote AI 기능) -->
+    <PackageReference Include="NAudio" Version="2.2.1" />
+
+    <!-- 음성 인식 STT (sherpa-onnx) -->
+    <PackageReference Include="org.k2fsa.sherpa.onnx" Version="1.12.22" />
+
+    <!-- Whisper STT (고정밀 한국어 음성인식) -->
+    <PackageReference Include="Whisper.net" Version="1.8.0" />
+    <PackageReference Include="Whisper.net.Runtime" Version="1.8.0" />
+    <!-- GPU 가속 런타임 (Intel Arc GPU = OpenVINO 최적화) -->
+    <PackageReference Include="Whisper.net.Runtime.OpenVino" Version="1.8.0" />
+    <!-- Vulkan GPU 가속 (범용 GPU 지원) -->
+    <PackageReference Include="Whisper.net.Runtime.Vulkan" Version="1.8.0" />
+    <!-- CUDA GPU 가속 (NVidia GPU + CUDA 12.1+ 필요) -->
+    <PackageReference Include="Whisper.net.Runtime.Cuda" Version="1.8.0" />
+
+    <!-- 화자분리 모델 압축 해제 (tar.bz2) -->
+    <PackageReference Include="SharpZipLib" Version="1.4.2" />
+  </ItemGroup>
+
+  <!-- log4net.config 파일을 출력 디렉토리에 복사 -->
+  <ItemGroup>
+    <None Update="log4net.config">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+  </ItemGroup>
+
+  <!-- Assets 리소스 -->
+  <ItemGroup>
+    <Resource Include="Assets\icon.png" />
+    <Resource Include="Assets\MaiX.ico" />
+  </ItemGroup>
+
+  <!-- TinyMCE 에디터 파일 (출력 디렉토리에 복사) -->
+  <ItemGroup>
+    <Content Include="Assets\tinymce\**\*">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+  </ItemGroup>
+
+</Project>

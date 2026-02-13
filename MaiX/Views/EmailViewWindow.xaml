@@ -1,0 +1,115 @@
+<ui:FluentWindow x:Class="MaiX.Views.EmailViewWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
+        xmlns:wv2="clr-namespace:Microsoft.Web.WebView2.Wpf;assembly=Microsoft.Web.WebView2.Wpf"
+        xmlns:local="clr-namespace:MaiX.Views"
+        xmlns:converters="clr-namespace:MaiX.Converters"
+        mc:Ignorable="d"
+        Title="메일 보기"
+        Height="700" Width="900"
+        MinHeight="500" MinWidth="700"
+        WindowStartupLocation="CenterScreen"
+        ExtendsContentIntoTitleBar="True"
+        WindowBackdropType="Mica">
+
+    <Window.Resources>
+        <converters:JsonArrayToStringConverter x:Key="JsonArrayToStringConverter"/>
+        <converters:EmptySubjectConverter x:Key="EmptySubjectConverter"/>
+        <converters:BoolToVisibilityConverter x:Key="BoolToVisibilityConverter"/>
+    </Window.Resources>
+
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+        </Grid.RowDefinitions>
+
+        <!-- 타이틀바 -->
+        <ui:TitleBar
+            x:Name="TitleBar"
+            Grid.Row="0"
+            ShowMaximize="True"
+            ShowMinimize="True"
+            ShowClose="True"
+            CanMaximize="True">
+            <ui:TitleBar.Icon>
+                <ui:ImageIcon Width="24" Height="24"
+                              RenderOptions.BitmapScalingMode="Fant"
+                              UseLayoutRounding="True"
+                              SnapsToDevicePixels="True">
+                    <ui:ImageIcon.Source>
+                        <BitmapImage UriSource="pack://application:,,,/Assets/icon.png"
+                                     DecodePixelWidth="256"
+                                     DecodePixelHeight="256"
+                                     CacheOption="OnLoad"/>
+                    </ui:ImageIcon.Source>
+                </ui:ImageIcon>
+            </ui:TitleBar.Icon>
+            <ui:TitleBar.Header>
+                <TextBlock x:Name="TitleText" VerticalAlignment="Center"
+                           Foreground="{DynamicResource TextFillColorPrimaryBrush}"/>
+            </ui:TitleBar.Header>
+        </ui:TitleBar>
+
+        <!-- 메일 헤더 정보 -->
+        <Border Grid.Row="1"
+                Background="{DynamicResource ControlFillColorDefaultBrush}"
+                BorderBrush="{DynamicResource ControlElevationBorderBrush}"
+                BorderThickness="0,0,0,1"
+                Padding="20,16">
+            <Grid>
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="Auto"/>
+                </Grid.RowDefinitions>
+
+                <!-- 제목 -->
+                <TextBlock x:Name="SubjectText" Grid.Row="0"
+                           FontSize="20" FontWeight="SemiBold"
+                           TextWrapping="Wrap"
+                           Foreground="{DynamicResource TextFillColorPrimaryBrush}"
+                           Margin="0,0,0,12"/>
+
+                <!-- 발신자 -->
+                <StackPanel Grid.Row="1" Orientation="Horizontal" Margin="0,0,0,8">
+                    <TextBlock Text="보낸 사람:"
+                               Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                               Width="70"/>
+                    <TextBlock x:Name="FromText"
+                               Foreground="{DynamicResource TextFillColorPrimaryBrush}"/>
+                </StackPanel>
+
+                <!-- 수신자 -->
+                <StackPanel Grid.Row="2" Orientation="Horizontal" Margin="0,0,0,8">
+                    <TextBlock Text="받는 사람:"
+                               Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                               Width="70"/>
+                    <TextBlock x:Name="ToText"
+                               Foreground="{DynamicResource TextFillColorPrimaryBrush}"
+                               TextWrapping="Wrap"
+                               MaxWidth="700"/>
+                </StackPanel>
+
+                <!-- 날짜 -->
+                <StackPanel Grid.Row="3" Orientation="Horizontal">
+                    <TextBlock Text="날짜:"
+                               Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                               Width="70"/>
+                    <TextBlock x:Name="DateText"
+                               Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
+                </StackPanel>
+            </Grid>
+        </Border>
+
+        <!-- 메일 본문 -->
+        <wv2:WebView2 x:Name="BodyWebView"
+                      Grid.Row="2"
+                      DefaultBackgroundColor="Transparent"/>
+    </Grid>
+</ui:FluentWindow>

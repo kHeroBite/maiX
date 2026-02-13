@@ -1,0 +1,353 @@
+<Application x:Class="MaiX.App"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
+             xmlns:converters="clr-namespace:MaiX.Converters"
+             ShutdownMode="OnExplicitShutdown">
+    <Application.Resources>
+        <ResourceDictionary>
+            <ResourceDictionary.MergedDictionaries>
+                <!-- WPF UI 테마 -->
+                <ui:ThemesDictionary Theme="Dark"/>
+                <ui:ControlsDictionary/>
+            </ResourceDictionary.MergedDictionaries>
+
+            <!-- 컨버터 등록 -->
+            <converters:IntToVisibilityConverter x:Key="IntToVisibilityConverter"/>
+            <converters:BoolToVisibilityConverter x:Key="BoolToVisibilityConverter"/>
+            <converters:NullToVisibilityConverter x:Key="NullToVisibilityConverter"/>
+            <converters:BoolToFontWeightConverter x:Key="BoolToFontWeightConverter"/>
+            <converters:StringToInitialConverter x:Key="StringToInitialConverter"/>
+            <converters:NameToAvatarColorConverter x:Key="NameToAvatarColorConverter"/>
+            <converters:StringEqualsToVisibilityConverter x:Key="StringEqualsToVisibilityConverter"/>
+            <converters:BoolToForegroundConverter x:Key="BoolToForegroundConverter"/>
+            <converters:IsReadToForegroundConverter x:Key="IsReadToForegroundConverter"/>
+            <!-- 아웃룩 스타일 컨버터 -->
+            <converters:ImportanceToVisibilityConverter x:Key="ImportanceToVisibilityConverter"/>
+            <converters:FlagStatusToVisibilityConverter x:Key="FlagStatusToVisibilityConverter"/>
+            <converters:CategoryToColorConverter x:Key="CategoryToColorConverter"/>
+            <converters:CategoryToVisibilityConverter x:Key="CategoryToVisibilityConverter"/>
+            <!-- Phase 1: 정렬/뷰 토글 컨버터 -->
+            <converters:SortByToAppearanceConverter x:Key="SortByToAppearanceConverter"/>
+            <converters:BoolToAppearanceConverter x:Key="BoolToAppearanceConverter"/>
+            <converters:FlagStatusToAppearanceConverter x:Key="FlagStatusToAppearanceConverter"/>
+            <converters:FlagStatusToColorConverter x:Key="FlagStatusToColorConverter"/>
+            <converters:BoolToIconColorConverter x:Key="BoolToIconColorConverter"/>
+            <converters:EmailToDisplayNameConverter x:Key="EmailToDisplayNameConverter"/>
+            <converters:JsonArrayToStringConverter x:Key="JsonArrayToStringConverter"/>
+            <converters:EmptySubjectConverter x:Key="EmptySubjectConverter"/>
+            <converters:Base64ToImageSourceConverter x:Key="Base64ToImageSourceConverter"/>
+            <!-- 채팅 그룹 아바타 컨버터 -->
+            <converters:CountToVisibilityConverter x:Key="CountToVisibilityConverter"/>
+            <!-- Planner 컨버터 -->
+            <converters:BoolToStrikethroughConverter x:Key="BoolToStrikethroughConverter"/>
+            <converters:DueStatusToBackgroundConverter x:Key="DueStatusToBackgroundConverter"/>
+            <!-- 오디오 플레이어 컨버터 -->
+            <converters:BoolToPlayPauseIconConverter x:Key="BoolToPlayPauseIconConverter"/>
+            <converters:DueStatusToForegroundConverter x:Key="DueStatusToForegroundConverter"/>
+            <!-- 채팅 시간 표시 컨버터 -->
+            <converters:DateTimeToRelativeTimeConverter x:Key="DateTimeToRelativeTimeConverter"/>
+            <!-- 녹음 파일 출처 컨버터 -->
+            <converters:RecordingSourceToVisibilityConverter x:Key="RecordingSourceToVisibilityConverter"/>
+            <converters:RecordingSourceToBackgroundConverter x:Key="RecordingSourceToBackgroundConverter"/>
+            <!-- 녹음 상세 패널용 컨버터 -->
+            <converters:ZeroToVisibleConverter x:Key="ZeroToVisibleConverter"/>
+            <!-- To Do 연동 컨버터 -->
+            <converters:BoolToTodoIconConverter x:Key="BoolToTodoIconConverter"/>
+            <converters:BoolToTodoTooltipConverter x:Key="BoolToTodoTooltipConverter"/>
+            <!-- OneNote 즐겨찾기 컨버터 -->
+            <converters:FavoriteItemTypeToIconConverter x:Key="FavoriteItemTypeToIconConverter"/>
+            <converters:FavoriteItemTypeToColorConverter x:Key="FavoriteItemTypeToColorConverter"/>
+            <converters:FavoriteItemTypeToNotebookVisibilityConverter x:Key="FavoriteItemTypeToNotebookVisibilityConverter"/>
+            <converters:FavoriteItemTypeToSectionVisibilityConverter x:Key="FavoriteItemTypeToSectionVisibilityConverter"/>
+            <converters:FavoriteItemTypeToNotSectionVisibilityConverter x:Key="FavoriteItemTypeToNotSectionVisibilityConverter"/>
+            <converters:FavoriteItemTypeToPageVisibilityConverter x:Key="FavoriteItemTypeToPageVisibilityConverter"/>
+            <converters:DirectFavoriteToVisibilityConverter x:Key="DirectFavoriteToVisibilityConverter"/>
+            <converters:IsSelectedToBackgroundConverter x:Key="IsSelectedToBackgroundConverter"/>
+
+            <!-- ========== 기능별 AccentColor 리소스 ========== -->
+            <!-- 기본값: Outlook Blue (ThemeService에서 동적으로 업데이트) -->
+            <Color x:Key="FeatureAccentColor">#0078D4</Color>
+            <SolidColorBrush x:Key="FeatureAccentBrush" Color="#0078D4"/>
+            <SolidColorBrush x:Key="FeatureAccentBrushLight" Color="#500078D4"/>
+            <SolidColorBrush x:Key="FeatureAccentBrushDim" Color="#800078D4"/>
+
+            <!-- 기능별 AccentColor 정적 정의 (참조용) -->
+            <Color x:Key="MailAccentColor">#0078D4</Color>
+            <Color x:Key="CalendarAccentColor">#0078D4</Color>
+            <Color x:Key="ChatAccentColor">#6264A7</Color>
+            <Color x:Key="TeamsAccentColor">#6264A7</Color>
+            <Color x:Key="PlannerAccentColor">#31752F</Color>
+            <Color x:Key="OneDriveAccentColor">#0078D4</Color>
+            <Color x:Key="OneNoteAccentColor">#7719AA</Color>
+            <Color x:Key="ActivityAccentColor">#F7630C</Color>
+            <Color x:Key="CallsAccentColor">#0078D4</Color>
+
+            <!-- 기능별 Brush (정적 참조용) -->
+            <SolidColorBrush x:Key="MailAccentBrush" Color="#0078D4"/>
+            <SolidColorBrush x:Key="CalendarAccentBrush" Color="#0078D4"/>
+            <SolidColorBrush x:Key="ChatAccentBrush" Color="#6264A7"/>
+            <SolidColorBrush x:Key="TeamsAccentBrush" Color="#6264A7"/>
+            <SolidColorBrush x:Key="PlannerAccentBrush" Color="#31752F"/>
+            <SolidColorBrush x:Key="OneDriveAccentBrush" Color="#0078D4"/>
+            <SolidColorBrush x:Key="OneNoteAccentBrush" Color="#7719AA"/>
+            <SolidColorBrush x:Key="ActivityAccentBrush" Color="#F7630C"/>
+            <SolidColorBrush x:Key="CallsAccentBrush" Color="#0078D4"/>
+
+            <!-- 타이틀바 투명 버튼 스타일 (라이트/다크 모드 호버 효과 지원) -->
+            <Style x:Key="TitleBarTransparentButtonStyle" TargetType="ui:Button">
+                <Setter Property="Background" Value="Transparent"/>
+                <Setter Property="BorderBrush" Value="Transparent"/>
+                <Setter Property="BorderThickness" Value="0"/>
+                <Setter Property="Foreground" Value="{DynamicResource TextFillColorPrimaryBrush}"/>
+                <Setter Property="Padding" Value="0"/>
+                <Setter Property="Height" Value="30"/>
+                <Setter Property="Width" Value="30"/>
+                <Setter Property="Margin" Value="0,0,4,0"/>
+                <Setter Property="Cursor" Value="Hand"/>
+                <Setter Property="Template">
+                    <Setter.Value>
+                        <ControlTemplate TargetType="ui:Button">
+                            <Border x:Name="Border"
+                                    Background="{TemplateBinding Background}"
+                                    BorderBrush="{TemplateBinding BorderBrush}"
+                                    BorderThickness="{TemplateBinding BorderThickness}"
+                                    CornerRadius="4"
+                                    Padding="{TemplateBinding Padding}">
+                                <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                            </Border>
+                            <ControlTemplate.Triggers>
+                                <Trigger Property="IsMouseOver" Value="True">
+                                    <Setter TargetName="Border" Property="Background" Value="{DynamicResource SubtleFillColorSecondaryBrush}"/>
+                                </Trigger>
+                                <Trigger Property="IsPressed" Value="True">
+                                    <Setter TargetName="Border" Property="Background" Value="{DynamicResource SubtleFillColorTertiaryBrush}"/>
+                                </Trigger>
+                            </ControlTemplate.Triggers>
+                        </ControlTemplate>
+                    </Setter.Value>
+                </Setter>
+            </Style>
+
+            <!-- 타이틀바 닫기 버튼 스타일 (빨간색 호버 효과) -->
+            <Style x:Key="TitleBarCloseButtonStyle" TargetType="ui:Button">
+                <Setter Property="Background" Value="Transparent"/>
+                <Setter Property="BorderBrush" Value="Transparent"/>
+                <Setter Property="BorderThickness" Value="0"/>
+                <Setter Property="Foreground" Value="{DynamicResource TextFillColorPrimaryBrush}"/>
+                <Setter Property="Padding" Value="0"/>
+                <Setter Property="Height" Value="30"/>
+                <Setter Property="Width" Value="30"/>
+                <Setter Property="Margin" Value="0,0,8,0"/>
+                <Setter Property="Cursor" Value="Hand"/>
+                <Setter Property="Template">
+                    <Setter.Value>
+                        <ControlTemplate TargetType="ui:Button">
+                            <Border x:Name="Border"
+                                    Background="{TemplateBinding Background}"
+                                    BorderBrush="{TemplateBinding BorderBrush}"
+                                    BorderThickness="{TemplateBinding BorderThickness}"
+                                    CornerRadius="4"
+                                    Padding="{TemplateBinding Padding}">
+                                <ContentPresenter x:Name="ContentPresenter" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                            </Border>
+                            <ControlTemplate.Triggers>
+                                <Trigger Property="IsMouseOver" Value="True">
+                                    <Setter TargetName="Border" Property="Background" Value="#C42B1C"/>
+                                    <Setter TargetName="ContentPresenter" Property="TextElement.Foreground" Value="White"/>
+                                </Trigger>
+                                <Trigger Property="IsPressed" Value="True">
+                                    <Setter TargetName="Border" Property="Background" Value="#B22518"/>
+                                    <Setter TargetName="ContentPresenter" Property="TextElement.Foreground" Value="White"/>
+                                </Trigger>
+                            </ControlTemplate.Triggers>
+                        </ControlTemplate>
+                    </Setter.Value>
+                </Setter>
+            </Style>
+
+            <!-- 좌측 네비게이션 아이콘바 스타일 -->
+            <Style x:Key="NavIconRadioButtonStyle" TargetType="RadioButton">
+                <Setter Property="Width" Value="48"/>
+                <Setter Property="Height" Value="48"/>
+                <Setter Property="Margin" Value="2"/>
+                <Setter Property="Padding" Value="4"/>
+                <Setter Property="Background" Value="Transparent"/>
+                <Setter Property="Foreground" Value="{DynamicResource TextFillColorSecondaryBrush}"/>
+                <Setter Property="HorizontalContentAlignment" Value="Center"/>
+                <Setter Property="VerticalContentAlignment" Value="Center"/>
+                <Setter Property="Cursor" Value="Hand"/>
+                <Setter Property="Template">
+                    <Setter.Value>
+                        <ControlTemplate TargetType="RadioButton">
+                            <Border x:Name="Border"
+                                    Background="{TemplateBinding Background}"
+                                    CornerRadius="8"
+                                    Width="{TemplateBinding Width}"
+                                    Height="{TemplateBinding Height}">
+                                <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                            </Border>
+                            <ControlTemplate.Triggers>
+                                <Trigger Property="IsMouseOver" Value="True">
+                                    <Setter TargetName="Border" Property="Background" Value="{DynamicResource SubtleFillColorSecondaryBrush}"/>
+                                </Trigger>
+                                <Trigger Property="IsChecked" Value="True">
+                                    <!-- Primary 버튼(새 메일)과 동일한 색상 사용 -->
+                                    <Setter TargetName="Border" Property="Background" Value="{DynamicResource AccentFillColorDefaultBrush}"/>
+                                    <!-- Primary 버튼과 동일하게 검정색 아이콘 -->
+                                    <Setter Property="Foreground" Value="{DynamicResource TextOnAccentFillColorPrimaryBrush}"/>
+                                </Trigger>
+                            </ControlTemplate.Triggers>
+                        </ControlTemplate>
+                    </Setter.Value>
+                </Setter>
+            </Style>
+
+            <!-- 메뉴 아이템 스타일 (여백 및 서브메뉴 화살표) -->
+            <Style TargetType="MenuItem">
+                <Setter Property="Padding" Value="50,8"/>
+            </Style>
+
+            <!-- 스크롤바 Thumb 스타일 (라이트/다크 모드 자동 지원) -->
+            <Style x:Key="ScrollBarThumbVertical" TargetType="Thumb">
+                <Setter Property="OverridesDefaultStyle" Value="True"/>
+                <Setter Property="IsTabStop" Value="False"/>
+                <Setter Property="Template">
+                    <Setter.Value>
+                        <ControlTemplate TargetType="Thumb">
+                            <Border x:Name="rectangle"
+                                    Background="{DynamicResource ControlStrongFillColorDefaultBrush}"
+                                    CornerRadius="4"
+                                    Width="8"
+                                    Margin="2,0"/>
+                            <ControlTemplate.Triggers>
+                                <Trigger Property="IsMouseOver" Value="True">
+                                    <Setter TargetName="rectangle" Property="Background" Value="{DynamicResource TextFillColorSecondaryBrush}"/>
+                                    <Setter TargetName="rectangle" Property="Width" Value="10"/>
+                                </Trigger>
+                                <Trigger Property="IsDragging" Value="True">
+                                    <Setter TargetName="rectangle" Property="Background" Value="{DynamicResource TextFillColorPrimaryBrush}"/>
+                                    <Setter TargetName="rectangle" Property="Width" Value="10"/>
+                                </Trigger>
+                            </ControlTemplate.Triggers>
+                        </ControlTemplate>
+                    </Setter.Value>
+                </Setter>
+            </Style>
+
+            <Style x:Key="ScrollBarThumbHorizontal" TargetType="Thumb">
+                <Setter Property="OverridesDefaultStyle" Value="True"/>
+                <Setter Property="IsTabStop" Value="False"/>
+                <Setter Property="Template">
+                    <Setter.Value>
+                        <ControlTemplate TargetType="Thumb">
+                            <Border x:Name="rectangle"
+                                    Background="{DynamicResource ControlStrongFillColorDefaultBrush}"
+                                    CornerRadius="4"
+                                    Height="8"
+                                    Margin="0,2"/>
+                            <ControlTemplate.Triggers>
+                                <Trigger Property="IsMouseOver" Value="True">
+                                    <Setter TargetName="rectangle" Property="Background" Value="{DynamicResource TextFillColorSecondaryBrush}"/>
+                                    <Setter TargetName="rectangle" Property="Height" Value="10"/>
+                                </Trigger>
+                                <Trigger Property="IsDragging" Value="True">
+                                    <Setter TargetName="rectangle" Property="Background" Value="{DynamicResource TextFillColorPrimaryBrush}"/>
+                                    <Setter TargetName="rectangle" Property="Height" Value="10"/>
+                                </Trigger>
+                            </ControlTemplate.Triggers>
+                        </ControlTemplate>
+                    </Setter.Value>
+                </Setter>
+            </Style>
+
+            <!-- 수직 스크롤바 스타일 -->
+            <Style TargetType="ScrollBar">
+                <Setter Property="Background" Value="Transparent"/>
+                <Setter Property="BorderThickness" Value="0"/>
+                <Setter Property="Width" Value="14"/>
+                <Setter Property="MinWidth" Value="14"/>
+                <Setter Property="Template">
+                    <Setter.Value>
+                        <ControlTemplate TargetType="ScrollBar">
+                            <Grid x:Name="Bg" SnapsToDevicePixels="True">
+                                <Border Background="{TemplateBinding Background}" CornerRadius="4"/>
+                                <Track x:Name="PART_Track" IsDirectionReversed="True" IsEnabled="{TemplateBinding IsMouseOver}">
+                                    <Track.DecreaseRepeatButton>
+                                        <RepeatButton Command="ScrollBar.PageUpCommand" Opacity="0"/>
+                                    </Track.DecreaseRepeatButton>
+                                    <Track.IncreaseRepeatButton>
+                                        <RepeatButton Command="ScrollBar.PageDownCommand" Opacity="0"/>
+                                    </Track.IncreaseRepeatButton>
+                                    <Track.Thumb>
+                                        <Thumb Style="{StaticResource ScrollBarThumbVertical}"/>
+                                    </Track.Thumb>
+                                </Track>
+                            </Grid>
+                        </ControlTemplate>
+                    </Setter.Value>
+                </Setter>
+                <Style.Triggers>
+                    <Trigger Property="Orientation" Value="Horizontal">
+                        <Setter Property="Width" Value="Auto"/>
+                        <Setter Property="MinWidth" Value="0"/>
+                        <Setter Property="Height" Value="14"/>
+                        <Setter Property="MinHeight" Value="14"/>
+                        <Setter Property="Template">
+                            <Setter.Value>
+                                <ControlTemplate TargetType="ScrollBar">
+                                    <Grid x:Name="Bg" SnapsToDevicePixels="True">
+                                        <Border Background="{TemplateBinding Background}" CornerRadius="4"/>
+                                        <Track x:Name="PART_Track" IsEnabled="{TemplateBinding IsMouseOver}">
+                                            <Track.DecreaseRepeatButton>
+                                                <RepeatButton Command="ScrollBar.PageLeftCommand" Opacity="0"/>
+                                            </Track.DecreaseRepeatButton>
+                                            <Track.IncreaseRepeatButton>
+                                                <RepeatButton Command="ScrollBar.PageRightCommand" Opacity="0"/>
+                                            </Track.IncreaseRepeatButton>
+                                            <Track.Thumb>
+                                                <Thumb Style="{StaticResource ScrollBarThumbHorizontal}"/>
+                                            </Track.Thumb>
+                                        </Track>
+                                    </Grid>
+                                </ControlTemplate>
+                            </Setter.Value>
+                        </Setter>
+                    </Trigger>
+                </Style.Triggers>
+            </Style>
+
+            <Style x:Key="NavIconButtonStyle" TargetType="Button">
+                <Setter Property="Width" Value="44"/>
+                <Setter Property="Height" Value="44"/>
+                <Setter Property="Margin" Value="4,2"/>
+                <Setter Property="Background" Value="Transparent"/>
+                <Setter Property="Foreground" Value="{DynamicResource TextFillColorSecondaryBrush}"/>
+                <Setter Property="HorizontalContentAlignment" Value="Center"/>
+                <Setter Property="VerticalContentAlignment" Value="Center"/>
+                <Setter Property="Cursor" Value="Hand"/>
+                <Setter Property="Template">
+                    <Setter.Value>
+                        <ControlTemplate TargetType="Button">
+                            <Border x:Name="Border"
+                                    Background="{TemplateBinding Background}"
+                                    CornerRadius="8"
+                                    Width="{TemplateBinding Width}"
+                                    Height="{TemplateBinding Height}">
+                                <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                            </Border>
+                            <ControlTemplate.Triggers>
+                                <Trigger Property="IsMouseOver" Value="True">
+                                    <Setter TargetName="Border" Property="Background" Value="{DynamicResource SubtleFillColorSecondaryBrush}"/>
+                                </Trigger>
+                                <Trigger Property="IsPressed" Value="True">
+                                    <Setter TargetName="Border" Property="Background" Value="{DynamicResource SubtleFillColorTertiaryBrush}"/>
+                                </Trigger>
+                            </ControlTemplate.Triggers>
+                        </ControlTemplate>
+                    </Setter.Value>
+                </Setter>
+            </Style>
+        </ResourceDictionary>
+    </Application.Resources>
+</Application>

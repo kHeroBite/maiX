@@ -1,6 +1,6 @@
-# PROJECT.md - mailX 프로젝트 구조 문서
+# PROJECT.md - MaiX 프로젝트 구조 문서
 
-이 문서는 mailX 프로젝트의 전체 파일 구조, 아키텍처, 의존성 정보를 포함합니다.
+이 문서는 MaiX 프로젝트의 전체 파일 구조, 아키텍처, 의존성 정보를 포함합니다.
 
 ## 관련 문서
 
@@ -14,7 +14,7 @@
 
 ```json
 {
-  "프로젝트명": "mailX",
+  "프로젝트명": "MaiX",
   "설명": "Microsoft 365 이메일 클라이언트 + AI 분석 시스템",
   "개발자": "김기로",
   "프레임워크": ".NET 10.0-windows",
@@ -22,30 +22,30 @@
   "UI_라이브러리": "WPF UI (Fluent Design)",
   "데이터베이스": {
     "종류": "SQLite (EF Core)",
-    "경로": "%APPDATA%\\mailX\\mailX.db"
+    "경로": "%APPDATA%\\MaiX\\MaiX.db"
   },
-  "빌드_경로": "C:\\DATA\\Project\\mailX",
-  "솔루션": "mailX.sln",
-  "메인_프로젝트": "mailX/mailX.csproj",
-  "실행파일": "mailX\\bin\\Debug\\net10.0-windows\\mailX.exe",
+  "빌드_경로": "C:\\DATA\\Project\\MaiX",
+  "솔루션": "MaiX.sln",
+  "메인_프로젝트": "MaiX/MaiX.csproj",
+  "실행파일": "MaiX\\bin\\Debug\\net10.0-windows\\MaiX.exe",
   "인코딩": "UTF-8",
   "줄_끝": "CRLF",
   "REST_API_포트": 5858,
-  "로그_경로": "%APPDATA%\\mailX\\logs\\",
-  "스크린샷_경로": "%APPDATA%\\mailX\\screenshots\\"
+  "로그_경로": "%APPDATA%\\MaiX\\logs\\",
+  "스크린샷_경로": "%APPDATA%\\MaiX\\screenshots\\"
 }
 ```
 
 ## 디렉토리 구조
 
 ```
-mailX/
-├── mailX/                      # 메인 프로젝트
+MaiX/
+├── MaiX/                      # 메인 프로젝트
 │   ├── App.xaml               # WPF Application 정의
 │   ├── App.xaml.cs            # 애플리케이션 진입점
 │   ├── appsettings.json       # 설정 파일
 │   ├── log4net.config         # 로깅 설정
-│   ├── mailX.csproj           # 프로젝트 파일
+│   ├── MaiX.csproj           # 프로젝트 파일
 │   │
 │   ├── Assets/                # 리소스 (이미지, 아이콘)
 │   ├── Controls/              # 커스텀 컨트롤
@@ -83,7 +83,7 @@ mailX/
 ```yaml
 시스템_파일:
   - 파일명: App.xaml.cs
-    경로: mailX/App.xaml.cs
+    경로: MaiX/App.xaml.cs
     중요도: ★★★★★
     역할: WPF 애플리케이션 진입점
     클래스:
@@ -96,7 +96,7 @@ mailX/
             - Application_Exit(): 앱 종료 시 REST API 서버 정리
 
   - 파일명: Log4.cs
-    경로: mailX/Utils/Log4.cs
+    경로: MaiX/Utils/Log4.cs
     중요도: ★★★★★
     역할: log4net 래퍼 클래스
     클래스:
@@ -112,7 +112,7 @@ mailX/
 ```yaml
 Views:
   - 파일명: LoginWindow.xaml / LoginWindow.xaml.cs
-    경로: mailX/Views/
+    경로: MaiX/Views/
     중요도: ★★★★★
     역할: Microsoft 365 로그인 화면
     클래스:
@@ -122,7 +122,7 @@ Views:
             - LoginSucceeded: 로그인 성공 시 발생
 
   - 파일명: MainWindow.xaml / MainWindow.xaml.cs
-    경로: mailX/Views/
+    경로: MaiX/Views/
     중요도: ★★★★★
     역할: 메인 애플리케이션 화면
     클래스:
@@ -135,14 +135,14 @@ Views:
 ```yaml
 ViewModels:
   - 파일명: ViewModelBase.cs
-    경로: mailX/ViewModels/
+    경로: MaiX/ViewModels/
     역할: ViewModel 기반 클래스
     클래스:
       - ViewModelBase:
           설명: INotifyPropertyChanged 구현, CommunityToolkit.Mvvm 활용
 
   - 파일명: LoginViewModel.cs
-    경로: mailX/ViewModels/
+    경로: MaiX/ViewModels/
     역할: 로그인 화면 ViewModel
     클래스:
       - LoginViewModel:
@@ -154,18 +154,18 @@ ViewModels:
             - LoginCommand: 로그인 실행
 
   - 파일명: MainViewModel.cs
-    경로: mailX/ViewModels/
+    경로: MaiX/ViewModels/
     역할: 메인 화면 ViewModel
     클래스:
       - MainViewModel:
           설명: 이메일 목록, 폴더 관리
 
   - 파일명: TeamsViewModel.cs
-    경로: mailX/ViewModels/
+    경로: MaiX/ViewModels/
     역할: Teams 채팅 ViewModel
 
   - 파일명: CalendarViewModel.cs
-    경로: mailX/ViewModels/
+    경로: MaiX/ViewModels/
     역할: 캘린더 ViewModel
 ```
 
@@ -278,7 +278,7 @@ Analysis_Services:
 ```yaml
 Api_Services:
   - 파일명: RestApiServer.cs
-    경로: mailX/Services/Api/RestApiServer.cs
+    경로: MaiX/Services/Api/RestApiServer.cs
     중요도: ★★★★★
     역할: 내장 REST API 서버 (포트 5858)
     클래스:
@@ -410,12 +410,12 @@ Other_Services:
 
 ```yaml
 Data:
-  - 파일명: MailXDbContext.cs
-    경로: mailX/Data/
+  - 파일명: MaiXDbContext.cs
+    경로: MaiX/Data/
     중요도: ★★★★★
     역할: EF Core DbContext
     클래스:
-      - MailXDbContext:
+      - MaiXDbContext:
           설명: SQLite 데이터베이스 컨텍스트
           DbSet:
             - Emails: 이메일
@@ -441,7 +441,7 @@ Converters:
 ## 핵심 종속성
 
 ```xml
-<!-- mailX.csproj 주요 NuGet 패키지 -->
+<!-- MaiX.csproj 주요 NuGet 패키지 -->
 <PackageReference Include="Microsoft.Identity.Client" />
 <PackageReference Include="Microsoft.Graph" />
 <PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" />
@@ -459,7 +459,7 @@ Converters:
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
-│                         mailX Application                        │
+│                         MaiX Application                        │
 ├─────────────────────────────────────────────────────────────────┤
 │  Views (WPF XAML)                                               │
 │  ├── LoginWindow.xaml        (M365 로그인)                      │
@@ -492,7 +492,7 @@ Converters:
 │      └── RestApiServer       (포트 5858)                        │
 ├─────────────────────────────────────────────────────────────────┤
 │  Data                                                            │
-│  └── MailXDbContext          (EF Core + SQLite)                 │
+│  └── MaiXDbContext          (EF Core + SQLite)                 │
 ├─────────────────────────────────────────────────────────────────┤
 │  External Services                                               │
 │  ├── Microsoft Graph API     (M365 데이터)                      │
@@ -506,13 +506,13 @@ Converters:
 ### 빌드 명령
 
 ```bash
-dotnet build "C:\DATA\Project\mailX\mailX\mailX.csproj"
+dotnet build "C:\DATA\Project\MaiX\MaiX\MaiX.csproj"
 ```
 
 ### 실행
 
 ```bash
-"C:\DATA\Project\mailX\mailX\bin\Debug\net10.0-windows\mailX.exe"
+"C:\DATA\Project\MaiX\MaiX\bin\Debug\net10.0-windows\MaiX.exe"
 ```
 
 ### REST API 확인
@@ -544,5 +544,5 @@ curl -s http://localhost:5858/api/status
 ### 새 Model 추가
 
 1. `Models/` 폴더에 생성
-2. EF Core 엔티티인 경우 `MailXDbContext`에 DbSet 추가
+2. EF Core 엔티티인 경우 `MaiXDbContext`에 DbSet 추가
 3. 마이그레이션 생성: `dotnet ef migrations add {Name}`
