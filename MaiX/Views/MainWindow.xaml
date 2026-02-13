@@ -5898,6 +5898,78 @@
                         <!-- 노트북/섹션/페이지 트리뷰 -->
                         <ScrollViewer Grid.Row="2" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
                             <StackPanel>
+                                <!-- 검색 결과 패널 (즐겨찾기 위) -->
+                                <Border x:Name="OneNoteSearchResultsPanel" Visibility="Collapsed" Margin="8,4"
+                                        Background="{DynamicResource CardBackgroundFillColorDefaultBrush}"
+                                        BorderBrush="{DynamicResource CardStrokeColorDefaultBrush}"
+                                        BorderThickness="1" CornerRadius="4">
+                                    <StackPanel>
+                                        <DockPanel Margin="8,6,8,2">
+                                            <ui:SymbolIcon Symbol="Search24" FontSize="14" Margin="0,0,6,0"
+                                                           Foreground="{DynamicResource AccentTextFillColorPrimaryBrush}"/>
+                                            <TextBlock x:Name="OneNoteSearchResultsHeader" Text="검색 결과"
+                                                       FontWeight="SemiBold" FontSize="13" VerticalAlignment="Center"/>
+                                            <Button x:Name="OneNoteSearchCloseButton" DockPanel.Dock="Right"
+                                                    HorizontalAlignment="Right" VerticalAlignment="Center"
+                                                    Click="OneNoteSearchClose_Click"
+                                                    Background="Transparent" BorderThickness="0"
+                                                    Padding="4" Cursor="Hand" ToolTip="검색 닫기">
+                                                <ui:SymbolIcon Symbol="Dismiss16" FontSize="12"/>
+                                            </Button>
+                                        </DockPanel>
+                                        <ListBox x:Name="OneNoteSearchResultsListBox"
+                                                 Background="Transparent" BorderThickness="0"
+                                                 MaxHeight="300"
+                                                 ScrollViewer.HorizontalScrollBarVisibility="Disabled"
+                                                 SelectionChanged="OneNoteSearchResults_SelectionChanged">
+                                            <ListBox.ItemTemplate>
+                                                <DataTemplate>
+                                                    <StackPanel Margin="4,2">
+                                                        <StackPanel.ContextMenu>
+                                                            <ContextMenu Opened="OneNoteContextMenu_Opened" Closed="OneNoteContextMenu_Closed">
+                                                                <MenuItem Header="즐겨찾기 추가" Click="AddToFavorites_Click"
+                                                                          Visibility="{Binding IsFavorite, Converter={StaticResource BoolToVisibilityConverter}, ConverterParameter=Invert}">
+                                                                    <MenuItem.Icon>
+                                                                        <ui:SymbolIcon Symbol="Star24"/>
+                                                                    </MenuItem.Icon>
+                                                                </MenuItem>
+                                                                <MenuItem Header="즐겨찾기 제거" Click="RemoveFromFavorites_Click"
+                                                                          Visibility="{Binding IsFavorite, Converter={StaticResource BoolToVisibilityConverter}}">
+                                                                    <MenuItem.Icon>
+                                                                        <ui:SymbolIcon Symbol="StarOff24"/>
+                                                                    </MenuItem.Icon>
+                                                                </MenuItem>
+                                                                <Separator/>
+                                                                <MenuItem Header="노트 삭제" Click="PageDelete_Click" Foreground="#E74856">
+                                                                    <MenuItem.Icon>
+                                                                        <ui:SymbolIcon Symbol="Delete24" Foreground="#E74856"/>
+                                                                    </MenuItem.Icon>
+                                                                </MenuItem>
+                                                            </ContextMenu>
+                                                        </StackPanel.ContextMenu>
+                                                        <DockPanel>
+                                                            <ui:SymbolIcon FontSize="14" Margin="0,0,6,0"
+                                                                           Symbol="{Binding ItemType, Converter={StaticResource FavoriteItemTypeToIconConverter}}"/>
+                                                            <TextBlock Text="{Binding Title}" FontSize="13"
+                                                                       TextTrimming="CharacterEllipsis"
+                                                                       Foreground="{DynamicResource TextFillColorPrimaryBrush}"/>
+                                                        </DockPanel>
+                                                        <TextBlock FontSize="11" Margin="20,0,0,0"
+                                                                   Foreground="{DynamicResource TextFillColorSecondaryBrush}">
+                                                            <TextBlock.Text>
+                                                                <MultiBinding StringFormat="{}{0} / {1}">
+                                                                    <Binding Path="NotebookName"/>
+                                                                    <Binding Path="SectionName"/>
+                                                                </MultiBinding>
+                                                            </TextBlock.Text>
+                                                        </TextBlock>
+                                                    </StackPanel>
+                                                </DataTemplate>
+                                            </ListBox.ItemTemplate>
+                                        </ListBox>
+                                    </StackPanel>
+                                </Border>
+
                                 <!-- 즐겨찾기 섹션 -->
                                 <Expander x:Name="OneNoteFavoritesExpander" IsExpanded="True" Margin="8,4">
                                     <Expander.Header>
@@ -5918,6 +5990,7 @@
                                             <Style TargetType="TreeViewItem">
                                                 <EventSetter Event="Expanded" Handler="FavoriteTreeViewItem_Expanded"/>
                                                 <EventSetter Event="PreviewMouseLeftButtonDown" Handler="FavoriteTreeViewItem_PreviewMouseLeftButtonDown"/>
+                                                <EventSetter Event="PreviewMouseLeftButtonUp" Handler="FavoriteTreeViewItem_PreviewMouseLeftButtonUp"/>
                                                 <EventSetter Event="PreviewMouseMove" Handler="FavoriteTreeViewItem_PreviewMouseMove"/>
                                                 <Setter Property="Background" Value="Transparent"/>
                                                 <Setter Property="Foreground" Value="{DynamicResource TextFillColorPrimaryBrush}"/>
@@ -6122,6 +6195,7 @@
                                             <Style TargetType="TreeViewItem">
                                                 <EventSetter Event="Expanded" Handler="OneNoteTreeViewItem_Expanded"/>
                                                 <EventSetter Event="PreviewMouseLeftButtonDown" Handler="OneNoteTreeViewItem_PreviewMouseLeftButtonDown"/>
+                                                <EventSetter Event="PreviewMouseLeftButtonUp" Handler="OneNoteTreeViewItem_PreviewMouseLeftButtonUp"/>
                                                 <Setter Property="Background" Value="Transparent"/>
                                                 <Setter Property="Foreground" Value="{DynamicResource TextFillColorPrimaryBrush}"/>
                                                 <Setter Property="Padding" Value="4,2"/>

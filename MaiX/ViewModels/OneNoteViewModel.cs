@@ -3471,45 +3471,47 @@ public partial class OneNoteViewModel : ViewModelBase
         if (string.IsNullOrWhiteSpace(SearchQuery))
             return;
 
-        await ExecuteAsync(async () =>
-        {
-            // 모든 노트북에서 페이지 검색
-            var notebooks = await _oneNoteService.GetNotebooksAsync();
-            var allPages = new System.Collections.Generic.List<PageItemViewModel>();
+        var query = SearchQuery;
 
-            foreach (var notebook in notebooks)
-            {
-                var sections = await _oneNoteService.GetSectionsAsync(notebook.Id ?? string.Empty);
-                foreach (var section in sections)
-                {
-                    var pages = await _oneNoteService.GetPagesAsync(section.Id ?? string.Empty);
-                    foreach (var page in pages)
-                    {
-                        if (page.Title?.Contains(SearchQuery, StringComparison.OrdinalIgnoreCase) == true)
-                        {
-                            allPages.Add(new PageItemViewModel
-                            {
-                                Id = page.Id ?? string.Empty,
-                                Title = page.Title ?? "Untitled",
-                                SectionId = section.Id ?? string.Empty,
-                                SectionName = section.DisplayName ?? string.Empty,
-                                NotebookName = notebook.DisplayName ?? string.Empty,
-                                CreatedDateTime = page.CreatedDateTime?.DateTime,
-                                LastModifiedDateTime = page.LastModifiedDateTime?.DateTime
-                            });
-                        }
-                    }
-                }
-            }
+        // Graph API로 개인/그룹/사이트 병렬 검색
+        var groupIds = Notebooks
+            .Where(nb => !string.IsNullOrEmpty(nb.GroupId))
+            .Select(nb => nb.GroupId)
+            .Distinct().ToList();
+
+        var siteIds = Notebooks
+            .Where(nb => !string.IsNullOrEmpty(nb.SiteId))
+            .Select(nb => nb.SiteId)
+            .Distinct().ToList();
+
+        try
+        {
+            var pages = await _oneNoteService.SearchPagesAsync(query, groupIds, siteIds);
 
             SearchResults.Clear();
-            foreach (var page in allPages)
+            foreach (var page in pages)
             {
-                SearchResults.Add(page);
+                var sectionName = page.ParentSection?.DisplayName ?? string.Empty;
+                var notebookName = page.ParentNotebook?.DisplayName ?? string.Empty;
+
+                SearchResults.Add(new PageItemViewModel
+                {
+                    Id = page.Id ?? string.Empty,
+                    Title = page.Title ?? "Untitled",
+                    SectionId = page.ParentSection?.Id ?? string.Empty,
+                    SectionName = sectionName,
+                    NotebookName = notebookName,
+                    CreatedDateTime = page.CreatedDateTime?.DateTime,
+                    LastModifiedDateTime = page.LastModifiedDateTime?.DateTime,
+                });
             }
 
-            _logger.Information("검색 '{Query}': {Count}개 결과", SearchQuery, SearchResults.Count);
-        }, "페이지 검색 실패");
+            _logger.Information("검색 '{Query}': {Count}개 결과 (Graph API)", query, SearchResults.Count);
+        }
+        catch (Exception ex)
+        {
+            _logger.Error(ex, "Graph API 검색 실패: {Query}", query);
+        }
     }
 
     /// <summary>

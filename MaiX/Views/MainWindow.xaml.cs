@@ -10353,17 +10353,49 @@ public partial class MainWindow : FluentWindow
                 _oneNoteViewModel.SearchQuery = query;
                 await _oneNoteViewModel.SearchPagesAsync();
 
-                // 검색 결과를 즐겨찾기 목록에 임시 표시
-                if (OneNoteFavoritesTreeView != null)
-                    OneNoteFavoritesTreeView.ItemsSource = _oneNoteViewModel.SearchResults;
+                // 검색 결과 패널에 표시
+                OneNoteSearchResultsListBox.ItemsSource = _oneNoteViewModel.SearchResults;
+                OneNoteSearchResultsHeader.Text = $"검색 결과 ({_oneNoteViewModel.SearchResults.Count}개)";
+                OneNoteSearchResultsPanel.Visibility = Visibility.Visible;
             }
         }
         else if (e.Key == Key.Escape && OneNoteSearchBox != null)
         {
-            OneNoteSearchBox.Text = string.Empty;
-            // 즐겨찾기 목록 복원
-            if (_oneNoteViewModel != null && OneNoteFavoritesTreeView != null)
-                OneNoteFavoritesTreeView.ItemsSource = _oneNoteViewModel.FavoritePages;
+            CloseOneNoteSearchResults();
+        }
+    }
+
+    /// <summary>
+    /// OneNote 검색 결과 닫기 버튼
+    /// </summary>
+    private void OneNoteSearchClose_Click(object sender, RoutedEventArgs e)
+    {
+        CloseOneNoteSearchResults();
+    }
+
+    /// <summary>
+    /// OneNote 검색 결과 패널 닫기
+    /// </summary>
+    private void CloseOneNoteSearchResults()
+    {
+        OneNoteSearchBox.Text = string.Empty;
+        OneNoteSearchResultsPanel.Visibility = Visibility.Collapsed;
+        OneNoteSearchResultsListBox.ItemsSource = null;
+    }
+
+    /// <summary>
+    /// OneNote 검색 결과 항목 선택
+    /// </summary>
+    private async void OneNoteSearchResults_SelectionChanged(object sender, System.Windows.Controls.SelectionChangedEventArgs e)
+    {
+        if (OneNoteSearchResultsListBox.SelectedItem is PageItemViewModel selectedItem && _oneNoteViewModel != null)
+        {
+            Log4.Debug($"[OneNote] 검색 결과 선택: {selectedItem.Title}, Type={selectedItem.ItemType}");
+
+            if (selectedItem.ItemType == FavoriteItemType.Page)
+            {
+                await LoadOneNotePageAsync(selectedItem);
+            }
         }
     }
 
@@ -10674,16 +10706,7 @@ public partial class MainWindow : FluentWindow
                 return;
             }
 
-            // 노트북/섹션은 선택하지 않고 토글만 (페이지만 선택 가능)
-            if (item.ItemType == FavoriteItemType.Notebook || item.ItemType == FavoriteItemType.Section)
-            {
-                treeViewItem.IsExpanded = !treeViewItem.IsExpanded;
-                e.Handled = true;
-                _draggedFavoriteItem = null;
-                return;
-            }
-
-            // 최상위 즐겨찾기 항목만 드래그 가능 (FavoritePages에 직접 포함된 항목)
+            // 최상위 즐겨찾기 항목이면 드래그 가능 (페이지/노트북/섹션 모두)
             if (_oneNoteViewModel?.FavoritePages.Contains(item) == true)
             {
                 _draggedFavoriteItem = item;
@@ -10691,6 +10714,34 @@ public partial class MainWindow : FluentWindow
             else
             {
                 _draggedFavoriteItem = null;
+            }
+
+            // 노트북/섹션은 MouseDown에서는 선택만 방지 (토글은 MouseUp에서)
+            if (item.ItemType == FavoriteItemType.Notebook || item.ItemType == FavoriteItemType.Section)
+            {
+                e.Handled = true;
+                return;
+            }
+        }
+    }
+
+    /// <summary>
+    /// 즐겨찾기 트리뷰 마우스 업 — 드래그가 아닌 경우에만 노트북/섹션 토글
+    /// </summary>
+    private void FavoriteTreeViewItem_PreviewMouseLeftButtonUp(object sender, System.Windows.Input.MouseButtonEventArgs e)
+    {
+        if (_isFavoriteDragging) return;
+
+        if (sender is System.Windows.Controls.TreeViewItem treeViewItem &&
+            treeViewItem.DataContext is PageItemViewModel item)
+        {
+            var clickedTreeViewItem = FindParentTreeViewItem(e.OriginalSource as DependencyObject);
+            if (clickedTreeViewItem != treeViewItem) return;
+
+            if (item.ItemType == FavoriteItemType.Notebook || item.ItemType == FavoriteItemType.Section)
+            {
+                treeViewItem.IsExpanded = !treeViewItem.IsExpanded;
+                e.Handled = true;
             }
         }
     }
@@ -11898,16 +11949,30 @@ public partial class MainWindow : FluentWindow
                 return;
             }
 
-            // 노트북 또는 섹션인 경우 선택을 방지하고 확장/축소만 토글
+            // 노트북 또는 섹션인 경우 MouseDown에서는 선택만 방지 (토글은 MouseUp에서)
             if (treeViewItem.DataContext is NotebookItemViewModel || treeViewItem.DataContext is SectionItemViewModel)
             {
-                // 확장/축소 토글
-                treeViewItem.IsExpanded = !treeViewItem.IsExpanded;
-
-                // 선택 방지
                 e.Handled = true;
             }
             // 페이지는 기본 동작 (선택)
+        }
+    }
+
+    /// <summary>
+    /// OneNote 트리뷰 마우스 업 — 드래그가 아닌 클릭 시에만 노트북/섹션 토글
+    /// </summary>
+    private void OneNoteTreeViewItem_PreviewMouseLeftButtonUp(object sender, System.Windows.Input.MouseButtonEventArgs e)
+    {
+        if (sender is System.Windows.Controls.TreeViewItem treeViewItem)
+        {
+            var clickedTreeViewItem = FindParentTreeViewItem(e.OriginalSource as DependencyObject);
+            if (clickedTreeViewItem != treeViewItem) return;
+
+            if (treeViewItem.DataContext is NotebookItemViewModel || treeViewItem.DataContext is SectionItemViewModel)
+            {
+                treeViewItem.IsExpanded = !treeViewItem.IsExpanded;
+                e.Handled = true;
+            }
         }
     }
 

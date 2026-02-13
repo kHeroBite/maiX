@@ -1959,6 +1959,99 @@ public class GraphOneNoteService
         // 기본값
         return "image/png";
     }
+
+    /// <summary>
+    /// Graph API로 페이지 제목 검색 (개인 + 그룹 + 사이트 병렬)
+    /// </summary>
+    /// <param name="query">검색어</param>
+    /// <param name="groupIds">검색할 그룹 ID 목록</param>
+    /// <param name="siteIds">검색할 사이트 ID 목록</param>
+    /// <returns>검색 결과 페이지 목록</returns>
+    public async Task<List<OnenotePage>> SearchPagesAsync(string query, IEnumerable<string> groupIds, IEnumerable<string> siteIds)
+    {
+        var allPages = new List<OnenotePage>();
+        var client = _authService.GetGraphClient();
+        var filter = $"contains(tolower(title),'{query.ToLower().Replace("'", "''")}')";
+
+        var tasks = new List<Task<List<OnenotePage>>>();
+
+        // 개인 노트북 검색
+        tasks.Add(Task.Run(async () =>
+        {
+            try
+            {
+                var response = await client.Me.Onenote.Pages.GetAsync(config =>
+                {
+                    config.QueryParameters.Filter = filter;
+                    config.QueryParameters.Top = 50;
+                    config.QueryParameters.Expand = new[] { "parentSection($select=id,displayName)", "parentNotebook($select=id,displayName)" };
+                });
+                return response?.Value?.ToList() ?? new List<OnenotePage>();
+            }
+            catch (Exception ex)
+            {
+                Log4.Warn($"[OneNote검색] 개인 노트북 검색 실패: {ex.Message}");
+                return new List<OnenotePage>();
+            }
+        }));
+
+        // 그룹별 검색
+        foreach (var groupId in groupIds.Where(id => !string.IsNullOrEmpty(id)).Distinct())
+        {
+            var gid = groupId;
+            tasks.Add(Task.Run(async () =>
+            {
+                try
+                {
+                    var response = await client.Groups[gid].Onenote.Pages.GetAsync(config =>
+                    {
+                        config.QueryParameters.Filter = filter;
+                        config.QueryParameters.Top = 50;
+                        config.QueryParameters.Expand = new[] { "parentSection($select=id,displayName)", "parentNotebook($select=id,displayName)" };
+                    });
+                    return response?.Value?.ToList() ?? new List<OnenotePage>();
+                }
+                catch (Exception ex)
+                {
+                    Log4.Warn($"[OneNote검색] 그룹 '{gid}' 검색 실패: {ex.Message}");
+                    return new List<OnenotePage>();
+                }
+            }));
+        }
+
+        // 사이트별 검색
+        foreach (var siteId in siteIds.Where(id => !string.IsNullOrEmpty(id)).Distinct())
+        {
+            var sid = siteId;
+            tasks.Add(Task.Run(async () =>
+            {
+                try
+                {
+                    var response = await client.Sites[sid].Onenote.Pages.GetAsync(config =>
+                    {
+                        config.QueryParameters.Filter = filter;
+                        config.QueryParameters.Top = 50;
+                        config.QueryParameters.Expand = new[] { "parentSection($select=id,displayName)", "parentNotebook($select=id,displayName)" };
+                    });
+                    return response?.Value?.ToList() ?? new List<OnenotePage>();
+                }
+                catch (Exception ex)
+                {
+                    Log4.Warn($"[OneNote검색] 사이트 '{sid}' 검색 실패: {ex.Message}");
+                    return new List<OnenotePage>();
+                }
+            }));
+        }
+
+        var results = await Task.WhenAll(tasks);
+        foreach (var pages in results)
+        {
+            allPages.AddRange(pages);
+        }
+
+        // 중복 제거 (같은 페이지가 여러 경로로 조회될 수 있음)
+        return allPages.GroupBy(p => p.Id).Select(g => g.First()).ToList();
+    }
 }
 
 /// <summary>
