@@ -233,7 +233,7 @@ public static class TinyMCEEditorService
                                     var msg = {{
                                         type: 'nonImageFileDropWithData',
                                         fileName: droppedFile.name,
-                                        fileSize: droppedFile.size,
+                                        fileSize: '' + droppedFile.size,
                                         base64: base64
                                     }};
                                     try {{
