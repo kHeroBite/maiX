@@ -331,6 +331,25 @@ public partial class TaskEditDialog : FluentWindow
                 editor.insertContent('<a href=""' + filePath + '"">' + (fileName || filePath) + '</a>');
             }}
         }};
+
+        // 비이미지 파일 드래그&드롭: TinyMCE 전파 차단 → Chromium file:/// 네비게이션 유도
+        document.addEventListener('dragover', function(e) {{
+            e.preventDefault();
+        }}, true);
+
+        document.addEventListener('drop', function(e) {{
+            if (!e.dataTransfer || !e.dataTransfer.files || e.dataTransfer.files.length === 0) return;
+            var hasNonImage = false;
+            for (var i = 0; i < e.dataTransfer.files.length; i++) {{
+                if (!e.dataTransfer.files[i].type.startsWith('image/')) {{
+                    hasNonImage = true;
+                    break;
+                }}
+            }}
+            if (hasNonImage) {{
+                e.stopImmediatePropagation();
+            }}
+        }}, true);
     </script>
 </body>
 </html>";
