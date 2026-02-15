@@ -472,6 +472,17 @@ public partial class MainWindow : FluentWindow
                         await Services.Editor.TinyMCEEditorService.비이미지파일드롭처리Async(DraftBodyWebView, dropFileName, dropFilePath);
                         break;
 
+                    case "nonImageFileDropWithData":
+                        var dropDataFileName = message.TryGetValue("fileName", out var ddfn) ? ddfn : "";
+                        var dropBase64 = message.TryGetValue("base64", out var db64) ? db64 : "";
+                        if (!string.IsNullOrEmpty(dropDataFileName) && !string.IsNullOrEmpty(dropBase64))
+                        {
+                            var tempPath = await Services.Editor.TinyMCEEditorService.파일드롭데이터저장Async(dropDataFileName, dropBase64);
+                            if (tempPath != null)
+                                await Services.Editor.TinyMCEEditorService.비이미지파일드롭처리Async(DraftBodyWebView, dropDataFileName, tempPath);
+                        }
+                        break;
+
                     case "debugLog":
                         var debugMsg = message.TryGetValue("message", out var dm) ? dm : "";
                         Log4.Debug($"[Draft-JS] {debugMsg}");
@@ -9661,6 +9672,19 @@ public partial class MainWindow : FluentWindow
                     await HandleOneNoteFileDropAsync(oneNoteDropFileName, oneNoteDropFilePath);
                     break;
 
+                case "nonImageFileDropWithData":
+                    var oneNoteDropDataFileName = message.TryGetValue("fileName", out var oddnObj) ? oddnObj?.ToString() ?? "" : "";
+                    var oneNoteDropBase64 = message.TryGetValue("base64", out var odb64Obj) ? odb64Obj?.ToString() ?? "" : "";
+                    if (!string.IsNullOrEmpty(oneNoteDropDataFileName) && !string.IsNullOrEmpty(oneNoteDropBase64))
+                    {
+                        var tempPath = await Services.Editor.TinyMCEEditorService.파일드롭데이터저장Async(oneNoteDropDataFileName, oneNoteDropBase64);
+                        if (tempPath != null)
+                            await HandleOneNoteFileDropAsync(oneNoteDropDataFileName, tempPath);
+                        else
+                            Log4.Warn($"[OneNote] 파일드롭 base64 임시저장 실패: {oneNoteDropDataFileName}");
+                    }
+                    break;
+
                 case "debugLog":
                     var oneNoteDebugMsg = message.TryGetValue("message", out var odmObj) ? odmObj?.ToString() ?? "" : "";
                     Log4.Debug($"[OneNote-JS] {oneNoteDebugMsg}");
@@ -9692,6 +9716,7 @@ public partial class MainWindow : FluentWindow
     /// </summary>
     private async void OneNoteEditorWebView_Drop(object sender, System.Windows.DragEventArgs e)
     {
+        Log4.Debug2("[OneNote] WPF PreviewDrop 발동됨");
         if (!_oneNoteEditorReady) return;
 
         if (e.Data.GetDataPresent(System.Windows.DataFormats.FileDrop))

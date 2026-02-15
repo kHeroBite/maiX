@@ -220,29 +220,41 @@ public static class TinyMCEEditorService
                             var ext = idx >= 0 ? file.name.substring(idx).toLowerCase() : '';
                             var imageExts = ['.jpg','.jpeg','.png','.gif','.bmp','.webp','.svg','.ico','.tif','.tiff'];
                             if (imageExts.indexOf(ext) < 0) {{
-                                // 비이미지 파일 → 브라우저 기본 동작 차단 + C#에 파일 경로 포함하여 알림
+                                // 비이미지 파일 → 브라우저 기본 동작 차단 + FileReader로 base64 전달
                                 evt.preventDefault();
                                 evt.stopImmediatePropagation();
-                                // dataTransfer에서 file:/// 경로 추출 시도
-                                var filePath = '';
-                                try {{ filePath = dt.getData('text/uri-list') || ''; }} catch(e) {{}}
-                                if (!filePath) try {{ filePath = dt.getData('text/plain') || ''; }} catch(e) {{}}
-                                if (!filePath) try {{ filePath = dt.getData('text/x-moz-url') || ''; }} catch(e) {{}}
-                                try {{
-                                    window.chrome.webview.postMessage({{
-                                        type: 'nonImageFileDrop',
-                                        fileName: file.name,
-                                        filePath: filePath
-                                    }});
-                                }} catch(ex) {{
+                                var reader = new FileReader();
+                                var droppedFile = file;
+                                reader.onload = function(e) {{
+                                    var bytes = new Uint8Array(e.target.result);
+                                    var binary = '';
+                                    for (var i = 0; i < bytes.length; i++) binary += String.fromCharCode(bytes[i]);
+                                    var base64 = btoa(binary);
+                                    var msg = {{
+                                        type: 'nonImageFileDropWithData',
+                                        fileName: droppedFile.name,
+                                        fileSize: droppedFile.size,
+                                        base64: base64
+                                    }};
                                     try {{
-                                        window.parent.chrome.webview.postMessage({{
-                                            type: 'nonImageFileDrop',
-                                            fileName: file.name,
-                                            filePath: filePath
-                                        }});
-                                    }} catch(ex2) {{}}
-                                }}
+                                        window.chrome.webview.postMessage(msg);
+                                    }} catch(ex) {{
+                                        try {{ window.parent.chrome.webview.postMessage(msg); }} catch(ex2) {{}}
+                                    }}
+                                }};
+                                reader.onerror = function() {{
+                                    var errMsg = {{
+                                        type: 'nonImageFileDrop',
+                                        fileName: droppedFile.name,
+                                        filePath: ''
+                                    }};
+                                    try {{
+                                        window.chrome.webview.postMessage(errMsg);
+                                    }} catch(ex) {{
+                                        try {{ window.parent.chrome.webview.postMessage(errMsg); }} catch(ex2) {{}}
+                                    }}
+                                }};
+                                reader.readAsArrayBuffer(file);
                             }}
                             // 이미지 파일은 TinyMCE 기본 처리에 맡김
                         }}, true);
@@ -482,6 +494,36 @@ public static class TinyMCEEditorService
             var escaped = System.Text.Json.JsonSerializer.Serialize($"📎 {fileName} ");
             await webView.CoreWebView2.ExecuteScriptAsync(
                 $"tinymce.activeEditor && tinymce.activeEditor.insertContent({escaped})");
+        }
+    }
+
+    /// <summary>
+    /// JS FileReader에서 전달받은 base64 데이터를 임시 파일로 저장합니다.
+    /// </summary>
+    public static async Task<string?> 파일드롭데이터저장Async(string fileName, string base64Data)
+    {
+        try
+        {
+            if (string.IsNullOrEmpty(fileName) || string.IsNullOrEmpty(base64Data))
+                return null;
+
+            var tempDir = System.IO.Path.Combine(System.IO.Path.GetTempPath(), "MaiX_Drop");
+            System.IO.Directory.CreateDirectory(tempDir);
+
+            // 파일명 충돌 방지
+            var safeName = string.Join("_", fileName.Split(System.IO.Path.GetInvalidFileNameChars()));
+            var tempPath = System.IO.Path.Combine(tempDir, $"{DateTime.Now:yyyyMMdd_HHmmss}_{safeName}");
+
+            var bytes = Convert.FromBase64String(base64Data);
+            await System.IO.File.WriteAllBytesAsync(tempPath, bytes);
+
+            Log4.Debug2($"[TinyMCE] 파일드롭 임시저장: {fileName} → {tempPath} ({bytes.Length:N0} bytes)");
+            return tempPath;
+        }
+        catch (Exception ex)
+        {
+            Log4.Error($"[TinyMCE] 파일드롭 임시저장 실패: {fileName} - {ex.Message}");
+            return null;
         }
     }
 

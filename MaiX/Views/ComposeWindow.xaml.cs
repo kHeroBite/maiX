@@ -198,6 +198,19 @@ public partial class ComposeWindow : FluentWindow
                         }
                         break;
 
+                    case "nonImageFileDropWithData":
+                        var composeDropDataFileName = message.TryGetValue("fileName", out var cddfn) ? cddfn : "";
+                        var composeDropBase64 = message.TryGetValue("base64", out var cdb64) ? cdb64 : "";
+                        if (!string.IsNullOrEmpty(composeDropDataFileName) && !string.IsNullOrEmpty(composeDropBase64))
+                        {
+                            var tempPath = await Services.Editor.TinyMCEEditorService.파일드롭데이터저장Async(composeDropDataFileName, composeDropBase64);
+                            if (tempPath != null)
+                                _viewModel.AddAttachment(tempPath);
+                            else
+                                Log4.Warn($"[Compose] 파일드롭 base64 임시저장 실패: {composeDropDataFileName}");
+                        }
+                        break;
+
                     case "filePicker":
                         var pickerType = message.TryGetValue("pickerType", out var pt) ? pt : "file";
                         await Services.Editor.TinyMCEEditorService.HandleFilePickerAsync(EditorWebView, pickerType);
@@ -230,6 +243,7 @@ public partial class ComposeWindow : FluentWindow
     /// </summary>
     private async void EditorWebView_Drop(object sender, System.Windows.DragEventArgs e)
     {
+        Log4.Debug2("[Compose] WPF PreviewDrop 발동됨");
         if (!_editorReady) return;
 
         // 메일 작성: 비이미지 파일은 첨부파일로 추가, 이미지는 에디터에 삽입
