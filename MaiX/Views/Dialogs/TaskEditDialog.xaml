@@ -281,7 +281,10 @@
                         CornerRadius="4"
                         Height="200">
                     <wv2:WebView2 x:Name="NotesWebView"
-                                 DefaultBackgroundColor="Transparent"/>
+                                 DefaultBackgroundColor="Transparent"
+                                 AllowDrop="True"
+                                 DragOver="NotesWebView_DragOver"
+                                 Drop="NotesWebView_Drop"/>
                 </Border>
 
                 <!-- 검사 목록 섹션 -->

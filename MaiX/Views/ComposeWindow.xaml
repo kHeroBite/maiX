@@ -472,7 +472,10 @@
                     <!-- TinyMCE 에디터 -->
                     <wv2:WebView2 x:Name="EditorWebView"
                                   DefaultBackgroundColor="Transparent"
-                                  Visibility="Collapsed"/>
+                                  Visibility="Collapsed"
+                                  AllowDrop="True"
+                                  DragOver="EditorWebView_DragOver"
+                                  Drop="EditorWebView_Drop"/>
                 </Grid>
             </Border>
         </Grid>

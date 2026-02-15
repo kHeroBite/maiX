@@ -149,21 +149,28 @@ public partial class ComposeWindow : FluentWindow
             var message = System.Text.Json.JsonSerializer.Deserialize<Dictionary<string, string>>(e.WebMessageAsJson);
             if (message != null && message.TryGetValue("type", out var type))
             {
-                if (type == "ready")
+                switch (type)
                 {
-                    _editorReady = true;
+                    case "ready":
+                        _editorReady = true;
 
-                    // 로딩 패널 숨기고 에디터 표시
-                    LoadingPanel.Visibility = Visibility.Collapsed;
-                    EditorWebView.Visibility = Visibility.Visible;
+                        // 로딩 패널 숨기고 에디터 표시
+                        LoadingPanel.Visibility = Visibility.Collapsed;
+                        EditorWebView.Visibility = Visibility.Visible;
 
-                    // 초기 컨텐츠 설정 (답장/전달 시)
-                    if (!string.IsNullOrEmpty(_viewModel.InitialBody))
-                    {
-                        await SetEditorContentAsync(_viewModel.InitialBody);
-                    }
+                        // 초기 컨텐츠 설정 (답장/전달 시)
+                        if (!string.IsNullOrEmpty(_viewModel.InitialBody))
+                        {
+                            await SetEditorContentAsync(_viewModel.InitialBody);
+                        }
 
-                    Log4.Debug("TinyMCE 에디터 준비 완료");
+                        Log4.Debug("TinyMCE 에디터 준비 완료");
+                        break;
+
+                    case "filePicker":
+                        var pickerType = message.TryGetValue("pickerType", out var pt) ? pt : "file";
+                        await Services.Editor.TinyMCEEditorService.HandleFilePickerAsync(EditorWebView, pickerType);
+                        break;
                 }
             }
         }
@@ -171,6 +178,27 @@ public partial class ComposeWindow : FluentWindow
         {
             Log4.Error($"WebView2 메시지 처리 실패: {ex.Message}");
         }
+    }
+
+    /// <summary>
+    /// 에디터 드래그 오버 (드롭 허용)
+    /// </summary>
+    private void EditorWebView_DragOver(object sender, System.Windows.DragEventArgs e)
+    {
+        if (e.Data.GetDataPresent(System.Windows.DataFormats.FileDrop))
+        {
+            e.Effects = System.Windows.DragDropEffects.Copy;
+            e.Handled = true;
+        }
+    }
+
+    /// <summary>
+    /// 에디터 파일 드롭
+    /// </summary>
+    private async void EditorWebView_Drop(object sender, System.Windows.DragEventArgs e)
+    {
+        if (!_editorReady) return;
+        await Services.Editor.TinyMCEEditorService.HandleDropAsync(EditorWebView, e);
     }
 
     /// <summary>

@@ -442,17 +442,24 @@ public partial class MainWindow : FluentWindow
             var message = System.Text.Json.JsonSerializer.Deserialize<Dictionary<string, string>>(e.WebMessageAsJson);
             if (message != null && message.TryGetValue("type", out var type))
             {
-                if (type == "ready")
+                switch (type)
                 {
-                    _draftEditorReady = true;
+                    case "ready":
+                        _draftEditorReady = true;
 
-                    // 초기 컨텐츠 설정
-                    if (!string.IsNullOrEmpty(_viewModel.DraftBody))
-                    {
-                        await SetDraftEditorContentAsync(_viewModel.DraftBody);
-                    }
+                        // 초기 컨텐츠 설정
+                        if (!string.IsNullOrEmpty(_viewModel.DraftBody))
+                        {
+                            await SetDraftEditorContentAsync(_viewModel.DraftBody);
+                        }
 
-                    Log4.Debug("임시보관함 TinyMCE 에디터 준비 완료");
+                        Log4.Debug("임시보관함 TinyMCE 에디터 준비 완료");
+                        break;
+
+                    case "filePicker":
+                        var pickerType = message.TryGetValue("pickerType", out var pt) ? pt : "file";
+                        await Services.Editor.TinyMCEEditorService.HandleFilePickerAsync(DraftBodyWebView, pickerType);
+                        break;
                 }
             }
         }
@@ -460,6 +467,27 @@ public partial class MainWindow : FluentWindow
         {
             Log4.Error($"DraftEditor 메시지 처리 실패: {ex.Message}");
         }
+    }
+
+    /// <summary>
+    /// 임시보관함 에디터 드래그 오버 (드롭 허용)
+    /// </summary>
+    private void DraftBodyWebView_DragOver(object sender, System.Windows.DragEventArgs e)
+    {
+        if (e.Data.GetDataPresent(System.Windows.DataFormats.FileDrop))
+        {
+            e.Effects = System.Windows.DragDropEffects.Copy;
+            e.Handled = true;
+        }
+    }
+
+    /// <summary>
+    /// 임시보관함 에디터 파일 드롭
+    /// </summary>
+    private async void DraftBodyWebView_Drop(object sender, System.Windows.DragEventArgs e)
+    {
+        if (!_draftEditorReady) return;
+        await Services.Editor.TinyMCEEditorService.HandleDropAsync(DraftBodyWebView, e);
     }
 
     /// <summary>
@@ -9573,7 +9601,7 @@ public partial class MainWindow : FluentWindow
     /// <summary>
     /// OneNote 에디터 WebView2 메시지 수신 (DraftEditor와 동일한 방식)
     /// </summary>
-    private void OneNoteEditorWebView_WebMessageReceived(object? sender, Microsoft.Web.WebView2.Core.CoreWebView2WebMessageReceivedEventArgs e)
+    private async void OneNoteEditorWebView_WebMessageReceived(object? sender, Microsoft.Web.WebView2.Core.CoreWebView2WebMessageReceivedEventArgs e)
     {
         try
         {
@@ -9599,12 +9627,37 @@ public partial class MainWindow : FluentWindow
                         }
                     }
                     break;
+                case "filePicker":
+                    var pickerType = message.TryGetValue("pickerType", out var ptObj) ? ptObj?.ToString() ?? "file" : "file";
+                    await Services.Editor.TinyMCEEditorService.HandleFilePickerAsync(OneNoteEditorWebView, pickerType);
+                    break;
             }
         }
         catch (Exception ex)
         {
             Log4.Warn($"[OneNote] WebView2 메시지 처리 실패 (무시): {ex.Message}");
         }
+    }
+
+    /// <summary>
+    /// OneNote 에디터 드래그 오버 (드롭 허용)
+    /// </summary>
+    private void OneNoteEditorWebView_DragOver(object sender, System.Windows.DragEventArgs e)
+    {
+        if (e.Data.GetDataPresent(System.Windows.DataFormats.FileDrop))
+        {
+            e.Effects = System.Windows.DragDropEffects.Copy;
+            e.Handled = true;
+        }
+    }
+
+    /// <summary>
+    /// OneNote 에디터 파일 드롭
+    /// </summary>
+    private async void OneNoteEditorWebView_Drop(object sender, System.Windows.DragEventArgs e)
+    {
+        if (!_oneNoteEditorReady) return;
+        await Services.Editor.TinyMCEEditorService.HandleDropAsync(OneNoteEditorWebView, e);
     }
 
     /// <summary>

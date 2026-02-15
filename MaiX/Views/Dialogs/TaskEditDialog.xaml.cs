@@ -148,8 +148,8 @@ public partial class TaskEditDialog : FluentWindow
                 "tinymce.local", tinymcePath,
                 Microsoft.Web.WebView2.Core.CoreWebView2HostResourceAccessKind.Allow);
 
-            // TinyMCE에서 콘텐츠 변경 시 알림 받기
-            NotesWebView.CoreWebView2.WebMessageReceived += (s, args) =>
+            // TinyMCE에서 콘텐츠 변경/파일 탐색기 요청 시 알림 받기
+            NotesWebView.CoreWebView2.WebMessageReceived += async (s, args) =>
             {
                 try
                 {
@@ -160,6 +160,15 @@ public partial class TaskEditDialog : FluentWindow
                         if (type == "content-changed" && _isInitialized)
                         {
                             Dispatcher.Invoke(() => MarkAsChanged());
+                        }
+                        else if (type == "filePicker")
+                        {
+                            var pickerType = message.RootElement.TryGetProperty("pickerType", out var ptElement)
+                                ? ptElement.GetString() ?? "file" : "file";
+                            await Dispatcher.InvokeAsync(async () =>
+                            {
+                                await Services.Editor.TinyMCEEditorService.HandleFilePickerAsync(NotesWebView, pickerType);
+                            });
                         }
                     }
                 }
@@ -187,6 +196,26 @@ public partial class TaskEditDialog : FluentWindow
         {
             Log4.Error($"[TaskEditDialog] TinyMCE 초기화 실패: {ex.Message}");
         }
+    }
+
+    /// <summary>
+    /// NotesWebView 드래그 오버 (드롭 허용)
+    /// </summary>
+    private void NotesWebView_DragOver(object sender, System.Windows.DragEventArgs e)
+    {
+        if (e.Data.GetDataPresent(System.Windows.DataFormats.FileDrop))
+        {
+            e.Effects = System.Windows.DragDropEffects.Copy;
+            e.Handled = true;
+        }
+    }
+
+    /// <summary>
+    /// NotesWebView 파일 드롭
+    /// </summary>
+    private async void NotesWebView_Drop(object sender, System.Windows.DragEventArgs e)
+    {
+        await Services.Editor.TinyMCEEditorService.HandleDropAsync(NotesWebView, e);
     }
 
     /// <summary>
@@ -224,8 +253,8 @@ public partial class TaskEditDialog : FluentWindow
             statusbar: false,
             base_url: 'https://tinymce.local',
             suffix: '.min',
-            plugins: 'lists link table',
-            toolbar: 'bold italic underline | bullist numlist | table | link',
+            plugins: 'lists link image table',
+            toolbar: 'bold italic underline | bullist numlist | table | link image',
             skin: 'oxide-dark',
             skin_url: 'https://tinymce.local/skins/ui/oxide-dark',
             content_css: 'dark',
@@ -233,6 +262,15 @@ public partial class TaskEditDialog : FluentWindow
             branding: false,
             browser_spellcheck: true,
             contextmenu: false,
+            paste_data_images: true,
+            file_picker_types: 'image file',
+            file_picker_callback: function(callback, value, meta) {{
+                window._filePickerCallback = callback;
+                window.chrome.webview.postMessage({{
+                    type: 'filePicker',
+                    pickerType: meta.filetype || 'file'
+                }});
+            }},
             table_toolbar: 'tableprops tabledelete | tableinsertrowbefore tableinsertrowafter tabledeleterow | tableinsertcolbefore tableinsertcolafter tabledeletecol',
             table_appearance_options: true,
             table_default_attributes: {{ border: '1' }},
@@ -255,6 +293,28 @@ public partial class TaskEditDialog : FluentWindow
         window.setContent = function(html) {{
             if (editor) {{
                 editor.setContent(html || '');
+            }}
+        }};
+
+        // 파일 탐색기 결과 콜백
+        window.filePickerResult = function(url, meta) {{
+            if (window._filePickerCallback) {{
+                window._filePickerCallback(url, meta || {{}});
+                window._filePickerCallback = null;
+            }}
+        }};
+
+        // 드롭 이미지 삽입
+        window.insertDroppedImage = function(dataUrl, fileName) {{
+            if (editor) {{
+                editor.insertContent('<img src=""' + dataUrl + '"" alt=""' + (fileName || '') + '"" />');
+            }}
+        }};
+
+        // 드롭 파일 링크 삽입
+        window.insertDroppedFileLink = function(filePath, fileName) {{
+            if (editor) {{
+                editor.insertContent('<a href=""' + filePath + '"">' + (fileName || filePath) + '</a>');
             }}
         }};
     </script>

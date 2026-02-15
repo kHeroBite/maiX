@@ -1,4 +1,6 @@
 using MaiX.Services.Theme;
+using Microsoft.Win32;
+using Microsoft.Web.WebView2.Wpf;
 
 namespace MaiX.Services.Editor;
 
@@ -8,6 +10,18 @@ namespace MaiX.Services.Editor;
 /// </summary>
 public static class TinyMCEEditorService
 {
+    /// <summary>
+    /// 이미지 파일 최대 크기 (10MB)
+    /// </summary>
+    private const long 최대파일크기 = 10 * 1024 * 1024;
+
+    /// <summary>
+    /// 이미지 확장자 목록
+    /// </summary>
+    private static readonly HashSet<string> 이미지확장자 = new(StringComparer.OrdinalIgnoreCase)
+    {
+        ".png", ".jpg", ".jpeg", ".gif", ".bmp", ".webp", ".svg", ".ico"
+    };
     /// <summary>
     /// 에디터 유형
     /// </summary>
@@ -110,6 +124,16 @@ public static class TinyMCEEditorService
             table_default_styles: {{ 'border-collapse': 'collapse', 'width': '100%' }},
             browser_spellcheck: true,
             contextmenu: false,
+            paste_data_images: true,
+            file_picker_types: 'image file',
+            file_picker_callback: function(callback, value, meta) {{
+                // 콜백을 전역에 저장하여 C#에서 호출 가능하게 함
+                window._filePickerCallback = callback;
+                window.chrome.webview.postMessage({{
+                    type: 'filePicker',
+                    pickerType: meta.filetype || 'file'
+                }});
+            }},
             setup: function(ed) {{
                 editor = ed;
                 ed.on('init', function() {{
@@ -152,6 +176,28 @@ public static class TinyMCEEditorService
                 tinymce.activeEditor.focus();
             }}
         }};
+
+        // C#에서 파일 탐색기 결과를 전달하는 콜백
+        window.filePickerResult = function(url, meta) {{
+            if (window._filePickerCallback) {{
+                window._filePickerCallback(url, meta || {{}});
+                window._filePickerCallback = null;
+            }}
+        }};
+
+        // C#에서 드롭된 이미지를 삽입하는 함수
+        window.insertDroppedImage = function(dataUrl, fileName) {{
+            if (tinymce.activeEditor) {{
+                tinymce.activeEditor.insertContent('<img src=""' + dataUrl + '"" alt=""' + (fileName || '') + '"" />');
+            }}
+        }};
+
+        // C#에서 드롭된 파일 링크를 삽입하는 함수
+        window.insertDroppedFileLink = function(filePath, fileName) {{
+            if (tinymce.activeEditor) {{
+                tinymce.activeEditor.insertContent('<a href=""' + filePath + '"">' + (fileName || filePath) + '</a>');
+            }}
+        }};
     </script>
 </body>
 </html>";
@@ -183,5 +229,151 @@ public static class TinyMCEEditorService
         var textColor = isDark ? "#e0e0e0" : "#333333";
         var bgColor = isDark ? "#1e1e1e" : "#ffffff";
         return GenerateContentStyle(isDark, textColor, bgColor);
+    }
+
+    /// <summary>
+    /// 파일 탐색기를 열어 파일을 선택하고, 결과를 WebView2 에디터에 전달합니다.
+    /// WebMessageReceived에서 type='filePicker' 수신 시 호출.
+    /// </summary>
+    /// <param name="webView">대상 WebView2 컨트롤</param>
+    /// <param name="pickerType">'image' 또는 'file'</param>
+    public static async Task HandleFilePickerAsync(WebView2 webView, string pickerType)
+    {
+        if (webView?.CoreWebView2 == null) return;
+
+        var dialog = new OpenFileDialog();
+
+        if (pickerType == "image")
+        {
+            dialog.Title = "이미지 선택";
+            dialog.Filter = "이미지 파일|*.png;*.jpg;*.jpeg;*.gif;*.bmp;*.webp;*.svg;*.ico|모든 파일|*.*";
+        }
+        else
+        {
+            dialog.Title = "파일 선택";
+            dialog.Filter = "모든 파일|*.*|이미지 파일|*.png;*.jpg;*.jpeg;*.gif;*.bmp;*.webp|문서 파일|*.pdf;*.doc;*.docx;*.xls;*.xlsx;*.ppt;*.pptx;*.txt";
+        }
+
+        if (dialog.ShowDialog() != true) return;
+
+        var filePath = dialog.FileName;
+        var fileName = System.IO.Path.GetFileName(filePath);
+        var ext = System.IO.Path.GetExtension(filePath);
+
+        if (이미지확장자.Contains(ext))
+        {
+            // 이미지 → Base64 data URL
+            var dataUrl = ConvertFileToDataUrl(filePath);
+            if (dataUrl == null) return;
+
+            var escapedUrl = System.Text.Json.JsonSerializer.Serialize(dataUrl);
+            var escapedName = System.Text.Json.JsonSerializer.Serialize(fileName);
+            await webView.CoreWebView2.ExecuteScriptAsync(
+                $"window.filePickerResult({escapedUrl}, {{alt: {escapedName}}})");
+        }
+        else
+        {
+            // 비이미지 → file:/// 링크
+            var fileUrl = "file:///" + filePath.Replace("\\", "/");
+            var escapedUrl = System.Text.Json.JsonSerializer.Serialize(fileUrl);
+            var escapedName = System.Text.Json.JsonSerializer.Serialize(fileName);
+            await webView.CoreWebView2.ExecuteScriptAsync(
+                $"window.filePickerResult({escapedUrl}, {{text: {escapedName}, title: {escapedName}}})");
+        }
+    }
+
+    /// <summary>
+    /// WPF Drop 이벤트에서 드롭된 파일을 처리하여 에디터에 삽입합니다.
+    /// </summary>
+    /// <param name="webView">대상 WebView2 컨트롤</param>
+    /// <param name="e">DragEventArgs</param>
+    public static async Task HandleDropAsync(WebView2 webView, System.Windows.DragEventArgs e)
+    {
+        if (webView?.CoreWebView2 == null) return;
+
+        if (!e.Data.GetDataPresent(System.Windows.DataFormats.FileDrop)) return;
+
+        var files = e.Data.GetData(System.Windows.DataFormats.FileDrop) as string[];
+        if (files == null || files.Length == 0) return;
+
+        foreach (var filePath in files)
+        {
+            if (!System.IO.File.Exists(filePath)) continue;
+
+            var fileName = System.IO.Path.GetFileName(filePath);
+            var ext = System.IO.Path.GetExtension(filePath);
+
+            if (이미지확장자.Contains(ext))
+            {
+                // 이미지 → Base64 data URL로 삽입
+                var dataUrl = ConvertFileToDataUrl(filePath);
+                if (dataUrl == null) continue;
+
+                var escapedUrl = System.Text.Json.JsonSerializer.Serialize(dataUrl);
+                var escapedName = System.Text.Json.JsonSerializer.Serialize(fileName);
+                await webView.CoreWebView2.ExecuteScriptAsync(
+                    $"window.insertDroppedImage({escapedUrl}, {escapedName})");
+            }
+            else
+            {
+                // 비이미지 → file:/// 링크로 삽입
+                var fileUrl = "file:///" + filePath.Replace("\\", "/");
+                var escapedUrl = System.Text.Json.JsonSerializer.Serialize(fileUrl);
+                var escapedName = System.Text.Json.JsonSerializer.Serialize(fileName);
+                await webView.CoreWebView2.ExecuteScriptAsync(
+                    $"window.insertDroppedFileLink({escapedUrl}, {escapedName})");
+            }
+        }
+
+        e.Handled = true;
+    }
+
+    /// <summary>
+    /// 파일을 Base64 data URL로 변환합니다.
+    /// </summary>
+    /// <returns>data URL 문자열, 실패 시 null</returns>
+    public static string? ConvertFileToDataUrl(string filePath)
+    {
+        try
+        {
+            var fileInfo = new System.IO.FileInfo(filePath);
+            if (fileInfo.Length > 최대파일크기)
+            {
+                System.Windows.MessageBox.Show(
+                    $"파일 크기가 10MB를 초과합니다: {fileInfo.Length / 1024 / 1024}MB",
+                    "파일 크기 초과", System.Windows.MessageBoxButton.OK, System.Windows.MessageBoxImage.Warning);
+                return null;
+            }
+
+            var bytes = System.IO.File.ReadAllBytes(filePath);
+            var base64 = Convert.ToBase64String(bytes);
+            var ext = System.IO.Path.GetExtension(filePath).ToLowerInvariant();
+            var mimeType = ext switch
+            {
+                ".png" => "image/png",
+                ".jpg" or ".jpeg" => "image/jpeg",
+                ".gif" => "image/gif",
+                ".bmp" => "image/bmp",
+                ".webp" => "image/webp",
+                ".svg" => "image/svg+xml",
+                ".ico" => "image/x-icon",
+                _ => "application/octet-stream"
+            };
+
+            return $"data:{mimeType};base64,{base64}";
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
+    /// <summary>
+    /// 파일 경로가 이미지인지 확인합니다.
+    /// </summary>
+    public static bool IsImageFile(string filePath)
+    {
+        var ext = System.IO.Path.GetExtension(filePath);
+        return 이미지확장자.Contains(ext);
     }
 }
