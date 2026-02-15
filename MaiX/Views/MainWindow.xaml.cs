@@ -398,8 +398,7 @@ public partial class MainWindow : FluentWindow
                 // NavigationStarting — 외부 링크 클릭 시 브라우저 열기
                 DraftBodyWebView.CoreWebView2.NavigationStarting += Services.Editor.TinyMCEEditorService.HandleEditorNavigationStarting;
 
-                // FrameNavigationStarting — TinyMCE iframe 내 file:/// 드롭 감지
-                DraftBodyWebView.CoreWebView2.FrameNavigationStarting += Services.Editor.TinyMCEEditorService.HandleEditorFrameNavigationStarting;
+
 
                 // 메시지 수신 핸들러
                 DraftBodyWebView.CoreWebView2.WebMessageReceived += DraftEditor_WebMessageReceived;
@@ -465,6 +464,12 @@ public partial class MainWindow : FluentWindow
                     case "filePicker":
                         var pickerType = message.TryGetValue("pickerType", out var pt) ? pt : "file";
                         await Services.Editor.TinyMCEEditorService.HandleFilePickerAsync(DraftBodyWebView, pickerType);
+                        break;
+
+                    case "nonImageFileDrop":
+                        var draftFilePath = message.TryGetValue("filePath", out var dfp) ? dfp : null;
+                        var draftFileName = message.TryGetValue("fileName", out var dfn) ? dfn : null;
+                        await Services.Editor.TinyMCEEditorService.HandleNonImageFileDropAsync(DraftBodyWebView, draftFilePath, draftFileName);
                         break;
 
                 }
@@ -9584,8 +9589,6 @@ public partial class MainWindow : FluentWindow
             // NavigationStarting — 외부 링크 클릭 시 브라우저 열기
             OneNoteEditorWebView.CoreWebView2.NavigationStarting += Services.Editor.TinyMCEEditorService.HandleEditorNavigationStarting;
 
-            // FrameNavigationStarting — TinyMCE iframe 내 file:/// 드롭 감지
-            OneNoteEditorWebView.CoreWebView2.FrameNavigationStarting += Services.Editor.TinyMCEEditorService.HandleEditorFrameNavigationStarting;
 
             // 로컬 TinyMCE 파일에 접근할 수 있도록 가상 호스트 매핑 (공통 서비스에서 호스트명 취득)
             var tinymcePath = System.IO.Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Assets", "tinymce");
@@ -9644,6 +9647,12 @@ public partial class MainWindow : FluentWindow
                 case "filePicker":
                     var pickerType = message.TryGetValue("pickerType", out var ptObj) ? ptObj?.ToString() ?? "file" : "file";
                     await Services.Editor.TinyMCEEditorService.HandleFilePickerAsync(OneNoteEditorWebView, pickerType);
+                    break;
+
+                case "nonImageFileDrop":
+                    var onFilePath = message.TryGetValue("filePath", out var onFp) ? onFp?.ToString() : null;
+                    var onFileName = message.TryGetValue("fileName", out var onFn) ? onFn?.ToString() : null;
+                    await Services.Editor.TinyMCEEditorService.HandleNonImageFileDropAsync(OneNoteEditorWebView, onFilePath, onFileName);
                     break;
 
             }

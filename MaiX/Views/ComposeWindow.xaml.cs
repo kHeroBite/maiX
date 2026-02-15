@@ -106,8 +106,6 @@ public partial class ComposeWindow : FluentWindow
             // NavigationStarting — 외부 링크 클릭 시 브라우저 열기
             EditorWebView.CoreWebView2.NavigationStarting += Services.Editor.TinyMCEEditorService.HandleEditorNavigationStarting;
 
-            // FrameNavigationStarting — TinyMCE iframe 내 file:/// 드롭 감지 (메일: 비이미지는 첨부파일)
-            EditorWebView.CoreWebView2.FrameNavigationStarting += EditorWebView_FrameNavigationStarting;
 
             // 에디터 HTML 로드
             await LoadTinyMCEEditorAsync();
@@ -178,6 +176,23 @@ public partial class ComposeWindow : FluentWindow
                         await Services.Editor.TinyMCEEditorService.HandleFilePickerAsync(EditorWebView, pickerType);
                         break;
 
+                    case "nonImageFileDrop":
+                        var dropFilePath = message.TryGetValue("filePath", out var cfp) ? cfp : null;
+                        var dropFileName = message.TryGetValue("fileName", out var cfn) ? cfn : null;
+                        if (!string.IsNullOrEmpty(dropFilePath))
+                        {
+                            // file:/// URL → 로컬 경로 변환
+                            var localPath = dropFilePath;
+                            if (localPath.StartsWith("file:///", StringComparison.OrdinalIgnoreCase))
+                                localPath = Uri.UnescapeDataString(localPath.Substring("file:///".Length)).Replace("/", "\\");
+                            if (System.IO.File.Exists(localPath))
+                            {
+                                _viewModel.AddAttachment(localPath);
+                                Log4.Debug2($"[ComposeWindow] 비이미지 파일 첨부 추가: {dropFileName}");
+                            }
+                        }
+                        break;
+
                 }
             }
         }
@@ -196,59 +211,6 @@ public partial class ComposeWindow : FluentWindow
         {
             e.Effects = System.Windows.DragDropEffects.Copy;
             e.Handled = true;
-        }
-    }
-
-    /// <summary>
-    /// TinyMCE iframe 내 file:/// 네비게이션 감지 — 메일 작성용 (비이미지=첨부파일)
-    /// </summary>
-    private async void EditorWebView_FrameNavigationStarting(object? sender, Microsoft.Web.WebView2.Core.CoreWebView2NavigationStartingEventArgs e)
-    {
-        if (e.Uri.StartsWith("about:") || e.Uri.StartsWith("data:"))
-            return;
-
-        if (e.Uri.Contains(".tinymce.local/"))
-            return;
-
-        Log4.Debug2($"[ComposeWindow] FrameNavigationStarting 감지: {e.Uri}");
-
-        if (e.Uri.StartsWith("file:///", StringComparison.OrdinalIgnoreCase))
-        {
-            e.Cancel = true;
-
-            var filePath = Uri.UnescapeDataString(e.Uri.Substring("file:///".Length)).Replace("/", "\\");
-            var fileName = System.IO.Path.GetFileName(filePath);
-            var ext = System.IO.Path.GetExtension(filePath).ToLowerInvariant();
-
-            Log4.Debug2($"[ComposeWindow] 파일 드롭 감지 — 경로: {filePath}, 확장자: {ext}");
-
-            if (Services.Editor.TinyMCEEditorService.IsImageFile(filePath) && System.IO.File.Exists(filePath))
-            {
-                // 이미지 → 에디터에 인라인 삽입
-                await Services.Editor.TinyMCEEditorService.InsertFileToEditorAsync(EditorWebView, filePath);
-            }
-            else if (System.IO.File.Exists(filePath))
-            {
-                // 비이미지 → 첨부파일로 추가
-                _viewModel.AddAttachment(filePath);
-                Log4.Debug2($"[ComposeWindow] 첨부파일 추가: {fileName}");
-            }
-        }
-        else if (e.Uri.StartsWith("http://") || e.Uri.StartsWith("https://"))
-        {
-            e.Cancel = true;
-            try
-            {
-                System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
-                {
-                    FileName = e.Uri,
-                    UseShellExecute = true
-                });
-            }
-            catch (Exception ex)
-            {
-                Log4.Error($"[ComposeWindow] 브라우저 열기 실패: {ex.Message}");
-            }
         }
     }
 
