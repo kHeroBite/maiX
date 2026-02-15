@@ -10740,32 +10740,54 @@ public partial class MainWindow : FluentWindow
         // 더미 자식("로딩 중...") 제거
         favoriteNotebook.Children.Clear();
 
-        // 먼저 이미 로드된 노트북에서 섹션 찾기
+        // 먼저 이미 로드된 노트북에서 섹션 찾기 (더미 아이템 제외, HasSectionsLoaded 검증)
         var notebook = _oneNoteViewModel.Notebooks.FirstOrDefault(n => n.Id == favoriteNotebook.Id);
-        if (notebook != null && notebook.Sections.Any())
+        if (notebook != null && notebook.HasSectionsLoaded)
         {
-            foreach (var section in notebook.Sections)
+            var realSections = notebook.Sections.Where(s => !s.IsDummyItem).ToList();
+            if (realSections.Any())
             {
-                favoriteNotebook.Children.Add(new PageItemViewModel
+                foreach (var section in realSections)
                 {
-                    Id = section.Id,
-                    Title = section.DisplayName,
-                    ItemType = FavoriteItemType.Section,
-                    NotebookName = favoriteNotebook.Title,
-                    GroupId = notebook.GroupId,
-                    SiteId = notebook.SiteId
-                });
+                    favoriteNotebook.Children.Add(new PageItemViewModel
+                    {
+                        Id = section.Id,
+                        Title = section.DisplayName,
+                        ItemType = FavoriteItemType.Section,
+                        NotebookName = favoriteNotebook.Title,
+                        GroupId = notebook.GroupId,
+                        SiteId = notebook.SiteId
+                    });
+                }
+                Log4.Debug($"[OneNote] 즐겨찾기 노트북 섹션 {favoriteNotebook.Children.Count}개 로드 (캐시)");
+                return;
             }
-            Log4.Debug($"[OneNote] 즐겨찾기 노트북 섹션 {favoriteNotebook.Children.Count}개 로드 (캐시)");
-            return;
         }
 
-        // 캐시에 없으면 API로 로드
+        // 캐시에 없거나 섹션 미로드 상태 → API로 로드
         using var scope = ((App)Application.Current).ServiceProvider.CreateScope();
         var graphService = scope.ServiceProvider.GetService<GraphOneNoteService>();
         if (graphService == null) return;
 
-        var sections = await graphService.GetSectionsAsync(favoriteNotebook.Id);
+        // 노트북 소스에 따라 다른 API 사용 (LoadSectionsForNotebookAsync와 동일 패턴)
+        IEnumerable<Microsoft.Graph.Models.OnenoteSection> sections;
+
+        if (!string.IsNullOrEmpty(favoriteNotebook.SiteId))
+        {
+            Log4.Debug($"[OneNote] 즐겨찾기 노트북 섹션 로드 (Site API) - SiteId={favoriteNotebook.SiteId}");
+            sections = await graphService.GetSiteSectionsAsync(favoriteNotebook.SiteId, favoriteNotebook.Id);
+        }
+        else if (!string.IsNullOrEmpty(favoriteNotebook.GroupId))
+        {
+            Log4.Debug($"[OneNote] 즐겨찾기 노트북 섹션 로드 (Group API) - GroupId={favoriteNotebook.GroupId}");
+            sections = await graphService.GetGroupSectionsAsync(favoriteNotebook.GroupId, favoriteNotebook.Id);
+        }
+        else
+        {
+            Log4.Debug($"[OneNote] 즐겨찾기 노트북 섹션 로드 (개인 API)");
+            sections = await graphService.GetSectionsAsync(favoriteNotebook.Id);
+        }
+
         foreach (var section in sections)
         {
             favoriteNotebook.Children.Add(new PageItemViewModel
