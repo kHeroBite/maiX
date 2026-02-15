@@ -173,13 +173,27 @@ public partial class ComposeWindow : FluentWindow
 
                     case "nonImageFileDrop":
                         var composeDropFileName = message.TryGetValue("fileName", out var cdfn) ? cdfn : "";
+                        var composeDropFilePath = message.TryGetValue("filePath", out var cdfp) ? cdfp : "";
                         // 메일 작성: 비이미지 파일은 첨부파일 목록에 추가
                         if (!string.IsNullOrEmpty(composeDropFileName))
                         {
-                            var 최근드롭 = Services.Editor.TinyMCEEditorService.최근드롭경로가져오기(composeDropFileName);
-                            if (최근드롭 != null)
+                            // 1순위: JS dataTransfer에서 전달된 file:/// 경로
+                            string? composeResolvedPath = null;
+                            if (!string.IsNullOrEmpty(composeDropFilePath))
                             {
-                                _viewModel.AddAttachment(최근드롭);
+                                var path = composeDropFilePath.Trim();
+                                if (path.StartsWith("file:///", StringComparison.OrdinalIgnoreCase))
+                                    path = Uri.UnescapeDataString(path.Substring("file:///".Length)).Replace("/", "\\");
+                                else if (path.StartsWith("file://", StringComparison.OrdinalIgnoreCase))
+                                    path = Uri.UnescapeDataString(path.Substring("file://".Length)).Replace("/", "\\");
+                                if (System.IO.File.Exists(path))
+                                    composeResolvedPath = path;
+                            }
+                            // 2순위: DragOver에서 저장한 경로 (Fallback)
+                            composeResolvedPath ??= Services.Editor.TinyMCEEditorService.최근드롭경로가져오기(composeDropFileName);
+                            if (composeResolvedPath != null)
+                            {
+                                _viewModel.AddAttachment(composeResolvedPath);
                             }
                         }
                         break;
@@ -227,7 +241,6 @@ public partial class ComposeWindow : FluentWindow
                 foreach (var filePath in files)
                 {
                     if (!System.IO.File.Exists(filePath)) continue;
-                    var ext = System.IO.Path.GetExtension(filePath);
                     if (Services.Editor.TinyMCEEditorService.IsImageFile(filePath))
                     {
                         // 이미지 → 에디터에 인라인 삽입
@@ -239,6 +252,7 @@ public partial class ComposeWindow : FluentWindow
                         _viewModel.AddAttachment(filePath);
                     }
                 }
+                e.Handled = true;
             }
         }
     }

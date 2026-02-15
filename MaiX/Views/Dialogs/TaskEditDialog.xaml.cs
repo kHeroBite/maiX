@@ -169,9 +169,11 @@ public partial class TaskEditDialog : FluentWindow
                         {
                             var dropFileName = message.RootElement.TryGetProperty("fileName", out var fnElement)
                                 ? fnElement.GetString() ?? "" : "";
+                            var dropFilePath = message.RootElement.TryGetProperty("filePath", out var fpElement)
+                                ? fpElement.GetString() ?? "" : "";
                             await Dispatcher.InvokeAsync(async () =>
                             {
-                                await Services.Editor.TinyMCEEditorService.비이미지파일드롭처리Async(NotesWebView, dropFileName);
+                                await Services.Editor.TinyMCEEditorService.비이미지파일드롭처리Async(NotesWebView, dropFileName, dropFilePath);
                             });
                         }
                         else if (type == "filePicker")

@@ -385,6 +385,72 @@ namespace MaiX.Services.Graph
         }
 
         /// <summary>
+        /// 대용량 첨부파일 업로드 (3MB 초과, createUploadSession 사용)
+        /// </summary>
+        public async Task UploadLargeAttachmentAsync(string messageId, string filePath, string fileName)
+        {
+            if (string.IsNullOrEmpty(messageId))
+                throw new ArgumentNullException(nameof(messageId));
+            if (string.IsNullOrEmpty(filePath))
+                throw new ArgumentNullException(nameof(filePath));
+
+            var client = _authService.GetGraphClient();
+            var fileInfo = new System.IO.FileInfo(filePath);
+
+            // Upload Session 생성
+            var attachmentItem = new AttachmentItem
+            {
+                AttachmentType = AttachmentType.File,
+                Name = fileName,
+                Size = fileInfo.Length
+            };
+
+            var uploadSession = await client.Me.Messages[messageId]
+                .Attachments.CreateUploadSession
+                .PostAsync(new Microsoft.Graph.Me.Messages.Item.Attachments.CreateUploadSession.CreateUploadSessionPostRequestBody
+                {
+                    AttachmentItem = attachmentItem
+                });
+
+            if (uploadSession?.UploadUrl == null)
+                throw new InvalidOperationException("Upload session 생성 실패");
+
+            // 청크 업로드 (3.25MB 단위)
+            const int chunkSize = 3 * 1024 * 1024 + 256 * 1024; // 3.25MB
+            using var fileStream = System.IO.File.OpenRead(filePath);
+            var fileSize = fileStream.Length;
+            var buffer = new byte[chunkSize];
+            long offset = 0;
+
+            using var httpClient = new System.Net.Http.HttpClient();
+
+            while (offset < fileSize)
+            {
+                var bytesRead = await fileStream.ReadAsync(buffer, 0, (int)Math.Min(chunkSize, fileSize - offset));
+                var content = new System.Net.Http.ByteArrayContent(buffer, 0, bytesRead);
+                content.Headers.Add("Content-Range", $"bytes {offset}-{offset + bytesRead - 1}/{fileSize}");
+                content.Headers.ContentLength = bytesRead;
+
+                var response = await httpClient.PutAsync(uploadSession.UploadUrl, content);
+                response.EnsureSuccessStatusCode();
+
+                offset += bytesRead;
+            }
+        }
+
+        /// <summary>
+        /// Draft 메시지 발송
+        /// </summary>
+        public async Task SendDraftMessageAsync(string messageId)
+        {
+            if (string.IsNullOrEmpty(messageId))
+                throw new ArgumentNullException(nameof(messageId));
+
+            var client = _authService.GetGraphClient();
+            await client.Me.Messages[messageId].Send.PostAsync();
+        }
+
+        /// <summary>
         /// 임시보관함에 메일 저장
         /// </summary>
         /// <param name="message">저장할 메일</param>

@@ -468,7 +468,8 @@ public partial class MainWindow : FluentWindow
 
                     case "nonImageFileDrop":
                         var dropFileName = message.TryGetValue("fileName", out var dfn) ? dfn : "";
-                        await Services.Editor.TinyMCEEditorService.비이미지파일드롭처리Async(DraftBodyWebView, dropFileName);
+                        var dropFilePath = message.TryGetValue("filePath", out var dfp) ? dfp : "";
+                        await Services.Editor.TinyMCEEditorService.비이미지파일드롭처리Async(DraftBodyWebView, dropFileName, dropFilePath);
                         break;
 
                     case "debugLog":
@@ -9656,7 +9657,8 @@ public partial class MainWindow : FluentWindow
 
                 case "nonImageFileDrop":
                     var oneNoteDropFileName = message.TryGetValue("fileName", out var odfnObj) ? odfnObj?.ToString() ?? "" : "";
-                    await Services.Editor.TinyMCEEditorService.비이미지파일드롭처리Async(OneNoteEditorWebView, oneNoteDropFileName);
+                    var oneNoteDropFilePath = message.TryGetValue("filePath", out var odfpObj) ? odfpObj?.ToString() ?? "" : "";
+                    await HandleOneNoteFileDropAsync(oneNoteDropFileName, oneNoteDropFilePath);
                     break;
 
                 case "debugLog":
@@ -9691,7 +9693,38 @@ public partial class MainWindow : FluentWindow
     private async void OneNoteEditorWebView_Drop(object sender, System.Windows.DragEventArgs e)
     {
         if (!_oneNoteEditorReady) return;
-        await Services.Editor.TinyMCEEditorService.HandleDropAsync(OneNoteEditorWebView, e);
+
+        if (e.Data.GetDataPresent(System.Windows.DataFormats.FileDrop))
+        {
+            var files = e.Data.GetData(System.Windows.DataFormats.FileDrop) as string[];
+            if (files != null)
+            {
+                foreach (var filePath in files)
+                {
+                    if (!System.IO.File.Exists(filePath)) continue;
+                    var fileName = System.IO.Path.GetFileName(filePath);
+
+                    if (Services.Editor.TinyMCEEditorService.IsImageFile(filePath))
+                    {
+                        // 이미지 → 에디터에 인라인 삽입
+                        var dataUrl = Services.Editor.TinyMCEEditorService.ConvertFileToDataUrl(filePath);
+                        if (dataUrl != null)
+                        {
+                            var escapedUrl = System.Text.Json.JsonSerializer.Serialize(dataUrl);
+                            var escapedName = System.Text.Json.JsonSerializer.Serialize(fileName);
+                            await OneNoteEditorWebView.CoreWebView2.ExecuteScriptAsync(
+                                $"window.insertDroppedImage({escapedUrl}, {escapedName})");
+                        }
+                    }
+                    else
+                    {
+                        // 비이미지 → Graph API로 직접 첨부
+                        await HandleOneNoteFileDropAsync(fileName, filePath);
+                    }
+                }
+                e.Handled = true;
+            }
+        }
     }
 
     /// <summary>
@@ -11219,6 +11252,74 @@ public partial class MainWindow : FluentWindow
     }
 
     /// <summary>
+    /// OneNote 에디터에서 비이미지 파일 드롭 처리 — Graph API로 직접 첨부
+    /// </summary>
+    private async Task HandleOneNoteFileDropAsync(string fileName, string filePath)
+    {
+        Log4.Debug2($"[OneNote] 파일 드롭: fileName={fileName}, filePath={filePath}");
+
+        // 파일 경로 해석 (WPF PreviewDrop 딕셔너리에서 가져오기)
+        var resolvedPath = filePath;
+        if (string.IsNullOrEmpty(resolvedPath))
+        {
+            resolvedPath = Services.Editor.TinyMCEEditorService.최근드롭경로가져오기(fileName);
+        }
+
+        if (string.IsNullOrEmpty(resolvedPath) || !System.IO.File.Exists(resolvedPath))
+        {
+            Log4.Warn($"[OneNote] 파일 드롭 경로를 확인할 수 없음: {fileName}");
+            // Fallback: file:/// 링크 삽입
+            await Services.Editor.TinyMCEEditorService.비이미지파일드롭처리Async(OneNoteEditorWebView, fileName, filePath);
+            return;
+        }
+
+        var graphService = ((App)Application.Current).GetService<Services.Graph.GraphOneNoteService>();
+        if (graphService == null)
+        {
+            Log4.Error("[OneNote] GraphOneNoteService를 가져올 수 없습니다.");
+            return;
+        }
+
+        // 기존 페이지 (pageId 있음): 즉시 API로 첨부
+        if (!_isNewPage && _oneNoteViewModel?.SelectedPage?.Id != null)
+        {
+            var pageId = _oneNoteViewModel.SelectedPage.Id;
+            Log4.Info($"[OneNote] 기존 페이지에 파일 첨부: PageId={pageId}, File={fileName}");
+
+            var success = await graphService.AppendFileToPageAsync(pageId, resolvedPath, fileName);
+            if (success)
+            {
+                // 에디터에 첨부 성공 메시지 삽입
+                var escapedName = fileName.Replace("'", "\\'");
+                await OneNoteEditorWebView.CoreWebView2.ExecuteScriptAsync(
+                    $"if(editor) editor.insertContent('<p>📎 <strong>{escapedName}</strong> (첨부됨)</p>');");
+                _viewModel.StatusMessage = $"파일 첨부 완료: {fileName}";
+            }
+            else
+            {
+                Log4.Warn($"[OneNote] 파일 첨부 실패: {fileName}");
+                // Fallback: file:/// 링크 삽입
+                await Services.Editor.TinyMCEEditorService.비이미지파일드롭처리Async(OneNoteEditorWebView, fileName, filePath);
+            }
+        }
+        // 새 페이지 모드: 대기 목록에 추가
+        else if (_isNewPage && _oneNoteViewModel != null)
+        {
+            _oneNoteViewModel.AddPendingAttachment(resolvedPath, fileName);
+            // 에디터에 첨부 예정 메시지 삽입
+            var escapedName = fileName.Replace("'", "\\'");
+            await OneNoteEditorWebView.CoreWebView2.ExecuteScriptAsync(
+                $"if(editor) editor.insertContent('<p>📎 <strong>{escapedName}</strong> (저장 시 첨부됨)</p>');");
+            _viewModel.StatusMessage = $"파일 첨부 예정: {fileName} (저장 시 첨부됩니다)";
+        }
+        else
+        {
+            // 페이지 미선택 상태 — Fallback
+            await Services.Editor.TinyMCEEditorService.비이미지파일드롭처리Async(OneNoteEditorWebView, fileName, filePath);
+        }
+    }
+
+    /// <summary>
     /// 새 노트 자동 저장 (제목 또는 내용 변경 시)
     /// </summary>
     private async Task SaveNewPageAsync()
@@ -11283,7 +11384,11 @@ public partial class MainWindow : FluentWindow
                 return;
             }
 
-            var newPage = await graphService.CreatePageAsync(sectionId, title, editorContent);
+            // 대기 중인 첨부파일이 있으면 multipart로 생성, 없으면 기존 방식
+            var pendingFiles = _oneNoteViewModel?.GetAndClearPendingAttachments() ?? new();
+            var newPage = pendingFiles.Count > 0
+                ? await graphService.CreatePageWithAttachmentsAsync(sectionId, title, editorContent, pendingFiles)
+                : await graphService.CreatePageAsync(sectionId, title, editorContent);
             if (newPage != null)
             {
                 Log4.Info($"[OneNote] 새 노트 생성 완료: Id={newPage.Id}, Title={newPage.Title}");

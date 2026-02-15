@@ -1,4 +1,5 @@
 using System.Collections.ObjectModel;
+using System.Linq;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Microsoft.Graph.Models;
@@ -339,9 +340,48 @@ public partial class ComposeViewModel : ViewModelBase
                 BccRecipients = bccRecipients
             };
 
-            // 첨부파일 추가
-            if (Attachments.Count > 0)
+            // 대용량 파일 여부 판단 (3MB 기준)
+            const long LargeFileThreshold = 3 * 1024 * 1024;
+            var hasLargeFile = Attachments.Any(a => a.FileSize > LargeFileThreshold);
+
+            if (hasLargeFile && Attachments.Count > 0)
             {
+                // 대용량 경로: Draft 생성 → 소형 inline + 대용량 UploadSession → Send
+                Log4.Debug2($"대용량 첨부 경로: {Attachments.Count}개 파일");
+
+                // 소형 파일만 inline 첨부
+                message.Attachments = new List<Microsoft.Graph.Models.Attachment>();
+                foreach (var attachment in Attachments.Where(a => a.FileSize <= LargeFileThreshold))
+                {
+                    var bytes = await System.IO.File.ReadAllBytesAsync(attachment.FilePath);
+                    message.Attachments.Add(new FileAttachment
+                    {
+                        Name = attachment.FileName,
+                        ContentBytes = bytes,
+                        ContentType = GetMimeType(attachment.FileName)
+                    });
+                }
+
+                // Draft 생성
+                var draft = await _graphMailService.SaveDraftAsync(message);
+                if (draft?.Id == null)
+                    throw new InvalidOperationException("Draft 메시지 생성 실패");
+
+                Log4.Debug2($"Draft 생성 완료: {draft.Id}");
+
+                // 대용량 파일 UploadSession 업로드
+                foreach (var attachment in Attachments.Where(a => a.FileSize > LargeFileThreshold))
+                {
+                    Log4.Debug2($"대용량 첨부 업로드: {attachment.FileName} ({attachment.FileSize / 1024 / 1024}MB)");
+                    await _graphMailService.UploadLargeAttachmentAsync(draft.Id, attachment.FilePath, attachment.FileName);
+                }
+
+                // Draft 발송
+                await _graphMailService.SendDraftMessageAsync(draft.Id);
+            }
+            else if (Attachments.Count > 0)
+            {
+                // 소형 경로: 기존 inline 방식
                 message.Attachments = new List<Microsoft.Graph.Models.Attachment>();
                 foreach (var attachment in Attachments)
                 {
@@ -353,10 +393,14 @@ public partial class ComposeViewModel : ViewModelBase
                         ContentType = GetMimeType(attachment.FileName)
                     });
                 }
-            }
 
-            // Graph API로 발송
-            await _graphMailService.SendMessageAsync(message);
+                await _graphMailService.SendMessageAsync(message);
+            }
+            else
+            {
+                // 첨부파일 없음
+                await _graphMailService.SendMessageAsync(message);
+            }
 
             Log4.Info($"메일 발송 성공: To={To}, Subject={Subject}");
 

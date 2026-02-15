@@ -44,6 +44,7 @@ public static class TinyMCEEditorService
         {
             var name = System.IO.Path.GetFileName(f);
             _최근드롭파일경로[name] = f;
+            Log4.Debug($"[TinyMCE] DragOver 파일경로 저장: {name} → {f}");
         }
     }
 
@@ -213,11 +214,37 @@ public static class TinyMCEEditorService
                     if (iframeDoc) {{
                         iframeDoc.addEventListener('drop', function(evt) {{
                             var dt = evt.dataTransfer;
-                            if (dt && dt.files && dt.files.length > 0) {{
-                                // 모든 파일 드롭을 차단 → WPF PreviewDrop(HandleDropAsync)에서 처리
+                            if (!dt || !dt.files || dt.files.length === 0) return;
+                            var file = dt.files[0];
+                            var idx = file.name.lastIndexOf('.');
+                            var ext = idx >= 0 ? file.name.substring(idx).toLowerCase() : '';
+                            var imageExts = ['.jpg','.jpeg','.png','.gif','.bmp','.webp','.svg','.ico','.tif','.tiff'];
+                            if (imageExts.indexOf(ext) < 0) {{
+                                // 비이미지 파일 → 브라우저 기본 동작 차단 + C#에 파일 경로 포함하여 알림
                                 evt.preventDefault();
                                 evt.stopImmediatePropagation();
+                                // dataTransfer에서 file:/// 경로 추출 시도
+                                var filePath = '';
+                                try {{ filePath = dt.getData('text/uri-list') || ''; }} catch(e) {{}}
+                                if (!filePath) try {{ filePath = dt.getData('text/plain') || ''; }} catch(e) {{}}
+                                if (!filePath) try {{ filePath = dt.getData('text/x-moz-url') || ''; }} catch(e) {{}}
+                                try {{
+                                    window.chrome.webview.postMessage({{
+                                        type: 'nonImageFileDrop',
+                                        fileName: file.name,
+                                        filePath: filePath
+                                    }});
+                                }} catch(ex) {{
+                                    try {{
+                                        window.parent.chrome.webview.postMessage({{
+                                            type: 'nonImageFileDrop',
+                                            fileName: file.name,
+                                            filePath: filePath
+                                        }});
+                                    }} catch(ex2) {{}}
+                                }}
                             }}
+                            // 이미지 파일은 TinyMCE 기본 처리에 맡김
                         }}, true);
                     }}
                     window.chrome.webview.postMessage({{ type: 'ready' }});
@@ -414,8 +441,48 @@ public static class TinyMCEEditorService
                     $"window.insertDroppedFileLink({escapedUrl}, {escapedName})");
             }
         }
+    }
 
-        e.Handled = true;
+    public static async Task 비이미지파일드롭처리Async(WebView2 webView, string fileName, string filePath = "")
+    {
+        if (string.IsNullOrEmpty(fileName) || webView?.CoreWebView2 == null) return;
+
+        // 1순위: JS dataTransfer에서 전달된 file:/// 경로
+        string? resolvedPath = null;
+        if (!string.IsNullOrEmpty(filePath))
+        {
+            // file:///C:/... 형식 → C:\... 로 변환
+            var path = filePath.Trim();
+            if (path.StartsWith("file:///", StringComparison.OrdinalIgnoreCase))
+                path = Uri.UnescapeDataString(path.Substring("file:///".Length)).Replace("/", "\\");
+            else if (path.StartsWith("file://", StringComparison.OrdinalIgnoreCase))
+                path = Uri.UnescapeDataString(path.Substring("file://".Length)).Replace("/", "\\");
+
+            if (System.IO.File.Exists(path))
+                resolvedPath = path;
+        }
+
+        // 2순위: DragOver에서 저장한 경로 조회 (Fallback)
+        if (resolvedPath == null && _최근드롭파일경로.TryGetValue(fileName, out var fullPath))
+            resolvedPath = fullPath;
+
+        if (resolvedPath != null)
+        {
+            Log4.Debug($"[TinyMCE] 비이미지 파일 드롭 (경로 확인): {fileName} → {resolvedPath}");
+            var fileUrl = "file:///" + resolvedPath.Replace("\\", "/");
+            var escapedUrl = System.Text.Json.JsonSerializer.Serialize(fileUrl);
+            var escapedName = System.Text.Json.JsonSerializer.Serialize(fileName);
+            await webView.CoreWebView2.ExecuteScriptAsync(
+                $"window.insertDroppedFileLink({escapedUrl}, {escapedName})");
+        }
+        else
+        {
+            // 경로 없으면 파일명만 텍스트로 삽입
+            Log4.Warn($"[TinyMCE] 비이미지 파일 드롭 (경로 미확인): {fileName}, JS경로: {filePath}");
+            var escaped = System.Text.Json.JsonSerializer.Serialize($"📎 {fileName} ");
+            await webView.CoreWebView2.ExecuteScriptAsync(
+                $"tinymce.activeEditor && tinymce.activeEditor.insertContent({escaped})");
+        }
     }
 
     /// <summary>

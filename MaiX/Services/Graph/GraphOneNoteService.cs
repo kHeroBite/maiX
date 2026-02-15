@@ -1193,6 +1193,190 @@ public class GraphOneNoteService
         }
     }
 
+    /// <summary>
+    /// 파일 확장자로 MIME 타입 반환
+    /// </summary>
+    private static string GetMimeType(string fileName)
+    {
+        var ext = Path.GetExtension(fileName).ToLowerInvariant();
+        return ext switch
+        {
+            ".pdf" => "application/pdf",
+            ".doc" => "application/msword",
+            ".docx" => "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+            ".xls" => "application/vnd.ms-excel",
+            ".xlsx" => "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            ".ppt" => "application/vnd.ms-powerpoint",
+            ".pptx" => "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+            ".txt" => "text/plain",
+            ".csv" => "text/csv",
+            ".zip" => "application/zip",
+            ".png" => "image/png",
+            ".jpg" or ".jpeg" => "image/jpeg",
+            ".gif" => "image/gif",
+            ".html" => "text/html",
+            _ => "application/octet-stream"
+        };
+    }
+
+    /// <summary>
+    /// 파일 첨부와 함께 새 페이지 생성 (multipart/form-data)
+    /// </summary>
+    public async Task<OnenotePage?> CreatePageWithAttachmentsAsync(
+        string sectionId, string title, string? htmlContent,
+        List<(string FilePath, string FileName)> attachments)
+    {
+        if (string.IsNullOrEmpty(sectionId))
+            throw new ArgumentNullException(nameof(sectionId));
+        if (string.IsNullOrEmpty(title))
+            throw new ArgumentNullException(nameof(title));
+
+        // 첨부파일 없으면 기존 메서드 사용
+        if (attachments == null || attachments.Count == 0)
+            return await CreatePageAsync(sectionId, title, htmlContent);
+
+        try
+        {
+            var token = await _authService.GetAccessTokenAsync();
+            using var httpClient = new HttpClient();
+            httpClient.DefaultRequestHeaders.Authorization =
+                new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", token);
+
+            // HTML에 <object> 태그 삽입
+            var bodyContent = string.IsNullOrEmpty(htmlContent) ? "<p></p>" : htmlContent;
+            var attachmentHtml = new StringBuilder();
+            for (int i = 0; i < attachments.Count; i++)
+            {
+                var (filePath, fileName) = attachments[i];
+                var mimeType = GetMimeType(fileName);
+                var partName = $"file{i + 1}";
+                attachmentHtml.AppendLine(
+                    $"<object data-attachment=\"{System.Web.HttpUtility.HtmlEncode(fileName)}\" " +
+                    $"data=\"name:{partName}\" type=\"{mimeType}\" />");
+            }
+
+            var htmlPage = $@"<!DOCTYPE html>
+<html>
+<head><title>{System.Web.HttpUtility.HtmlEncode(title)}</title></head>
+<body>
+{bodyContent}
+{attachmentHtml}
+</body>
+</html>";
+
+            // multipart/form-data 구성
+            using var multipart = new MultipartFormDataContent();
+
+            // Presentation 파트 (HTML)
+            var presentationContent = new StringContent(htmlPage, Encoding.UTF8, "text/html");
+            multipart.Add(presentationContent, "Presentation");
+
+            // 파일 파트들
+            for (int i = 0; i < attachments.Count; i++)
+            {
+                var (filePath, fileName) = attachments[i];
+                var partName = $"file{i + 1}";
+                var fileBytes = await File.ReadAllBytesAsync(filePath);
+                var fileContent = new ByteArrayContent(fileBytes);
+                fileContent.Headers.ContentType =
+                    new System.Net.Http.Headers.MediaTypeHeaderValue(GetMimeType(fileName));
+                multipart.Add(fileContent, partName);
+            }
+
+            var response = await httpClient.PostAsync(
+                $"https://graph.microsoft.com/v1.0/me/onenote/sections/{sectionId}/pages",
+                multipart);
+
+            if (response.IsSuccessStatusCode)
+            {
+                var json = await response.Content.ReadAsStringAsync();
+                var page = JsonSerializer.Deserialize<OnenotePage>(json,
+                    new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+                _logger.Information("파일 첨부 페이지 생성 완료: {Title}, 첨부={Count}개", title, attachments.Count);
+                return page;
+            }
+            else
+            {
+                var errorContent = await response.Content.ReadAsStringAsync();
+                _logger.Error("파일 첨부 페이지 생성 실패: {StatusCode} - {Error}", response.StatusCode, errorContent);
+                return null;
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.Error(ex, "파일 첨부 페이지 생성 예외: Title={Title}", title);
+            throw;
+        }
+    }
+
+    /// <summary>
+    /// 기존 페이지에 파일 첨부 (multipart/form-data PATCH)
+    /// </summary>
+    public async Task<bool> AppendFileToPageAsync(string pageId, string filePath, string fileName)
+    {
+        if (string.IsNullOrEmpty(pageId))
+            return false;
+        if (string.IsNullOrEmpty(filePath) || !File.Exists(filePath))
+            return false;
+
+        try
+        {
+            var token = await _authService.GetAccessTokenAsync();
+            using var httpClient = new HttpClient();
+            httpClient.DefaultRequestHeaders.Authorization =
+                new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", token);
+
+            var mimeType = GetMimeType(fileName);
+            var partName = "fileAttachment1";
+
+            // Commands 파트 (JSON)
+            var commands = new[]
+            {
+                new
+                {
+                    target = "body",
+                    action = "append",
+                    position = "after",
+                    content = $"<object data-attachment=\"{System.Web.HttpUtility.HtmlEncode(fileName)}\" " +
+                              $"data=\"name:{partName}\" type=\"{mimeType}\" />"
+                }
+            };
+            var commandsJson = JsonSerializer.Serialize(commands);
+
+            // multipart/form-data 구성
+            using var multipart = new MultipartFormDataContent();
+
+            var commandsContent = new StringContent(commandsJson, Encoding.UTF8, "application/json");
+            multipart.Add(commandsContent, "Commands");
+
+            var fileBytes = await File.ReadAllBytesAsync(filePath);
+            var fileContent = new ByteArrayContent(fileBytes);
+            fileContent.Headers.ContentType =
+                new System.Net.Http.Headers.MediaTypeHeaderValue(mimeType);
+            multipart.Add(fileContent, partName);
+
+            var url = $"https://graph.microsoft.com/v1.0/me/onenote/pages/{pageId}/content";
+            var response = await httpClient.PatchAsync(url, multipart);
+
+            if (response.IsSuccessStatusCode)
+            {
+                _logger.Information("페이지 파일 첨부 완료: PageId={PageId}, File={FileName}", pageId, fileName);
+                return true;
+            }
+            else
+            {
+                var errorContent = await response.Content.ReadAsStringAsync();
+                _logger.Error("페이지 파일 첨부 실패: {StatusCode} - {Error}", response.StatusCode, errorContent);
+                return false;
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.Error(ex, "페이지 파일 첨부 예외: PageId={PageId}, File={FileName}", pageId, fileName);
+            return false;
+        }
+    }
+
 
     /// <summary>
     /// 섹션 삭제

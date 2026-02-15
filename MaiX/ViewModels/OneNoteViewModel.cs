@@ -3694,6 +3694,29 @@ public partial class OneNoteViewModel : ViewModelBase
     /// <summary>
     /// 페이지 저장 (Graph API PATCH)
     /// </summary>
+
+    // 새 페이지 생성 시 대기 중인 첨부파일 목록
+    private readonly List<(string FilePath, string FileName)> _pendingAttachments = new();
+
+    /// <summary>
+    /// 새 페이지용 첨부 대기 목록에 추가
+    /// </summary>
+    public void AddPendingAttachment(string filePath, string fileName)
+    {
+        _pendingAttachments.Add((filePath, fileName));
+        Log4.Info($"[OneNote] 첨부 대기 추가: {fileName}");
+    }
+
+    /// <summary>
+    /// 대기 중인 첨부파일 목록 반환 및 클리어
+    /// </summary>
+    public List<(string FilePath, string FileName)> GetAndClearPendingAttachments()
+    {
+        var list = new List<(string, string)>(_pendingAttachments);
+        _pendingAttachments.Clear();
+        return list;
+    }
+
     [RelayCommand]
     public async Task SaveAsync()
     {
