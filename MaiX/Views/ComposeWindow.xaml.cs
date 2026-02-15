@@ -102,7 +102,9 @@ public partial class ComposeWindow : FluentWindow
             EditorWebView.CoreWebView2.Settings.IsScriptEnabled = true;
             EditorWebView.CoreWebView2.Settings.AreDefaultContextMenusEnabled = false;
             EditorWebView.CoreWebView2.Settings.IsStatusBarEnabled = false;
-            EditorWebView.AllowExternalDrop = false;
+
+            // NavigationStarting — 비이미지 파일 드롭 시 링크 삽입, 외부 링크 클릭 시 브라우저 열기
+            EditorWebView.CoreWebView2.NavigationStarting += Services.Editor.TinyMCEEditorService.HandleEditorNavigationStarting;
 
             // 에디터 HTML 로드
             await LoadTinyMCEEditorAsync();

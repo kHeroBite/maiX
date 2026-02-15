@@ -1,4 +1,5 @@
 using MaiX.Services.Theme;
+using MaiX.Utils;
 using Microsoft.Win32;
 using Microsoft.Web.WebView2.Wpf;
 
@@ -125,6 +126,7 @@ public static class TinyMCEEditorService
             browser_spellcheck: true,
             contextmenu: false,
             paste_data_images: true,
+            convert_urls: false,
             file_picker_types: 'image file',
             file_picker_callback: function(callback, value, meta) {{
                 // 콜백을 전역에 저장하여 C#에서 호출 가능하게 함
@@ -336,6 +338,74 @@ public static class TinyMCEEditorService
         }
 
         e.Handled = true;
+    }
+
+    /// <summary>
+    /// 에디터 WebView2의 NavigationStarting 이벤트 핸들러.
+    /// 비이미지 파일 드래그&amp;드롭 시 file:/// URL을 링크로 삽입하고,
+    /// 외부 링크 클릭 시 기본 브라우저로 엽니다.
+    /// </summary>
+    public static async void HandleEditorNavigationStarting(object? sender, Microsoft.Web.WebView2.Core.CoreWebView2NavigationStartingEventArgs e)
+    {
+        // 초기 로드(about:blank) 및 data: URI는 허용
+        if (e.Uri.StartsWith("about:") || e.Uri.StartsWith("data:"))
+            return;
+
+        // 가상 호스트(TinyMCE 리소스 로드)는 허용
+        if (e.Uri.Contains(".tinymce.local/"))
+            return;
+
+        // 모든 외부 navigation 차단
+        e.Cancel = true;
+
+        if (e.Uri.StartsWith("file:///", StringComparison.OrdinalIgnoreCase))
+        {
+            // file:/// URL → 로컬 파일 경로 추출
+            var filePath = Uri.UnescapeDataString(e.Uri.Substring("file:///".Length)).Replace("/", "\\");
+            var fileName = System.IO.Path.GetFileName(filePath);
+            var ext = System.IO.Path.GetExtension(filePath).ToLowerInvariant();
+
+            if (sender is Microsoft.Web.WebView2.Wpf.WebView2 webView && webView.CoreWebView2 != null)
+            {
+                if (이미지확장자.Contains(ext) && System.IO.File.Exists(filePath))
+                {
+                    // 이미지 → Base64 data URL로 삽입
+                    var dataUrl = ConvertFileToDataUrl(filePath);
+                    if (dataUrl != null)
+                    {
+                        var escapedUrl = System.Text.Json.JsonSerializer.Serialize(dataUrl);
+                        var escapedName = System.Text.Json.JsonSerializer.Serialize(fileName);
+                        await webView.CoreWebView2.ExecuteScriptAsync(
+                            $"tinymce.activeEditor && tinymce.activeEditor.insertContent('<img src=\"' + {escapedUrl} + '\" alt=\"' + {escapedName} + '\" />')");
+                    }
+                }
+                else
+                {
+                    // 비이미지 → file:/// 링크로 삽입
+                    var fileUrl = "file:///" + filePath.Replace("\\", "/");
+                    var escapedUrl = System.Text.Json.JsonSerializer.Serialize(fileUrl);
+                    var escapedName = System.Text.Json.JsonSerializer.Serialize(fileName);
+                    await webView.CoreWebView2.ExecuteScriptAsync(
+                        $"tinymce.activeEditor && tinymce.activeEditor.insertContent('<a href=\"' + {escapedUrl} + '\">' + {escapedName} + '</a>')");
+                }
+            }
+        }
+        else
+        {
+            // http/https 등 외부 링크 → 기본 브라우저로 열기
+            try
+            {
+                System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
+                {
+                    FileName = e.Uri,
+                    UseShellExecute = true
+                });
+            }
+            catch (Exception ex)
+            {
+                Log4.Error($"[TinyMCE] 외부 링크 열기 실패: {e.Uri} — {ex.Message}");
+            }
+        }
     }
 
     /// <summary>

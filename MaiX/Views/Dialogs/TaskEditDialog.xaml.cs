@@ -137,7 +137,9 @@ public partial class TaskEditDialog : FluentWindow
         try
         {
             await NotesWebView.EnsureCoreWebView2Async();
-            NotesWebView.AllowExternalDrop = false;
+
+            // NavigationStarting — 비이미지 파일 드롭 시 링크 삽입, 외부 링크 클릭 시 브라우저 열기
+            NotesWebView.CoreWebView2.NavigationStarting += Services.Editor.TinyMCEEditorService.HandleEditorNavigationStarting;
 
             // 로컬 TinyMCE 폴더 경로 설정 (Self-hosted)
             // CDN은 WebView2 NavigateToString에서 referer 헤더가 없어 도메인 확인 불가
@@ -264,6 +266,7 @@ public partial class TaskEditDialog : FluentWindow
             browser_spellcheck: true,
             contextmenu: false,
             paste_data_images: true,
+            convert_urls: false,
             file_picker_types: 'image file',
             file_picker_callback: function(callback, value, meta) {{
                 window._filePickerCallback = callback;
