@@ -105,6 +105,7 @@ public partial class ComposeWindow : FluentWindow
 
             // NavigationStarting — 외부 링크 클릭 시 브라우저 열기
             EditorWebView.CoreWebView2.NavigationStarting += Services.Editor.TinyMCEEditorService.HandleEditorNavigationStarting;
+            EditorWebView.CoreWebView2.FrameNavigationStarting += Services.Editor.TinyMCEEditorService.HandleEditorNavigationStarting;
 
 
             // 에디터 HTML 로드
@@ -177,20 +178,8 @@ public partial class ComposeWindow : FluentWindow
                         break;
 
                     case "nonImageFileDrop":
-                        var dropFilePath = message.TryGetValue("filePath", out var cfp) ? cfp : null;
-                        var dropFileName = message.TryGetValue("fileName", out var cfn) ? cfn : null;
-                        if (!string.IsNullOrEmpty(dropFilePath))
-                        {
-                            // file:/// URL → 로컬 경로 변환
-                            var localPath = dropFilePath;
-                            if (localPath.StartsWith("file:///", StringComparison.OrdinalIgnoreCase))
-                                localPath = Uri.UnescapeDataString(localPath.Substring("file:///".Length)).Replace("/", "\\");
-                            if (System.IO.File.Exists(localPath))
-                            {
-                                _viewModel.AddAttachment(localPath);
-                                Log4.Debug2($"[ComposeWindow] 비이미지 파일 첨부 추가: {dropFileName}");
-                            }
-                        }
+                        var dropFileName = message.TryGetValue("fileName", out var dfn) ? dfn : "";
+                        await Services.Editor.TinyMCEEditorService.비이미지파일드롭처리Async(EditorWebView, dropFileName);
                         break;
 
                 }

@@ -150,41 +150,40 @@ public static class TinyMCEEditorService
                     }}
                 }});
                 ed.on('init', function() {{
-                    window.chrome.webview.postMessage({{ type: 'ready' }});
-
-                    // 비이미지 파일 드롭 감지 — iframe document에 capture-phase drop listener
-                    var imgExts = ['.png','.jpg','.jpeg','.gif','.bmp','.ico','.svg','.webp','.tif','.tiff'];
                     var iframeDoc = ed.getDoc();
                     if (iframeDoc) {{
                         iframeDoc.addEventListener('drop', function(evt) {{
                             var dt = evt.dataTransfer;
                             if (!dt || !dt.files || dt.files.length === 0) return;
-
                             var file = dt.files[0];
-                            var ext = '.' + file.name.split('.').pop().toLowerCase();
-                            if (imgExts.indexOf(ext) >= 0) return; // 이미지는 TinyMCE 기본 처리
-
-                            // 비이미지 — Chromium 기본 동작 차단
-                            evt.preventDefault();
-                            evt.stopPropagation();
-
-                            // file:/// URL 추출 시도
-                            var filePath = '';
-                            try {{
-                                filePath = dt.getData('text/uri-list') || dt.getData('URL') || dt.getData('text/plain') || '';
-                            }} catch(ex) {{ }}
-
-                            window.chrome.webview.postMessage({{
-                                type: 'nonImageFileDrop',
-                                fileName: file.name,
-                                filePath: filePath
-                            }});
+                            var idx = file.name.lastIndexOf('.');
+                            var ext = idx >= 0 ? file.name.substring(idx).toLowerCase() : '';
+                            var imageExts = ['.jpg','.jpeg','.png','.gif','.bmp','.webp','.svg','.ico','.tif','.tiff'];
+                            if (imageExts.indexOf(ext) < 0) {{
+                                evt.preventDefault();
+                                evt.stopImmediatePropagation();
+                                try {{
+                                    window.chrome.webview.postMessage({{
+                                        type: 'nonImageFileDrop',
+                                        fileName: file.name
+                                    }});
+                                }} catch(ex) {{
+                                    try {{
+                                        window.parent.chrome.webview.postMessage({{
+                                            type: 'nonImageFileDrop',
+                                            fileName: file.name
+                                        }});
+                                    }} catch(ex2) {{}}
+                                }}
+                            }}
                         }}, true);
                     }}
+                    window.chrome.webview.postMessage({{ type: 'ready' }});
                 }});
                 ed.on('input change', function() {{
                     window.chrome.webview.postMessage({{ type: 'contentChanged', content: ed.getContent() }});
                 }});
+                
             }}
         }});
 
@@ -414,12 +413,11 @@ public static class TinyMCEEditorService
                 }
                 else
                 {
-                    // 비이미지 → file:/// 링크로 삽입
-                    var fileUrl = "file:///" + filePath.Replace("\\", "/");
-                    var escapedUrl = System.Text.Json.JsonSerializer.Serialize(fileUrl);
-                    var escapedName = System.Text.Json.JsonSerializer.Serialize(fileName);
+                    // 비이미지 → 📎 파일명 텍스트로 삽입
+                    Log4.Debug($"[TinyMCE] 비이미지 파일 드롭 처리: {fileName}");
+                    var escapedText = System.Text.Json.JsonSerializer.Serialize($"📎 {fileName} ");
                     await webView.CoreWebView2.ExecuteScriptAsync(
-                        $"tinymce.activeEditor && tinymce.activeEditor.insertContent('<a href=\"' + {escapedUrl} + '\">' + {escapedName} + '</a>')");
+                        $"tinymce.activeEditor && tinymce.activeEditor.insertContent({escapedText})");
                 }
             }
         }
@@ -442,36 +440,25 @@ public static class TinyMCEEditorService
     }
 
     /// <summary>
-    /// WebMessageReceived에서 nonImageFileDrop 메시지를 처리합니다.
-    /// JS drop handler가 비이미지 파일 드롭을 감지하여 postMessage로 전달한 것을 처리합니다.
+    /// 비이미지 파일 드롭 메시지를 처리합니다.
+    /// TinyMCE의 editor.on('drop') JS에서 전달받은 파일 정보로 텍스트를 에디터에 삽입합니다.
     /// </summary>
-    public static async Task HandleNonImageFileDropAsync(Microsoft.Web.WebView2.Wpf.WebView2 webView, string? filePath, string? fileName)
+    public static async Task 비이미지파일드롭처리Async(Microsoft.Web.WebView2.Wpf.WebView2 webView, string fileName)
     {
-        if (string.IsNullOrEmpty(filePath) || string.IsNullOrEmpty(fileName))
+        if (string.IsNullOrEmpty(fileName))
         {
-            Log4.Debug2($"[TinyMCE] nonImageFileDrop — 파일 경로 없음 (fileName: {fileName})");
+            Log4.Warn("[TinyMCE] 비이미지 파일 드롭: 파일 이름 없음");
             return;
         }
 
-        // file:/// URL → 로컬 경로 변환
-        var localPath = filePath;
-        if (localPath.StartsWith("file:///", StringComparison.OrdinalIgnoreCase))
-            localPath = Uri.UnescapeDataString(localPath.Substring("file:///".Length)).Replace("/", "\\");
-        else if (localPath.StartsWith("file://", StringComparison.OrdinalIgnoreCase))
-            localPath = Uri.UnescapeDataString(localPath.Substring("file://".Length)).Replace("/", "\\");
+        Log4.Debug($"[TinyMCE] 비이미지 파일 드롭 처리: {fileName}");
 
-        Log4.Debug2($"[TinyMCE] 비이미지 파일 드롭 — 경로: {localPath}, 파일명: {fileName}");
+        if (webView.CoreWebView2 == null) return;
 
-        if (webView.CoreWebView2 != null)
-        {
-            var fileUrl = "file:///" + localPath.Replace("\\", "/");
-            var escapedUrl = System.Text.Json.JsonSerializer.Serialize(fileUrl);
-            var escapedName = System.Text.Json.JsonSerializer.Serialize(fileName);
-            await webView.CoreWebView2.ExecuteScriptAsync(
-                $"window.insertDroppedFileLink({escapedUrl}, {escapedName})");
-
-            Log4.Debug2($"[TinyMCE] 비이미지 파일 링크 삽입 완료: {fileName}");
-        }
+        // 파일 이름을 📎 아이콘과 함께 텍스트로 삽입
+        var escaped = System.Text.Json.JsonSerializer.Serialize($"📎 {fileName} ");
+        await webView.CoreWebView2.ExecuteScriptAsync(
+            $"tinymce.activeEditor && tinymce.activeEditor.insertContent({escaped})");
     }
 
     /// <summary>

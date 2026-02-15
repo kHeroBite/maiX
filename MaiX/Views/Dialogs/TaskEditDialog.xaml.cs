@@ -140,6 +140,7 @@ public partial class TaskEditDialog : FluentWindow
 
             // NavigationStarting — 외부 링크 클릭 시 브라우저 열기
             NotesWebView.CoreWebView2.NavigationStarting += Services.Editor.TinyMCEEditorService.HandleEditorNavigationStarting;
+            NotesWebView.CoreWebView2.FrameNavigationStarting += Services.Editor.TinyMCEEditorService.HandleEditorNavigationStarting;
 
 
             // 로컬 TinyMCE 폴더 경로 설정 (Self-hosted)
@@ -176,11 +177,10 @@ public partial class TaskEditDialog : FluentWindow
                         }
                         else if (type == "nonImageFileDrop")
                         {
-                            var tdFilePath = message.RootElement.TryGetProperty("filePath", out var fpEl) ? fpEl.GetString() : null;
-                            var tdFileName = message.RootElement.TryGetProperty("fileName", out var fnEl) ? fnEl.GetString() : null;
+                            var dropFn = message.RootElement.TryGetProperty("fileName", out var fnEl) ? fnEl.GetString() ?? "" : "";
                             await Dispatcher.InvokeAsync(async () =>
                             {
-                                await Services.Editor.TinyMCEEditorService.HandleNonImageFileDropAsync(NotesWebView, tdFilePath, tdFileName);
+                                await Services.Editor.TinyMCEEditorService.비이미지파일드롭처리Async(NotesWebView, dropFn);
                             });
                         }
                     }

@@ -397,6 +397,7 @@ public partial class MainWindow : FluentWindow
 
                 // NavigationStarting — 외부 링크 클릭 시 브라우저 열기
                 DraftBodyWebView.CoreWebView2.NavigationStarting += Services.Editor.TinyMCEEditorService.HandleEditorNavigationStarting;
+                DraftBodyWebView.CoreWebView2.FrameNavigationStarting += Services.Editor.TinyMCEEditorService.HandleEditorNavigationStarting;
 
 
 
@@ -467,9 +468,13 @@ public partial class MainWindow : FluentWindow
                         break;
 
                     case "nonImageFileDrop":
-                        var draftFilePath = message.TryGetValue("filePath", out var dfp) ? dfp : null;
-                        var draftFileName = message.TryGetValue("fileName", out var dfn) ? dfn : null;
-                        await Services.Editor.TinyMCEEditorService.HandleNonImageFileDropAsync(DraftBodyWebView, draftFilePath, draftFileName);
+                        var dropFileName = message.TryGetValue("fileName", out var dfn) ? dfn : "";
+                        await Services.Editor.TinyMCEEditorService.비이미지파일드롭처리Async(DraftBodyWebView, dropFileName);
+                        break;
+
+                    case "debugLog":
+                        var debugMsg = message.TryGetValue("message", out var dm) ? dm : "";
+                        Log4.Debug($"[Draft-JS] {debugMsg}");
                         break;
 
                 }
@@ -9588,6 +9593,7 @@ public partial class MainWindow : FluentWindow
 
             // NavigationStarting — 외부 링크 클릭 시 브라우저 열기
             OneNoteEditorWebView.CoreWebView2.NavigationStarting += Services.Editor.TinyMCEEditorService.HandleEditorNavigationStarting;
+            OneNoteEditorWebView.CoreWebView2.FrameNavigationStarting += Services.Editor.TinyMCEEditorService.HandleEditorNavigationStarting;
 
 
             // 로컬 TinyMCE 파일에 접근할 수 있도록 가상 호스트 매핑 (공통 서비스에서 호스트명 취득)
@@ -9650,9 +9656,13 @@ public partial class MainWindow : FluentWindow
                     break;
 
                 case "nonImageFileDrop":
-                    var onFilePath = message.TryGetValue("filePath", out var onFp) ? onFp?.ToString() : null;
-                    var onFileName = message.TryGetValue("fileName", out var onFn) ? onFn?.ToString() : null;
-                    await Services.Editor.TinyMCEEditorService.HandleNonImageFileDropAsync(OneNoteEditorWebView, onFilePath, onFileName);
+                    var dropFn = message.TryGetValue("fileName", out var fnObj) ? fnObj?.ToString() ?? "" : "";
+                    await Services.Editor.TinyMCEEditorService.비이미지파일드롭처리Async(OneNoteEditorWebView, dropFn);
+                    break;
+
+                case "debugLog":
+                    var oneNoteDebugMsg = message.TryGetValue("message", out var odmObj) ? odmObj?.ToString() ?? "" : "";
+                    Log4.Debug($"[OneNote-JS] {oneNoteDebugMsg}");
                     break;
 
             }
