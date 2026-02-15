@@ -395,7 +395,10 @@ public partial class MainWindow : FluentWindow
                 DraftBodyWebView.CoreWebView2.Settings.AreDefaultContextMenusEnabled = false;
                 DraftBodyWebView.CoreWebView2.Settings.IsStatusBarEnabled = false;
 
-                // NavigationStarting — 비이미지 파일 드롭 시 링크 삽입, 외부 링크 클릭 시 브라우저 열기
+                // Chromium 자체 드래그&드롭 차단 → WPF Drop 핸들러(DraftBodyWebView_Drop)가 처리
+                DraftBodyWebView.AllowExternalDrop = false;
+
+                // NavigationStarting — 외부 링크 클릭 시 브라우저 열기
                 DraftBodyWebView.CoreWebView2.NavigationStarting += Services.Editor.TinyMCEEditorService.HandleEditorNavigationStarting;
 
                 // 메시지 수신 핸들러
@@ -463,6 +466,7 @@ public partial class MainWindow : FluentWindow
                         var pickerType = message.TryGetValue("pickerType", out var pt) ? pt : "file";
                         await Services.Editor.TinyMCEEditorService.HandleFilePickerAsync(DraftBodyWebView, pickerType);
                         break;
+
                 }
             }
         }
@@ -9577,7 +9581,10 @@ public partial class MainWindow : FluentWindow
             OneNoteEditorWebView.CoreWebView2.Settings.AreDefaultContextMenusEnabled = false;
             OneNoteEditorWebView.CoreWebView2.Settings.IsStatusBarEnabled = false;
 
-            // NavigationStarting — 비이미지 파일 드롭 시 링크 삽입, 외부 링크 클릭 시 브라우저 열기
+            // Chromium 자체 드래그&드롭 차단 → WPF Drop 핸들러(OneNoteEditorWebView_Drop)가 처리
+            OneNoteEditorWebView.AllowExternalDrop = false;
+
+            // NavigationStarting — 외부 링크 클릭 시 브라우저 열기
             OneNoteEditorWebView.CoreWebView2.NavigationStarting += Services.Editor.TinyMCEEditorService.HandleEditorNavigationStarting;
 
             // 로컬 TinyMCE 파일에 접근할 수 있도록 가상 호스트 매핑 (공통 서비스에서 호스트명 취득)
@@ -9597,6 +9604,7 @@ public partial class MainWindow : FluentWindow
 
             _oneNoteEditorInitialized = true;
             Log4.Debug("[OneNote] TinyMCE 에디터 초기화 완료");
+
         }
         catch (Exception ex)
         {
@@ -9637,6 +9645,7 @@ public partial class MainWindow : FluentWindow
                     var pickerType = message.TryGetValue("pickerType", out var ptObj) ? ptObj?.ToString() ?? "file" : "file";
                     await Services.Editor.TinyMCEEditorService.HandleFilePickerAsync(OneNoteEditorWebView, pickerType);
                     break;
+
             }
         }
         catch (Exception ex)

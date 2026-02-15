@@ -126,6 +126,7 @@ public static class TinyMCEEditorService
             browser_spellcheck: true,
             contextmenu: false,
             paste_data_images: true,
+            block_unsupported_drop: false,
             convert_urls: false,
             file_picker_types: 'image file',
             file_picker_callback: function(callback, value, meta) {{
@@ -210,25 +211,6 @@ public static class TinyMCEEditorService
                 tinymce.activeEditor.insertContent('<a href=""' + filePath + '"">' + (fileName || filePath) + '</a>');
             }}
         }};
-
-        // 비이미지 파일 드래그&드롭: TinyMCE 전파 차단 → Chromium file:/// 네비게이션 유도
-        document.addEventListener('dragover', function(e) {{
-            e.preventDefault();
-        }}, true);
-
-        document.addEventListener('drop', function(e) {{
-            if (!e.dataTransfer || !e.dataTransfer.files || e.dataTransfer.files.length === 0) return;
-            var hasNonImage = false;
-            for (var i = 0; i < e.dataTransfer.files.length; i++) {{
-                if (!e.dataTransfer.files[i].type.startsWith('image/')) {{
-                    hasNonImage = true;
-                    break;
-                }}
-            }}
-            if (hasNonImage) {{
-                e.stopImmediatePropagation();
-            }}
-        }}, true);
     </script>
 </body>
 </html>";
@@ -374,6 +356,8 @@ public static class TinyMCEEditorService
         if (e.Uri.Contains(".tinymce.local/"))
             return;
 
+        Log4.Debug($"[TinyMCE] NavigationStarting 감지: {e.Uri}");
+
         // 모든 외부 navigation 차단
         e.Cancel = true;
 
@@ -447,6 +431,7 @@ public static class TinyMCEEditorService
             var bytes = System.IO.File.ReadAllBytes(filePath);
             var base64 = Convert.ToBase64String(bytes);
             var ext = System.IO.Path.GetExtension(filePath).ToLowerInvariant();
+
             var mimeType = ext switch
             {
                 ".png" => "image/png",
@@ -474,5 +459,35 @@ public static class TinyMCEEditorService
     {
         var ext = System.IO.Path.GetExtension(filePath);
         return 이미지확장자.Contains(ext);
+    }
+
+    /// <summary>
+    /// 단일 파일을 에디터에 삽입합니다.
+    /// 이미지 → Base64 data URL로 인라인 삽입, 비이미지 → file:/// 링크 삽입.
+    /// </summary>
+    public static async Task InsertFileToEditorAsync(WebView2 webView, string filePath)
+    {
+        if (webView?.CoreWebView2 == null || !System.IO.File.Exists(filePath)) return;
+
+        var fileName = System.IO.Path.GetFileName(filePath);
+
+        if (IsImageFile(filePath))
+        {
+            var dataUrl = ConvertFileToDataUrl(filePath);
+            if (dataUrl == null) return;
+
+            var escapedUrl = System.Text.Json.JsonSerializer.Serialize(dataUrl);
+            var escapedName = System.Text.Json.JsonSerializer.Serialize(fileName);
+            await webView.CoreWebView2.ExecuteScriptAsync(
+                $"window.insertDroppedImage({escapedUrl}, {escapedName})");
+        }
+        else
+        {
+            var fileUrl = "file:///" + filePath.Replace("\\", "/");
+            var escapedUrl = System.Text.Json.JsonSerializer.Serialize(fileUrl);
+            var escapedName = System.Text.Json.JsonSerializer.Serialize(fileName);
+            await webView.CoreWebView2.ExecuteScriptAsync(
+                $"window.insertDroppedFileLink({escapedUrl}, {escapedName})");
+        }
     }
 }

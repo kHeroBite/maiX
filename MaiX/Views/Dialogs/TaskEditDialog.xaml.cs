@@ -138,7 +138,10 @@ public partial class TaskEditDialog : FluentWindow
         {
             await NotesWebView.EnsureCoreWebView2Async();
 
-            // NavigationStarting — 비이미지 파일 드롭 시 링크 삽입, 외부 링크 클릭 시 브라우저 열기
+            // Chromium 자체 드래그&드롭 차단 → WPF Drop 핸들러(NotesWebView_Drop)가 처리
+            NotesWebView.AllowExternalDrop = false;
+
+            // NavigationStarting — 외부 링크 클릭 시 브라우저 열기
             NotesWebView.CoreWebView2.NavigationStarting += Services.Editor.TinyMCEEditorService.HandleEditorNavigationStarting;
 
             // 로컬 TinyMCE 폴더 경로 설정 (Self-hosted)
@@ -266,6 +269,7 @@ public partial class TaskEditDialog : FluentWindow
             browser_spellcheck: true,
             contextmenu: false,
             paste_data_images: true,
+            block_unsupported_drop: false,
             convert_urls: false,
             file_picker_types: 'image file',
             file_picker_callback: function(callback, value, meta) {{
@@ -331,25 +335,6 @@ public partial class TaskEditDialog : FluentWindow
                 editor.insertContent('<a href=""' + filePath + '"">' + (fileName || filePath) + '</a>');
             }}
         }};
-
-        // 비이미지 파일 드래그&드롭: TinyMCE 전파 차단 → Chromium file:/// 네비게이션 유도
-        document.addEventListener('dragover', function(e) {{
-            e.preventDefault();
-        }}, true);
-
-        document.addEventListener('drop', function(e) {{
-            if (!e.dataTransfer || !e.dataTransfer.files || e.dataTransfer.files.length === 0) return;
-            var hasNonImage = false;
-            for (var i = 0; i < e.dataTransfer.files.length; i++) {{
-                if (!e.dataTransfer.files[i].type.startsWith('image/')) {{
-                    hasNonImage = true;
-                    break;
-                }}
-            }}
-            if (hasNonImage) {{
-                e.stopImmediatePropagation();
-            }}
-        }}, true);
     </script>
 </body>
 </html>";

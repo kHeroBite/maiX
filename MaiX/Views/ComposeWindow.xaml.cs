@@ -103,7 +103,10 @@ public partial class ComposeWindow : FluentWindow
             EditorWebView.CoreWebView2.Settings.AreDefaultContextMenusEnabled = false;
             EditorWebView.CoreWebView2.Settings.IsStatusBarEnabled = false;
 
-            // NavigationStarting — 비이미지 파일 드롭 시 링크 삽입, 외부 링크 클릭 시 브라우저 열기
+            // Chromium 자체 드래그&드롭 차단 → WPF Drop 핸들러(EditorWebView_Drop)가 처리
+            EditorWebView.AllowExternalDrop = false;
+
+            // NavigationStarting — 외부 링크 클릭 시 브라우저 열기
             EditorWebView.CoreWebView2.NavigationStarting += Services.Editor.TinyMCEEditorService.HandleEditorNavigationStarting;
 
             // 에디터 HTML 로드
@@ -174,6 +177,7 @@ public partial class ComposeWindow : FluentWindow
                         var pickerType = message.TryGetValue("pickerType", out var pt) ? pt : "file";
                         await Services.Editor.TinyMCEEditorService.HandleFilePickerAsync(EditorWebView, pickerType);
                         break;
+
                 }
             }
         }
@@ -201,7 +205,30 @@ public partial class ComposeWindow : FluentWindow
     private async void EditorWebView_Drop(object sender, System.Windows.DragEventArgs e)
     {
         if (!_editorReady) return;
-        await Services.Editor.TinyMCEEditorService.HandleDropAsync(EditorWebView, e);
+
+        // 메일 작성: 비이미지 파일은 첨부파일로 추가, 이미지는 에디터에 삽입
+        if (e.Data.GetDataPresent(System.Windows.DataFormats.FileDrop))
+        {
+            var files = e.Data.GetData(System.Windows.DataFormats.FileDrop) as string[];
+            if (files != null)
+            {
+                foreach (var filePath in files)
+                {
+                    if (!System.IO.File.Exists(filePath)) continue;
+                    var ext = System.IO.Path.GetExtension(filePath);
+                    if (Services.Editor.TinyMCEEditorService.IsImageFile(filePath))
+                    {
+                        // 이미지 → 에디터에 인라인 삽입
+                        await Services.Editor.TinyMCEEditorService.InsertFileToEditorAsync(EditorWebView, filePath);
+                    }
+                    else
+                    {
+                        // 비이미지 → 첨부파일로 추가
+                        _viewModel.AddAttachment(filePath);
+                    }
+                }
+            }
+        }
     }
 
     /// <summary>
