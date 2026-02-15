@@ -394,6 +394,7 @@ public partial class MainWindow : FluentWindow
                 DraftBodyWebView.CoreWebView2.Settings.IsScriptEnabled = true;
                 DraftBodyWebView.CoreWebView2.Settings.AreDefaultContextMenusEnabled = false;
                 DraftBodyWebView.CoreWebView2.Settings.IsStatusBarEnabled = false;
+                DraftBodyWebView.AllowExternalDrop = false;
 
                 // 메시지 수신 핸들러
                 DraftBodyWebView.CoreWebView2.WebMessageReceived += DraftEditor_WebMessageReceived;
@@ -9573,6 +9574,7 @@ public partial class MainWindow : FluentWindow
             OneNoteEditorWebView.CoreWebView2.Settings.IsScriptEnabled = true;
             OneNoteEditorWebView.CoreWebView2.Settings.AreDefaultContextMenusEnabled = false;
             OneNoteEditorWebView.CoreWebView2.Settings.IsStatusBarEnabled = false;
+            OneNoteEditorWebView.AllowExternalDrop = false;
 
             // 로컬 TinyMCE 파일에 접근할 수 있도록 가상 호스트 매핑 (공통 서비스에서 호스트명 취득)
             var tinymcePath = System.IO.Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Assets", "tinymce");

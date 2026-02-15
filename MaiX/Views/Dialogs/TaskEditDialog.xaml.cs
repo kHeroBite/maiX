@@ -137,6 +137,7 @@ public partial class TaskEditDialog : FluentWindow
         try
         {
             await NotesWebView.EnsureCoreWebView2Async();
+            NotesWebView.AllowExternalDrop = false;
 
             // 로컬 TinyMCE 폴더 경로 설정 (Self-hosted)
             // CDN은 WebView2 NavigateToString에서 referer 헤더가 없어 도메인 확인 불가
@@ -253,8 +254,8 @@ public partial class TaskEditDialog : FluentWindow
             statusbar: false,
             base_url: 'https://tinymce.local',
             suffix: '.min',
-            plugins: 'lists link image table',
-            toolbar: 'bold italic underline | bullist numlist | table | link image',
+            plugins: 'lists link image table autolink',
+            toolbar: 'bold italic underline | bullist numlist | table | link image insertfile',
             skin: 'oxide-dark',
             skin_url: 'https://tinymce.local/skins/ui/oxide-dark',
             content_css: 'dark',
@@ -277,6 +278,16 @@ public partial class TaskEditDialog : FluentWindow
             table_default_styles: {{ 'border-collapse': 'collapse', 'width': '100%' }},
             setup: function(ed) {{
                 editor = ed;
+                ed.ui.registry.addButton('insertfile', {{
+                    icon: 'browse',
+                    tooltip: '파일 삽입',
+                    onAction: function() {{
+                        window.chrome.webview.postMessage({{
+                            type: 'filePicker',
+                            pickerType: 'file'
+                        }});
+                    }}
+                }});
                 ed.on('change', function() {{
                     window.chrome.webview.postMessage({{ type: 'content-changed' }});
                 }});

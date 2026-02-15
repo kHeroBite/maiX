@@ -75,8 +75,8 @@ public static class TinyMCEEditorService
         var contentStyle = GenerateContentStyle(dark, textColor, bgColor);
 
         // 공통 설정
-        var plugins = "table lists link image code checklist";
-        var toolbar = "bold italic underline strikethrough | forecolor backcolor | fontfamily fontsize | alignleft aligncenter alignright alignjustify | bullist numlist checklist outdent indent | table | link image | code removeformat";
+        var plugins = "table lists link image code checklist autolink";
+        var toolbar = "bold italic underline strikethrough | forecolor backcolor | fontfamily fontsize | alignleft aligncenter alignright alignjustify | bullist numlist checklist outdent indent | table | link image insertfile | code removeformat";
         var fontFamilyFormats = "Aptos=Aptos,sans-serif; 맑은 고딕=Malgun Gothic; 굴림=Gulim; 돋움=Dotum; 바탕=Batang; 궁서=Gungsuh; Segoe UI=Segoe UI,sans-serif; Arial=arial,helvetica,sans-serif; Arial Black=arial black,avant garde; Comic Sans MS=comic sans ms,sans-serif; Courier New=courier new,courier; Georgia=georgia,palatino; Helvetica=helvetica; Impact=impact,chicago; Tahoma=tahoma,arial,helvetica,sans-serif; Terminal=terminal,monaco; Times New Roman=times new roman,times; Verdana=verdana,geneva";
 
         return $@"<!DOCTYPE html>
@@ -136,6 +136,16 @@ public static class TinyMCEEditorService
             }},
             setup: function(ed) {{
                 editor = ed;
+                ed.ui.registry.addButton('insertfile', {{
+                    icon: 'browse',
+                    tooltip: '파일 삽입',
+                    onAction: function() {{
+                        window.chrome.webview.postMessage({{
+                            type: 'filePicker',
+                            pickerType: 'file'
+                        }});
+                    }}
+                }});
                 ed.on('init', function() {{
                     window.chrome.webview.postMessage({{ type: 'ready' }});
                 }});
