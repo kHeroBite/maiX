@@ -395,11 +395,11 @@ public partial class MainWindow : FluentWindow
                 DraftBodyWebView.CoreWebView2.Settings.AreDefaultContextMenusEnabled = false;
                 DraftBodyWebView.CoreWebView2.Settings.IsStatusBarEnabled = false;
 
-                // Chromium 자체 드래그&드롭 차단 → WPF Drop 핸들러(DraftBodyWebView_Drop)가 처리
-                DraftBodyWebView.AllowExternalDrop = false;
-
                 // NavigationStarting — 외부 링크 클릭 시 브라우저 열기
                 DraftBodyWebView.CoreWebView2.NavigationStarting += Services.Editor.TinyMCEEditorService.HandleEditorNavigationStarting;
+
+                // FrameNavigationStarting — TinyMCE iframe 내 file:/// 드롭 감지
+                DraftBodyWebView.CoreWebView2.FrameNavigationStarting += Services.Editor.TinyMCEEditorService.HandleEditorFrameNavigationStarting;
 
                 // 메시지 수신 핸들러
                 DraftBodyWebView.CoreWebView2.WebMessageReceived += DraftEditor_WebMessageReceived;
@@ -9581,11 +9581,11 @@ public partial class MainWindow : FluentWindow
             OneNoteEditorWebView.CoreWebView2.Settings.AreDefaultContextMenusEnabled = false;
             OneNoteEditorWebView.CoreWebView2.Settings.IsStatusBarEnabled = false;
 
-            // Chromium 자체 드래그&드롭 차단 → WPF Drop 핸들러(OneNoteEditorWebView_Drop)가 처리
-            OneNoteEditorWebView.AllowExternalDrop = false;
-
             // NavigationStarting — 외부 링크 클릭 시 브라우저 열기
             OneNoteEditorWebView.CoreWebView2.NavigationStarting += Services.Editor.TinyMCEEditorService.HandleEditorNavigationStarting;
+
+            // FrameNavigationStarting — TinyMCE iframe 내 file:/// 드롭 감지
+            OneNoteEditorWebView.CoreWebView2.FrameNavigationStarting += Services.Editor.TinyMCEEditorService.HandleEditorFrameNavigationStarting;
 
             // 로컬 TinyMCE 파일에 접근할 수 있도록 가상 호스트 매핑 (공통 서비스에서 호스트명 취득)
             var tinymcePath = System.IO.Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Assets", "tinymce");

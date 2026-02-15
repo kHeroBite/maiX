@@ -138,11 +138,11 @@ public partial class TaskEditDialog : FluentWindow
         {
             await NotesWebView.EnsureCoreWebView2Async();
 
-            // Chromium 자체 드래그&드롭 차단 → WPF Drop 핸들러(NotesWebView_Drop)가 처리
-            NotesWebView.AllowExternalDrop = false;
-
             // NavigationStarting — 외부 링크 클릭 시 브라우저 열기
             NotesWebView.CoreWebView2.NavigationStarting += Services.Editor.TinyMCEEditorService.HandleEditorNavigationStarting;
+
+            // FrameNavigationStarting — TinyMCE iframe 내 file:/// 드롭 감지
+            NotesWebView.CoreWebView2.FrameNavigationStarting += Services.Editor.TinyMCEEditorService.HandleEditorFrameNavigationStarting;
 
             // 로컬 TinyMCE 폴더 경로 설정 (Self-hosted)
             // CDN은 WebView2 NavigateToString에서 referer 헤더가 없어 도메인 확인 불가
