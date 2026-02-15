@@ -2604,8 +2604,8 @@
                     <wv2:WebView2 x:Name="DraftBodyWebView"
                                   DefaultBackgroundColor="Transparent"
                                   AllowDrop="True"
-                                  DragOver="DraftBodyWebView_DragOver"
-                                  Drop="DraftBodyWebView_Drop"/>
+                                  PreviewDragOver="DraftBodyWebView_DragOver"
+                                  PreviewDrop="DraftBodyWebView_Drop"/>
                 </Border>
             </Grid>
 
@@ -6523,8 +6523,8 @@
                                                           DefaultBackgroundColor="Transparent"
                                                           GotFocus="OneNoteEditorWebView_GotFocus"
                                                           AllowDrop="True"
-                                                          DragOver="OneNoteEditorWebView_DragOver"
-                                                          Drop="OneNoteEditorWebView_Drop"/>
+                                                          PreviewDragOver="OneNoteEditorWebView_DragOver"
+                                                          PreviewDrop="OneNoteEditorWebView_Drop"/>
                                         </Border>
                                     </Grid>
                                 </Border>

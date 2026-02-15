@@ -474,8 +474,8 @@
                                   DefaultBackgroundColor="Transparent"
                                   Visibility="Collapsed"
                                   AllowDrop="True"
-                                  DragOver="EditorWebView_DragOver"
-                                  Drop="EditorWebView_Drop"/>
+                                  PreviewDragOver="EditorWebView_DragOver"
+                                  PreviewDrop="EditorWebView_Drop"/>
                 </Grid>
             </Border>
         </Grid>

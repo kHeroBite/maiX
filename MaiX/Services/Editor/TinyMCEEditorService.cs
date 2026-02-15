@@ -23,6 +23,65 @@ public static class TinyMCEEditorService
     {
         ".png", ".jpg", ".jpeg", ".gif", ".bmp", ".webp", ".svg", ".ico"
     };
+
+    /// <summary>
+    /// DragOver에서 저장한 파일 경로 (파일명 → 전체 경로 매핑)
+    /// JS drop 이벤트에서는 파일명만 알 수 있으므로, 이 딕셔너리에서 전체 경로를 조회합니다.
+    /// </summary>
+    private static readonly Dictionary<string, string> _최근드롭파일경로 = new();
+
+    /// <summary>
+    /// WPF DragOver 이벤트에서 드래그 중인 파일 경로를 저장합니다.
+    /// </summary>
+    public static void 드래그파일경로저장(System.Windows.DragEventArgs e)
+    {
+        if (!e.Data.GetDataPresent(System.Windows.DataFormats.FileDrop)) return;
+        var files = e.Data.GetData(System.Windows.DataFormats.FileDrop) as string[];
+        if (files == null) return;
+
+        _최근드롭파일경로.Clear();
+        foreach (var f in files)
+        {
+            var name = System.IO.Path.GetFileName(f);
+            _최근드롭파일경로[name] = f;
+        }
+    }
+
+    /// <summary>
+    /// 파일명으로 최근 드롭 경로를 조회합니다.
+    /// </summary>
+    public static string? 최근드롭경로가져오기(string fileName)
+    {
+        return _최근드롭파일경로.TryGetValue(fileName, out var path) ? path : null;
+    }
+
+    /// <summary>
+    /// JS drop 이벤트에서 전달받은 파일명으로 첨부 링크를 에디터에 삽입합니다.
+    /// </summary>
+    public static async Task 비이미지파일드롭처리Async(WebView2 webView, string fileName)
+    {
+        if (string.IsNullOrEmpty(fileName) || webView?.CoreWebView2 == null) return;
+
+        // DragOver에서 저장한 경로 조회
+        if (_최근드롭파일경로.TryGetValue(fileName, out var fullPath))
+        {
+            Log4.Debug($"[TinyMCE] 비이미지 파일 드롭 (경로 확인): {fileName} → {fullPath}");
+            var fileUrl = "file:///" + fullPath.Replace("\\", "/");
+            var escapedUrl = System.Text.Json.JsonSerializer.Serialize(fileUrl);
+            var escapedName = System.Text.Json.JsonSerializer.Serialize(fileName);
+            await webView.CoreWebView2.ExecuteScriptAsync(
+                $"window.insertDroppedFileLink({escapedUrl}, {escapedName})");
+        }
+        else
+        {
+            // 경로 없으면 파일명만 텍스트로 삽입
+            Log4.Warn($"[TinyMCE] 비이미지 파일 드롭 (경로 미확인): {fileName}");
+            var escaped = System.Text.Json.JsonSerializer.Serialize($"📎 {fileName} ");
+            await webView.CoreWebView2.ExecuteScriptAsync(
+                $"tinymce.activeEditor && tinymce.activeEditor.insertContent({escaped})");
+        }
+    }
+
     /// <summary>
     /// 에디터 유형
     /// </summary>
@@ -154,27 +213,10 @@ public static class TinyMCEEditorService
                     if (iframeDoc) {{
                         iframeDoc.addEventListener('drop', function(evt) {{
                             var dt = evt.dataTransfer;
-                            if (!dt || !dt.files || dt.files.length === 0) return;
-                            var file = dt.files[0];
-                            var idx = file.name.lastIndexOf('.');
-                            var ext = idx >= 0 ? file.name.substring(idx).toLowerCase() : '';
-                            var imageExts = ['.jpg','.jpeg','.png','.gif','.bmp','.webp','.svg','.ico','.tif','.tiff'];
-                            if (imageExts.indexOf(ext) < 0) {{
+                            if (dt && dt.files && dt.files.length > 0) {{
+                                // 모든 파일 드롭을 차단 → WPF PreviewDrop(HandleDropAsync)에서 처리
                                 evt.preventDefault();
                                 evt.stopImmediatePropagation();
-                                try {{
-                                    window.chrome.webview.postMessage({{
-                                        type: 'nonImageFileDrop',
-                                        fileName: file.name
-                                    }});
-                                }} catch(ex) {{
-                                    try {{
-                                        window.parent.chrome.webview.postMessage({{
-                                            type: 'nonImageFileDrop',
-                                            fileName: file.name
-                                        }});
-                                    }} catch(ex2) {{}}
-                                }}
                             }}
                         }}, true);
                     }}
@@ -234,10 +276,13 @@ public static class TinyMCEEditorService
             }}
         }};
 
-        // C#에서 드롭된 파일 링크를 삽입하는 함수
+        // C#에서 드롭된 파일 첨부를 삽입하는 함수 (file:/// 링크 — 클릭 시 NavigationStarting에서 처리)
         window.insertDroppedFileLink = function(filePath, fileName) {{
             if (tinymce.activeEditor) {{
-                tinymce.activeEditor.insertContent('<a href=""' + filePath + '"">' + (fileName || filePath) + '</a>');
+                var html = '<a href=""' + filePath + '"" ' +
+                    'style=""display:inline-block;padding:4px 10px;margin:2px;border:1px solid #ccc;border-radius:6px;background:#f5f5f5;color:#333;text-decoration:none;font-size:13px;cursor:pointer;"" ' +
+                    'title=""클릭하여 열기"" contenteditable=""false"">📎 ' + (fileName || filePath) + '</a>&nbsp;';
+                tinymce.activeEditor.insertContent(html);
             }}
         }};
     </script>
@@ -338,12 +383,14 @@ public static class TinyMCEEditorService
         var files = e.Data.GetData(System.Windows.DataFormats.FileDrop) as string[];
         if (files == null || files.Length == 0) return;
 
+        Log4.Debug($"[TinyMCE] WPF Drop 처리: {files.Length}개 파일");
+
         foreach (var filePath in files)
         {
             if (!System.IO.File.Exists(filePath)) continue;
 
             var fileName = System.IO.Path.GetFileName(filePath);
-            var ext = System.IO.Path.GetExtension(filePath);
+            var ext = System.IO.Path.GetExtension(filePath).ToLowerInvariant();
 
             if (이미지확장자.Contains(ext))
             {
@@ -358,7 +405,8 @@ public static class TinyMCEEditorService
             }
             else
             {
-                // 비이미지 → file:/// 링크로 삽입
+                // 비이미지 → 첨부 파일 스타일로 삽입
+                Log4.Debug($"[TinyMCE] 비이미지 파일 첨부 삽입: {fileName} → {filePath}");
                 var fileUrl = "file:///" + filePath.Replace("\\", "/");
                 var escapedUrl = System.Text.Json.JsonSerializer.Serialize(fileUrl);
                 var escapedName = System.Text.Json.JsonSerializer.Serialize(fileName);
@@ -413,11 +461,27 @@ public static class TinyMCEEditorService
                 }
                 else
                 {
-                    // 비이미지 → 📎 파일명 텍스트로 삽입
-                    Log4.Debug($"[TinyMCE] 비이미지 파일 드롭 처리: {fileName}");
-                    var escapedText = System.Text.Json.JsonSerializer.Serialize($"📎 {fileName} ");
-                    await webView.CoreWebView2.ExecuteScriptAsync(
-                        $"tinymce.activeEditor && tinymce.activeEditor.insertContent({escapedText})");
+                    // 비이미지 file:/// 링크 클릭 → 파일 열기
+                    Log4.Debug($"[TinyMCE] 첨부 파일 열기: {filePath}");
+                    try
+                    {
+                        if (System.IO.File.Exists(filePath))
+                        {
+                            System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
+                            {
+                                FileName = filePath,
+                                UseShellExecute = true
+                            });
+                        }
+                        else
+                        {
+                            Log4.Warn($"[TinyMCE] 첨부 파일 없음: {filePath}");
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        Log4.Error($"[TinyMCE] 첨부 파일 열기 실패: {filePath} — {ex.Message}");
+                    }
                 }
             }
         }
@@ -437,28 +501,6 @@ public static class TinyMCEEditorService
                 Log4.Error($"[TinyMCE] 외부 링크 열기 실패: {e.Uri} — {ex.Message}");
             }
         }
-    }
-
-    /// <summary>
-    /// 비이미지 파일 드롭 메시지를 처리합니다.
-    /// TinyMCE의 editor.on('drop') JS에서 전달받은 파일 정보로 텍스트를 에디터에 삽입합니다.
-    /// </summary>
-    public static async Task 비이미지파일드롭처리Async(Microsoft.Web.WebView2.Wpf.WebView2 webView, string fileName)
-    {
-        if (string.IsNullOrEmpty(fileName))
-        {
-            Log4.Warn("[TinyMCE] 비이미지 파일 드롭: 파일 이름 없음");
-            return;
-        }
-
-        Log4.Debug($"[TinyMCE] 비이미지 파일 드롭 처리: {fileName}");
-
-        if (webView.CoreWebView2 == null) return;
-
-        // 파일 이름을 📎 아이콘과 함께 텍스트로 삽입
-        var escaped = System.Text.Json.JsonSerializer.Serialize($"📎 {fileName} ");
-        await webView.CoreWebView2.ExecuteScriptAsync(
-            $"tinymce.activeEditor && tinymce.activeEditor.insertContent({escaped})");
     }
 
     /// <summary>

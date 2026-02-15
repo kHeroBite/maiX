@@ -137,7 +137,6 @@ public partial class TaskEditDialog : FluentWindow
         try
         {
             await NotesWebView.EnsureCoreWebView2Async();
-
             // NavigationStarting — 외부 링크 클릭 시 브라우저 열기
             NotesWebView.CoreWebView2.NavigationStarting += Services.Editor.TinyMCEEditorService.HandleEditorNavigationStarting;
             NotesWebView.CoreWebView2.FrameNavigationStarting += Services.Editor.TinyMCEEditorService.HandleEditorNavigationStarting;
@@ -166,6 +165,15 @@ public partial class TaskEditDialog : FluentWindow
                         {
                             Dispatcher.Invoke(() => MarkAsChanged());
                         }
+                        else if (type == "nonImageFileDrop")
+                        {
+                            var dropFileName = message.RootElement.TryGetProperty("fileName", out var fnElement)
+                                ? fnElement.GetString() ?? "" : "";
+                            await Dispatcher.InvokeAsync(async () =>
+                            {
+                                await Services.Editor.TinyMCEEditorService.비이미지파일드롭처리Async(NotesWebView, dropFileName);
+                            });
+                        }
                         else if (type == "filePicker")
                         {
                             var pickerType = message.RootElement.TryGetProperty("pickerType", out var ptElement)
@@ -173,14 +181,6 @@ public partial class TaskEditDialog : FluentWindow
                             await Dispatcher.InvokeAsync(async () =>
                             {
                                 await Services.Editor.TinyMCEEditorService.HandleFilePickerAsync(NotesWebView, pickerType);
-                            });
-                        }
-                        else if (type == "nonImageFileDrop")
-                        {
-                            var dropFn = message.RootElement.TryGetProperty("fileName", out var fnEl) ? fnEl.GetString() ?? "" : "";
-                            await Dispatcher.InvokeAsync(async () =>
-                            {
-                                await Services.Editor.TinyMCEEditorService.비이미지파일드롭처리Async(NotesWebView, dropFn);
                             });
                         }
                     }
@@ -218,6 +218,7 @@ public partial class TaskEditDialog : FluentWindow
     {
         if (e.Data.GetDataPresent(System.Windows.DataFormats.FileDrop))
         {
+            Services.Editor.TinyMCEEditorService.드래그파일경로저장(e);
             e.Effects = System.Windows.DragDropEffects.Copy;
             e.Handled = true;
         }

@@ -102,7 +102,6 @@ public partial class ComposeWindow : FluentWindow
             EditorWebView.CoreWebView2.Settings.IsScriptEnabled = true;
             EditorWebView.CoreWebView2.Settings.AreDefaultContextMenusEnabled = false;
             EditorWebView.CoreWebView2.Settings.IsStatusBarEnabled = false;
-
             // NavigationStarting — 외부 링크 클릭 시 브라우저 열기
             EditorWebView.CoreWebView2.NavigationStarting += Services.Editor.TinyMCEEditorService.HandleEditorNavigationStarting;
             EditorWebView.CoreWebView2.FrameNavigationStarting += Services.Editor.TinyMCEEditorService.HandleEditorNavigationStarting;
@@ -172,14 +171,22 @@ public partial class ComposeWindow : FluentWindow
                         Log4.Debug("TinyMCE 에디터 준비 완료");
                         break;
 
+                    case "nonImageFileDrop":
+                        var composeDropFileName = message.TryGetValue("fileName", out var cdfn) ? cdfn : "";
+                        // 메일 작성: 비이미지 파일은 첨부파일 목록에 추가
+                        if (!string.IsNullOrEmpty(composeDropFileName))
+                        {
+                            var 최근드롭 = Services.Editor.TinyMCEEditorService.최근드롭경로가져오기(composeDropFileName);
+                            if (최근드롭 != null)
+                            {
+                                _viewModel.AddAttachment(최근드롭);
+                            }
+                        }
+                        break;
+
                     case "filePicker":
                         var pickerType = message.TryGetValue("pickerType", out var pt) ? pt : "file";
                         await Services.Editor.TinyMCEEditorService.HandleFilePickerAsync(EditorWebView, pickerType);
-                        break;
-
-                    case "nonImageFileDrop":
-                        var dropFileName = message.TryGetValue("fileName", out var dfn) ? dfn : "";
-                        await Services.Editor.TinyMCEEditorService.비이미지파일드롭처리Async(EditorWebView, dropFileName);
                         break;
 
                 }
@@ -198,6 +205,7 @@ public partial class ComposeWindow : FluentWindow
     {
         if (e.Data.GetDataPresent(System.Windows.DataFormats.FileDrop))
         {
+            Services.Editor.TinyMCEEditorService.드래그파일경로저장(e);
             e.Effects = System.Windows.DragDropEffects.Copy;
             e.Handled = true;
         }

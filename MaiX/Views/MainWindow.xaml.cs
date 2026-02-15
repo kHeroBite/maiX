@@ -394,7 +394,6 @@ public partial class MainWindow : FluentWindow
                 DraftBodyWebView.CoreWebView2.Settings.IsScriptEnabled = true;
                 DraftBodyWebView.CoreWebView2.Settings.AreDefaultContextMenusEnabled = false;
                 DraftBodyWebView.CoreWebView2.Settings.IsStatusBarEnabled = false;
-
                 // NavigationStarting — 외부 링크 클릭 시 브라우저 열기
                 DraftBodyWebView.CoreWebView2.NavigationStarting += Services.Editor.TinyMCEEditorService.HandleEditorNavigationStarting;
                 DraftBodyWebView.CoreWebView2.FrameNavigationStarting += Services.Editor.TinyMCEEditorService.HandleEditorNavigationStarting;
@@ -493,6 +492,7 @@ public partial class MainWindow : FluentWindow
     {
         if (e.Data.GetDataPresent(System.Windows.DataFormats.FileDrop))
         {
+            Services.Editor.TinyMCEEditorService.드래그파일경로저장(e);
             e.Effects = System.Windows.DragDropEffects.Copy;
             e.Handled = true;
         }
@@ -9590,7 +9590,6 @@ public partial class MainWindow : FluentWindow
             OneNoteEditorWebView.CoreWebView2.Settings.IsScriptEnabled = true;
             OneNoteEditorWebView.CoreWebView2.Settings.AreDefaultContextMenusEnabled = false;
             OneNoteEditorWebView.CoreWebView2.Settings.IsStatusBarEnabled = false;
-
             // NavigationStarting — 외부 링크 클릭 시 브라우저 열기
             OneNoteEditorWebView.CoreWebView2.NavigationStarting += Services.Editor.TinyMCEEditorService.HandleEditorNavigationStarting;
             OneNoteEditorWebView.CoreWebView2.FrameNavigationStarting += Services.Editor.TinyMCEEditorService.HandleEditorNavigationStarting;
@@ -9656,8 +9655,8 @@ public partial class MainWindow : FluentWindow
                     break;
 
                 case "nonImageFileDrop":
-                    var dropFn = message.TryGetValue("fileName", out var fnObj) ? fnObj?.ToString() ?? "" : "";
-                    await Services.Editor.TinyMCEEditorService.비이미지파일드롭처리Async(OneNoteEditorWebView, dropFn);
+                    var oneNoteDropFileName = message.TryGetValue("fileName", out var odfnObj) ? odfnObj?.ToString() ?? "" : "";
+                    await Services.Editor.TinyMCEEditorService.비이미지파일드롭처리Async(OneNoteEditorWebView, oneNoteDropFileName);
                     break;
 
                 case "debugLog":
@@ -9680,6 +9679,7 @@ public partial class MainWindow : FluentWindow
     {
         if (e.Data.GetDataPresent(System.Windows.DataFormats.FileDrop))
         {
+            Services.Editor.TinyMCEEditorService.드래그파일경로저장(e);
             e.Effects = System.Windows.DragDropEffects.Copy;
             e.Handled = true;
         }
