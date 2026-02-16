@@ -378,6 +378,38 @@ namespace MaiX.Services.Converter
                     return path;
             }
 
+            // 3. winget 설치 경로 확인
+            try
+            {
+                var wingetPackagesDir = Path.Combine(
+                    Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+                    "Microsoft", "WinGet", "Packages");
+
+                if (Directory.Exists(wingetPackagesDir))
+                {
+                    var pandocDirs = Directory.GetDirectories(wingetPackagesDir, "JohnMacFarlane.Pandoc*");
+                    foreach (var packageDir in pandocDirs)
+                    {
+                        var versionDirs = Directory.GetDirectories(packageDir, "pandoc-*");
+                        foreach (var versionDir in versionDirs)
+                        {
+                            var exePath = Path.Combine(versionDir, "pandoc.exe");
+                            if (File.Exists(exePath))
+                                return exePath;
+                        }
+
+                        // 버전 디렉토리 없이 직접 존재하는 경우
+                        var directPath = Path.Combine(packageDir, "pandoc.exe");
+                        if (File.Exists(directPath))
+                            return directPath;
+                    }
+                }
+            }
+            catch
+            {
+                // winget 경로 탐색 실패 시 무시
+            }
+
             // 기본값
             return "pandoc";
         }
