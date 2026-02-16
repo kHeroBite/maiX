@@ -3353,6 +3353,12 @@ public partial class OneNoteViewModel : ViewModelBase
                 content = await _oneNoteService.ConvertImagesToBase64Async(content);
             }
 
+            // 비오디오 첨부파일 object 태그를 클릭 가능한 링크로 변환
+            if (!string.IsNullOrEmpty(content))
+            {
+                content = _oneNoteService.ConvertAttachmentObjectsToLinks(content);
+            }
+
             CurrentPageContent = content;
             
             // 로드된 콘텐츠를 _editingContent에도 설정 (자동저장 시 필요)

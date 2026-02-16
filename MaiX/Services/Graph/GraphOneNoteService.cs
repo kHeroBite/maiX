@@ -1717,6 +1717,43 @@ public class GraphOneNoteService
     }
 
     /// <summary>
+    /// 비오디오 &lt;object data-attachment="..."&gt; 태그를 클릭 가능한 📎 링크로 변환
+    /// OneNote API에서 첨부파일은 object 태그로 반환되지만 TinyMCE에서는 제대로 렌더링되지 않음
+    /// </summary>
+    public string ConvertAttachmentObjectsToLinks(string html)
+    {
+        if (string.IsNullOrEmpty(html))
+            return html;
+
+        // <object ... data-attachment="파일명" ... type="비오디오" ... /> 또는 <object ...>...</object>
+        var objectRegex = new Regex(
+            @"<object\s+([^>]*)(?:/>|>.*?</object>)",
+            RegexOptions.IgnoreCase | RegexOptions.Singleline);
+
+        var result = objectRegex.Replace(html, match =>
+        {
+            var attrs = match.Groups[1].Value;
+
+            // 오디오 타입은 기존 오디오 처리 로직에 맡김 (스킵)
+            if (attrs.Contains("audio/", StringComparison.OrdinalIgnoreCase))
+                return match.Value;
+
+            // data-attachment 속성에서 파일명 추출
+            var attachmentMatch = Regex.Match(attrs, @"data-attachment=""([^""]+)""", RegexOptions.IgnoreCase);
+            if (!attachmentMatch.Success)
+                return match.Value;
+
+            var fileName = attachmentMatch.Groups[1].Value;
+            var safeFileName = System.Web.HttpUtility.HtmlEncode(fileName);
+
+            Log4.Debug($"[OneNote] 첨부파일 object→link 변환: {fileName}");
+            return $"<p><a href=\"#\" title=\"{safeFileName}\" data-attachment=\"{safeFileName}\">📎 <strong>{safeFileName}</strong> (첨부됨)</a></p>";
+        });
+
+        return result;
+    }
+
+    /// <summary>
     /// HTML 콘텐츠의 이미지 URL을 Base64 데이터 URL로 변환
     /// Graph API 인증이 필요한 이미지를 인라인으로 변환하여 WebView2에서 표시 가능하게 함
     /// </summary>
