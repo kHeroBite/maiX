@@ -5986,9 +5986,13 @@ public partial class MainWindow : FluentWindow
         if (recIcon != null) recIcon.Foreground = new SolidColorBrush(Color.FromRgb(0x99, 0x99, 0x99));
         if (recText != null) { recText.Foreground = new SolidColorBrush(Color.FromRgb(0x99, 0x99, 0x99)); recText.FontWeight = FontWeights.Normal; }
 
+        // 동적 분석 탭 비활성화
+        DeactivateAnalysisTabs();
+
         // 패널 표시 전환
         OneNoteNoteContentPanel.Visibility = Visibility.Visible;
         OneNoteRecordingContentPanel.Visibility = Visibility.Collapsed;
+        OneNoteAnalysisContentPanel.Visibility = Visibility.Collapsed;
 
         // ViewModel 상태 업데이트
         if (_oneNoteViewModel != null)
@@ -6016,13 +6020,245 @@ public partial class MainWindow : FluentWindow
         if (recIcon != null) recIcon.Foreground = (Brush)FindResource("TextFillColorPrimaryBrush");
         if (recText != null) { recText.Foreground = (Brush)FindResource("TextFillColorPrimaryBrush"); recText.FontWeight = FontWeights.Medium; }
 
+        // 동적 분석 탭 비활성화
+        DeactivateAnalysisTabs();
+
         // 패널 표시 전환
         OneNoteNoteContentPanel.Visibility = Visibility.Collapsed;
         OneNoteRecordingContentPanel.Visibility = Visibility.Visible;
+        OneNoteAnalysisContentPanel.Visibility = Visibility.Collapsed;
 
         // ViewModel 상태 업데이트
         if (_oneNoteViewModel != null)
             _oneNoteViewModel.ActiveContentTab = "recording";
+    }
+
+    /// <summary>
+    /// "넓게 보기" 버튼 클릭 → 분석 결과를 동적 탭으로 추가
+    /// </summary>
+    private void OneNoteAnalysisExpandView_Click(object sender, RoutedEventArgs e)
+    {
+        // 현재 선택된 첨부파일 가져오기
+        if (OneNoteFileListBox?.SelectedItem is not Models.OneNoteAttachment attachment)
+            return;
+
+        if (!attachment.HasAnalysis || string.IsNullOrEmpty(attachment.AnalysisResult))
+            return;
+
+        var fileName = attachment.FileName ?? "알 수 없는 파일";
+
+        // 중복 방지: 이미 같은 파일명의 탭이 있으면 해당 탭으로 전환
+        if (_analysisExpandTabs.Any(t => t.FileName == fileName))
+        {
+            SwitchToAnalysisTab(fileName);
+            return;
+        }
+
+        // 새 탭 데이터 추가
+        _analysisExpandTabs.Add((fileName, attachment.AnalysisResult));
+
+        // 탭 UI 생성
+        CreateAnalysisTabUI(fileName);
+
+        // 해당 탭으로 전환
+        SwitchToAnalysisTab(fileName);
+    }
+
+    /// <summary>
+    /// 동적 분석 탭 UI 요소 생성
+    /// </summary>
+    private void CreateAnalysisTabUI(string fileName)
+    {
+        var tabBorder = new Border
+        {
+            Padding = new Thickness(12, 10, 4, 10),
+            Margin = new Thickness(0, 4, 0, 0),
+            CornerRadius = new CornerRadius(6, 6, 0, 0),
+            Background = Brushes.Transparent,
+            BorderBrush = Brushes.Transparent,
+            BorderThickness = new Thickness(1, 1, 1, 0),
+            Cursor = System.Windows.Input.Cursors.Hand,
+            Tag = fileName
+        };
+
+        var panel = new StackPanel { Orientation = Orientation.Horizontal };
+
+        // 파일 아이콘
+        var icon = new Wpf.Ui.Controls.SymbolIcon
+        {
+            Symbol = Wpf.Ui.Controls.SymbolRegular.DocumentSearch24,
+            FontSize = 14,
+            Margin = new Thickness(0, 0, 6, 0),
+            Foreground = new SolidColorBrush(Color.FromRgb(0x99, 0x99, 0x99))
+        };
+        panel.Children.Add(icon);
+
+        // 파일명 (길면 잘라서 표시)
+        var displayName = fileName.Length > 15 ? fileName[..12] + "..." : fileName;
+        var textBlock = new System.Windows.Controls.TextBlock
+        {
+            Text = displayName,
+            FontSize = 13,
+            VerticalAlignment = VerticalAlignment.Center,
+            Foreground = new SolidColorBrush(Color.FromRgb(0x99, 0x99, 0x99)),
+            ToolTip = fileName
+        };
+        panel.Children.Add(textBlock);
+
+        // X 닫기 버튼
+        var closeButton = new System.Windows.Controls.Button
+        {
+            Content = "✕",
+            FontSize = 10,
+            Padding = new Thickness(4, 2, 4, 2),
+            Margin = new Thickness(6, 0, 0, 0),
+            VerticalAlignment = VerticalAlignment.Center,
+            Background = Brushes.Transparent,
+            BorderBrush = Brushes.Transparent,
+            Cursor = System.Windows.Input.Cursors.Hand,
+            Tag = fileName
+        };
+        closeButton.Click += AnalysisTabClose_Click;
+        panel.Children.Add(closeButton);
+
+        tabBorder.Child = panel;
+        tabBorder.MouseLeftButtonDown += AnalysisTab_MouseDown;
+
+        OneNoteAnalysisTabHost.Items.Add(tabBorder);
+    }
+
+    /// <summary>
+    /// 동적 분석 탭 클릭 → 해당 분석 결과 표시
+    /// </summary>
+    private void AnalysisTab_MouseDown(object sender, System.Windows.Input.MouseButtonEventArgs e)
+    {
+        if (sender is Border border && border.Tag is string fileName)
+        {
+            SwitchToAnalysisTab(fileName);
+        }
+    }
+
+    /// <summary>
+    /// 동적 분석 탭 닫기 버튼 클릭
+    /// </summary>
+    private void AnalysisTabClose_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is not System.Windows.Controls.Button btn || btn.Tag is not string fileName)
+            return;
+
+        // 데이터 제거
+        _analysisExpandTabs.RemoveAll(t => t.FileName == fileName);
+
+        // 탭 UI 제거
+        var tabToRemove = OneNoteAnalysisTabHost.Items.Cast<Border>()
+            .FirstOrDefault(b => b.Tag is string tag && tag == fileName);
+        if (tabToRemove != null)
+            OneNoteAnalysisTabHost.Items.Remove(tabToRemove);
+
+        // 현재 활성 탭이 닫힌 탭이면 노트내용으로 복귀
+        if (_activeAnalysisTabFileName == fileName)
+        {
+            _activeAnalysisTabFileName = null;
+            SwitchToNoteContentTab();
+        }
+
+        e.Handled = true; // 부모 Border의 MouseDown 이벤트 전파 방지
+    }
+
+    /// <summary>
+    /// 동적 분석 탭으로 전환
+    /// </summary>
+    private void SwitchToAnalysisTab(string fileName)
+    {
+        _activeAnalysisTabFileName = fileName;
+
+        // 기존 탭(노트/녹음) 비활성화 스타일
+        DeactivateStaticTabs();
+
+        // 동적 탭 스타일 업데이트
+        foreach (var item in OneNoteAnalysisTabHost.Items)
+        {
+            if (item is Border border && border.Tag is string tag)
+            {
+                bool isActive = tag == fileName;
+                border.Background = isActive ? (Brush)FindResource("ApplicationBackgroundBrush") : Brushes.Transparent;
+                border.BorderBrush = isActive ? (Brush)FindResource("ControlElevationBorderBrush") : Brushes.Transparent;
+
+                if (border.Child is StackPanel panel)
+                {
+                    var tabIcon = panel.Children.OfType<Wpf.Ui.Controls.SymbolIcon>().FirstOrDefault();
+                    var tabText = panel.Children.OfType<System.Windows.Controls.TextBlock>().FirstOrDefault();
+                    if (tabIcon != null)
+                        tabIcon.Foreground = isActive ? (Brush)FindResource("TextFillColorPrimaryBrush") : new SolidColorBrush(Color.FromRgb(0x99, 0x99, 0x99));
+                    if (tabText != null)
+                    {
+                        tabText.Foreground = isActive ? (Brush)FindResource("TextFillColorPrimaryBrush") : new SolidColorBrush(Color.FromRgb(0x99, 0x99, 0x99));
+                        tabText.FontWeight = isActive ? FontWeights.Medium : FontWeights.Normal;
+                    }
+                }
+            }
+        }
+
+        // 패널 전환: 노트/녹음 숨기고 분석 결과 표시
+        OneNoteNoteContentPanel.Visibility = Visibility.Collapsed;
+        OneNoteRecordingContentPanel.Visibility = Visibility.Collapsed;
+        OneNoteAnalysisContentPanel.Visibility = Visibility.Visible;
+
+        // 분석 결과 콘텐츠 업데이트
+        var tabData = _analysisExpandTabs.FirstOrDefault(t => t.FileName == fileName);
+        OneNoteAnalysisContentFileName.Text = tabData.FileName ?? fileName;
+        OneNoteAnalysisContentText.Text = tabData.AnalysisResult ?? "";
+    }
+
+    /// <summary>
+    /// 정적 탭(노트내용/녹음내용) 비활성화 스타일 적용
+    /// </summary>
+    private void DeactivateStaticTabs()
+    {
+        // 노트내용 탭 비활성화
+        OneNoteTabNoteContent.Background = Brushes.Transparent;
+        OneNoteTabNoteContent.BorderBrush = Brushes.Transparent;
+        if (OneNoteTabNoteContent.Child is StackPanel notePanel)
+        {
+            var noteIcon = notePanel.Children.OfType<Wpf.Ui.Controls.SymbolIcon>().FirstOrDefault();
+            var noteText = notePanel.Children.OfType<System.Windows.Controls.TextBlock>().FirstOrDefault();
+            if (noteIcon != null) noteIcon.Foreground = new SolidColorBrush(Color.FromRgb(0x99, 0x99, 0x99));
+            if (noteText != null) { noteText.Foreground = new SolidColorBrush(Color.FromRgb(0x99, 0x99, 0x99)); noteText.FontWeight = FontWeights.Normal; }
+        }
+
+        // 녹음내용 탭 비활성화
+        OneNoteTabRecordingContent.Background = Brushes.Transparent;
+        OneNoteTabRecordingContent.BorderBrush = Brushes.Transparent;
+        if (OneNoteTabRecordingContent.Child is StackPanel recPanel)
+        {
+            var recIcon = recPanel.Children.OfType<Wpf.Ui.Controls.SymbolIcon>().FirstOrDefault();
+            var recText = recPanel.Children.OfType<System.Windows.Controls.TextBlock>().FirstOrDefault();
+            if (recIcon != null) recIcon.Foreground = new SolidColorBrush(Color.FromRgb(0x99, 0x99, 0x99));
+            if (recText != null) { recText.Foreground = new SolidColorBrush(Color.FromRgb(0x99, 0x99, 0x99)); recText.FontWeight = FontWeights.Normal; }
+        }
+    }
+
+    /// <summary>
+    /// 동적 분석 탭 전체 비활성화 스타일 적용
+    /// </summary>
+    private void DeactivateAnalysisTabs()
+    {
+        _activeAnalysisTabFileName = null;
+        foreach (var item in OneNoteAnalysisTabHost.Items)
+        {
+            if (item is Border border)
+            {
+                border.Background = Brushes.Transparent;
+                border.BorderBrush = Brushes.Transparent;
+                if (border.Child is StackPanel panel)
+                {
+                    var tabIcon = panel.Children.OfType<Wpf.Ui.Controls.SymbolIcon>().FirstOrDefault();
+                    var tabText = panel.Children.OfType<System.Windows.Controls.TextBlock>().FirstOrDefault();
+                    if (tabIcon != null) tabIcon.Foreground = new SolidColorBrush(Color.FromRgb(0x99, 0x99, 0x99));
+                    if (tabText != null) { tabText.Foreground = new SolidColorBrush(Color.FromRgb(0x99, 0x99, 0x99)); tabText.FontWeight = FontWeights.Normal; }
+                }
+            }
+        }
     }
 
     /// <summary>
@@ -9709,6 +9945,10 @@ public partial class MainWindow : FluentWindow
     #region OneNote 이벤트 핸들러
 
     private OneNoteViewModel? _oneNoteViewModel;
+
+    // 동적 분석 결과 탭 데이터 (파일명 → 분석결과)
+    private readonly List<(string FileName, string AnalysisResult)> _analysisExpandTabs = new();
+    private string? _activeAnalysisTabFileName;
     private bool _oneNoteEditorInitialized = false;
     private bool _oneNoteEditorReady = false;
     private bool _isLoadingOneNoteSettings = false;  // 설정 로드 중 플래그 (SelectionChanged 이벤트 무시용)

@@ -6465,6 +6465,7 @@
                                     BorderThickness="0,0,0,1"
                                     Background="{DynamicResource ControlFillColorDefaultBrush}"
                                     Visibility="Visible">
+                                <ScrollViewer HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Disabled">
                                 <StackPanel Orientation="Horizontal" Margin="0,0,0,-1">
                                     <!-- 노트내용 탭 -->
                                     <Border x:Name="OneNoteTabNoteContent"
@@ -6496,7 +6497,16 @@
                                                        Foreground="#999999"/>
                                         </StackPanel>
                                     </Border>
+                                    <!-- 동적 분석 결과 탭 (코드에서 생성) -->
+                                    <ItemsControl x:Name="OneNoteAnalysisTabHost">
+                                        <ItemsControl.ItemsPanel>
+                                            <ItemsPanelTemplate>
+                                                <StackPanel Orientation="Horizontal"/>
+                                            </ItemsPanelTemplate>
+                                        </ItemsControl.ItemsPanel>
+                                    </ItemsControl>
                                 </StackPanel>
+                                </ScrollViewer>
                             </Border>
 
                             <!-- 탭 콘텐츠 영역 -->
@@ -6798,6 +6808,28 @@
                                                 </ScrollViewer>
                                             </Grid>
                                         </Border>
+                                    </Grid>
+                                </Border>
+
+                                <!-- 동적 분석 결과 패널 (넓게 보기) -->
+                                <Border x:Name="OneNoteAnalysisContentPanel" Visibility="Collapsed">
+                                    <Grid>
+                                        <Grid.RowDefinitions>
+                                            <RowDefinition Height="Auto"/>
+                                            <RowDefinition Height="*"/>
+                                        </Grid.RowDefinitions>
+                                        <!-- 파일명 헤더 -->
+                                        <Border Grid.Row="0" Padding="16,10"
+                                                BorderBrush="{DynamicResource ControlElevationBorderBrush}" BorderThickness="0,0,0,1">
+                                            <StackPanel Orientation="Horizontal">
+                                                <ui:SymbolIcon Symbol="DocumentSearch24" FontSize="16" Margin="0,0,8,0" VerticalAlignment="Center"/>
+                                                <TextBlock x:Name="OneNoteAnalysisContentFileName" Text="" FontSize="14" FontWeight="SemiBold" VerticalAlignment="Center"/>
+                                            </StackPanel>
+                                        </Border>
+                                        <!-- 분석 결과 본문 -->
+                                        <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto" Padding="16">
+                                            <TextBlock x:Name="OneNoteAnalysisContentText" TextWrapping="Wrap" FontSize="13"/>
+                                        </ScrollViewer>
                                     </Grid>
                                 </Border>
 
@@ -7949,7 +7981,19 @@
 
                                     <!-- 분석 결과 헤더 -->
                                     <Grid Grid.Row="2" Margin="10,5,10,5">
-                                        <TextBlock Text="분석 결과" FontSize="14" FontWeight="SemiBold" VerticalAlignment="Center"/>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*"/>
+                                            <ColumnDefinition Width="Auto"/>
+                                        </Grid.ColumnDefinitions>
+                                        <TextBlock Grid.Column="0" Text="분석 결과" FontSize="14" FontWeight="SemiBold" VerticalAlignment="Center"/>
+                                        <Button Grid.Column="1" Padding="6,4"
+                                                Click="OneNoteAnalysisExpandView_Click"
+                                                ToolTip="넓게 보기" VerticalAlignment="Center">
+                                            <StackPanel Orientation="Horizontal">
+                                                <ui:SymbolIcon Symbol="ArrowExpand24" FontSize="14"/>
+                                                <TextBlock Text="넓게 보기" FontSize="11" Margin="4,0,0,0" VerticalAlignment="Center"/>
+                                            </StackPanel>
+                                        </Button>
                                     </Grid>
 
                                     <!-- 분석 결과 표시 -->
