@@ -484,8 +484,9 @@ public partial class MainWindow : FluentWindow
                         break;
 
                     case "linkClick":
-                        var draftLinkUrl = message.TryGetValue("url", out var dlUrl) ? dlUrl : "";
-                        Services.Editor.TinyMCEEditorService.HandleLinkClick(draftLinkUrl ?? "");
+                        var draftLinkUrl = message.TryGetValue("url", out var dlUrl) ? dlUrl?.ToString() ?? "" : "";
+                        var draftLinkFileName = message.TryGetValue("fileName", out var dlfObj) ? dlfObj?.ToString() ?? "" : "";
+                        Services.Editor.TinyMCEEditorService.HandleLinkClick(draftLinkUrl, draftLinkFileName);
                         break;
 
                     case "debugLog":
@@ -9692,7 +9693,8 @@ public partial class MainWindow : FluentWindow
 
                 case "linkClick":
                     var oneNoteLinkUrl = message.TryGetValue("url", out var olcObj) ? olcObj?.ToString() ?? "" : "";
-                    Services.Editor.TinyMCEEditorService.HandleLinkClick(oneNoteLinkUrl);
+                    var oneNoteLinkFileName = message.TryGetValue("fileName", out var olfObj) ? olfObj?.ToString() ?? "" : "";
+                    Services.Editor.TinyMCEEditorService.HandleLinkClick(oneNoteLinkUrl, oneNoteLinkFileName);
                     break;
 
                 case "debugLog":

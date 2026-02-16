@@ -217,8 +217,9 @@ public partial class ComposeWindow : FluentWindow
                         break;
 
                     case "linkClick":
-                        var composeLinkUrl = message.TryGetValue("url", out var clUrl) ? clUrl : "";
-                        Services.Editor.TinyMCEEditorService.HandleLinkClick(composeLinkUrl ?? "");
+                        var composeLinkUrl = message.TryGetValue("url", out var clUrl) ? clUrl?.ToString() ?? "" : "";
+                        var composeLinkFileName = message.TryGetValue("fileName", out var clfObj) ? clfObj?.ToString() ?? "" : "";
+                        Services.Editor.TinyMCEEditorService.HandleLinkClick(composeLinkUrl, composeLinkFileName);
                         break;
 
                 }
