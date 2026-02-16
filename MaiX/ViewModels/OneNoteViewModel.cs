@@ -3358,7 +3358,7 @@ public partial class OneNoteViewModel : ViewModelBase
             // (StripEditorRootWrapper의 greedy regex가 카드 HTML을 파괴하지 않도록)
             if (attachmentCards.Count > 0)
             {
-                content += "<div style=\"margin-top:8px;\">" + string.Join("", attachmentCards) + "</div>";
+                content += "<div style=\"margin-top:8px;display:flex;flex-wrap:wrap;gap:4px;\">" + string.Join("", attachmentCards) + "</div>";
             }
 
             // Graph API 이미지 URL을 Base64로 변환 (인증 필요한 이미지 처리)
