@@ -1903,17 +1903,17 @@ public class GraphOneNoteService
              + "</a></div>";
     }
 
-    public string ConvertAttachmentObjectsToLinks(string html)
+    public (string html, List<string> cards) ConvertAttachmentObjectsToLinks(string html)
     {
         if (string.IsNullOrEmpty(html))
-            return html;
+            return (html, new List<string>());
 
         var containsObject = html.Contains("<object", StringComparison.OrdinalIgnoreCase);
         Log4.Debug($"[OneNote] ConvertAttachmentObjectsToLinks 진입: 길이={html.Length}, <object 포함={containsObject}");
 
         // 1단계: <object> 태그를 카드로 변환 (수집 후 제거)
         // OneNote API는 <object>를 editorRoot 밖에 배치하므로,
-        // 카드 HTML을 수집하고 <object>는 제거한 뒤 editorRoot 끝에 삽입
+        // 카드 HTML을 수집하고 <object>는 제거한 뒤 호출자가 적절한 시점에 삽입
         var cardHtmlList = new List<string>();
         var seenFiles = new HashSet<string>(StringComparer.OrdinalIgnoreCase); // 중복 방지
 
@@ -1952,7 +1952,7 @@ public class GraphOneNoteService
 
         // 2단계: MaiX 드롭 카드가 API 왕복 후 변질된 패턴 제거
         var droppedCardRegex = new Regex(
-            @"<a\s+href=""file:///[^""]*MaiX_Drop/[^""]*?/([^""/]+)""[^>]*>\s*<div[^>]*>\s*<img[^>]*/>\s*</div>\s*</a>\s*(?:<div[^>]*>\s*<p[^>]*><a[^>]*>[^<]*</a></p>\s*</div>)?",
+            @"<a\s+href=""file:///[^""]*MaiX_Drop/[^""]*?/([^""/]+)""[^>]*>\s*<div[^>]*>\s*<img[^>]*/?>\s*</div>\s*</a>\s*(?:<div[^>]*>\s*<p[^>]*><a[^>]*>[^<]*</a></p>\s*</div>)?",
             RegexOptions.IgnoreCase | RegexOptions.Singleline);
 
         result = droppedCardRegex.Replace(result, match =>
@@ -1995,43 +1995,13 @@ public class GraphOneNoteService
             return "";
         });
 
-
-
-        // 4단계: 수집된 카드를 editorRoot 마지막에 삽입
+        // 카드 삽입은 호출자가 ExtractEditorRootContent + StripEditorRootWrapper 이후에 수행
         if (cardHtmlList.Count > 0)
         {
-            var cardsHtml = "<div style=\"margin-top:8px;\">" + string.Join("", cardHtmlList) + "</div>";
-            Log4.Debug($"[OneNote] 첨부 카드 {cardHtmlList.Count}개를 editorRoot에 삽입");
-
-            // editorRoot의 마지막 닫는 </div> 앞에 삽입
-            // 패턴: editorRoot div의 마지막 </div> 태그
-            var editorRootEndRegex = new Regex(
-                @"(</div>\s*)(</div>\s*</body>)",
-                RegexOptions.IgnoreCase | RegexOptions.Singleline | RegexOptions.RightToLeft);
-
-            var editorRootMatch = editorRootEndRegex.Match(result);
-            if (editorRootMatch.Success)
-            {
-                result = result.Substring(0, editorRootMatch.Index)
-                       + cardsHtml
-                       + editorRootMatch.Value;
-            }
-            else
-            {
-                // editorRoot를 찾지 못하면 </body> 앞에 삽입
-                var bodyEndIdx = result.LastIndexOf("</body>", StringComparison.OrdinalIgnoreCase);
-                if (bodyEndIdx >= 0)
-                {
-                    result = result.Insert(bodyEndIdx, cardsHtml);
-                }
-                else
-                {
-                    result += cardsHtml;
-                }
-            }
+            Log4.Debug($"[OneNote] 첨부 카드 {cardHtmlList.Count}개 수집 완료 (삽입은 호출자 담당)");
         }
 
-        return result;
+        return (result, cardHtmlList);
     }
 
     /// <summary>
