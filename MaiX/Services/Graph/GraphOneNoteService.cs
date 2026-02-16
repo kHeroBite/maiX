@@ -740,6 +740,17 @@ public class GraphOneNoteService
             using var reader = new System.IO.StreamReader(contentStream);
             var content = await reader.ReadToEndAsync();
 
+            // 디버그: API 원본 응답 전체를 파일에 덤프 (최초 5회만)
+            var dumpPath = Path.Combine(Path.GetTempPath(), $"onenote_api_dump_{DateTime.Now:HHmmss}.html");
+            try { File.WriteAllText(dumpPath, content); Log4.Debug($"[OneNote] API 응답 덤프: {dumpPath}"); } catch { }
+            Log4.Debug($"[OneNote] API 원본 응답 길이={content.Length}, <object 포함={content.Contains("<object", StringComparison.OrdinalIgnoreCase)}, data-attachment 포함={content.Contains("data-attachment", StringComparison.OrdinalIgnoreCase)}");
+            if (content.Contains("<object", StringComparison.OrdinalIgnoreCase))
+            {
+                var objIdx = content.IndexOf("<object", StringComparison.OrdinalIgnoreCase);
+                var objEnd = Math.Min(objIdx + 600, content.Length);
+                Log4.Debug($"[OneNote] API object 태그 샘플: {content.Substring(objIdx, objEnd - objIdx)}");
+            }
+
             _logger.Debug("페이지 {PageId} 내용 조회 완료 (GroupId={GroupId}, SiteId={SiteId})", pageId, groupId ?? "N/A", siteId ?? "N/A");
             return content;
         }
@@ -1314,10 +1325,17 @@ public class GraphOneNoteService
     /// </summary>
     public async Task<bool> AppendFileToPageAsync(string pageId, string filePath, string fileName)
     {
+        Log4.Debug($"[OneNote] AppendFileToPageAsync 진입: pageId={pageId?.Substring(0, Math.Min(20, pageId?.Length ?? 0))}..., filePath={filePath}, fileName={fileName}");
         if (string.IsNullOrEmpty(pageId))
+        {
+            Log4.Warn("[OneNote] AppendFileToPageAsync: pageId가 비어있음");
             return false;
+        }
         if (string.IsNullOrEmpty(filePath) || !File.Exists(filePath))
+        {
+            Log4.Warn($"[OneNote] AppendFileToPageAsync: 파일 미존재 — filePath={filePath}, Exists={(!string.IsNullOrEmpty(filePath) ? File.Exists(filePath).ToString() : "empty")}");
             return false;
+        }
 
         try
         {
@@ -1358,20 +1376,24 @@ public class GraphOneNoteService
             var url = $"https://graph.microsoft.com/v1.0/me/onenote/pages/{pageId}/content";
             var response = await httpClient.PatchAsync(url, multipart);
 
+            Log4.Debug($"[OneNote] AppendFileToPageAsync PATCH 응답: {response.StatusCode}");
             if (response.IsSuccessStatusCode)
             {
+                Log4.Debug($"[OneNote] AppendFileToPageAsync 성공: {fileName}");
                 _logger.Information("페이지 파일 첨부 완료: PageId={PageId}, File={FileName}", pageId, fileName);
                 return true;
             }
             else
             {
                 var errorContent = await response.Content.ReadAsStringAsync();
+                Log4.Warn($"[OneNote] AppendFileToPageAsync API 실패: {response.StatusCode} - {errorContent}");
                 _logger.Error("페이지 파일 첨부 실패: {StatusCode} - {Error}", response.StatusCode, errorContent);
                 return false;
             }
         }
         catch (Exception ex)
         {
+            Log4.Error($"[OneNote] AppendFileToPageAsync 예외: {ex.Message}");
             _logger.Error(ex, "페이지 파일 첨부 예외: PageId={PageId}, File={FileName}", pageId, fileName);
             return false;
         }
@@ -1542,6 +1564,10 @@ public class GraphOneNoteService
                 Log4.Debug($"[GraphOneNote] body 태그 내용 추출: {bodyContent.Length}자");
             }
 
+            // 아이콘 카드 HTML 제거 (저장 시 불필요 — API가 <object> 태그로 관리)
+            // GenerateAttachmentCardHtml이 생성한 <div contenteditable="false" ... data-attachment="...">...</div> 제거
+            bodyContent = StripAttachmentCardHtml(bodyContent);
+
             // 내용이 비어있으면 최소 내용 유지
             if (string.IsNullOrWhiteSpace(bodyContent) || bodyContent.Trim() == "<p></p>" || bodyContent.Trim() == "<p><br></p>")
             {
@@ -1611,6 +1637,28 @@ public class GraphOneNoteService
             Log4.Error($"[GraphOneNote] 페이지 업데이트 예외: PageId={pageId}, Error={ex.Message}\n{ex.StackTrace}");
             return false;
         }
+    }
+
+    /// <summary>
+    /// 저장 전 아이콘 카드 HTML을 제거 (OneNote API가 <object> 태그로 파일 관리)
+    /// GenerateAttachmentCardHtml이 생성한 카드를 PATCH에 포함하면 API가 이미지로 변환해 분리됨
+    /// </summary>
+    public static string StripAttachmentCardHtml(string html)
+    {
+        if (string.IsNullOrEmpty(html))
+            return html;
+
+        // GenerateAttachmentCardHtml 출력:
+        // <div contenteditable="false" ... data-attachment="파일명">
+        //   <a ...><img .../><div ...>표시이름</div></a>
+        // </div>
+        // 내부에 중첩 div가 있으므로 </div></a></div> 패턴까지 매칭
+        var cardRegex = new Regex(
+            @"<div\s+[^>]*contenteditable=""false""[^>]*data-attachment=""[^""]+""[^>]*>.*?</a>\s*</div>",
+            RegexOptions.IgnoreCase | RegexOptions.Singleline);
+
+        var result = cardRegex.Replace(html, "");
+        return result;
     }
 
 
@@ -1694,15 +1742,19 @@ public class GraphOneNoteService
         if (string.IsNullOrEmpty(html))
             return string.Empty;
 
+        // 디버그: 추출 전 object 태그 존재 여부
+        Log4.Debug($"[OneNote] ExtractEditorRootContent 진입: 길이={html.Length}, <object 포함={html.Contains("<object", StringComparison.OrdinalIgnoreCase)}");
+
         // data-id="editorRoot" div의 내용 추출
         var match = Regex.Match(html,
-            @"<div[^>]*data-id=""editorRoot""[^>]*>(.*?)</div>",
+            @"<div[^>]*data-id=""editorRoot""[^>]*>(.*)</div>\s*</body>",
             RegexOptions.Singleline | RegexOptions.IgnoreCase);
 
         if (match.Success)
         {
-            _logger.Debug("editorRoot 콘텐츠 추출: {Length}자", match.Groups[1].Value.Length);
-            return match.Groups[1].Value;
+            var extracted = match.Groups[1].Value;
+            Log4.Debug($"[OneNote] editorRoot 추출 완료: 길이={extracted.Length}, <object 포함={extracted.Contains("<object", StringComparison.OrdinalIgnoreCase)}");
+            return extracted;
         }
 
         // editorRoot가 없으면 body 전체 반환
@@ -1825,7 +1877,15 @@ public class GraphOneNoteService
         if (string.IsNullOrEmpty(html))
             return html;
 
-        // <object ... data-attachment="파일명" ... type="비오디오" ... /> 또는 <object ...>...</object>
+        var containsObject = html.Contains("<object", StringComparison.OrdinalIgnoreCase);
+        Log4.Debug($"[OneNote] ConvertAttachmentObjectsToLinks 진입: 길이={html.Length}, <object 포함={containsObject}");
+
+        // 1단계: <object> 태그를 카드로 변환 (수집 후 제거)
+        // OneNote API는 <object>를 editorRoot 밖에 배치하므로,
+        // 카드 HTML을 수집하고 <object>는 제거한 뒤 editorRoot 끝에 삽입
+        var cardHtmlList = new List<string>();
+        var seenFiles = new HashSet<string>(StringComparer.OrdinalIgnoreCase); // 중복 방지
+
         var objectRegex = new Regex(
             @"<object\s+([^>]*)(?:/>|>.*?</object>)",
             RegexOptions.IgnoreCase | RegexOptions.Singleline);
@@ -1844,11 +1904,99 @@ public class GraphOneNoteService
                 return match.Value;
 
             var fileName = attachmentMatch.Groups[1].Value;
-            var safeFileName = System.Web.HttpUtility.HtmlEncode(fileName);
 
-            Log4.Debug($"[OneNote] 첨부파일 object→카드 변환: {fileName}");
-            return GenerateAttachmentCardHtml(fileName);
+            // data 속성에서 리소스 다운로드 URL 추출 (\s로 data-attachment과 구분)
+            var dataUrlMatch = Regex.Match(attrs, @"\sdata=""([^""]+)""", RegexOptions.IgnoreCase);
+            var dataUrl = dataUrlMatch.Success ? dataUrlMatch.Groups[1].Value : "#";
+
+            // 동일 파일명 중복 카드 방지
+            if (seenFiles.Add(fileName))
+            {
+                Log4.Debug($"[OneNote] 첨부파일 object→카드 변환: {fileName}");
+                cardHtmlList.Add(GenerateAttachmentCardHtml(fileName, dataUrl));
+            }
+
+            return ""; // <object> 태그 제거
         });
+
+        // 2단계: MaiX 드롭 카드가 API 왕복 후 변질된 패턴 제거
+        var droppedCardRegex = new Regex(
+            @"<a\s+href=""file:///[^""]*MaiX_Drop/[^""]*?/([^""/]+)""[^>]*>\s*<div[^>]*>\s*<img[^>]*/>\s*</div>\s*</a>\s*(?:<div[^>]*>\s*<p[^>]*><a[^>]*>[^<]*</a></p>\s*</div>)?",
+            RegexOptions.IgnoreCase | RegexOptions.Singleline);
+
+        result = droppedCardRegex.Replace(result, match =>
+        {
+            var fileName = Uri.UnescapeDataString(match.Groups[1].Value.Trim());
+            if (seenFiles.Add(fileName))
+            {
+                Log4.Debug($"[OneNote] 변질카드→카드 복원: {fileName}");
+                cardHtmlList.Add(GenerateAttachmentCardHtml(fileName));
+            }
+            return ""; // 변질 패턴 제거
+        });
+
+        // 3단계: 텍스트 링크 패턴 제거
+        var textLinkRegexA = new Regex(
+            @"<a\s+[^>]*>📎\s*<strong>([^<]+)</strong>\s*\(첨부됨\)</a>",
+            RegexOptions.IgnoreCase | RegexOptions.Singleline);
+        result = textLinkRegexA.Replace(result, match =>
+        {
+            var fileName = match.Groups[1].Value.Trim();
+            if (seenFiles.Add(fileName))
+            {
+                Log4.Debug($"[OneNote] 텍스트링크A→카드 변환: {fileName}");
+                cardHtmlList.Add(GenerateAttachmentCardHtml(fileName));
+            }
+            return "";
+        });
+
+        var textLinkRegexB = new Regex(
+            @"<a\s+[^>]*>(?:📎|&#128206;)\s*</a>\s*([^\s<][^<]*?)\s*\(첨부됨\)",
+            RegexOptions.IgnoreCase | RegexOptions.Singleline);
+        result = textLinkRegexB.Replace(result, match =>
+        {
+            var fileName = match.Groups[1].Value.Trim();
+            if (seenFiles.Add(fileName))
+            {
+                Log4.Debug($"[OneNote] 텍스트링크B→카드 변환: {fileName}");
+                cardHtmlList.Add(GenerateAttachmentCardHtml(fileName));
+            }
+            return "";
+        });
+
+        // 4단계: 수집된 카드를 editorRoot 마지막에 삽입
+        if (cardHtmlList.Count > 0)
+        {
+            var cardsHtml = "<div style=\"margin-top:8px;\">" + string.Join("", cardHtmlList) + "</div>";
+            Log4.Debug($"[OneNote] 첨부 카드 {cardHtmlList.Count}개를 editorRoot에 삽입");
+
+            // editorRoot의 마지막 닫는 </div> 앞에 삽입
+            // 패턴: editorRoot div의 마지막 </div> 태그
+            var editorRootEndRegex = new Regex(
+                @"(</div>\s*)(</div>\s*</body>)",
+                RegexOptions.IgnoreCase | RegexOptions.Singleline | RegexOptions.RightToLeft);
+
+            var editorRootMatch = editorRootEndRegex.Match(result);
+            if (editorRootMatch.Success)
+            {
+                result = result.Substring(0, editorRootMatch.Index)
+                       + cardsHtml
+                       + editorRootMatch.Value;
+            }
+            else
+            {
+                // editorRoot를 찾지 못하면 </body> 앞에 삽입
+                var bodyEndIdx = result.LastIndexOf("</body>", StringComparison.OrdinalIgnoreCase);
+                if (bodyEndIdx >= 0)
+                {
+                    result = result.Insert(bodyEndIdx, cardsHtml);
+                }
+                else
+                {
+                    result += cardsHtml;
+                }
+            }
+        }
 
         return result;
     }

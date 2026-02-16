@@ -11340,6 +11340,9 @@ public partial class MainWindow : FluentWindow
                 await OneNoteEditorWebView.CoreWebView2.ExecuteScriptAsync(
                     $"var el = editor.dom.get('{dropId}'); if(el) {{ el.outerHTML = '{jsCardHtml}'; editor.fire('change'); }}");
                 _viewModel.StatusMessage = $"파일 첨부 완료: {fileName}";
+
+                // 첨부 완료 후 자동저장 (다른 노트 이동 시 카드 보존)
+                await SaveOneNoteAsync();
             }
             else
             {

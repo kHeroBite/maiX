@@ -3340,6 +3340,13 @@ public partial class OneNoteViewModel : ViewModelBase
 
             var content = await _oneNoteService.GetPageContentAsync(pageId, groupId, siteId);
 
+            // 비오디오 첨부파일 object 태그를 클릭 가능한 아이콘 카드로 변환
+            // ExtractEditorRootContent보다 먼저 실행 (object 태그가 editorRoot 밖에 위치하므로)
+            if (!string.IsNullOrEmpty(content))
+            {
+                content = _oneNoteService.ConvertAttachmentObjectsToLinks(content);
+            }
+
             // editorRoot 콘텐츠 추출 (중복 추가 방지)
             if (!string.IsNullOrEmpty(content))
             {
@@ -3351,12 +3358,6 @@ public partial class OneNoteViewModel : ViewModelBase
             {
                 _logger.Debug("이미지 Base64 변환 시작...");
                 content = await _oneNoteService.ConvertImagesToBase64Async(content);
-            }
-
-            // 비오디오 첨부파일 object 태그를 클릭 가능한 링크로 변환
-            if (!string.IsNullOrEmpty(content))
-            {
-                content = _oneNoteService.ConvertAttachmentObjectsToLinks(content);
             }
 
             CurrentPageContent = content;
