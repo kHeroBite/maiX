@@ -1963,7 +1963,7 @@ public class GraphOneNoteService
 
                     if (!string.IsNullOrWhiteSpace(strippedContent))
                     {
-                        // 형제 요소(첨부파일 카드)가 있으면 editorRoot 내부 하단에 인라인 배치
+                        // 형제 요소(첨부파일 카드 + 텍스트)가 있으면 처리
                         // OneNote API는 absolute div의 위치 변경을 PATCH로 지원하지 않으므로
                         // 별도 레이어가 아닌 editorRoot 내부에 카드를 포함시킴
                         if (!string.IsNullOrWhiteSpace(siblings))
@@ -1972,9 +1972,18 @@ public class GraphOneNoteService
 
                             // ConvertAttachmentObjectsToLinks가 이미 <object>→카드 변환 완료
                             // siblings에서 data-attachment 속성 가진 카드 div를 찾아 인라인 배치
-                            var cardMatches = Regex.Matches(trimmedSiblings,
-                                @"<div\s+contenteditable=""false""[^>]*data-attachment=""([^""]+)""[^>]*>.*?</div>\s*</a></div>",
+                            var cardPattern = @"<div\s+contenteditable=""false""[^>]*data-attachment=""([^""]+)""[^>]*>.*?</div>\s*</a></div>";
+                            var cardMatches = Regex.Matches(trimmedSiblings, cardPattern,
                                 RegexOptions.IgnoreCase | RegexOptions.Singleline);
+
+                            // 카드를 제거한 나머지 텍스트/br 요소를 strippedContent에 추가
+                            var nonCardContent = Regex.Replace(trimmedSiblings, cardPattern, "",
+                                RegexOptions.IgnoreCase | RegexOptions.Singleline);
+                            if (!string.IsNullOrWhiteSpace(nonCardContent))
+                            {
+                                strippedContent += nonCardContent;
+                                Log4.Debug($"[OneNote] editorRoot 형제 텍스트 {nonCardContent.Length}자를 콘텐츠에 추가");
+                            }
 
                             if (cardMatches.Count > 0)
                             {
