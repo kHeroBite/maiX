@@ -507,12 +507,12 @@ public static class TinyMCEEditorService
             if (string.IsNullOrEmpty(fileName) || string.IsNullOrEmpty(base64Data))
                 return null;
 
-            var tempDir = System.IO.Path.Combine(System.IO.Path.GetTempPath(), "MaiX_Drop");
+            var tempDir = System.IO.Path.Combine(System.IO.Path.GetTempPath(), "MaiX_Drop", Guid.NewGuid().ToString("N")[..8]);
             System.IO.Directory.CreateDirectory(tempDir);
 
-            // 파일명 충돌 방지
+            // 원본 파일명 유지 (충돌 방지는 GUID 서브디렉토리)
             var safeName = string.Join("_", fileName.Split(System.IO.Path.GetInvalidFileNameChars()));
-            var tempPath = System.IO.Path.Combine(tempDir, $"{DateTime.Now:yyyyMMdd_HHmmss}_{safeName}");
+            var tempPath = System.IO.Path.Combine(tempDir, safeName);
 
             var bytes = Convert.FromBase64String(base64Data);
             await System.IO.File.WriteAllBytesAsync(tempPath, bytes);
