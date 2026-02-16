@@ -216,6 +216,11 @@ public partial class ComposeWindow : FluentWindow
                         await Services.Editor.TinyMCEEditorService.HandleFilePickerAsync(EditorWebView, pickerType);
                         break;
 
+                    case "linkClick":
+                        var composeLinkUrl = message.TryGetValue("url", out var clUrl) ? clUrl : "";
+                        Services.Editor.TinyMCEEditorService.HandleLinkClick(composeLinkUrl ?? "");
+                        break;
+
                 }
             }
         }

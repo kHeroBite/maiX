@@ -258,6 +258,20 @@ public static class TinyMCEEditorService
                             }}
                             // 이미지 파일은 TinyMCE 기본 처리에 맡김
                         }}, true);
+                        // 링크 클릭 → postMessage로 C#에 전달 (TinyMCE Ctrl+Click 우회)
+                        iframeDoc.addEventListener('click', function(evt) {{
+                            var el = evt.target;
+                            while (el && el.tagName !== 'A') el = el.parentElement;
+                            if (el && el.tagName === 'A' && el.href) {{
+                                evt.preventDefault();
+                                evt.stopImmediatePropagation();
+                                try {{
+                                    window.chrome.webview.postMessage({{ type: 'linkClick', url: el.href }});
+                                }} catch(ex) {{
+                                    try {{ window.parent.chrome.webview.postMessage({{ type: 'linkClick', url: el.href }}); }} catch(ex2) {{}}
+                                }}
+                            }}
+                        }}, true);
                     }}
                     window.chrome.webview.postMessage({{ type: 'ready' }});
                 }});
@@ -344,7 +358,7 @@ public static class TinyMCEEditorService
             ? $@" [style*=""background""] {{ background-color: transparent !important; background: transparent !important; }} [style*=""color""] {{ color: {textColor} !important; }} p, li, div, span, font, b, strong, i, em, u, a, h1, h2, h3, h4, h5, h6 {{ color: {textColor} !important; background-color: transparent !important; }}"
             : "";
 
-        return $@"body {{ font-family: Aptos, sans-serif; font-size: 14px; color: {textColor}; background-color: {bgColor}; padding: 16px; }} * {{ color: inherit; }} table {{ border-collapse: collapse; }} table td, table th {{ color: {textColor} !important; background-color: {tableBgColor} !important; border: 1px solid {tableBorderColor}; padding: 4px 8px; }} table td[style*=""background""], table th[style*=""background""] {{ background-color: {tableBgColor} !important; }} table td *, table th * {{ color: {textColor} !important; }} table th {{ background-color: {tableHeaderBgColor} !important; }} span, font, b, strong, i, em, u {{ color: inherit !important; }}{inlineOverride}";
+        return $@"body {{ font-family: Aptos, sans-serif; font-size: 14px; color: {textColor}; background-color: {bgColor}; padding: 16px; }} * {{ color: inherit; }} table {{ border-collapse: collapse; }} table td, table th {{ color: {textColor} !important; background-color: {tableBgColor} !important; border: 1px solid {tableBorderColor}; padding: 4px 8px; }} table td[style*=""background""], table th[style*=""background""] {{ background-color: {tableBgColor} !important; }} table td *, table th * {{ color: {textColor} !important; }} table th {{ background-color: {tableHeaderBgColor} !important; }} span, font, b, strong, i, em, u {{ color: inherit !important; }} a {{ cursor: pointer !important; }}{inlineOverride}";
     }
 
     /// <summary>
@@ -531,6 +545,51 @@ public static class TinyMCEEditorService
     /// 에디터 WebView2의 NavigationStarting 이벤트 핸들러.
     /// 비이미지 파일 드래그&amp;드롭 시 file:/// URL을 링크로 삽입하고,
     /// 외부 링크 클릭 시 기본 브라우저로 엽니다.
+
+    /// <summary>
+    /// JS postMessage로 전달된 링크 클릭을 처리합니다.
+    /// TinyMCE 편집 모드에서는 NavigationStarting이 발생하지 않으므로
+    /// JS click 이벤트에서 postMessage로 전달받아 처리합니다.
+    /// </summary>
+    public static void HandleLinkClick(string url)
+    {
+        if (string.IsNullOrEmpty(url)) return;
+
+        Log4.Debug($"[TinyMCE] 링크 클릭: {url}");
+
+        try
+        {
+            if (url.StartsWith("file:///", StringComparison.OrdinalIgnoreCase))
+            {
+                var filePath = Uri.UnescapeDataString(url.Substring("file:///".Length)).Replace("/", "\\");
+                if (System.IO.File.Exists(filePath))
+                {
+                    System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
+                    {
+                        FileName = filePath,
+                        UseShellExecute = true
+                    });
+                }
+                else
+                {
+                    Log4.Warn($"[TinyMCE] 링크 파일 없음: {filePath}");
+                }
+            }
+            else if (url.StartsWith("http://", StringComparison.OrdinalIgnoreCase) ||
+                     url.StartsWith("https://", StringComparison.OrdinalIgnoreCase))
+            {
+                System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
+                {
+                    FileName = url,
+                    UseShellExecute = true
+                });
+            }
+        }
+        catch (Exception ex)
+        {
+            Log4.Error($"[TinyMCE] 링크 열기 실패: {url} — {ex.Message}");
+        }
+    }
     /// </summary>
     public static async void HandleEditorNavigationStarting(object? sender, Microsoft.Web.WebView2.Core.CoreWebView2NavigationStartingEventArgs e)
     {

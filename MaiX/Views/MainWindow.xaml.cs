@@ -483,6 +483,11 @@ public partial class MainWindow : FluentWindow
                         }
                         break;
 
+                    case "linkClick":
+                        var draftLinkUrl = message.TryGetValue("url", out var dlUrl) ? dlUrl : "";
+                        Services.Editor.TinyMCEEditorService.HandleLinkClick(draftLinkUrl ?? "");
+                        break;
+
                     case "debugLog":
                         var debugMsg = message.TryGetValue("message", out var dm) ? dm : "";
                         Log4.Debug($"[Draft-JS] {debugMsg}");
@@ -9683,6 +9688,11 @@ public partial class MainWindow : FluentWindow
                         else
                             Log4.Warn($"[OneNote] 파일드롭 base64 임시저장 실패: {oneNoteDropDataFileName}");
                     }
+                    break;
+
+                case "linkClick":
+                    var oneNoteLinkUrl = message.TryGetValue("url", out var olcObj) ? olcObj?.ToString() ?? "" : "";
+                    Services.Editor.TinyMCEEditorService.HandleLinkClick(oneNoteLinkUrl);
                     break;
 
                 case "debugLog":
