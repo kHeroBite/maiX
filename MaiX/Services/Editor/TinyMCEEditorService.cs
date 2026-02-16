@@ -653,6 +653,59 @@ public static class TinyMCEEditorService
                 }
             }
         }
+        else if (e.Uri.Contains("graph.microsoft.com", StringComparison.OrdinalIgnoreCase) &&
+                 e.Uri.Contains("/onenote/resources/", StringComparison.OrdinalIgnoreCase))
+        {
+            // Graph API onenote resource URL → 인증 다운로드 후 로컬 파일 열기
+            Log4.Debug($"[TinyMCE] OneNote 리소스 다운로드 시작: {e.Uri}");
+            try
+            {
+                var graphService = ((App)System.Windows.Application.Current).GetService<Services.Graph.GraphOneNoteService>();
+                if (graphService != null)
+                {
+                    // URL에서 파일명 추출 시도 — 카드 HTML의 data-filename 속성에서 가져올 수 없으므로
+                    // NavigationStarting 이벤트 시점에 WebView에서 클릭된 요소의 파일명을 알 수 없음
+                    // → 다운로드 후 Content-Disposition 헤더 또는 URL에서 추정
+                    var fileName = "downloaded_file";
+
+                    // sender에서 WebView를 가져와 클릭된 링크의 파일명 추출 시도
+                    if (sender is Microsoft.Web.WebView2.Wpf.WebView2 wv && wv.CoreWebView2 != null)
+                    {
+                        try
+                        {
+                            var jsResult = await wv.CoreWebView2.ExecuteScriptAsync(
+                                "(() => { var el = document.querySelector('a[href*=\"graph.microsoft.com\"][data-attachment]'); return el ? el.getAttribute('data-attachment') : ''; })()");
+                            var parsed = jsResult?.Trim('"');
+                            if (!string.IsNullOrEmpty(parsed))
+                                fileName = parsed;
+                        }
+                        catch { /* JS 실패 시 기본 파일명 사용 */ }
+                    }
+
+                    var saveDir = System.IO.Path.Combine(
+                        Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
+                        "MaiX", "MaiX_Drop");
+                    var localPath = await graphService.DownloadAudioResourceAsync(e.Uri, fileName, saveDir);
+                    if (!string.IsNullOrEmpty(localPath) && System.IO.File.Exists(localPath))
+                    {
+                        Log4.Info($"[TinyMCE] OneNote 리소스 다운로드 완료, 열기: {localPath}");
+                        System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
+                        {
+                            FileName = localPath,
+                            UseShellExecute = true
+                        });
+                    }
+                    else
+                    {
+                        Log4.Warn($"[TinyMCE] OneNote 리소스 다운로드 실패: {e.Uri}");
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                Log4.Error($"[TinyMCE] OneNote 리소스 다운로드 오류: {e.Uri} — {ex.Message}");
+            }
+        }
         else
         {
             // http/https 등 외부 링크 → 기본 브라우저로 열기
