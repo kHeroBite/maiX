@@ -258,8 +258,16 @@ public static class TinyMCEEditorService
                             }}
                             // 이미지 파일은 TinyMCE 기본 처리에 맡김
                         }}, true);
-                        // 링크 클릭 → postMessage로 C#에 전달 (TinyMCE Ctrl+Click 우회)
+                        // 링크 더블클릭 → postMessage로 C#에 전달 (싱글클릭 비활성화)
                         iframeDoc.addEventListener('click', function(evt) {{
+                            var el = evt.target;
+                            while (el && el.tagName !== 'A') el = el.parentElement;
+                            if (el && el.tagName === 'A' && el.href) {{
+                                evt.preventDefault();
+                                evt.stopImmediatePropagation();
+                            }}
+                        }}, true);
+                        iframeDoc.addEventListener('dblclick', function(evt) {{
                             var el = evt.target;
                             while (el && el.tagName !== 'A') el = el.parentElement;
                             if (el && el.tagName === 'A' && el.href) {{
@@ -273,10 +281,85 @@ public static class TinyMCEEditorService
                             }}
                         }}, true);
                     }}
+                    // OneNote 레이어 드래그 핸들 주입 + 드래그 이동 로직
+                    (function() {{
+                        var doc = ed.getDoc();
+                        if (!doc) return;
+
+                        function addHandles() {{
+                            var layers = doc.querySelectorAll('div[style*=""position:absolute""], div[style*=""position: absolute""]');
+                            layers.forEach(function(layer) {{
+                                if (layer.getAttribute('data-layer-type') === 'card') return;
+                                if (layer.querySelector('.layer-handle')) return;
+                                var handle = doc.createElement('div');
+                                handle.className = 'layer-handle';
+                                handle.textContent = '⠿';
+                                handle.setAttribute('contenteditable', 'false');
+                                layer.insertBefore(handle, layer.firstChild);
+                            }});
+                        }}
+                        addHandles();
+
+                        // setContent 후 핸들 재주입
+                        ed.on('SetContent', function() {{ setTimeout(addHandles, 50); }});
+
+                        // 클릭 시 선택 토글
+                        doc.addEventListener('mousedown', function(e) {{
+                            var layers = doc.querySelectorAll('.mce-layer-selected');
+                            layers.forEach(function(l) {{ l.classList.remove('mce-layer-selected'); }});
+                            var layer = e.target.closest('div[style*=""position:absolute""], div[style*=""position: absolute""]');
+                            if (layer) layer.classList.add('mce-layer-selected');
+                        }});
+
+                        // 카드 레이어 내부 요소의 기본 드래그 차단
+                        doc.addEventListener('dragstart', function(e) {{
+                            var cardLayer = e.target.closest('div[data-layer-type=""card""]');
+                            if (cardLayer) e.preventDefault();
+                        }});
+
+                        // 드래그 이동 (핸들 또는 카드 레이어 내부)
+                        var dragState = null;
+                        doc.addEventListener('mousedown', function(e) {{
+                            var isHandle = e.target.classList.contains('layer-handle');
+                            var cardLayer = e.target.closest('div[data-layer-type=""card""]');
+                            if (!isHandle && !cardLayer) return;
+                            e.preventDefault();
+                            var layer = isHandle ? e.target.parentElement : cardLayer;
+                            var startX = e.clientX, startY = e.clientY;
+                            var origLeft = parseInt(layer.style.left) || 0;
+                            var origTop = parseInt(layer.style.top) || 0;
+                            dragState = {{ layer: layer, startX: startX, startY: startY, origLeft: origLeft, origTop: origTop }};
+                            layer.style.cursor = 'grabbing';
+                        }});
+                        doc.addEventListener('mousemove', function(e) {{
+                            if (!dragState) return;
+                            e.preventDefault();
+                            var dx = e.clientX - dragState.startX;
+                            var dy = e.clientY - dragState.startY;
+                            dragState.layer.style.left = (dragState.origLeft + dx) + 'px';
+                            dragState.layer.style.top = (dragState.origTop + dy) + 'px';
+                        }});
+                        doc.addEventListener('mouseup', function(e) {{
+                            if (!dragState) return;
+                            dragState.layer.style.cursor = '';
+                            var handle = dragState.layer.querySelector('.layer-handle');
+                            if (handle) handle.style.cursor = 'grab';
+                            dragState = null;
+                            // 위치 변경을 contentChanged로 전파
+                            ed.fire('change');
+                        }});
+                    }})();
+
                     window.chrome.webview.postMessage({{ type: 'ready' }});
                 }});
                 ed.on('input change', function() {{
-                    window.chrome.webview.postMessage({{ type: 'contentChanged', content: ed.getContent() }});
+                    var raw = ed.getContent();
+                    var tmp = document.createElement('div');
+                    tmp.innerHTML = raw;
+                    // 표시용 요소/클래스 제거 (PATCH에 포함되면 안 됨)
+                    tmp.querySelectorAll('.layer-handle').forEach(function(h) {{ h.remove(); }});
+                    tmp.querySelectorAll('.mce-layer-selected').forEach(function(el) {{ el.classList.remove('mce-layer-selected'); }});
+                    window.chrome.webview.postMessage({{ type: 'contentChanged', content: tmp.innerHTML }});
                 }});
                 
             }}
@@ -291,7 +374,12 @@ public static class TinyMCEEditorService
 
         window.getContent = function() {{
             if (tinymce.activeEditor) {{
-                return tinymce.activeEditor.getContent();
+                var raw = tinymce.activeEditor.getContent();
+                var tmp = document.createElement('div');
+                tmp.innerHTML = raw;
+                tmp.querySelectorAll('.layer-handle').forEach(function(h) {{ h.remove(); }});
+                tmp.querySelectorAll('.mce-layer-selected').forEach(function(el) {{ el.classList.remove('mce-layer-selected'); }});
+                return tmp.innerHTML;
             }}
             return '';
         }};
@@ -360,8 +448,11 @@ public static class TinyMCEEditorService
 
         // OneNote 레이어 박스/리사이즈 CSS
         var layerBorderColor = isDark ? "#666" : "#ccc";
-        var layerHoverColor = isDark ? "#88f" : "#4488ff";
-        var layerCss = $@" div[style*=""position:absolute""], div[style*=""position: absolute""] {{ border: 1px dashed {layerBorderColor}; resize: both; overflow: auto; box-sizing: border-box; width: fit-content !important; }} div[style*=""position:absolute""]:hover, div[style*=""position: absolute""]:hover {{ border: 2px solid {layerHoverColor}; cursor: move; }}";
+        
+        var handleBg = isDark ? "#333" : "#e8e8e8";
+        var handleBorder = isDark ? "#555" : "#ccc";
+        var handleHoverBg = isDark ? "#444" : "#ddd";
+        var layerCss = $@" div[style*=""position:absolute""], div[style*=""position: absolute""] {{ border: 1px solid transparent; resize: both; overflow: visible; box-sizing: border-box; position: absolute; }} div[style*=""position:absolute""]:hover, div[style*=""position: absolute""]:hover {{ border: 1px dashed {layerBorderColor}; }} div[style*=""position:absolute""].mce-layer-selected, div[style*=""position: absolute""].mce-layer-selected {{ border: 1px solid {layerBorderColor}; }} div[style*=""position:absolute""] > .layer-handle, div[style*=""position: absolute""] > .layer-handle {{ display: none; position: absolute; top: -10px; left: -1px; right: -1px; height: 9px; background: {handleBg}; border: 1px solid {handleBorder}; border-bottom: none; border-radius: 2px 2px 0 0; cursor: grab; font-size: 7px; line-height: 9px; text-align: center; color: {layerBorderColor}; user-select: none; z-index: 10; outline: none; }} div[style*=""position:absolute""]:hover > .layer-handle, div[style*=""position: absolute""]:hover > .layer-handle, div[style*=""position:absolute""].mce-layer-selected > .layer-handle, div[style*=""position: absolute""].mce-layer-selected > .layer-handle {{ display: block; }} div[style*=""position:absolute""] > .layer-handle:hover, div[style*=""position: absolute""] > .layer-handle:hover {{ background: {handleHoverBg}; cursor: grabbing; }} div[data-layer-type=""card""] {{ border: none !important; }} div[data-layer-type=""card""]:hover {{ border: none !important; }} div[data-layer-type=""card""].mce-layer-selected {{ border: none !important; }} div[data-layer-type=""card""] > .layer-handle {{ display: none !important; }} .layer-handle:focus, .layer-handle:active, div[style*=""position:absolute""]:focus, div[style*=""position: absolute""]:focus, div[style*=""position:absolute""] *:focus, div[style*=""position: absolute""] *:focus {{ outline: none !important; box-shadow: none !important; }}";
 
         return $@"body {{ font-family: Aptos, sans-serif; font-size: 14px; color: {textColor}; background-color: {bgColor}; padding: 16px; }} * {{ color: inherit; }} table {{ border-collapse: collapse; }} table td, table th {{ color: {textColor} !important; background-color: {tableBgColor} !important; border: 1px solid {tableBorderColor}; padding: 4px 8px; }} table td[style*=""background""], table th[style*=""background""] {{ background-color: {tableBgColor} !important; }} table td *, table th * {{ color: {textColor} !important; }} table th {{ background-color: {tableHeaderBgColor} !important; }} span, font, b, strong, i, em, u {{ color: inherit !important; }} a {{ cursor: pointer !important; }}{inlineOverride}{layerCss}";
     }

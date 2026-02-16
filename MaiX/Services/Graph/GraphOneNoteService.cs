@@ -1564,13 +1564,14 @@ public class GraphOneNoteService
                 Log4.Debug($"[GraphOneNote] body 태그 내용 추출: {bodyContent.Length}자");
             }
 
+            // TinyMCE HTML에서 editorRoot 해당 텍스트만 추출 (다른 레이어/카드 제거로 중복 방지)
+            bodyContent = ExtractEditorContentForPatch(bodyContent);
+
             // 아이콘 카드 HTML 제거 (저장 시 불필요 — API가 <object> 태그로 관리)
-            // GenerateAttachmentCardHtml이 생성한 <div contenteditable="false" ... data-attachment="...">...</div> 제거
             bodyContent = StripAttachmentCardHtml(bodyContent);
 
             // editorRoot 중첩 방지: bodyContent에 이미 editorRoot div가 포함되어 있으면 strip
-            // (ExtractEditorRootContent → TinyMCE → getContent() 경로에서 중첩 유입)
-            bodyContent = StripEditorRootWrapper(bodyContent);
+            (bodyContent, _) = StripEditorRootWrapper(bodyContent);
 
             // 내용이 비어있으면 최소 내용 유지
             if (string.IsNullOrWhiteSpace(bodyContent) || bodyContent.Trim() == "<p></p>" || bodyContent.Trim() == "<p><br></p>")
@@ -1644,6 +1645,85 @@ public class GraphOneNoteService
     }
 
     /// <summary>
+    /// TinyMCE 에디터의 HTML에서 PATCH할 editorRoot 텍스트만 추출.
+    /// position:relative 컨테이너 안의 여러 absolute div 중
+    /// 첫 번째 텍스트 레이어(= editorRoot 해당)의 내용만 반환.
+    /// 카드 레이어와 다른 텍스트 블록(body 직계 div)은 제거하여 중복 방지.
+    /// 카드 레이어의 위치 정보는 숨겨진 메타데이터 div로 포함.
+    /// </summary>
+    public static string ExtractEditorContentForPatch(string html)
+    {
+        if (string.IsNullOrEmpty(html))
+            return html;
+
+        var trimmed = html.TrimStart();
+
+        // position:relative 컨테이너가 아니면 (단일 레이어 페이지) 그대로 반환
+        if (!trimmed.Contains("position:relative", StringComparison.OrdinalIgnoreCase))
+            return html;
+
+        // position:relative 컨테이너 안의 내용 추출
+        var relMatch = Regex.Match(trimmed, @"<div\s+style=""[^""]*position:\s*relative[^""]*""[^>]*>(.*)</div>\s*$",
+            RegexOptions.Singleline | RegexOptions.IgnoreCase);
+        if (!relMatch.Success)
+            return html;
+
+        var innerContent = relMatch.Groups[1].Value;
+
+        // 내부 absolute div를 순회하여 첫 번째 텍스트 레이어(editorRoot) 추출
+        // 카드 레이어/다른 텍스트 블록은 무시 (PATCH는 editorRoot만 교체)
+        string editorContent = null;
+
+        int pos = 0;
+        while (pos < innerContent.Length)
+        {
+            var divStart = innerContent.IndexOf("<div", pos, StringComparison.OrdinalIgnoreCase);
+            if (divStart < 0) break;
+
+            var tagEnd = innerContent.IndexOf('>', divStart);
+            if (tagEnd < 0) break;
+
+            var openTag = innerContent.Substring(divStart, tagEnd - divStart + 1);
+
+            // div의 닫는 태그를 depth 추적으로 찾기
+            int depth = 1;
+            int searchPos = tagEnd + 1;
+            int innerStart = tagEnd + 1;
+            int closePos = -1;
+
+            while (depth > 0 && searchPos < innerContent.Length)
+            {
+                var nextOpen = innerContent.IndexOf("<div", searchPos, StringComparison.OrdinalIgnoreCase);
+                var nextClose = innerContent.IndexOf("</div>", searchPos, StringComparison.OrdinalIgnoreCase);
+                if (nextClose < 0) break;
+                if (nextOpen >= 0 && nextOpen < nextClose) { depth++; searchPos = nextOpen + 4; }
+                else { depth--; if (depth == 0) closePos = nextClose; searchPos = nextClose + 6; }
+            }
+
+            if (closePos < 0) { pos = tagEnd + 1; continue; }
+
+            var divInner = innerContent.Substring(innerStart, closePos - innerStart);
+
+            // 첫 번째 non-card absolute div = editorRoot 텍스트
+            if (editorContent == null
+                && !openTag.Contains("data-layer-type=\"card\"", StringComparison.OrdinalIgnoreCase)
+                && openTag.Contains("position:absolute", StringComparison.OrdinalIgnoreCase))
+            {
+                editorContent = divInner;
+            }
+            // 카드 레이어/다른 텍스트 블록은 무시
+
+            pos = closePos + 6;
+        }
+
+        if (editorContent == null)
+            return html; // 추출 실패 시 원본 반환
+
+        Log4.Debug($"[OneNote] ExtractEditorContentForPatch: editorRoot 텍스트={editorContent.Length}자, 다른 레이어/카드 제거됨");
+        return editorContent;
+    }
+
+    /// <summary>
     /// 저장 전 아이콘 카드 HTML을 제거 (OneNote API가 <object> 태그로 파일 관리)
     /// GenerateAttachmentCardHtml이 생성한 카드를 PATCH에 포함하면 API가 이미지로 변환해 분리됨
     /// </summary>
@@ -1670,53 +1750,66 @@ public class GraphOneNoteService
     /// bodyContent에서 editorRoot div wrapper를 반복 제거하여 중첩 해소.
     /// 매 저장 시 UpdatePageContentAsync가 editorRoot로 감싸므로, 기존 wrapper가 있으면 strip.
     /// </summary>
-    private static string StripEditorRootWrapper(string html)
+    private static (string innerContent, string siblings) StripEditorRootWrapper(string html)
     {
         if (string.IsNullOrEmpty(html))
-            return html;
+            return (html, "");
 
-        int strippedCount = 0;
-        var current = html;
+        // editorRoot div가 있으면 strip하되, 형제 요소(첨부파일 카드 등)는 별도 반환
+        var trimmed = html.TrimStart();
+        const string marker = "data-id=\"editorRoot\"";
 
-        while (true)
+        if (!trimmed.StartsWith("<div", StringComparison.OrdinalIgnoreCase))
+            return (html, "");
+
+        var closeAngle = trimmed.IndexOf('>');
+        if (closeAngle < 0) return (html, "");
+
+        var startTag = trimmed.Substring(0, closeAngle + 1);
+        if (startTag.IndexOf(marker, StringComparison.OrdinalIgnoreCase) < 0)
+            return (html, "");
+
+        // depth 추적으로 editorRoot의 정확한 닫는 </div> 찾기
+        int depth = 1;
+        int searchPos = closeAngle + 1;
+        int editorRootInnerStart = closeAngle + 1;
+        int editorRootClosePos = -1;
+
+        while (depth > 0 && searchPos < trimmed.Length)
         {
-            // 앞쪽 공백 제거
-            var trimmed = current.TrimStart();
+            var nextOpen = trimmed.IndexOf("<div", searchPos, StringComparison.OrdinalIgnoreCase);
+            var nextClose = trimmed.IndexOf("</div>", searchPos, StringComparison.OrdinalIgnoreCase);
 
-            // editorRoot div 시작 태그 확인
-            const string marker = "data-id=\"editorRoot\"";
-            if (!trimmed.StartsWith("<div", StringComparison.OrdinalIgnoreCase))
-                break;
+            if (nextClose < 0) break;
 
-            // 시작 태그에서 data-id="editorRoot" 확인
-            var closeAngle = trimmed.IndexOf('>');
-            if (closeAngle < 0) break;
-
-            var startTag = trimmed.Substring(0, closeAngle + 1);
-            if (startTag.IndexOf(marker, StringComparison.OrdinalIgnoreCase) < 0)
-                break;
-
-            // 끝쪽에서 </div> + 공백 확인
-            var endTrimmed = current.TrimEnd();
-            if (!endTrimmed.EndsWith("</div>", StringComparison.OrdinalIgnoreCase))
-                break;
-
-            // 시작 태그 이후 ~ 마지막 </div> 이전의 콘텐츠 추출
-            var innerStart = current.IndexOf('>', current.IndexOf('<')) + 1;
-            var innerEnd = current.LastIndexOf("</div>", StringComparison.OrdinalIgnoreCase);
-            if (innerStart <= 0 || innerEnd < 0 || innerEnd <= innerStart)
-                break;
-
-            current = current.Substring(innerStart, innerEnd - innerStart);
-            strippedCount++;
+            if (nextOpen >= 0 && nextOpen < nextClose)
+            {
+                depth++;
+                searchPos = nextOpen + 4;
+            }
+            else
+            {
+                depth--;
+                if (depth == 0)
+                {
+                    editorRootClosePos = nextClose;
+                }
+                searchPos = nextClose + 6;
+            }
         }
 
-        if (strippedCount > 0)
-        {
-            Log4.Debug($"[OneNote] StripEditorRootWrapper: {strippedCount}겹 editorRoot 제거, 결과 길이={current.Length}");
-        }
+        if (editorRootClosePos < 0)
+            return (html, "");
 
-        return current;
+        // editorRoot 내부 콘텐츠
+        var innerContent = trimmed.Substring(editorRootInnerStart, editorRootClosePos - editorRootInnerStart);
+
+        // editorRoot 뒤 형제 요소 (첨부파일 카드 등)
+        var afterEditorRoot = trimmed.Substring(editorRootClosePos + 6); // "</div>".Length = 6
+
+        Log4.Debug($"[OneNote] StripEditorRootWrapper: editorRoot strip 완료, 내부={innerContent.Length}자, 형제={afterEditorRoot.TrimStart().Length}자");
+
+        return (innerContent, afterEditorRoot);
     }
 
 
@@ -1865,13 +1958,41 @@ public class GraphOneNoteService
 
                     var innerHTML = bodyContent.Substring(innerStart, innerEnd - innerStart);
 
-                    // editorRoot wrapper가 있으면 strip (내용만 꺼냄)
-                    innerHTML = StripEditorRootWrapper(innerHTML);
+                    // editorRoot wrapper가 있으면 strip (내용과 형제 분리)
+                    var (strippedContent, siblings) = StripEditorRootWrapper(innerHTML);
 
-                    if (!string.IsNullOrWhiteSpace(innerHTML))
+                    if (!string.IsNullOrWhiteSpace(strippedContent))
                     {
+                        // 형제 요소(첨부파일 카드)가 있으면 editorRoot 내부 하단에 인라인 배치
+                        // OneNote API는 absolute div의 위치 변경을 PATCH로 지원하지 않으므로
+                        // 별도 레이어가 아닌 editorRoot 내부에 카드를 포함시킴
+                        if (!string.IsNullOrWhiteSpace(siblings))
+                        {
+                            var trimmedSiblings = siblings.TrimStart();
+
+                            // ConvertAttachmentObjectsToLinks가 이미 <object>→카드 변환 완료
+                            // siblings에서 data-attachment 속성 가진 카드 div를 찾아 인라인 배치
+                            var cardMatches = Regex.Matches(trimmedSiblings,
+                                @"<div\s+contenteditable=""false""[^>]*data-attachment=""([^""]+)""[^>]*>.*?</div>\s*</a></div>",
+                                RegexOptions.IgnoreCase | RegexOptions.Singleline);
+
+                            if (cardMatches.Count > 0)
+                            {
+                                // 카드를 가로 나열하는 컨테이너 (flex wrap)
+                                var cardContainer = new System.Text.StringBuilder();
+                                cardContainer.Append("<div style=\"display:flex;flex-wrap:wrap;gap:8px;margin-top:12px;\">");
+                                foreach (Match cardMatch in cardMatches)
+                                {
+                                    cardContainer.Append(cardMatch.Value);
+                                }
+                                cardContainer.Append("</div>");
+                                strippedContent += cardContainer.ToString();
+                                Log4.Debug($"[OneNote] 첨부파일 카드 {cardMatches.Count}개를 editorRoot 내부 인라인 배치");
+                            }
+                        }
+
                         // 원본 div 태그의 style에서 data-id 속성 제거하고 position:absolute 스타일 보존
-                        rebuiltDivs.Add(openTag + innerHTML + "</div>");
+                        rebuiltDivs.Add(openTag + strippedContent + "</div>");
 
                         // min-height 계산: top 값 + 200px (추정 높이)
                         var topMatch = Regex.Match(openTag, @"top:\s*(\d+)px", RegexOptions.IgnoreCase);
@@ -1904,7 +2025,7 @@ public class GraphOneNoteService
         if (match.Success)
         {
             var extracted = match.Groups[1].Value;
-            extracted = StripEditorRootWrapper(extracted);
+            (extracted, _) = StripEditorRootWrapper(extracted);
             Log4.Debug($"[OneNote] editorRoot 추출 완료: 길이={extracted.Length}, <object 포함={extracted.Contains("<object", StringComparison.OrdinalIgnoreCase)}");
             return extracted;
         }
@@ -2072,6 +2193,10 @@ public class GraphOneNoteService
 
             return ""; // 중복 object 태그 제거
         });
+
+        // 1.5단계: U+FFFC (Object Replacement Character) 제거
+        // OneNote가 <object> 태그의 인라인 placeholder로 삽입하는 문자 — 카드 변환 후 잔존
+        result = result.Replace("\uFFFC", "");
 
         // 2단계: MaiX 드롭 카드가 API 왕복 후 변질된 패턴 제거
         var droppedCardRegex = new Regex(
