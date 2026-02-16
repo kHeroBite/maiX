@@ -5239,16 +5239,53 @@ public partial class MainWindow : FluentWindow
 
         if (attachment.HasAnalysis)
         {
-            OneNoteFileAnalysisResult.Text = attachment.AnalysisResult;
+            // 요약 부분만 추출하여 표시
+            OneNoteFileAnalysisResult.Text = ExtractAnalysisSummary(attachment.AnalysisResult);
+            if (OneNoteFileAnalysisSection != null)
+                OneNoteFileAnalysisSection.Visibility = Visibility.Visible;
         }
         else if (attachment.IsAnalyzing)
         {
             OneNoteFileAnalysisResult.Text = "분석 중...";
+            if (OneNoteFileAnalysisSection != null)
+                OneNoteFileAnalysisSection.Visibility = Visibility.Visible;
         }
         else
         {
-            OneNoteFileAnalysisResult.Text = "파일을 선택하고 AI 분석 버튼을 눌러주세요";
+            if (OneNoteFileAnalysisSection != null)
+                OneNoteFileAnalysisSection.Visibility = Visibility.Collapsed;
         }
+    }
+
+    /// <summary>
+    /// AI 분석 결과에서 요약 부분만 추출
+    /// </summary>
+    private static string ExtractAnalysisSummary(string analysisResult)
+    {
+        if (string.IsNullOrEmpty(analysisResult)) return string.Empty;
+
+        // "**요약**:" 이후 ~ "**주요 포인트**" 이전 텍스트 추출
+        var summaryStart = analysisResult.IndexOf("**요약**", StringComparison.Ordinal);
+        if (summaryStart < 0)
+        {
+            // 요약 마커가 없으면 전체 결과의 처음 3줄 반환
+            var lines = analysisResult.Split('\n');
+            return string.Join("\n", lines.Take(3)).Trim();
+        }
+
+        // "**요약**:" 이후 텍스트
+        var afterSummary = analysisResult.Substring(summaryStart);
+        var colonIdx = afterSummary.IndexOf(':');
+        if (colonIdx < 0) colonIdx = afterSummary.IndexOf('：');
+        var contentStart = colonIdx >= 0 ? colonIdx + 1 : "**요약**".Length;
+
+        // "**주요 포인트**" 이전까지 추출
+        var nextSection = afterSummary.IndexOf("**주요 포인트**", StringComparison.Ordinal);
+        var summary = nextSection > 0
+            ? afterSummary.Substring(contentStart, nextSection - contentStart)
+            : afterSummary.Substring(contentStart);
+
+        return summary.Trim();
     }
 
     /// <summary>
@@ -5708,13 +5745,28 @@ public partial class MainWindow : FluentWindow
     /// </summary>
     private void MainWindow_PreviewKeyDown(object sender, System.Windows.Input.KeyEventArgs e)
     {
-        // Ctrl+Tab: OneNote 노트내용/녹음내용 탭 토글
+        // Ctrl+Tab: OneNote 탭 토글
         if (e.Key == System.Windows.Input.Key.Tab &&
             (System.Windows.Input.Keyboard.Modifiers & System.Windows.Input.ModifierKeys.Control) != 0)
         {
             // OneNote 뷰가 활성화되어 있을 때만 처리
             if (OneNoteViewBorder?.Visibility == System.Windows.Visibility.Visible && _oneNoteViewModel != null)
             {
+                // AI 분석 패널이 활성 상태면 녹음↔파일 AI탭 토글
+                if (OneNoteAIRecordPanel?.Visibility == System.Windows.Visibility.Visible)
+                {
+                    SwitchAITab("file");
+                    e.Handled = true;
+                    return;
+                }
+                if (OneNoteAIFilePanel?.Visibility == System.Windows.Visibility.Visible)
+                {
+                    SwitchAITab("record");
+                    e.Handled = true;
+                    return;
+                }
+
+                // 노트내용/녹음내용 탭 토글
                 if (_oneNoteViewModel.ActiveContentTab == "note")
                 {
                     SwitchToRecordingContentTab();
@@ -6091,6 +6143,25 @@ public partial class MainWindow : FluentWindow
         if (OneNoteFileListBox?.SelectedItem is not Models.OneNoteAttachment attachment)
             return;
 
+        OpenAnalysisExpandTab(attachment);
+    }
+
+    /// <summary>
+    /// 파일목록 DataTemplate의 넓게보기 버튼 클릭
+    /// </summary>
+    private void OneNoteAttachmentExpandView_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is not FrameworkElement fe || fe.DataContext is not Models.OneNoteAttachment attachment)
+            return;
+
+        OpenAnalysisExpandTab(attachment);
+    }
+
+    /// <summary>
+    /// 분석 결과를 동적 탭으로 추가 (공통 로직)
+    /// </summary>
+    private void OpenAnalysisExpandTab(Models.OneNoteAttachment attachment)
+    {
         if (!attachment.HasAnalysis || string.IsNullOrEmpty(attachment.AnalysisResult))
             return;
 
@@ -11770,9 +11841,9 @@ public partial class MainWindow : FluentWindow
             else
             {
                 Log4.Warn($"[OneNote] 파일 첨부 실패: {fileName}");
-                // 로딩 → 실패 메시지로 교체
+                // 로딩 요소 제거 (실패 텍스트 삽입 안 함)
                 await OneNoteEditorWebView.CoreWebView2.ExecuteScriptAsync(
-                    $"var el = editor.dom.get('{dropId}'); if(el) {{ el.outerHTML = '<p>❌ <strong>{safeFileName}</strong> (첨부 실패)</p>'; editor.fire('change'); }}");
+                    $"var el = editor.dom.get('{dropId}'); if(el) {{ el.outerHTML = ''; editor.fire('change'); }}");
                 _viewModel.StatusMessage = $"파일 첨부 실패: {fileName}";
             }
         }
