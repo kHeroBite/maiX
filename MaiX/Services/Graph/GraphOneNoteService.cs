@@ -1568,6 +1568,10 @@ public class GraphOneNoteService
             // GenerateAttachmentCardHtml이 생성한 <div contenteditable="false" ... data-attachment="...">...</div> 제거
             bodyContent = StripAttachmentCardHtml(bodyContent);
 
+            // editorRoot 중첩 방지: bodyContent에 이미 editorRoot div가 포함되어 있으면 strip
+            // (ExtractEditorRootContent → TinyMCE → getContent() 경로에서 중첩 유입)
+            bodyContent = StripEditorRootWrapper(bodyContent);
+
             // 내용이 비어있으면 최소 내용 유지
             if (string.IsNullOrWhiteSpace(bodyContent) || bodyContent.Trim() == "<p></p>" || bodyContent.Trim() == "<p><br></p>")
             {
@@ -1657,8 +1661,33 @@ public class GraphOneNoteService
             @"<div\s+[^>]*contenteditable=""false""[^>]*data-attachment=""[^""]+""[^>]*>.*?</a>\s*</div>",
             RegexOptions.IgnoreCase | RegexOptions.Singleline);
 
+        // 카드를 완전 제거 (API가 <object> 태그로 첨부파일 관리 — 카드는 표시용이므로 저장 불필요)
         var result = cardRegex.Replace(html, "");
         return result;
+    }
+
+    /// <summary>
+    /// bodyContent에서 editorRoot div wrapper를 반복 제거하여 중첩 해소.
+    /// 매 저장 시 UpdatePageContentAsync가 editorRoot로 감싸므로, 기존 wrapper가 있으면 strip.
+    /// </summary>
+    private static string StripEditorRootWrapper(string html)
+    {
+        if (string.IsNullOrEmpty(html))
+            return html;
+
+        var regex = new Regex(
+            @"^\s*<div[^>]*data-id=""editorRoot""[^>]*>(.*)</div>\s*$",
+            RegexOptions.Singleline | RegexOptions.IgnoreCase);
+
+        var current = html;
+        while (true)
+        {
+            var m = regex.Match(current);
+            if (!m.Success) break;
+            current = m.Groups[1].Value;
+        }
+
+        return current;
     }
 
 
@@ -1963,6 +1992,8 @@ public class GraphOneNoteService
             }
             return "";
         });
+
+
 
         // 4단계: 수집된 카드를 editorRoot 마지막에 삽입
         if (cardHtmlList.Count > 0)
