@@ -2061,14 +2061,16 @@ public class GraphOneNoteService
             var dataUrlMatch = Regex.Match(attrs, @"\sdata=""([^""]+)""", RegexOptions.IgnoreCase);
             var dataUrl = dataUrlMatch.Success ? dataUrlMatch.Groups[1].Value : "#";
 
-            // 동일 파일명 중복 카드 방지
+            // 동일 파일명 중복 카드 방지 — in-place 교체 (레이어 내부 유지)
             if (seenFiles.Add(fileName))
             {
-                Log4.Debug($"[OneNote] 첨부파일 object→카드 변환: {fileName}");
-                cardHtmlList.Add(GenerateAttachmentCardHtml(fileName, dataUrl));
+                Log4.Debug($"[OneNote] 첨부파일 object→카드 in-place 교체: {fileName}");
+                var cardHtml = GenerateAttachmentCardHtml(fileName, dataUrl);
+                cardHtmlList.Add(cardHtml);
+                return cardHtml; // object 위치에 카드 직접 삽입
             }
 
-            return ""; // <object> 태그 제거
+            return ""; // 중복 object 태그 제거
         });
 
         // 2단계: MaiX 드롭 카드가 API 왕복 후 변질된 패턴 제거

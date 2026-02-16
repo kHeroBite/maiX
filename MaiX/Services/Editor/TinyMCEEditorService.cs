@@ -361,7 +361,7 @@ public static class TinyMCEEditorService
         // OneNote 레이어 박스/리사이즈 CSS
         var layerBorderColor = isDark ? "#666" : "#ccc";
         var layerHoverColor = isDark ? "#88f" : "#4488ff";
-        var layerCss = $@" div[style*=""position:absolute""], div[style*=""position: absolute""] {{ border: 1px dashed {layerBorderColor}; resize: both; overflow: auto; box-sizing: border-box; }} div[style*=""position:absolute""]:hover, div[style*=""position: absolute""]:hover {{ border: 2px solid {layerHoverColor}; cursor: move; }}";
+        var layerCss = $@" div[style*=""position:absolute""], div[style*=""position: absolute""] {{ border: 1px dashed {layerBorderColor}; resize: both; overflow: auto; box-sizing: border-box; width: fit-content !important; }} div[style*=""position:absolute""]:hover, div[style*=""position: absolute""]:hover {{ border: 2px solid {layerHoverColor}; cursor: move; }}";
 
         return $@"body {{ font-family: Aptos, sans-serif; font-size: 14px; color: {textColor}; background-color: {bgColor}; padding: 16px; }} * {{ color: inherit; }} table {{ border-collapse: collapse; }} table td, table th {{ color: {textColor} !important; background-color: {tableBgColor} !important; border: 1px solid {tableBorderColor}; padding: 4px 8px; }} table td[style*=""background""], table th[style*=""background""] {{ background-color: {tableBgColor} !important; }} table td *, table th * {{ color: {textColor} !important; }} table th {{ background-color: {tableHeaderBgColor} !important; }} span, font, b, strong, i, em, u {{ color: inherit !important; }} a {{ cursor: pointer !important; }}{inlineOverride}{layerCss}";
     }

@@ -3340,25 +3340,17 @@ public partial class OneNoteViewModel : ViewModelBase
 
             var content = await _oneNoteService.GetPageContentAsync(pageId, groupId, siteId);
 
-            // 비오디오 첨부파일 object 태그를 카드로 변환 (수집만, 삽입은 아래에서)
-            // object 태그가 editorRoot 밖에 위치하므로 ExtractEditorRootContent 전에 수집
-            var attachmentCards = new List<string>();
+            // 비오디오 첨부파일 object 태그를 카드로 in-place 교체
+            // 카드가 원본 레이어 내부에 유지됨 (별도 append 불필요)
             if (!string.IsNullOrEmpty(content))
             {
-                (content, attachmentCards) = _oneNoteService.ConvertAttachmentObjectsToLinks(content);
+                (content, _) = _oneNoteService.ConvertAttachmentObjectsToLinks(content);
             }
 
             // editorRoot 콘텐츠 추출 + 중첩 editorRoot strip
             if (!string.IsNullOrEmpty(content))
             {
                 content = _oneNoteService.ExtractEditorRootContent(content);
-            }
-
-            // 첨부파일 카드를 strip 완료 후 안전하게 append
-            // (StripEditorRootWrapper의 greedy regex가 카드 HTML을 파괴하지 않도록)
-            if (attachmentCards.Count > 0)
-            {
-                content += "<div style=\"margin-top:8px;\">" + string.Join("", attachmentCards) + "</div>";
             }
 
             // Graph API 이미지 URL을 Base64로 변환 (인증 필요한 이미지 처리)
