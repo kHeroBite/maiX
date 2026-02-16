@@ -1720,6 +1720,106 @@ public class GraphOneNoteService
     /// 비오디오 &lt;object data-attachment="..."&gt; 태그를 클릭 가능한 📎 링크로 변환
     /// OneNote API에서 첨부파일은 object 태그로 반환되지만 TinyMCE에서는 제대로 렌더링되지 않음
     /// </summary>
+
+    // --- 첨부파일 아이콘 추출 (Win32 SHGetFileInfo) ---
+
+    [System.Runtime.InteropServices.DllImport("shell32.dll", CharSet = System.Runtime.InteropServices.CharSet.Unicode)]
+    private static extern IntPtr SHGetFileInfo(string pszPath, uint dwFileAttributes, ref SHFILEINFO psfi, uint cbSizeFileInfo, uint uFlags);
+
+    [System.Runtime.InteropServices.StructLayout(System.Runtime.InteropServices.LayoutKind.Sequential, CharSet = System.Runtime.InteropServices.CharSet.Unicode)]
+    private struct SHFILEINFO
+    {
+        public IntPtr hIcon;
+        public int iIcon;
+        public uint dwAttributes;
+        [System.Runtime.InteropServices.MarshalAs(System.Runtime.InteropServices.UnmanagedType.ByValTStr, SizeConst = 260)]
+        public string szDisplayName;
+        [System.Runtime.InteropServices.MarshalAs(System.Runtime.InteropServices.UnmanagedType.ByValTStr, SizeConst = 80)]
+        public string szTypeName;
+    }
+
+    [System.Runtime.InteropServices.DllImport("user32.dll")]
+    private static extern bool DestroyIcon(IntPtr hIcon);
+
+    private const uint SHGFI_ICON = 0x000000100;
+    private const uint SHGFI_LARGEICON = 0x000000000;
+    private const uint SHGFI_USEFILEATTRIBUTES = 0x000000010;
+    private const uint FILE_ATTRIBUTE_NORMAL = 0x00000080;
+
+    private static readonly Dictionary<string, string> _아이콘캐시 = new(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// 확장자에 해당하는 Windows 시스템 아이콘을 Base64 PNG로 반환
+    /// </summary>
+    public static string GetFileIconBase64(string fileName)
+    {
+        var ext = Path.GetExtension(fileName)?.ToLowerInvariant() ?? "";
+        if (string.IsNullOrEmpty(ext))
+            return ""; // 확장자 없으면 빈 문자열 → 폴백 처리
+
+        if (_아이콘캐시.TryGetValue(ext, out var cached))
+            return cached;
+
+        try
+        {
+            var shInfo = new SHFILEINFO();
+            var result = SHGetFileInfo(
+                $"file{ext}", FILE_ATTRIBUTE_NORMAL, ref shInfo,
+                (uint)System.Runtime.InteropServices.Marshal.SizeOf(typeof(SHFILEINFO)),
+                SHGFI_ICON | SHGFI_LARGEICON | SHGFI_USEFILEATTRIBUTES);
+
+            if (result == IntPtr.Zero || shInfo.hIcon == IntPtr.Zero)
+                return "";
+
+            try
+            {
+                using var icon = System.Drawing.Icon.FromHandle(shInfo.hIcon);
+                using var bmp = icon.ToBitmap();
+                using var ms = new MemoryStream();
+                bmp.Save(ms, System.Drawing.Imaging.ImageFormat.Png);
+                var base64 = Convert.ToBase64String(ms.ToArray());
+                _아이콘캐시[ext] = base64;
+                return base64;
+            }
+            finally
+            {
+                DestroyIcon(shInfo.hIcon);
+            }
+        }
+        catch (Exception ex)
+        {
+            Log4.Debug($"[OneNote] 아이콘 추출 실패: {ext} — {ex.Message}");
+            return "";
+        }
+    }
+
+    /// <summary>
+    /// 첨부파일 카드 HTML 생성 — 아이콘(48px) + 파일명 (확장자 제외)
+    /// </summary>
+    public static string GenerateAttachmentCardHtml(string fileName, string href = "#", string extraAttrs = "")
+    {
+        var safeFileName = System.Web.HttpUtility.HtmlEncode(fileName);
+        var displayName = System.Web.HttpUtility.HtmlEncode(Path.GetFileNameWithoutExtension(fileName));
+        var iconBase64 = GetFileIconBase64(fileName);
+
+        string iconHtml;
+        if (!string.IsNullOrEmpty(iconBase64))
+        {
+            iconHtml = $"<img src=\"data:image/png;base64,{iconBase64}\" width=\"48\" height=\"48\" style=\"display:block;margin:0 auto;\" alt=\"{safeFileName}\" />";
+        }
+        else
+        {
+            // 폴백: 이모지 아이콘
+            iconHtml = "<span style=\"font-size:48px;display:block;text-align:center;\">📎</span>";
+        }
+
+        return $"<div contenteditable=\"false\" style=\"display:inline-block;text-align:center;padding:8px 12px;margin:4px;border:1px solid #e0e0e0;border-radius:8px;background:#f9f9f9;cursor:pointer;vertical-align:top;min-width:80px;max-width:120px;\" title=\"{safeFileName}\" data-attachment=\"{safeFileName}\">"
+             + $"<a href=\"{href}\" title=\"{safeFileName}\" data-attachment=\"{safeFileName}\" style=\"text-decoration:none;color:inherit;display:block;\" {extraAttrs}>"
+             + iconHtml
+             + $"<div style=\"margin-top:4px;font-size:11px;color:#333;word-break:break-all;line-height:1.3;\">{displayName}</div>"
+             + "</a></div>";
+    }
+
     public string ConvertAttachmentObjectsToLinks(string html)
     {
         if (string.IsNullOrEmpty(html))
@@ -1746,8 +1846,8 @@ public class GraphOneNoteService
             var fileName = attachmentMatch.Groups[1].Value;
             var safeFileName = System.Web.HttpUtility.HtmlEncode(fileName);
 
-            Log4.Debug($"[OneNote] 첨부파일 object→link 변환: {fileName}");
-            return $"<p><a href=\"#\" title=\"{safeFileName}\" data-attachment=\"{safeFileName}\">📎 <strong>{safeFileName}</strong> (첨부됨)</a></p>";
+            Log4.Debug($"[OneNote] 첨부파일 object→카드 변환: {fileName}");
+            return GenerateAttachmentCardHtml(fileName);
         });
 
         return result;

@@ -11334,9 +11334,11 @@ public partial class MainWindow : FluentWindow
             var success = await graphService.AppendFileToPageAsync(pageId, resolvedPath, fileName);
             if (success)
             {
-                // 로딩 → 클릭 가능한 링크로 교체
+                // 로딩 → 아이콘 카드로 교체
+                var cardHtml = Services.Graph.GraphOneNoteService.GenerateAttachmentCardHtml(fileName, fileUrl);
+                var jsCardHtml = cardHtml.Replace("\\", "\\\\").Replace("'", "\\'").Replace("\"", "\\\"").Replace("\n", "").Replace("\r", "");
                 await OneNoteEditorWebView.CoreWebView2.ExecuteScriptAsync(
-                    $"var el = editor.dom.get('{dropId}'); if(el) {{ el.outerHTML = '<p><a href=\"{safeFileUrl}\" title=\"{safeFileName}\">📎 <strong>{safeFileName}</strong> (첨부됨)</a></p>'; editor.fire('change'); }}");
+                    $"var el = editor.dom.get('{dropId}'); if(el) {{ el.outerHTML = '{jsCardHtml}'; editor.fire('change'); }}");
                 _viewModel.StatusMessage = $"파일 첨부 완료: {fileName}";
             }
             else
@@ -11352,9 +11354,11 @@ public partial class MainWindow : FluentWindow
         else if (_isNewPage && _oneNoteViewModel != null)
         {
             _oneNoteViewModel.AddPendingAttachment(resolvedPath, fileName);
-            // 로딩 → 클릭 가능한 링크로 교체 (저장 시 첨부 안내)
+            // 로딩 → 아이콘 카드로 교체 (저장 시 첨부 안내)
+            var cardHtml = Services.Graph.GraphOneNoteService.GenerateAttachmentCardHtml(fileName, fileUrl);
+            var jsCardHtml = cardHtml.Replace("\\", "\\\\").Replace("'", "\\'").Replace("\"", "\\\"").Replace("\n", "").Replace("\r", "");
             await OneNoteEditorWebView.CoreWebView2.ExecuteScriptAsync(
-                $"var el = editor.dom.get('{dropId}'); if(el) {{ el.outerHTML = '<p><a href=\"{safeFileUrl}\" title=\"{safeFileName}\">📎 <strong>{safeFileName}</strong> (저장 시 첨부됨)</a></p>'; editor.fire('change'); }}");
+                $"var el = editor.dom.get('{dropId}'); if(el) {{ el.outerHTML = '{jsCardHtml}'; editor.fire('change'); }}");
             _viewModel.StatusMessage = $"파일 첨부 예정: {fileName} (저장 시 첨부됩니다)";
         }
         else
