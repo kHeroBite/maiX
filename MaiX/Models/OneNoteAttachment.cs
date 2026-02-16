@@ -9,6 +9,7 @@ public partial class OneNoteAttachment : ObservableObject
     public string DisplayName { get; set; } = string.Empty;
     public string Extension { get; set; } = string.Empty;
     public string DataUrl { get; set; } = string.Empty;  // Graph API URL 또는 로컬 경로
+    public string IconBase64 { get; set; } = string.Empty;  // Windows 시스템 아이콘 Base64 PNG
 
     [ObservableProperty]
     private string _localPath = string.Empty;

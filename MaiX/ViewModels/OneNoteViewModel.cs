@@ -3414,13 +3414,16 @@ public partial class OneNoteViewModel : ViewModelBase
                 var fileName = nameMatch.Groups[1].Value;
                 var url = hrefMatch.Success ? hrefMatch.Groups[1].Value : string.Empty;
                 var ext = Path.GetExtension(fileName).ToLowerInvariant();
+                // Windows 시스템 아이콘을 직접 추출
+                var iconBase64 = GraphOneNoteService.GetFileIconBase64(fileName);
 
                 CurrentPageAttachments.Add(new OneNoteAttachment
                 {
                     FileName = fileName,
                     DisplayName = Path.GetFileNameWithoutExtension(fileName),
                     Extension = ext,
-                    DataUrl = url
+                    DataUrl = url,
+                    IconBase64 = iconBase64
                 });
             }
         }

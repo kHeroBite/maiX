@@ -7912,8 +7912,10 @@
                                                         <ColumnDefinition Width="Auto"/>
                                                     </Grid.ColumnDefinitions>
                                                     <!-- 파일 아이콘 -->
-                                                    <ui:SymbolIcon Grid.Column="0" FontSize="20" Margin="0,0,8,0"
-                                                                   VerticalAlignment="Center" Symbol="Document24"/>
+                                                    <Image Grid.Column="0" Width="24" Height="24" Margin="0,0,8,0"
+                                                           VerticalAlignment="Center"
+                                                           Source="{Binding IconBase64, Converter={StaticResource Base64ToImageSourceConverter}}"
+                                                           RenderOptions.BitmapScalingMode="HighQuality"/>
                                                     <!-- 파일명 + 상태 -->
                                                     <StackPanel Grid.Column="1" VerticalAlignment="Center">
                                                         <TextBlock Text="{Binding FileName}" FontSize="13" FontWeight="Medium"

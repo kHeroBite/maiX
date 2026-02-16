@@ -2134,23 +2134,10 @@ public class GraphOneNoteService
     {
         var safeFileName = System.Web.HttpUtility.HtmlEncode(fileName);
         var displayName = System.Web.HttpUtility.HtmlEncode(Path.GetFileNameWithoutExtension(fileName));
-        var iconBase64 = GetFileIconBase64(fileName);
 
-        string iconHtml;
-        if (!string.IsNullOrEmpty(iconBase64))
-        {
-            iconHtml = $"<img src=\"data:image/png;base64,{iconBase64}\" width=\"48\" height=\"48\" style=\"display:block;margin:0 auto;\" alt=\"{safeFileName}\" />";
-        }
-        else
-        {
-            // 폴백: 이모지 아이콘
-            iconHtml = "<span style=\"font-size:48px;display:block;text-align:center;\">📎</span>";
-        }
-
-        return $"<div contenteditable=\"false\" style=\"display:block;text-align:center;padding:8px 12px;margin:4px 0;border:1px solid #e0e0e0;border-radius:8px;background:#f9f9f9;cursor:pointer;min-width:80px;max-width:120px;\" title=\"{safeFileName}\" data-attachment=\"{safeFileName}\">"
+        return $"<div contenteditable=\"false\" style=\"display:inline-block;text-align:center;padding:6px 12px;margin:4px 0;border:1px solid #e0e0e0;border-radius:8px;background:#f9f9f9;cursor:pointer;\" title=\"{safeFileName}\" data-attachment=\"{safeFileName}\">"
              + $"<a href=\"{href}\" title=\"{safeFileName}\" data-attachment=\"{safeFileName}\" style=\"text-decoration:none;color:inherit;display:block;\" {extraAttrs}>"
-             + iconHtml
-             + $"<div style=\"margin-top:4px;font-size:11px;color:#333;word-break:break-all;line-height:1.3;\">{displayName}</div>"
+             + $"<div style=\"font-size:12px;color:#333;word-break:break-all;line-height:1.3;\">{displayName}</div>"
              + "</a></div>";
     }
 
