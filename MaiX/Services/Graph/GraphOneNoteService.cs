@@ -1803,7 +1803,100 @@ public class GraphOneNoteService
         // 디버그: 추출 전 object 태그 존재 여부
         Log4.Debug($"[OneNote] ExtractEditorRootContent 진입: 길이={html.Length}, <object 포함={html.Contains("<object", StringComparison.OrdinalIgnoreCase)}");
 
-        // data-id="editorRoot" div의 내용 추출
+        // data-absolute-enabled="true" 페이지: 절대 위치 레이아웃 보존
+        if (html.Contains("data-absolute-enabled=\"true\"", StringComparison.OrdinalIgnoreCase))
+        {
+            // body 내용 추출
+            var bodyMatch = Regex.Match(html, @"<body[^>]*>(.*)</body>", RegexOptions.Singleline | RegexOptions.IgnoreCase);
+            if (bodyMatch.Success)
+            {
+                var bodyContent = bodyMatch.Groups[1].Value;
+
+                // body 직계 자식 div를 순차 파싱하여 절대 위치 스타일 보존 + editorRoot strip
+                var rebuiltDivs = new List<string>();
+                int maxBottom = 0; // min-height 계산용
+
+                int pos = 0;
+                while (pos < bodyContent.Length)
+                {
+                    var divStart = bodyContent.IndexOf("<div", pos, StringComparison.OrdinalIgnoreCase);
+                    if (divStart < 0) break;
+
+                    var tagEnd = bodyContent.IndexOf('>', divStart);
+                    if (tagEnd < 0) break;
+
+                    // 시작 태그 전체 (속성 포함)
+                    var openTag = bodyContent.Substring(divStart, tagEnd - divStart + 1);
+
+                    // div의 닫는 태그를 depth 추적으로 찾기
+                    int depth = 1;
+                    int searchPos = tagEnd + 1;
+                    int innerStart = tagEnd + 1;
+                    int innerEnd = -1;
+
+                    while (depth > 0 && searchPos < bodyContent.Length)
+                    {
+                        var nextOpen = bodyContent.IndexOf("<div", searchPos, StringComparison.OrdinalIgnoreCase);
+                        var nextClose = bodyContent.IndexOf("</div>", searchPos, StringComparison.OrdinalIgnoreCase);
+
+                        if (nextClose < 0) break;
+
+                        if (nextOpen >= 0 && nextOpen < nextClose)
+                        {
+                            depth++;
+                            searchPos = nextOpen + 4;
+                        }
+                        else
+                        {
+                            depth--;
+                            if (depth == 0)
+                            {
+                                innerEnd = nextClose;
+                            }
+                            searchPos = nextClose + 6;
+                        }
+                    }
+
+                    if (innerEnd < 0)
+                    {
+                        pos = tagEnd + 1;
+                        continue;
+                    }
+
+                    var innerHTML = bodyContent.Substring(innerStart, innerEnd - innerStart);
+
+                    // editorRoot wrapper가 있으면 strip (내용만 꺼냄)
+                    innerHTML = StripEditorRootWrapper(innerHTML);
+
+                    if (!string.IsNullOrWhiteSpace(innerHTML))
+                    {
+                        // 원본 div 태그의 style에서 data-id 속성 제거하고 position:absolute 스타일 보존
+                        rebuiltDivs.Add(openTag + innerHTML + "</div>");
+
+                        // min-height 계산: top 값 + 200px (추정 높이)
+                        var topMatch = Regex.Match(openTag, @"top:\s*(\d+)px", RegexOptions.IgnoreCase);
+                        if (topMatch.Success && int.TryParse(topMatch.Groups[1].Value, out var topValue))
+                        {
+                            var bottom = topValue + 200;
+                            if (bottom > maxBottom) maxBottom = bottom;
+                        }
+                    }
+
+                    pos = innerEnd + 6;
+                }
+
+                if (rebuiltDivs.Count > 0)
+                {
+                    // position:relative 컨테이너로 감싸서 absolute 위치가 작동하도록 함
+                    var minHeightStyle = maxBottom > 0 ? $"min-height:{maxBottom}px;" : "";
+                    var result = $"<div style=\"position:relative;{minHeightStyle}\">" + string.Join("\n", rebuiltDivs) + "</div>";
+                    Log4.Debug($"[OneNote] absolute 페이지: {rebuiltDivs.Count}개 블록 수집 (절대위치 보존), 총 길이={result.Length}");
+                    return result;
+                }
+            }
+        }
+
+        // 기존 로직: data-id="editorRoot" div의 내용 추출
         var match = Regex.Match(html,
             @"<div[^>]*data-id=""editorRoot""[^>]*>(.*)</div>\s*</body>",
             RegexOptions.Singleline | RegexOptions.IgnoreCase);
@@ -1811,18 +1904,17 @@ public class GraphOneNoteService
         if (match.Success)
         {
             var extracted = match.Groups[1].Value;
-            // 서버에 축적된 editorRoot 중첩 제거 (저장 시 strip 전에 축적된 레거시 데이터 대응)
             extracted = StripEditorRootWrapper(extracted);
             Log4.Debug($"[OneNote] editorRoot 추출 완료: 길이={extracted.Length}, <object 포함={extracted.Contains("<object", StringComparison.OrdinalIgnoreCase)}");
             return extracted;
         }
 
         // editorRoot가 없으면 body 전체 반환
-        var bodyMatch = Regex.Match(html, @"<body[^>]*>(.*?)</body>", RegexOptions.Singleline | RegexOptions.IgnoreCase);
-        if (bodyMatch.Success)
+        var fallbackMatch = Regex.Match(html, @"<body[^>]*>(.*?)</body>", RegexOptions.Singleline | RegexOptions.IgnoreCase);
+        if (fallbackMatch.Success)
         {
-            _logger.Debug("body 콘텐츠 추출 (editorRoot 없음): {Length}자", bodyMatch.Groups[1].Value.Length);
-            return bodyMatch.Groups[1].Value;
+            _logger.Debug("body 콘텐츠 추출 (editorRoot 없음): {Length}자", fallbackMatch.Groups[1].Value.Length);
+            return fallbackMatch.Groups[1].Value;
         }
 
         return html;
@@ -1925,7 +2017,7 @@ public class GraphOneNoteService
             iconHtml = "<span style=\"font-size:48px;display:block;text-align:center;\">📎</span>";
         }
 
-        return $"<div contenteditable=\"false\" style=\"display:inline-block;text-align:center;padding:8px 12px;margin:4px;border:1px solid #e0e0e0;border-radius:8px;background:#f9f9f9;cursor:pointer;vertical-align:top;min-width:80px;max-width:120px;\" title=\"{safeFileName}\" data-attachment=\"{safeFileName}\">"
+        return $"<div contenteditable=\"false\" style=\"display:block;text-align:center;padding:8px 12px;margin:4px 0;border:1px solid #e0e0e0;border-radius:8px;background:#f9f9f9;cursor:pointer;min-width:80px;max-width:120px;\" title=\"{safeFileName}\" data-attachment=\"{safeFileName}\">"
              + $"<a href=\"{href}\" title=\"{safeFileName}\" data-attachment=\"{safeFileName}\" style=\"text-decoration:none;color:inherit;display:block;\" {extraAttrs}>"
              + iconHtml
              + $"<div style=\"margin-top:4px;font-size:11px;color:#333;word-break:break-all;line-height:1.3;\">{displayName}</div>"
