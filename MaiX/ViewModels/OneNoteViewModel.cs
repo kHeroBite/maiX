@@ -3,10 +3,12 @@ using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.IO;
 using System.Linq;
+using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Microsoft.Graph.Models;
+using MaiX.Models;
 using MaiX.Utils;
 using MaiX.Services.Graph;
 using Newtonsoft.Json;
@@ -72,6 +74,12 @@ public partial class OneNoteViewModel : ViewModelBase
     /// </summary>
     [ObservableProperty]
     private string? _currentPageContent;
+
+    /// <summary>
+    /// 현재 페이지 첨부파일 목록
+    /// </summary>
+    [ObservableProperty]
+    private ObservableCollection<OneNoteAttachment> _currentPageAttachments = new();
 
     /// <summary>
     /// 최근 페이지 목록
@@ -3344,7 +3352,9 @@ public partial class OneNoteViewModel : ViewModelBase
             // 카드가 원본 레이어 내부에 유지됨 (별도 append 불필요)
             if (!string.IsNullOrEmpty(content))
             {
-                (content, _) = _oneNoteService.ConvertAttachmentObjectsToLinks(content);
+                List<string> cards;
+                (content, cards) = _oneNoteService.ConvertAttachmentObjectsToLinks(content);
+                ParseAttachmentCards(cards);
             }
 
             // editorRoot 콘텐츠 추출 + 중첩 editorRoot strip
@@ -3381,6 +3391,38 @@ public partial class OneNoteViewModel : ViewModelBase
         finally
         {
             IsLoadingContent = false;
+        }
+    }
+
+    /// <summary>
+    /// 첨부파일 카드 HTML에서 파일 정보 파싱
+    /// </summary>
+    private void ParseAttachmentCards(List<string> cards)
+    {
+        CurrentPageAttachments.Clear();
+        if (cards == null || cards.Count == 0) return;
+
+        foreach (var cardHtml in cards)
+        {
+            // data-attachment="filename.ext" 파싱
+            var nameMatch = Regex.Match(cardHtml, @"data-attachment=""([^""]+)""");
+            // href="url" 파싱
+            var hrefMatch = Regex.Match(cardHtml, @"href=""([^""]+)""");
+
+            if (nameMatch.Success)
+            {
+                var fileName = nameMatch.Groups[1].Value;
+                var url = hrefMatch.Success ? hrefMatch.Groups[1].Value : string.Empty;
+                var ext = Path.GetExtension(fileName).ToLowerInvariant();
+
+                CurrentPageAttachments.Add(new OneNoteAttachment
+                {
+                    FileName = fileName,
+                    DisplayName = Path.GetFileNameWithoutExtension(fileName),
+                    Extension = ext,
+                    DataUrl = url
+                });
+            }
         }
     }
 

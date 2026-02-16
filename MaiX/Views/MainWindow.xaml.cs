@@ -4990,13 +4990,11 @@ public partial class MainWindow : FluentWindow
     {
         // 모든 탭 비활성화 스타일
         SetAITabInactive(OneNoteAITabRecord);
-        SetAITabInactive(OneNoteAITabAuto);
-        SetAITabInactive(OneNoteAITabAgent);
+        SetAITabInactive(OneNoteAITabFile);
 
         // 모든 탭 패널 숨김
         if (OneNoteAIRecordPanel != null) OneNoteAIRecordPanel.Visibility = Visibility.Collapsed;
-        if (OneNoteAIAutomationPanel != null) OneNoteAIAutomationPanel.Visibility = Visibility.Collapsed;
-        if (OneNoteAIAgentPanel != null) OneNoteAIAgentPanel.Visibility = Visibility.Collapsed;
+        if (OneNoteAIFilePanel != null) OneNoteAIFilePanel.Visibility = Visibility.Collapsed;
 
         // 선택한 탭 활성화
         switch (tabName)
@@ -5006,13 +5004,10 @@ public partial class MainWindow : FluentWindow
                 if (OneNoteAIRecordPanel != null) OneNoteAIRecordPanel.Visibility = Visibility.Visible;
                 LoadOneNoteRecordings();
                 break;
-            case "automation":
-                SetAITabActive(OneNoteAITabAuto);
-                if (OneNoteAIAutomationPanel != null) OneNoteAIAutomationPanel.Visibility = Visibility.Visible;
-                break;
-            case "agent":
-                SetAITabActive(OneNoteAITabAgent);
-                if (OneNoteAIAgentPanel != null) OneNoteAIAgentPanel.Visibility = Visibility.Visible;
+            case "file":
+                SetAITabActive(OneNoteAITabFile);
+                if (OneNoteAIFilePanel != null) OneNoteAIFilePanel.Visibility = Visibility.Visible;
+                LoadOneNoteAttachments();
                 break;
         }
     }
@@ -5156,6 +5151,142 @@ public partial class MainWindow : FluentWindow
         {
             UpdateRecordingContentPanel();
             UpdateSummaryContentPanel();
+        }
+    }
+
+    /// <summary>
+    /// 첨부파일 목록 로드
+    /// </summary>
+    private void LoadOneNoteAttachments()
+    {
+        if (_oneNoteViewModel == null) return;
+
+        var attachments = _oneNoteViewModel.CurrentPageAttachments;
+        if (OneNoteFileListBox != null)
+        {
+            OneNoteFileListBox.ItemsSource = attachments;
+        }
+
+        // 빈 목록 메시지 표시
+        if (OneNoteFileEmptyMessage != null)
+        {
+            OneNoteFileEmptyMessage.Visibility = (attachments == null || attachments.Count == 0)
+                ? Visibility.Visible : Visibility.Collapsed;
+        }
+        if (OneNoteFileListBox != null)
+        {
+            OneNoteFileListBox.Visibility = (attachments != null && attachments.Count > 0)
+                ? Visibility.Visible : Visibility.Collapsed;
+        }
+    }
+
+    /// <summary>
+    /// 파일 목록 새로고침
+    /// </summary>
+    private void OneNoteFileRefresh_Click(object sender, RoutedEventArgs e)
+    {
+        LoadOneNoteAttachments();
+    }
+
+    /// <summary>
+    /// 파일 선택 변경 시 분석 결과 표시
+    /// </summary>
+    private void OneNoteFileListBox_SelectionChanged(object sender, System.Windows.Controls.SelectionChangedEventArgs e)
+    {
+        if (OneNoteFileListBox?.SelectedItem is Models.OneNoteAttachment attachment)
+        {
+            UpdateFileAnalysisResult(attachment);
+        }
+    }
+
+    /// <summary>
+    /// 분석 결과 UI 갱신
+    /// </summary>
+    private void UpdateFileAnalysisResult(Models.OneNoteAttachment attachment)
+    {
+        if (OneNoteFileAnalysisResult == null) return;
+
+        if (attachment.HasAnalysis)
+        {
+            OneNoteFileAnalysisResult.Text = attachment.AnalysisResult;
+        }
+        else if (attachment.IsAnalyzing)
+        {
+            OneNoteFileAnalysisResult.Text = "분석 중...";
+        }
+        else
+        {
+            OneNoteFileAnalysisResult.Text = "파일을 선택하고 AI 분석 버튼을 눌러주세요";
+        }
+    }
+
+    /// <summary>
+    /// 개별 파일 AI 분석
+    /// </summary>
+    private async void OneNoteAttachmentAnalyze_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is not System.Windows.Controls.Button btn) return;
+        if (btn.DataContext is not Models.OneNoteAttachment attachment) return;
+
+        var fileAnalysisService = ((App)Application.Current).GetService<Services.AI.FileAnalysisService>();
+        if (fileAnalysisService == null) return;
+
+        attachment.PropertyChanged += (s, args) =>
+        {
+            if (args.PropertyName == nameof(Models.OneNoteAttachment.AnalysisResult) ||
+                args.PropertyName == nameof(Models.OneNoteAttachment.AnalysisStatus))
+            {
+                Dispatcher.Invoke(() => UpdateFileAnalysisResult(attachment));
+            }
+        };
+
+        await fileAnalysisService.AnalyzeFileAsync(attachment);
+    }
+
+    /// <summary>
+    /// 전체 파일 일괄 AI 분석
+    /// </summary>
+    private async void OneNoteAttachmentAnalyzeAll_Click(object sender, RoutedEventArgs e)
+    {
+        if (_oneNoteViewModel?.CurrentPageAttachments == null) return;
+        var attachments = _oneNoteViewModel.CurrentPageAttachments;
+        if (attachments.Count == 0) return;
+
+        var fileAnalysisService = ((App)Application.Current).GetService<Services.AI.FileAnalysisService>();
+        if (fileAnalysisService == null) return;
+
+        if (OneNoteFileListBox != null)
+            OneNoteFileListBox.SelectedIndex = 0;
+
+        foreach (var att in attachments)
+        {
+            att.PropertyChanged += (s, args) =>
+            {
+                if (args.PropertyName == nameof(Models.OneNoteAttachment.AnalysisResult))
+                {
+                    Dispatcher.Invoke(() =>
+                    {
+                        if (OneNoteFileListBox?.SelectedItem == att)
+                            UpdateFileAnalysisResult(att);
+                    });
+                }
+            };
+        }
+
+        await fileAnalysisService.AnalyzeAllFilesAsync(attachments);
+    }
+
+    /// <summary>
+    /// 파일 열기
+    /// </summary>
+    private void OneNoteAttachmentOpen_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is not System.Windows.Controls.Button btn) return;
+        if (btn.DataContext is not Models.OneNoteAttachment attachment) return;
+
+        if (!string.IsNullOrEmpty(attachment.DataUrl))
+        {
+            Services.Editor.TinyMCEEditorService.HandleLinkClick(attachment.DataUrl, attachment.FileName);
         }
     }
 
