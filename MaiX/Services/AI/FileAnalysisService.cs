@@ -11,6 +11,10 @@ namespace MaiX.Services.AI;
 
 public class FileAnalysisService
 {
+    // STT (음성→텍스트) 서비스 — lazy 초기화
+    private Speech.SpeechRecognitionService? _speechService;
+    private readonly SemaphoreSlim _speechInitLock = new(1, 1);
+
     private readonly AIService _aiService;
     private readonly AttachmentProcessor _attachmentProcessor;
     private readonly OcrConverter _ocrConverter;
@@ -49,17 +53,24 @@ public class FileAnalysisService
                 return;
             }
 
-            // 2. 텍스트 추출
+            // 2. 텍스트 추출 (오디오 파일은 STT로 변환)
+            var isAudio = IsAudioExtension(attachment.Extension);
+            if (isAudio)
+                attachment.AnalysisStatus = "음성 인식 중...";
+
             var text = await ExtractTextAsync(filePath, attachment.Extension, ct);
             if (string.IsNullOrEmpty(text))
             {
                 attachment.AnalysisStatus = "실패";
-                attachment.AnalysisResult = "파일에서 텍스트를 추출할 수 없습니다.";
+                attachment.AnalysisResult = isAudio
+                    ? "오디오 파일에서 음성을 인식할 수 없습니다."
+                    : "파일에서 텍스트를 추출할 수 없습니다.";
                 return;
             }
 
             // 3. AI 분석 (스트리밍)
-            var prompt = BuildAnalysisPrompt(attachment.FileName, text);
+            attachment.AnalysisStatus = "AI 분석 중...";
+            var prompt = BuildAnalysisPrompt(attachment.FileName, text, isAudio);
             var stream = await _aiService.StreamCompleteAsync(prompt, ct);
             await foreach (var chunk in stream.WithCancellation(ct))
             {
@@ -213,7 +224,14 @@ public class FileAnalysisService
     {
         try
         {
-            if (IsImageExtension(extension))
+            if (IsAudioExtension(extension))
+            {
+                var speechService = await EnsureSpeechServiceAsync(ct);
+                var result = await speechService.TranscribeFileAsync(filePath, ct);
+                _log.Info($"STT 완료: {filePath}, 텍스트 길이={result.FullText.Length}");
+                return result.FullText;
+            }
+            else if (IsImageExtension(extension))
             {
                 return await _ocrConverter.ConvertToTextAsync(filePath, ct);
             }
@@ -230,14 +248,73 @@ public class FileAnalysisService
         }
     }
 
+
+    /// <summary>
+    /// STT 서비스를 lazy 초기화하여 반환
+    /// </summary>
+    private async Task<Speech.SpeechRecognitionService> EnsureSpeechServiceAsync(CancellationToken ct)
+    {
+        if (_speechService?.IsInitialized == true)
+            return _speechService;
+
+        await _speechInitLock.WaitAsync(ct);
+        try
+        {
+            if (_speechService?.IsInitialized == true)
+                return _speechService;
+
+            _speechService ??= new Speech.SpeechRecognitionService();
+
+            if (_speechService.NeedsSenseVoiceModelDownload())
+            {
+                _log.Info("STT 모델 다운로드 시작 (SenseVoice)...");
+                await _speechService.DownloadSenseVoiceModelAsync(ct);
+            }
+
+            if (!_speechService.IsSenseVoiceInitialized)
+            {
+                await _speechService.InitializeSenseVoiceAsync(ct);
+            }
+
+            return _speechService;
+        }
+        finally
+        {
+            _speechInitLock.Release();
+        }
+    }
+
+    /// <summary>
+    /// 오디오 파일 확장자 판별
+    /// </summary>
+    private static bool IsAudioExtension(string ext) => ext.ToLowerInvariant() switch
+    {
+        ".mp3" or ".wav" or ".m4a" or ".ogg" or ".wma" or ".flac" or ".aac" => true,
+        _ => false
+    };
+
     private static bool IsImageExtension(string ext) => ext.ToLowerInvariant() switch
     {
         ".png" or ".jpg" or ".jpeg" or ".gif" or ".bmp" or ".tiff" => true,
         _ => false
     };
 
-    private static string BuildAnalysisPrompt(string fileName, string text)
+    private static string BuildAnalysisPrompt(string fileName, string text, bool isAudio = false)
     {
+        if (isAudio)
+        {
+            return $"""
+            다음은 '{fileName}' 오디오 파일에서 STT(음성→텍스트)로 추출한 내용입니다. 이 음성 내용을 분석하여 다음을 제공해주세요:
+
+            1. **요약**: 음성 내용의 핵심을 3-5문장으로 요약
+            2. **주요 포인트**: 중요한 정보나 핵심 사항을 bullet point로 나열
+            3. **액션 아이템**: 필요한 후속 조치가 있다면 나열
+
+            음성 내용:
+            {text}
+            """;
+        }
+
         return $"""
             다음은 '{fileName}' 파일의 내용입니다. 이 파일을 분석하여 다음을 제공해주세요:
 
