@@ -1675,16 +1675,45 @@ public class GraphOneNoteService
         if (string.IsNullOrEmpty(html))
             return html;
 
-        var regex = new Regex(
-            @"^\s*<div[^>]*data-id=""editorRoot""[^>]*>(.*)</div>\s*$",
-            RegexOptions.Singleline | RegexOptions.IgnoreCase);
-
+        int strippedCount = 0;
         var current = html;
+
         while (true)
         {
-            var m = regex.Match(current);
-            if (!m.Success) break;
-            current = m.Groups[1].Value;
+            // 앞쪽 공백 제거
+            var trimmed = current.TrimStart();
+
+            // editorRoot div 시작 태그 확인
+            const string marker = "data-id=\"editorRoot\"";
+            if (!trimmed.StartsWith("<div", StringComparison.OrdinalIgnoreCase))
+                break;
+
+            // 시작 태그에서 data-id="editorRoot" 확인
+            var closeAngle = trimmed.IndexOf('>');
+            if (closeAngle < 0) break;
+
+            var startTag = trimmed.Substring(0, closeAngle + 1);
+            if (startTag.IndexOf(marker, StringComparison.OrdinalIgnoreCase) < 0)
+                break;
+
+            // 끝쪽에서 </div> + 공백 확인
+            var endTrimmed = current.TrimEnd();
+            if (!endTrimmed.EndsWith("</div>", StringComparison.OrdinalIgnoreCase))
+                break;
+
+            // 시작 태그 이후 ~ 마지막 </div> 이전의 콘텐츠 추출
+            var innerStart = current.IndexOf('>', current.IndexOf('<')) + 1;
+            var innerEnd = current.LastIndexOf("</div>", StringComparison.OrdinalIgnoreCase);
+            if (innerStart <= 0 || innerEnd < 0 || innerEnd <= innerStart)
+                break;
+
+            current = current.Substring(innerStart, innerEnd - innerStart);
+            strippedCount++;
+        }
+
+        if (strippedCount > 0)
+        {
+            Log4.Debug($"[OneNote] StripEditorRootWrapper: {strippedCount}겹 editorRoot 제거, 결과 길이={current.Length}");
         }
 
         return current;
