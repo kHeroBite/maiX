@@ -2149,9 +2149,8 @@ public class GraphOneNoteService
         var containsObject = html.Contains("<object", StringComparison.OrdinalIgnoreCase);
         Log4.Debug($"[OneNote] ConvertAttachmentObjectsToLinks 진입: 길이={html.Length}, <object 포함={containsObject}");
 
-        // 1단계: <object> 태그를 카드로 변환 (수집 후 제거)
-        // OneNote API는 <object>를 editorRoot 밖에 배치하므로,
-        // 카드 HTML을 수집하고 <object>는 제거한 뒤 호출자가 적절한 시점에 삽입
+        // 1단계: <object> 태그에서 파일 정보 수집 후 제거
+        // 첨부파일은 에디터 본문에 표시하지 않고, 우측 파일탭에서만 관리
         var cardHtmlList = new List<string>();
         var seenFiles = new HashSet<string>(StringComparer.OrdinalIgnoreCase); // 중복 방지
 
@@ -2178,16 +2177,15 @@ public class GraphOneNoteService
             var dataUrlMatch = Regex.Match(attrs, @"\sdata=""([^""]+)""", RegexOptions.IgnoreCase);
             var dataUrl = dataUrlMatch.Success ? dataUrlMatch.Groups[1].Value : "#";
 
-            // 동일 파일명 중복 카드 방지 — in-place 교체 (레이어 내부 유지)
+            // 파일 정보 수집 (파일리스트용) — 에디터에는 카드 삽입하지 않음
             if (seenFiles.Add(fileName))
             {
-                Log4.Debug($"[OneNote] 첨부파일 object→카드 in-place 교체: {fileName}");
+                Log4.Debug($"[OneNote] 첨부파일 object 감지→파일리스트 수집: {fileName}");
                 var cardHtml = GenerateAttachmentCardHtml(fileName, dataUrl);
                 cardHtmlList.Add(cardHtml);
-                return cardHtml; // object 위치에 카드 직접 삽입
             }
 
-            return ""; // 중복 object 태그 제거
+            return ""; // 에디터 본문에서 제거
         });
 
         // 1.5단계: U+FFFC (Object Replacement Character) 제거
@@ -2196,7 +2194,7 @@ public class GraphOneNoteService
 
         // 2단계: MaiX 드롭 카드가 API 왕복 후 변질된 패턴 제거
         var droppedCardRegex = new Regex(
-            @"<a\s+href=""file:///[^""]*MaiX_Drop/[^""]*?/([^""/]+)""[^>]*>\s*<div[^>]*>\s*<img[^>]*/?>\s*</div>\s*</a>\s*(?:<div[^>]*>\s*<p[^>]*><a[^>]*>[^<]*</a></p>\s*</div>)?",
+            @"<a\s+href=""file:///[^""]*MaiX_Drop/[^""]*?/([^""/]+)""[^>]*>\s*<div[^>]*>\s*<img[^>]*/?>\\s*</div>\s*</a>\s*(?:<div[^>]*>\s*<p[^>]*><a[^>]*>[^<]*</a></p>\s*</div>)?",
             RegexOptions.IgnoreCase | RegexOptions.Singleline);
 
         result = droppedCardRegex.Replace(result, match =>
@@ -2204,7 +2202,7 @@ public class GraphOneNoteService
             var fileName = Uri.UnescapeDataString(match.Groups[1].Value.Trim());
             if (seenFiles.Add(fileName))
             {
-                Log4.Debug($"[OneNote] 변질카드→카드 복원: {fileName}");
+                Log4.Debug($"[OneNote] 변질카드→파일리스트 수집: {fileName}");
                 cardHtmlList.Add(GenerateAttachmentCardHtml(fileName));
             }
             return ""; // 변질 패턴 제거
@@ -2219,7 +2217,7 @@ public class GraphOneNoteService
             var fileName = match.Groups[1].Value.Trim();
             if (seenFiles.Add(fileName))
             {
-                Log4.Debug($"[OneNote] 텍스트링크A→카드 변환: {fileName}");
+                Log4.Debug($"[OneNote] 텍스트링크A→파일리스트 수집: {fileName}");
                 cardHtmlList.Add(GenerateAttachmentCardHtml(fileName));
             }
             return "";
@@ -2233,16 +2231,16 @@ public class GraphOneNoteService
             var fileName = match.Groups[1].Value.Trim();
             if (seenFiles.Add(fileName))
             {
-                Log4.Debug($"[OneNote] 텍스트링크B→카드 변환: {fileName}");
+                Log4.Debug($"[OneNote] 텍스트링크B→파일리스트 수집: {fileName}");
                 cardHtmlList.Add(GenerateAttachmentCardHtml(fileName));
             }
             return "";
         });
 
-        // 카드 삽입은 호출자가 ExtractEditorRootContent + StripEditorRootWrapper 이후에 수행
+        // 파일리스트용 카드 정보 수집 완료 로그
         if (cardHtmlList.Count > 0)
         {
-            Log4.Debug($"[OneNote] 첨부 카드 {cardHtmlList.Count}개 수집 완료 (삽입은 호출자 담당)");
+            Log4.Debug($"[OneNote] 첨부파일 {cardHtmlList.Count}개 수집 완료 (에디터 본문에서 제거됨)");
         }
 
         return (result, cardHtmlList);

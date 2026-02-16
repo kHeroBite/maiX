@@ -5178,6 +5178,37 @@ public partial class MainWindow : FluentWindow
             OneNoteFileListBox.Visibility = (attachments != null && attachments.Count > 0)
                 ? Visibility.Visible : Visibility.Collapsed;
         }
+
+        // 캐시된 AI 분석 결과 자동 로드
+        _ = LoadCachedAnalysisResultsAsync(attachments);
+    }
+
+    /// <summary>
+    /// 캐시된 AI 분석 결과를 첨부파일에 자동 적용
+    /// </summary>
+    private async Task LoadCachedAnalysisResultsAsync(System.Collections.ObjectModel.ObservableCollection<Models.OneNoteAttachment>? attachments)
+    {
+        if (attachments == null || attachments.Count == 0) return;
+        var pageId = _oneNoteViewModel?.SelectedPage?.Id;
+        if (string.IsNullOrEmpty(pageId)) return;
+
+        var cacheService = ((App)Application.Current).GetService<Services.AI.FileAnalysisCacheService>();
+        if (cacheService == null) return;
+
+        var cachedResults = await cacheService.LoadAllAnalysisResultsAsync(pageId);
+        if (cachedResults.Count == 0) return;
+
+        await Dispatcher.InvokeAsync(() =>
+        {
+            foreach (var att in attachments)
+            {
+                if (cachedResults.TryGetValue(att.FileName, out var result) && !string.IsNullOrEmpty(result))
+                {
+                    att.AnalysisResult = result;
+                    att.AnalysisStatus = "완료";
+                }
+            }
+        });
     }
 
     /// <summary>
@@ -5231,12 +5262,21 @@ public partial class MainWindow : FluentWindow
         var fileAnalysisService = ((App)Application.Current).GetService<Services.AI.FileAnalysisService>();
         if (fileAnalysisService == null) return;
 
+        var cacheService = ((App)Application.Current).GetService<Services.AI.FileAnalysisCacheService>();
+        var pageId = _oneNoteViewModel?.SelectedPage?.Id;
+
         attachment.PropertyChanged += (s, args) =>
         {
             if (args.PropertyName == nameof(Models.OneNoteAttachment.AnalysisResult) ||
                 args.PropertyName == nameof(Models.OneNoteAttachment.AnalysisStatus))
             {
                 Dispatcher.Invoke(() => UpdateFileAnalysisResult(attachment));
+            }
+            // 분석 완료 시 캐시에 자동 저장
+            if (args.PropertyName == nameof(Models.OneNoteAttachment.AnalysisStatus) &&
+                attachment.AnalysisStatus == "완료" && cacheService != null && !string.IsNullOrEmpty(pageId))
+            {
+                _ = cacheService.SaveAnalysisResultAsync(pageId, attachment.FileName, attachment.AnalysisResult);
             }
         };
 
@@ -5255,6 +5295,9 @@ public partial class MainWindow : FluentWindow
         var fileAnalysisService = ((App)Application.Current).GetService<Services.AI.FileAnalysisService>();
         if (fileAnalysisService == null) return;
 
+        var cacheService = ((App)Application.Current).GetService<Services.AI.FileAnalysisCacheService>();
+        var pageId = _oneNoteViewModel?.SelectedPage?.Id;
+
         if (OneNoteFileListBox != null)
             OneNoteFileListBox.SelectedIndex = 0;
 
@@ -5269,6 +5312,12 @@ public partial class MainWindow : FluentWindow
                         if (OneNoteFileListBox?.SelectedItem == att)
                             UpdateFileAnalysisResult(att);
                     });
+                }
+                // 분석 완료 시 캐시에 자동 저장
+                if (args.PropertyName == nameof(Models.OneNoteAttachment.AnalysisStatus) &&
+                    att.AnalysisStatus == "완료" && cacheService != null && !string.IsNullOrEmpty(pageId))
+                {
+                    _ = cacheService.SaveAnalysisResultAsync(pageId, att.FileName, att.AnalysisResult);
                 }
             };
         }
@@ -11707,12 +11756,13 @@ public partial class MainWindow : FluentWindow
             var success = await graphService.AppendFileToPageAsync(pageId, resolvedPath, fileName);
             if (success)
             {
-                // 로딩 → 아이콘 카드로 교체
-                var cardHtml = Services.Graph.GraphOneNoteService.GenerateAttachmentCardHtml(fileName, fileUrl);
-                var jsCardHtml = cardHtml.Replace("\\", "\\\\").Replace("'", "\\'").Replace("\"", "\\\"").Replace("\n", "").Replace("\r", "");
+                // 첨부 완료 → 에디터에서 로딩 표시 제거 (노트본문에 카드 안 남김)
                 await OneNoteEditorWebView.CoreWebView2.ExecuteScriptAsync(
-                    $"var el = editor.dom.get('{dropId}'); if(el) {{ el.outerHTML = '{jsCardHtml}'; editor.fire('change'); }}");
+                    $"var el = editor.dom.get('{dropId}'); if(el) {{ el.outerHTML = ''; editor.fire('change'); }}");
                 _viewModel.StatusMessage = $"파일 첨부 완료: {fileName}";
+
+                // 우측 파일리스트에 실시간 추가
+                AddAttachmentToFileList(fileName, fileUrl);
 
                 // 첨부 완료 후 자동저장 (다른 노트 이동 시 카드 보존)
                 await SaveOneNoteAsync();
@@ -11730,17 +11780,52 @@ public partial class MainWindow : FluentWindow
         else if (_isNewPage && _oneNoteViewModel != null)
         {
             _oneNoteViewModel.AddPendingAttachment(resolvedPath, fileName);
-            // 로딩 → 아이콘 카드로 교체 (저장 시 첨부 안내)
-            var cardHtml = Services.Graph.GraphOneNoteService.GenerateAttachmentCardHtml(fileName, fileUrl);
-            var jsCardHtml = cardHtml.Replace("\\", "\\\\").Replace("'", "\\'").Replace("\"", "\\\"").Replace("\n", "").Replace("\r", "");
+            // 첨부 예정 → 에디터에서 로딩 표시 제거 + 파일리스트에 추가
             await OneNoteEditorWebView.CoreWebView2.ExecuteScriptAsync(
-                $"var el = editor.dom.get('{dropId}'); if(el) {{ el.outerHTML = '{jsCardHtml}'; editor.fire('change'); }}");
+                $"var el = editor.dom.get('{dropId}'); if(el) {{ el.outerHTML = ''; editor.fire('change'); }}");
             _viewModel.StatusMessage = $"파일 첨부 예정: {fileName} (저장 시 첨부됩니다)";
+
+            AddAttachmentToFileList(fileName, fileUrl);
         }
         else
         {
             // 페이지 미선택 상태 — Fallback
             await Services.Editor.TinyMCEEditorService.비이미지파일드롭처리Async(OneNoteEditorWebView, fileName, filePath);
+        }
+    }
+
+    /// <summary>
+    /// 우측 파일리스트에 첨부파일 실시간 추가 (중복 방지)
+    /// </summary>
+    private void AddAttachmentToFileList(string fileName, string dataUrl)
+    {
+        if (_oneNoteViewModel == null) return;
+        var attachments = _oneNoteViewModel.CurrentPageAttachments;
+
+        // 중복 체크
+        if (attachments.Any(a => a.FileName.Equals(fileName, StringComparison.OrdinalIgnoreCase)))
+            return;
+
+        var ext = System.IO.Path.GetExtension(fileName).ToLowerInvariant();
+        var iconBase64 = Services.Graph.GraphOneNoteService.GetFileIconBase64(fileName);
+
+        attachments.Add(new Models.OneNoteAttachment
+        {
+            FileName = fileName,
+            DisplayName = System.IO.Path.GetFileNameWithoutExtension(fileName),
+            Extension = ext,
+            DataUrl = dataUrl,
+            IconBase64 = iconBase64
+        });
+
+        // 빈 목록 메시지 갱신
+        if (OneNoteFileEmptyMessage != null)
+        {
+            OneNoteFileEmptyMessage.Visibility = Visibility.Collapsed;
+        }
+        if (OneNoteFileListBox != null)
+        {
+            OneNoteFileListBox.Visibility = Visibility.Visible;
         }
     }
 

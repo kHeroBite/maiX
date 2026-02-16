@@ -282,6 +282,7 @@ public partial class App : Application
         services.AddSingleton<OcrConverter>();
         services.AddSingleton<AttachmentProcessor>();
         services.AddSingleton<FileAnalysisService>();
+        services.AddSingleton<FileAnalysisCacheService>();
         services.AddSingleton<CloudLinkDownloader>();
 
         // 검색 서비스 등록
