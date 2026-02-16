@@ -1782,6 +1782,8 @@ public class GraphOneNoteService
         if (match.Success)
         {
             var extracted = match.Groups[1].Value;
+            // 서버에 축적된 editorRoot 중첩 제거 (저장 시 strip 전에 축적된 레거시 데이터 대응)
+            extracted = StripEditorRootWrapper(extracted);
             Log4.Debug($"[OneNote] editorRoot 추출 완료: 길이={extracted.Length}, <object 포함={extracted.Contains("<object", StringComparison.OrdinalIgnoreCase)}");
             return extracted;
         }
