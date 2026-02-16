@@ -11305,6 +11305,16 @@ public partial class MainWindow : FluentWindow
             return;
         }
 
+        // 에디터에 로딩 표시 삽입 (고유 ID로 나중에 교체)
+        var dropId = $"drop_{DateTime.Now:yyyyMMddHHmmssfff}";
+        var safeFileName = fileName.Replace("'", "\\'").Replace("\"", "&quot;");
+        var fileUrl = "file:///" + resolvedPath.Replace("\\", "/");
+        var safeFileUrl = fileUrl.Replace("'", "\\'").Replace("\"", "&quot;");
+
+        await OneNoteEditorWebView.CoreWebView2.ExecuteScriptAsync(
+            $"if(editor) editor.insertContent('<p id=\"{dropId}\">⏳ <strong>{safeFileName}</strong> (첨부 중...)</p>');");
+        _viewModel.StatusMessage = $"파일 첨부 중: {fileName}";
+
         // 기존 페이지 (pageId 있음): 즉시 API로 첨부
         if (!_isNewPage && _oneNoteViewModel?.SelectedPage?.Id != null)
         {
@@ -11314,27 +11324,27 @@ public partial class MainWindow : FluentWindow
             var success = await graphService.AppendFileToPageAsync(pageId, resolvedPath, fileName);
             if (success)
             {
-                // 에디터에 첨부 성공 메시지 삽입
-                var escapedName = fileName.Replace("'", "\\'");
+                // 로딩 → 클릭 가능한 링크로 교체
                 await OneNoteEditorWebView.CoreWebView2.ExecuteScriptAsync(
-                    $"if(editor) editor.insertContent('<p>📎 <strong>{escapedName}</strong> (첨부됨)</p>');");
+                    $"var el = document.getElementById('{dropId}'); if(el) el.outerHTML = '<p><a href=\"{safeFileUrl}\" title=\"{safeFileName}\">📎 <strong>{safeFileName}</strong> (첨부됨)</a></p>';");
                 _viewModel.StatusMessage = $"파일 첨부 완료: {fileName}";
             }
             else
             {
                 Log4.Warn($"[OneNote] 파일 첨부 실패: {fileName}");
-                // Fallback: file:/// 링크 삽입
-                await Services.Editor.TinyMCEEditorService.비이미지파일드롭처리Async(OneNoteEditorWebView, fileName, filePath);
+                // 로딩 → 실패 메시지로 교체
+                await OneNoteEditorWebView.CoreWebView2.ExecuteScriptAsync(
+                    $"var el = document.getElementById('{dropId}'); if(el) el.outerHTML = '<p>❌ <strong>{safeFileName}</strong> (첨부 실패)</p>';");
+                _viewModel.StatusMessage = $"파일 첨부 실패: {fileName}";
             }
         }
         // 새 페이지 모드: 대기 목록에 추가
         else if (_isNewPage && _oneNoteViewModel != null)
         {
             _oneNoteViewModel.AddPendingAttachment(resolvedPath, fileName);
-            // 에디터에 첨부 예정 메시지 삽입
-            var escapedName = fileName.Replace("'", "\\'");
+            // 로딩 → 클릭 가능한 링크로 교체 (저장 시 첨부 안내)
             await OneNoteEditorWebView.CoreWebView2.ExecuteScriptAsync(
-                $"if(editor) editor.insertContent('<p>📎 <strong>{escapedName}</strong> (저장 시 첨부됨)</p>');");
+                $"var el = document.getElementById('{dropId}'); if(el) el.outerHTML = '<p><a href=\"{safeFileUrl}\" title=\"{safeFileName}\">📎 <strong>{safeFileName}</strong> (저장 시 첨부됨)</a></p>';");
             _viewModel.StatusMessage = $"파일 첨부 예정: {fileName} (저장 시 첨부됩니다)";
         }
         else
