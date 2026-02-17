@@ -5295,14 +5295,17 @@ public partial class MainWindow : FluentWindow
 
         // font 태그 패턴: <font color="#RRGGBB">내용</font>
         var fontPattern = new System.Text.RegularExpressions.Regex(
-            @"(<font color=""#[0-9A-Fa-f]{6}"">.*?</font>)");
+            @"(<font color=""#[0-9A-Fa-f]{6}"">.*?</font>)",
+            System.Text.RegularExpressions.RegexOptions.Singleline);
         // 기존 대괄호 마커 패턴 (하위 호환): [K]내용[/K], [G]내용[/G] 등
         var legacyPattern = new System.Text.RegularExpressions.Regex(
-            @"(\[K\].+?\[/K\]|\[G\].+?\[/G\]|\[R\].+?\[/R\]|\[W\].+?\[/W\]|\[B\].+?\[/B\]|\[A\].+?\[/A\]|\[P\].+?\[/P\]|\[C\].+?\[/C\])");
+            @"(\[K\].+?\[/K\]|\[G\].+?\[/G\]|\[R\].+?\[/R\]|\[W\].+?\[/W\]|\[B\].+?\[/B\]|\[A\].+?\[/A\]|\[P\].+?\[/P\]|\[C\].+?\[/C\])",
+            System.Text.RegularExpressions.RegexOptions.Singleline);
 
         // 두 패턴을 합친 통합 패턴
         var combinedPattern = new System.Text.RegularExpressions.Regex(
-            @"(<font color=""#[0-9A-Fa-f]{6}"">.*?</font>|\[K\].+?\[/K\]|\[G\].+?\[/G\]|\[R\].+?\[/R\]|\[W\].+?\[/W\]|\[B\].+?\[/B\]|\[A\].+?\[/A\]|\[P\].+?\[/P\]|\[C\].+?\[/C\])");
+            @"(<font color=""#[0-9A-Fa-f]{6}"">.*?</font>|\[K\].+?\[/K\]|\[G\].+?\[/G\]|\[R\].+?\[/R\]|\[W\].+?\[/W\]|\[B\].+?\[/B\]|\[A\].+?\[/A\]|\[P\].+?\[/P\]|\[C\].+?\[/C\])",
+            System.Text.RegularExpressions.RegexOptions.Singleline);
 
         var parts = combinedPattern.Split(text);
         var matches = combinedPattern.Matches(text);
@@ -5325,7 +5328,7 @@ public partial class MainWindow : FluentWindow
                 {
                     // font 태그: color 속성에서 hex 추출
                     var colorMatch = System.Text.RegularExpressions.Regex.Match(marker, @"#([0-9A-Fa-f]{6})");
-                    var innerMatch = System.Text.RegularExpressions.Regex.Match(marker, @">(.+?)</font>");
+                    var innerMatch = System.Text.RegularExpressions.Regex.Match(marker, @">(.+?)</font>", System.Text.RegularExpressions.RegexOptions.Singleline);
                     content = innerMatch.Success ? innerMatch.Groups[1].Value : marker;
 
                     if (colorMatch.Success)
