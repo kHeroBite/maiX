@@ -5302,7 +5302,8 @@ public partial class MainWindow : FluentWindow
                 ? analysisResult[..200].Trim() + "..."
                 : analysisResult.Trim();
             fallback = System.Text.RegularExpressions.Regex.Replace(fallback, @"<[^>]+>", "");
-            fallback = System.Text.RegularExpressions.Regex.Replace(fallback, @"\s*[\r\n]+\s*", " ").Trim();
+            fallback = System.Text.RegularExpressions.Regex.Replace(fallback, @"^[ \t]+|[ \t]+$", "",
+                System.Text.RegularExpressions.RegexOptions.Multiline).Trim();
             return fallback;
         }
 
@@ -5332,8 +5333,9 @@ public partial class MainWindow : FluentWindow
         // HTML 태그 제거
         summary = System.Text.RegularExpressions.Regex.Replace(summary, @"<[^>]+>", "");
 
-        // 줄바꿈 + 들여쓰기를 공백으로 정리 (한 줄 요약)
-        summary = System.Text.RegularExpressions.Regex.Replace(summary, @"\s*[\r\n]+\s*", " ").Trim();
+        // 각 줄의 앞뒤 공백(들여쓰기) 제거 — 줄바꿈은 유지
+        summary = System.Text.RegularExpressions.Regex.Replace(summary, @"^[ \t]+|[ \t]+$", "",
+            System.Text.RegularExpressions.RegexOptions.Multiline).Trim();
 
         // 최대 300자 제한
         if (summary.Length > 300)
