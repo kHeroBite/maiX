@@ -48,7 +48,7 @@ public class FileAnalysisService
             attachment.AnalysisResult = string.Empty;
 
             // 1. 파일 다운로드 (Graph API URL인 경우)
-            var filePath = await EnsureLocalFileAsync(attachment, ct);
+            var filePath = await EnsureLocalFileAsync(attachment, ct).ConfigureAwait(false);
             if (string.IsNullOrEmpty(filePath))
             {
                 attachment.AnalysisStatus = "실패";
@@ -61,7 +61,7 @@ public class FileAnalysisService
             if (isAudio)
                 attachment.AnalysisStatus = "음성 인식 중...";
 
-            var text = await Task.Run(() => ExtractTextAsync(filePath, attachment.Extension, ct), ct);
+            var text = await Task.Run(() => ExtractTextAsync(filePath, attachment.Extension, ct), ct).ConfigureAwait(false);
             if (string.IsNullOrEmpty(text))
             {
                 attachment.AnalysisStatus = "실패";
@@ -73,9 +73,9 @@ public class FileAnalysisService
 
             // 3. AI 분석 — 스트리밍 결과를 모아서 한 번에 설정 (UI 블로킹 방지)
             attachment.AnalysisStatus = "AI 분석 중...";
-            var prompt = await BuildAnalysisPromptAsync(attachment.FileName, text, isAudio);
+            var prompt = await BuildAnalysisPromptAsync(attachment.FileName, text, isAudio).ConfigureAwait(false);
             var resultBuilder = new System.Text.StringBuilder();
-            var stream = await _aiService.StreamCompleteAsync(prompt, ct);
+            var stream = await _aiService.StreamCompleteAsync(prompt, ct).ConfigureAwait(false);
             await foreach (var chunk in stream.WithCancellation(ct))
             {
                 resultBuilder.Append(chunk);
@@ -125,10 +125,10 @@ public class FileAnalysisService
         {
             foreach (var att in attachments)
             {
-                var filePath = await EnsureLocalFileAsync(att, ct);
+                var filePath = await EnsureLocalFileAsync(att, ct).ConfigureAwait(false);
                 if (!string.IsNullOrEmpty(filePath))
                 {
-                    var text = await Task.Run(() => ExtractTextAsync(filePath, att.Extension, ct), ct);
+                    var text = await Task.Run(() => ExtractTextAsync(filePath, att.Extension, ct), ct).ConfigureAwait(false);
                     if (!string.IsNullOrEmpty(text))
                     {
                         allTexts.Add($"[{att.FileName}]\n{text}");
@@ -149,14 +149,14 @@ public class FileAnalysisService
 
             // 전체 통합 AI 분석
             var combinedText = string.Join("\n\n---\n\n", allTexts);
-            var prompt = await BuildAllFilesAnalysisPromptAsync(combinedText);
+            var prompt = await BuildAllFilesAnalysisPromptAsync(combinedText).ConfigureAwait(false);
             foreach (var att in attachments)
             {
                 att.AnalysisStatus = "AI 분석 중...";
             }
 
             var resultBuilder = new System.Text.StringBuilder();
-            var stream = await _aiService.StreamCompleteAsync(prompt, ct);
+            var stream = await _aiService.StreamCompleteAsync(prompt, ct).ConfigureAwait(false);
             await foreach (var chunk in stream.WithCancellation(ct))
             {
                 resultBuilder.Append(chunk);
@@ -214,7 +214,7 @@ public class FileAnalysisService
                 Directory.CreateDirectory(tempDir);
 
                 var localPath = await _graphOneNoteService.DownloadAudioResourceAsync(
-                    attachment.DataUrl, attachment.FileName, tempDir);
+                    attachment.DataUrl, attachment.FileName, tempDir).ConfigureAwait(false);
 
                 if (!string.IsNullOrEmpty(localPath))
                 {
@@ -239,18 +239,18 @@ public class FileAnalysisService
         {
             if (IsAudioExtension(extension))
             {
-                var speechService = await EnsureSpeechServiceAsync(ct);
-                var result = await speechService.TranscribeFileAsync(filePath, ct);
+                var speechService = await EnsureSpeechServiceAsync(ct).ConfigureAwait(false);
+                var result = await speechService.TranscribeFileAsync(filePath, ct).ConfigureAwait(false);
                 _log.Info($"STT 완료: {filePath}, 텍스트 길이={result.FullText.Length}");
                 return result.FullText;
             }
             else if (IsImageExtension(extension))
             {
-                return await _ocrConverter.ConvertToTextAsync(filePath, ct);
+                return await _ocrConverter.ConvertToTextAsync(filePath, ct).ConfigureAwait(false);
             }
             else
             {
-                var result = await _attachmentProcessor.ProcessAttachmentAsync(filePath, ct);
+                var result = await _attachmentProcessor.ProcessAttachmentAsync(filePath, ct).ConfigureAwait(false);
                 return result.Text;
             }
         }
@@ -270,7 +270,7 @@ public class FileAnalysisService
         if (_speechService?.IsInitialized == true)
             return _speechService;
 
-        await _speechInitLock.WaitAsync(ct);
+        await _speechInitLock.WaitAsync(ct).ConfigureAwait(false);
         try
         {
             if (_speechService?.IsInitialized == true)
@@ -281,12 +281,12 @@ public class FileAnalysisService
             if (_speechService.NeedsSenseVoiceModelDownload())
             {
                 _log.Info("STT 모델 다운로드 시작 (SenseVoice)...");
-                await _speechService.DownloadSenseVoiceModelAsync(ct);
+                await _speechService.DownloadSenseVoiceModelAsync(ct).ConfigureAwait(false);
             }
 
             if (!_speechService.IsSenseVoiceInitialized)
             {
-                await _speechService.InitializeSenseVoiceAsync(ct);
+                await _speechService.InitializeSenseVoiceAsync(ct).ConfigureAwait(false);
             }
 
             return _speechService;
@@ -315,7 +315,7 @@ public class FileAnalysisService
     private async Task<string> BuildAnalysisPromptAsync(string fileName, string text, bool isAudio = false)
     {
         var promptFileName = isAudio ? "onenote_audio_analysis.txt" : "onenote_file_analysis.txt";
-        var template = await _promptCache.GetTemplateAsync(promptFileName);
+        var template = await _promptCache.GetTemplateAsync(promptFileName).ConfigureAwait(false);
 
         var variables = new Dictionary<string, string>
         {
@@ -329,7 +329,7 @@ public class FileAnalysisService
 
     private async Task<string> BuildAllFilesAnalysisPromptAsync(string combinedText)
     {
-        var template = await _promptCache.GetTemplateAsync("onenote_all_files_analysis.txt");
+        var template = await _promptCache.GetTemplateAsync("onenote_all_files_analysis.txt").ConfigureAwait(false);
 
         var variables = new Dictionary<string, string>
         {

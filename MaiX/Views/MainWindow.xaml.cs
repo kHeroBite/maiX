@@ -5367,7 +5367,8 @@ public partial class MainWindow : FluentWindow
             }
         };
 
-        await fileAnalysisService.AnalyzeFileAsync(attachment);
+        // Task.Run으로 전체 분석을 백그라운드 스레드에서 실행 (UI 블로킹 방지)
+        await Task.Run(() => fileAnalysisService.AnalyzeFileAsync(attachment));
     }
 
     /// <summary>
@@ -5409,7 +5410,8 @@ public partial class MainWindow : FluentWindow
             };
         }
 
-        await fileAnalysisService.AnalyzeAllFilesAsync(attachments);
+        // Task.Run으로 전체 일괄 분석을 백그라운드 스레드에서 실행 (UI 블로킹 방지)
+        await Task.Run(() => fileAnalysisService.AnalyzeAllFilesAsync(attachments));
     }
 
     /// <summary>
