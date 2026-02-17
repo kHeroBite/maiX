@@ -5207,6 +5207,7 @@ public partial class MainWindow : FluentWindow
                 if (cachedResults.TryGetValue(att.FileName, out var result) && !string.IsNullOrEmpty(result))
                 {
                     att.AnalysisResult = result;
+                    att.AnalysisSummary = ExtractAnalysisSummary(result);
                     att.AnalysisStatus = "완료";
                 }
             }
@@ -5277,6 +5278,49 @@ public partial class MainWindow : FluentWindow
             : afterSummary.Substring(contentStart);
 
         return summary.Trim();
+    }
+
+    /// <summary>
+    /// 분석 결과 텍스트에 하이라이팅 마커(★핵심★, ▲긍정▲, ▼부정▼, ⚠주의⚠)를 색상 Run으로 변환하여 TextBlock에 적용
+    /// </summary>
+    private static void ApplyHighlightedText(System.Windows.Controls.TextBlock textBlock, string text)
+    {
+        textBlock.Inlines.Clear();
+        if (string.IsNullOrEmpty(text))
+            return;
+
+        // 하이라이팅 마커 패턴: ★핵심★, ▲긍정▲, ▼부정▼, ⚠주의⚠
+        var pattern = new System.Text.RegularExpressions.Regex(
+            @"(★[^★]+★|▲[^▲]+▲|▼[^▼]+▼|⚠[^⚠]+⚠)");
+        var parts = pattern.Split(text);
+        var matches = pattern.Matches(text);
+
+        int matchIdx = 0;
+        for (int i = 0; i < parts.Length; i++)
+        {
+            // 일반 텍스트
+            if (!string.IsNullOrEmpty(parts[i]))
+                textBlock.Inlines.Add(new System.Windows.Documents.Run(parts[i]));
+
+            // 매칭된 하이라이팅 마커
+            if (matchIdx < matches.Count && i < parts.Length - 1)
+            {
+                var marker = matches[matchIdx].Value;
+                var run = new System.Windows.Documents.Run(marker) { FontWeight = FontWeights.Bold };
+
+                if (marker.StartsWith("★"))
+                    run.Foreground = new SolidColorBrush(Color.FromRgb(0xFF, 0x8C, 0x00)); // 주황 (핵심)
+                else if (marker.StartsWith("▲"))
+                    run.Foreground = new SolidColorBrush(Color.FromRgb(0x2E, 0x8B, 0x57)); // 초록 (긍정)
+                else if (marker.StartsWith("▼"))
+                    run.Foreground = new SolidColorBrush(Color.FromRgb(0xDC, 0x14, 0x3C)); // 빨강 (부정)
+                else if (marker.StartsWith("⚠"))
+                    run.Foreground = new SolidColorBrush(Color.FromRgb(0xDA, 0xA5, 0x20)); // 골드 (주의)
+
+                textBlock.Inlines.Add(run);
+                matchIdx++;
+            }
+        }
     }
 
     /// <summary>
@@ -6328,7 +6372,7 @@ public partial class MainWindow : FluentWindow
         // 분석 결과 콘텐츠 업데이트
         var tabData = _analysisExpandTabs.FirstOrDefault(t => t.FileName == fileName);
         OneNoteAnalysisContentFileName.Text = tabData.FileName ?? fileName;
-        OneNoteAnalysisContentText.Text = tabData.AnalysisResult ?? "";
+        ApplyHighlightedText(OneNoteAnalysisContentText, tabData.AnalysisResult ?? "");
     }
 
     /// <summary>
