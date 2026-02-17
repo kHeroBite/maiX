@@ -107,7 +107,19 @@ public static class DefaultPromptTemplates
 (발신자가 요청한 사항이 있다면 나열, 없으면 ""없음"")
 
 ## 후속 조치 필요 여부
-(예/아니오 + 간단한 설명)"
+(예/아니오 + 간단한 설명)
+
+⚠️ 답변 형식 규칙:
+- 마크다운(##, -, **)이 아닌 리포트 형식으로 작성하세요.
+- 섹션 구분은 굵은 제목 + 수평선으로 하세요.
+- 중요한 부분에 HTML 색상 하이라이트를 적용하세요:
+  🔴 긴급/위험: <span style=""color:red"">텍스트</span>
+  🟠 주의/경고: <span style=""color:orange"">텍스트</span>
+  🟡 참고/알림: <span style=""color:#DAA520"">텍스트</span>
+  🟢 완료/긍정: <span style=""color:green"">텍스트</span>
+  🔵 정보/참조: <span style=""color:blue"">텍스트</span>
+  배경 강조: <span style=""background-color:#FFF3CD;padding:2px 4px"">핵심 내용</span>
+- 핵심 수치, 날짜, 인명에는 반드시 색상 하이라이트를 적용하세요."
     };
 
     /// <summary>
@@ -143,7 +155,19 @@ public static class DefaultPromptTemplates
 (대화가 어떤 상태인지: 결론 도출됨/논의 중/응답 대기 중 등)
 
 ## 미해결 사항
-(아직 해결되지 않은 사항 나열, 없으면 ""없음"")"
+(아직 해결되지 않은 사항 나열, 없으면 ""없음"")
+
+⚠️ 답변 형식 규칙:
+- 마크다운(##, -, **)이 아닌 리포트 형식으로 작성하세요.
+- 섹션 구분은 굵은 제목 + 수평선으로 하세요.
+- 중요한 부분에 HTML 색상 하이라이트를 적용하세요:
+  🔴 긴급/위험: <span style=""color:red"">텍스트</span>
+  🟠 주의/경고: <span style=""color:orange"">텍스트</span>
+  🟡 참고/알림: <span style=""color:#DAA520"">텍스트</span>
+  🟢 완료/긍정: <span style=""color:green"">텍스트</span>
+  🔵 정보/참조: <span style=""color:blue"">텍스트</span>
+  배경 강조: <span style=""background-color:#FFF3CD;padding:2px 4px"">핵심 내용</span>
+- 핵심 수치, 날짜, 인명에는 반드시 색상 하이라이트를 적용하세요."
     };
 
     /// <summary>
@@ -631,7 +655,19 @@ JSON 형식으로 응답:
 3. **액션 아이템**: 필요한 후속 조치가 있다면 나열
 
 파일 내용:
-{{file_content}}"
+{{file_content}}
+
+⚠️ 답변 형식 규칙:
+- 마크다운(##, -, **)이 아닌 리포트 형식으로 작성하세요.
+- 섹션 구분은 굵은 제목 + 수평선으로 하세요.
+- 중요한 부분에 HTML 색상 하이라이트를 적용하세요:
+  🔴 긴급/위험: <span style=""color:red"">텍스트</span>
+  🟠 주의/경고: <span style=""color:orange"">텍스트</span>
+  🟡 참고/알림: <span style=""color:#DAA520"">텍스트</span>
+  🟢 완료/긍정: <span style=""color:green"">텍스트</span>
+  🔵 정보/참조: <span style=""color:blue"">텍스트</span>
+  배경 강조: <span style=""background-color:#FFF3CD;padding:2px 4px"">핵심 내용</span>
+- 핵심 수치, 날짜, 인명에는 반드시 색상 하이라이트를 적용하세요."
     };
 
     /// <summary>
@@ -652,7 +688,19 @@ JSON 형식으로 응답:
 3. **액션 아이템**: 필요한 후속 조치가 있다면 나열
 
 음성 내용:
-{{audio_text}}"
+{{audio_text}}
+
+⚠️ 답변 형식 규칙:
+- 마크다운(##, -, **)이 아닌 리포트 형식으로 작성하세요.
+- 섹션 구분은 굵은 제목 + 수평선으로 하세요.
+- 중요한 부분에 HTML 색상 하이라이트를 적용하세요:
+  🔴 긴급/위험: <span style=""color:red"">텍스트</span>
+  🟠 주의/경고: <span style=""color:orange"">텍스트</span>
+  🟡 참고/알림: <span style=""color:#DAA520"">텍스트</span>
+  🟢 완료/긍정: <span style=""color:green"">텍스트</span>
+  🔵 정보/참조: <span style=""color:blue"">텍스트</span>
+  배경 강조: <span style=""background-color:#FFF3CD;padding:2px 4px"">핵심 내용</span>
+- 핵심 수치, 날짜, 인명에는 반드시 색상 하이라이트를 적용하세요."
     };
 
     /// <summary>
@@ -674,7 +722,19 @@ JSON 형식으로 응답:
 4. **액션 아이템**: 필요한 후속 조치
 
 전체 파일 내용:
-{{combined_text}}"
+{{combined_text}}
+
+⚠️ 답변 형식 규칙:
+- 마크다운(##, -, **)이 아닌 리포트 형식으로 작성하세요.
+- 섹션 구분은 굵은 제목 + 수평선으로 하세요.
+- 중요한 부분에 HTML 색상 하이라이트를 적용하세요:
+  🔴 긴급/위험: <span style=""color:red"">텍스트</span>
+  🟠 주의/경고: <span style=""color:orange"">텍스트</span>
+  🟡 참고/알림: <span style=""color:#DAA520"">텍스트</span>
+  🟢 완료/긍정: <span style=""color:green"">텍스트</span>
+  🔵 정보/참조: <span style=""color:blue"">텍스트</span>
+  배경 강조: <span style=""background-color:#FFF3CD;padding:2px 4px"">핵심 내용</span>
+- 핵심 수치, 날짜, 인명에는 반드시 색상 하이라이트를 적용하세요."
     };
 
     /// <summary>

@@ -7119,7 +7119,7 @@
 
         <!-- ========== 설정 뷰 컨테이너 (Column 1-5 전체 사용, 초기에는 숨김) ========== -->
         <Border x:Name="SettingsViewBorder"
-                Grid.Column="1" Grid.ColumnSpan="5"
+                Grid.Column="1" Grid.ColumnSpan="7"
                 Visibility="Collapsed"
                 Background="{DynamicResource ApplicationBackgroundBrush}">
             <Grid>

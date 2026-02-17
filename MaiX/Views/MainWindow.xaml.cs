@@ -16661,7 +16661,7 @@ public partial class MainWindow : FluentWindow
         // 메인 편집 영역
         var editorGroup = CreateSettingsGroupBorder();
         var mainGrid = new Grid();
-        mainGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(240) });
+        mainGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(340) });
         mainGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
 
         // === 좌측 패널: 트리구조 ===
