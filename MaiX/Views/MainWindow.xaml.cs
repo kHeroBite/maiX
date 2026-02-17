@@ -16763,17 +16763,42 @@ public partial class MainWindow : FluentWindow
 
         SettingsContentPanel.Children.Add(CreateSettingsSectionHeader("AI 프롬프트 관리"));
 
-        // 설명 텍스트
+        // 설명 텍스트 + 버튼 행 (상단 헤더)
         var descGroup = CreateSettingsGroupBorder();
+        var descHeaderGrid = new Grid();
+        descHeaderGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        descHeaderGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         var descText = new System.Windows.Controls.TextBlock
         {
             Text = "AI 분석에 사용되는 프롬프트를 카테고리별로 관리합니다.\n파일 분석, 오디오 분석, 녹음 요약 등 각 기능별 프롬프트를 수정하거나 기본값으로 복원할 수 있습니다.",
             TextWrapping = TextWrapping.Wrap,
             FontSize = 14,
-            Margin = new Thickness(0, 0, 0, 12),
-            Opacity = 0.8
+            Opacity = 0.8,
+            VerticalAlignment = VerticalAlignment.Center
         };
-        descGroup.Child = descText;
+        Grid.SetColumn(descText, 0);
+        descHeaderGrid.Children.Add(descText);
+
+        var headerBtnPanel = new StackPanel { Orientation = System.Windows.Controls.Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center };
+        var reloadBtn = new Wpf.Ui.Controls.Button { Content = "프롬프트 리로드", Appearance = Wpf.Ui.Controls.ControlAppearance.Secondary, Margin = new Thickness(8, 0, 0, 0) };
+        reloadBtn.Click += async (s, e) =>
+        {
+            var 캐시서비스 = (App.Current as App)?.GetService<Services.AI.PromptCacheService>();
+            if (캐시서비스 != null)
+            {
+                var 개수 = await 캐시서비스.ReloadAllAsync();
+                System.Windows.MessageBox.Show($"프롬프트 {개수}개가 리로드되었습니다.", "프롬프트 리로드", System.Windows.MessageBoxButton.OK, System.Windows.MessageBoxImage.Information);
+            }
+        };
+        var saveBtn = new Wpf.Ui.Controls.Button { Content = "저장", Appearance = Wpf.Ui.Controls.ControlAppearance.Primary, Margin = new Thickness(8, 0, 0, 0) };
+        var restoreBtn = new Wpf.Ui.Controls.Button { Content = "기본값 복원", Appearance = Wpf.Ui.Controls.ControlAppearance.Secondary };
+        headerBtnPanel.Children.Add(restoreBtn);
+        headerBtnPanel.Children.Add(reloadBtn);
+        headerBtnPanel.Children.Add(saveBtn);
+        Grid.SetColumn(headerBtnPanel, 1);
+        descHeaderGrid.Children.Add(headerBtnPanel);
+
+        descGroup.Child = descHeaderGrid;
         SettingsContentPanel.Children.Add(descGroup);
 
         // 메인 편집 영역
@@ -16886,32 +16911,6 @@ public partial class MainWindow : FluentWindow
         toggleRow.Children.Add(enabledToggle);
         Grid.SetRow(toggleRow, 5);
         rightGrid.Children.Add(toggleRow);
-
-        // 버튼 행
-        var btnRow = new Grid();
-        btnRow.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-        btnRow.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-        btnRow.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-
-        var restoreBtn = new Wpf.Ui.Controls.Button { Content = "기본값 복원", Appearance = Wpf.Ui.Controls.ControlAppearance.Secondary };
-        var reloadBtn = new Wpf.Ui.Controls.Button { Content = "프롬프트 리로드", Appearance = Wpf.Ui.Controls.ControlAppearance.Secondary, Margin = new Thickness(8, 0, 0, 0) };
-        reloadBtn.Click += async (s, e) =>
-        {
-            var 캐시서비스 = (App.Current as App)?.GetService<Services.AI.PromptCacheService>();
-            if (캐시서비스 != null)
-            {
-                var 개수 = await 캐시서비스.ReloadAllAsync();
-                System.Windows.MessageBox.Show($"프롬프트 {개수}개가 리로드되었습니다.", "프롬프트 리로드", System.Windows.MessageBoxButton.OK, System.Windows.MessageBoxImage.Information);
-            }
-        };
-        Grid.SetColumn(reloadBtn, 1);
-        var saveBtn = new Wpf.Ui.Controls.Button { Content = "저장", Appearance = Wpf.Ui.Controls.ControlAppearance.Primary, Width = 100, Margin = new Thickness(8, 0, 0, 0) };
-        Grid.SetColumn(saveBtn, 2);
-        btnRow.Children.Add(restoreBtn);
-        btnRow.Children.Add(reloadBtn);
-        btnRow.Children.Add(saveBtn);
-        Grid.SetRow(btnRow, 6);
-        rightGrid.Children.Add(btnRow);
 
         rightPanel.Child = rightGrid;
         Grid.SetColumn(rightPanel, 1);
