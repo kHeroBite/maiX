@@ -775,7 +775,16 @@ JSON 형식으로 응답:
             }
             else
             {
-                _logger.Debug("기본 프롬프트 이미 존재: {Key}", prompt.PromptKey);
+                // 시스템 프롬프트의 Name/Template이 변경된 경우 동기화
+                var existing = await dbContext.Prompts
+                    .FirstAsync(p => p.PromptKey == prompt.PromptKey);
+                if (existing.IsSystem && (existing.Name != prompt.Name || existing.Template != prompt.Template))
+                {
+                    existing.Name = prompt.Name;
+                    existing.Template = prompt.Template;
+                    insertedCount++;
+                    _logger.Information("시스템 프롬프트 업데이트: {Key}", prompt.PromptKey);
+                }
             }
         }
 
