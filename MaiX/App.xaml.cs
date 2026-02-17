@@ -412,6 +412,7 @@ public partial class App : Application
 
             Log.Information("데이터베이스 마이그레이션 시작");
             await dbContext.Database.MigrateAsync();
+            await DefaultPromptTemplates.SeedDatabaseAsync(dbContext);
             Log.Information("데이터베이스 마이그레이션 완료");
             Log4.Debug("DB 마이그레이션 완료");
 

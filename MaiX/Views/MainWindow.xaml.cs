@@ -21,6 +21,7 @@ using MaiX.ViewModels;
 using MaiX.Views.Dialogs;
 using MaiX.Services.Graph;
 using MaiX.Services.Storage;
+using MaiX.Data;
 
 namespace MaiX.Views;
 
@@ -16810,10 +16811,21 @@ public partial class MainWindow : FluentWindow
         // === 데이터 로딩 및 이벤트 ===
         Prompt? selectedPrompt = null;
 
+        // 카테고리 한글 매핑
+        var categoryDisplayNames = new Dictionary<string, string>
+        {
+            ["global"] = "공통",
+            ["analysis"] = "분석",
+            ["extraction"] = "추출",
+            ["onenote"] = "OneNote"
+        };
+
         // 카테고리 선택 변경
         categoryListBox.SelectionChanged += async (s, e) =>
         {
-            if (categoryListBox.SelectedItem is not string category) return;
+            if (categoryListBox.SelectedItem is not string displayName) return;
+            // 한글→영문 역매핑
+            var category = categoryDisplayNames.FirstOrDefault(kv => kv.Value == displayName).Key ?? displayName;
             try
             {
                 var app = (App)Application.Current;
@@ -16888,9 +16900,20 @@ public partial class MainWindow : FluentWindow
                 using var scope = app.ServiceProvider.CreateScope();
                 var promptService = scope.ServiceProvider.GetRequiredService<PromptService>();
                 var allPrompts = await promptService.GetAllPromptsAsync();
+
+                // 프롬프트가 비어있으면 시드 후 재로딩
+                if (allPrompts.Count == 0)
+                {
+                    var dbContext = scope.ServiceProvider.GetRequiredService<MaiXDbContext>();
+                    await DefaultPromptTemplates.SeedDatabaseAsync(dbContext);
+                    allPrompts = await promptService.GetAllPromptsAsync();
+                }
+
                 var cats = allPrompts.Select(p => p.Category).Where(c => c != null).Distinct().OrderBy(c => c).ToList();
-                categoryListBox.ItemsSource = cats;
-                if (cats.Count > 0)
+                // 한글 표시명으로 변환
+                var displayCats = cats.Select(c => categoryDisplayNames.TryGetValue(c!, out var name) ? name : c!).ToList();
+                categoryListBox.ItemsSource = displayCats;
+                if (displayCats.Count > 0)
                     categoryListBox.SelectedIndex = 0;
             }
             catch (Exception ex)
