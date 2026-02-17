@@ -20,6 +20,7 @@ using MaiX.Utils;
 using MaiX.ViewModels;
 using MaiX.Views.Dialogs;
 using MaiX.Services.Graph;
+using MaiX.Services.Storage;
 
 namespace MaiX.Views;
 
@@ -2286,15 +2287,6 @@ public partial class MainWindow : FluentWindow
         var apiSettingsWindow = new ApiSettingsWindow(App.Settings);
         apiSettingsWindow.Owner = this;
         apiSettingsWindow.ShowDialog();
-    }
-
-    private void MenuPromptSettings_Click(object sender, RoutedEventArgs e)
-    {
-        Log4.Info("메뉴: AI 프롬프트 설정 클릭");
-        var app = (App)Application.Current;
-        var window = new PromptSettingsWindow(app.ServiceProvider);
-        window.Owner = this;
-        window.ShowDialog();
     }
 
     /// <summary>
@@ -16266,7 +16258,7 @@ public partial class MainWindow : FluentWindow
     {
         return mainMenuKey switch
         {
-            "sync_ai" => new[] { ("sync_ai_favorite", "즐겨찾기"), ("sync_ai_all", "전체") },
+            "sync_ai" => new[] { ("sync_ai_favorite", "즐겨찾기"), ("sync_ai_all", "전체"), ("sync_ai_prompt", "프롬프트 관리") },
             "sync_ms365" => new[] { ("sync_ms365_favorite", "즐겨찾기"), ("sync_ms365_all", "전체") },
             "mail" => new[] { ("mail_signature", "서명 관리") },
             "api" => new[] { ("api_ai_providers", "AI Provider"), ("api_tinymce", "TinyMCE") },
@@ -16415,6 +16407,9 @@ public partial class MainWindow : FluentWindow
                 break;
             case "sync_ai_all":
                 ShowAiSyncAllSettings();
+                break;
+            case "sync_ai_prompt":
+                ShowAiPromptSettings();
                 break;
             case "sync_ms365_favorite":
                 ShowMs365SyncFavoriteSettings();
@@ -16639,6 +16634,271 @@ public partial class MainWindow : FluentWindow
     }
 
     #endregion
+
+    /// <summary>
+    /// AI 프롬프트 관리 설정 UI 표시 (embed 방식)
+    /// </summary>
+    private void ShowAiPromptSettings()
+    {
+        if (SettingsContentPanel == null) return;
+
+        SettingsContentPanel.Children.Add(CreateSettingsSectionHeader("AI 프롬프트 관리"));
+
+        // 설명 텍스트
+        var descGroup = CreateSettingsGroupBorder();
+        var descText = new System.Windows.Controls.TextBlock
+        {
+            Text = "AI 분석에 사용되는 프롬프트를 카테고리별로 관리합니다.\n파일 분석, 오디오 분석, 녹음 요약 등 각 기능별 프롬프트를 수정하거나 기본값으로 복원할 수 있습니다.",
+            TextWrapping = TextWrapping.Wrap,
+            FontSize = 14,
+            Margin = new Thickness(0, 0, 0, 12),
+            Opacity = 0.8
+        };
+        descGroup.Child = descText;
+        SettingsContentPanel.Children.Add(descGroup);
+
+        // 메인 편집 영역
+        var editorGroup = CreateSettingsGroupBorder();
+        var mainGrid = new Grid();
+        mainGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(240) });
+        mainGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+
+        // === 좌측 패널: 카테고리 + 프롬프트 목록 ===
+        var leftPanel = new Grid { Margin = new Thickness(0, 0, 12, 0) };
+        leftPanel.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+        leftPanel.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
+        leftPanel.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+        leftPanel.RowDefinitions.Add(new RowDefinition { Height = new GridLength(2, GridUnitType.Star) });
+
+        var catLabel = new System.Windows.Controls.TextBlock { Text = "카테고리", FontWeight = FontWeights.SemiBold, Margin = new Thickness(0, 0, 0, 4) };
+        Grid.SetRow(catLabel, 0);
+        leftPanel.Children.Add(catLabel);
+
+        var categoryListBox = new System.Windows.Controls.ListBox { MinHeight = 100 };
+        Grid.SetRow(categoryListBox, 1);
+        leftPanel.Children.Add(categoryListBox);
+
+        var promptLabel = new System.Windows.Controls.TextBlock { Text = "프롬프트", FontWeight = FontWeights.SemiBold, Margin = new Thickness(0, 8, 0, 4) };
+        Grid.SetRow(promptLabel, 2);
+        leftPanel.Children.Add(promptLabel);
+
+        var promptListBox = new System.Windows.Controls.ListBox { MinHeight = 150 };
+        promptListBox.DisplayMemberPath = "Name";
+        Grid.SetRow(promptListBox, 3);
+        leftPanel.Children.Add(promptListBox);
+
+        Grid.SetColumn(leftPanel, 0);
+        mainGrid.Children.Add(leftPanel);
+
+        // === 우측 패널: 프롬프트 상세 ===
+        var rightPanel = new Border
+        {
+            Padding = new Thickness(16),
+            Background = (Brush)FindResource("ControlFillColorDefaultBrush"),
+            CornerRadius = new CornerRadius(8)
+        };
+        var rightGrid = new Grid();
+        rightGrid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto }); // 이름
+        rightGrid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto }); // 키
+        rightGrid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto }); // 템플릿 라벨
+        rightGrid.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) }); // 템플릿 편집
+        rightGrid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto }); // 변수
+        rightGrid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto }); // 활성화
+        rightGrid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto }); // 버튼
+
+        // 이름 행
+        var nameRow = new Grid { Margin = new Thickness(0, 0, 0, 12) };
+        nameRow.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(80) });
+        nameRow.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        var nameLbl = new System.Windows.Controls.TextBlock { Text = "이름", VerticalAlignment = VerticalAlignment.Center, FontWeight = FontWeights.SemiBold };
+        var nameText = new System.Windows.Controls.TextBlock { VerticalAlignment = VerticalAlignment.Center, FontSize = 14 };
+        Grid.SetColumn(nameText, 1);
+        nameRow.Children.Add(nameLbl);
+        nameRow.Children.Add(nameText);
+        Grid.SetRow(nameRow, 0);
+        rightGrid.Children.Add(nameRow);
+
+        // 키 행
+        var keyRow = new Grid { Margin = new Thickness(0, 0, 0, 12) };
+        keyRow.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(80) });
+        keyRow.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        var keyLbl = new System.Windows.Controls.TextBlock { Text = "키", VerticalAlignment = VerticalAlignment.Center, FontWeight = FontWeights.SemiBold };
+        var keyText = new System.Windows.Controls.TextBlock
+        {
+            VerticalAlignment = VerticalAlignment.Center,
+            Foreground = (Brush)FindResource("TextFillColorSecondaryBrush"),
+            FontFamily = new FontFamily("Consolas")
+        };
+        Grid.SetColumn(keyText, 1);
+        keyRow.Children.Add(keyLbl);
+        keyRow.Children.Add(keyText);
+        Grid.SetRow(keyRow, 1);
+        rightGrid.Children.Add(keyRow);
+
+        // 템플릿 라벨
+        var templateLbl = new System.Windows.Controls.TextBlock { Text = "템플릿", FontWeight = FontWeights.SemiBold, Margin = new Thickness(0, 0, 0, 4) };
+        Grid.SetRow(templateLbl, 2);
+        rightGrid.Children.Add(templateLbl);
+
+        // 템플릿 편집 TextBox
+        var templateTextBox = new Wpf.Ui.Controls.TextBox
+        {
+            AcceptsReturn = true,
+            TextWrapping = TextWrapping.Wrap,
+            VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
+            VerticalContentAlignment = VerticalAlignment.Top,
+            MinHeight = 200,
+            FontFamily = new FontFamily("Consolas"),
+            FontSize = 13,
+            Margin = new Thickness(0, 0, 0, 12)
+        };
+        Grid.SetRow(templateTextBox, 3);
+        rightGrid.Children.Add(templateTextBox);
+
+        // 변수 행
+        var varRow = new Grid { Margin = new Thickness(0, 0, 0, 12) };
+        varRow.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(80) });
+        varRow.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        var varLbl = new System.Windows.Controls.TextBlock { Text = "사용 변수", VerticalAlignment = VerticalAlignment.Top, FontWeight = FontWeights.SemiBold };
+        var varText = new System.Windows.Controls.TextBlock
+        {
+            TextWrapping = TextWrapping.Wrap,
+            Foreground = (Brush)FindResource("TextFillColorSecondaryBrush"),
+            FontFamily = new FontFamily("Consolas"),
+            FontSize = 12
+        };
+        Grid.SetColumn(varText, 1);
+        varRow.Children.Add(varLbl);
+        varRow.Children.Add(varText);
+        Grid.SetRow(varRow, 4);
+        rightGrid.Children.Add(varRow);
+
+        // 활성화 토글 행
+        var toggleRow = new Grid { Margin = new Thickness(0, 0, 0, 16) };
+        toggleRow.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(80) });
+        toggleRow.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        var toggleLbl = new System.Windows.Controls.TextBlock { Text = "활성화", VerticalAlignment = VerticalAlignment.Center, FontWeight = FontWeights.SemiBold };
+        var enabledToggle = new System.Windows.Controls.Primitives.ToggleButton { Content = "사용", HorizontalAlignment = HorizontalAlignment.Left };
+        Grid.SetColumn(enabledToggle, 1);
+        toggleRow.Children.Add(toggleLbl);
+        toggleRow.Children.Add(enabledToggle);
+        Grid.SetRow(toggleRow, 5);
+        rightGrid.Children.Add(toggleRow);
+
+        // 버튼 행
+        var btnRow = new Grid();
+        btnRow.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        btnRow.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+
+        var restoreBtn = new Wpf.Ui.Controls.Button { Content = "기본값 복원", Appearance = Wpf.Ui.Controls.ControlAppearance.Secondary };
+        var saveBtn = new Wpf.Ui.Controls.Button { Content = "저장", Appearance = Wpf.Ui.Controls.ControlAppearance.Primary, Width = 100 };
+        Grid.SetColumn(saveBtn, 1);
+        btnRow.Children.Add(restoreBtn);
+        btnRow.Children.Add(saveBtn);
+        Grid.SetRow(btnRow, 6);
+        rightGrid.Children.Add(btnRow);
+
+        rightPanel.Child = rightGrid;
+        Grid.SetColumn(rightPanel, 1);
+        mainGrid.Children.Add(rightPanel);
+
+        // 높이 설정
+        mainGrid.MinHeight = 500;
+        editorGroup.Child = mainGrid;
+        SettingsContentPanel.Children.Add(editorGroup);
+
+        // === 데이터 로딩 및 이벤트 ===
+        Prompt? selectedPrompt = null;
+
+        // 카테고리 선택 변경
+        categoryListBox.SelectionChanged += async (s, e) =>
+        {
+            if (categoryListBox.SelectedItem is not string category) return;
+            try
+            {
+                var app = (App)Application.Current;
+                using var scope = app.ServiceProvider.CreateScope();
+                var promptService = scope.ServiceProvider.GetRequiredService<PromptService>();
+                var prompts = await promptService.GetPromptsByCategoryAsync(category);
+                promptListBox.ItemsSource = prompts;
+                if (prompts.Count > 0)
+                    promptListBox.SelectedIndex = 0;
+            }
+            catch (Exception ex)
+            {
+                Log4.Error($"프롬프트 카테고리 로딩 실패: {ex.Message}");
+            }
+        };
+
+        // 프롬프트 선택 변경
+        promptListBox.SelectionChanged += (s, e) =>
+        {
+            if (promptListBox.SelectedItem is not Prompt prompt) return;
+            selectedPrompt = prompt;
+            nameText.Text = prompt.Name;
+            keyText.Text = prompt.PromptKey;
+            templateTextBox.Text = prompt.Template;
+            varText.Text = prompt.Variables ?? "없음";
+            enabledToggle.IsChecked = prompt.IsEnabled;
+        };
+
+        // 저장 버튼
+        saveBtn.Click += async (s, e) =>
+        {
+            if (selectedPrompt == null) return;
+            selectedPrompt.Template = templateTextBox.Text;
+            selectedPrompt.IsEnabled = enabledToggle.IsChecked == true;
+            try
+            {
+                var app = (App)Application.Current;
+                using var scope = app.ServiceProvider.CreateScope();
+                var promptService = scope.ServiceProvider.GetRequiredService<PromptService>();
+                await promptService.SavePromptAsync(selectedPrompt);
+                Log4.Info($"프롬프트 저장 완료: {selectedPrompt.PromptKey}");
+                System.Windows.MessageBox.Show("저장되었습니다.", "AI 프롬프트", System.Windows.MessageBoxButton.OK, System.Windows.MessageBoxImage.Information);
+            }
+            catch (Exception ex)
+            {
+                Log4.Error($"프롬프트 저장 실패: {ex.Message}");
+                System.Windows.MessageBox.Show($"저장 실패: {ex.Message}", "오류", System.Windows.MessageBoxButton.OK, System.Windows.MessageBoxImage.Error);
+            }
+        };
+
+        // 기본값 복원 버튼
+        restoreBtn.Click += (s, e) =>
+        {
+            if (selectedPrompt == null) return;
+            var defaultPrompt = DefaultPromptTemplates.GetDefaultByKey(selectedPrompt.PromptKey);
+            if (defaultPrompt != null)
+            {
+                templateTextBox.Text = defaultPrompt.Template;
+            }
+            else
+            {
+                System.Windows.MessageBox.Show("기본값을 찾을 수 없습니다.", "AI 프롬프트", System.Windows.MessageBoxButton.OK, System.Windows.MessageBoxImage.Warning);
+            }
+        };
+
+        // 초기 데이터 로딩
+        _ = Dispatcher.InvokeAsync(async () =>
+        {
+            try
+            {
+                var app = (App)Application.Current;
+                using var scope = app.ServiceProvider.CreateScope();
+                var promptService = scope.ServiceProvider.GetRequiredService<PromptService>();
+                var allPrompts = await promptService.GetAllPromptsAsync();
+                var cats = allPrompts.Select(p => p.Category).Where(c => c != null).Distinct().OrderBy(c => c).ToList();
+                categoryListBox.ItemsSource = cats;
+                if (cats.Count > 0)
+                    categoryListBox.SelectedIndex = 0;
+            }
+            catch (Exception ex)
+            {
+                Log4.Error($"프롬프트 카테고리 초기 로딩 실패: {ex.Message}");
+            }
+        });
+    }
 
     #region MS365 동기화 설정 (즐겨찾기/전체)
 
