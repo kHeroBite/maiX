@@ -73,14 +73,16 @@ public class FileAnalysisService
                 return;
             }
 
-            // 3. AI 분석 (스트리밍)
+            // 3. AI 분석 — 스트리밍 결과를 모아서 한 번에 설정 (UI 블로킹 방지)
             attachment.AnalysisStatus = "AI 분석 중...";
             var prompt = await BuildAnalysisPromptAsync(attachment.FileName, text, isAudio);
+            var resultBuilder = new System.Text.StringBuilder();
             var stream = await _aiService.StreamCompleteAsync(prompt, ct);
             await foreach (var chunk in stream.WithCancellation(ct))
             {
-                attachment.AnalysisResult += chunk;
+                resultBuilder.Append(chunk);
             }
+            attachment.AnalysisResult = resultBuilder.ToString();
 
             // 분석 완료 후 요약 추출
             if (!string.IsNullOrEmpty(attachment.AnalysisResult))
@@ -150,20 +152,18 @@ public class FileAnalysisService
             // 전체 통합 AI 분석
             var combinedText = string.Join("\n\n---\n\n", allTexts);
             var prompt = await BuildAllFilesAnalysisPromptAsync(combinedText);
-            var result = string.Empty;
-
             foreach (var att in attachments)
             {
                 att.AnalysisStatus = "AI 분석 중...";
             }
 
+            var resultBuilder = new System.Text.StringBuilder();
             var stream = await _aiService.StreamCompleteAsync(prompt, ct);
             await foreach (var chunk in stream.WithCancellation(ct))
             {
-                result += chunk;
-                // 첫 번째 파일에 실시간 업데이트 표시 (전체 분석 결과)
-                attachments[0].AnalysisResult = result;
+                resultBuilder.Append(chunk);
             }
+            var result = resultBuilder.ToString();
 
             // 요약 추출
             var summary = ExtractSummary(result);
@@ -349,7 +349,7 @@ public class FileAnalysisService
                 2. 주요 포인트: 중요 정보를 항목별로 나열
                 3. 액션 아이템: 후속 조치가 있다면 나열
 
-                ⚠️ 답변 형식: 번호 체계(1. 2. 3. / a. b. c.) 사용. ★핵심★ ▲긍정▲ ▼부정▼ ⚠주의⚠ 하이라이팅. 마크다운(##, -, *, **) 금지. 각 항목 1줄 간결하게.
+                ⚠️ 답변 형식: 번호 체계(1. 2. 3. / a. b. c. / i. ii. iii.) 사용, 들여쓰기로 계층 표현. ★핵심★ ▲긍정▲ ▼부정▼ ⚠주의⚠ 하이라이팅. 마크다운(##, -, *, **) 금지. HTML 태그(<span> 등) 금지. 상위 제목 반복 금지 — 제목은 한 번만, 하위는 들여쓰기. 각 항목 1줄 간결하게.
 
                 음성 내용:
                 {text}
@@ -363,7 +363,7 @@ public class FileAnalysisService
             2. 주요 포인트: 중요 정보를 항목별로 나열
             3. 액션 아이템: 후속 조치가 있다면 나열
 
-            ⚠️ 답변 형식: 번호 체계(1. 2. 3. / a. b. c.) 사용. ★핵심★ ▲긍정▲ ▼부정▼ ⚠주의⚠ 하이라이팅. 마크다운(##, -, *, **) 금지. 각 항목 1줄 간결하게.
+            ⚠️ 답변 형식: 번호 체계(1. 2. 3. / a. b. c. / i. ii. iii.) 사용, 들여쓰기로 계층 표현. ★핵심★ ▲긍정▲ ▼부정▼ ⚠주의⚠ 하이라이팅. 마크다운(##, -, *, **) 금지. HTML 태그(<span> 등) 금지. 상위 제목 반복 금지 — 제목은 한 번만, 하위는 들여쓰기. 각 항목 1줄 간결하게.
 
             파일 내용:
             {text}
@@ -394,7 +394,7 @@ public class FileAnalysisService
             3. 연관성 분석: 파일 간의 관련성이나 공통 주제
             4. 액션 아이템: 후속 조치가 있다면 나열
 
-            ⚠️ 답변 형식: 번호 체계(1. 2. 3. / a. b. c.) 사용. ★핵심★ ▲긍정▲ ▼부정▼ ⚠주의⚠ 하이라이팅. 마크다운(##, -, *, **) 금지. 각 항목 1줄 간결하게.
+            ⚠️ 답변 형식: 번호 체계(1. 2. 3. / a. b. c. / i. ii. iii.) 사용, 들여쓰기로 계층 표현. ★핵심★ ▲긍정▲ ▼부정▼ ⚠주의⚠ 하이라이팅. 마크다운(##, -, *, **) 금지. HTML 태그(<span> 등) 금지. 상위 제목 반복 금지 — 제목은 한 번만, 하위는 들여쓰기. 각 항목 1줄 간결하게.
 
             전체 파일 내용:
             {combinedText}
