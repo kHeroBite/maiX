@@ -5260,7 +5260,9 @@ public partial class MainWindow : FluentWindow
         if (summaryStart < 0)
         {
             var lines = analysisResult.Split('\n');
-            return string.Join("\n", lines.Take(3)).Trim();
+            var fallback = string.Join("\n", lines.Take(2)).Trim();
+            if (fallback.Length > 150) fallback = fallback[..150] + "...";
+            return fallback;
         }
 
         var afterSummary = analysisResult.Substring(summaryStart);
@@ -5277,7 +5279,9 @@ public partial class MainWindow : FluentWindow
             ? afterSummary.Substring(contentStart, nextSection - contentStart)
             : afterSummary.Substring(contentStart);
 
-        return summary.Trim();
+        summary = summary.Trim();
+        if (summary.Length > 150) summary = summary[..150] + "...";
+        return summary;
     }
 
     /// <summary>
@@ -5289,9 +5293,9 @@ public partial class MainWindow : FluentWindow
         if (string.IsNullOrEmpty(text))
             return;
 
-        // 하이라이팅 마커 패턴: ★핵심★, ▲긍정▲, ▼부정▼, ⚠주의⚠
+        // 하이라이팅 마커 패턴: ★핵심★, ▲긍정▲, ▼부정▼, ⚠주의⚠, ◆중요◆, ●참고●, ◈결론◈, ♦수치♦
         var pattern = new System.Text.RegularExpressions.Regex(
-            @"(★[^★]+★|▲[^▲]+▲|▼[^▼]+▼|⚠[^⚠]+⚠)");
+            @"(★[^★]+★|▲[^▲]+▲|▼[^▼]+▼|⚠[^⚠]+⚠|◆[^◆]+◆|●[^●]+●|◈[^◈]+◈|♦[^♦]+♦)");
         var parts = pattern.Split(text);
         var matches = pattern.Matches(text);
 
@@ -5316,6 +5320,14 @@ public partial class MainWindow : FluentWindow
                     run.Foreground = new SolidColorBrush(Color.FromRgb(0xDC, 0x14, 0x3C)); // 빨강 (부정)
                 else if (marker.StartsWith("⚠"))
                     run.Foreground = new SolidColorBrush(Color.FromRgb(0xDA, 0xA5, 0x20)); // 골드 (주의)
+                else if (marker.StartsWith("◆"))
+                    run.Foreground = new SolidColorBrush(Color.FromRgb(0x41, 0x69, 0xE1)); // 로열블루 (중요)
+                else if (marker.StartsWith("●"))
+                    run.Foreground = new SolidColorBrush(Color.FromRgb(0x70, 0x80, 0x90)); // 슬레이트그레이 (참고)
+                else if (marker.StartsWith("◈"))
+                    run.Foreground = new SolidColorBrush(Color.FromRgb(0x8B, 0x00, 0x8B)); // 다크마젠타 (결론)
+                else if (marker.StartsWith("♦"))
+                    run.Foreground = new SolidColorBrush(Color.FromRgb(0x00, 0x8B, 0x8B)); // 다크시안 (수치)
 
                 textBlock.Inlines.Add(run);
                 matchIdx++;
@@ -5415,6 +5427,20 @@ public partial class MainWindow : FluentWindow
     {
         if (OneNoteFileListBox.SelectedItem is not Models.OneNoteAttachment attachment) return;
 
+        if (!string.IsNullOrEmpty(attachment.DataUrl))
+        {
+            Services.Editor.TinyMCEEditorService.HandleLinkClick(attachment.DataUrl, attachment.FileName);
+        }
+    }
+
+    /// <summary>
+    /// 파일 아이콘/파일명 더블클릭 시 파일 열기 (요약 영역 제외)
+    /// </summary>
+    private void OneNoteFileItem_MouseDoubleClick(object sender, MouseButtonEventArgs e)
+    {
+        if (e.ClickCount != 2) return;
+        var element = sender as FrameworkElement;
+        if (element?.DataContext is not Models.OneNoteAttachment attachment) return;
         if (!string.IsNullOrEmpty(attachment.DataUrl))
         {
             Services.Editor.TinyMCEEditorService.HandleLinkClick(attachment.DataUrl, attachment.FileName);
