@@ -5293,87 +5293,70 @@ public partial class MainWindow : FluentWindow
         if (string.IsNullOrEmpty(text))
             return;
 
-        // font 태그 패턴: <font color="#RRGGBB">내용</font>
-        var fontPattern = new System.Text.RegularExpressions.Regex(
-            @"(<font color=""#[0-9A-Fa-f]{6}"">.*?</font>)",
-            System.Text.RegularExpressions.RegexOptions.Singleline);
-        // 기존 대괄호 마커 패턴 (하위 호환): [K]내용[/K], [G]내용[/G] 등
-        var legacyPattern = new System.Text.RegularExpressions.Regex(
-            @"(\[K\].+?\[/K\]|\[G\].+?\[/G\]|\[R\].+?\[/R\]|\[W\].+?\[/W\]|\[B\].+?\[/B\]|\[A\].+?\[/A\]|\[P\].+?\[/P\]|\[C\].+?\[/C\])",
-            System.Text.RegularExpressions.RegexOptions.Singleline);
-
-        // 두 패턴을 합친 통합 패턴
+        // font 태그 + 레거시 대괄호 마커 통합 패턴
         var combinedPattern = new System.Text.RegularExpressions.Regex(
-            @"(<font color=""#[0-9A-Fa-f]{6}"">.*?</font>|\[K\].+?\[/K\]|\[G\].+?\[/G\]|\[R\].+?\[/R\]|\[W\].+?\[/W\]|\[B\].+?\[/B\]|\[A\].+?\[/A\]|\[P\].+?\[/P\]|\[C\].+?\[/C\])",
+            @"<font color=""#([0-9A-Fa-f]{6})"">(.+?)</font>|\[K\](.+?)\[/K\]|\[G\](.+?)\[/G\]|\[R\](.+?)\[/R\]|\[W\](.+?)\[/W\]|\[B\](.+?)\[/B\]|\[A\](.+?)\[/A\]|\[P\](.+?)\[/P\]|\[C\](.+?)\[/C\]",
             System.Text.RegularExpressions.RegexOptions.Singleline);
 
-        var parts = combinedPattern.Split(text);
         var matches = combinedPattern.Matches(text);
+        int lastEnd = 0;
 
-        int matchIdx = 0;
-        for (int i = 0; i < parts.Length; i++)
+        foreach (System.Text.RegularExpressions.Match match in matches)
         {
-            // 일반 텍스트
-            if (!string.IsNullOrEmpty(parts[i]))
-                textBlock.Inlines.Add(new System.Windows.Documents.Run(parts[i]));
+            // 매칭 이전의 일반 텍스트
+            if (match.Index > lastEnd)
+                textBlock.Inlines.Add(new System.Windows.Documents.Run(text.Substring(lastEnd, match.Index - lastEnd)));
 
-            // 매칭된 하이라이팅 마커
-            if (matchIdx < matches.Count && i < parts.Length - 1)
+            string content;
+            SolidColorBrush brush;
+
+            if (match.Groups[1].Success)
             {
-                var marker = matches[matchIdx].Value;
-                string content;
-                SolidColorBrush brush;
-
-                if (marker.StartsWith("<font"))
-                {
-                    // font 태그: color 속성에서 hex 추출
-                    var colorMatch = System.Text.RegularExpressions.Regex.Match(marker, @"#([0-9A-Fa-f]{6})");
-                    var innerMatch = System.Text.RegularExpressions.Regex.Match(marker, @">(.+?)</font>", System.Text.RegularExpressions.RegexOptions.Singleline);
-                    content = innerMatch.Success ? innerMatch.Groups[1].Value : marker;
-
-                    if (colorMatch.Success)
-                    {
-                        var hex = colorMatch.Groups[1].Value;
-                        byte r = Convert.ToByte(hex.Substring(0, 2), 16);
-                        byte g = Convert.ToByte(hex.Substring(2, 2), 16);
-                        byte b = Convert.ToByte(hex.Substring(4, 2), 16);
-                        brush = new SolidColorBrush(Color.FromRgb(r, g, b));
-                    }
-                    else
-                    {
-                        brush = new SolidColorBrush(Color.FromRgb(0xFF, 0x8C, 0x00)); // 기본 주황
-                    }
-                }
-                else
-                {
-                    // 기존 대괄호 마커 (하위 호환)
-                    content = marker.Substring(3, marker.Length - 7);
-
-                    if (marker.StartsWith("[K]"))
-                        brush = new SolidColorBrush(Color.FromRgb(0xFF, 0x8C, 0x00)); // 주황 (핵심)
-                    else if (marker.StartsWith("[G]"))
-                        brush = new SolidColorBrush(Color.FromRgb(0x2E, 0x8B, 0x57)); // 초록 (긍정)
-                    else if (marker.StartsWith("[R]"))
-                        brush = new SolidColorBrush(Color.FromRgb(0xDC, 0x14, 0x3C)); // 빨강 (부정)
-                    else if (marker.StartsWith("[W]"))
-                        brush = new SolidColorBrush(Color.FromRgb(0xDA, 0xA5, 0x20)); // 골드 (주의)
-                    else if (marker.StartsWith("[B]"))
-                        brush = new SolidColorBrush(Color.FromRgb(0x41, 0x69, 0xE1)); // 로열블루 (이름)
-                    else if (marker.StartsWith("[A]"))
-                        brush = new SolidColorBrush(Color.FromRgb(0x70, 0x80, 0x90)); // 슬레이트그레이 (참고)
-                    else if (marker.StartsWith("[P]"))
-                        brush = new SolidColorBrush(Color.FromRgb(0x8B, 0x00, 0x8B)); // 다크마젠타 (결론)
-                    else if (marker.StartsWith("[C]"))
-                        brush = new SolidColorBrush(Color.FromRgb(0x00, 0x8B, 0x8B)); // 다크시안 (수치)
-                    else
-                        brush = new SolidColorBrush(Color.FromRgb(0xFF, 0x8C, 0x00)); // 기본 주황
-                }
-
-                var run = new System.Windows.Documents.Run(content) { FontWeight = FontWeights.Bold, Foreground = brush };
-                textBlock.Inlines.Add(run);
-                matchIdx++;
+                // font 태그: Group[1] = hex 색상, Group[2] = 내용
+                content = match.Groups[2].Value;
+                var hex = match.Groups[1].Value;
+                byte r = Convert.ToByte(hex.Substring(0, 2), 16);
+                byte g = Convert.ToByte(hex.Substring(2, 2), 16);
+                byte b = Convert.ToByte(hex.Substring(4, 2), 16);
+                brush = new SolidColorBrush(Color.FromRgb(r, g, b));
             }
+            else
+            {
+                // 레거시 대괄호 마커 — 캡처 그룹에서 내용 추출
+                content = "";
+                brush = new SolidColorBrush(Color.FromRgb(0xFF, 0x8C, 0x00)); // 기본 주황
+
+                // Groups[3]~[10]: [K]~[C] 순서
+                for (int gi = 3; gi <= 10; gi++)
+                {
+                    if (match.Groups[gi].Success)
+                    {
+                        content = match.Groups[gi].Value;
+                        brush = gi switch
+                        {
+                            3 => new SolidColorBrush(Color.FromRgb(0xFF, 0x8C, 0x00)),  // [K] 주황 (핵심)
+                            4 => new SolidColorBrush(Color.FromRgb(0x2E, 0x8B, 0x57)),  // [G] 초록 (긍정)
+                            5 => new SolidColorBrush(Color.FromRgb(0xDC, 0x14, 0x3C)),  // [R] 빨강 (부정)
+                            6 => new SolidColorBrush(Color.FromRgb(0xDA, 0xA5, 0x20)),  // [W] 골드 (주의)
+                            7 => new SolidColorBrush(Color.FromRgb(0x41, 0x69, 0xE1)),  // [B] 로열블루 (이름)
+                            8 => new SolidColorBrush(Color.FromRgb(0x70, 0x80, 0x90)),  // [A] 슬레이트그레이 (참고)
+                            9 => new SolidColorBrush(Color.FromRgb(0x8B, 0x00, 0x8B)),  // [P] 다크마젠타 (결론)
+                            10 => new SolidColorBrush(Color.FromRgb(0x00, 0x8B, 0x8B)), // [C] 다크시안 (수치)
+                            _ => new SolidColorBrush(Color.FromRgb(0xFF, 0x8C, 0x00))
+                        };
+                        break;
+                    }
+                }
+            }
+
+            var run = new System.Windows.Documents.Run(content) { FontWeight = FontWeights.Bold, Foreground = brush };
+            textBlock.Inlines.Add(run);
+            lastEnd = match.Index + match.Length;
         }
+
+        // 마지막 매칭 이후 나머지 텍스트
+        if (lastEnd < text.Length)
+            textBlock.Inlines.Add(new System.Windows.Documents.Run(text.Substring(lastEnd)));
     }
 
     /// <summary>
