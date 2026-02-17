@@ -5280,7 +5280,6 @@ public partial class MainWindow : FluentWindow
             : afterSummary.Substring(contentStart);
 
         summary = summary.Trim();
-        if (summary.Length > 150) summary = summary[..150] + "...";
         return summary;
     }
 
