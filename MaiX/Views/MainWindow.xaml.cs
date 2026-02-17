@@ -5284,7 +5284,8 @@ public partial class MainWindow : FluentWindow
     }
 
     /// <summary>
-    /// 분석 결과 텍스트에 하이라이팅 마커(★핵심★, ▲긍정▲, ▼부정▼, ⚠주의⚠)를 색상 Run으로 변환하여 TextBlock에 적용
+    /// 분석 결과 텍스트에 하이라이팅 마커를 색상 Run으로 변환하여 TextBlock에 적용.
+    /// 마커 기호(★▲▼⚠◆●◈♦)는 제거하고 내용만 색상 표시.
     /// </summary>
     private static void ApplyHighlightedText(System.Windows.Controls.TextBlock textBlock, string text)
     {
@@ -5292,7 +5293,7 @@ public partial class MainWindow : FluentWindow
         if (string.IsNullOrEmpty(text))
             return;
 
-        // 하이라이팅 마커 패턴: ★핵심★, ▲긍정▲, ▼부정▼, ⚠주의⚠, ◆중요◆, ●참고●, ◈결론◈, ♦수치♦
+        // 하이라이팅 마커 패턴: ★내용★, ▲내용▲, ▼내용▼, ⚠내용⚠, ◆내용◆, ●내용●, ◈내용◈, ♦내용♦
         var pattern = new System.Text.RegularExpressions.Regex(
             @"(★[^★]+★|▲[^▲]+▲|▼[^▼]+▼|⚠️?[^⚠]+⚠️?|◆[^◆]+◆|●[^●]+●|◈[^◈]+◈|♦[^♦]+♦)");
         var parts = pattern.Split(text);
@@ -5305,11 +5306,16 @@ public partial class MainWindow : FluentWindow
             if (!string.IsNullOrEmpty(parts[i]))
                 textBlock.Inlines.Add(new System.Windows.Documents.Run(parts[i]));
 
-            // 매칭된 하이라이팅 마커
+            // 매칭된 하이라이팅 마커 — 기호 제거 후 내용만 색상 표시
             if (matchIdx < matches.Count && i < parts.Length - 1)
             {
                 var marker = matches[matchIdx].Value;
-                var run = new System.Windows.Documents.Run(marker) { FontWeight = FontWeights.Bold };
+                // 마커 기호 제거: ★내용★ → 내용, ⚠️내용⚠️ → 내용
+                var content = marker.Substring(1, marker.Length - 2);
+                // ⚠ 마커의 경우 variant selector(️) 추가 제거
+                content = content.TrimStart('\uFE0F').TrimEnd('\uFE0F');
+
+                var run = new System.Windows.Documents.Run(content) { FontWeight = FontWeights.Bold };
 
                 if (marker.StartsWith("★"))
                     run.Foreground = new SolidColorBrush(Color.FromRgb(0xFF, 0x8C, 0x00)); // 주황 (핵심)
