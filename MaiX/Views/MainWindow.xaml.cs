@@ -16757,10 +16757,16 @@ public partial class MainWindow : FluentWindow
         toggleRow.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(80) });
         toggleRow.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
         var toggleLbl = new System.Windows.Controls.TextBlock { Text = "활성화", VerticalAlignment = VerticalAlignment.Center, FontWeight = FontWeights.SemiBold };
-        var enabledToggle = new System.Windows.Controls.Primitives.ToggleButton { Content = "사용", HorizontalAlignment = HorizontalAlignment.Left };
-        Grid.SetColumn(enabledToggle, 1);
+        var enabledToggle = new Wpf.Ui.Controls.ToggleSwitch { IsChecked = false, OnContent = "사용중", OffContent = "중지중", HorizontalAlignment = HorizontalAlignment.Left };
+        var toggleStatusText = new System.Windows.Controls.TextBlock { Text = "중지중", VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(8, 0, 0, 0), Foreground = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(153, 153, 153)) };
+        enabledToggle.Checked += (s, e) => { toggleStatusText.Text = "사용중"; toggleStatusText.Foreground = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(220, 38, 38)); };
+        enabledToggle.Unchecked += (s, e) => { toggleStatusText.Text = "중지중"; toggleStatusText.Foreground = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(153, 153, 153)); };
+        var togglePanel = new System.Windows.Controls.StackPanel { Orientation = System.Windows.Controls.Orientation.Horizontal };
+        togglePanel.Children.Add(enabledToggle);
+        togglePanel.Children.Add(toggleStatusText);
+        Grid.SetColumn(togglePanel, 1);
         toggleRow.Children.Add(toggleLbl);
-        toggleRow.Children.Add(enabledToggle);
+        toggleRow.Children.Add(togglePanel);
         Grid.SetRow(toggleRow, 5);
         rightGrid.Children.Add(toggleRow);
 

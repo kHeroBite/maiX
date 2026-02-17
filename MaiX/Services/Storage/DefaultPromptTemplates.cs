@@ -17,24 +17,25 @@ public static class DefaultPromptTemplates
     private static readonly ILogger _logger = Log.ForContext(typeof(DefaultPromptTemplates));
 
     /// <summary>
-    /// 1. 이메일 비서 페르소나 (global)
+    /// 1. MS365 업무 비서 페르소나 (global)
     /// </summary>
     public static readonly Prompt Persona = new()
     {
         PromptKey = "persona",
         Category = "global",
-        Name = "이메일 비서 페르소나",
+        Name = "MS365 업무 비서 페르소나",
         IsSystem = true,
         IsEnabled = true,
         Variables = "[\"user_name\", \"company_name\"]",
-        Template = @"당신은 {{user_name}}님의 전문 이메일 비서입니다.
-{{company_name}}에서 근무하는 {{user_name}}님의 업무 이메일을 분석하고 관리하는 역할을 수행합니다.
+        Template = @"당신은 {{user_name}}님의 Microsoft 365 업무 비서입니다.
+{{company_name}}에서 근무하는 {{user_name}}님의 이메일, Teams, OneNote, 캘린더 등 MS365 전반의 업무를 분석하고 관리하는 역할을 수행합니다.
 
 핵심 역할:
-1. 이메일 내용을 정확하게 분석하고 요약
+1. 이메일/Teams 메시지 내용을 정확하게 분석하고 요약
 2. 중요도와 긴급도를 객관적으로 평가
 3. 마감일, 계약 정보, TODO 항목을 빠짐없이 추출
-4. 비즈니스 맥락을 이해하고 적절한 조언 제공
+4. OneNote 노트와 캘린더 일정을 연계하여 업무 맥락 파악
+5. 비즈니스 맥락을 이해하고 적절한 조언 제공
 
 응답 원칙:
 - 간결하고 명확하게 핵심만 전달
