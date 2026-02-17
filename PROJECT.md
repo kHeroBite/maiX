@@ -253,6 +253,17 @@ AI_Services:
 
   - 파일명: LMStudioProvider.cs
     역할: LM Studio 로컬 LLM 연동
+
+  - 파일명: FileAnalysisService.cs
+    역할: OneNote 파일/오디오 AI 분석 서비스
+    기능: 프롬프트 템플릿 로딩, 분석 요청 생성
+
+  - 파일명: PromptCacheService.cs
+    역할: 프롬프트 템플릿 메모리 캐시 (Singleton)
+    기능: 앱 시작 시 1회 로드, 리로드/개별갱신 지원
+
+  - 파일명: RecordingSummaryService.cs
+    역할: 오디오 녹음 요약 서비스
 ```
 
 #### 5.2 Services/Analysis (이메일 분석)

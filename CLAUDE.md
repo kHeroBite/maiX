@@ -96,39 +96,46 @@ WSL에서_실행 (기본):
 
 ---
 
-## 스킬 시스템 (40개)
+## 스킬 시스템 (42개)
 
-**모든 사용자 메시지에 kO 자동 발동** → 질문/퀵은 즉시 처리, 코드 수정은 kO_gate로 위임
+**모든 사용자 메시지에 kO 자동 발동** → 분류 + 팀에이전트 spawn → idle (인터럽트 대기)
 
 ```
-사용자 메시지 → [kO] 오케스트레이션 (모든 메시지에 자동 발동)
-                 ├─ 질문/탐색 → 직접 응답 (스킬 미사용)
-                 ├─ 퀵 작업 → kDev(메인 직접) → kTest → kDone(Fast)
-                 └─ 코드 수정 → [kO_gate] 규모 분석 + 3-way 분류
-                                → [kO_gate_verify] 분류 검증 (실패 시 kO_gate 재실행)
-                                ├─ 라이트 → kDev(팀에이전트 1개) → kTest → kDone(Fast)
-                                ├─ 미디엄 → kPlan(Quick) → kDev(팀에이전트 2개+) → kTest → kDone(Fast)
-                                └─ 풀 → kPlan → kDev(팀에이전트 4개+) → kTest → kDone
+사용자 메시지 → [kO] 순수 디스패처 (분류 + spawn + idle)
+                 ├─ 질문/탐색 → 팀에이전트(kQ) spawn → kO idle
+                 ├─ 퀵 작업 → 팀에이전트(kQ 퀵모드) spawn → kO idle
+                 │              └─ kQ 내부: kDev→kTest→kDone 직접 수행
+                 └─ 코드 수정 → 팀에이전트(kGate) spawn → kO idle
+                                └─ kGate 4단계 오케스트레이션:
+                                   1단계: kPlan 에이전트 spawn → 계획 수립
+                                   2단계: 분류(라이트/미디엄/풀) → kDev×N spawn
+                                   3단계: kTest×N spawn
+                                   4단계: kDone×N spawn
 ```
 
-### 오케스트레이션 (3개)
+### 오케스트레이션 (1개)
 
 | 스킬 | 설명 |
 |------|------|
-| **kO** | 오케스트레이션 진입점 — 모든 메시지에 자동 발동, 질문/퀵 직접 판별, 코드 수정은 kO_gate 위임 |
-| **kO_gate** | 규모 분석 + 3-way 분류 — 라이트/미디엄/풀 판정, 파일 할당, 에이전트 수 결정 |
-| **kO_gate_verify** | 분류 검증 — 분류 정확성 + 에이전트 수 검증, 실패 시 kO_gate 재실행 |
+| **kO** | 순수 디스패처 — 모든 메시지에 자동 발동, 3-way 분류(질문/퀵/코드수정), 팀에이전트 spawn 후 idle |
 
-### 메인 + 서브스킬 (22개)
+### 에이전트 전용 (2개)
 
-> **파이프라인 순서 엄수 (L-008)**: kPlan → kDev → kTest → kDone. 이전 메인스킬 완료 전 다음 진입 금지.
+| 스킬 | 설명 |
+|------|------|
+| **kQ** | 질문/탐색 + 퀵 처리 — 팀에이전트가 실행, 퀵 시 kDev→kTest→kDone 직접 수행 |
+| **kGate** | 전체 파이프라인 오케스트레이터 — kPlan spawn → 분류 → kDev×N → kTest×N → kDone×N 4단계 오케스트레이션 |
 
-#### kPlan 계열 (4개) — 계획 수립
+### 메인 + 서브스킬 (21개)
+
+> **파이프라인 순서 엄수 (L-008)**: kGate 내부에서 kPlan → 분류 → kDev → kTest → kDone. 이전 단계 완료 전 다음 진입 금지.
+
+#### kPlan 계열 (4개) — 순수 계획 수립
 
 | 스킬 | 설명 | 파이프라인 |
 |------|------|-----------|
-| **kPlan** | 계획 라우터 — Quick 포함 + Deep/Sim/Review 디스패치 | 1 메인 |
-| **kPlan_deep** | 심층 설계 — 4단계 + Scout 에이전트 + 대안 탐색 | 1-1 |
+| **kPlan** | 순수 계획 — kGate가 에이전트로 spawn, Quick/Deep 자체 판정, 파일 목록 + 단위작업 출력 | 1 메인 |
+| **kPlan_deep** | 심층 설계 — Scout 에이전트 + 대안 탐색 + 정밀 분석 | 1-1 |
 | **kPlan_sim** | 계획 시뮬레이션 — 정상/예외/엣지케이스 사전 발견 | 1-2 |
 | **kPlan_review** | 계획 검증 — 요구사항 + 기술 타당성 Two-step | 1-3 |
 
@@ -180,10 +187,11 @@ WSL에서_실행 (기본):
 |------|------|
 | **agent_profiles** | 에이전트 프로필 프리셋 — 프롬프트 조립 시 참조 (impl-form/backend/mobile, scout, analyst, reviewer) |
 
-### 도메인 (4개)
+### 도메인 (5개)
 
 | 스킬 | 설명 |
 |------|------|
+| **domain-fileops** | 파일 수정 Low-level 드라이버 — 환경 감지(NTFS/EXT4), NTFS 안전 절차, 원자적 파일 Lock |
 | **domain-csharp** | C# 코드 품질 분석 + 리팩토링 (통합) |
 | **domain-winforms** | WinForms UI 디자인 + MDI 폼 템플릿 (통합) |
 | **domain-database** | DB 스키마 마이그레이션 |
@@ -225,8 +233,9 @@ WSL에서_실행 (기본):
   2. kO 자동 발동 (모든 메시지)
   3. kO가 현재 프로젝트 감지 (CLAUDE.md 경로, .sln 파일 등)
   4. kInfra_{project} 프로젝트스킬 자동 호출
-  5. 질문/퀵 직접 판별, 코드 수정 → kO_gate → kO_gate_verify → 해당 경로 실행
-  6. 이후 가이드 진입 시 해당 _{project} 자동 로딩
+  5. 3-way 분류 (질문/퀵/코드수정)
+  6. 팀에이전트 spawn (kQ 또는 kGate) → kO idle (인터럽트 대기)
+  7. 팀에이전트 내부에서 해당 _{project} 자동 로딩
 
 프로젝트스킬_상세: PROJECT.md 참조
 ```
@@ -236,10 +245,11 @@ WSL에서_실행 (기본):
 ```yaml
 공유_방식: NTFS 하드링크 (ln) — 동일 inode, 어느 프로젝트에서 수정해도 전체 반영
 공유_대상: AI ↔ Mars ↔ MaiX (3개 프로젝트)
-공유_범위: 범용 스킬 34개 (프로젝트스킬 제외)
+공유_범위: 범용 스킬 35개 (프로젝트스킬 제외)
 원본_소스: /mnt/c/DATA/Project/AI/.claude/skills/
 
-범용_스킬: 오케스트레이션(kO, kO_gate), kPlan 4개, kDev 5개, kDone 8개, kTest 5개,
+범용_스킬: 오케스트레이션(kO), 에이전트전용(kQ, kGate),
+           kPlan 4개, kDev 5개, kDone 8개, kTest 5개,
            유틸리티(kDebug, kVerify, kThink, kSurl), agent_profiles, domain 4개, find-skills
 프로젝트스킬: kInfra_{project}, kRules_{project}, kTest_build_{project} 등 (하드링크 아님)
 
@@ -272,9 +282,9 @@ WSL에서_실행 (기본):
   B. 시간: 예상 소요 시간 10분+ AND 독립 작업 2개+
   C. 복잡도: 복잡도 높음 AND 독립 작업 2개+
   공통: 코드 파일뿐 아니라 .md, .json 등 비코드 파일도 해당
-  강제: kO Gate에서 판정 → 이후 변경 절대 금지
+  강제: kGate에서 판정 → 이후 변경 절대 금지
 
-에이전트_수_정책 (참조 — 유일 출처: kO_gate step_7):
+에이전트_수_정책 (참조 — 유일 출처: kGate Step 2):
   | 분류       | 필수 에이전트 | 빠른 확장  | 신중 확장   |
   |-----------|-------------|-----------|------------|
   | 질문/탐색  | 0개         | -         | -          |
@@ -283,7 +293,7 @@ WSL에서_실행 (기본):
   | 미디엄     | 팀 2개      | 4개까지    | 6개+ 신중   |
   | 풀        | 팀 4개      | 6개까지    | 8개+ 신중   |
   원칙: 퀵 이외 코드 수정 작업은 팀에이전트 위임 (메인 직접 수정 금지)
-  분류_주체: 질문/퀵 = kO 직접, 라이트/미디엄/풀 = kO_gate → kO_gate_verify
+  분류_주체: 질문/퀵 = kO 직접, 라이트/미디엄/풀 = kGate
 
 병렬_극대화:
   - 서브에이전트/팀에이전트 개수 상한 없음
@@ -291,7 +301,7 @@ WSL에서_실행 (기본):
   - 순차 처리 최소화, 병렬 처리 최대화
 
 충돌_방지:
-  - 파일 할당 매트릭스: kO Gate에서 사전 분배 (수정 파일 중복 = 0)
+  - 파일 할당 매트릭스: kGate에서 사전 분배 (수정 파일 중복 = 0)
   - 에이전트 프롬프트에 "수정 허용 파일" 목록 필수 포함
   - 다중 세션: git status로 사전 확인 + kDev_lock으로 실시간 보호
   - 커밋: 팀원은 커밋 금지, 리더만 통합 커밋
