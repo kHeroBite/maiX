@@ -411,6 +411,9 @@ public class FileAnalysisService
             // HTML 태그 제거
             summary = System.Text.RegularExpressions.Regex.Replace(summary, @"<[^>]+>", "");
 
+            // 줄바꿈 + 들여쓰기를 공백으로 정리 (한 줄 요약)
+            summary = System.Text.RegularExpressions.Regex.Replace(summary, @"\s*[\r\n]+\s*", " ").Trim();
+
             if (summary.Length > 300)
                 summary = summary[..300] + "...";
 
@@ -421,6 +424,7 @@ public class FileAnalysisService
         var fallback = analysisResult.Length > 200
             ? analysisResult[..200].Trim() + "..."
             : analysisResult.Trim();
-        return System.Text.RegularExpressions.Regex.Replace(fallback, @"<[^>]+>", "");
+        fallback = System.Text.RegularExpressions.Regex.Replace(fallback, @"<[^>]+>", "");
+        return System.Text.RegularExpressions.Regex.Replace(fallback, @"\s*[\r\n]+\s*", " ").Trim();
     }
 }

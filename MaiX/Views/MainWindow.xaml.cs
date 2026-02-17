@@ -5298,10 +5298,11 @@ public partial class MainWindow : FluentWindow
 
         if (summaryStart < 0)
         {
-            var lines = analysisResult.Split('\n');
-            var fallback = string.Join("\n", lines.Take(2)).Trim();
+            var fallback = analysisResult.Length > 200
+                ? analysisResult[..200].Trim() + "..."
+                : analysisResult.Trim();
             fallback = System.Text.RegularExpressions.Regex.Replace(fallback, @"<[^>]+>", "");
-            if (fallback.Length > 300) fallback = fallback[..300] + "...";
+            fallback = System.Text.RegularExpressions.Regex.Replace(fallback, @"\s*[\r\n]+\s*", " ").Trim();
             return fallback;
         }
 
@@ -5330,6 +5331,9 @@ public partial class MainWindow : FluentWindow
 
         // HTML 태그 제거
         summary = System.Text.RegularExpressions.Regex.Replace(summary, @"<[^>]+>", "");
+
+        // 줄바꿈 + 들여쓰기를 공백으로 정리 (한 줄 요약)
+        summary = System.Text.RegularExpressions.Regex.Replace(summary, @"\s*[\r\n]+\s*", " ").Trim();
 
         // 최대 300자 제한
         if (summary.Length > 300)
