@@ -16664,32 +16664,10 @@ public partial class MainWindow : FluentWindow
         mainGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(240) });
         mainGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
 
-        // === 좌측 패널: 카테고리 + 프롬프트 목록 ===
-        var leftPanel = new Grid { Margin = new Thickness(0, 0, 12, 0) };
-        leftPanel.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
-        leftPanel.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
-        leftPanel.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
-        leftPanel.RowDefinitions.Add(new RowDefinition { Height = new GridLength(2, GridUnitType.Star) });
-
-        var catLabel = new System.Windows.Controls.TextBlock { Text = "카테고리", FontWeight = FontWeights.SemiBold, Margin = new Thickness(0, 0, 0, 4) };
-        Grid.SetRow(catLabel, 0);
-        leftPanel.Children.Add(catLabel);
-
-        var categoryListBox = new System.Windows.Controls.ListBox { MinHeight = 100 };
-        Grid.SetRow(categoryListBox, 1);
-        leftPanel.Children.Add(categoryListBox);
-
-        var promptLabel = new System.Windows.Controls.TextBlock { Text = "프롬프트", FontWeight = FontWeights.SemiBold, Margin = new Thickness(0, 8, 0, 4) };
-        Grid.SetRow(promptLabel, 2);
-        leftPanel.Children.Add(promptLabel);
-
-        var promptListBox = new System.Windows.Controls.ListBox { MinHeight = 150 };
-        promptListBox.DisplayMemberPath = "Name";
-        Grid.SetRow(promptListBox, 3);
-        leftPanel.Children.Add(promptListBox);
-
-        Grid.SetColumn(leftPanel, 0);
-        mainGrid.Children.Add(leftPanel);
+        // === 좌측 패널: 트리구조 ===
+        var treeView = new System.Windows.Controls.TreeView { Margin = new Thickness(0, 0, 12, 0) };
+        Grid.SetColumn(treeView, 0);
+        mainGrid.Children.Add(treeView);
 
         // === 우측 패널: 프롬프트 상세 ===
         var rightPanel = new Border
@@ -16811,41 +16789,22 @@ public partial class MainWindow : FluentWindow
         // === 데이터 로딩 및 이벤트 ===
         Prompt? selectedPrompt = null;
 
-        // 카테고리 한글 매핑
-        var categoryDisplayNames = new Dictionary<string, string>
+        // 카테고리 그룹 매핑 (DB Category → 표시 그룹)
+        var categoryGroupMap = new Dictionary<string, string>
         {
             ["global"] = "공통",
-            ["analysis"] = "분석",
-            ["extraction"] = "추출",
-            ["onenote"] = "OneNote"
+            ["analysis"] = "메일",
+            ["extraction"] = "메일",
+            ["onenote"] = "원노트"
         };
+        // 그룹 표시 순서
+        var groupOrder = new[] { "공통", "메일", "원노트" };
 
-        // 카테고리 선택 변경
-        categoryListBox.SelectionChanged += async (s, e) =>
+        // TreeView 선택 변경
+        treeView.SelectedItemChanged += (s, e) =>
         {
-            if (categoryListBox.SelectedItem is not string displayName) return;
-            // 한글→영문 역매핑
-            var category = categoryDisplayNames.FirstOrDefault(kv => kv.Value == displayName).Key ?? displayName;
-            try
-            {
-                var app = (App)Application.Current;
-                using var scope = app.ServiceProvider.CreateScope();
-                var promptService = scope.ServiceProvider.GetRequiredService<PromptService>();
-                var prompts = await promptService.GetPromptsByCategoryAsync(category);
-                promptListBox.ItemsSource = prompts;
-                if (prompts.Count > 0)
-                    promptListBox.SelectedIndex = 0;
-            }
-            catch (Exception ex)
-            {
-                Log4.Error($"프롬프트 카테고리 로딩 실패: {ex.Message}");
-            }
-        };
-
-        // 프롬프트 선택 변경
-        promptListBox.SelectionChanged += (s, e) =>
-        {
-            if (promptListBox.SelectedItem is not Prompt prompt) return;
+            if (treeView.SelectedItem is not System.Windows.Controls.TreeViewItem item) return;
+            if (item.Tag is not Prompt prompt) return;
             selectedPrompt = prompt;
             nameText.Text = prompt.Name;
             keyText.Text = prompt.PromptKey;
@@ -16891,7 +16850,7 @@ public partial class MainWindow : FluentWindow
             }
         };
 
-        // 초기 데이터 로딩
+        // 초기 데이터 로딩 — TreeView 채우기
         _ = Dispatcher.InvokeAsync(async () =>
         {
             try
@@ -16909,16 +16868,45 @@ public partial class MainWindow : FluentWindow
                     allPrompts = await promptService.GetAllPromptsAsync();
                 }
 
-                var cats = allPrompts.Select(p => p.Category).Where(c => c != null).Distinct().OrderBy(c => c).ToList();
-                // 한글 표시명으로 변환
-                var displayCats = cats.Select(c => categoryDisplayNames.TryGetValue(c!, out var name) ? name : c!).ToList();
-                categoryListBox.ItemsSource = displayCats;
-                if (displayCats.Count > 0)
-                    categoryListBox.SelectedIndex = 0;
+                // 그룹별로 프롬프트 분류
+                var grouped = allPrompts
+                    .Where(p => p.Category != null)
+                    .GroupBy(p => categoryGroupMap.TryGetValue(p.Category!, out var g) ? g : p.Category!)
+                    .ToDictionary(g => g.Key, g => g.OrderBy(p => p.Name).ToList());
+
+                // 그룹 순서대로 TreeView에 추가
+                foreach (var groupName in groupOrder)
+                {
+                    if (!grouped.TryGetValue(groupName, out var prompts)) continue;
+                    var groupItem = new System.Windows.Controls.TreeViewItem
+                    {
+                        Header = $"{groupName} ({prompts.Count})",
+                        IsExpanded = true,
+                        FontWeight = FontWeights.SemiBold
+                    };
+                    foreach (var prompt in prompts)
+                    {
+                        var promptItem = new System.Windows.Controls.TreeViewItem
+                        {
+                            Header = prompt.Name,
+                            Tag = prompt,
+                            FontWeight = FontWeights.Normal
+                        };
+                        groupItem.Items.Add(promptItem);
+                    }
+                    treeView.Items.Add(groupItem);
+                }
+
+                // 첫 번째 프롬프트 자동 선택
+                if (treeView.Items.Count > 0 && treeView.Items[0] is System.Windows.Controls.TreeViewItem firstGroup && firstGroup.Items.Count > 0)
+                {
+                    var firstPromptItem = (System.Windows.Controls.TreeViewItem)firstGroup.Items[0]!;
+                    firstPromptItem.IsSelected = true;
+                }
             }
             catch (Exception ex)
             {
-                Log4.Error($"프롬프트 카테고리 초기 로딩 실패: {ex.Message}");
+                Log4.Error($"프롬프트 트리 초기 로딩 실패: {ex.Message}");
             }
         });
     }
