@@ -10,7 +10,7 @@ using MaiX.Models;
 namespace MaiX.Services.Storage;
 
 /// <summary>
-/// 기본 프롬프트 템플릿 정의 - 15개 기본 프롬프트
+/// 기본 프롬프트 템플릿 정의 - 19개 기본 프롬프트
 /// </summary>
 public static class DefaultPromptTemplates
 {
@@ -613,9 +613,112 @@ JSON 형식으로 응답:
     };
 
     /// <summary>
+    /// 16. OneNote 파일 분석 프롬프트 (onenote)
+    /// </summary>
+    public static readonly Prompt OneNoteFileAnalysis = new()
+    {
+        PromptKey = "onenote_file_analysis",
+        Category = "onenote",
+        Name = "OneNote 파일 분석",
+        IsSystem = true,
+        IsEnabled = true,
+        Variables = "[\"file_name\", \"file_content\"]",
+        Template = @"다음은 '{{file_name}}' 파일의 내용입니다. 이 파일을 분석하여 다음을 제공해주세요:
+
+1. **요약**: 파일의 핵심 내용을 3-5문장으로 요약
+2. **주요 포인트**: 중요한 정보나 핵심 사항을 bullet point로 나열
+3. **액션 아이템**: 필요한 후속 조치가 있다면 나열
+
+파일 내용:
+{{file_content}}"
+    };
+
+    /// <summary>
+    /// 17. OneNote 오디오 파일 STT 분석 프롬프트 (onenote)
+    /// </summary>
+    public static readonly Prompt OneNoteAudioAnalysis = new()
+    {
+        PromptKey = "onenote_audio_analysis",
+        Category = "onenote",
+        Name = "OneNote 오디오 분석",
+        IsSystem = true,
+        IsEnabled = true,
+        Variables = "[\"file_name\", \"audio_text\"]",
+        Template = @"다음은 '{{file_name}}' 오디오 파일에서 STT(음성→텍스트)로 추출한 내용입니다. 이 음성 내용을 분석하여 다음을 제공해주세요:
+
+1. **요약**: 음성 내용의 핵심을 3-5문장으로 요약
+2. **주요 포인트**: 중요한 정보나 핵심 사항을 bullet point로 나열
+3. **액션 아이템**: 필요한 후속 조치가 있다면 나열
+
+음성 내용:
+{{audio_text}}"
+    };
+
+    /// <summary>
+    /// 18. OneNote 전체 파일 종합 분석 프롬프트 (onenote)
+    /// </summary>
+    public static readonly Prompt OneNoteAllFilesAnalysis = new()
+    {
+        PromptKey = "onenote_all_files_analysis",
+        Category = "onenote",
+        Name = "OneNote 전체 파일 종합 분석",
+        IsSystem = true,
+        IsEnabled = true,
+        Variables = "[\"combined_text\"]",
+        Template = @"다음은 여러 첨부파일의 내용입니다. 전체 파일을 종합적으로 분석하여 다음을 제공해주세요:
+
+1. **종합 요약**: 전체 첨부파일의 핵심 내용을 요약
+2. **파일별 주요 포인트**: 각 파일의 중요 정보
+3. **연관성 분석**: 파일 간의 관련성이나 공통 주제
+4. **액션 아이템**: 필요한 후속 조치
+
+전체 파일 내용:
+{{combined_text}}"
+    };
+
+    /// <summary>
+    /// 19. OneNote 녹음 요약 프롬프트 (onenote)
+    /// </summary>
+    public static readonly Prompt OneNoteRecordingSummary = new()
+    {
+        PromptKey = "onenote_recording_summary",
+        Category = "onenote",
+        Name = "OneNote 녹음 요약",
+        IsSystem = true,
+        IsEnabled = true,
+        Variables = "[\"transcript_text\"]",
+        Template = @"## 배경 정보
+- 이 녹음은 **한국 회사**에서 진행된 회의/대화입니다.
+- STT(음성인식)로 변환된 텍스트이므로 오인식이 있을 수 있습니다.
+- 특히 중국어로 잘못 인식된 부분은 한국어 발음으로 해석해주세요.
+  (예: '中国' → 한국 관련 내용으로 해석)
+
+## 전사 내용
+{{transcript_text}}
+
+## 요청 사항
+위 내용을 분석하여 다음 형식의 JSON으로 응답해주세요:
+
+{
+  ""summary"": ""전체 내용을 3-5문장으로 요약 (한국어로)"",
+  ""keyPoints"": [""핵심 포인트 1"", ""핵심 포인트 2"", ...],
+  ""actionItems"": [
+    {""description"": ""해야 할 일"", ""assignee"": ""담당자 (언급된 경우)"", ""dueDate"": ""기한 (언급된 경우)"", ""priority"": ""높음/중간/낮음""}
+  ],
+  ""topics"": [""주요 주제1"", ""주요 주제2"", ...],
+  ""recordingType"": ""회의/강의/인터뷰/일반 대화 등"",
+  ""sentiment"": ""긍정적/부정적/중립적/건설적 등""
+}
+
+## 주의사항
+- STT 오인식을 고려하여 문맥에 맞게 해석하세요.
+- 반드시 유효한 JSON 형식으로만 응답하세요."
+    };
+
+    /// <summary>
     /// 모든 기본 프롬프트 목록 반환
     /// </summary>
-    /// <returns>15개 기본 프롬프트 목록</returns>
+    /// <returns>19개 기본 프롬프트 목록</returns>
     public static List<Prompt> GetAllDefaults()
     {
         return new List<Prompt>
@@ -633,8 +736,12 @@ JSON 형식으로 응답:
             IsNonBusiness,     // 11. analysis
             MyPosition,        // 12. analysis
             HasAttachments,    // 13. analysis
-            GroupAnalysis,     // 14. analysis
-            AttachmentAnalysis // 15. extraction
+            GroupAnalysis,          // 14. analysis
+            AttachmentAnalysis,     // 15. extraction
+            OneNoteFileAnalysis,    // 16. onenote
+            OneNoteAudioAnalysis,   // 17. onenote
+            OneNoteAllFilesAnalysis,// 18. onenote
+            OneNoteRecordingSummary // 19. onenote
         };
     }
 

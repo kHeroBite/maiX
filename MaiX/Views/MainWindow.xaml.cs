@@ -2288,6 +2288,15 @@ public partial class MainWindow : FluentWindow
         apiSettingsWindow.ShowDialog();
     }
 
+    private void MenuPromptSettings_Click(object sender, RoutedEventArgs e)
+    {
+        Log4.Info("메뉴: AI 프롬프트 설정 클릭");
+        var app = (App)Application.Current;
+        var window = new PromptSettingsWindow(app.ServiceProvider);
+        window.Owner = this;
+        window.ShowDialog();
+    }
+
     /// <summary>
     /// 서명 관리 메뉴 클릭
     /// </summary>

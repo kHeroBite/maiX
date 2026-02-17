@@ -5,6 +5,8 @@ using System.Text;
 using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
+using MaiX.Services.Storage;
+using Microsoft.Extensions.DependencyInjection;
 using Serilog;
 
 namespace MaiX.Services.AI;
@@ -18,10 +20,12 @@ public class RecordingSummaryService
     private static readonly ILogger _logger = Log.ForContext<RecordingSummaryService>();
 
     private readonly AIService _aiService;
+    private readonly IServiceProvider _serviceProvider;
 
-    public RecordingSummaryService(AIService aiService)
+    public RecordingSummaryService(AIService aiService, IServiceProvider serviceProvider)
     {
         _aiService = aiService ?? throw new ArgumentNullException(nameof(aiService));
+        _serviceProvider = serviceProvider ?? throw new ArgumentNullException(nameof(serviceProvider));
     }
 
     /// <summary>
@@ -64,7 +68,7 @@ public class RecordingSummaryService
             ProgressChanged?.Invoke(0.1);
 
             // 요약 프롬프트 생성
-            var prompt = BuildSummaryPrompt(transcriptText);
+            var prompt = await BuildSummaryPromptAsync(transcriptText);
 
             // AI 요약 요청
             var summaryResponse = await _aiService.CompleteAsync(prompt, cancellationToken);
@@ -144,10 +148,24 @@ public class RecordingSummaryService
     }
 
     /// <summary>
-    /// 요약 프롬프트 생성
+    /// 요약 프롬프트 생성 (DB 프롬프트 우선, Fallback 하드코딩)
     /// </summary>
-    private string BuildSummaryPrompt(string transcriptText)
+    private async Task<string> BuildSummaryPromptAsync(string transcriptText)
     {
+        try
+        {
+            using var scope = _serviceProvider.CreateScope();
+            var promptService = scope.ServiceProvider.GetRequiredService<PromptService>();
+            var result = await promptService.RenderPromptAsync("onenote_recording_summary",
+                new Dictionary<string, string> { ["transcript_text"] = transcriptText });
+            if (result != null) return result;
+        }
+        catch (Exception ex)
+        {
+            _logger.Warning(ex, "프롬프트 서비스 조회 실패, 기본 프롬프트 사용");
+        }
+
+        // Fallback: 기존 하드코딩
         return $@"## 배경 정보
 - 이 녹음은 **한국 회사**에서 진행된 회의/대화입니다.
 - STT(음성인식)로 변환된 텍스트이므로 오인식이 있을 수 있습니다.

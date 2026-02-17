@@ -1,6 +1,8 @@
 using MaiX.Models;
 using MaiX.Services.Converter;
 using MaiX.Services.Graph;
+using MaiX.Services.Storage;
+using Microsoft.Extensions.DependencyInjection;
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -19,18 +21,21 @@ public class FileAnalysisService
     private readonly AttachmentProcessor _attachmentProcessor;
     private readonly OcrConverter _ocrConverter;
     private readonly GraphOneNoteService _graphOneNoteService;
+    private readonly IServiceProvider _serviceProvider;
     private static readonly log4net.ILog _log = log4net.LogManager.GetLogger(typeof(FileAnalysisService));
 
     public FileAnalysisService(
         AIService aiService,
         AttachmentProcessor attachmentProcessor,
         OcrConverter ocrConverter,
-        GraphOneNoteService graphOneNoteService)
+        GraphOneNoteService graphOneNoteService,
+        IServiceProvider serviceProvider)
     {
         _aiService = aiService;
         _attachmentProcessor = attachmentProcessor;
         _ocrConverter = ocrConverter;
         _graphOneNoteService = graphOneNoteService;
+        _serviceProvider = serviceProvider;
     }
 
     /// <summary>
@@ -70,11 +75,17 @@ public class FileAnalysisService
 
             // 3. AI 분석 (스트리밍)
             attachment.AnalysisStatus = "AI 분석 중...";
-            var prompt = BuildAnalysisPrompt(attachment.FileName, text, isAudio);
+            var prompt = await BuildAnalysisPromptAsync(attachment.FileName, text, isAudio);
             var stream = await _aiService.StreamCompleteAsync(prompt, ct);
             await foreach (var chunk in stream.WithCancellation(ct))
             {
                 attachment.AnalysisResult += chunk;
+            }
+
+            // 분석 완료 후 요약 추출
+            if (!string.IsNullOrEmpty(attachment.AnalysisResult))
+            {
+                attachment.AnalysisSummary = ExtractSummary(attachment.AnalysisResult);
             }
 
             attachment.AnalysisStatus = "완료";
@@ -138,7 +149,7 @@ public class FileAnalysisService
 
             // 전체 통합 AI 분석
             var combinedText = string.Join("\n\n---\n\n", allTexts);
-            var prompt = BuildAllFilesAnalysisPrompt(combinedText);
+            var prompt = await BuildAllFilesAnalysisPromptAsync(combinedText);
             var result = string.Empty;
 
             foreach (var att in attachments)
@@ -154,10 +165,14 @@ public class FileAnalysisService
                 attachments[0].AnalysisResult = result;
             }
 
+            // 요약 추출
+            var summary = ExtractSummary(result);
+
             // 모든 파일에 동일 결과 설정
             foreach (var att in attachments)
             {
                 att.AnalysisResult = result;
+                att.AnalysisSummary = summary;
                 att.AnalysisStatus = "완료";
             }
         }
@@ -299,20 +314,44 @@ public class FileAnalysisService
         _ => false
     };
 
-    private static string BuildAnalysisPrompt(string fileName, string text, bool isAudio = false)
+    private async Task<string> BuildAnalysisPromptAsync(string fileName, string text, bool isAudio = false)
     {
+        try
+        {
+            using var scope = _serviceProvider.CreateScope();
+            var promptService = scope.ServiceProvider.GetRequiredService<PromptService>();
+
+            if (isAudio)
+            {
+                var result = await promptService.RenderPromptAsync("onenote_audio_analysis",
+                    new Dictionary<string, string> { ["file_name"] = fileName, ["audio_text"] = text });
+                if (result != null) return result;
+            }
+            else
+            {
+                var result = await promptService.RenderPromptAsync("onenote_file_analysis",
+                    new Dictionary<string, string> { ["file_name"] = fileName, ["file_content"] = text });
+                if (result != null) return result;
+            }
+        }
+        catch (Exception ex)
+        {
+            _log.Warn($"프롬프트 서비스 조회 실패, 기본 프롬프트 사용: {ex.Message}");
+        }
+
+        // Fallback: 기존 하드코딩 프롬프트
         if (isAudio)
         {
             return $"""
-            다음은 '{fileName}' 오디오 파일에서 STT(음성→텍스트)로 추출한 내용입니다. 이 음성 내용을 분석하여 다음을 제공해주세요:
+                다음은 '{fileName}' 오디오 파일에서 STT(음성→텍스트)로 추출한 내용입니다. 이 음성 내용을 분석하여 다음을 제공해주세요:
 
-            1. **요약**: 음성 내용의 핵심을 3-5문장으로 요약
-            2. **주요 포인트**: 중요한 정보나 핵심 사항을 bullet point로 나열
-            3. **액션 아이템**: 필요한 후속 조치가 있다면 나열
+                1. **요약**: 음성 내용의 핵심을 3-5문장으로 요약
+                2. **주요 포인트**: 중요한 정보나 핵심 사항을 bullet point로 나열
+                3. **액션 아이템**: 필요한 후속 조치가 있다면 나열
 
-            음성 내용:
-            {text}
-            """;
+                음성 내용:
+                {text}
+                """;
         }
 
         return $"""
@@ -327,8 +366,22 @@ public class FileAnalysisService
             """;
     }
 
-    private static string BuildAllFilesAnalysisPrompt(string combinedText)
+    private async Task<string> BuildAllFilesAnalysisPromptAsync(string combinedText)
     {
+        try
+        {
+            using var scope = _serviceProvider.CreateScope();
+            var promptService = scope.ServiceProvider.GetRequiredService<PromptService>();
+            var result = await promptService.RenderPromptAsync("onenote_all_files_analysis",
+                new Dictionary<string, string> { ["combined_text"] = combinedText });
+            if (result != null) return result;
+        }
+        catch (Exception ex)
+        {
+            _log.Warn($"프롬프트 서비스 조회 실패, 기본 프롬프트 사용: {ex.Message}");
+        }
+
+        // Fallback
         return $"""
             다음은 여러 첨부파일의 내용입니다. 전체 파일을 종합적으로 분석하여 다음을 제공해주세요:
 
@@ -340,5 +393,51 @@ public class FileAnalysisService
             전체 파일 내용:
             {combinedText}
             """;
+    }
+
+    /// <summary>
+    /// 분석 결과에서 요약 부분만 추출
+    /// </summary>
+    private static string ExtractSummary(string analysisResult)
+    {
+        if (string.IsNullOrWhiteSpace(analysisResult))
+            return string.Empty;
+
+        // "**요약**:" 패턴 찾기
+        var summaryIndex = analysisResult.IndexOf("**요약**:", StringComparison.Ordinal);
+        if (summaryIndex < 0)
+            summaryIndex = analysisResult.IndexOf("**요약**", StringComparison.Ordinal);
+        if (summaryIndex < 0)
+            summaryIndex = analysisResult.IndexOf("**종합 요약**:", StringComparison.Ordinal);
+        if (summaryIndex < 0)
+            summaryIndex = analysisResult.IndexOf("**종합 요약**", StringComparison.Ordinal);
+
+        if (summaryIndex >= 0)
+        {
+            // 요약 시작 위치에서 다음 섹션 직전까지 추출
+            var contentStart = analysisResult.IndexOf(':', summaryIndex);
+            if (contentStart < 0) contentStart = summaryIndex + 6;
+            else contentStart++;
+
+            var nextSection = analysisResult.IndexOf("\n2.", contentStart, StringComparison.Ordinal);
+            if (nextSection < 0)
+                nextSection = analysisResult.IndexOf("**주요", contentStart, StringComparison.Ordinal);
+            if (nextSection < 0)
+                nextSection = analysisResult.IndexOf("**파일별", contentStart, StringComparison.Ordinal);
+
+            var summary = nextSection >= 0
+                ? analysisResult[contentStart..nextSection].Trim()
+                : analysisResult[contentStart..].Trim();
+
+            if (summary.Length > 300)
+                summary = summary[..300] + "...";
+
+            return summary;
+        }
+
+        // 패턴 없으면 첫 200자
+        return analysisResult.Length > 200
+            ? analysisResult[..200].Trim() + "..."
+            : analysisResult.Trim();
     }
 }

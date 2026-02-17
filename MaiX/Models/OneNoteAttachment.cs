@@ -24,6 +24,9 @@ public partial class OneNoteAttachment : ObservableObject
     [ObservableProperty]
     private string _analysisStatus = string.Empty;  // "", "분석 중...", "완료", "실패"
 
+    [ObservableProperty]
+    private string _analysisSummary = string.Empty;
+
     // 계산 속성
     public bool HasAnalysis => !string.IsNullOrEmpty(AnalysisResult);
 
