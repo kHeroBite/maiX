@@ -5295,7 +5295,7 @@ public partial class MainWindow : FluentWindow
 
         // 대괄호 마커 패턴: [K]내용[/K], [G]내용[/G], [R]내용[/R], [W]내용[/W], [B]내용[/B], [A]내용[/A], [P]내용[/P], [C]내용[/C]
         var pattern = new System.Text.RegularExpressions.Regex(
-            @"(\[K\][^\[]+\[/K\]|\[G\][^\[]+\[/G\]|\[R\][^\[]+\[/R\]|\[W\][^\[]+\[/W\]|\[B\][^\[]+\[/B\]|\[A\][^\[]+\[/A\]|\[P\][^\[]+\[/P\]|\[C\][^\[]+\[/C\])");
+            @"(\[K\].+?\[/K\]|\[G\].+?\[/G\]|\[R\].+?\[/R\]|\[W\].+?\[/W\]|\[B\].+?\[/B\]|\[A\].+?\[/A\]|\[P\].+?\[/P\]|\[C\].+?\[/C\])");
         var parts = pattern.Split(text);
         var matches = pattern.Matches(text);
 
@@ -5357,7 +5357,7 @@ public partial class MainWindow : FluentWindow
             if (args.PropertyName == nameof(Models.OneNoteAttachment.AnalysisResult) ||
                 args.PropertyName == nameof(Models.OneNoteAttachment.AnalysisStatus))
             {
-                Dispatcher.Invoke(() => UpdateFileAnalysisResult(attachment));
+                Dispatcher.BeginInvoke(() => UpdateFileAnalysisResult(attachment));
             }
             // 분석 완료 시 캐시에 자동 저장
             if (args.PropertyName == nameof(Models.OneNoteAttachment.AnalysisStatus) &&
@@ -5394,7 +5394,7 @@ public partial class MainWindow : FluentWindow
             {
                 if (args.PropertyName == nameof(Models.OneNoteAttachment.AnalysisResult))
                 {
-                    Dispatcher.Invoke(() =>
+                    Dispatcher.BeginInvoke(() =>
                     {
                         if (OneNoteFileListBox?.SelectedItem == att)
                             UpdateFileAnalysisResult(att);
