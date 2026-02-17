@@ -5229,6 +5229,10 @@ public partial class MainWindow : FluentWindow
     {
         if (OneNoteFileListBox?.SelectedItem is Models.OneNoteAttachment attachment)
         {
+            // 새 항목 선택 시 분석 결과 있으면 자동 펼침
+            if (attachment.HasAnalysis)
+                attachment.IsSummaryExpanded = true;
+
             UpdateFileAnalysisResult(attachment);
         }
     }
