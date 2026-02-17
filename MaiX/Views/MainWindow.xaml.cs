@@ -5247,23 +5247,31 @@ public partial class MainWindow : FluentWindow
     {
         if (string.IsNullOrEmpty(analysisResult)) return string.Empty;
 
-        // "**요약**:" 이후 ~ "**주요 포인트**" 이전 텍스트 추출
-        var summaryStart = analysisResult.IndexOf("**요약**", StringComparison.Ordinal);
+        // 새 리포트형식: "1. 요약" 패턴
+        var summaryStart = analysisResult.IndexOf("1. 요약", StringComparison.Ordinal);
+        if (summaryStart < 0)
+            summaryStart = analysisResult.IndexOf("1. 종합 요약", StringComparison.Ordinal);
+
+        // 레거시 마크다운 형식 호환
+        if (summaryStart < 0)
+            summaryStart = analysisResult.IndexOf("**요약**", StringComparison.Ordinal);
+
         if (summaryStart < 0)
         {
-            // 요약 마커가 없으면 전체 결과의 처음 3줄 반환
             var lines = analysisResult.Split('\n');
             return string.Join("\n", lines.Take(3)).Trim();
         }
 
-        // "**요약**:" 이후 텍스트
         var afterSummary = analysisResult.Substring(summaryStart);
         var colonIdx = afterSummary.IndexOf(':');
         if (colonIdx < 0) colonIdx = afterSummary.IndexOf('：');
-        var contentStart = colonIdx >= 0 ? colonIdx + 1 : "**요약**".Length;
+        var contentStart = colonIdx >= 0 ? colonIdx + 1 : 5;
 
-        // "**주요 포인트**" 이전까지 추출
-        var nextSection = afterSummary.IndexOf("**주요 포인트**", StringComparison.Ordinal);
+        // 다음 섹션: "2." 또는 "**주요"
+        var nextSection = afterSummary.IndexOf("\n2.", contentStart, StringComparison.Ordinal);
+        if (nextSection < 0)
+            nextSection = afterSummary.IndexOf("**주요 포인트**", StringComparison.Ordinal);
+
         var summary = nextSection > 0
             ? afterSummary.Substring(contentStart, nextSection - contentStart)
             : afterSummary.Substring(contentStart);

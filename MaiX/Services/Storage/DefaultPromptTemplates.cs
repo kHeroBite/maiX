@@ -648,24 +648,27 @@ JSON 형식으로 응답:
         IsSystem = true,
         IsEnabled = true,
         Variables = "[\"file_name\", \"file_content\"]",
-        Template = @"다음은 '{{file_name}}' 파일의 내용입니다. 이 파일을 분석하여 다음을 제공해주세요:
+        Template = @"다음은 '{{file_name}}' 파일의 내용입니다. 이 파일을 분석해주세요.
 
-1. **요약**: 파일의 핵심 내용을 3-5문장으로 요약
-2. **주요 포인트**: 중요한 정보나 핵심 사항을 bullet point로 나열
-3. **액션 아이템**: 필요한 후속 조치가 있다면 나열
+아래 분석항목을 작성하세요:
+1. 요약: 핵심 내용을 3~5문장으로 서술
+2. 주요 포인트: 중요 정보를 항목별로 나열
+3. 액션 아이템: 후속 조치가 있다면 나열
 
 파일 내용:
 {{file_content}}
 
-⚠️ 답변 형식 규칙:
-- 마크다운(##, -, **)이 아닌 리포트 형식으로 작성하세요.
-- 섹션 구분은 굵은 제목 + 수평선으로 하세요.
+⚠️ 답변 형식 규칙 (반드시 준수):
+- 번호 체계: 1단계 1. 2. 3. / 2단계 a. b. c. / 3단계 i. ii. iii.
+- 하이라이팅: ★텍스트★(핵심), ▲텍스트▲(긍정/완료), ▼텍스트▼(부정/미흡), ⚠텍스트⚠(주의/경고)
+- 마크다운 금지: ##, -, *, ** 등 일체 사용하지 마세요
+- 각 항목은 1줄로 간결하게 작성
 - 중요한 부분에 HTML 색상 하이라이트를 적용하세요:
-  🔴 긴급/위험: <span style=""color:red"">텍스트</span>
-  🟠 주의/경고: <span style=""color:orange"">텍스트</span>
-  🟡 참고/알림: <span style=""color:#DAA520"">텍스트</span>
-  🟢 완료/긍정: <span style=""color:green"">텍스트</span>
-  🔵 정보/참조: <span style=""color:blue"">텍스트</span>
+  긴급/위험: <span style=""color:red"">텍스트</span>
+  주의/경고: <span style=""color:orange"">텍스트</span>
+  참고/알림: <span style=""color:#DAA520"">텍스트</span>
+  완료/긍정: <span style=""color:green"">텍스트</span>
+  정보/참조: <span style=""color:blue"">텍스트</span>
   배경 강조: <span style=""background-color:#FFF3CD;padding:2px 4px"">핵심 내용</span>
 - 핵심 수치, 날짜, 인명에는 반드시 색상 하이라이트를 적용하세요."
     };
@@ -681,24 +684,27 @@ JSON 형식으로 응답:
         IsSystem = true,
         IsEnabled = true,
         Variables = "[\"file_name\", \"audio_text\"]",
-        Template = @"다음은 '{{file_name}}' 오디오 파일에서 STT(음성→텍스트)로 추출한 내용입니다. 이 음성 내용을 분석하여 다음을 제공해주세요:
+        Template = @"다음은 '{{file_name}}' 오디오 파일에서 STT(음성→텍스트)로 추출한 내용입니다. 이 음성 내용을 분석해주세요.
 
-1. **요약**: 음성 내용의 핵심을 3-5문장으로 요약
-2. **주요 포인트**: 중요한 정보나 핵심 사항을 bullet point로 나열
-3. **액션 아이템**: 필요한 후속 조치가 있다면 나열
+아래 분석항목을 작성하세요:
+1. 요약: 음성 내용의 핵심을 3~5문장으로 서술
+2. 주요 포인트: 중요 정보를 항목별로 나열
+3. 액션 아이템: 후속 조치가 있다면 나열
 
 음성 내용:
 {{audio_text}}
 
-⚠️ 답변 형식 규칙:
-- 마크다운(##, -, **)이 아닌 리포트 형식으로 작성하세요.
-- 섹션 구분은 굵은 제목 + 수평선으로 하세요.
+⚠️ 답변 형식 규칙 (반드시 준수):
+- 번호 체계: 1단계 1. 2. 3. / 2단계 a. b. c. / 3단계 i. ii. iii.
+- 하이라이팅: ★텍스트★(핵심), ▲텍스트▲(긍정/완료), ▼텍스트▼(부정/미흡), ⚠텍스트⚠(주의/경고)
+- 마크다운 금지: ##, -, *, ** 등 일체 사용하지 마세요
+- 각 항목은 1줄로 간결하게 작성
 - 중요한 부분에 HTML 색상 하이라이트를 적용하세요:
-  🔴 긴급/위험: <span style=""color:red"">텍스트</span>
-  🟠 주의/경고: <span style=""color:orange"">텍스트</span>
-  🟡 참고/알림: <span style=""color:#DAA520"">텍스트</span>
-  🟢 완료/긍정: <span style=""color:green"">텍스트</span>
-  🔵 정보/참조: <span style=""color:blue"">텍스트</span>
+  긴급/위험: <span style=""color:red"">텍스트</span>
+  주의/경고: <span style=""color:orange"">텍스트</span>
+  참고/알림: <span style=""color:#DAA520"">텍스트</span>
+  완료/긍정: <span style=""color:green"">텍스트</span>
+  정보/참조: <span style=""color:blue"">텍스트</span>
   배경 강조: <span style=""background-color:#FFF3CD;padding:2px 4px"">핵심 내용</span>
 - 핵심 수치, 날짜, 인명에는 반드시 색상 하이라이트를 적용하세요."
     };
@@ -714,25 +720,28 @@ JSON 형식으로 응답:
         IsSystem = true,
         IsEnabled = true,
         Variables = "[\"combined_text\"]",
-        Template = @"다음은 여러 첨부파일의 내용입니다. 전체 파일을 종합적으로 분석하여 다음을 제공해주세요:
+        Template = @"다음은 여러 첨부파일의 내용입니다. 전체 파일을 종합적으로 분석해주세요.
 
-1. **종합 요약**: 전체 첨부파일의 핵심 내용을 요약
-2. **파일별 주요 포인트**: 각 파일의 중요 정보
-3. **연관성 분석**: 파일 간의 관련성이나 공통 주제
-4. **액션 아이템**: 필요한 후속 조치
+아래 분석항목을 작성하세요:
+1. 종합 요약: 전체 첨부파일의 핵심 내용을 요약
+2. 파일별 주요 포인트: 각 파일의 중요 정보
+3. 연관성 분석: 파일 간의 관련성이나 공통 주제
+4. 액션 아이템: 후속 조치가 있다면 나열
 
 전체 파일 내용:
 {{combined_text}}
 
-⚠️ 답변 형식 규칙:
-- 마크다운(##, -, **)이 아닌 리포트 형식으로 작성하세요.
-- 섹션 구분은 굵은 제목 + 수평선으로 하세요.
+⚠️ 답변 형식 규칙 (반드시 준수):
+- 번호 체계: 1단계 1. 2. 3. / 2단계 a. b. c. / 3단계 i. ii. iii.
+- 하이라이팅: ★텍스트★(핵심), ▲텍스트▲(긍정/완료), ▼텍스트▼(부정/미흡), ⚠텍스트⚠(주의/경고)
+- 마크다운 금지: ##, -, *, ** 등 일체 사용하지 마세요
+- 각 항목은 1줄로 간결하게 작성
 - 중요한 부분에 HTML 색상 하이라이트를 적용하세요:
-  🔴 긴급/위험: <span style=""color:red"">텍스트</span>
-  🟠 주의/경고: <span style=""color:orange"">텍스트</span>
-  🟡 참고/알림: <span style=""color:#DAA520"">텍스트</span>
-  🟢 완료/긍정: <span style=""color:green"">텍스트</span>
-  🔵 정보/참조: <span style=""color:blue"">텍스트</span>
+  긴급/위험: <span style=""color:red"">텍스트</span>
+  주의/경고: <span style=""color:orange"">텍스트</span>
+  참고/알림: <span style=""color:#DAA520"">텍스트</span>
+  완료/긍정: <span style=""color:green"">텍스트</span>
+  정보/참조: <span style=""color:blue"">텍스트</span>
   배경 강조: <span style=""background-color:#FFF3CD;padding:2px 4px"">핵심 내용</span>
 - 핵심 수치, 날짜, 인명에는 반드시 색상 하이라이트를 적용하세요."
     };
