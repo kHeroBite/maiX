@@ -5294,7 +5294,7 @@ public partial class MainWindow : FluentWindow
 
         // 하이라이팅 마커 패턴: ★핵심★, ▲긍정▲, ▼부정▼, ⚠주의⚠, ◆중요◆, ●참고●, ◈결론◈, ♦수치♦
         var pattern = new System.Text.RegularExpressions.Regex(
-            @"(★[^★]+★|▲[^▲]+▲|▼[^▼]+▼|⚠[^⚠]+⚠|◆[^◆]+◆|●[^●]+●|◈[^◈]+◈|♦[^♦]+♦)");
+            @"(★[^★]+★|▲[^▲]+▲|▼[^▼]+▼|⚠️?[^⚠]+⚠️?|◆[^◆]+◆|●[^●]+●|◈[^◈]+◈|♦[^♦]+♦)");
         var parts = pattern.Split(text);
         var matches = pattern.Matches(text);
 

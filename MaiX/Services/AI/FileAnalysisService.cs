@@ -1,8 +1,6 @@
 using MaiX.Models;
 using MaiX.Services.Converter;
 using MaiX.Services.Graph;
-using MaiX.Services.Storage;
-using Microsoft.Extensions.DependencyInjection;
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -21,21 +19,18 @@ public class FileAnalysisService
     private readonly AttachmentProcessor _attachmentProcessor;
     private readonly OcrConverter _ocrConverter;
     private readonly GraphOneNoteService _graphOneNoteService;
-    private readonly IServiceProvider _serviceProvider;
     private static readonly log4net.ILog _log = log4net.LogManager.GetLogger(typeof(FileAnalysisService));
 
     public FileAnalysisService(
         AIService aiService,
         AttachmentProcessor attachmentProcessor,
         OcrConverter ocrConverter,
-        GraphOneNoteService graphOneNoteService,
-        IServiceProvider serviceProvider)
+        GraphOneNoteService graphOneNoteService)
     {
         _aiService = aiService;
         _attachmentProcessor = attachmentProcessor;
         _ocrConverter = ocrConverter;
         _graphOneNoteService = graphOneNoteService;
-        _serviceProvider = serviceProvider;
     }
 
     /// <summary>
@@ -314,100 +309,58 @@ public class FileAnalysisService
         _ => false
     };
 
-    private async Task<string> BuildAnalysisPromptAsync(string fileName, string text, bool isAudio = false)
+    private static async Task<string> BuildAnalysisPromptAsync(string fileName, string text, bool isAudio = false)
     {
-        try
+        var promptFileName = isAudio ? "onenote_audio_analysis.txt" : "onenote_file_analysis.txt";
+        var template = await LoadPromptTemplateAsync(promptFileName);
+
+        var variables = new Dictionary<string, string>
         {
-            using var scope = _serviceProvider.CreateScope();
-            var promptService = scope.ServiceProvider.GetRequiredService<PromptService>();
+            ["file_name"] = fileName,
+            ["file_content"] = text,
+            ["audio_text"] = text
+        };
 
-            if (isAudio)
-            {
-                var result = await promptService.RenderPromptAsync("onenote_audio_analysis",
-                    new Dictionary<string, string> { ["file_name"] = fileName, ["audio_text"] = text });
-                if (result != null) return result;
-            }
-            else
-            {
-                var result = await promptService.RenderPromptAsync("onenote_file_analysis",
-                    new Dictionary<string, string> { ["file_name"] = fileName, ["file_content"] = text });
-                if (result != null) return result;
-            }
-        }
-        catch (Exception ex)
-        {
-            _log.Warn($"프롬프트 서비스 조회 실패, 기본 프롬프트 사용: {ex.Message}");
-        }
-
-        // Fallback: 기존 하드코딩 프롬프트
-        if (isAudio)
-        {
-            return $"""
-                다음은 '{fileName}' 오디오 파일에서 STT(음성→텍스트)로 추출한 내용입니다.
-                아래 분석항목을 작성하세요:
-                1. 요약: 핵심 키워드 요점정리 (FCC TA EOS 이관 / 공수기준 정합성 / 폐쇄망설치 형식, 줄바꿈·서술형 금지)
-                2. 주요 포인트: 중요 정보를 항목별로 나열
-                3. 액션 아이템: 후속 조치가 있다면 나열
-
-                ⚠️ 답변 형식: 번호 체계(1. 2. 3. / a. b. c. / i. ii. iii.) 사용, 들여쓰기로 계층 표현.
-                ★핵심★(주황) ▲긍정▲(초록) ▼부정▼(빨강) ⚠주의⚠(골드) ◆중요◆(파랑) ●참고●(회색) ◈결론◈(보라) ♦수치♦(시안) 8종 마커 균등 활용 필수 — 빨강/노랑만 사용 금지, 파랑/초록/보라 적극 사용.
-                마커 앞뒤 공백 금지, 텍스트 바로 붙여서 작성 (예: ⚠주의⚠가 아니라 ⚠주의⚠로 감싸기).
-                마크다운(##, -, *, **) 금지. HTML 태그(<span> 등) 금지. 상위 제목 반복 금지 — 제목은 한 번만, 하위는 들여쓰기. 각 항목 1줄 간결하게.
-
-                음성 내용:
-                {text}
-                """;
-        }
-
-        return $"""
-            다음은 '{fileName}' 파일의 내용입니다.
-            아래 분석항목을 작성하세요:
-            1. 요약: 핵심 키워드 요점정리 (FCC TA EOS 이관 / 공수기준 정합성 / 폐쇄망설치 형식, 줄바꿈·서술형 금지)
-            2. 주요 포인트: 중요 정보를 항목별로 나열
-            3. 액션 아이템: 후속 조치가 있다면 나열
-
-            ⚠️ 답변 형식: 번호 체계(1. 2. 3. / a. b. c. / i. ii. iii.) 사용, 들여쓰기로 계층 표현.
-            ★핵심★(주황) ▲긍정▲(초록) ▼부정▼(빨강) ⚠주의⚠(골드) ◆중요◆(파랑) ●참고●(회색) ◈결론◈(보라) ♦수치♦(시안) 8종 마커 균등 활용 필수 — 빨강/노랑만 사용 금지, 파랑/초록/보라 적극 사용.
-            마커 앞뒤 공백 금지, 텍스트 바로 붙여서 작성 (예: ⚠주의⚠가 아니라 ⚠주의⚠로 감싸기).
-            마크다운(##, -, *, **) 금지. HTML 태그(<span> 등) 금지. 상위 제목 반복 금지 — 제목은 한 번만, 하위는 들여쓰기. 각 항목 1줄 간결하게.
-
-            파일 내용:
-            {text}
-            """;
+        return RenderTemplate(template, variables);
     }
 
-    private async Task<string> BuildAllFilesAnalysisPromptAsync(string combinedText)
+    private static async Task<string> BuildAllFilesAnalysisPromptAsync(string combinedText)
     {
-        try
+        var template = await LoadPromptTemplateAsync("onenote_all_files_analysis.txt");
+
+        var variables = new Dictionary<string, string>
         {
-            using var scope = _serviceProvider.CreateScope();
-            var promptService = scope.ServiceProvider.GetRequiredService<PromptService>();
-            var result = await promptService.RenderPromptAsync("onenote_all_files_analysis",
-                new Dictionary<string, string> { ["combined_text"] = combinedText });
-            if (result != null) return result;
-        }
-        catch (Exception ex)
+            ["combined_text"] = combinedText
+        };
+
+        return RenderTemplate(template, variables);
+    }
+
+    /// <summary>
+    /// Resources/Prompts/ 폴더에서 프롬프트 템플릿 파일 로드
+    /// </summary>
+    private static async Task<string> LoadPromptTemplateAsync(string promptFileName)
+    {
+        var baseDir = AppDomain.CurrentDomain.BaseDirectory;
+        var promptPath = Path.Combine(baseDir, "Resources", "Prompts", promptFileName);
+
+        if (!File.Exists(promptPath))
+            throw new FileNotFoundException($"프롬프트 템플릿 파일을 찾을 수 없습니다: {promptPath}");
+
+        return await File.ReadAllTextAsync(promptPath);
+    }
+
+    /// <summary>
+    /// 템플릿 내 {{변수명}} 플레이스홀더를 실제 값으로 치환
+    /// </summary>
+    private static string RenderTemplate(string template, Dictionary<string, string> variables)
+    {
+        var result = template;
+        foreach (var (key, value) in variables)
         {
-            _log.Warn($"프롬프트 서비스 조회 실패, 기본 프롬프트 사용: {ex.Message}");
+            result = result.Replace($"{{{{{key}}}}}", value);
         }
-
-        // Fallback
-        return $"""
-            다음은 여러 첨부파일의 내용입니다.
-            아래 분석항목을 작성하세요:
-            1. 종합 요약: 핵심 키워드 요점정리 (FCC TA EOS 이관 / 공수기준 정합성 / 폐쇄망설치 형식, 줄바꿈·서술형 금지)
-            2. 파일별 주요 포인트: 각 파일의 중요 정보
-            3. 연관성 분석: 파일 간의 관련성이나 공통 주제
-            4. 액션 아이템: 후속 조치가 있다면 나열
-
-            ⚠️ 답변 형식: 번호 체계(1. 2. 3. / a. b. c. / i. ii. iii.) 사용, 들여쓰기로 계층 표현.
-            ★핵심★(주황) ▲긍정▲(초록) ▼부정▼(빨강) ⚠주의⚠(골드) ◆중요◆(파랑) ●참고●(회색) ◈결론◈(보라) ♦수치♦(시안) 8종 마커 균등 활용 필수 — 빨강/노랑만 사용 금지, 파랑/초록/보라 적극 사용.
-            마커 앞뒤 공백 금지, 텍스트 바로 붙여서 작성 (예: ⚠주의⚠가 아니라 ⚠주의⚠로 감싸기).
-            마크다운(##, -, *, **) 금지. HTML 태그(<span> 등) 금지. 상위 제목 반복 금지 — 제목은 한 번만, 하위는 들여쓰기. 각 항목 1줄 간결하게.
-
-            전체 파일 내용:
-            {combinedText}
-            """;
+        return result;
     }
 
     /// <summary>

@@ -107,4 +107,11 @@
     </Content>
   </ItemGroup>
 
+  <!-- AI 프롬프트 템플릿 파일 (출력 디렉토리에 복사) -->
+  <ItemGroup>
+    <Content Include="Resources\Prompts\*.txt">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+  </ItemGroup>
+
 </Project>
