@@ -7906,7 +7906,8 @@
                                     <ListBox x:Name="OneNoteFileListBox" Grid.Row="1" Margin="10,0,10,5"
                                              Background="Transparent" BorderThickness="0"
                                              ScrollViewer.HorizontalScrollBarVisibility="Disabled"
-                                             SelectionChanged="OneNoteFileListBox_SelectionChanged">
+                                             SelectionChanged="OneNoteFileListBox_SelectionChanged"
+                                             MouseDoubleClick="OneNoteFileListBox_MouseDoubleClick">
                                         <ListBox.ItemContainerStyle>
                                             <Style TargetType="ListBoxItem">
                                                 <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
@@ -7936,46 +7937,73 @@
                                         </ListBox.ItemContainerStyle>
                                         <ListBox.ItemTemplate>
                                             <DataTemplate>
-                                                <Grid>
-                                                    <Grid.ColumnDefinitions>
-                                                        <ColumnDefinition Width="Auto"/>
-                                                        <ColumnDefinition Width="*"/>
-                                                        <ColumnDefinition Width="Auto"/>
-                                                        <ColumnDefinition Width="Auto"/>
-                                                        <ColumnDefinition Width="Auto"/>
-                                                    </Grid.ColumnDefinitions>
-                                                    <!-- 파일 아이콘 -->
-                                                    <Image Grid.Column="0" Width="24" Height="24" Margin="0,0,8,0"
-                                                           VerticalAlignment="Center"
-                                                           Source="{Binding IconBase64, Converter={StaticResource Base64ToImageSourceConverter}}"
-                                                           RenderOptions.BitmapScalingMode="HighQuality"/>
-                                                    <!-- 파일명 + 상태 -->
-                                                    <StackPanel Grid.Column="1" VerticalAlignment="Center">
-                                                        <TextBlock Text="{Binding FileName}" FontSize="13" FontWeight="Medium"
-                                                                   TextTrimming="CharacterEllipsis"/>
-                                                        <TextBlock Text="{Binding AnalysisStatus}" FontSize="11"
-                                                                   Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
-                                                    </StackPanel>
-                                                    <!-- 넓게보기 버튼 (분석 결과 있을 때만, 빨강 강조) -->
-                                                    <Button Grid.Column="2" Padding="4,3" Margin="2,0"
-                                                            Click="OneNoteAttachmentExpandView_Click"
-                                                            ToolTip="넓게 보기" VerticalAlignment="Center"
-                                                            Visibility="{Binding HasAnalysis, Converter={StaticResource BooleanToVisibilityConverter}}">
-                                                        <ui:SymbolIcon Symbol="ArrowExpand24" FontSize="12" Foreground="#E74C3C"/>
-                                                    </Button>
-                                                    <!-- 분석 버튼 -->
-                                                    <Button Grid.Column="3" Padding="4,3" Margin="2,0"
-                                                            Click="OneNoteAttachmentAnalyze_Click"
-                                                            ToolTip="AI 분석" VerticalAlignment="Center">
-                                                        <ui:SymbolIcon Symbol="Sparkle24" FontSize="12"/>
-                                                    </Button>
-                                                    <!-- 열기 버튼 -->
-                                                    <Button Grid.Column="4" Padding="4,3"
-                                                            Click="OneNoteAttachmentOpen_Click"
-                                                            ToolTip="파일 열기" VerticalAlignment="Center">
-                                                        <ui:SymbolIcon Symbol="Open24" FontSize="12"/>
-                                                    </Button>
-                                                </Grid>
+                                                <StackPanel>
+                                                    <Grid>
+                                                        <Grid.ColumnDefinitions>
+                                                            <ColumnDefinition Width="Auto"/>
+                                                            <ColumnDefinition Width="*"/>
+                                                            <ColumnDefinition Width="Auto"/>
+                                                            <ColumnDefinition Width="Auto"/>
+                                                            <ColumnDefinition Width="Auto"/>
+                                                        </Grid.ColumnDefinitions>
+                                                        <!-- 파일 아이콘 -->
+                                                        <Image Grid.Column="0" Width="24" Height="24" Margin="0,0,8,0"
+                                                               VerticalAlignment="Center"
+                                                               Source="{Binding IconBase64, Converter={StaticResource Base64ToImageSourceConverter}}"
+                                                               RenderOptions.BitmapScalingMode="HighQuality"/>
+                                                        <!-- 파일명 + 상태 -->
+                                                        <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                                                            <TextBlock Text="{Binding FileName}" FontSize="13" FontWeight="Medium"
+                                                                       TextTrimming="CharacterEllipsis"/>
+                                                            <TextBlock Text="{Binding AnalysisStatus}" FontSize="11"
+                                                                       Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
+                                                        </StackPanel>
+                                                        <!-- 넓게보기 버튼 (분석 결과 있을 때만, 빨강 강조) -->
+                                                        <Button Grid.Column="2" Padding="4,3" Margin="2,0"
+                                                                Click="OneNoteAttachmentExpandView_Click"
+                                                                ToolTip="넓게 보기" VerticalAlignment="Center"
+                                                                Visibility="{Binding HasAnalysis, Converter={StaticResource BooleanToVisibilityConverter}}">
+                                                            <ui:SymbolIcon Symbol="ArrowExpand24" FontSize="12" Foreground="#E74C3C"/>
+                                                        </Button>
+                                                        <!-- 분석 버튼 -->
+                                                        <Button Grid.Column="3" Padding="4,3" Margin="2,0"
+                                                                Click="OneNoteAttachmentAnalyze_Click"
+                                                                ToolTip="AI 분석" VerticalAlignment="Center">
+                                                            <ui:SymbolIcon Symbol="Sparkle24" FontSize="12"/>
+                                                        </Button>
+                                                        <!-- 열기 버튼 -->
+                                                        <Button Grid.Column="4" Padding="4,3"
+                                                                Click="OneNoteAttachmentOpen_Click"
+                                                                ToolTip="파일 열기" VerticalAlignment="Center">
+                                                            <ui:SymbolIcon Symbol="Open24" FontSize="12"/>
+                                                        </Button>
+                                                    </Grid>
+                                                    <!-- 인라인 분석결과 (선택 시에만 표시, 정사각형 고정, 내부 스크롤) -->
+                                                    <Border Margin="0,6,0,0" CornerRadius="6" Padding="8"
+                                                            Width="200" Height="200"
+                                                            HorizontalAlignment="Left"
+                                                            Background="{DynamicResource ControlFillColorDefaultBrush}"
+                                                            BorderBrush="{DynamicResource ControlStrokeColorDefaultBrush}" BorderThickness="1"
+                                                            >
+                                                        <Border.Style>
+                                                            <Style TargetType="Border">
+                                                                <Setter Property="Visibility" Value="Collapsed"/>
+                                                                <Style.Triggers>
+                                                                    <MultiDataTrigger>
+                                                                        <MultiDataTrigger.Conditions>
+                                                                            <Condition Binding="{Binding HasAnalysis}" Value="True"/>
+                                                                            <Condition Binding="{Binding IsSelected, RelativeSource={RelativeSource AncestorType=ListBoxItem}}" Value="True"/>
+                                                                        </MultiDataTrigger.Conditions>
+                                                                        <Setter Property="Visibility" Value="Visible"/>
+                                                                    </MultiDataTrigger>
+                                                                </Style.Triggers>
+                                                            </Style>
+                                                        </Border.Style>
+                                                        <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+                                                            <TextBlock Text="{Binding AnalysisResult}" TextWrapping="Wrap" FontSize="12"/>
+                                                        </ScrollViewer>
+                                                    </Border>
+                                                </StackPanel>
                                             </DataTemplate>
                                         </ListBox.ItemTemplate>
                                     </ListBox>
@@ -7987,34 +8015,9 @@
                                                HorizontalAlignment="Center" VerticalAlignment="Center"
                                                Visibility="Collapsed"/>
 
-                                    <!-- 분석 결과 섹션 (결과 있을 때만 표시) -->
+                                    <!-- 분석 결과 섹션 (인라인으로 이동됨 — 이 섹션은 더 이상 사용하지 않음) -->
                                     <StackPanel x:Name="OneNoteFileAnalysisSection" Grid.Row="2" Grid.RowSpan="2" Visibility="Collapsed">
-                                        <!-- 분석 결과 헤더 -->
-                                        <Grid Margin="10,5,10,5">
-                                            <Grid.ColumnDefinitions>
-                                                <ColumnDefinition Width="*"/>
-                                                <ColumnDefinition Width="Auto"/>
-                                            </Grid.ColumnDefinitions>
-                                            <TextBlock Grid.Column="0" Text="분석 결과" FontSize="14" FontWeight="SemiBold" VerticalAlignment="Center"/>
-                                            <Button Grid.Column="1" Padding="6,4"
-                                                    Click="OneNoteAnalysisExpandView_Click"
-                                                    ToolTip="넓게 보기" VerticalAlignment="Center">
-                                                <StackPanel Orientation="Horizontal">
-                                                    <ui:SymbolIcon Symbol="ArrowExpand24" FontSize="14"/>
-                                                    <TextBlock Text="넓게 보기" FontSize="11" Margin="4,0,0,0" VerticalAlignment="Center"/>
-                                                </StackPanel>
-                                            </Button>
-                                        </Grid>
-
-                                        <!-- 분석 결과 표시 -->
-                                        <Border Margin="10,0,10,10" CornerRadius="6" Padding="10"
-                                                Background="{DynamicResource ControlFillColorDefaultBrush}"
-                                                BorderBrush="{DynamicResource ControlStrokeColorDefaultBrush}" BorderThickness="1">
-                                            <ScrollViewer VerticalScrollBarVisibility="Auto">
-                                                <TextBlock x:Name="OneNoteFileAnalysisResult" TextWrapping="Wrap" FontSize="13"
-                                                           Text="파일을 선택하고 AI 분석 버튼을 눌러주세요"/>
-                                            </ScrollViewer>
-                                        </Border>
+                                        <TextBlock x:Name="OneNoteFileAnalysisResult" Visibility="Collapsed"/>
                                     </StackPanel>
                                 </Grid>
                             </Grid>

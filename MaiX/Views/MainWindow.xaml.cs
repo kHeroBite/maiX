@@ -5235,26 +5235,7 @@ public partial class MainWindow : FluentWindow
     /// </summary>
     private void UpdateFileAnalysisResult(Models.OneNoteAttachment attachment)
     {
-        if (OneNoteFileAnalysisResult == null) return;
-
-        if (attachment.HasAnalysis)
-        {
-            // 요약 부분만 추출하여 표시
-            OneNoteFileAnalysisResult.Text = ExtractAnalysisSummary(attachment.AnalysisResult);
-            if (OneNoteFileAnalysisSection != null)
-                OneNoteFileAnalysisSection.Visibility = Visibility.Visible;
-        }
-        else if (attachment.IsAnalyzing)
-        {
-            OneNoteFileAnalysisResult.Text = "분석 중...";
-            if (OneNoteFileAnalysisSection != null)
-                OneNoteFileAnalysisSection.Visibility = Visibility.Visible;
-        }
-        else
-        {
-            if (OneNoteFileAnalysisSection != null)
-                OneNoteFileAnalysisSection.Visibility = Visibility.Collapsed;
-        }
+        // 분석결과는 DataTemplate 인라인 바인딩으로 자동 표시됨 — 하단 섹션 조작 불필요
     }
 
     /// <summary>
@@ -5369,6 +5350,16 @@ public partial class MainWindow : FluentWindow
     {
         if (sender is not System.Windows.Controls.Button btn) return;
         if (btn.DataContext is not Models.OneNoteAttachment attachment) return;
+
+        if (!string.IsNullOrEmpty(attachment.DataUrl))
+        {
+            Services.Editor.TinyMCEEditorService.HandleLinkClick(attachment.DataUrl, attachment.FileName);
+        }
+    }
+
+    private void OneNoteFileListBox_MouseDoubleClick(object sender, MouseButtonEventArgs e)
+    {
+        if (OneNoteFileListBox.SelectedItem is not Models.OneNoteAttachment attachment) return;
 
         if (!string.IsNullOrEmpty(attachment.DataUrl))
         {
