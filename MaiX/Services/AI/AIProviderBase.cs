@@ -26,6 +26,11 @@ namespace MaiX.Services.AI
         public abstract string ProviderName { get; }
 
         /// <summary>
+        /// 현재 설정된 모델명
+        /// </summary>
+        public string ModelName => _model ?? ProviderName;
+
+        /// <summary>
         /// Provider 사용 가능 여부
         /// </summary>
         public virtual bool IsAvailable => !string.IsNullOrEmpty(_apiKey) || IsLocalProvider;

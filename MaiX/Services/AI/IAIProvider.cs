@@ -17,6 +17,11 @@ namespace MaiX.Services.AI
         string ProviderName { get; }
 
         /// <summary>
+        /// 현재 설정된 모델명 (예: "gpt-4o-mini", "claude-3-5-sonnet")
+        /// </summary>
+        string ModelName { get; }
+
+        /// <summary>
         /// Provider 사용 가능 여부 (API 키 설정, 서버 연결 상태 등)
         /// </summary>
         bool IsAvailable { get; }

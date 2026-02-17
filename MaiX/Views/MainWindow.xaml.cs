@@ -5241,6 +5241,14 @@ public partial class MainWindow : FluentWindow
         var listBox = sender as System.Windows.Controls.ListBox;
         if (listBox == null) return;
 
+        // 버튼 클릭이면 토글 처리 안 함 (AI분석 등 버튼 동작 보장)
+        var source = e.OriginalSource as DependencyObject;
+        while (source != null)
+        {
+            if (source is System.Windows.Controls.Primitives.ButtonBase) return;
+            source = System.Windows.Media.VisualTreeHelper.GetParent(source);
+        }
+
         // 클릭한 ListBoxItem 찾기
         var element = e.OriginalSource as DependencyObject;
         while (element != null && element is not ListBoxItem)
@@ -5277,47 +5285,46 @@ public partial class MainWindow : FluentWindow
     {
         if (string.IsNullOrEmpty(analysisResult)) return string.Empty;
 
-        // 유연한 패턴 매칭: "1.핵심요약", "1. 핵심요약", "1. 핵심 요약" 등 지원
-        var pattern = @"1\.\s*(?:핵심\s*)?요약";
-        var match = System.Text.RegularExpressions.Regex.Match(analysisResult, pattern, System.Text.RegularExpressions.RegexOptions.IgnoreCase);
-
+        // 유연한 패턴 매칭: "1.핵심요약", "1. 핵심요약", "1. 종합 요약" 등
+        var match = System.Text.RegularExpressions.Regex.Match(analysisResult,
+            @"1\.\s*(?:핵심\s*)?(?:종합\s*)?요약", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
         int summaryStart = match.Success ? match.Index : -1;
-
-        // Fallback: "1. 종합 요약"
-        if (summaryStart < 0)
-            summaryStart = analysisResult.IndexOf("1. 종합 요약", StringComparison.Ordinal);
 
         // 레거시 마크다운 형식 호환
         if (summaryStart < 0)
             summaryStart = analysisResult.IndexOf("**요약**", StringComparison.Ordinal);
+        if (summaryStart < 0)
+            summaryStart = analysisResult.IndexOf("**종합 요약**", StringComparison.Ordinal);
 
         if (summaryStart < 0)
         {
             var lines = analysisResult.Split('\n');
             var fallback = string.Join("\n", lines.Take(2)).Trim();
-            // HTML 태그 제거
             fallback = System.Text.RegularExpressions.Regex.Replace(fallback, @"<[^>]+>", "");
             if (fallback.Length > 300) fallback = fallback[..300] + "...";
             return fallback;
         }
 
-        var afterSummary = analysisResult.Substring(summaryStart);
+        // 타이틀 줄 전체 스킵 (첫 줄바꿈까지)
+        var afterTitle = analysisResult.Substring(summaryStart);
+        var firstNewLine = afterTitle.IndexOf('\n');
+        var contentStart = firstNewLine >= 0 ? firstNewLine + 1 : afterTitle.Length;
 
-        // 타이틀 줄 제거: 첫 줄바꿈까지 스킵
-        var firstNewLine = afterSummary.IndexOf('\n');
-        var contentStart = firstNewLine >= 0 ? firstNewLine + 1 : 0;
-
-        // 다음 섹션 찾기: "2." (주요포인트)
-        var pattern2 = @"\n2\.\s*(?:주요\s*)?포인트";
-        var match2 = System.Text.RegularExpressions.Regex.Match(afterSummary, pattern2, System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+        // 다음 섹션 찾기: 줄 시작 "2." 패턴 (포인트, 분석 등 무관)
+        var contentText = afterTitle.Substring(contentStart);
+        var match2 = System.Text.RegularExpressions.Regex.Match(contentText,
+            @"^\s*2\.\s*", System.Text.RegularExpressions.RegexOptions.Multiline);
         var nextSection = match2.Success ? match2.Index : -1;
 
         if (nextSection < 0)
-            nextSection = afterSummary.IndexOf("**주요 포인트**", StringComparison.Ordinal);
+        {
+            var legacyIdx = contentText.IndexOf("**주요", StringComparison.Ordinal);
+            if (legacyIdx >= 0) nextSection = legacyIdx;
+        }
 
-        var summary = nextSection > 0
-            ? afterSummary.Substring(contentStart, nextSection - contentStart)
-            : afterSummary.Substring(contentStart);
+        var summary = nextSection >= 0
+            ? contentText[..nextSection]
+            : contentText;
 
         summary = summary.Trim();
 
@@ -6465,7 +6472,7 @@ public partial class MainWindow : FluentWindow
 
         // AI 모델명 가져오기
         var aiService = ((App)Application.Current).GetService<Services.AI.AIService>();
-        var modelName = aiService?.CurrentProviderName ?? "AI";
+        var modelName = aiService?.CurrentModelName ?? "AI";
 
         // 파일명 + 모델명 (길면 잘라서 표시)
         var displayName = fileName.Length > 15 ? fileName[..12] + "..." : fileName;
@@ -6584,7 +6591,7 @@ public partial class MainWindow : FluentWindow
 
         // AI 모델명 추가 표시
         var aiService = ((App)Application.Current).GetService<Services.AI.AIService>();
-        var modelInfo = aiService != null ? $" (by. {aiService.CurrentProviderName})" : "";
+        var modelInfo = aiService != null ? $" (by. {aiService.CurrentModelName})" : "";
         OneNoteAnalysisContentFileName.Text = $"{tabData.FileName ?? fileName}{modelInfo}";
 
         ApplyHighlightedText(OneNoteAnalysisContentText, tabData.AnalysisResult ?? "");

@@ -39,6 +39,11 @@ namespace MaiX.Services.AI
         public string CurrentProviderName => _currentProvider?.ProviderName ?? "None";
 
         /// <summary>
+        /// 현재 모델명 (상세)
+        /// </summary>
+        public string CurrentModelName => _currentProvider?.ModelName ?? "AI";
+
+        /// <summary>
         /// 기본 Provider 등록
         /// </summary>
         private void RegisterDefaultProviders()

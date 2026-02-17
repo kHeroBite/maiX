@@ -379,10 +379,10 @@ public class FileAnalysisService
         if (string.IsNullOrWhiteSpace(analysisResult))
             return string.Empty;
 
-        // 새 리포트형식: "1. 요약" 패턴
-        var summaryIndex = analysisResult.IndexOf("1. 요약", StringComparison.Ordinal);
-        if (summaryIndex < 0)
-            summaryIndex = analysisResult.IndexOf("1. 종합 요약", StringComparison.Ordinal);
+        // 유연한 패턴 매칭: "1.핵심요약", "1. 핵심요약", "1. 요약", "1. 종합 요약" 등
+        var match = System.Text.RegularExpressions.Regex.Match(analysisResult,
+            @"1\.\s*(?:핵심\s*)?(?:종합\s*)?요약", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+        var summaryIndex = match.Success ? match.Index : -1;
 
         // 레거시 마크다운 형식 호환
         if (summaryIndex < 0)
@@ -392,18 +392,24 @@ public class FileAnalysisService
 
         if (summaryIndex >= 0)
         {
-            var contentStart = analysisResult.IndexOf(':', summaryIndex);
-            if (contentStart < 0) contentStart = summaryIndex + 5;
-            else contentStart++;
+            // 타이틀 줄 전체 스킵 (첫 줄바꿈까지)
+            var afterTitle = analysisResult.Substring(summaryIndex);
+            var firstNewLine = afterTitle.IndexOf('\n');
+            var contentStart = summaryIndex + (firstNewLine >= 0 ? firstNewLine + 1 : afterTitle.Length);
 
-            // 다음 섹션 찾기: "2." 또는 "**주요"
-            var nextSection = analysisResult.IndexOf("\n2.", contentStart, StringComparison.Ordinal);
+            // 다음 섹션 찾기: "2." (주요포인트) — 줄 시작 "2." 패턴
+            var match2 = System.Text.RegularExpressions.Regex.Match(analysisResult.Substring(contentStart),
+                @"^\s*2\.\s*", System.Text.RegularExpressions.RegexOptions.Multiline);
+            var nextSection = match2.Success ? contentStart + match2.Index : -1;
             if (nextSection < 0)
                 nextSection = analysisResult.IndexOf("**주요", contentStart, StringComparison.Ordinal);
 
             var summary = nextSection >= 0
                 ? analysisResult[contentStart..nextSection].Trim()
                 : analysisResult[contentStart..].Trim();
+
+            // HTML 태그 제거
+            summary = System.Text.RegularExpressions.Regex.Replace(summary, @"<[^>]+>", "");
 
             if (summary.Length > 300)
                 summary = summary[..300] + "...";
@@ -412,8 +418,9 @@ public class FileAnalysisService
         }
 
         // 패턴 없으면 첫 200자
-        return analysisResult.Length > 200
+        var fallback = analysisResult.Length > 200
             ? analysisResult[..200].Trim() + "..."
             : analysisResult.Trim();
+        return System.Text.RegularExpressions.Regex.Replace(fallback, @"<[^>]+>", "");
     }
 }
