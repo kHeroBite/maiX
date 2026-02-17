@@ -5,6 +5,7 @@ using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Controls;
 using MaiX.Models;
+using MaiX.Services.AI;
 using MaiX.Services.Storage;
 using Microsoft.Extensions.DependencyInjection;
 using Wpf.Ui.Controls;
@@ -101,6 +102,17 @@ public partial class PromptSettingsWindow : FluentWindow
         {
             System.Windows.MessageBox.Show("기본값을 찾을 수 없습니다.", "AI 프롬프트", System.Windows.MessageBoxButton.OK, System.Windows.MessageBoxImage.Warning);
         }
+    }
+
+    private async void ReloadAllButton_Click(object sender, RoutedEventArgs e)
+    {
+        var 캐시서비스 = _serviceProvider.GetRequiredService<PromptCacheService>();
+        var 개수 = await 캐시서비스.ReloadAllAsync();
+        System.Windows.MessageBox.Show(
+            $"프롬프트 {개수}개가 리로드되었습니다.",
+            "프롬프트 리로드",
+            System.Windows.MessageBoxButton.OK,
+            System.Windows.MessageBoxImage.Information);
     }
 
     private void CloseButton_Click(object sender, RoutedEventArgs e)

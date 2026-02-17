@@ -281,6 +281,7 @@ public partial class App : Application
         services.AddSingleton<PandocConverter>();
         services.AddSingleton<OcrConverter>();
         services.AddSingleton<AttachmentProcessor>();
+        services.AddSingleton<PromptCacheService>();
         services.AddSingleton<FileAnalysisService>();
         services.AddSingleton<FileAnalysisCacheService>();
         services.AddSingleton<CloudLinkDownloader>();
@@ -415,6 +416,10 @@ public partial class App : Application
             await DefaultPromptTemplates.SeedDatabaseAsync(dbContext);
             Log.Information("데이터베이스 마이그레이션 완료");
             Log4.Debug("DB 마이그레이션 완료");
+
+            // 프롬프트 파일 캐시 초기화
+            var promptCache = _host.Services.GetRequiredService<PromptCacheService>();
+            await promptCache.InitializeAsync();
 
             // 로그인 창 먼저 표시
             Log4.Debug("LoginWindow 생성 시작");

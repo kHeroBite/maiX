@@ -138,9 +138,15 @@
                     <ColumnDefinition Width="Auto"/>
                 </Grid.ColumnDefinitions>
 
-                <ui:Button Content="기본값 복원"
-                           Appearance="Secondary"
-                           Click="RestoreDefaultButton_Click"/>
+                <StackPanel Orientation="Horizontal">
+                    <ui:Button Content="기본값 복원"
+                               Appearance="Secondary"
+                               Click="RestoreDefaultButton_Click"/>
+                    <ui:Button Content="프롬프트 리로드"
+                               Appearance="Secondary"
+                               Margin="8,0,0,0"
+                               Click="ReloadAllButton_Click"/>
+                </StackPanel>
 
                 <StackPanel Grid.Column="1" Orientation="Horizontal">
                     <ui:Button Content="저장"

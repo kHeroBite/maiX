@@ -19,18 +19,21 @@ public class FileAnalysisService
     private readonly AttachmentProcessor _attachmentProcessor;
     private readonly OcrConverter _ocrConverter;
     private readonly GraphOneNoteService _graphOneNoteService;
+    private readonly PromptCacheService _promptCache;
     private static readonly log4net.ILog _log = log4net.LogManager.GetLogger(typeof(FileAnalysisService));
 
     public FileAnalysisService(
         AIService aiService,
         AttachmentProcessor attachmentProcessor,
         OcrConverter ocrConverter,
-        GraphOneNoteService graphOneNoteService)
+        GraphOneNoteService graphOneNoteService,
+        PromptCacheService promptCache)
     {
         _aiService = aiService;
         _attachmentProcessor = attachmentProcessor;
         _ocrConverter = ocrConverter;
         _graphOneNoteService = graphOneNoteService;
+        _promptCache = promptCache;
     }
 
     /// <summary>
@@ -309,10 +312,10 @@ public class FileAnalysisService
         _ => false
     };
 
-    private static async Task<string> BuildAnalysisPromptAsync(string fileName, string text, bool isAudio = false)
+    private async Task<string> BuildAnalysisPromptAsync(string fileName, string text, bool isAudio = false)
     {
         var promptFileName = isAudio ? "onenote_audio_analysis.txt" : "onenote_file_analysis.txt";
-        var template = await LoadPromptTemplateAsync(promptFileName);
+        var template = await _promptCache.GetTemplateAsync(promptFileName);
 
         var variables = new Dictionary<string, string>
         {
@@ -324,9 +327,9 @@ public class FileAnalysisService
         return RenderTemplate(template, variables);
     }
 
-    private static async Task<string> BuildAllFilesAnalysisPromptAsync(string combinedText)
+    private async Task<string> BuildAllFilesAnalysisPromptAsync(string combinedText)
     {
-        var template = await LoadPromptTemplateAsync("onenote_all_files_analysis.txt");
+        var template = await _promptCache.GetTemplateAsync("onenote_all_files_analysis.txt");
 
         var variables = new Dictionary<string, string>
         {
@@ -334,20 +337,6 @@ public class FileAnalysisService
         };
 
         return RenderTemplate(template, variables);
-    }
-
-    /// <summary>
-    /// Resources/Prompts/ 폴더에서 프롬프트 템플릿 파일 로드
-    /// </summary>
-    private static async Task<string> LoadPromptTemplateAsync(string promptFileName)
-    {
-        var baseDir = AppDomain.CurrentDomain.BaseDirectory;
-        var promptPath = Path.Combine(baseDir, "Resources", "Prompts", promptFileName);
-
-        if (!File.Exists(promptPath))
-            throw new FileNotFoundException($"프롬프트 템플릿 파일을 찾을 수 없습니다: {promptPath}");
-
-        return await File.ReadAllTextAsync(promptPath);
     }
 
     /// <summary>
