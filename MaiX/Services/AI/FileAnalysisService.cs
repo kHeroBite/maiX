@@ -43,6 +43,11 @@ public class FileAnalysisService
     {
         try
         {
+            // UI 중지 버튼용 CTS 생성 + 외부 ct 연결
+            attachment.Cts = new CancellationTokenSource();
+            using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(ct, attachment.Cts.Token);
+            ct = linkedCts.Token;
+
             attachment.IsAnalyzing = true;
             attachment.AnalysisStatus = "분석 중...";
             attachment.AnalysisResult = string.Empty;
@@ -57,6 +62,7 @@ public class FileAnalysisService
             }
 
             // 2. 텍스트 추출 (오디오 파일은 STT로 변환)
+            ct.ThrowIfCancellationRequested();
             var isAudio = IsAudioExtension(attachment.Extension);
             if (isAudio)
                 attachment.AnalysisStatus = "음성 인식 중...";
@@ -72,6 +78,7 @@ public class FileAnalysisService
             }
 
             // 3. AI 분석 — 스트리밍 결과를 모아서 한 번에 설정 (UI 블로킹 방지)
+            ct.ThrowIfCancellationRequested();
             attachment.AnalysisStatus = "AI 분석 중...";
             var prompt = await BuildAnalysisPromptAsync(attachment.FileName, text, isAudio).ConfigureAwait(false);
             var resultBuilder = new System.Text.StringBuilder();
@@ -102,6 +109,8 @@ public class FileAnalysisService
         }
         finally
         {
+            attachment.Cts?.Dispose();
+            attachment.Cts = null;
             attachment.IsAnalyzing = false;
         }
     }
@@ -113,16 +122,23 @@ public class FileAnalysisService
     {
         if (attachments == null || attachments.Count == 0) return;
 
+        // UI 중지 버튼용 CTS 생성 + 외부 ct 연결 (첫 번째 attachment에 대표 CTS)
+        var masterCts = new CancellationTokenSource();
+        using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(ct, masterCts.Token);
+        ct = linkedCts.Token;
+
         // 모든 파일에서 텍스트 추출
         var allTexts = new List<string>();
         foreach (var att in attachments)
         {
+            att.Cts = masterCts; // 모든 attachment가 동일 CTS 공유 → 어느 하나라도 Cancel 시 전체 중지
             att.IsAnalyzing = true;
             att.AnalysisStatus = "텍스트 추출 중...";
         }
 
         try
         {
+            ct.ThrowIfCancellationRequested();
             foreach (var att in attachments)
             {
                 var filePath = await EnsureLocalFileAsync(att, ct).ConfigureAwait(false);
@@ -148,6 +164,7 @@ public class FileAnalysisService
             }
 
             // 전체 통합 AI 분석
+            ct.ThrowIfCancellationRequested();
             var combinedText = string.Join("\n\n---\n\n", allTexts);
             var prompt = await BuildAllFilesAnalysisPromptAsync(combinedText).ConfigureAwait(false);
             foreach (var att in attachments)
@@ -194,8 +211,10 @@ public class FileAnalysisService
         {
             foreach (var att in attachments)
             {
+                att.Cts = null;
                 att.IsAnalyzing = false;
             }
+            masterCts.Dispose();
         }
     }
 

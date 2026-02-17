@@ -5234,6 +5234,35 @@ public partial class MainWindow : FluentWindow
     }
 
     /// <summary>
+    /// 파일 목록 클릭 시 요약 토글 (같은 항목 재클릭 감지)
+    /// </summary>
+    private void OneNoteFileListBox_PreviewMouseLeftButtonDown(object sender, System.Windows.Input.MouseButtonEventArgs e)
+    {
+        var listBox = sender as System.Windows.Controls.ListBox;
+        if (listBox == null) return;
+
+        // 클릭한 ListBoxItem 찾기
+        var element = e.OriginalSource as DependencyObject;
+        while (element != null && element is not ListBoxItem)
+        {
+            element = System.Windows.Media.VisualTreeHelper.GetParent(element);
+        }
+
+        if (element is not ListBoxItem item) return;
+        if (item.DataContext is not Models.OneNoteAttachment attachment) return;
+
+        // 분석 미완료면 토글 안 함
+        if (!attachment.HasAnalysis) return;
+
+        // 같은 항목 재클릭이면 요약 토글
+        if (listBox.SelectedItem == attachment)
+        {
+            attachment.IsSummaryExpanded = !attachment.IsSummaryExpanded;
+            e.Handled = true; // SelectionChanged 발생 방지
+        }
+    }
+
+    /// <summary>
     /// 분석 결과 UI 갱신
     /// </summary>
     private void UpdateFileAnalysisResult(Models.OneNoteAttachment attachment)
@@ -5242,14 +5271,19 @@ public partial class MainWindow : FluentWindow
     }
 
     /// <summary>
-    /// AI 분석 결과에서 요약 부분만 추출
+    /// AI 분석 결과에서 요약 부분만 추출 (plain text, HTML 태그 제거)
     /// </summary>
     private static string ExtractAnalysisSummary(string analysisResult)
     {
         if (string.IsNullOrEmpty(analysisResult)) return string.Empty;
 
-        // 새 리포트형식: "1. 요약" 패턴
-        var summaryStart = analysisResult.IndexOf("1. 요약", StringComparison.Ordinal);
+        // 유연한 패턴 매칭: "1.핵심요약", "1. 핵심요약", "1. 핵심 요약" 등 지원
+        var pattern = @"1\.\s*(?:핵심\s*)?요약";
+        var match = System.Text.RegularExpressions.Regex.Match(analysisResult, pattern, System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+
+        int summaryStart = match.Success ? match.Index : -1;
+
+        // Fallback: "1. 종합 요약"
         if (summaryStart < 0)
             summaryStart = analysisResult.IndexOf("1. 종합 요약", StringComparison.Ordinal);
 
@@ -5261,17 +5295,23 @@ public partial class MainWindow : FluentWindow
         {
             var lines = analysisResult.Split('\n');
             var fallback = string.Join("\n", lines.Take(2)).Trim();
-            if (fallback.Length > 150) fallback = fallback[..150] + "...";
+            // HTML 태그 제거
+            fallback = System.Text.RegularExpressions.Regex.Replace(fallback, @"<[^>]+>", "");
+            if (fallback.Length > 300) fallback = fallback[..300] + "...";
             return fallback;
         }
 
         var afterSummary = analysisResult.Substring(summaryStart);
-        var colonIdx = afterSummary.IndexOf(':');
-        if (colonIdx < 0) colonIdx = afterSummary.IndexOf('：');
-        var contentStart = colonIdx >= 0 ? colonIdx + 1 : 5;
 
-        // 다음 섹션: "2." 또는 "**주요"
-        var nextSection = afterSummary.IndexOf("\n2.", contentStart, StringComparison.Ordinal);
+        // 타이틀 줄 제거: 첫 줄바꿈까지 스킵
+        var firstNewLine = afterSummary.IndexOf('\n');
+        var contentStart = firstNewLine >= 0 ? firstNewLine + 1 : 0;
+
+        // 다음 섹션 찾기: "2." (주요포인트)
+        var pattern2 = @"\n2\.\s*(?:주요\s*)?포인트";
+        var match2 = System.Text.RegularExpressions.Regex.Match(afterSummary, pattern2, System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+        var nextSection = match2.Success ? match2.Index : -1;
+
         if (nextSection < 0)
             nextSection = afterSummary.IndexOf("**주요 포인트**", StringComparison.Ordinal);
 
@@ -5280,6 +5320,14 @@ public partial class MainWindow : FluentWindow
             : afterSummary.Substring(contentStart);
 
         summary = summary.Trim();
+
+        // HTML 태그 제거
+        summary = System.Text.RegularExpressions.Regex.Replace(summary, @"<[^>]+>", "");
+
+        // 최대 300자 제한
+        if (summary.Length > 300)
+            summary = summary[..300] + "...";
+
         return summary;
     }
 
@@ -5360,18 +5408,66 @@ public partial class MainWindow : FluentWindow
     }
 
     /// <summary>
-    /// 개별 파일 AI 분석
+    /// 기존 분석 결과 탭 전체 닫기
+    /// </summary>
+    private void CloseAllAnalysisTabs()
+    {
+        _analysisExpandTabs.Clear();
+        OneNoteAnalysisTabHost.Items.Clear();
+        SwitchToNoteContentTab();
+    }
+
+    /// <summary>
+    /// 분석 결과 텍스트 Ctrl+휠로 글자 크기 조절
+    /// </summary>
+    private void AnalysisContentText_PreviewMouseWheel(object sender, System.Windows.Input.MouseWheelEventArgs e)
+    {
+        if (System.Windows.Input.Keyboard.Modifiers == System.Windows.Input.ModifierKeys.Control)
+        {
+            var textBlock = sender as System.Windows.Controls.TextBlock;
+            if (textBlock == null) return;
+
+            var delta = e.Delta > 0 ? 1 : -1;
+            var newSize = textBlock.FontSize + delta;
+
+            // 최소 8, 최대 30
+            if (newSize >= 8 && newSize <= 30)
+            {
+                textBlock.FontSize = newSize;
+            }
+
+            e.Handled = true;
+        }
+    }
+
+    /// <summary>
+    /// 개별 파일 AI 분석 (토글: 분석 중 → 중지)
     /// </summary>
     private async void OneNoteAttachmentAnalyze_Click(object sender, RoutedEventArgs e)
     {
         if (sender is not System.Windows.Controls.Button btn) return;
         if (btn.DataContext is not Models.OneNoteAttachment attachment) return;
 
+        // 분석 중이면 중지
+        if (attachment.IsAnalyzing && attachment.Cts != null)
+        {
+            btn.Content = "■ 중지 중...";
+            attachment.Cts.Cancel();
+            return;
+        }
+
+        // 기존 분석 탭 모두 닫기
+        CloseAllAnalysisTabs();
+
         var fileAnalysisService = ((App)Application.Current).GetService<Services.AI.FileAnalysisService>();
         if (fileAnalysisService == null) return;
 
         var cacheService = ((App)Application.Current).GetService<Services.AI.FileAnalysisCacheService>();
         var pageId = _oneNoteViewModel?.SelectedPage?.Id;
+
+        // CancellationTokenSource 생성
+        attachment.Cts = new System.Threading.CancellationTokenSource();
+        btn.Content = "■ 분석 중지";
 
         attachment.PropertyChanged += (s, args) =>
         {
@@ -5386,20 +5482,55 @@ public partial class MainWindow : FluentWindow
             {
                 _ = cacheService.SaveAnalysisResultAsync(pageId, attachment.FileName, attachment.AnalysisResult);
             }
+            // 분석 완료/취소 시 버튼 복구
+            if (args.PropertyName == nameof(Models.OneNoteAttachment.IsAnalyzing) && !attachment.IsAnalyzing)
+            {
+                Dispatcher.BeginInvoke(() =>
+                {
+                    attachment.Cts = null;
+                    btn.Content = new Wpf.Ui.Controls.SymbolIcon { Symbol = Wpf.Ui.Controls.SymbolRegular.Sparkle24, FontSize = 12 };
+                });
+            }
         };
 
-        // Task.Run으로 전체 분석을 백그라운드 스레드에서 실행 (UI 블로킹 방지)
-        await Task.Run(() => fileAnalysisService.AnalyzeFileAsync(attachment));
+        try
+        {
+            // Task.Run으로 전체 분석을 백그라운드 스레드에서 실행 (UI 블로킹 방지)
+            await Task.Run(() => fileAnalysisService.AnalyzeFileAsync(attachment, attachment.Cts.Token));
+        }
+        catch (System.OperationCanceledException)
+        {
+            // 정상 취소 — 에러 아님
+        }
+        finally
+        {
+            attachment.Cts = null;
+            btn.Content = new Wpf.Ui.Controls.SymbolIcon { Symbol = Wpf.Ui.Controls.SymbolRegular.Sparkle24, FontSize = 12 };
+        }
     }
 
     /// <summary>
-    /// 전체 파일 일괄 AI 분석
+    /// 전체 파일 일괄 AI 분석 (토글: 분석 중 → 전체 중지)
     /// </summary>
     private async void OneNoteAttachmentAnalyzeAll_Click(object sender, RoutedEventArgs e)
     {
         if (_oneNoteViewModel?.CurrentPageAttachments == null) return;
         var attachments = _oneNoteViewModel.CurrentPageAttachments;
         if (attachments.Count == 0) return;
+
+        // 분석 중이면 모든 진행 중인 분석 중지
+        var analyzingAttachments = attachments.Where(a => a.IsAnalyzing && a.Cts != null).ToList();
+        if (analyzingAttachments.Any())
+        {
+            foreach (var att in analyzingAttachments)
+            {
+                att.Cts?.Cancel();
+            }
+            return;
+        }
+
+        // 기존 분석 탭 모두 닫기
+        CloseAllAnalysisTabs();
 
         var fileAnalysisService = ((App)Application.Current).GetService<Services.AI.FileAnalysisService>();
         if (fileAnalysisService == null) return;
@@ -5412,6 +5543,9 @@ public partial class MainWindow : FluentWindow
 
         foreach (var att in attachments)
         {
+            // CancellationTokenSource 생성
+            att.Cts = new System.Threading.CancellationTokenSource();
+
             att.PropertyChanged += (s, args) =>
             {
                 if (args.PropertyName == nameof(Models.OneNoteAttachment.AnalysisResult))
@@ -5428,11 +5562,30 @@ public partial class MainWindow : FluentWindow
                 {
                     _ = cacheService.SaveAnalysisResultAsync(pageId, att.FileName, att.AnalysisResult);
                 }
+                // 분석 완료/취소 시 Cts 정리
+                if (args.PropertyName == nameof(Models.OneNoteAttachment.IsAnalyzing) && !att.IsAnalyzing)
+                {
+                    Dispatcher.BeginInvoke(() => att.Cts = null);
+                }
             };
         }
 
-        // Task.Run으로 전체 일괄 분석을 백그라운드 스레드에서 실행 (UI 블로킹 방지)
-        await Task.Run(() => fileAnalysisService.AnalyzeAllFilesAsync(attachments));
+        try
+        {
+            // Task.Run으로 전체 일괄 분석을 백그라운드 스레드에서 실행 (UI 블로킹 방지)
+            await Task.Run(() => fileAnalysisService.AnalyzeAllFilesAsync(attachments));
+        }
+        catch (System.OperationCanceledException)
+        {
+            // 정상 취소 — 에러 아님
+        }
+        finally
+        {
+            foreach (var att in attachments)
+            {
+                att.Cts = null;
+            }
+        }
     }
 
     /// <summary>
@@ -6310,15 +6463,20 @@ public partial class MainWindow : FluentWindow
         };
         panel.Children.Add(icon);
 
-        // 파일명 (길면 잘라서 표시)
+        // AI 모델명 가져오기
+        var aiService = ((App)Application.Current).GetService<Services.AI.AIService>();
+        var modelName = aiService?.CurrentProviderName ?? "AI";
+
+        // 파일명 + 모델명 (길면 잘라서 표시)
         var displayName = fileName.Length > 15 ? fileName[..12] + "..." : fileName;
+        var displayText = $"{displayName} (by. {modelName})";
         var textBlock = new System.Windows.Controls.TextBlock
         {
-            Text = displayName,
+            Text = displayText,
             FontSize = 13,
             VerticalAlignment = VerticalAlignment.Center,
             Foreground = new SolidColorBrush(Color.FromRgb(0x99, 0x99, 0x99)),
-            ToolTip = fileName
+            ToolTip = $"{fileName} (by. {modelName})"
         };
         panel.Children.Add(textBlock);
 
@@ -6423,7 +6581,12 @@ public partial class MainWindow : FluentWindow
 
         // 분석 결과 콘텐츠 업데이트
         var tabData = _analysisExpandTabs.FirstOrDefault(t => t.FileName == fileName);
-        OneNoteAnalysisContentFileName.Text = tabData.FileName ?? fileName;
+
+        // AI 모델명 추가 표시
+        var aiService = ((App)Application.Current).GetService<Services.AI.AIService>();
+        var modelInfo = aiService != null ? $" (by. {aiService.CurrentProviderName})" : "";
+        OneNoteAnalysisContentFileName.Text = $"{tabData.FileName ?? fileName}{modelInfo}";
+
         ApplyHighlightedText(OneNoteAnalysisContentText, tabData.AnalysisResult ?? "");
     }
 

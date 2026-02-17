@@ -27,6 +27,14 @@ public partial class OneNoteAttachment : ObservableObject
     [ObservableProperty]
     private string _analysisSummary = string.Empty;
 
+    // AI 분석 중지용 CancellationTokenSource
+    [ObservableProperty]
+    private CancellationTokenSource? _cts;
+
+    // 파일탭 요약 펼침/접힘 토글
+    [ObservableProperty]
+    private bool _isSummaryExpanded = false;
+
     // 계산 속성
     public bool HasAnalysis => !string.IsNullOrEmpty(AnalysisResult);
 

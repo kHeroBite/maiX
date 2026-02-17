@@ -6828,7 +6828,8 @@
                                         </Border>
                                         <!-- 분석 결과 본문 -->
                                         <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto" Padding="16">
-                                            <TextBlock x:Name="OneNoteAnalysisContentText" TextWrapping="Wrap" FontSize="13"/>
+                                            <TextBlock x:Name="OneNoteAnalysisContentText" TextWrapping="Wrap" FontSize="13"
+                                                       PreviewMouseWheel="AnalysisContentText_PreviewMouseWheel"/>
                                         </ScrollViewer>
                                     </Grid>
                                 </Border>
@@ -7906,7 +7907,8 @@
                                     <ListBox x:Name="OneNoteFileListBox" Grid.Row="1" Margin="10,0,10,5"
                                              Background="Transparent" BorderThickness="0"
                                              ScrollViewer.HorizontalScrollBarVisibility="Disabled"
-                                             SelectionChanged="OneNoteFileListBox_SelectionChanged">
+                                             SelectionChanged="OneNoteFileListBox_SelectionChanged"
+                                             PreviewMouseLeftButtonDown="OneNoteFileListBox_PreviewMouseLeftButtonDown">
                                         <ListBox.ItemContainerStyle>
                                             <Style TargetType="ListBoxItem">
                                                 <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
@@ -7993,6 +7995,7 @@
                                                                         <MultiDataTrigger.Conditions>
                                                                             <Condition Binding="{Binding HasAnalysis}" Value="True"/>
                                                                             <Condition Binding="{Binding IsSelected, RelativeSource={RelativeSource AncestorType=ListBoxItem}}" Value="True"/>
+                                                                            <Condition Binding="{Binding IsSummaryExpanded}" Value="True"/>
                                                                         </MultiDataTrigger.Conditions>
                                                                         <Setter Property="Visibility" Value="Visible"/>
                                                                     </MultiDataTrigger>
