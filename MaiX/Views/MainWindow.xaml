@@ -7979,9 +7979,9 @@
                                                         </Button>
                                                     </Grid>
                                                     <!-- 인라인 분석결과 (선택 시에만 표시, 정사각형 고정, 내부 스크롤) -->
-                                                    <Border Margin="0,6,0,0" CornerRadius="6" Padding="8"
-                                                            Width="200" Height="200"
-                                                            HorizontalAlignment="Left"
+                                                    <Border x:Name="InlineAnalysisBorder" Margin="0,6,0,0" CornerRadius="6" Padding="8"
+                                                            Height="{Binding ActualWidth, RelativeSource={RelativeSource Self}}"
+                                                            HorizontalAlignment="Stretch"
                                                             Background="{DynamicResource ControlFillColorDefaultBrush}"
                                                             BorderBrush="{DynamicResource ControlStrokeColorDefaultBrush}" BorderThickness="1"
                                                             >
