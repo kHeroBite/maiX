@@ -38,6 +38,14 @@
 **예외**: 기술 용어(REST API, MCP 등), 라이브러리명은 영어 허용.
 **중요**: Context 압축(/compact) 후에도 한국어 유지 필수. 새 세션도 한국어로 시작.
 
+### 인코딩 및 텍스트 파일 정책
+
+- PowerShell 명령은 항상 `-Encoding UTF8`(예: `Set-Content -Encoding UTF8`)을 지정합니다.
+- 콘솔 세션은 `chcp 65001` 및 `[Console]::OutputEncoding = [System.Text.Encoding]::UTF8` 상태를 유지합니다.
+- Python 스크립트는 파일 I/O 시 `encoding='utf-8'`을 사용하고, 대량 치환 후 `git diff`로 한글 깨짐 여부를 확인합니다.
+- 모든 텍스트 파일은 CRLF 줄 끝을 유지하며, 필요 시 `unix2dos` 등으로 복구합니다.
+
+
 ---
 
 ## 실행 환경: WSL2 + Windows
@@ -393,6 +401,13 @@ WSL에서_실행 (기본):
 | **context7** | 라이브러리 문서 | 무료 |
 | **ref** | 문서 검색 | |
 | **vibe-check-mcp** | 메타인지 검증 | |
+
+### MCP 공통 지침
+
+- 기본 서버는 위 표의 6개를 항상 활성화하고, 대규모 코드 분석이 필요할 때만 `serena-full`을 추가 연결합니다.
+- DB 작업은 `mcp__mysql__*` 도구를 우선 사용하며, 한글이 포함된 쿼리를 실행할 때는 세션마다 `SET NAMES utf8`을 먼저 호출합니다.
+- MCP 호출은 각 도구를 직접 실행하며 Serena의 `execute_shell_command`로 다른 MCP를 우회 호출하지 않습니다.
+- 코드 수정 도구 선택: `.cs` 파일은 Serena, Designer/문서/JSON/YAML 파일은 Claude Code Edit/Write를 기본으로 사용합니다.
 
 ### MCP MySQL 한글 인코딩 규칙
 
