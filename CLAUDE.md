@@ -35,6 +35,7 @@
 ## 언어 정책
 
 **필수**: 모든 대화/주석/변수명/함수명/클래스명/문서 = 한국어. Git 커밋 = 한국어 + 이모지.
+**커밋 모델 태그**: 커밋 메시지 제목 마지막에 `by {모델버전}` 추가 (예: `✨ 기능 추가 by claude-sonnet-4-6`, `✨ 기능 추가 by codex-5.3-pro`). 접두어([클로드], [코덱스] 등) 사용 금지.
 **예외**: 기술 용어(REST API, MCP 등), 라이브러리명은 영어 허용.
 **중요**: Context 압축(/compact) 후에도 한국어 유지 필수. 새 세션도 한국어로 시작.
 
@@ -43,7 +44,19 @@
 - PowerShell 명령은 항상 `-Encoding UTF8`(예: `Set-Content -Encoding UTF8`)을 지정합니다.
 - 콘솔 세션은 `chcp 65001` 및 `[Console]::OutputEncoding = [System.Text.Encoding]::UTF8` 상태를 유지합니다.
 - Python 스크립트는 파일 I/O 시 `encoding='utf-8'`을 사용하고, 대량 치환 후 `git diff`로 한글 깨짐 여부를 확인합니다.
-- 모든 텍스트 파일은 CRLF 줄 끝을 유지하며, 필요 시 `unix2dos` 등으로 복구합니다.
+- **CRLF 정책**: NTFS 프로젝트 파일(`.cs`, `.md`, `.json`, `.xml` 등)은 CRLF 줄 끝 유지.
+  - rsync로 동기화 후 CRLF가 손상된 경우 `unix2dos 파일명`으로 복구.
+  - git 설정: `core.autocrlf = true` (Windows) / `core.autocrlf = input` (WSL) 유지.
+  - 신규 파일 Write 시 LF로 생성됨. `.gitattributes`에 `* text=auto eol=crlf` 설정 시 git checkout 시 자동 CRLF 변환 (unix2dos 불필요).
+- **BOM 정책**: 신규 파일은 UTF-8 without BOM으로 생성. 기존 파일 수정 시 BOM 유무 그대로 유지 (cp 바이너리 복사로 자동 보존).
+- **Git 인코딩**: `i18n.commitEncoding = utf-8`, `i18n.logOutputEncoding = utf-8` 설정 유지.
+- **Git 커밋 모델 태그**: Codex CLI 포함 모든 AI 도구는 커밋 메시지 제목 마지막에 `by {모델버전}` 형식으로 모델을 명시. 접두어([클로드], [코덱스] 등) 사용 금지.
+
+### UI/Designer 규칙
+
+- UI 컨트롤 추가/배치는 `*.Designer.cs`에서만 수행.
+- 코드에서 `new Control()`로 직접 생성 후 연결 금지.
+- 이벤트 바인딩도 Designer에서 처리.
 
 
 ---
@@ -76,7 +89,7 @@ WSL에서_실행 (기본):
       3. Edit ~/work/{project}-ntfs/파일  (ext4에서 부분 수정)
       4. rsync -a --inplace ~/work/{project}-ntfs/파일 "/mnt/c/.../파일"  (NTFS에 동기화)
   - --inplace 필수 (없으면 임시파일 rename 시 NTFS metadata 오류)
-  - BOM 보존: cp가 바이너리 복사이므로 utf-8-sig BOM 자동 보존
+  - BOM 처리: cp가 바이너리 복사이므로 기존 BOM 자동 보존 (신규 파일은 BOM 없이 생성)
   - 작업 디렉토리: ~/work/{project}-ntfs/ (세션 공통)
   - 예외_Serena_심볼편집만: LSP 경유이므로 rsync 불필요 (유일한 예외)
   - 위반_감지: /mnt/c/ 경로에 Edit/Write 도구 직접 호출 시 즉시 중단 + 경고
