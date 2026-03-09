@@ -409,6 +409,5 @@ tmpclaude-*-cwd
 .ownership/
 
 # 하드링크 파일 (AI 프로젝트가 원본 — MaiX에서는 git 추적 불필요)
-AGENTS.md
 CLAUDE.md
 .agents/skills
