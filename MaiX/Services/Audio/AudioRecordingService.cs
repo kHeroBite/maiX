@@ -142,7 +142,7 @@ public class AudioRecordingService : IDisposable
             _currentFilePath = Path.Combine(RecordingsDirectory, fileName);
 
             // WasapiCapture 설정 (WASAPI — waveInOpen InvalidParameter 우회)
-            _waveIn = new WasapiCapture();
+            _waveIn = new WasapiCapture(WasapiCapture.GetDefaultCaptureDevice(), useEventSync: false);
             _logger.Information("[녹음] WasapiCapture WaveFormat: {SampleRate}Hz, {BitsPerSample}bit, {Channels}ch",
                 _waveIn.WaveFormat.SampleRate, _waveIn.WaveFormat.BitsPerSample, _waveIn.WaveFormat.Channels);
 
