@@ -163,7 +163,12 @@ WSL에서_실행 (기본):
 
 6-way 분류 기준:
   질문: 코드 탐색 0~2회로 답변 가능 (아키텍처 질문, 파일 위치, 설정 확인 등)
-  계획: 코드 탐색 3회+ 필요, 파일 수정 없이 분석/설계만 (영향도 분석, 설계 검토, 구조 파악 등)
+  계획: 파일 수정 없이 분석/설계만 필요한 경우 — 코드 탐색 3회+ 예상되거나, 새 기능/신규 구현 요청처럼 사전 설계가 필요한 경우.
+        ⚡ 즉시 kPlan spawn 트리거 (메인 직접 탐색 금지):
+          - "~~ 기능 추가해줘" / "~~ 구현해줘" 형태의 새 기능 요청
+          - 여러 파일에 걸친 변경이 예상되는 요청
+          - DB/파일/UI 등 여러 레이어가 연관된 요청
+          - 메인이 코드 탐색을 1회라도 수행한 시점에서 3회+ 예상되면 즉시 kPlan spawn
   퀵: 비코드 파일(.md/.json/.yaml 등)만 수정 — 코드 파일 수정 0건
   라이트: 코드 파일 1~2개 AND 단위작업 1~2개 AND 복잡도 낮음
   미디엄: 코드 파일 2~4개 OR 단위작업 3~5개 OR 복잡도 중간
@@ -177,6 +182,8 @@ WSL에서_실행 (기본):
   원칙: 메인 = 디스패처 + 오케스트레이터. 6-way 판단 + spawn + 대기 + kFinish
   질문: Read/Grep/Glob 0~2회만. 초과 시 계획으로 격상하여 kPlan spawn
   계획: 사전 코드 탐색 없이 즉시 kPlan spawn (코드 탐색은 kPlan 역할)
+        금지 패턴: "먼저 현황을 파악하겠습니다" + 탐색 시작 → 이미 위반
+        새 기능 요청은 코드를 보기 전에 계획으로 분류하고 즉시 kPlan spawn
   퀵/라이트+: Skill('kO') 로딩 → kO 지침에 따라 팀에이전트 spawn
   금지: "먼저 현황을 파악하겠습니다" 식의 메인 직접 탐색 (3회+ = 계획 = kPlan 위임)
 
@@ -309,32 +316,8 @@ kDone(메인) → kDone_review(프로세스개선) / kDone_trans(우회감지) /
   - 한 프로젝트에만 범용 스킬 수정 후 다른 프로젝트 미반영 (AI 원본 수정 시 심볼릭링크로 자동 반영)
 ```
 
-### Hooks 공유 (2-level 구조)
-
-```yaml
-구조:
-  user-level: ~/.claude/hooks/ (ext4 하드카피 — NTFS 원본에서 복사)
-    - 모든 프로젝트에서 공통 실행
-    - NTFS 원본: /mnt/c/DATA/Project/AI/.claude/hooks/ (git 관리)
-    - ext4 실행본: ~/.claude/hooks/ (실제 실행되는 파일)
-    - 이전: 심볼릭링크 → NTFS drvfs 경유 실행 시 "No stderr output" 에러 발생하여 ext4 하드카피로 전환
-  project-level: {프로젝트}/.claude/hooks/ (프로젝트 전용, 선택적)
-    - 해당 프로젝트에서만 추가 실행
-    - 필요 시에만 생성 (없어도 정상)
-
-동기화_절차 (hook 수정 시 필수):
-  1. NTFS 원본 수정: /mnt/c/DATA/Project/AI/.claude/hooks/{hook명}.sh (git 추적 대상)
-  2. ext4로 복사: cp /mnt/c/DATA/Project/AI/.claude/hooks/{hook명}.sh ~/.claude/hooks/{hook명}.sh
-  3. 실행 권한: chmod +x ~/.claude/hooks/{hook명}.sh
-  4. CRLF 제거: sed -i 's/\r$//' ~/.claude/hooks/{hook명}.sh
-  주의: lib/ 하위 파일도 동일 절차 적용
-
-실행_순서: Claude Code가 user-level + project-level 모두 실행 (병합)
-금지:
-  - project-level settings.json에 user-level과 동일한 hook 등록 금지 (2번 실행됨)
-  - ext4 ~/.claude/hooks/만 수정하고 NTFS 원본 미반영 (git 추적 누락)
-  - NTFS 원본만 수정하고 ext4 복사 미수행 (실행본 미반영)
-```
+### Hooks 공유
+기타 hook 운영/동기화/금지 규칙은 [AI/hooks.md](./AI/hooks.md) 참조.
 
 ---
 
@@ -357,6 +340,9 @@ kDone(메인) → kDone_review(프로세스개선) / kDone_trans(우회감지) /
   - shutdown_request 수신 시 즉시 응답. SendMessage hook 차단 절대 금지 (L-172)
   - 에이전트 반환 메시지: 요약 5줄 이내 + 파일 경로만 (컨텍스트 보호)
   - 에이전트 1개당 담당 파일 최대 3개. DB SELECT는 상위 5행만
+  - 스킬 호출 선언 필수: 스킬 로딩 시 "Skill('{스킬명}') 로딩 — {목적}" 형식으로 선언
+  - kDev는 구현(파일 수정)만 담당. git commit/push 절대 금지 — 커밋은 kDone 전용 (L-228)
+  - 팀에이전트는 정상완료/스킵/이미완료 등 모든 종료 경로에서 SendMessage 완료 보고 필수 (L-228)
 중단_조건: 동일 오류 10회 반복 / 외부 의존성 문제 → ntfy 알림
 ```
 
@@ -380,6 +366,29 @@ kDone(메인) → kDone_review(프로세스개선) / kDone_trans(우회감지) /
   - sequential-thinking, vibe-check 등 분석 도구를 불필요하게 호출하면 스트리밍이 멈추고 응답 지연 발생
   - 도구 호출이 필요한 경우: 파일 읽기/수정, 코드 검색, DB 쿼리 등 실제 데이터가 필요할 때만
 ```
+
+## 스킬 회피 안티패턴 (절대 금지)
+
+아래 사고방식은 스킬 적용을 회피하는 합리화 패턴이다. 감지 즉시 중단하고 스킬을 먼저 확인하라.
+
+- "단순한 질문일 뿐이라 스킬이 필요 없다"
+- "먼저 맥락/코드를 파악한 후 스킬을 결정하겠다"
+- "이 작업엔 스킬이 과도하다"
+- "지금 진행 중인 작업이 있어서 스킬 확인을 나중에 하겠다"
+- "이미 방법을 알고 있으니 스킬 없이 진행하겠다"
+
+**원칙**: 1%라도 스킬 적용 가능성이 있으면 먼저 스킬을 확인하라. 스킬이 작업에 해당하면 반드시 사용해야 하며 예외는 없다. (우선순위: 사용자 명시 지시 > 스킬 > 기본 동작)
+
+## kO 경로 강제화 (프로젝트 훅)
+
+`/.claude/settings.json`의 `PreToolUse`에서 `/.claude/hooks/ko_route_guard.sh`를 실행하여 아래를 하드 차단한다.
+
+- 분류(`question|plan|quick|light|medium|full`)가 기록되지 않은 상태의 수정/팀명령
+- `question`/`plan` 분류에서 `kO` 호출 또는 파일 수정 시도
+- `plan` 분류에서 `kPlan` 이외 팀에이전트 단계 진입
+- `quick|light|medium|full` 분류에서 `kO` 미경유 수정/팀명령
+
+즉, 질문/답변만 직접 처리하고, 수정 분류는 반드시 `kO` 선행 후 파이프라인으로만 진행된다.
 
 ---
 
@@ -419,6 +428,18 @@ kDone(메인) → kDone_review(프로세스개선) / kDone_trans(우회감지) /
 | C# 코드 심볼 수정/추가/리팩토링 | Serena |
 | Designer.cs, 비코드 파일, 주석/문자열 | Claude Code Edit |
 | Serena 오류 시 | Claude Code Edit (Fallback) |
+
+### 도메인 스킬 자동 트리거 기준
+
+| 상황 | 자동 로딩 스킬 |
+|------|---------------|
+| C# 코드 리뷰/리팩토링/품질 분석 | `domain-csharp` |
+| WinForms UI 설계/폼 생성/MDI/레이아웃 | `domain-winforms` |
+| DB 스키마 변경/테이블 생성/마이그레이션 | `domain-database` |
+| 새 라이브러리 도입/버전 업그레이드 | `domain-context7` |
+| NTFS 파일 수정/파일 잠금/다중 세션 충돌 | `domain-fileops` |
+
+**규칙**: 위 상황에 해당하면 작업 시작 전 해당 스킬을 반드시 로딩하라. "나중에 필요하면 보겠다" 패턴 금지.
 
 ---
 

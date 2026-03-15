@@ -717,6 +717,13 @@
                                Click="ThemeToggleButton_Click">
                         <ui:SymbolIcon x:Name="ThemeIcon" Symbol="WeatherSunny24" FontSize="16"/>
                     </ui:Button>
+                    <!-- GPU 모드 토글 버튼 -->
+                    <ui:Button x:Name="GpuToggleButton"
+                               ToolTip="GPU/CPU 렌더링 전환"
+                               Style="{StaticResource TitleBarTransparentButtonStyle}"
+                               Click="GpuToggleButton_Click">
+                        <ui:SymbolIcon x:Name="GpuIcon" Symbol="Desktop24" FontSize="16"/>
+                    </ui:Button>
                     <!-- 알림 버튼 -->
                     <ui:Button x:Name="NotificationButton"
                                ToolTip="알림"

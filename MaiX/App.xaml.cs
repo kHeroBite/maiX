@@ -373,11 +373,16 @@ public partial class App : Application
             args.SetObserved();
         };
 
-        // 명령줄 인수 파싱 (--gpumode=true/false)
+        // 명령줄 인수 파싱 (--gpumode=true/false, --nogpu)
         bool? gpuModeOverride = null;
         foreach (var arg in e.Args)
         {
-            if (arg.StartsWith("--gpumode=", StringComparison.OrdinalIgnoreCase))
+            if (arg.Equals("--nogpu", StringComparison.OrdinalIgnoreCase))
+            {
+                gpuModeOverride = false;
+                Log4.Info("명령줄 GPU 모드 강제 비활성화: --nogpu");
+            }
+            else if (arg.StartsWith("--gpumode=", StringComparison.OrdinalIgnoreCase))
             {
                 var value = arg.Substring("--gpumode=".Length);
                 if (bool.TryParse(value, out bool gpuMode))

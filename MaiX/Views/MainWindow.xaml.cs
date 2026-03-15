@@ -1056,8 +1056,9 @@ public partial class MainWindow : FluentWindow
     {
         Log4.Debug("MainWindow_Loaded 시작");
 
-        // GPU 모드 체크마크 초기화
+        // GPU 모드 체크마크 및 타이틀바 아이콘 초기화
         UpdateGpuModeCheckmark();
+        UpdateGpuIcon();
 
         // 저장된 동기화 설정 로드
         LoadSavedSyncSettings();
@@ -9500,6 +9501,38 @@ public partial class MainWindow : FluentWindow
         themeService.ToggleTheme();
         UpdateThemeIcon();
         SyncSettingsUIFromMenu(); // 설정 UI 동기화
+    }
+
+    /// <summary>
+    /// GPU 모드 토글 버튼 클릭
+    /// </summary>
+    private void GpuToggleButton_Click(object sender, RoutedEventArgs e)
+    {
+        Log4.Info("타이틀바: GPU 모드 토글");
+        Services.Theme.RenderModeService.Instance.ToggleGpuMode();
+        UpdateGpuIcon();
+        UpdateGpuModeCheckmark(); // 메뉴 체크마크 동기화
+        SyncSettingsUIFromMenu(); // 설정 UI 동기화
+
+        // 사용자에게 재시작 안내
+        var currentMode = Services.Theme.RenderModeService.Instance.GetCurrentModeString();
+        _viewModel.StatusMessage = $"렌더링 모드가 {currentMode}로 변경되었습니다. 완전 적용을 위해 앱을 재시작하세요.";
+    }
+
+    /// <summary>
+    /// GPU 아이콘 업데이트 (타이틀바 버튼)
+    /// </summary>
+    private void UpdateGpuIcon()
+    {
+        var isGpuMode = Services.Theme.RenderModeService.Instance.IsGpuMode;
+        // GPU 모드: Desktop 아이콘 (하드웨어), CPU 모드: Board 아이콘 (소프트웨어)
+        GpuIcon.Symbol = isGpuMode
+            ? Wpf.Ui.Controls.SymbolRegular.Desktop24
+            : Wpf.Ui.Controls.SymbolRegular.Board24;
+
+        GpuToggleButton.ToolTip = isGpuMode
+            ? "GPU 렌더링 (클릭하여 CPU로 전환)"
+            : "CPU 렌더링 (클릭하여 GPU로 전환)";
     }
 
     /// <summary>
