@@ -10,7 +10,7 @@
 ┌─────────────────────────────────────────────────────────────────┐
 │  Tier 1: CLAUDE.md (이 파일) — 범용 규칙                         │
 │  ● 모든 프로젝트에 공통 적용되는 규칙/정책/프로세스              │
-│  ● 스킬 전체 목록 및 설명 (범용 45개)                             │
+│  ● 스킬 전체 목록 및 설명 (범용 47개)                             │
 │  ● 실행 환경, 병렬화 정책, MCP 설정 등 범용 인프라               │
 ├─────────────────────────────────────────────────────────────────┤
 │  Tier 2: PROJECT.md — 프로젝트 고유 정보                         │
@@ -125,7 +125,7 @@ WSL에서_실행 (기본):
 
 ---
 
-## 스킬 시스템 (범용 45개 + 프로젝트스킬 10개)
+## 스킬 시스템 (범용 47개 + 프로젝트스킬 10개)
 
 **모든 사용자 메시지에 메인이 6-way 판단** (판단만 수행. kO 로딩은 수정 작업 시만 — 질문/계획은 kO 미경유) → 질문/계획/퀵/라이트/미디엄/풀
 
@@ -216,7 +216,7 @@ WSL에서_실행 (기본):
 |------|------|
 | **kO** | 오케스트레이션 실행 지침 — 메인이 Skill('kO')로 로딩. 퀵/코드수정 분류 + 파이프라인 순서(kPlan→kDev→kTest→kDone) + 팀에이전트 spawn 지침 제공. **팀에이전트로 spawn 절대 금지 (L-214)** |
 
-### 메인 + 서브스킬 (25개)
+### 메인 + 서브스킬 (27개)
 
 > **파이프라인 순서 엄수 (L-008)**: 메인(kO 지침)이 kPlan(1) → kDev(2) → kTest(3) → kDone(4) 순서로 팀에이전트 spawn. 이전 단계 완료 전 다음 진입 금지. **진입 기반 상태 전환**: spawn 직전에 해당 단계 상태 설정 (비정상종료 시 실패 단계 식별 가능). **실패 시 역라우팅 허용**: DEV→PLAN, TEST→DEV, DONE→TEST (1단계 역방향만, 최대 2회 — `/tmp/claude_reroute_counter_${SHORT_SID}` 카운터 파일로 강제).
 
@@ -226,8 +226,8 @@ kPlan(메인) → kPlan_deep(심층설계) / kPlan_sim(시뮬레이션) / kPlan_
 #### kDev 계열 (6개) — 코드 구현
 kDev(메인) → kDev_parallel(병렬디스패치) / kDev_review(코드리뷰) / kDev_simplify(단순화) / kDev_impact(영향도) / kDev_lock(파일Lock)
 
-#### kTest 계열 (5개) — 빌드/테스트
-kTest(메인) → kTest_build(빌드) / kTest_deploy(배포) / kTest_run(테스트실행) / kTest_quality(품질검증)
+#### kTest 계열 (7개) — 빌드/테스트
+kTest(메인) → kTest_build(빌드) / kTest_deploy(배포) / kTest_run(테스트실행) / kTest_quality(품질검증) / kTestUI(UI테스트) / kTestUIWinforms(WinForms자동화)
 
 #### kDone 계열 (10개) — 작업 마무리
 kDone(메인) → kDone_review(프로세스개선) / kDone_trans(우회감지) / kDone_hooks(Hook강제화) / kDone_skills(스킬업데이트) / kDone_cleanup(코드정리) / kDone_docs(문서) / kDone_git(커밋) / kFinish(파이프라인마무리) / kFinish_cleanup(팀정리)
