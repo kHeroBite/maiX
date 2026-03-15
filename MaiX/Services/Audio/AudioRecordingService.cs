@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using NAudio.CoreAudioApi;
 using NAudio.Wave;
 using Serilog;
 using MaiX.Utils;
@@ -14,7 +15,7 @@ public class AudioRecordingService : IDisposable
 {
     private static readonly ILogger _logger = Log.ForContext<AudioRecordingService>();
 
-    private WaveInEvent? _waveIn;
+    private IWaveIn? _waveIn;
     private WaveFileWriter? _writer;
     private string? _currentFilePath;
     private bool _isRecording;
@@ -140,15 +141,10 @@ public class AudioRecordingService : IDisposable
 
             _currentFilePath = Path.Combine(RecordingsDirectory, fileName);
 
-            // WaveInEvent 설정 (마이크 지원 포맷 자동감지)
-            var bestFormat = GetBestWaveFormat(0);
-            _waveIn = new WaveInEvent
-            {
-                WaveFormat = bestFormat,
-                BufferMilliseconds = 50
-            };
-            _logger.Information("[녹음] WaveFormat 선택: {SampleRate}Hz, {BitsPerSample}bit, {Channels}ch",
-                bestFormat.SampleRate, bestFormat.BitsPerSample, bestFormat.Channels);
+            // WasapiCapture 설정 (WASAPI — waveInOpen InvalidParameter 우회)
+            _waveIn = new WasapiCapture();
+            _logger.Information("[녹음] WasapiCapture WaveFormat: {SampleRate}Hz, {BitsPerSample}bit, {Channels}ch",
+                _waveIn.WaveFormat.SampleRate, _waveIn.WaveFormat.BitsPerSample, _waveIn.WaveFormat.Channels);
 
             _writer = new WaveFileWriter(_currentFilePath, _waveIn.WaveFormat);
 
@@ -258,10 +254,11 @@ public class AudioRecordingService : IDisposable
     public static List<string> GetAvailableDevices()
     {
         var devices = new List<string>();
-        for (int i = 0; i < WaveInEvent.DeviceCount; i++)
+        var enumerator = new NAudio.CoreAudioApi.MMDeviceEnumerator();
+        foreach (var device in enumerator.EnumerateAudioEndPoints(
+            NAudio.CoreAudioApi.DataFlow.Capture, NAudio.CoreAudioApi.DeviceState.Active))
         {
-            var caps = WaveInEvent.GetCapabilities(i);
-            devices.Add(caps.ProductName);
+            devices.Add(device.FriendlyName);
         }
         return devices;
     }
@@ -274,14 +271,28 @@ public class AudioRecordingService : IDisposable
         {
             _writer.Write(e.Buffer, 0, e.BytesRecorded);
 
-            // 볼륨 레벨 계산
+            // 볼륨 레벨 계산 (WaveFormat에 따라 분기)
             float maxVolume = 0;
-            for (int i = 0; i < e.BytesRecorded; i += 2)
+            if (_waveIn?.WaveFormat.BitsPerSample == 32 && _waveIn.WaveFormat.Encoding == WaveFormatEncoding.IeeeFloat)
             {
-                short sample = (short)(e.Buffer[i + 1] << 8 | e.Buffer[i]);
-                float sampleF = sample / 32768f;
-                if (sampleF < 0) sampleF = -sampleF;
-                if (sampleF > maxVolume) maxVolume = sampleF;
+                // 32bit IEEE Float (WasapiCapture 기본)
+                for (int i = 0; i + 3 < e.BytesRecorded; i += 4)
+                {
+                    float sampleF = BitConverter.ToSingle(e.Buffer, i);
+                    if (sampleF < 0) sampleF = -sampleF;
+                    if (sampleF > maxVolume) maxVolume = sampleF;
+                }
+            }
+            else
+            {
+                // 16bit PCM
+                for (int i = 0; i + 1 < e.BytesRecorded; i += 2)
+                {
+                    short sample = (short)(e.Buffer[i + 1] << 8 | e.Buffer[i]);
+                    float sampleF = sample / 32768f;
+                    if (sampleF < 0) sampleF = -sampleF;
+                    if (sampleF > maxVolume) maxVolume = sampleF;
+                }
             }
 
             VolumeChanged?.Invoke(maxVolume);
@@ -402,10 +413,10 @@ public class AudioRecordingService : IDisposable
     /// 마이크 장치가 지원하는 최적 WaveFormat 자동 감지
     /// </summary>
     /// <param name="deviceNumber">마이크 장치 번호</param>
-    /// <returns>지원되는 WaveFormat (기본: 16000Hz, 16bit, Mono)</returns>
+    /// <returns>지원되는 WaveFormat (기본: 44100Hz, 16bit, Mono)</returns>
     private WaveFormat GetBestWaveFormat(int deviceNumber)
     {
-        var candidateRates = new[] { 16000, 44100, 48000, 22050, 8000 };
+        var candidateRates = new[] { 44100, 48000, 22050, 11025, 8000 };
         var candidateChannels = new[] { 1, 2 };
 
         try
@@ -426,10 +437,10 @@ public class AudioRecordingService : IDisposable
         }
         catch (Exception ex)
         {
-            _logger.Warning(ex, "[녹음] WaveFormat 자동감지 실패, 기본값(16000Hz, Mono) 사용");
+            _logger.Warning(ex, "[녹음] WaveFormat 자동감지 실패, 기본값(44100Hz, Mono) 사용");
         }
 
-        return new WaveFormat(16000, 16, 1);
+        return new WaveFormat(44100, 16, 1);
     }
 
     /// <summary>
@@ -448,6 +459,8 @@ public class AudioRecordingService : IDisposable
             { (22050, 2), SupportedWaveFormat.WAVE_FORMAT_2S16 },
             { (44100, 1), SupportedWaveFormat.WAVE_FORMAT_4M16 },
             { (44100, 2), SupportedWaveFormat.WAVE_FORMAT_4S16 },
+            { (48000, 1), SupportedWaveFormat.WAVE_FORMAT_48M16 },
+            { (48000, 2), SupportedWaveFormat.WAVE_FORMAT_48S16 },
         };
 
         // 매핑에 있는 포맷은 정확히 확인
@@ -456,21 +469,8 @@ public class AudioRecordingService : IDisposable
             return capabilities.SupportsWaveFormat(supportedFormat);
         }
 
-        // 매핑에 없는 포맷(16000, 48000 등)은 실제 초기화 시도로 확인
-        try
-        {
-            using var testWaveIn = new WaveInEvent
-            {
-                DeviceNumber = 0,
-                WaveFormat = new WaveFormat(sampleRate, 16, channels)
-            };
-            // WaveInEvent 생성 성공 = 포맷 지원 가능
-            return true;
-        }
-        catch
-        {
-            return false;
-        }
+        // formatMap에 없는 포맷은 지원 불가로 판정 (WaveInEvent 생성만으로는 waveInOpen 미호출되어 검증 불가)
+        return false;
     }
 
     /// <summary>
