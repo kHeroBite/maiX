@@ -53,6 +53,7 @@
                 <StackPanel Grid.Column="0" Orientation="Horizontal">
                     <!-- 저장 버튼 -->
                     <ui:Button x:Name="SaveButton"
+                              AutomationProperties.AutomationId="SaveButton"
                               Appearance="Primary"
                               Click="SaveButton_Click"
                               Margin="4,0"
@@ -77,6 +78,7 @@
 
                     <!-- 되풀이 항목 -->
                     <ui:Button x:Name="RecurrenceButton"
+                              AutomationProperties.AutomationId="RecurrenceButton"
                               Appearance="Secondary"
                               Click="RecurrenceButton_Click"
                               Margin="4,0"
@@ -121,6 +123,7 @@
 
                     <!-- 삭제 버튼 (수정 모드에서만 표시) -->
                     <ui:Button x:Name="DeleteButton"
+                              AutomationProperties.AutomationId="DeleteButton"
                               Appearance="Danger"
                               Click="DeleteButton_Click"
                               Margin="4,0"
@@ -156,6 +159,7 @@
                             </Grid.ColumnDefinitions>
                             <ui:SymbolIcon Grid.Column="0" Symbol="Edit20" Style="{StaticResource FieldIconStyle}"/>
                             <ui:TextBox x:Name="SubjectTextBox"
+                                       AutomationProperties.AutomationId="SubjectTextBox"
                                        Grid.Column="1"
                                        PlaceholderText="제목 추가"
                                        FontSize="16"
@@ -174,6 +178,7 @@
                             </Grid.ColumnDefinitions>
                             <ui:SymbolIcon Grid.Column="0" Symbol="People24" Style="{StaticResource FieldIconStyle}"/>
                             <ui:TextBox x:Name="AttendeesTextBox"
+                                       AutomationProperties.AutomationId="AttendeesTextBox"
                                        Grid.Column="1"
                                        PlaceholderText="필수 참석자 초대"
                                        BorderThickness="0"
@@ -204,6 +209,7 @@
                             </Grid.ColumnDefinitions>
                             <ui:SymbolIcon Grid.Column="0" Symbol="PersonAdd24" Style="{StaticResource FieldIconStyle}"/>
                             <ui:TextBox x:Name="OptionalAttendeesTextBox"
+                                       AutomationProperties.AutomationId="OptionalAttendeesTextBox"
                                        Grid.Column="1"
                                        PlaceholderText="선택적 참석자"
                                        BorderThickness="0"
@@ -230,9 +236,11 @@
                             <!-- 시작 날짜/시간 -->
                             <StackPanel Grid.Column="1" Grid.Row="0" Orientation="Horizontal" Margin="0,0,0,8">
                                 <DatePicker x:Name="StartDatePicker"
+                                           AutomationProperties.AutomationId="StartDatePicker"
                                            Width="160"
                                            Margin="0,0,8,0"/>
                                 <ui:TextBox x:Name="StartTimeTextBox"
+                                           AutomationProperties.AutomationId="StartTimeTextBox"
                                            Width="100"
                                            PlaceholderText="오후 9:00"
                                            HorizontalContentAlignment="Center"
@@ -240,6 +248,7 @@
                                            LostFocus="TimeTextBox_LostFocus"/>
                                 <TextBlock Text=" - " VerticalAlignment="Center" Margin="8,0"/>
                                 <ui:TextBox x:Name="EndTimeTextBox"
+                                           AutomationProperties.AutomationId="EndTimeTextBox"
                                            Width="100"
                                            PlaceholderText="오후 9:30"
                                            HorizontalContentAlignment="Center"
@@ -256,6 +265,7 @@
                             <!-- 종일/스케줄러 버튼 -->
                             <StackPanel Grid.Column="2" Grid.Row="0" Grid.RowSpan="2" Orientation="Horizontal" VerticalAlignment="Top">
                                 <CheckBox x:Name="IsAllDayCheckBox"
+                                         AutomationProperties.AutomationId="IsAllDayCheckBox"
                                          Content="종일"
                                          Margin="16,0,8,0"
                                          Checked="IsAllDayCheckBox_Changed"
@@ -285,6 +295,7 @@
                             </Grid.ColumnDefinitions>
                             <ui:SymbolIcon Grid.Column="0" Symbol="Location24" Style="{StaticResource FieldIconStyle}"/>
                             <ui:TextBox x:Name="LocationTextBox"
+                                       AutomationProperties.AutomationId="LocationTextBox"
                                        Grid.Column="1"
                                        PlaceholderText="회의실 또는 위치 추가"
                                        BorderThickness="0"
@@ -311,6 +322,7 @@
                             </Grid.ColumnDefinitions>
                             <ui:SymbolIcon Grid.Column="0" Symbol="Video24" Style="{StaticResource FieldIconStyle}"/>
                             <ui:ToggleSwitch x:Name="IsOnlineMeetingToggle"
+                                            AutomationProperties.AutomationId="IsOnlineMeetingToggle"
                                             Grid.Column="1"
                                             Margin="0,0,12,0"/>
                             <TextBlock Grid.Column="2"
@@ -329,6 +341,7 @@
                             </Grid.ColumnDefinitions>
                             <ui:SymbolIcon Grid.Column="0" Symbol="Alert24" Style="{StaticResource FieldIconStyle}"/>
                             <ComboBox x:Name="ReminderComboBox"
+                                     AutomationProperties.AutomationId="ReminderComboBox"
                                      Grid.Column="1"
                                      Width="150"
                                      SelectedIndex="2">
@@ -353,6 +366,7 @@
                             </Grid.ColumnDefinitions>
                             <ui:SymbolIcon Grid.Column="0" Symbol="Document24" Style="{StaticResource FieldIconStyle}" VerticalAlignment="Top"/>
                             <ui:TextBox x:Name="BodyTextBox"
+                                       AutomationProperties.AutomationId="BodyTextBox"
                                        Grid.Column="1"
                                        PlaceholderText="메모 또는 회의 안건을 입력하세요..."
                                        AcceptsReturn="True"

@@ -507,6 +507,7 @@
 
                         <!-- 폴더 선택 드롭다운 (모든 폴더, 기본 폴더들) -->
                         <ComboBox x:Name="SearchFolderComboBox"
+                                  AutomationProperties.AutomationId="SearchFolderComboBox"
                                   Grid.Column="0"
                                   Width="140"
                                   Height="32"
@@ -528,6 +529,7 @@
 
                         <!-- 검색창 (창 크기에 따라 축소/확장, 최소 100px) -->
                         <ui:TextBox x:Name="TitleBarSearchBox"
+                                    AutomationProperties.AutomationId="TitleBarSearchBox"
                                     Grid.Column="1"
                                     PlaceholderText="🔍 메일 검색 (Ctrl+K)"
                                     Text="{Binding SearchKeyword, UpdateSourceTrigger=PropertyChanged}"
@@ -1176,6 +1178,7 @@
                     <!-- ===== 상단 그룹: 핵심 기능 ===== -->
                     <!-- 메일 아이콘 (#0078D4 Outlook Blue) -->
                     <RadioButton x:Name="NavMailButton"
+                                 AutomationProperties.AutomationId="NavMailButton"
                                  IsChecked="True"
                                  GroupName="NavGroup"
                                  Style="{StaticResource NavIconRadioButtonStyle}"
@@ -1186,6 +1189,7 @@
 
                     <!-- 캘린더 아이콘 (#0078D4 Calendar Blue) -->
                     <RadioButton x:Name="NavCalendarButton"
+                                 AutomationProperties.AutomationId="NavCalendarButton"
                                  GroupName="NavGroup"
                                  Style="{StaticResource NavIconRadioButtonStyle}"
                                  Checked="NavCalendarButton_Checked"
@@ -1195,6 +1199,7 @@
 
                     <!-- 채팅 아이콘 (#6264A7 Teams Purple) -->
                     <RadioButton x:Name="NavChatButton"
+                                 AutomationProperties.AutomationId="NavChatButton"
                                  GroupName="NavGroup"
                                  Style="{StaticResource NavIconRadioButtonStyle}"
                                  Checked="NavChatButton_Checked"
@@ -1204,6 +1209,7 @@
 
                     <!-- 팀 아이콘 (#6264A7 Teams Purple) -->
                     <RadioButton x:Name="NavTeamsButton"
+                                 AutomationProperties.AutomationId="NavTeamsButton"
                                  GroupName="NavGroup"
                                  Style="{StaticResource NavIconRadioButtonStyle}"
                                  Checked="NavTeamsButton_Checked"
@@ -1213,6 +1219,7 @@
 
                     <!-- 활동 아이콘 (#F7630C Activity Orange) -->
                     <RadioButton x:Name="NavActivityButton"
+                                 AutomationProperties.AutomationId="NavActivityButton"
                                  GroupName="NavGroup"
                                  Style="{StaticResource NavIconRadioButtonStyle}"
                                  Checked="NavActivityButton_Checked"
@@ -1226,6 +1233,7 @@
                     <!-- ===== 중단 그룹: 생산성 도구 ===== -->
                     <!-- 플래너 아이콘 (#31752F Planner Green) -->
                     <RadioButton x:Name="NavPlannerButton"
+                                 AutomationProperties.AutomationId="NavPlannerButton"
                                  GroupName="NavGroup"
                                  Style="{StaticResource NavIconRadioButtonStyle}"
                                  Checked="NavPlannerButton_Checked"
@@ -1235,6 +1243,7 @@
 
                     <!-- OneDrive 아이콘 (#0078D4 OneDrive Blue) -->
                     <RadioButton x:Name="NavOneDriveButton"
+                                 AutomationProperties.AutomationId="NavOneDriveButton"
                                  GroupName="NavGroup"
                                  Style="{StaticResource NavIconRadioButtonStyle}"
                                  Checked="NavOneDriveButton_Checked"
@@ -1244,6 +1253,7 @@
 
                     <!-- OneNote 아이콘 (#7719AA OneNote Purple) -->
                     <RadioButton x:Name="NavOneNoteButton"
+                                 AutomationProperties.AutomationId="NavOneNoteButton"
                                  GroupName="NavGroup"
                                  Style="{StaticResource NavIconRadioButtonStyle}"
                                  Checked="NavOneNoteButton_Checked"
@@ -1253,6 +1263,7 @@
 
                     <!-- 통화 아이콘 (#0078D4 Calling Blue) -->
                     <RadioButton x:Name="NavCallsButton"
+                                 AutomationProperties.AutomationId="NavCallsButton"
                                  GroupName="NavGroup"
                                  Style="{StaticResource NavIconRadioButtonStyle}"
                                  Checked="NavCallsButton_Checked"
@@ -1264,6 +1275,7 @@
                 <!-- 하단 설정 아이콘 -->
                 <StackPanel Grid.Row="1" Margin="0,0,0,8">
                     <RadioButton x:Name="NavSettingsButton"
+                                 AutomationProperties.AutomationId="NavSettingsButton"
                                  GroupName="NavGroup"
                                  Style="{StaticResource NavIconRadioButtonStyle}"
                                  Checked="NavSettingsButton_Checked"
@@ -1306,6 +1318,7 @@
                     <StackPanel>
                         <!-- 즐겨찾기 폴더 목록 (드래그&드롭 순서 변경 지원) -->
                         <ListBox x:Name="FavoriteListBox"
+                                 AutomationProperties.AutomationId="FavoriteListBox"
                                  ItemsSource="{Binding FavoriteFolders}"
                                  BorderThickness="0"
                                  Background="Transparent"
@@ -1818,6 +1831,7 @@
                         <!-- 새 메일 / 새로고침 / AI분석 / 메일동기화 버튼 -->
                         <StackPanel Grid.Column="1" Orientation="Horizontal">
                             <ui:Button x:Name="NewMailButton"
+                                       AutomationProperties.AutomationId="NewMailButton"
                                        Icon="{ui:SymbolIcon MailAdd24}"
                                        ToolTip="새 메일"
                                        Appearance="Primary"
@@ -1917,6 +1931,7 @@
                 <!-- 메일 리스트 -->
                 <ListBox Grid.Row="1"
                          x:Name="EmailListBox"
+                         AutomationProperties.AutomationId="EmailListBox"
                          Margin="0,36,0,0"
                          ItemsSource="{Binding Emails}"
                          SelectedItem="{Binding SelectedEmail}"
@@ -2644,6 +2659,7 @@
                     <StackPanel Grid.Column="0" Orientation="Horizontal">
                         <!-- 회신 버튼 -->
                         <ui:Button x:Name="ReplyButton"
+                                   AutomationProperties.AutomationId="ReplyButton"
                                    ToolTip="회신"
                                    Appearance="Secondary"
                                    Width="36" Height="36"
@@ -2654,6 +2670,7 @@
                         </ui:Button>
                         <!-- 전체 회신 버튼 -->
                         <ui:Button x:Name="ReplyAllButton"
+                                   AutomationProperties.AutomationId="ReplyAllButton"
                                    ToolTip="전체 회신"
                                    Appearance="Secondary"
                                    Width="36" Height="36"
@@ -2664,6 +2681,7 @@
                         </ui:Button>
                         <!-- 전달 버튼 -->
                         <ui:Button x:Name="ForwardButton"
+                                   AutomationProperties.AutomationId="ForwardButton"
                                    ToolTip="전달"
                                    Appearance="Secondary"
                                    Width="36" Height="36"
@@ -3012,6 +3030,7 @@
                         <!-- 새 일정 버튼 -->
                         <Border Grid.Row="3" Padding="12,8,12,12">
                             <ui:Button x:Name="NewEventButton"
+                                       AutomationProperties.AutomationId="NewEventButton"
                                        Appearance="Primary"
                                        HorizontalAlignment="Stretch"
                                        Click="NewEventButton_Click">
@@ -3752,6 +3771,7 @@
 
                                         <!-- 텍스트 입력 -->
                                         <TextBox x:Name="ChatMessageInput" Grid.Row="0"
+                                                 AutomationProperties.AutomationId="ChatMessageInput"
                                                  Background="Transparent" BorderThickness="0"
                                                  AcceptsReturn="True" TextWrapping="Wrap"
                                                  MinHeight="24" MaxHeight="120"
@@ -3805,6 +3825,7 @@
 
                                             <!-- 오른쪽: 전송 버튼 -->
                                             <ui:Button x:Name="ChatSendButton" Grid.Column="1"
+                                                       AutomationProperties.AutomationId="ChatSendButton"
                                                        Appearance="Primary" Padding="8,4"
                                                        Click="ChatSendButton_Click" ToolTip="전송 (Enter)">
                                                 <ui:SymbolIcon Symbol="Send24" FontSize="16"/>

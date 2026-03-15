@@ -40,6 +40,7 @@
                                    FontWeight="SemiBold"/>
 
                         <ComboBox x:Name="DefaultProviderComboBox"
+                                  AutomationProperties.AutomationId="DefaultProviderComboBox"
                                   Grid.Column="1"
                                   Width="200"
                                   HorizontalAlignment="Left"
@@ -75,9 +76,11 @@
                                 </Grid.ColumnDefinitions>
                                 <TextBlock Text="API Key" VerticalAlignment="Center"/>
                                 <ui:PasswordBox x:Name="ClaudeApiKeyBox" Grid.Column="1"
+                                               AutomationProperties.AutomationId="ClaudeApiKeyBox"
                                                PlaceholderText="sk-ant-..."
                                                RevealButtonEnabled="True"/>
                                 <ui:Button x:Name="ClaudeTestButton" Grid.Column="2"
+                                           AutomationProperties.AutomationId="ClaudeTestButton"
                                            Content="테스트" Margin="8,0,0,0"
                                            Width="70" Click="ClaudeTestButton_Click"/>
                             </Grid>
@@ -88,6 +91,7 @@
                                 </Grid.ColumnDefinitions>
                                 <TextBlock Text="Model" VerticalAlignment="Center"/>
                                 <ComboBox x:Name="ClaudeModelComboBox" Grid.Column="1"
+                                          AutomationProperties.AutomationId="ClaudeModelComboBox"
                                           IsEnabled="False"
                                           />
                             </Grid>
@@ -103,6 +107,7 @@
                                     </Grid.ColumnDefinitions>
                                     <TextBlock Text="Base URL" VerticalAlignment="Center"/>
                                     <ui:TextBox x:Name="ClaudeBaseUrlBox" Grid.Column="1"
+                                               AutomationProperties.AutomationId="ClaudeBaseUrlBox"
                                                Text="https://api.anthropic.com"/>
                                 </Grid>
                             </Expander>
@@ -132,9 +137,11 @@
                                 </Grid.ColumnDefinitions>
                                 <TextBlock Text="API Key" VerticalAlignment="Center"/>
                                 <ui:PasswordBox x:Name="OpenAIApiKeyBox" Grid.Column="1"
+                                               AutomationProperties.AutomationId="OpenAIApiKeyBox"
                                                PlaceholderText="sk-..."
                                                RevealButtonEnabled="True"/>
                                 <ui:Button x:Name="OpenAITestButton" Grid.Column="2"
+                                           AutomationProperties.AutomationId="OpenAITestButton"
                                            Content="테스트" Margin="8,0,0,0"
                                            Width="70" Click="OpenAITestButton_Click"/>
                             </Grid>
@@ -145,6 +152,7 @@
                                 </Grid.ColumnDefinitions>
                                 <TextBlock Text="Model" VerticalAlignment="Center"/>
                                 <ComboBox x:Name="OpenAIModelComboBox" Grid.Column="1"
+                                          AutomationProperties.AutomationId="OpenAIModelComboBox"
                                           IsEnabled="False"
                                           />
                             </Grid>
@@ -160,6 +168,7 @@
                                     </Grid.ColumnDefinitions>
                                     <TextBlock Text="Base URL" VerticalAlignment="Center"/>
                                     <ui:TextBox x:Name="OpenAIBaseUrlBox" Grid.Column="1"
+                                               AutomationProperties.AutomationId="OpenAIBaseUrlBox"
                                                Text="https://api.openai.com/v1"/>
                                 </Grid>
                             </Expander>
@@ -189,9 +198,11 @@
                                 </Grid.ColumnDefinitions>
                                 <TextBlock Text="API Key" VerticalAlignment="Center"/>
                                 <ui:PasswordBox x:Name="GeminiApiKeyBox" Grid.Column="1"
+                                               AutomationProperties.AutomationId="GeminiApiKeyBox"
                                                PlaceholderText="AIzaSy..."
                                                RevealButtonEnabled="True"/>
                                 <ui:Button x:Name="GeminiTestButton" Grid.Column="2"
+                                           AutomationProperties.AutomationId="GeminiTestButton"
                                            Content="테스트" Margin="8,0,0,0"
                                            Width="70" Click="GeminiTestButton_Click"/>
                             </Grid>
@@ -202,6 +213,7 @@
                                 </Grid.ColumnDefinitions>
                                 <TextBlock Text="Model" VerticalAlignment="Center"/>
                                 <ComboBox x:Name="GeminiModelComboBox" Grid.Column="1"
+                                          AutomationProperties.AutomationId="GeminiModelComboBox"
                                           IsEnabled="False"
                                           />
                             </Grid>
@@ -217,6 +229,7 @@
                                     </Grid.ColumnDefinitions>
                                     <TextBlock Text="Base URL" VerticalAlignment="Center"/>
                                     <ui:TextBox x:Name="GeminiBaseUrlBox" Grid.Column="1"
+                                               AutomationProperties.AutomationId="GeminiBaseUrlBox"
                                                Text="https://generativelanguage.googleapis.com/v1beta"/>
                                 </Grid>
                             </Expander>
@@ -246,8 +259,10 @@
                                 </Grid.ColumnDefinitions>
                                 <TextBlock Text="Base URL" VerticalAlignment="Center"/>
                                 <ui:TextBox x:Name="OllamaBaseUrlBox" Grid.Column="1"
+                                           AutomationProperties.AutomationId="OllamaBaseUrlBox"
                                            Text="http://localhost:11434"/>
                                 <ui:Button x:Name="OllamaTestButton" Grid.Column="2"
+                                           AutomationProperties.AutomationId="OllamaTestButton"
                                            Content="테스트" Margin="8,0,0,0"
                                            Width="70" Click="OllamaTestButton_Click"/>
                             </Grid>
@@ -258,6 +273,7 @@
                                 </Grid.ColumnDefinitions>
                                 <TextBlock Text="Model" VerticalAlignment="Center"/>
                                 <ComboBox x:Name="OllamaModelComboBox" Grid.Column="1"
+                                          AutomationProperties.AutomationId="OllamaModelComboBox"
                                           IsEnabled="False"
                                           />
                             </Grid>
@@ -287,8 +303,10 @@
                                 </Grid.ColumnDefinitions>
                                 <TextBlock Text="Base URL" VerticalAlignment="Center"/>
                                 <ui:TextBox x:Name="LMStudioBaseUrlBox" Grid.Column="1"
+                                           AutomationProperties.AutomationId="LMStudioBaseUrlBox"
                                            Text="http://localhost:1234/v1"/>
                                 <ui:Button x:Name="LMStudioTestButton" Grid.Column="2"
+                                           AutomationProperties.AutomationId="LMStudioTestButton"
                                            Content="테스트" Margin="8,0,0,0"
                                            Width="70" Click="LMStudioTestButton_Click"/>
                             </Grid>
@@ -299,6 +317,7 @@
                                 </Grid.ColumnDefinitions>
                                 <TextBlock Text="Model" VerticalAlignment="Center"/>
                                 <ComboBox x:Name="LMStudioModelComboBox" Grid.Column="1"
+                                          AutomationProperties.AutomationId="LMStudioModelComboBox"
                                           IsEnabled="False"
                                           />
                             </Grid>
@@ -331,6 +350,7 @@
                                 </Grid.ColumnDefinitions>
                                 <TextBlock Text="API Key" VerticalAlignment="Center"/>
                                 <ui:PasswordBox x:Name="TinyMCEApiKeyBox" Grid.Column="1"
+                                               AutomationProperties.AutomationId="TinyMCEApiKeyBox"
                                                PlaceholderText="your-api-key..."
                                                RevealButtonEnabled="True"/>
                             </Grid>
@@ -363,12 +383,15 @@
                            FontSize="12"/>
 
                 <StackPanel Grid.Column="1" Orientation="Horizontal">
-                    <ui:Button Content="취소"
+                    <ui:Button AutomationProperties.AutomationId="CancelButton"
+                               Content="취소"
                                Appearance="Secondary"
                                Width="100"
                                Margin="0,0,8,0"
                                Click="CancelButton_Click"/>
-                    <ui:Button x:Name="SaveButton" Content="저장"
+                    <ui:Button x:Name="SaveButton"
+                               AutomationProperties.AutomationId="SaveButton"
+                               Content="저장"
                                Appearance="Primary"
                                Width="100"
                                IsEnabled="False"

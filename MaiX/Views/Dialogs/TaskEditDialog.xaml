@@ -66,6 +66,7 @@
                 <StackPanel Grid.Column="0" Orientation="Horizontal">
                     <!-- 저장 버튼 -->
                     <ui:Button x:Name="SaveButton"
+                              AutomationProperties.AutomationId="SaveButton"
                               Appearance="Primary"
                               Click="SaveButton_Click"
                               Margin="4,0"
@@ -80,6 +81,7 @@
 
                     <!-- 완료 토글 -->
                     <ui:Button x:Name="CompleteButton"
+                              AutomationProperties.AutomationId="CompleteButton"
                               Appearance="Secondary"
                               Click="CompleteButton_Click"
                               Margin="4,0"
@@ -94,6 +96,7 @@
                 <!-- 오른쪽: 삭제 버튼 -->
                 <ui:Button Grid.Column="2"
                           x:Name="DeleteButton"
+                          AutomationProperties.AutomationId="DeleteButton"
                           Appearance="Secondary"
                           Click="DeleteButton_Click"
                           Margin="4,0"
@@ -118,6 +121,7 @@
                         </Grid.ColumnDefinitions>
                         <ui:SymbolIcon Grid.Column="0" Symbol="TaskListSquareLtr24" Style="{StaticResource FieldIconStyle}"/>
                         <ui:TextBox x:Name="TitleTextBox"
+                                   AutomationProperties.AutomationId="TitleTextBox"
                                    Grid.Column="1"
                                    PlaceholderText="작업 제목"
                                    FontSize="16"
@@ -139,6 +143,7 @@
                         <ui:SymbolIcon Grid.Column="0" Symbol="Column24" Style="{StaticResource FieldIconStyle}"/>
                         <TextBlock Grid.Column="1" Text="버킷" VerticalAlignment="Center"/>
                         <ComboBox x:Name="BucketComboBox"
+                                 AutomationProperties.AutomationId="BucketComboBox"
                                  Grid.Column="2"
                                  HorizontalAlignment="Stretch"
                                  DisplayMemberPath="Name"
@@ -157,6 +162,7 @@
                         <ui:SymbolIcon Grid.Column="0" Symbol="TaskListSquareLtr24" Style="{StaticResource FieldIconStyle}"/>
                         <TextBlock Grid.Column="1" Text="진행률" VerticalAlignment="Center"/>
                         <ComboBox x:Name="ProgressComboBox"
+                                 AutomationProperties.AutomationId="ProgressComboBox"
                                  Grid.Column="2"
                                  HorizontalAlignment="Stretch"
                                  SelectionChanged="ProgressComboBox_SelectionChanged">
@@ -178,6 +184,7 @@
                         <ui:SymbolIcon Grid.Column="0" Symbol="Flag24" Style="{StaticResource FieldIconStyle}"/>
                         <TextBlock Grid.Column="1" Text="우선 순위" VerticalAlignment="Center"/>
                         <ComboBox x:Name="PriorityComboBox"
+                                 AutomationProperties.AutomationId="PriorityComboBox"
                                  Grid.Column="2"
                                  HorizontalAlignment="Stretch"
                                  SelectionChanged="PriorityComboBox_SelectionChanged">
@@ -220,6 +227,7 @@
                         <ui:SymbolIcon Grid.Column="0" Symbol="CalendarLtr24" Style="{StaticResource FieldIconStyle}"/>
                         <TextBlock Grid.Column="1" Text="시작 날짜" VerticalAlignment="Center"/>
                         <DatePicker x:Name="StartDatePicker"
+                                   AutomationProperties.AutomationId="StartDatePicker"
                                    Grid.Column="2"
                                    HorizontalAlignment="Stretch"
                                    SelectedDateChanged="StartDatePicker_SelectedDateChanged"/>
@@ -237,6 +245,7 @@
                         <ui:SymbolIcon Grid.Column="0" Symbol="CalendarCheckmark24" Style="{StaticResource FieldIconStyle}"/>
                         <TextBlock Grid.Column="1" Text="기한" VerticalAlignment="Center"/>
                         <DatePicker x:Name="DueDatePicker"
+                                   AutomationProperties.AutomationId="DueDatePicker"
                                    Grid.Column="2"
                                    HorizontalAlignment="Stretch"
                                    SelectedDateChanged="DueDatePicker_SelectedDateChanged"/>
@@ -269,6 +278,7 @@
                 <!-- 카드에 표시 체크박스 -->
                 <Border Padding="16,8">
                     <CheckBox x:Name="ShowNotesOnCardCheckBox"
+                             AutomationProperties.AutomationId="ShowNotesOnCardCheckBox"
                              Content="카드에 표시"
                              Checked="ShowNotesOnCardCheckBox_Changed"
                              Unchecked="ShowNotesOnCardCheckBox_Changed"/>
@@ -334,6 +344,7 @@
                                 <ColumnDefinition Width="Auto"/>
                             </Grid.ColumnDefinitions>
                             <ui:TextBox x:Name="NewChecklistItemTextBox"
+                                       AutomationProperties.AutomationId="NewChecklistItemTextBox"
                                        Grid.Column="0"
                                        PlaceholderText="항목 추가"
                                        KeyDown="NewChecklistItemTextBox_KeyDown"/>
@@ -457,6 +468,7 @@
                                 <ColumnDefinition Width="Auto"/>
                             </Grid.ColumnDefinitions>
                             <ui:TextBox x:Name="NewCommentTextBox"
+                                       AutomationProperties.AutomationId="NewCommentTextBox"
                                        Grid.Column="0"
                                        PlaceholderText="댓글 추가..."
                                        KeyDown="NewCommentTextBox_KeyDown"/>

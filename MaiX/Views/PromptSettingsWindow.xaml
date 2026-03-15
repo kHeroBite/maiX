@@ -38,11 +38,13 @@
 
                 <TextBlock Grid.Row="0" Text="카테고리" FontWeight="SemiBold" Margin="0,0,0,4"/>
                 <ListBox x:Name="CategoryListBox" Grid.Row="1"
+                         AutomationProperties.AutomationId="CategoryListBox"
                          SelectionChanged="CategoryListBox_SelectionChanged"
                          MinHeight="100"/>
 
                 <TextBlock Grid.Row="2" Text="프롬프트" FontWeight="SemiBold" Margin="0,8,0,4"/>
                 <ListBox x:Name="PromptListBox" Grid.Row="3"
+                         AutomationProperties.AutomationId="PromptListBox"
                          DisplayMemberPath="Name"
                          SelectionChanged="PromptListBox_SelectionChanged"/>
             </Grid>
@@ -90,6 +92,7 @@
 
                     <!-- 템플릿 편집 -->
                     <ui:TextBox x:Name="TemplateTextBox" Grid.Row="3"
+                                AutomationProperties.AutomationId="TemplateTextBox"
                                 AcceptsReturn="True"
                                 TextWrapping="Wrap"
                                 VerticalScrollBarVisibility="Auto"
@@ -120,6 +123,7 @@
                         </Grid.ColumnDefinitions>
                         <TextBlock Text="활성화" VerticalAlignment="Center" FontWeight="SemiBold"/>
                         <ToggleButton x:Name="EnabledToggle" Grid.Column="1"
+                                      AutomationProperties.AutomationId="EnabledToggle"
                                       HorizontalAlignment="Left"
                                       Content="사용"/>
                     </Grid>
@@ -139,22 +143,26 @@
                 </Grid.ColumnDefinitions>
 
                 <StackPanel Orientation="Horizontal">
-                    <ui:Button Content="기본값 복원"
+                    <ui:Button AutomationProperties.AutomationId="RestoreDefaultButton"
+                               Content="기본값 복원"
                                Appearance="Secondary"
                                Click="RestoreDefaultButton_Click"/>
-                    <ui:Button Content="프롬프트 리로드"
+                    <ui:Button AutomationProperties.AutomationId="ReloadAllButton"
+                               Content="프롬프트 리로드"
                                Appearance="Secondary"
                                Margin="8,0,0,0"
                                Click="ReloadAllButton_Click"/>
                 </StackPanel>
 
                 <StackPanel Grid.Column="1" Orientation="Horizontal">
-                    <ui:Button Content="저장"
+                    <ui:Button AutomationProperties.AutomationId="SaveButton"
+                               Content="저장"
                                Appearance="Primary"
                                Width="100"
                                Margin="0,0,8,0"
                                Click="SaveButton_Click"/>
-                    <ui:Button Content="닫기"
+                    <ui:Button AutomationProperties.AutomationId="CloseButton"
+                               Content="닫기"
                                Appearance="Secondary"
                                Width="100"
                                Click="CloseButton_Click"/>

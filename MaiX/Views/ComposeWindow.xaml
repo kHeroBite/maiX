@@ -151,6 +151,7 @@
                 <!-- 왼쪽: 보내기 버튼 -->
                 <StackPanel Grid.Column="0" Orientation="Horizontal">
                     <ui:Button x:Name="SendButton"
+                              AutomationProperties.AutomationId="SendButton"
                               Icon="{ui:SymbolIcon Send24}"
                               Content="보내기"
                               Appearance="Primary"
@@ -163,6 +164,7 @@
                 <StackPanel Grid.Column="2" Orientation="Horizontal">
                     <!-- 중요도 드롭다운 -->
                     <ui:DropDownButton x:Name="ImportanceButton"
+                                       AutomationProperties.AutomationId="ImportanceButton"
                                        Content="중요도"
                                        Appearance="Secondary"
                                        Margin="0,0,4,0">
@@ -189,6 +191,7 @@
 
                     <!-- 첨부 버튼 -->
                     <ui:Button x:Name="AttachButton"
+                              AutomationProperties.AutomationId="AttachButton"
                               Icon="{ui:SymbolIcon Attach24}"
                               ToolTip="파일 첨부"
                               Appearance="Secondary"
@@ -197,6 +200,7 @@
 
                     <!-- 삭제 버튼 -->
                     <ui:Button x:Name="DiscardButton"
+                              AutomationProperties.AutomationId="DiscardButton"
                               Icon="{ui:SymbolIcon Delete24}"
                               ToolTip="삭제"
                               Appearance="Secondary"
@@ -238,6 +242,7 @@
 
                     <Grid Grid.Column="1">
                         <ui:TextBox x:Name="ToTextBox"
+                                   AutomationProperties.AutomationId="ToTextBox"
                                    Text="{Binding To, UpdateSourceTrigger=PropertyChanged}"
                                    PlaceholderText=""
                                    PreviewKeyDown="EmailTextBox_PreviewKeyDown"
@@ -307,6 +312,7 @@
 
                     <Grid Grid.Column="1">
                         <ui:TextBox x:Name="CcTextBox"
+                                   AutomationProperties.AutomationId="CcTextBox"
                                    Text="{Binding Cc, UpdateSourceTrigger=PropertyChanged}"
                                    PlaceholderText=""
                                    PreviewKeyDown="EmailTextBox_PreviewKeyDown"
@@ -357,6 +363,7 @@
 
                     <Grid Grid.Column="1">
                         <ui:TextBox x:Name="BccTextBox"
+                                   AutomationProperties.AutomationId="BccTextBox"
                                    Text="{Binding Bcc, UpdateSourceTrigger=PropertyChanged}"
                                    PlaceholderText=""
                                    PreviewKeyDown="EmailTextBox_PreviewKeyDown"
@@ -392,6 +399,7 @@
                 <!-- 제목 -->
                 <ui:TextBox Grid.Row="3"
                            x:Name="SubjectTextBox"
+                           AutomationProperties.AutomationId="SubjectTextBox"
                            Text="{Binding Subject, UpdateSourceTrigger=PropertyChanged}"
                            PlaceholderText="제목 추가"
                            FontSize="16"
