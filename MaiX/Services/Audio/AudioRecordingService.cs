@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Runtime.InteropServices;
 using NAudio.CoreAudioApi;
 using NAudio.Wave;
 using Serilog;
@@ -23,6 +24,11 @@ public class AudioRecordingService : IDisposable
     private DateTime _recordingStartTime;
     private TimeSpan _pausedDuration;
     private DateTime _pauseStartTime;
+
+    // 캡처 장치 원본 포맷 (float/PCM 판별용)
+    private WaveFormat? _captureFormat;
+    // 파일 저장용 포맷 (16kHz 16bit mono — STT 최적)
+    private static readonly WaveFormat _outputFormat = new(16000, 16, 1);
 
     // 실시간 STT용 버퍼
     private List<byte> _realtimeBuffer = new();
@@ -154,13 +160,16 @@ public class AudioRecordingService : IDisposable
                 _waveIn = new WasapiCapture();
             }
 
-            // AudioClient.Initialize ArgumentException 방지: 32bit float → 16bit PCM 변환
-            _waveIn.WaveFormat = new WaveFormat(_waveIn.WaveFormat.SampleRate, 16, _waveIn.WaveFormat.Channels);
+            // 캡처 장치 원본 포맷 저장 (OnDataAvailable에서 변환용)
+            _captureFormat = _waveIn.WaveFormat;
 
-            _logger.Information("[녹음] WasapiCapture WaveFormat: {SampleRate}Hz, {BitsPerSample}bit, {Channels}ch",
-                _waveIn.WaveFormat.SampleRate, _waveIn.WaveFormat.BitsPerSample, _waveIn.WaveFormat.Channels);
+            _logger.Information("[녹음] WasapiCapture 캡처 포맷: {SampleRate}Hz, {BitsPerSample}bit, {Channels}ch, Encoding={Encoding}",
+                _captureFormat.SampleRate, _captureFormat.BitsPerSample, _captureFormat.Channels, _captureFormat.Encoding);
+            _logger.Information("[녹음] 파일 저장 포맷: {SampleRate}Hz, {BitsPerSample}bit, {Channels}ch",
+                _outputFormat.SampleRate, _outputFormat.BitsPerSample, _outputFormat.Channels);
 
-            _writer = new WaveFileWriter(_currentFilePath, _waveIn.WaveFormat);
+            // WaveFileWriter는 STT 최적 포맷(16kHz 16bit mono)으로 생성
+            _writer = new WaveFileWriter(_currentFilePath, _outputFormat);
 
             _waveIn.DataAvailable += OnDataAvailable;
             _waveIn.RecordingStopped += OnRecordingStopped;
@@ -279,54 +288,109 @@ public class AudioRecordingService : IDisposable
 
     private void OnDataAvailable(object? sender, WaveInEventArgs e)
     {
-        if (_writer == null || _isPaused) return;
+        if (_writer == null || _isPaused || _captureFormat == null) return;
 
         try
         {
-            _writer.Write(e.Buffer, 0, e.BytesRecorded);
-
-            // 볼륨 레벨 계산 (WaveFormat에 따라 분기)
+            // 1) 캡처 데이터를 float 샘플 배열로 변환 + 볼륨 계산
+            float[] floatSamples;
             float maxVolume = 0;
-            if (_waveIn?.WaveFormat.BitsPerSample == 32 && _waveIn.WaveFormat.Encoding == WaveFormatEncoding.IeeeFloat)
+
+            if (_captureFormat.Encoding == WaveFormatEncoding.IeeeFloat && _captureFormat.BitsPerSample == 32)
             {
                 // 32bit IEEE Float (WasapiCapture 기본)
-                for (int i = 0; i + 3 < e.BytesRecorded; i += 4)
+                var span = MemoryMarshal.Cast<byte, float>(e.Buffer.AsSpan(0, e.BytesRecorded));
+                floatSamples = new float[span.Length];
+                for (int i = 0; i < span.Length; i++)
                 {
-                    float sampleF = BitConverter.ToSingle(e.Buffer, i);
-                    if (sampleF < 0) sampleF = -sampleF;
-                    if (sampleF > maxVolume) maxVolume = sampleF;
+                    floatSamples[i] = span[i];
+                    var abs = Math.Abs(span[i]);
+                    if (abs > maxVolume) maxVolume = abs;
                 }
             }
             else
             {
-                // 16bit PCM
-                for (int i = 0; i + 1 < e.BytesRecorded; i += 2)
+                // 16bit PCM → float 변환
+                int sampleCount = e.BytesRecorded / 2;
+                floatSamples = new float[sampleCount];
+                for (int i = 0; i < sampleCount; i++)
                 {
-                    short sample = (short)(e.Buffer[i + 1] << 8 | e.Buffer[i]);
-                    float sampleF = sample / 32768f;
-                    if (sampleF < 0) sampleF = -sampleF;
-                    if (sampleF > maxVolume) maxVolume = sampleF;
+                    short sample = (short)(e.Buffer[i * 2 + 1] << 8 | e.Buffer[i * 2]);
+                    floatSamples[i] = sample / 32768f;
+                    var abs = Math.Abs(floatSamples[i]);
+                    if (abs > maxVolume) maxVolume = abs;
                 }
             }
 
             VolumeChanged?.Invoke(maxVolume);
             DurationChanged?.Invoke(RecordingDuration);
 
-            // 실시간 STT용 버퍼링
-            if (_realtimeEnabled && _waveIn != null)
+            // 2) 스테레오 → mono 다운믹스 (STT는 mono 선호)
+            float[] monoSamples;
+            if (_captureFormat.Channels >= 2)
+            {
+                int channels = _captureFormat.Channels;
+                int monoCount = floatSamples.Length / channels;
+                monoSamples = new float[monoCount];
+                for (int i = 0; i < monoCount; i++)
+                {
+                    float sum = 0;
+                    for (int ch = 0; ch < channels; ch++)
+                        sum += floatSamples[i * channels + ch];
+                    monoSamples[i] = sum / channels;
+                }
+            }
+            else
+            {
+                monoSamples = floatSamples;
+            }
+
+            // 3) 리샘플링: 캡처 SampleRate → 16kHz (선형 보간)
+            float[] resampledSamples;
+            int captureSampleRate = _captureFormat.SampleRate;
+            if (captureSampleRate != _outputFormat.SampleRate)
+            {
+                double ratio = (double)_outputFormat.SampleRate / captureSampleRate;
+                int outCount = (int)(monoSamples.Length * ratio);
+                resampledSamples = new float[outCount];
+                for (int i = 0; i < outCount; i++)
+                {
+                    double srcIdx = i / ratio;
+                    int idx0 = (int)srcIdx;
+                    int idx1 = Math.Min(idx0 + 1, monoSamples.Length - 1);
+                    float frac = (float)(srcIdx - idx0);
+                    resampledSamples[i] = monoSamples[idx0] * (1f - frac) + monoSamples[idx1] * frac;
+                }
+            }
+            else
+            {
+                resampledSamples = monoSamples;
+            }
+
+            // 4) float → 16bit PCM 변환
+            var pcmBuffer = new byte[resampledSamples.Length * 2];
+            for (int i = 0; i < resampledSamples.Length; i++)
+            {
+                var clamped = Math.Clamp(resampledSamples[i], -1f, 1f);
+                var pcmSample = (short)(clamped * 32767);
+                pcmBuffer[i * 2] = (byte)(pcmSample & 0xFF);
+                pcmBuffer[i * 2 + 1] = (byte)((pcmSample >> 8) & 0xFF);
+            }
+
+            // 5) 파일에 쓰기 (16kHz 16bit mono PCM)
+            _writer.Write(pcmBuffer, 0, pcmBuffer.Length);
+
+            // 6) 실시간 STT용 버퍼링 (변환된 PCM 데이터 사용)
+            if (_realtimeEnabled)
             {
                 lock (_bufferLock)
                 {
-                    // 버퍼에 데이터 추가
-                    var dataToAdd = new byte[e.BytesRecorded];
-                    Array.Copy(e.Buffer, dataToAdd, e.BytesRecorded);
-                    _realtimeBuffer.AddRange(dataToAdd);
+                    _realtimeBuffer.AddRange(pcmBuffer);
 
-                    // 청크 크기 계산: 44100Hz, 16bit, Mono = 88200 bytes/sec
-                    var bytesPerSecond = _waveIn.WaveFormat.AverageBytesPerSecond;
+                    // 청크 크기 계산: 16000Hz * 2bytes * 1ch = 32000 bytes/sec
+                    var bytesPerSecond = _outputFormat.AverageBytesPerSecond;
                     var chunkSizeBytes = bytesPerSecond * _realtimeChunkSeconds;
 
-                    // 버퍼가 청크 크기 이상이면 이벤트 발생
                     if (_realtimeBuffer.Count >= chunkSizeBytes)
                     {
                         var chunkData = _realtimeBuffer.ToArray();
@@ -336,8 +400,6 @@ public class AudioRecordingService : IDisposable
                         _realtimeBuffer.Clear();
 
                         _logger.Debug("실시간 청크 준비: {StartTime}, {Size} bytes", chunkStartTime, chunkData.Length);
-
-                        // 이벤트 발생 (비동기 처리를 위해 복사된 데이터 전달)
                         RealtimeAudioChunkReady?.Invoke(chunkData, chunkStartTime);
                     }
                 }
@@ -355,15 +417,15 @@ public class AudioRecordingService : IDisposable
         var filePath = _currentFilePath;
         Log4.Info($"[AudioRecording] ★ 파일 경로: {filePath ?? "null"}");
 
-        // 실시간 모드에서 남은 버퍼 처리
-        if (_realtimeEnabled && _waveIn != null)
+        // 실시간 모드에서 남은 버퍼 처리 (변환된 PCM 기준)
+        if (_realtimeEnabled)
         {
             lock (_bufferLock)
             {
                 if (_realtimeBuffer.Count > 0)
                 {
                     var chunkData = _realtimeBuffer.ToArray();
-                    var bytesPerSecond = _waveIn.WaveFormat.AverageBytesPerSecond;
+                    var bytesPerSecond = _outputFormat.AverageBytesPerSecond;
                     var chunkStartTime = TimeSpan.FromSeconds((double)_totalBytesProcessed / bytesPerSecond);
 
                     _logger.Debug("실시간 최종 청크 처리: {StartTime}, {Size} bytes", chunkStartTime, chunkData.Length);
@@ -406,6 +468,8 @@ public class AudioRecordingService : IDisposable
             _waveIn.Dispose();
             _waveIn = null;
         }
+
+        _captureFormat = null;
 
         if (_writer != null)
         {
