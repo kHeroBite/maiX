@@ -141,10 +141,27 @@ public class AudioRecordingService : IDisposable
 
             _currentFilePath = Path.Combine(RecordingsDirectory, fileName);
 
-            // WasapiCapture 설정 (WASAPI — waveInOpen InvalidParameter 우회)
+            // WasapiCapture 설정 — Role 순서 fallback: Multimedia → Console → Communications → 인자없음
             var enumerator = new MMDeviceEnumerator();
-            var captureDevice = enumerator.GetDefaultAudioEndpoint(DataFlow.Capture, Role.Communications);
-            _waveIn = new WasapiCapture(captureDevice, useEventSync: false);
+            MMDevice? captureDevice = null;
+            foreach (var role in new[] { Role.Multimedia, Role.Console, Role.Communications })
+            {
+                try
+                {
+                    captureDevice = enumerator.GetDefaultAudioEndpoint(DataFlow.Capture, role);
+                    _logger.Debug("[녹음] 캡처 장치 획득 성공: Role={Role}, Device={Device}", role, captureDevice.FriendlyName);
+                    break;
+                }
+                catch (Exception ex)
+                {
+                    _logger.Warning("[녹음] Role={Role} 캡처 장치 없음: {Message}", role, ex.Message);
+                }
+            }
+
+            if (captureDevice != null)
+                _waveIn = new WasapiCapture(captureDevice, useEventSync: false);
+            else
+                _waveIn = new WasapiCapture(); // 인자 없는 생성자 fallback
             _logger.Information("[녹음] WasapiCapture WaveFormat: {SampleRate}Hz, {BitsPerSample}bit, {Channels}ch",
                 _waveIn.WaveFormat.SampleRate, _waveIn.WaveFormat.BitsPerSample, _waveIn.WaveFormat.Channels);
 

@@ -2558,6 +2558,7 @@ public partial class OneNoteViewModel : ViewModelBase
             Log4.Error($"[녹음] ★ 녹음 시작 실패: {ex.Message}");
             IsRecording = false;
             StopRealtimeSTT();
+            throw;  // MainWindow catch 블록으로 전파 → UpdateRecordingUI(false) 실행
         }
     }
 
