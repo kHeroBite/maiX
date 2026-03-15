@@ -227,7 +227,7 @@ kPlan(메인) → kPlan_deep(심층설계) / kPlan_sim(시뮬레이션) / kPlan_
 kDev(메인) → kDev_parallel(병렬디스패치) / kDev_review(코드리뷰) / kDev_simplify(단순화) / kDev_impact(영향도) / kDev_lock(파일Lock)
 
 #### kTest 계열 (7개) — 빌드/테스트
-kTest(메인) → kTest_build(빌드) / kTest_deploy(배포) / kTest_run(테스트실행) / kTest_quality(품질검증) / kTestUI(UI테스트) / kTestUIWinforms(WinForms자동화)
+kTest(메인) → kTest_build(빌드) / kTest_deploy(배포) / kTest_run(테스트실행) / kTest_quality(품질검증) / kTestUI(UI테스트) / kTestUIWinforms(WinForms/WPF자동화)
 
 #### kDone 계열 (10개) — 작업 마무리
 kDone(메인) → kDone_review(프로세스개선) / kDone_trans(우회감지) / kDone_hooks(Hook강제화) / kDone_skills(스킬업데이트) / kDone_cleanup(코드정리) / kDone_docs(문서) / kDone_git(커밋) / kFinish(파이프라인마무리) / kFinish_cleanup(팀정리)
