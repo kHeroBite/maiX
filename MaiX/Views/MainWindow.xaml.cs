@@ -6310,7 +6310,8 @@ public partial class MainWindow : FluentWindow
                 UpdateRecordingContentPanel();
                 UpdateSummaryContentPanel();
 
-                Log4.Debug($"[OneNote] 녹음 선택: {_oneNoteViewModel.SelectedRecording.FileName}, STT 세그먼트: {_oneNoteViewModel.STTSegments.Count}개");
+                if (_oneNoteViewModel.SelectedRecording != null)
+                    Log4.Debug($"[OneNote] 녹음 선택: {_oneNoteViewModel.SelectedRecording.FileName}, STT 세그먼트: {_oneNoteViewModel.STTSegments.Count}개");
             }
         }
     }
