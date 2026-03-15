@@ -140,12 +140,15 @@ public class AudioRecordingService : IDisposable
 
             _currentFilePath = Path.Combine(RecordingsDirectory, fileName);
 
-            // WaveInEvent 설정 (기본 마이크, 44.1kHz, 16bit, Mono)
+            // WaveInEvent 설정 (마이크 지원 포맷 자동감지)
+            var bestFormat = GetBestWaveFormat(0);
             _waveIn = new WaveInEvent
             {
-                WaveFormat = new WaveFormat(44100, 16, 1),
+                WaveFormat = bestFormat,
                 BufferMilliseconds = 50
             };
+            _logger.Information("[녹음] WaveFormat 선택: {SampleRate}Hz, {BitsPerSample}bit, {Channels}ch",
+                bestFormat.SampleRate, bestFormat.BitsPerSample, bestFormat.Channels);
 
             _writer = new WaveFileWriter(_currentFilePath, _waveIn.WaveFormat);
 
@@ -392,6 +395,81 @@ public class AudioRecordingService : IDisposable
         {
             _realtimeBuffer.Clear();
             _totalBytesProcessed = 0;
+        }
+    }
+
+    /// <summary>
+    /// 마이크 장치가 지원하는 최적 WaveFormat 자동 감지
+    /// </summary>
+    /// <param name="deviceNumber">마이크 장치 번호</param>
+    /// <returns>지원되는 WaveFormat (기본: 16000Hz, 16bit, Mono)</returns>
+    private WaveFormat GetBestWaveFormat(int deviceNumber)
+    {
+        var candidateRates = new[] { 16000, 44100, 48000, 22050, 8000 };
+        var candidateChannels = new[] { 1, 2 };
+
+        try
+        {
+            var capabilities = WaveInEvent.GetCapabilities(deviceNumber);
+
+            foreach (var rate in candidateRates)
+            {
+                foreach (var channels in candidateChannels)
+                {
+                    if (IsSupportedFormat(capabilities, rate, channels))
+                    {
+                        _logger.Debug("[녹음] 지원 포맷 감지: {Rate}Hz, {Channels}ch", rate, channels);
+                        return new WaveFormat(rate, 16, channels);
+                    }
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.Warning(ex, "[녹음] WaveFormat 자동감지 실패, 기본값(16000Hz, Mono) 사용");
+        }
+
+        return new WaveFormat(16000, 16, 1);
+    }
+
+    /// <summary>
+    /// WaveInCapabilities로 특정 SampleRate/Channels 조합 지원 여부 확인
+    /// </summary>
+    private static bool IsSupportedFormat(WaveInCapabilities capabilities, int sampleRate, int channels)
+    {
+        // NAudio SupportedWaveFormat 열거형 매핑
+        var formatMap = new Dictionary<(int rate, int ch), SupportedWaveFormat>
+        {
+            { (8000, 1), SupportedWaveFormat.WAVE_FORMAT_1M16 },   // 근사 매핑
+            { (8000, 2), SupportedWaveFormat.WAVE_FORMAT_1S16 },
+            { (11025, 1), SupportedWaveFormat.WAVE_FORMAT_1M16 },
+            { (11025, 2), SupportedWaveFormat.WAVE_FORMAT_1S16 },
+            { (22050, 1), SupportedWaveFormat.WAVE_FORMAT_2M16 },
+            { (22050, 2), SupportedWaveFormat.WAVE_FORMAT_2S16 },
+            { (44100, 1), SupportedWaveFormat.WAVE_FORMAT_4M16 },
+            { (44100, 2), SupportedWaveFormat.WAVE_FORMAT_4S16 },
+        };
+
+        // 매핑에 있는 포맷은 정확히 확인
+        if (formatMap.TryGetValue((sampleRate, channels), out var supportedFormat))
+        {
+            return capabilities.SupportsWaveFormat(supportedFormat);
+        }
+
+        // 매핑에 없는 포맷(16000, 48000 등)은 실제 초기화 시도로 확인
+        try
+        {
+            using var testWaveIn = new WaveInEvent
+            {
+                DeviceNumber = 0,
+                WaveFormat = new WaveFormat(sampleRate, 16, channels)
+            };
+            // WaveInEvent 생성 성공 = 포맷 지원 가능
+            return true;
+        }
+        catch
+        {
+            return false;
         }
     }
 
