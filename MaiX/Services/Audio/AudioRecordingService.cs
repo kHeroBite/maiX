@@ -141,27 +141,22 @@ public class AudioRecordingService : IDisposable
 
             _currentFilePath = Path.Combine(RecordingsDirectory, fileName);
 
-            // WasapiCapture 설정 — Role 순서 fallback: Multimedia → Console → Communications → 인자없음
-            var enumerator = new MMDeviceEnumerator();
-            MMDevice? captureDevice = null;
-            foreach (var role in new[] { Role.Multimedia, Role.Console, Role.Communications })
+            // WasapiCapture 설정 — audioBufferMillisecondsLength 200ms 명시로 E_INVALIDARG 방지
+            try
             {
-                try
-                {
-                    captureDevice = enumerator.GetDefaultAudioEndpoint(DataFlow.Capture, role);
-                    _logger.Debug("[녹음] 캡처 장치 획득 성공: Role={Role}, Device={Device}", role, captureDevice.FriendlyName);
-                    break;
-                }
-                catch (Exception ex)
-                {
-                    _logger.Warning("[녹음] Role={Role} 캡처 장치 없음: {Message}", role, ex.Message);
-                }
+                var defaultDevice = WasapiCapture.GetDefaultCaptureDevice();
+                _waveIn = new WasapiCapture(defaultDevice, useEventSync: false, audioBufferMillisecondsLength: 200);
+                _logger.Information("[녹음] WasapiCapture 생성 성공: Device={Device}", defaultDevice.FriendlyName);
+            }
+            catch (Exception ex)
+            {
+                _logger.Warning("[녹음] GetDefaultCaptureDevice 실패: {Message}, 기본 생성자 사용", ex.Message);
+                _waveIn = new WasapiCapture();
             }
 
-            if (captureDevice != null)
-                _waveIn = new WasapiCapture(captureDevice, useEventSync: false);
-            else
-                _waveIn = new WasapiCapture(); // 인자 없는 생성자 fallback
+            // AudioClient.Initialize ArgumentException 방지: 32bit float → 16bit PCM 변환
+            _waveIn.WaveFormat = new WaveFormat(_waveIn.WaveFormat.SampleRate, 16, _waveIn.WaveFormat.Channels);
+
             _logger.Information("[녹음] WasapiCapture WaveFormat: {SampleRate}Hz, {BitsPerSample}bit, {Channels}ch",
                 _waveIn.WaveFormat.SampleRate, _waveIn.WaveFormat.BitsPerSample, _waveIn.WaveFormat.Channels);
 
