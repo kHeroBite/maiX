@@ -147,34 +147,48 @@ public class AudioRecordingService : IDisposable
 
             _currentFilePath = Path.Combine(RecordingsDirectory, fileName);
 
-            // WasapiCapture 설정 — audioBufferMillisecondsLength 200ms 명시로 E_INVALIDARG 방지
+            // WasapiCapture → WaveInEvent 2단계 fallback 체인
+            // 1단계: WasapiCapture 기본 생성자 (파라미터 없음 — NAudio 기기 자동 협상)
+            bool startSuccess = false;
             try
             {
-                var defaultDevice = WasapiCapture.GetDefaultCaptureDevice();
-                _waveIn = new WasapiCapture(defaultDevice, useEventSync: false, audioBufferMillisecondsLength: 200);
-                _logger.Information("[녹음] WasapiCapture 생성 성공: Device={Device}", defaultDevice.FriendlyName);
+                _waveIn = new WasapiCapture();
+                _captureFormat = _waveIn.WaveFormat;
+                _logger.Information("[녹음] WasapiCapture 초기화: {Rate}Hz, {Bits}bit, {Ch}ch, {Enc}",
+                    _captureFormat.SampleRate, _captureFormat.BitsPerSample, _captureFormat.Channels, _captureFormat.Encoding);
+                _writer = new WaveFileWriter(_currentFilePath, _outputFormat);
+                _waveIn.DataAvailable += OnDataAvailable;
+                _waveIn.RecordingStopped += OnRecordingStopped;
+                _waveIn.StartRecording();
+                startSuccess = true;
+                _logger.Information("[녹음] WasapiCapture 시작 성공");
             }
             catch (Exception ex)
             {
-                _logger.Warning("[녹음] GetDefaultCaptureDevice 실패: {Message}, 기본 생성자 사용", ex.Message);
-                _waveIn = new WasapiCapture();
+                _logger.Warning("[녹음] WasapiCapture 실패: {Message} — WaveInEvent(MME) fallback", ex.Message);
+                if (_waveIn != null)
+                {
+                    try { _waveIn.DataAvailable -= OnDataAvailable; } catch { }
+                    try { _waveIn.RecordingStopped -= OnRecordingStopped; } catch { }
+                    try { _waveIn.Dispose(); } catch { }
+                    _waveIn = null;
+                }
+                if (_writer != null) { try { _writer.Dispose(); } catch { } _writer = null; }
+                _captureFormat = null;
             }
 
-            // 캡처 장치 원본 포맷 저장 (OnDataAvailable에서 변환용)
-            _captureFormat = _waveIn.WaveFormat;
-
-            _logger.Information("[녹음] WasapiCapture 캡처 포맷: {SampleRate}Hz, {BitsPerSample}bit, {Channels}ch, Encoding={Encoding}",
-                _captureFormat.SampleRate, _captureFormat.BitsPerSample, _captureFormat.Channels, _captureFormat.Encoding);
-            _logger.Information("[녹음] 파일 저장 포맷: {SampleRate}Hz, {BitsPerSample}bit, {Channels}ch",
-                _outputFormat.SampleRate, _outputFormat.BitsPerSample, _outputFormat.Channels);
-
-            // WaveFileWriter는 STT 최적 포맷(16kHz 16bit mono)으로 생성
-            _writer = new WaveFileWriter(_currentFilePath, _outputFormat);
-
-            _waveIn.DataAvailable += OnDataAvailable;
-            _waveIn.RecordingStopped += OnRecordingStopped;
-
-            _waveIn.StartRecording();
+            // 2단계: WaveInEvent fallback (MME API — WASAPI 우회)
+            if (!startSuccess)
+            {
+                _captureFormat = new WaveFormat(16000, 16, 1);
+                _logger.Information("[녹음] WaveInEvent fallback: {Rate}Hz, {Bits}bit, {Ch}ch",
+                    _captureFormat.SampleRate, _captureFormat.BitsPerSample, _captureFormat.Channels);
+                _waveIn = new WaveInEvent { DeviceNumber = 0, WaveFormat = _captureFormat };
+                _writer = new WaveFileWriter(_currentFilePath, _outputFormat);
+                _waveIn.DataAvailable += OnDataAvailable;
+                _waveIn.RecordingStopped += OnRecordingStopped;
+                _waveIn.StartRecording();
+            }
             _isRecording = true;
             _isPaused = false;
             _recordingStartTime = DateTime.Now;
