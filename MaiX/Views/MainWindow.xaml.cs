@@ -21,6 +21,7 @@ using MaiX.ViewModels;
 using MaiX.Views.Dialogs;
 using MaiX.Services.Graph;
 using MaiX.Services.Storage;
+using MaiX.Services.Audio;
 using MaiX.Data;
 
 namespace MaiX.Views;
@@ -2323,10 +2324,14 @@ public partial class MainWindow : FluentWindow
 
     private void MenuMicrophoneSettings_Click(object sender, RoutedEventArgs e)
     {
-        Log4.Info("메뉴: 마이크 설정 클릭");
-        var micSettingsWindow = new MicrophoneSettingsWindow(App.Settings);
-        micSettingsWindow.Owner = this;
-        micSettingsWindow.ShowDialog();
+        Log4.Info("메뉴: 마이크 설정 클릭 → 설정 패널 시스템 > 마이크 설정으로 이동");
+        // 설정 패널로 이동하여 마이크 설정 표시
+        HideAllViews();
+        if (SettingsViewBorder != null) SettingsViewBorder.Visibility = Visibility.Visible;
+        _viewModel.StatusMessage = "설정";
+        InitializeSettingsMainMenu();
+        SelectSettingsMainMenu("system");
+        SelectSettingsSubMenu("system_microphone");
     }
 
     #endregion
@@ -16425,6 +16430,11 @@ public partial class MainWindow : FluentWindow
     private string _selectedSettingsMainMenu = "";
     private string _selectedSettingsSubMenu = "";
 
+    // 마이크 설정 관련
+    private MicrophoneTestService? _micTestService;
+    private string? _micSelectedDeviceId;
+    private bool _micIsRecording;
+
     /// <summary>
     /// 설정 뷰 표시
     /// </summary>
@@ -16455,7 +16465,8 @@ public partial class MainWindow : FluentWindow
             ("sync_ms365", "Cloud24", "MS365"),
             ("mail", "Mail24", "메일"),
             ("api", "Key24", "API 관리"),
-            ("general", "Settings24", "기타 설정")
+            ("general", "Settings24", "기타 설정"),
+            ("system", "Speaker224", "시스템")
         };
 
         foreach (var (key, icon, text) in mainMenuItems)
@@ -16596,6 +16607,7 @@ public partial class MainWindow : FluentWindow
             "mail" => new[] { ("mail_signature", "서명 관리") },
             "api" => new[] { ("api_ai_providers", "AI Provider"), ("api_tinymce", "TinyMCE") },
             "general" => new[] { ("general_theme", "일반"), ("general_account", "계정") },
+            "system" => new[] { ("system_microphone", "마이크 설정") },
             _ => Array.Empty<(string, string)>()
         };
     }
@@ -16615,6 +16627,7 @@ public partial class MainWindow : FluentWindow
             "mail" => "메일",
             "api" => "API 관리",
             "general" => "기타 설정",
+            "system" => "시스템",
             _ => ""
         };
 
@@ -16733,6 +16746,14 @@ public partial class MainWindow : FluentWindow
         if (SettingsContentPanel == null) return;
         SettingsContentPanel.Children.Clear();
 
+        // 설정 콘텐츠 전환 시 이전 마이크 서비스 정리
+        if (_micTestService != null)
+        {
+            _micTestService.StopMonitoring();
+            _micTestService.Dispose();
+            _micTestService = null;
+        }
+
         switch (subMenuKey)
         {
             case "sync_ai_favorite":
@@ -16764,6 +16785,9 @@ public partial class MainWindow : FluentWindow
                 break;
             case "general_account":
                 ShowAccountSettings();
+                break;
+            case "system_microphone":
+                ShowMicrophoneSettings();
                 break;
         }
     }
@@ -18685,6 +18709,358 @@ public partial class MainWindow : FluentWindow
 
         logoutGroup.Child = logoutStack;
         SettingsContentPanel.Children.Add(logoutGroup);
+    }
+
+    /// <summary>
+    /// 마이크 설정 UI 표시 (시스템 > 마이크 설정)
+    /// </summary>
+    private void ShowMicrophoneSettings()
+    {
+        if (SettingsContentPanel == null) return;
+
+        // 헤더
+        SettingsContentPanel.Children.Add(CreateSettingsSectionHeader("마이크 설정"));
+
+        // === 장치 선택 그룹 ===
+        var deviceGroup = CreateSettingsGroupBorder();
+        var deviceStack = new StackPanel();
+
+        deviceStack.Children.Add(CreateSettingsLabel("마이크 장치 선택"));
+
+        // 장치 선택 행 (ComboBox + 새로고침 버튼)
+        var deviceRow = new Grid { Margin = new Thickness(0, 8, 0, 0) };
+        deviceRow.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        deviceRow.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+
+        var deviceCombo = new ComboBox
+        {
+            DisplayMemberPath = "FriendlyName",
+            Margin = new Thickness(0, 0, 8, 0),
+            Height = 32
+        };
+        Grid.SetColumn(deviceCombo, 0);
+
+        var refreshBtn = new Wpf.Ui.Controls.Button
+        {
+            Content = "새로고침",
+            Margin = new Thickness(0),
+            Height = 32
+        };
+        Grid.SetColumn(refreshBtn, 1);
+
+        deviceRow.Children.Add(deviceCombo);
+        deviceRow.Children.Add(refreshBtn);
+        deviceStack.Children.Add(deviceRow);
+
+        var deviceStatus = new System.Windows.Controls.TextBlock
+        {
+            Text = "",
+            FontSize = 12,
+            Foreground = (Brush)FindResource("TextFillColorSecondaryBrush"),
+            Margin = new Thickness(0, 4, 0, 0)
+        };
+        deviceStack.Children.Add(deviceStatus);
+
+        deviceGroup.Child = deviceStack;
+        SettingsContentPanel.Children.Add(deviceGroup);
+
+        // === 볼륨 조절 그룹 ===
+        var volumeGroup = CreateSettingsGroupBorder();
+        var volumeStack = new StackPanel();
+
+        volumeStack.Children.Add(CreateSettingsLabel("마이크 볼륨"));
+
+        var volumeRow = new Grid { Margin = new Thickness(0, 8, 0, 0) };
+        volumeRow.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        volumeRow.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+
+        var volumeSlider = new Slider
+        {
+            Minimum = 0,
+            Maximum = 100,
+            Value = 80,
+            VerticalAlignment = VerticalAlignment.Center
+        };
+        Grid.SetColumn(volumeSlider, 0);
+
+        var volumeValue = new System.Windows.Controls.TextBlock
+        {
+            Text = "80",
+            Width = 35,
+            TextAlignment = TextAlignment.Right,
+            VerticalAlignment = VerticalAlignment.Center,
+            Margin = new Thickness(8, 0, 0, 0)
+        };
+        Grid.SetColumn(volumeValue, 1);
+
+        volumeRow.Children.Add(volumeSlider);
+        volumeRow.Children.Add(volumeValue);
+        volumeStack.Children.Add(volumeRow);
+
+        volumeGroup.Child = volumeStack;
+        SettingsContentPanel.Children.Add(volumeGroup);
+
+        // === 실시간 입력 레벨 그룹 ===
+        var levelGroup = CreateSettingsGroupBorder();
+        var levelStack = new StackPanel();
+
+        levelStack.Children.Add(CreateSettingsLabel("실시간 입력 레벨"));
+
+        var levelBar = new ProgressBar
+        {
+            Minimum = 0,
+            Maximum = 100,
+            Value = 0,
+            Height = 16,
+            Margin = new Thickness(0, 8, 0, 4)
+        };
+        levelStack.Children.Add(levelBar);
+
+        var dbText = new System.Windows.Controls.TextBlock
+        {
+            Text = "-- dB",
+            FontSize = 12,
+            Foreground = (Brush)FindResource("TextFillColorSecondaryBrush")
+        };
+        levelStack.Children.Add(dbText);
+
+        var monitorBtn = new Wpf.Ui.Controls.Button
+        {
+            Content = "모니터링 시작",
+            Margin = new Thickness(0, 8, 0, 0)
+        };
+        levelStack.Children.Add(monitorBtn);
+
+        levelGroup.Child = levelStack;
+        SettingsContentPanel.Children.Add(levelGroup);
+
+        // === 테스트 녹음 그룹 ===
+        var testGroup = CreateSettingsGroupBorder();
+        var testStack = new StackPanel();
+
+        testStack.Children.Add(CreateSettingsLabel("마이크 테스트 녹음"));
+
+        var testBtnRow = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 8, 0, 0) };
+
+        var recordBtn = new Wpf.Ui.Controls.Button
+        {
+            Content = "녹음 시작",
+            Margin = new Thickness(0, 0, 8, 0)
+        };
+        testBtnRow.Children.Add(recordBtn);
+
+        var playBtn = new Wpf.Ui.Controls.Button
+        {
+            Content = "재생",
+            IsEnabled = false,
+            Margin = new Thickness(0)
+        };
+        testBtnRow.Children.Add(playBtn);
+        testStack.Children.Add(testBtnRow);
+
+        var testStatus = new System.Windows.Controls.TextBlock
+        {
+            Text = "녹음 버튼을 눌러 마이크를 테스트하세요.",
+            FontSize = 12,
+            Foreground = (Brush)FindResource("TextFillColorSecondaryBrush"),
+            Margin = new Thickness(0, 8, 0, 0),
+            TextWrapping = TextWrapping.Wrap
+        };
+        testStack.Children.Add(testStatus);
+
+        testGroup.Child = testStack;
+        SettingsContentPanel.Children.Add(testGroup);
+
+        // === 저장 버튼 ===
+        var saveBtn = new Wpf.Ui.Controls.Button
+        {
+            Content = "선호 장치 저장",
+            Appearance = Wpf.Ui.Controls.ControlAppearance.Primary,
+            Margin = new Thickness(0, 8, 0, 0)
+        };
+        SettingsContentPanel.Children.Add(saveBtn);
+
+        // === 초기화 및 이벤트 바인딩 ===
+        _micTestService = new MicrophoneTestService();
+
+        // 장치 목록 로드
+        var devices = MicrophoneTestService.GetAvailableDevices();
+        deviceCombo.ItemsSource = devices;
+
+        // 현재 저장된 선호 장치 선택
+        var preferredId = App.Settings?.UserPreferences?.PreferredMicrophoneDeviceId;
+        if (!string.IsNullOrEmpty(preferredId))
+        {
+            var preferred = devices.FirstOrDefault(d => d.DeviceId == preferredId);
+            if (preferred != null)
+            {
+                deviceCombo.SelectedItem = preferred;
+                _micSelectedDeviceId = preferredId;
+            }
+        }
+        if (deviceCombo.SelectedItem == null && devices.Count > 0)
+        {
+            deviceCombo.SelectedIndex = 0;
+            _micSelectedDeviceId = devices[0].DeviceId;
+        }
+
+        // 볼륨 초기 로드
+        if (_micSelectedDeviceId != null)
+        {
+            try
+            {
+                var vol = _micTestService.GetDeviceVolume(_micSelectedDeviceId);
+                volumeSlider.Value = vol * 100;
+                volumeValue.Text = ((int)(vol * 100)).ToString();
+            }
+            catch { }
+        }
+
+        // 이벤트 구독
+        _micTestService.VolumeLevelChanged += level =>
+        {
+            Dispatcher.InvokeAsync(() =>
+            {
+                levelBar.Value = (double)level * 100;
+            });
+        };
+
+        _micTestService.DecibelLevelChanged += db =>
+        {
+            Dispatcher.InvokeAsync(() =>
+            {
+                dbText.Text = $"{db:F1} dB";
+            });
+        };
+
+        _micTestService.TestRecordingCompleted += filePath =>
+        {
+            Dispatcher.InvokeAsync(() =>
+            {
+                testStatus.Text = "녹음 완료. 재생 버튼을 눌러 확인하세요.";
+                playBtn.IsEnabled = true;
+                recordBtn.Content = "녹음 시작";
+                _micIsRecording = false;
+            });
+        };
+
+        _micTestService.TestPlaybackCompleted += () =>
+        {
+            Dispatcher.InvokeAsync(() =>
+            {
+                testStatus.Text = "재생 완료.";
+                playBtn.IsEnabled = true;
+            });
+        };
+
+        // 장치 변경 이벤트
+        deviceCombo.SelectionChanged += (s, e) =>
+        {
+            if (deviceCombo.SelectedItem is AudioDeviceInfo info)
+            {
+                _micSelectedDeviceId = info.DeviceId;
+                deviceStatus.Text = $"선택: {info.FriendlyName}";
+                if (_micTestService != null && _micTestService.IsMonitoring)
+                {
+                    _micTestService.StopMonitoring();
+                    _micTestService.StartMonitoring(_micSelectedDeviceId);
+                }
+                try
+                {
+                    if (_micTestService != null)
+                    {
+                        var vol = _micTestService.GetDeviceVolume(_micSelectedDeviceId);
+                        volumeSlider.Value = vol * 100;
+                        volumeValue.Text = ((int)(vol * 100)).ToString();
+                    }
+                }
+                catch { }
+            }
+        };
+
+        // 새로고침 버튼
+        refreshBtn.Click += (s, e) =>
+        {
+            var newDevices = MicrophoneTestService.GetAvailableDevices();
+            deviceCombo.ItemsSource = newDevices;
+            deviceStatus.Text = $"장치 목록 새로고침 완료 ({newDevices.Count}개)";
+        };
+
+        // 볼륨 슬라이더
+        volumeSlider.ValueChanged += (s, e) =>
+        {
+            var vol = (float)(volumeSlider.Value / 100.0);
+            volumeValue.Text = ((int)volumeSlider.Value).ToString();
+            if (_micSelectedDeviceId != null && _micTestService != null)
+            {
+                try { _micTestService.SetDeviceVolume(_micSelectedDeviceId, vol); }
+                catch { }
+            }
+        };
+
+        // 모니터링 버튼
+        monitorBtn.Click += (s, e) =>
+        {
+            if (_micTestService == null) return;
+            if (_micTestService.IsMonitoring)
+            {
+                _micTestService.StopMonitoring();
+                monitorBtn.Content = "모니터링 시작";
+                levelBar.Value = 0;
+                dbText.Text = "-- dB";
+            }
+            else if (_micSelectedDeviceId != null)
+            {
+                _micTestService.StartMonitoring(_micSelectedDeviceId);
+                monitorBtn.Content = "모니터링 중지";
+            }
+        };
+
+        // 녹음 버튼
+        recordBtn.Click += (s, e) =>
+        {
+            if (_micTestService == null) return;
+            if (_micIsRecording)
+            {
+                _micTestService.StopTestRecording();
+                recordBtn.Content = "녹음 시작";
+                _micIsRecording = false;
+                testStatus.Text = "녹음 중지됨.";
+            }
+            else if (_micSelectedDeviceId != null)
+            {
+                _micTestService.StartTestRecording(_micSelectedDeviceId);
+                recordBtn.Content = "녹음 중지";
+                _micIsRecording = true;
+                testStatus.Text = "녹음 중...";
+                playBtn.IsEnabled = false;
+            }
+        };
+
+        // 재생 버튼
+        playBtn.Click += (s, e) =>
+        {
+            if (_micTestService == null) return;
+            var tempFile = System.IO.Path.Combine(
+                System.IO.Path.GetTempPath(), "maix_mic_test.wav");
+            if (System.IO.File.Exists(tempFile))
+            {
+                playBtn.IsEnabled = false;
+                testStatus.Text = "재생 중...";
+                _micTestService.PlayTestRecording(tempFile);
+            }
+        };
+
+        // 저장 버튼
+        saveBtn.Click += (s, e) =>
+        {
+            if (_micSelectedDeviceId != null && App.Settings?.UserPreferences != null)
+            {
+                App.Settings.UserPreferences.PreferredMicrophoneDeviceId = _micSelectedDeviceId;
+                App.Settings?.SaveUserPreferences();
+                deviceStatus.Text = "선호 장치가 저장되었습니다.";
+            }
+        };
     }
 
     #endregion

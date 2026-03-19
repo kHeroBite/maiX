@@ -127,14 +127,8 @@ Views:
     역할: 메인 애플리케이션 화면
     클래스:
       - MainWindow:
-          설명: 이메일 목록, 상세보기, 사이드바 네비게이션
+          설명: 이메일 목록, 상세보기, 사이드바 네비게이션, 설정탭 시스템 메뉴(마이크 설정 포함)
 
-  - 파일명: MicrophoneSettingsWindow.xaml / MicrophoneSettingsWindow.xaml.cs
-    경로: MaiX/Views/
-    역할: 마이크 설정 창 (장치 선택, 볼륨 조절, 실시간 레벨 모니터링, 테스트 녹음/재생)
-    클래스:
-      - MicrophoneSettingsWindow:
-          설명: WPF Fluent Window, MicrophoneTestService 연동
 ```
 
 ### 3. ViewModels (MVVM)
