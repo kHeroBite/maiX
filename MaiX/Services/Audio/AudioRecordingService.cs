@@ -148,41 +148,65 @@ public class AudioRecordingService : IDisposable
             _currentFilePath = Path.Combine(RecordingsDirectory, fileName);
 
             // WasapiCapture → WaveInEvent 2단계 fallback 체인
-            // 1단계: WasapiCapture 다단계 버퍼 재시도 (200→500→50→30ms)
+            // 1단계: WasapiCapture 다중 장치 + 다단계 버퍼 재시도
             bool startSuccess = false;
             var enumerator = new MMDeviceEnumerator();
-            MMDevice? captureDevice = null;
+
+            // 시도할 장치 목록 구성 (중복 제거)
+            var devicesToTry = new List<MMDevice>();
+            var addedIds = new HashSet<string>();
+
+            // 1순위: Communications Role
             try
             {
-                captureDevice = enumerator.GetDefaultAudioEndpoint(DataFlow.Capture, Role.Communications);
+                var commDevice = enumerator.GetDefaultAudioEndpoint(DataFlow.Capture, Role.Communications);
+                if (addedIds.Add(commDevice.ID)) devicesToTry.Add(commDevice);
             }
-            catch (Exception ex)
-            {
-                _logger.Warning("[녹음] 기본 캡처 장치 획득 실패: {Message}", ex.Message);
-            }
+            catch (Exception ex) { Log4.Warn($"[녹음] Communications 장치 획득 실패: {ex.Message}"); }
 
-            if (captureDevice != null)
+            // 2순위: Multimedia Role (Communications와 다를 경우만)
+            try
             {
-                var bufferSizes = new[] { 200, 500, 50, 30 };
+                var multimediaDevice = enumerator.GetDefaultAudioEndpoint(DataFlow.Capture, Role.Multimedia);
+                if (addedIds.Add(multimediaDevice.ID)) devicesToTry.Add(multimediaDevice);
+            }
+            catch (Exception ex) { Log4.Warn($"[녹음] Multimedia 장치 획득 실패: {ex.Message}"); }
+
+            // 3순위: 모든 활성 캡처 장치 순회
+            try
+            {
+                var allDevices = enumerator.EnumerateAudioEndPoints(DataFlow.Capture, DeviceState.Active);
+                foreach (var dev in allDevices)
+                {
+                    if (addedIds.Add(dev.ID)) devicesToTry.Add(dev);
+                }
+            }
+            catch (Exception ex) { Log4.Warn($"[녹음] 장치 열거 실패: {ex.Message}"); }
+
+            Log4.Info($"[녹음] 캡처 장치 {devicesToTry.Count}개 탐색 시작");
+
+            var bufferSizes = new[] { 200, 500, 50, 30 };
+            foreach (var device in devicesToTry)
+            {
+                Log4.Info($"[녹음] 장치 시도: {device.FriendlyName}");
                 foreach (var bufferMs in bufferSizes)
                 {
                     try
                     {
-                        _waveIn = new WasapiCapture(captureDevice, false, bufferMs);
+                        _waveIn = new WasapiCapture(device, false, bufferMs);
                         _captureFormat = _waveIn.WaveFormat;
-                        _logger.Information("[녹음] WasapiCapture 초기화(버퍼 {Buffer}ms): {Rate}Hz, {Bits}bit, {Ch}ch, {Enc}",
-                            bufferMs, _captureFormat.SampleRate, _captureFormat.BitsPerSample, _captureFormat.Channels, _captureFormat.Encoding);
+                        Log4.Info($"[녹음] WasapiCapture 초기화(버퍼 {bufferMs}ms): {_captureFormat.SampleRate}Hz, {_captureFormat.BitsPerSample}bit, {_captureFormat.Channels}ch");
                         _writer = new WaveFileWriter(_currentFilePath, _outputFormat);
                         _waveIn.DataAvailable += OnDataAvailable;
                         _waveIn.RecordingStopped += OnRecordingStopped;
                         _waveIn.StartRecording();
                         startSuccess = true;
-                        _logger.Information("[녹음] WasapiCapture 시작 성공 (버퍼 {Buffer}ms)", bufferMs);
+                        Log4.Info($"[녹음] WasapiCapture 성공 — 장치: {device.FriendlyName}, 버퍼: {bufferMs}ms");
                         break;
                     }
                     catch (Exception ex)
                     {
-                        _logger.Warning("[녹음] WasapiCapture(버퍼 {Buffer}ms) 실패: {Message}", bufferMs, ex.Message);
+                        Log4.Warn($"[녹음] WasapiCapture 실패 — 장치: {device.FriendlyName}, 버퍼: {bufferMs}ms: {ex.Message}");
                         if (_waveIn != null)
                         {
                             try { _waveIn.DataAvailable -= OnDataAvailable; } catch { }
@@ -194,31 +218,33 @@ public class AudioRecordingService : IDisposable
                         _captureFormat = null;
                     }
                 }
+                if (startSuccess) break;
             }
 
             // 2단계: WaveInEvent fallback (MME API — WASAPI 우회)
             if (!startSuccess)
             {
+                Log4.Warn("[녹음] WASAPI 전체 실패 — WaveInEvent(MME) fallback 시도");
                 _captureFormat = GetBestWaveFormat(0);
-                _logger.Information("[녹음] WaveInEvent fallback — 자동감지 포맷: {Rate}Hz, {Bits}bit, {Ch}ch",
-                    _captureFormat.SampleRate, _captureFormat.BitsPerSample, _captureFormat.Channels);
+                Log4.Info($"[녹음] WaveInEvent 포맷: {_captureFormat.SampleRate}Hz, {_captureFormat.BitsPerSample}bit, {_captureFormat.Channels}ch");
                 _waveIn = new WaveInEvent { DeviceNumber = 0, WaveFormat = _captureFormat };
                 _writer = new WaveFileWriter(_currentFilePath, _outputFormat);
                 _waveIn.DataAvailable += OnDataAvailable;
                 _waveIn.RecordingStopped += OnRecordingStopped;
                 _waveIn.StartRecording();
+                Log4.Info("[녹음] WaveInEvent 시작 성공");
             }
             _isRecording = true;
             _isPaused = false;
             _recordingStartTime = DateTime.Now;
             _pausedDuration = TimeSpan.Zero;
 
-            _logger.Information("녹음 시작: {FilePath}", _currentFilePath);
+            Log4.Info($"[녹음] 녹음 시작: {_currentFilePath}");
             return _currentFilePath;
         }
         catch (Exception ex)
         {
-            _logger.Error(ex, "녹음 시작 실패");
+            Log4.Error($"[녹음] 녹음 시작 실패: {ex.Message}");
             Cleanup();
             throw;
         }
@@ -540,7 +566,7 @@ public class AudioRecordingService : IDisposable
                 {
                     if (IsSupportedFormat(capabilities, rate, channels))
                     {
-                        _logger.Debug("[녹음] 지원 포맷 감지: {Rate}Hz, {Channels}ch", rate, channels);
+                        Log4.Debug($"[녹음] 지원 포맷 감지: {rate}Hz, {channels}ch");
                         return new WaveFormat(rate, 16, channels);
                     }
                 }
@@ -548,7 +574,7 @@ public class AudioRecordingService : IDisposable
         }
         catch (Exception ex)
         {
-            _logger.Warning(ex, "[녹음] WaveFormat 자동감지 실패, 기본값(44100Hz, Mono) 사용");
+            Log4.Warn($"[녹음] WaveFormat 자동감지 실패, 기본값(44100Hz, Mono) 사용: {ex.Message}");
         }
 
         return new WaveFormat(44100, 16, 1);
