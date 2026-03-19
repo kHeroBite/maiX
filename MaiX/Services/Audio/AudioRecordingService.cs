@@ -5,6 +5,7 @@ using System.Runtime.InteropServices;
 using NAudio.CoreAudioApi;
 using NAudio.Wave;
 using Serilog;
+using System.Linq;
 using MaiX.Utils;
 
 namespace MaiX.Services.Audio;
@@ -185,7 +186,7 @@ public class AudioRecordingService : IDisposable
 
             Log4.Info($"[녹음] 캡처 장치 {devicesToTry.Count}개 탐색 시작");
 
-            var bufferSizes = new[] { 200, 500, 50, 30 };
+            var bufferSizes = new[] { 0, 200, 500, 50, 30 };
             foreach (var device in devicesToTry)
             {
                 Log4.Info($"[녹음] 장치 시도: {device.FriendlyName}");
@@ -206,7 +207,7 @@ public class AudioRecordingService : IDisposable
                     }
                     catch (Exception ex)
                     {
-                        Log4.Warn($"[녹음] WasapiCapture 실패 — 장치: {device.FriendlyName}, 버퍼: {bufferMs}ms: {ex.Message}");
+                        Log4.Warn($"[녹음] WasapiCapture 실패 — 장치: {device.FriendlyName}, 버퍼: {bufferMs}ms: {ex.Message} (HResult: 0x{ex.HResult:X8}, Type: {ex.GetType().Name})");
                         if (_waveIn != null)
                         {
                             try { _waveIn.DataAvailable -= OnDataAvailable; } catch { }
@@ -225,14 +226,45 @@ public class AudioRecordingService : IDisposable
             if (!startSuccess)
             {
                 Log4.Warn("[녹음] WASAPI 전체 실패 — WaveInEvent(MME) fallback 시도");
-                _captureFormat = GetBestWaveFormat(0);
-                Log4.Info($"[녹음] WaveInEvent 포맷: {_captureFormat.SampleRate}Hz, {_captureFormat.BitsPerSample}bit, {_captureFormat.Channels}ch");
-                _waveIn = new WaveInEvent { DeviceNumber = 0, WaveFormat = _captureFormat };
-                _writer = new WaveFileWriter(_currentFilePath, _outputFormat);
-                _waveIn.DataAvailable += OnDataAvailable;
-                _waveIn.RecordingStopped += OnRecordingStopped;
-                _waveIn.StartRecording();
-                Log4.Info("[녹음] WaveInEvent 시작 성공");
+                var mmeFallbackFormats = new[]
+                {
+                    new WaveFormat(48000, 16, 1),
+                    new WaveFormat(44100, 16, 1),
+                    new WaveFormat(48000, 16, 2),
+                    new WaveFormat(44100, 16, 2),
+                    new WaveFormat(16000, 16, 1),
+                    new WaveFormat(8000, 16, 1),
+                };
+                // GetBestWaveFormat 결과를 첫 번째 후보로 추가
+                var bestFormat = GetBestWaveFormat(0);
+                var formatsToTry = new[] { bestFormat }.Concat(mmeFallbackFormats.Where(f => f.SampleRate != bestFormat.SampleRate || f.Channels != bestFormat.Channels)).ToArray();
+
+                bool mmeSuccess = false;
+                foreach (var fmt in formatsToTry)
+                {
+                    try
+                    {
+                        Log4.Info($"[녹음] WaveInEvent 시도: {fmt.SampleRate}Hz, {fmt.BitsPerSample}bit, {fmt.Channels}ch");
+                        _captureFormat = fmt;
+                        _waveIn = new WaveInEvent { DeviceNumber = 0, WaveFormat = _captureFormat };
+                        _writer = new WaveFileWriter(_currentFilePath, _outputFormat);
+                        _waveIn.DataAvailable += OnDataAvailable;
+                        _waveIn.RecordingStopped += OnRecordingStopped;
+                        _waveIn.StartRecording();
+                        Log4.Info($"[녹음] WaveInEvent 시작 성공: {fmt.SampleRate}Hz, {fmt.Channels}ch");
+                        mmeSuccess = true;
+                        break;
+                    }
+                    catch (Exception mmeEx)
+                    {
+                        Log4.Warn($"[녹음] WaveInEvent 실패: {fmt.SampleRate}Hz/{fmt.Channels}ch: {mmeEx.Message} (HResult: 0x{mmeEx.HResult:X8})");
+                        if (_waveIn != null) { try { _waveIn.DataAvailable -= OnDataAvailable; } catch { } try { _waveIn.RecordingStopped -= OnRecordingStopped; } catch { } try { _waveIn.Dispose(); } catch { } _waveIn = null; }
+                        if (_writer != null) { try { _writer.Dispose(); } catch { } _writer = null; }
+                        _captureFormat = null;
+                    }
+                }
+                if (!mmeSuccess)
+                    throw new InvalidOperationException("모든 오디오 캡처 방식 실패 (WASAPI + MME)");
             }
             _isRecording = true;
             _isPaused = false;
