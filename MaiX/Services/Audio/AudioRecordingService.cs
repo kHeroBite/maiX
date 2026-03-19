@@ -148,33 +148,52 @@ public class AudioRecordingService : IDisposable
             _currentFilePath = Path.Combine(RecordingsDirectory, fileName);
 
             // WasapiCapture → WaveInEvent 2단계 fallback 체인
-            // 1단계: WasapiCapture 기본 생성자 (파라미터 없음 — NAudio 기기 자동 협상)
+            // 1단계: WasapiCapture 다단계 버퍼 재시도 (200→500→50→30ms)
             bool startSuccess = false;
+            var enumerator = new MMDeviceEnumerator();
+            MMDevice? captureDevice = null;
             try
             {
-                _waveIn = new WasapiCapture();
-                _captureFormat = _waveIn.WaveFormat;
-                _logger.Information("[녹음] WasapiCapture 초기화: {Rate}Hz, {Bits}bit, {Ch}ch, {Enc}",
-                    _captureFormat.SampleRate, _captureFormat.BitsPerSample, _captureFormat.Channels, _captureFormat.Encoding);
-                _writer = new WaveFileWriter(_currentFilePath, _outputFormat);
-                _waveIn.DataAvailable += OnDataAvailable;
-                _waveIn.RecordingStopped += OnRecordingStopped;
-                _waveIn.StartRecording();
-                startSuccess = true;
-                _logger.Information("[녹음] WasapiCapture 시작 성공");
+                captureDevice = enumerator.GetDefaultAudioEndpoint(DataFlow.Capture, Role.Communications);
             }
             catch (Exception ex)
             {
-                _logger.Warning("[녹음] WasapiCapture 실패: {Message} — WaveInEvent(MME) fallback", ex.Message);
-                if (_waveIn != null)
+                _logger.Warning("[녹음] 기본 캡처 장치 획득 실패: {Message}", ex.Message);
+            }
+
+            if (captureDevice != null)
+            {
+                var bufferSizes = new[] { 200, 500, 50, 30 };
+                foreach (var bufferMs in bufferSizes)
                 {
-                    try { _waveIn.DataAvailable -= OnDataAvailable; } catch { }
-                    try { _waveIn.RecordingStopped -= OnRecordingStopped; } catch { }
-                    try { _waveIn.Dispose(); } catch { }
-                    _waveIn = null;
+                    try
+                    {
+                        _waveIn = new WasapiCapture(captureDevice, false, bufferMs);
+                        _captureFormat = _waveIn.WaveFormat;
+                        _logger.Information("[녹음] WasapiCapture 초기화(버퍼 {Buffer}ms): {Rate}Hz, {Bits}bit, {Ch}ch, {Enc}",
+                            bufferMs, _captureFormat.SampleRate, _captureFormat.BitsPerSample, _captureFormat.Channels, _captureFormat.Encoding);
+                        _writer = new WaveFileWriter(_currentFilePath, _outputFormat);
+                        _waveIn.DataAvailable += OnDataAvailable;
+                        _waveIn.RecordingStopped += OnRecordingStopped;
+                        _waveIn.StartRecording();
+                        startSuccess = true;
+                        _logger.Information("[녹음] WasapiCapture 시작 성공 (버퍼 {Buffer}ms)", bufferMs);
+                        break;
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.Warning("[녹음] WasapiCapture(버퍼 {Buffer}ms) 실패: {Message}", bufferMs, ex.Message);
+                        if (_waveIn != null)
+                        {
+                            try { _waveIn.DataAvailable -= OnDataAvailable; } catch { }
+                            try { _waveIn.RecordingStopped -= OnRecordingStopped; } catch { }
+                            try { _waveIn.Dispose(); } catch { }
+                            _waveIn = null;
+                        }
+                        if (_writer != null) { try { _writer.Dispose(); } catch { } _writer = null; }
+                        _captureFormat = null;
+                    }
                 }
-                if (_writer != null) { try { _writer.Dispose(); } catch { } _writer = null; }
-                _captureFormat = null;
             }
 
             // 2단계: WaveInEvent fallback (MME API — WASAPI 우회)
