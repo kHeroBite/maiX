@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using System.Runtime.InteropServices;
 using NAudio.CoreAudioApi;
 using NAudio.Wave;
@@ -126,7 +127,7 @@ public class AudioRecordingService : IDisposable
     /// </summary>
     /// <param name="pageId">연결할 OneNote 페이지 ID (선택)</param>
     /// <returns>녹음 파일 경로</returns>
-    public async Task<string> StartRecordingAsync(string? pageId = null)
+    public async Task<string> StartRecordingAsync(string? pageId = null, string? preferredDeviceId = null)
     {
         if (_isRecording)
         {
@@ -157,6 +158,22 @@ public class AudioRecordingService : IDisposable
             // 시도할 장치 목록 구성 (중복 제거)
             var devicesToTry = new List<MMDevice>();
             var addedIds = new HashSet<string>();
+
+            // 0순위: 사용자 선택 장치
+            if (!string.IsNullOrEmpty(preferredDeviceId))
+            {
+                try
+                {
+                    var allDevs = enumerator.EnumerateAudioEndPoints(DataFlow.Capture, DeviceState.Active);
+                    var preferred = allDevs.FirstOrDefault(d => d.ID == preferredDeviceId);
+                    if (preferred != null && addedIds.Add(preferred.ID))
+                    {
+                        devicesToTry.Insert(0, preferred);
+                        Log4.Info($"[녹음] 선택 마이크 0순위 추가: {preferred.FriendlyName}");
+                    }
+                }
+                catch (Exception ex) { Log4.Warn($"[녹음] 선택 마이크 장치 획득 실패: {ex.Message}"); }
+            }
 
             // 1순위: Communications Role
             try

@@ -174,4 +174,10 @@ public class UserPreferencesSettings
     /// </summary>
     [XmlElement("WindowState")]
     public string? WindowState { get; set; }
+
+    /// <summary>
+    /// 선호 마이크 장치 ID
+    /// </summary>
+    [XmlElement("PreferredMicrophoneDeviceId")]
+    public string? PreferredMicrophoneDeviceId { get; set; }
 }

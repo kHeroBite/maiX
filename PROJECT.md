@@ -128,6 +128,13 @@ Views:
     클래스:
       - MainWindow:
           설명: 이메일 목록, 상세보기, 사이드바 네비게이션
+
+  - 파일명: MicrophoneSettingsWindow.xaml / MicrophoneSettingsWindow.xaml.cs
+    경로: MaiX/Views/
+    역할: 마이크 설정 창 (장치 선택, 볼륨 조절, 실시간 레벨 모니터링, 테스트 녹음/재생)
+    클래스:
+      - MicrophoneSettingsWindow:
+          설명: WPF Fluent Window, MicrophoneTestService 연동
 ```
 
 ### 3. ViewModels (MVVM)
@@ -415,6 +422,19 @@ Other_Services:
   - 파일명: ConverterSettingService.cs
     경로: Services/Storage/
     역할: 변환기 설정 관리
+```
+
+#### 5.7 Services/Audio (오디오)
+
+```yaml
+Audio_Services:
+  - 파일명: AudioRecordingService.cs
+    경로: Services/Audio/
+    역할: OneNote 녹음 서비스 (WasapiCapture 기반, 다중 장치 탐색, 선호 장치 우선순위)
+
+  - 파일명: MicrophoneTestService.cs
+    경로: Services/Audio/
+    역할: 마이크 테스트 전용 서비스 (장치 열거, 실시간 모니터링, 테스트 녹음/재생, 볼륨 조절)
 ```
 
 ### 6. Data (데이터베이스)

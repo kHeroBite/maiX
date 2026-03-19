@@ -443,6 +443,18 @@
                                     </Grid>
                                 </MenuItem.Header>
                             </MenuItem>
+                            <MenuItem Click="MenuMicrophoneSettings_Click">
+                                <MenuItem.Header>
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="20"/>
+                                            <ColumnDefinition Width="*"/>
+                                        </Grid.ColumnDefinitions>
+                                        <ui:SymbolIcon Grid.Column="0" Symbol="Mic24" FontSize="12" HorizontalAlignment="Left"/>
+                                        <TextBlock Grid.Column="1" Text="마이크 설정" VerticalAlignment="Center"/>
+                                    </Grid>
+                                </MenuItem.Header>
+                            </MenuItem>
                             <Separator/>
                             <MenuItem>
                                 <MenuItem.Header>

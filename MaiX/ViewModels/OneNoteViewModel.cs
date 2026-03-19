@@ -2548,7 +2548,7 @@ public partial class OneNoteViewModel : ViewModelBase
 
             // 현재 선택된 페이지 ID와 연결 (있으면)
             var pageId = SelectedPage?.Id;
-            await _recordingService.StartRecordingAsync(pageId);
+            await _recordingService.StartRecordingAsync(pageId, App.Settings?.UserPreferences?.PreferredMicrophoneDeviceId);
 
             IsRecording = true;
             IsRecordingPaused = false;

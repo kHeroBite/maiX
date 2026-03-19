@@ -2321,6 +2321,14 @@ public partial class MainWindow : FluentWindow
         }
     }
 
+    private void MenuMicrophoneSettings_Click(object sender, RoutedEventArgs e)
+    {
+        Log4.Info("메뉴: 마이크 설정 클릭");
+        var micSettingsWindow = new MicrophoneSettingsWindow(App.Settings);
+        micSettingsWindow.Owner = this;
+        micSettingsWindow.ShowDialog();
+    }
+
     #endregion
 
     #region 동기화 메뉴 이벤트
