@@ -5693,7 +5693,7 @@ public partial class MainWindow : FluentWindow
     /// <summary>
     /// 녹음 시작/중지 버튼 클릭
     /// </summary>
-    private void OneNoteRecordStart_Click(object sender, RoutedEventArgs e)
+    private async void OneNoteRecordStart_Click(object sender, RoutedEventArgs e)
     {
         if (_oneNoteViewModel == null) return;
 
@@ -5730,7 +5730,7 @@ public partial class MainWindow : FluentWindow
             // 녹음 시작
             try
             {
-                _oneNoteViewModel.StartRecording();
+                await _oneNoteViewModel.StartRecordingAsync();
                 UpdateRecordingUI(true);
 
                 // 녹음 시작 시 녹음내용 탭으로 전환 (탭 바는 항상 표시)

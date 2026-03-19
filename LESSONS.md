@@ -162,3 +162,12 @@
 - **교훈**: 오디오 캡처는 "성공할 때까지 다음 조합 시도" 패턴이 필수 — 단일 설정 의존 금지
 - **심각도**: 낮음 (패턴 기록)
 - **Level**: 1 (참고)
+
+## L-246: NAudio WasapiCapture COM 상태 오염 — ??= 패턴 금지 (2026-03-19)
+
+- **문제**: 녹음 시작 시 `_recordingService ??= new`로 기존 인스턴스를 재사용하면 이전 실패의 COM 상태가 오염된 채 남아 후속 녹음도 실패
+- **근본원인**: WasapiCapture 내부의 AudioClient COM 객체가 E_INVALIDARG(0x80070057) 실패 후 정리되지 않아 재초기화 불가
+- **해결**: `_recordingService?.Dispose(); _recordingService = new`로 매번 새 인스턴스 생성
+- **교훈**: COM 기반 오디오 서비스는 `??=` 패턴(null일 때만 생성) 금지 — 실패 후 반드시 Dispose+재생성
+- **심각도**: 낮음 (패턴 기록)
+- **Level**: 1 (참고)

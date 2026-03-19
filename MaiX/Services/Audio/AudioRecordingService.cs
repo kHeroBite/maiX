@@ -4,7 +4,6 @@ using System.IO;
 using System.Runtime.InteropServices;
 using NAudio.CoreAudioApi;
 using NAudio.Wave;
-using System.Linq;
 using MaiX.Utils;
 
 namespace MaiX.Services.Audio;
@@ -22,6 +21,11 @@ public class AudioRecordingService : IDisposable
     private DateTime _recordingStartTime;
     private TimeSpan _pausedDuration;
     private DateTime _pauseStartTime;
+
+    // WasapiNative 직접 캡처용 필드
+    private IntPtr _nativeAudioClient = IntPtr.Zero;
+    private CancellationTokenSource? _nativeCaptureCts;
+    private Task? _nativeCaptureTask;
 
     // 캡처 장치 원본 포맷 (float/PCM 판별용)
     private WaveFormat? _captureFormat;
@@ -122,7 +126,7 @@ public class AudioRecordingService : IDisposable
     /// </summary>
     /// <param name="pageId">연결할 OneNote 페이지 ID (선택)</param>
     /// <returns>녹음 파일 경로</returns>
-    public string StartRecording(string? pageId = null)
+    public async Task<string> StartRecordingAsync(string? pageId = null)
     {
         if (_isRecording)
         {
@@ -183,85 +187,127 @@ public class AudioRecordingService : IDisposable
 
             Log4.Info($"[녹음] 캡처 장치 {devicesToTry.Count}개 탐색 시작");
 
-            var bufferSizes = new[] { 0 };
+            // 1단계: NAudio AudioClient 직접 사용 (streamFlags=0 — WasapiCapture의 AUTOCONVERTPCM 우회)
+            // PowerShell 검증: device.AudioClient.Initialize(Shared, streamFlags=0, 0, 0, mixFormat, Guid.Empty) → 성공
             foreach (var device in devicesToTry)
             {
-                Log4.Info($"[녹음] 장치 시도: {device.FriendlyName}");
-                foreach (var bufferMs in bufferSizes)
+                Log4.Info($"[녹음] 장치 시도 (AudioClient 직접): {device.FriendlyName}");
+                try
                 {
-                    try
+                    var audioClient = device.AudioClient;
+                    var mixFmt = audioClient.MixFormat;
+                    Log4.Info($"[녹음] MixFormat: {mixFmt.SampleRate}Hz, {mixFmt.BitsPerSample}bit, {mixFmt.Channels}ch, {mixFmt.Encoding}");
+
+                    // streamFlags=0 (AUTOCONVERTPCM 없음) — Intel SST 호환
+                    audioClient.Initialize(AudioClientShareMode.Shared, AudioClientStreamFlags.None, 0, 0, mixFmt, Guid.Empty);
+                    Log4.Info("[녹음] AudioClient.Initialize 성공");
+
+                    var captureClient = audioClient.AudioCaptureClient;
+                    audioClient.Start();
+                    Log4.Info("[녹음] AudioClient.Start 성공");
+
+                    _captureFormat = mixFmt;
+                    _writer = new WaveFileWriter(_currentFilePath, _outputFormat);
+                    _nativeCaptureCts = new CancellationTokenSource();
+                    var token = _nativeCaptureCts.Token;
+
+                    _nativeCaptureTask = Task.Run(() =>
                     {
-                        _waveIn = new WasapiCapture(device, false, bufferMs);
-                        _captureFormat = _waveIn.WaveFormat;
-                        Log4.Info($"[녹음] WasapiCapture 초기화(버퍼 {bufferMs}ms): {_captureFormat.SampleRate}Hz, {_captureFormat.BitsPerSample}bit, {_captureFormat.Channels}ch");
-                        _writer = new WaveFileWriter(_currentFilePath, _outputFormat);
-                        _waveIn.DataAvailable += OnDataAvailable;
-                        _waveIn.RecordingStopped += OnRecordingStopped;
-                        _waveIn.StartRecording();
-                        startSuccess = true;
-                        Log4.Info($"[녹음] WasapiCapture 성공 — 장치: {device.FriendlyName}, 버퍼: {bufferMs}ms");
-                        break;
-                    }
-                    catch (Exception ex)
-                    {
-                        Log4.Warn($"[녹음] WasapiCapture 실패 — 장치: {device.FriendlyName}, 버퍼: {bufferMs}ms: {ex.Message} (HResult: 0x{ex.HResult:X8}, Type: {ex.GetType().Name})");
-                        if (_waveIn != null)
+                        Log4.Info("[녹음] AudioClient 직접 캡처 루프 시작");
+                        try
                         {
-                            try { _waveIn.DataAvailable -= OnDataAvailable; } catch { }
-                            try { _waveIn.RecordingStopped -= OnRecordingStopped; } catch { }
-                            try { _waveIn.Dispose(); } catch { }
-                            _waveIn = null;
+                            while (!token.IsCancellationRequested)
+                            {
+                                int nextPacketSize = captureClient.GetNextPacketSize();
+                                if (nextPacketSize == 0) { Thread.Sleep(10); continue; }
+
+                                nint bufPtr = captureClient.GetBuffer(out int numFrames, out AudioClientBufferFlags flags);
+                                if (numFrames > 0 && bufPtr != 0 &&
+                                    !flags.HasFlag(AudioClientBufferFlags.Silent) &&
+                                    _captureFormat != null)
+                                {
+                                    int byteCount = numFrames * _captureFormat.BlockAlign;
+                                    var raw = new byte[byteCount];
+                                    System.Runtime.InteropServices.Marshal.Copy(bufPtr, raw, 0, byteCount);
+                                    OnDataAvailable(null, new WaveInEventArgs(raw, byteCount));
+                                }
+                                captureClient.ReleaseBuffer(numFrames);
+                            }
                         }
-                        if (_writer != null) { try { _writer.Dispose(); } catch { } _writer = null; }
-                        _captureFormat = null;
-                    }
+                        catch (Exception ex) { Log4.Error($"[녹음] AudioClient 캡처 루프 오류: {ex.Message}"); }
+                        finally { try { audioClient.Stop(); } catch { } Log4.Info("[녹음] AudioClient 캡처 루프 종료"); }
+                    }, token);
+
+                    startSuccess = true;
+                    Log4.Info($"[녹음] AudioClient 직접 캡처 시작 성공 — {device.FriendlyName}");
+                    break;
                 }
-                if (startSuccess) break;
+                catch (Exception ex)
+                {
+                    Log4.Warn($"[녹음] AudioClient 직접 초기화 실패 — {device.FriendlyName}: {ex.Message} (HR=0x{ex.HResult:X8})");
+                    _captureFormat = null;
+                    if (_writer != null) { try { _writer.Dispose(); } catch { } _writer = null; }
+                }
             }
 
-            // 2단계: WaveInEvent fallback (MME API — WASAPI 우회)
+            // 2단계: WasapiNative 직접 P/Invoke (NAudio streamFlags 우회 — Intel SST 호환)
             if (!startSuccess)
             {
-                Log4.Warn("[녹음] WASAPI 전체 실패 — WaveInEvent(MME) fallback 시도");
-                var mmeFallbackFormats = new[]
+                Log4.Warn("[녹음] NAudio WASAPI 전체 실패 — WasapiNative 직접 초기화 시도");
+                try
                 {
-                    new WaveFormat(48000, 16, 1),
-                    new WaveFormat(44100, 16, 1),
-                    new WaveFormat(48000, 16, 2),
-                    new WaveFormat(44100, 16, 2),
-                    new WaveFormat(16000, 16, 1),
-                    new WaveFormat(8000, 16, 1),
-                };
-                // GetBestWaveFormat 결과를 첫 번째 후보로 추가
-                var bestFormat = GetBestWaveFormat(0);
-                var formatsToTry = new[] { bestFormat }.Concat(mmeFallbackFormats.Where(f => f.SampleRate != bestFormat.SampleRate || f.Channels != bestFormat.Channels)).ToArray();
+                    var firstDevice = devicesToTry.FirstOrDefault();
+                    if (firstDevice != null)
+                    {
+                        var pAudioClient = WasapiNative.ActivateAudioClient(firstDevice);
+                        Log4.Info($"[녹음] WasapiNative: IAudioClient 획득 0x{pAudioClient:X}");
 
-                bool mmeSuccess = false;
-                foreach (var fmt in formatsToTry)
-                {
-                    try
-                    {
-                        Log4.Info($"[녹음] WaveInEvent 시도: {fmt.SampleRate}Hz, {fmt.BitsPerSample}bit, {fmt.Channels}ch");
-                        _captureFormat = fmt;
-                        _waveIn = new WaveInEvent { DeviceNumber = 0, WaveFormat = _captureFormat };
-                        _writer = new WaveFileWriter(_currentFilePath, _outputFormat);
-                        _waveIn.DataAvailable += OnDataAvailable;
-                        _waveIn.RecordingStopped += OnRecordingStopped;
-                        _waveIn.StartRecording();
-                        Log4.Info($"[녹음] WaveInEvent 시작 성공: {fmt.SampleRate}Hz, {fmt.Channels}ch");
-                        mmeSuccess = true;
-                        break;
-                    }
-                    catch (Exception mmeEx)
-                    {
-                        Log4.Warn($"[녹음] WaveInEvent 실패: {fmt.SampleRate}Hz/{fmt.Channels}ch: {mmeEx.Message} (HResult: 0x{mmeEx.HResult:X8})");
-                        if (_waveIn != null) { try { _waveIn.DataAvailable -= OnDataAvailable; } catch { } try { _waveIn.RecordingStopped -= OnRecordingStopped; } catch { } try { _waveIn.Dispose(); } catch { } _waveIn = null; }
-                        if (_writer != null) { try { _writer.Dispose(); } catch { } _writer = null; }
-                        _captureFormat = null;
+                        int hr = WasapiNative.InitializeWithMixFormat(pAudioClient, out long usedDuration);
+                        Log4.Info($"[녹음] WasapiNative: Initialize HR=0x{hr:X8}, duration={usedDuration}");
+
+                        if (hr == 0)
+                        {
+                            // GetMixFormat으로 포맷 확인
+                            hr = WasapiNative.AudioClientGetMixFormat(pAudioClient, out IntPtr pWfx);
+                            if (hr == 0 && pWfx != IntPtr.Zero)
+                            {
+                                _captureFormat = System.Runtime.InteropServices.Marshal.PtrToStructure<NAudio.Wave.WaveFormat>(pWfx);
+                                System.Runtime.InteropServices.Marshal.FreeCoTaskMem(pWfx);
+                                Log4.Info($"[녹음] WasapiNative 포맷: {_captureFormat.SampleRate}Hz, {_captureFormat.BitsPerSample}bit, {_captureFormat.Channels}ch");
+                            }
+                            else
+                            {
+                                _captureFormat = new NAudio.Wave.WaveFormat(48000, 32, 2);
+                            }
+
+                            // NAudio WasapiCapture 내부 상태 우회 — 커스텀 캡처 루프 사용
+                            _nativeAudioClient = pAudioClient;
+                            startSuccess = StartNativeCaptureLoop(pAudioClient);
+                        }
+                        else
+                        {
+                            Log4.Warn($"[녹음] WasapiNative Initialize 실패: 0x{hr:X8}");
+                        }
                     }
                 }
-                if (!mmeSuccess)
-                    throw new InvalidOperationException("모든 오디오 캡처 방식 실패 (WASAPI + MME)");
+                catch (Exception ex)
+                {
+                    Log4.Warn($"[녹음] WasapiNative 직접 초기화 실패: {ex.Message}");
+                }
+            }
+
+            // 3단계: WaveInEvent fallback (MME API — WASAPI 우회)
+            if (!startSuccess)
+            {
+                Log4.Warn("[녹음] WasapiNative 실패 — WaveInEvent(MME) fallback 시도");
+                _captureFormat = GetBestWaveFormat(0);
+                Log4.Info($"[녹음] WaveInEvent 포맷: {_captureFormat.SampleRate}Hz, {_captureFormat.BitsPerSample}bit, {_captureFormat.Channels}ch");
+                _waveIn = new WaveInEvent { DeviceNumber = 0, WaveFormat = _captureFormat };
+                _writer = new WaveFileWriter(_currentFilePath, _outputFormat);
+                _waveIn.DataAvailable += OnDataAvailable;
+                _waveIn.RecordingStopped += OnRecordingStopped;
+                _waveIn.StartRecording();
+                Log4.Info("[녹음] WaveInEvent 시작 성공");
             }
             _isRecording = true;
             _isPaused = false;
@@ -393,21 +439,6 @@ public class AudioRecordingService : IDisposable
                 {
                     floatSamples[i] = span[i];
                     var abs = Math.Abs(span[i]);
-                    if (abs > maxVolume) maxVolume = abs;
-                }
-            }
-            else if (_captureFormat.BitsPerSample == 24)
-            {
-                // 24bit PCM → float 변환
-                int sampleCount = e.BytesRecorded / 3;
-                floatSamples = new float[sampleCount];
-                for (int i = 0; i < sampleCount; i++)
-                {
-                    int sample24 = e.Buffer[i * 3]
-                                 | (e.Buffer[i * 3 + 1] << 8)
-                                 | ((sbyte)e.Buffer[i * 3 + 2] << 16);
-                    floatSamples[i] = sample24 / 8388608f;
-                    var abs = Math.Abs(floatSamples[i]);
                     if (abs > maxVolume) maxVolume = abs;
                 }
             }
@@ -559,10 +590,83 @@ public class AudioRecordingService : IDisposable
         }
     }
 
+    /// <summary>
+    /// WasapiNative IAudioClient로 캡처 루프 시작 (NAudio 우회)
+    /// </summary>
+    private bool StartNativeCaptureLoop(IntPtr pAudioClient)
+    {
+        try
+        {
+            var iidCapture = WasapiNative.IID_IAudioCaptureClient;
+            int hr = WasapiNative.AudioClientGetService(pAudioClient, ref iidCapture, out IntPtr pCaptureClient);
+            if (hr != 0) { Log4.Warn($"[녹음] WasapiNative: GetService 실패 0x{hr:X8}"); return false; }
+
+            hr = WasapiNative.AudioClientStart(pAudioClient);
+            if (hr != 0) { Log4.Warn($"[녹음] WasapiNative: AudioClientStart 실패 0x{hr:X8}"); return false; }
+
+            Log4.Info("[녹음] WasapiNative: 캡처 시작 성공");
+            _writer = new WaveFileWriter(_currentFilePath!, _outputFormat);
+            _nativeCaptureCts = new CancellationTokenSource();
+            var token = _nativeCaptureCts.Token;
+
+            _nativeCaptureTask = Task.Run(() =>
+            {
+                Log4.Info("[녹음] WasapiNative: 캡처 루프 시작");
+                try
+                {
+                    while (!token.IsCancellationRequested)
+                    {
+                        int hrNext = WasapiNative.CaptureClientGetNextPacketSize(pCaptureClient, out uint packetSize);
+                        if (hrNext != 0 || packetSize == 0) { Thread.Sleep(10); continue; }
+
+                        int hrBuf = WasapiNative.CaptureClientGetBuffer(pCaptureClient,
+                            out IntPtr pData, out uint numFrames, out uint flags, out _, out _);
+                        if (hrBuf != 0) { Thread.Sleep(5); continue; }
+
+                        if (numFrames > 0 && pData != IntPtr.Zero &&
+                            (flags & WasapiNative.AUDCLNT_BUFFERFLAGS_SILENT) == 0 &&
+                            _captureFormat != null)
+                        {
+                            int byteCount = (int)numFrames * _captureFormat.BlockAlign;
+                            var raw = new byte[byteCount];
+                            System.Runtime.InteropServices.Marshal.Copy(pData, raw, 0, byteCount);
+                            OnDataAvailable(null, new WaveInEventArgs(raw, byteCount));
+                        }
+                        WasapiNative.CaptureClientReleaseBuffer(pCaptureClient, numFrames);
+                    }
+                }
+                catch (Exception ex) { Log4.Error($"[녹음] WasapiNative: 캡처 루프 오류: {ex.Message}"); }
+                finally
+                {
+                    WasapiNative.AudioClientStop(pAudioClient);
+                    Log4.Info("[녹음] WasapiNative: 캡처 루프 종료");
+                }
+            }, token);
+
+            return true;
+        }
+        catch (Exception ex) { Log4.Error($"[녹음] WasapiNative: StartNativeCaptureLoop 실패: {ex.Message}"); return false; }
+    }
+
     private void Cleanup()
     {
         _isRecording = false;
         _isPaused = false;
+
+        // WasapiNative 캡처 루프 정리
+        if (_nativeCaptureCts != null)
+        {
+            _nativeCaptureCts.Cancel();
+            try { _nativeCaptureTask?.Wait(2000); } catch { }
+            _nativeCaptureCts.Dispose();
+            _nativeCaptureCts = null;
+            _nativeCaptureTask = null;
+        }
+        if (_nativeAudioClient != IntPtr.Zero)
+        {
+            try { unsafe { var v = *(IntPtr**)_nativeAudioClient; ((delegate* unmanaged[Stdcall]<IntPtr, uint>)v[2])(_nativeAudioClient); } } catch { }
+            _nativeAudioClient = IntPtr.Zero;
+        }
 
         if (_waveIn != null)
         {

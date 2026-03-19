@@ -2480,7 +2480,7 @@ public partial class OneNoteViewModel : ViewModelBase
     private Action<string>? _recordingErrorHandler;
 
     [RelayCommand]
-    public void StartRecording()
+    public async Task StartRecordingAsync()
     {
         if (IsRecording) return;
 
@@ -2500,7 +2500,8 @@ public partial class OneNoteViewModel : ViewModelBase
                     _recordingService.RecordingError -= _recordingErrorHandler;
             }
 
-            _recordingService ??= new Services.Audio.AudioRecordingService();
+            _recordingService?.Dispose();
+            _recordingService = new Services.Audio.AudioRecordingService();
 
             // 이벤트 핸들러 생성
             _volumeChangedHandler = volume =>
@@ -2547,7 +2548,7 @@ public partial class OneNoteViewModel : ViewModelBase
 
             // 현재 선택된 페이지 ID와 연결 (있으면)
             var pageId = SelectedPage?.Id;
-            _recordingService.StartRecording(pageId);
+            await _recordingService.StartRecordingAsync(pageId);
 
             IsRecording = true;
             IsRecordingPaused = false;

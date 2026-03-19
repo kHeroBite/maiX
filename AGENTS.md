@@ -199,10 +199,10 @@ WSL에서_실행 (기본):
   판정_기준: 사용자가 명시적으로 계획/플랜/구상/설계/분석을 요청하고 파일 수정 없음 → 계획 분류 (메인 사전 탐색 불필요)
   금지: 구현 요청("추가해줘", "구현해줘", "만들어줘")을 복잡하다는 이유로 계획 분류 금지 — 반드시 라이트/미디엄/풀로 분류
   절차:
-    1. SID 결정: OWNER_SID=$(awk '{print $2}' /tmp/claude_pipeline_state 2>/dev/null | cut -c1-8); SHORT_SID="${OWNER_SID:-$(echo $CLAUDE_SESSION_ID | cut -c1-8)}"
+    1. SID 결정: MY_SID=$(echo "$CLAUDE_SESSION_ID" | cut -c1-8); EXISTING=$(ls /tmp/claude_pipeline_state_* 2>/dev/null | head -1); [ -z "$MY_SID" ] && MY_SID=$(basename "$EXISTING" 2>/dev/null | sed 's/claude_pipeline_state_//'); SHORT_SID="${MY_SID:-nosid}"
     2. TeamCreate (team_name 자동 생성)
     3. BEFORE 스냅샷: tmux list-panes -a -F '#{pane_id}' | sort > /tmp/claude_panes_before_${SHORT_SID}.txt
-    4. pipeline_state 설정: echo "PLAN $CLAUDE_SESSION_ID" > /tmp/claude_pipeline_state
+    4. pipeline_state 설정: echo "PLAN ${SHORT_SID}" > /tmp/claude_pipeline_state_${SHORT_SID}
     5. kPlan spawn: Agent(team_name, name="kPlan-1", mode="bypassPermissions", prompt="Skill('kPlan') + 사용자 요구사항 + Skill('kInfra_{project}')")
     6. kPlan 완료 대기 → 결과 수신 → 사용자에게 결과 전달
     7. shutdown_request 발송 (fire-and-forget)
