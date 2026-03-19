@@ -4,7 +4,6 @@ using System.IO;
 using System.Runtime.InteropServices;
 using NAudio.CoreAudioApi;
 using NAudio.Wave;
-using Serilog;
 using System.Linq;
 using MaiX.Utils;
 
@@ -15,8 +14,6 @@ namespace MaiX.Services.Audio;
 /// </summary>
 public class AudioRecordingService : IDisposable
 {
-    private static readonly ILogger _logger = Log.ForContext<AudioRecordingService>();
-
     private IWaveIn? _waveIn;
     private WaveFileWriter? _writer;
     private string? _currentFilePath;
@@ -186,7 +183,7 @@ public class AudioRecordingService : IDisposable
 
             Log4.Info($"[녹음] 캡처 장치 {devicesToTry.Count}개 탐색 시작");
 
-            var bufferSizes = new[] { 0, 200, 500, 50, 30 };
+            var bufferSizes = new[] { 0 };
             foreach (var device in devicesToTry)
             {
                 Log4.Info($"[녹음] 장치 시도: {device.FriendlyName}");
@@ -300,7 +297,7 @@ public class AudioRecordingService : IDisposable
         }
         catch (Exception ex)
         {
-            _logger.Error(ex, "녹음 중지 실패");
+            Log4.Error($"[녹음] 녹음 중지 실패: {ex.Message}");
             Cleanup();
             throw;
         }
@@ -315,7 +312,7 @@ public class AudioRecordingService : IDisposable
 
         _isPaused = true;
         _pauseStartTime = DateTime.Now;
-        _logger.Debug("녹음 일시정지");
+        Log4.Debug("[녹음] 녹음 일시정지");
     }
 
     /// <summary>
@@ -327,7 +324,7 @@ public class AudioRecordingService : IDisposable
 
         _pausedDuration += DateTime.Now - _pauseStartTime;
         _isPaused = false;
-        _logger.Debug("녹음 재개");
+        Log4.Debug("[녹음] 녹음 재개");
     }
 
     /// <summary>
@@ -353,11 +350,11 @@ public class AudioRecordingService : IDisposable
             try
             {
                 File.Delete(filePath);
-                _logger.Information("녹음 취소됨, 파일 삭제: {FilePath}", filePath);
+                Log4.Info($"[녹음] 녹음 취소됨, 파일 삭제: {filePath}");
             }
             catch (Exception ex)
             {
-                _logger.Warning(ex, "녹음 파일 삭제 실패: {FilePath}", filePath);
+                Log4.Warn($"[녹음] 녹음 파일 삭제 실패: {filePath}: {ex.Message}");
             }
         }
     }
@@ -396,6 +393,21 @@ public class AudioRecordingService : IDisposable
                 {
                     floatSamples[i] = span[i];
                     var abs = Math.Abs(span[i]);
+                    if (abs > maxVolume) maxVolume = abs;
+                }
+            }
+            else if (_captureFormat.BitsPerSample == 24)
+            {
+                // 24bit PCM → float 변환
+                int sampleCount = e.BytesRecorded / 3;
+                floatSamples = new float[sampleCount];
+                for (int i = 0; i < sampleCount; i++)
+                {
+                    int sample24 = e.Buffer[i * 3]
+                                 | (e.Buffer[i * 3 + 1] << 8)
+                                 | ((sbyte)e.Buffer[i * 3 + 2] << 16);
+                    floatSamples[i] = sample24 / 8388608f;
+                    var abs = Math.Abs(floatSamples[i]);
                     if (abs > maxVolume) maxVolume = abs;
                 }
             }
@@ -490,7 +502,7 @@ public class AudioRecordingService : IDisposable
                         _totalBytesProcessed += _realtimeBuffer.Count;
                         _realtimeBuffer.Clear();
 
-                        _logger.Debug("실시간 청크 준비: {StartTime}, {Size} bytes", chunkStartTime, chunkData.Length);
+                        Log4.Debug($"[녹음] 실시간 청크 준비: {chunkStartTime}, {chunkData.Length} bytes");
                         RealtimeAudioChunkReady?.Invoke(chunkData, chunkStartTime);
                     }
                 }
@@ -498,7 +510,7 @@ public class AudioRecordingService : IDisposable
         }
         catch (Exception ex)
         {
-            _logger.Error(ex, "녹음 데이터 처리 실패");
+            Log4.Error($"[녹음] 녹음 데이터 처리 실패: {ex.Message}");
         }
     }
 
@@ -519,7 +531,7 @@ public class AudioRecordingService : IDisposable
                     var bytesPerSecond = _outputFormat.AverageBytesPerSecond;
                     var chunkStartTime = TimeSpan.FromSeconds((double)_totalBytesProcessed / bytesPerSecond);
 
-                    _logger.Debug("실시간 최종 청크 처리: {StartTime}, {Size} bytes", chunkStartTime, chunkData.Length);
+                    Log4.Debug($"[녹음] 실시간 최종 청크 처리: {chunkStartTime}, {chunkData.Length} bytes");
                     RealtimeAudioChunkReady?.Invoke(chunkData, chunkStartTime);
                 }
             }
@@ -530,14 +542,14 @@ public class AudioRecordingService : IDisposable
         if (e.Exception != null)
         {
             Log4.Error($"[AudioRecording] ★ 녹음 중 오류 발생: {e.Exception.Message}");
-            _logger.Error(e.Exception, "녹음 중 오류 발생");
+            Log4.Error($"[녹음] 녹음 중 오류 발생: {e.Exception.Message}");
             RecordingError?.Invoke(e.Exception.Message);
         }
         else if (!string.IsNullOrEmpty(filePath))
         {
             Log4.Info($"[AudioRecording] ★ 녹음 완료, RecordingCompleted 이벤트 발생 전");
             Log4.Info($"[AudioRecording] ★ RecordingCompleted 핸들러 수: {RecordingCompleted?.GetInvocationList().Length ?? 0}");
-            _logger.Information("녹음 완료: {FilePath}", filePath);
+            Log4.Info($"[녹음] 녹음 완료: {filePath}");
             RecordingCompleted?.Invoke(filePath);
             Log4.Info($"[AudioRecording] ★ RecordingCompleted 이벤트 발생 완료");
         }
