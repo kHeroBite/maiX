@@ -111,3 +111,11 @@
 - **교훈**: WaveInEvent에 임의 샘플레이트를 지정하지 말 것. 항상 GetBestWaveFormat()으로 기기 지원 포맷을 조회하여 사용
 - **심각도**: 높음 (녹음 기능 전체 불가)
 - **Level**: 2 (코드 패턴 — GetBestWaveFormat 강제 사용)
+
+## L-240: phase_guard.sh kInfra_* KO 전환 — 파이프라인 진행 중 덮어쓰기 금지 (2026-03-19)
+- **문제**: kDone 프롬프트에 Skill('kInfra_maix') 포함 시 phase_guard.sh PostToolUse hook이 DONE 상태를 KO로 덮어씀 → pipeline_order_guard.sh가 KO 상태에서 DONE spawn을 차단 → kDone spawn 실패 + 좀비 pane 생성
+- **근본원인**: phase_guard.sh의 kInfra_* 처리에 현재 상태 조건이 없어 IDLE/FINISH 이외 상태도 무조건 KO로 전환
+- **해결**: phase_guard.sh kInfra_* 분기에 IDLE/FINISH 상태일 때만 KO 전환하는 조건 추가 (kO 분기와 동일한 조건)
+- **교훈**: kDone 프롬프트에서 Skill('kInfra_*') 호출 제거로 회피 가능하나 hook 자체도 안전해야 함. IDLE/FINISH 이외 파이프라인 진행 중 상태는 어떤 스킬 로딩으로도 KO 전환 금지
+- **심각도**: 높음 (kDone 진입 완전 차단 → 좀비 pane 생성)
+- **Level**: 3 (강제 — phase_guard.sh hook 수정)
