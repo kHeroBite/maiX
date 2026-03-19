@@ -5747,6 +5747,12 @@ public partial class MainWindow : FluentWindow
             {
                 Log4.Error($"[OneNote] 녹음 시작 실패: {ex.Message}");
                 UpdateRecordingUI(false);
+                if (OneNoteRecordingStatus != null)
+                {
+                    OneNoteRecordingStatus.Text = "⚠️ 마이크를 사용할 수 없습니다. 마이크 설정을 확인해주세요.";
+                    OneNoteRecordingStatus.Foreground = new System.Windows.Media.SolidColorBrush(
+                        System.Windows.Media.Colors.Red);
+                }
             }
         }
     }

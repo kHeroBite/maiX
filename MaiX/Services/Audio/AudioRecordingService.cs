@@ -180,8 +180,8 @@ public class AudioRecordingService : IDisposable
             // 2단계: WaveInEvent fallback (MME API — WASAPI 우회)
             if (!startSuccess)
             {
-                _captureFormat = new WaveFormat(16000, 16, 1);
-                _logger.Information("[녹음] WaveInEvent fallback: {Rate}Hz, {Bits}bit, {Ch}ch",
+                _captureFormat = GetBestWaveFormat(0);
+                _logger.Information("[녹음] WaveInEvent fallback — 자동감지 포맷: {Rate}Hz, {Bits}bit, {Ch}ch",
                     _captureFormat.SampleRate, _captureFormat.BitsPerSample, _captureFormat.Channels);
                 _waveIn = new WaveInEvent { DeviceNumber = 0, WaveFormat = _captureFormat };
                 _writer = new WaveFileWriter(_currentFilePath, _outputFormat);
