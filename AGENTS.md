@@ -221,7 +221,7 @@ WSL에서_실행 (기본):
 
 ### 메인 + 서브스킬 (28개)
 
-> **파이프라인 순서 엄수 (L-008)**: 메인(kO 지침)이 kPlan(1) → kDev(2) → kTest(3) → kDone(4) 순서로 팀에이전트 spawn. 이전 단계 완료 전 다음 진입 금지. **진입 기반 상태 전환**: spawn 직전에 해당 단계 상태 설정 (비정상종료 시 실패 단계 식별 가능). **실패 시 역라우팅 허용**: DEV→PLAN, TEST→DEV, DONE→TEST (1단계 역방향만, 최대 2회 — `/tmp/claude_reroute_counter_${SHORT_SID}` 카운터 파일로 강제).
+> **파이프라인 순서 엄수 (L-008)**: 메인(kO 지침)이 kPlan(1) → kDev(2) → kTest(3) → kDone(4) 순서로 팀에이전트 spawn. 이전 단계 완료 전 다음 진입 금지. **진입 기반 상태 전환**: spawn 직전에 해당 단계 상태 설정 (비정상종료 시 실패 단계 식별 가능). **실패 시 역라우팅 허용**: DEV→PLAN, TEST→DEV, TEST→PLAN, DONE→TEST (최대 2회 — `/tmp/claude_reroute_counter_${SHORT_SID}` 카운터 파일로 강제). TEST→PLAN은 설계/계획 재검토가 필요한 경우만.
 
 #### kPlan 계열 (5개) — 순수 계획 수립
 kPlan(메인) → kPlan_deep(심층설계) / kPlan_sim(시뮬레이션) / kPlan_review(검증) / kPlan_parallel(병렬에이전트결정)
