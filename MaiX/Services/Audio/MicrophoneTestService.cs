@@ -273,33 +273,17 @@ public class MicrophoneTestService : IDisposable
     {
         try
         {
-            var enumerator = new MMDeviceEnumerator();
-            var device = enumerator.EnumerateAudioEndPoints(DataFlow.Capture, DeviceState.Active)
-                                   .FirstOrDefault(d => d.ID == deviceId);
-            if (device == null)
-            {
-                Log4.Warn($"[마이크테스트] NativeMonitoring 장치를 찾을 수 없음: {deviceId}");
-                return false;
-            }
-
-            // 1) ActivateAudioClient — 순수 P/Invoke로 IAudioClient COM 포인터 획득
-            _nativeAudioClient = WasapiNative.ActivateAudioClient(device);
-            if (_nativeAudioClient == IntPtr.Zero)
-            {
-                Log4.Warn("[마이크테스트] WasapiNative.ActivateAudioClient 실패 — IntPtr.Zero 반환");
-                return false;
-            }
-
-            // 2) InitializeWithMixFormat — 4단계 AUTOCONVERTPCM 폴백
-            int hr = WasapiNative.InitializeWithMixFormat(_nativeAudioClient, out long _);
-            if (hr != 0)
+            // 1) InitializeWithMixFormat — 각 시도마다 새 IAudioClient Activate + 4단계 폴백
+            int hr = WasapiNative.InitializeWithMixFormat(deviceId, out _nativeAudioClient, out _);
+            if (hr != 0 || _nativeAudioClient == IntPtr.Zero)
             {
                 Log4.Warn($"[마이크테스트] WasapiNative.InitializeWithMixFormat 실패 hr=0x{hr:X8}");
-                WasapiNative.ComRelease(ref _nativeAudioClient);
+                if (_nativeAudioClient != IntPtr.Zero)
+                    WasapiNative.ComRelease(ref _nativeAudioClient);
                 return false;
             }
 
-            // 3) GetService → IAudioCaptureClient
+            // 2) GetService → IAudioCaptureClient
             var iidCapture = WasapiNative.IID_IAudioCaptureClient;
             hr = WasapiNative.AudioClientGetService(_nativeAudioClient, ref iidCapture, out _nativeCaptureClient);
             if (hr != 0 || _nativeCaptureClient == IntPtr.Zero)
@@ -309,7 +293,7 @@ public class MicrophoneTestService : IDisposable
                 return false;
             }
 
-            // 4) GetMixFormat로 실제 캡처 포맷 획득
+            // 3) GetMixFormat로 실제 캡처 포맷 획득
             hr = WasapiNative.AudioClientGetMixFormat(_nativeAudioClient, out IntPtr pWfx);
             if (hr == 0 && pWfx != IntPtr.Zero)
             {
@@ -333,7 +317,7 @@ public class MicrophoneTestService : IDisposable
                 Log4.Warn("[마이크테스트] GetMixFormat 실패 — 48kHz float stereo 폴백");
             }
 
-            // 5) AudioClientStart
+            // 4) AudioClientStart
             hr = WasapiNative.AudioClientStart(_nativeAudioClient);
             if (hr != 0)
             {
@@ -343,7 +327,7 @@ public class MicrophoneTestService : IDisposable
                 return false;
             }
 
-            // 6) 캡처 루프 Task 시작
+            // 5) 캡처 루프 Task 시작
             _nativeMonitorCts = new CancellationTokenSource();
             _nativeMonitorTask = Task.Run(() => NativeCaptureLoop(_nativeMonitorCts.Token));
             _isMonitoring = true;

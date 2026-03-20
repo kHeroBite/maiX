@@ -262,51 +262,145 @@ internal static class WasapiNative
     }
 
     /// <summary>
-    /// IAudioClient::Initialize — GetMixFormat 원본 pWfx 포인터로 직접 호출
-    /// 4단계 폴백: flags=0/dur=0 → AUTOCONVERT/dur=0 → AUTOCONVERT/defaultPeriod → flags=0/defaultPeriod
-    /// Intel SST 등 AUTOCONVERTPCM 필요 드라이버 대응
+    /// deviceId로 CoCreateInstance → GetDevice → Activate하여 IAudioClient COM 포인터 획득
+    /// ActivateAudioClient(MMDevice)와 동일 구조이나 string deviceId 직접 입력
     /// </summary>
-    public static unsafe int InitializeWithMixFormat(IntPtr pAudioClient, out long usedDuration)
+    public static unsafe IntPtr ActivateAudioClientById(string deviceId)
     {
-        // GetMixFormat으로 드라이버 네이티브 포맷 획득
-        int hr = AudioClientGetMixFormat(pAudioClient, out IntPtr pWfx);
-        if (hr != 0) { usedDuration = 0; return hr; }
+        var clsid = CLSID_MMDeviceEnumerator;
+        var iid = IID_IMMDeviceEnumerator;
+        const uint CLSCTX_ALL = 0x17;
+        int hr = CoCreateInstance(ref clsid, IntPtr.Zero, CLSCTX_ALL, ref iid, out IntPtr pEnumerator);
+        if (hr != 0) return IntPtr.Zero;
 
         try
         {
-            var vtbl = *(IntPtr**)pAudioClient;
-            var initialize = (delegate* unmanaged[Stdcall]<IntPtr, int, uint, long, long, IntPtr, IntPtr, int>)vtbl[3];
+            var enumVtbl = *(IntPtr**)pEnumerator;
+            var getDevice = (delegate* unmanaged[Stdcall]<IntPtr, char*, IntPtr*, int>)enumVtbl[5];
+            IntPtr pDevice;
+            fixed (char* pId = deviceId)
+                hr = getDevice(pEnumerator, pId, &pDevice);
+            if (hr != 0) return IntPtr.Zero;
 
-            // 시도 1: flags=0, dur=0 (드라이버가 자동 결정)
-            hr = initialize(pAudioClient, 0, 0, 0, 0, pWfx, IntPtr.Zero);
-            if (hr == 0) { usedDuration = 0; return 0; }
-            Log4.Warn($"[WasapiNative] Initialize 시도1 실패 HResult=0x{(uint)hr:X8} flags=0 dur=0");
-
-            // 시도 2: AUTOCONVERTPCM | SRC_DEFAULT_QUALITY, dur=0
-            const uint autoConvertFlags = AUDCLNT_STREAMFLAGS_AUTOCONVERTPCM | AUDCLNT_STREAMFLAGS_SRC_DEFAULT_QUALITY;
-            hr = initialize(pAudioClient, 0, autoConvertFlags, 0, 0, pWfx, IntPtr.Zero);
-            if (hr == 0) { usedDuration = 0; return 0; }
-            Log4.Warn($"[WasapiNative] Initialize 시도2 실패 HResult=0x{(uint)hr:X8} flags=AUTOCONVERT dur=0");
-
-            // GetDevicePeriod 취득
-            hr = AudioClientGetDevicePeriod(pAudioClient, out long defaultPeriod, out _);
-            if (hr != 0) { usedDuration = 0; return hr; }
-            Log4.Info($"[WasapiNative] GetDevicePeriod: default={defaultPeriod}");
-
-            // 시도 3: AUTOCONVERTPCM | SRC_DEFAULT_QUALITY, dur=defaultPeriod
-            hr = initialize(pAudioClient, 0, autoConvertFlags, defaultPeriod, 0, pWfx, IntPtr.Zero);
-            if (hr == 0) { usedDuration = defaultPeriod; return 0; }
-            Log4.Warn($"[WasapiNative] Initialize 시도3 실패 HResult=0x{(uint)hr:X8} flags=AUTOCONVERT dur={defaultPeriod}");
-
-            // 시도 4: flags=0, dur=defaultPeriod (최종 폴백)
-            hr = initialize(pAudioClient, 0, 0, defaultPeriod, 0, pWfx, IntPtr.Zero);
-            usedDuration = defaultPeriod;
-            return hr;
+            try
+            {
+                var devVtbl = *(IntPtr**)pDevice;
+                var activate = (delegate* unmanaged[Stdcall]<IntPtr, Guid*, uint, IntPtr, IntPtr*, int>)devVtbl[3];
+                var iidAudioClient = IID_IAudioClient;
+                IntPtr pAudioClient;
+                hr = activate(pDevice, &iidAudioClient, CLSCTX_ALL, IntPtr.Zero, &pAudioClient);
+                return hr == 0 ? pAudioClient : IntPtr.Zero;
+            }
+            finally
+            {
+                var devVtbl2 = *(IntPtr**)pDevice;
+                ((delegate* unmanaged[Stdcall]<IntPtr, uint>)devVtbl2[2])(pDevice);
+            }
         }
         finally
         {
-            Marshal.FreeCoTaskMem(pWfx);
+            var enumVtbl2 = *(IntPtr**)pEnumerator;
+            ((delegate* unmanaged[Stdcall]<IntPtr, uint>)enumVtbl2[2])(pEnumerator);
         }
+    }
+
+    /// <summary>
+    /// IAudioClient::Initialize — 각 시도마다 새 IAudioClient Activate
+    /// IAudioClient::Initialize는 1회만 호출 가능 — 실패 시 ComRelease 후 새 인스턴스로 재시도
+    /// 4단계 폴백:
+    ///   (1) MixFormat + flags=0
+    ///   (2) MixFormat + AUTOCONVERTPCM|SRC_DEFAULT_QUALITY
+    ///   (3) PCM 16bit/48kHz/1ch + flags=0
+    ///   (4) PCM 16bit/48kHz/1ch + AUTOCONVERTPCM|SRC_DEFAULT_QUALITY
+    /// </summary>
+    public static unsafe int InitializeWithMixFormat(string deviceId, out IntPtr pAudioClientOut, out long usedDuration)
+    {
+        pAudioClientOut = IntPtr.Zero;
+        usedDuration = 0;
+        const uint autoConvertFlags = AUDCLNT_STREAMFLAGS_AUTOCONVERTPCM | AUDCLNT_STREAMFLAGS_SRC_DEFAULT_QUALITY;
+
+        // PCM 16bit/48kHz/1ch 폴백 포맷
+        var pcmFormat = new WAVEFORMATEXTENSIBLE
+        {
+            wFormatTag = 0xFFFE,
+            nChannels = 1,
+            nSamplesPerSec = 48000,
+            wBitsPerSample = 16,
+            nBlockAlign = 2,
+            nAvgBytesPerSec = 96000,
+            cbSize = 22,
+            wValidBitsPerSample = 16,
+            dwChannelMask = KSAUDIO_SPEAKER_MONO,
+            SubFormat = KSDATAFORMAT_SUBTYPE_PCM
+        };
+
+        // 시도 목록: (useMixFormat, streamFlags, 설명)
+        var attempts = new (bool useMix, uint flags, string desc)[]
+        {
+            (true,  0,               "MixFormat+flags=0"),
+            (true,  autoConvertFlags, "MixFormat+AUTOCONVERT"),
+            (false, 0,               "PCM16/48k/1ch+flags=0"),
+            (false, autoConvertFlags, "PCM16/48k/1ch+AUTOCONVERT"),
+        };
+
+        for (int i = 0; i < attempts.Length; i++)
+        {
+            var (useMix, flags, desc) = attempts[i];
+
+            // 매 시도마다 새 IAudioClient Activate
+            IntPtr pClient = ActivateAudioClientById(deviceId);
+            if (pClient == IntPtr.Zero)
+            {
+                Log4.Warn($"[WasapiNative] Initialize 시도{i + 1} ActivateAudioClient 실패 ({desc})");
+                continue;
+            }
+
+            int hr;
+            if (useMix)
+            {
+                // GetMixFormat으로 드라이버 네이티브 포맷 사용
+                hr = AudioClientGetMixFormat(pClient, out IntPtr pWfx);
+                if (hr != 0 || pWfx == IntPtr.Zero)
+                {
+                    Log4.Warn($"[WasapiNative] Initialize 시도{i + 1} GetMixFormat 실패 hr=0x{(uint)hr:X8}");
+                    ComRelease(ref pClient);
+                    continue;
+                }
+
+                try
+                {
+                    var vtbl = *(IntPtr**)pClient;
+                    var initialize = (delegate* unmanaged[Stdcall]<IntPtr, int, uint, long, long, IntPtr, IntPtr, int>)vtbl[3];
+                    hr = initialize(pClient, 0, flags, 0, 0, pWfx, IntPtr.Zero);
+                }
+                finally
+                {
+                    Marshal.FreeCoTaskMem(pWfx);
+                }
+            }
+            else
+            {
+                // PCM 16bit/48kHz/1ch 고정 포맷 사용
+                var vtbl = *(IntPtr**)pClient;
+                var initialize = (delegate* unmanaged[Stdcall]<IntPtr, int, uint, long, long, WAVEFORMATEXTENSIBLE*, IntPtr, int>)vtbl[3];
+                var pFmt = &pcmFormat;
+                hr = initialize(pClient, 0, flags, 0, 0, pFmt, IntPtr.Zero);
+            }
+
+            if (hr == 0)
+            {
+                Log4.Info($"[WasapiNative] Initialize 시도{i + 1} 성공 ({desc})");
+                pAudioClientOut = pClient;
+                usedDuration = 0;
+                return 0;
+            }
+
+            Log4.Warn($"[WasapiNative] Initialize 시도{i + 1} 실패 HResult=0x{(uint)hr:X8} ({desc})");
+            ComRelease(ref pClient);
+        }
+
+        Log4.Warn("[WasapiNative] InitializeWithMixFormat 4단계 모두 실패");
+        return unchecked((int)0x80004005); // E_FAIL
     }
 
     // IID_IAudioClient: {1CB9AD4C-DBFA-4C32-B178-C2F568A703B2}

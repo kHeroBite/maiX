@@ -276,10 +276,7 @@ public class AudioRecordingService : IDisposable
                     var firstDevice = devicesToTry.FirstOrDefault();
                     if (firstDevice != null)
                     {
-                        var pAudioClient = WasapiNative.ActivateAudioClient(firstDevice);
-                        Log4.Info($"[녹음] WasapiNative: IAudioClient 획득 0x{pAudioClient:X}");
-
-                        int hr = WasapiNative.InitializeWithMixFormat(pAudioClient, out long usedDuration);
+                        int hr = WasapiNative.InitializeWithMixFormat(firstDevice.ID, out IntPtr pAudioClient, out long usedDuration);
                         Log4.Info($"[녹음] WasapiNative: Initialize HR=0x{hr:X8}, duration={usedDuration}");
 
                         if (hr == 0)

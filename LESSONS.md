@@ -199,3 +199,12 @@
 - **교훈**: 최신 WASAPI API(IAudioClient3)는 드라이버 네이티브 주기(defaultPeriod)를 사용하여 호환성이 더 높을 수 있음. 구형 IAudioClient Initialize 대신 IAudioClient3 SharedAudioStream을 먼저 시도하는 것이 효과적
 - **심각도**: 낮음 (패턴 기록)
 - **Level**: 1 (참고)
+
+## L-250: IAudioClient::Initialize는 인스턴스당 1회만 호출 가능 — 실패 시 새 인스턴스 필수 (2026-03-20)
+
+- **문제**: Intel SST 마이크에서 WASAPI 캡처가 완전히 실패. 동일 IAudioClient 인스턴스로 다른 flags/format으로 4번 재시도했으나 모두 실패
+- **근본 원인**: COM 규약상 IAudioClient::Initialize()는 인스턴스당 단 1회만 호출 가능. 성공이든 실패든 1회 호출 후 내부 상태가 변경되어 재호출 시 AUDCLNT_E_ALREADY_INITIALIZED(0x88890002) 또는 E_FAIL 반환
+- **해결**: 각 폴백 시도마다 ComRelease 후 새 IAudioClient를 ActivateAudioClientById()로 재획득. 4단계 폴백: (1) MixFormat+flags=0, (2) MixFormat+AUTOCONVERT, (3) PCM 16bit/48kHz/1ch+flags=0, (4) PCM 16bit+AUTOCONVERT
+- **교훈**: WASAPI COM 인터페이스에서 Initialize 재시도가 필요하면 반드시 기존 인스턴스를 Release하고 새 인스턴스를 Activate해야 함. 이는 IAudioClient뿐 아니라 일반적인 COM 패턴
+- **심각도**: 높음 (캡처 완전 실패 → 마이크 기능 사용 불가)
+- **Level**: 2 (인지)
