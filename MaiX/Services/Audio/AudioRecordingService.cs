@@ -718,7 +718,7 @@ public class AudioRecordingService : IDisposable
     /// <returns>지원되는 WaveFormat (기본: 44100Hz, 16bit, Mono)</returns>
     private WaveFormat GetBestWaveFormat(int deviceNumber)
     {
-        var candidateRates = new[] { 44100, 48000, 22050, 11025, 8000 };
+        var candidateRates = new[] { 48000, 44100, 22050, 11025, 8000 };
         var candidateChannels = new[] { 1, 2 };
 
         try

@@ -262,9 +262,9 @@ internal static class WasapiNative
     }
 
     /// <summary>
-    /// IAudioClient::Initialize — GetMixFormat 원본 pWfx 포인터로 직접 호출 (streamFlags=0)
-    /// NAudio의 AUTOCONVERTPCM 플래그 없이 순수 Shared Mode 초기화
-    /// hnsBufferDuration=0 시도 → 실패 시 GetDevicePeriod defaultPeriod 사용
+    /// IAudioClient::Initialize — GetMixFormat 원본 pWfx 포인터로 직접 호출
+    /// 4단계 폴백: flags=0/dur=0 → AUTOCONVERT/dur=0 → AUTOCONVERT/defaultPeriod → flags=0/defaultPeriod
+    /// Intel SST 등 AUTOCONVERTPCM 필요 드라이버 대응
     /// </summary>
     public static unsafe int InitializeWithMixFormat(IntPtr pAudioClient, out long usedDuration)
     {
@@ -277,17 +277,28 @@ internal static class WasapiNative
             var vtbl = *(IntPtr**)pAudioClient;
             var initialize = (delegate* unmanaged[Stdcall]<IntPtr, int, uint, long, long, IntPtr, IntPtr, int>)vtbl[3];
 
-            // 시도 1: hnsBufferDuration=0 (드라이버가 자동 결정)
-            hr = initialize(pAudioClient, 0 /*Shared*/, 0 /*streamFlags=없음*/, 0, 0, pWfx, IntPtr.Zero);
+            // 시도 1: flags=0, dur=0 (드라이버가 자동 결정)
+            hr = initialize(pAudioClient, 0, 0, 0, 0, pWfx, IntPtr.Zero);
             if (hr == 0) { usedDuration = 0; return 0; }
+            Log4.Warn($"[WasapiNative] Initialize 시도1 실패 HResult=0x{(uint)hr:X8} flags=0 dur=0");
 
-            Log4.Warn($"[WasapiNative] Initialize(bufferDuration=0) 실패: 0x{hr:X8}");
+            // 시도 2: AUTOCONVERTPCM | SRC_DEFAULT_QUALITY, dur=0
+            const uint autoConvertFlags = AUDCLNT_STREAMFLAGS_AUTOCONVERTPCM | AUDCLNT_STREAMFLAGS_SRC_DEFAULT_QUALITY;
+            hr = initialize(pAudioClient, 0, autoConvertFlags, 0, 0, pWfx, IntPtr.Zero);
+            if (hr == 0) { usedDuration = 0; return 0; }
+            Log4.Warn($"[WasapiNative] Initialize 시도2 실패 HResult=0x{(uint)hr:X8} flags=AUTOCONVERT dur=0");
 
-            // 시도 2: GetDevicePeriod defaultPeriod 사용
+            // GetDevicePeriod 취득
             hr = AudioClientGetDevicePeriod(pAudioClient, out long defaultPeriod, out _);
             if (hr != 0) { usedDuration = 0; return hr; }
-
             Log4.Info($"[WasapiNative] GetDevicePeriod: default={defaultPeriod}");
+
+            // 시도 3: AUTOCONVERTPCM | SRC_DEFAULT_QUALITY, dur=defaultPeriod
+            hr = initialize(pAudioClient, 0, autoConvertFlags, defaultPeriod, 0, pWfx, IntPtr.Zero);
+            if (hr == 0) { usedDuration = defaultPeriod; return 0; }
+            Log4.Warn($"[WasapiNative] Initialize 시도3 실패 HResult=0x{(uint)hr:X8} flags=AUTOCONVERT dur={defaultPeriod}");
+
+            // 시도 4: flags=0, dur=defaultPeriod (최종 폴백)
             hr = initialize(pAudioClient, 0, 0, defaultPeriod, 0, pWfx, IntPtr.Zero);
             usedDuration = defaultPeriod;
             return hr;

@@ -2,6 +2,8 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Threading;
+using System.Threading.Tasks;
 using NAudio.CoreAudioApi;
 using NAudio.Wave;
 using MaiX.Utils;
@@ -18,13 +20,16 @@ public record AudioDeviceInfo(string DeviceId, string FriendlyName, bool IsDefau
 /// </summary>
 public class MicrophoneTestService : IDisposable
 {
-    private WasapiCapture? _capture;
+    private IWaveIn? _capture;
     private WaveFileWriter? _waveWriter;
     private WaveOutEvent? _playbackDevice;
     private AudioFileReader? _audioFileReader;
     private string? _testRecordingPath;
     private bool _isMonitoring;
     private bool _isRecording;
+    private CancellationTokenSource? _monitorCts;
+    private Task? _monitorTask;
+    private WaveFormat? _captureFormat;
 
     /// <summary>
     /// 볼륨 레벨 변경 이벤트 (0.0 ~ 1.0)
@@ -86,34 +91,193 @@ public class MicrophoneTestService : IDisposable
     }
 
     /// <summary>
-    /// 지정한 장치로 실시간 모니터링 시작
+    /// 지정한 장치로 실시간 모니터링 시작 (WASAPI → WasapiNative(AUTOCONVERTPCM) → WaveInEvent MME 폴백)
     /// </summary>
     public void StartMonitoring(string deviceId)
     {
         StopMonitoring();
 
+        // 1단계: WASAPI AudioClient 직접 캡처 시도
+        if (TryStartWasapiMonitoring(deviceId))
+            return;
+
+        // 2단계: WasapiNative(AUTOCONVERTPCM) 시도 — Intel SST 등 AUTOCONVERT 필수 드라이버 대응
+        Log4.Warn("[마이크테스트] WasapiCapture 실패 — WasapiNative(AUTOCONVERTPCM) 시도");
+        if (TryStartNativeMonitoring(deviceId))
+            return;
+
+        // 3단계: WaveInEvent MME 폴백
+        Log4.Warn("[마이크테스트] WasapiNative 실패 — WaveInEvent MME 폴백 시도");
+        TryStartMmeMonitoring(deviceId);
+    }
+
+    private bool TryStartWasapiMonitoring(string deviceId)
+    {
+        // useEventSync true → false 순서로 WasapiCapture 시도 (NAudio 내부 Initialize 위임)
+        var enumerator = new MMDeviceEnumerator();
+        foreach (var useEvent in new[] { false, true })
+        {
+            try
+            {
+                var device = enumerator.EnumerateAudioEndPoints(DataFlow.Capture, DeviceState.Active)
+                                       .FirstOrDefault(d => d.ID == deviceId);
+                if (device == null)
+                {
+                    Log4.Warn($"[마이크테스트] 모니터링 장치를 찾을 수 없음: {deviceId}");
+                    return false;
+                }
+
+                var wasapi = new WasapiCapture(device, useEvent, 100);
+                Log4.Info($"[마이크테스트] WasapiCapture 시도 (useEvent={useEvent}): {wasapi.WaveFormat.SampleRate}Hz {wasapi.WaveFormat.BitsPerSample}bit {wasapi.WaveFormat.Channels}ch");
+
+                _captureFormat = wasapi.WaveFormat;
+                _capture = wasapi;
+
+                wasapi.DataAvailable += (s, e) =>
+                {
+                    if (e.BytesRecorded > 0 && _captureFormat != null)
+                        OnMonitoringDataAvailable(e.Buffer, e.BytesRecorded, _captureFormat);
+                };
+                wasapi.RecordingStopped += (s, e) =>
+                {
+                    if (e.Exception != null && _isMonitoring)
+                        Log4.Warn($"[마이크테스트] WasapiCapture 중지: {e.Exception.Message}");
+                };
+
+                wasapi.StartRecording();
+                _isMonitoring = true;
+                Log4.Info($"[마이크테스트] WasapiCapture 모니터링 시작 (useEvent={useEvent})");
+                return true;
+            }
+            catch (Exception ex)
+            {
+                Log4.Warn($"[마이크테스트] WasapiCapture 시도 실패 (useEvent={useEvent}): 0x{ex.HResult:X8} {ex.Message}");
+                if (_capture != null) { try { _capture.Dispose(); } catch { } _capture = null; }
+            }
+        }
+        _isMonitoring = false;
+        return false;
+    }
+
+    private bool TryStartNativeMonitoring(string deviceId)
+    {
         try
         {
             var enumerator = new MMDeviceEnumerator();
-            var allDevices = enumerator.EnumerateAudioEndPoints(DataFlow.Capture, DeviceState.Active);
-            var device = allDevices.FirstOrDefault(d => d.ID == deviceId);
+            var device = enumerator.EnumerateAudioEndPoints(DataFlow.Capture, DeviceState.Active)
+                                   .FirstOrDefault(d => d.ID == deviceId);
             if (device == null)
             {
-                Log4.Warn($"[마이크테스트] 모니터링 장치를 찾을 수 없음: {deviceId}");
-                return;
+                Log4.Warn($"[마이크테스트] NativeMonitoring 장치를 찾을 수 없음: {deviceId}");
+                return false;
             }
 
-            _capture = new WasapiCapture(device);
-            _capture.DataAvailable += OnMonitoringDataAvailable;
-            _capture.StartRecording();
+            var mixFmt = device.AudioClient.MixFormat;
+            Log4.Info($"[마이크테스트] NativeMonitoring MixFormat: {mixFmt.SampleRate}Hz {mixFmt.Channels}ch {mixFmt.BitsPerSample}bit");
+
+            // MixFormat으로 WasapiCapture 재시도 (AUTOCONVERTPCM 경로 활용)
+            var capture = new WasapiCapture(device, false, 100);
+            capture.WaveFormat = mixFmt;
+
+            _captureFormat = mixFmt;
+            _capture = capture;
+
+            capture.DataAvailable += (s, e) =>
+            {
+                if (e.BytesRecorded > 0 && _captureFormat != null)
+                    OnMonitoringDataAvailable(e.Buffer, e.BytesRecorded, _captureFormat);
+            };
+            capture.RecordingStopped += (s, e) =>
+            {
+                if (e.Exception != null && _isMonitoring)
+                    Log4.Warn($"[마이크테스트] NativeMonitoring 중지: {e.Exception.Message}");
+            };
+
+            capture.StartRecording();
             _isMonitoring = true;
-            Log4.Info($"[마이크테스트] 모니터링 시작: {device.FriendlyName}");
+            Log4.Info("[마이크테스트] WasapiNative MixFormat 직접 시도 성공");
+            return true;
         }
         catch (Exception ex)
         {
-            Log4.Warn($"[마이크테스트] 모니터링 시작 실패: {ex.Message}");
-            StopMonitoring();
+            Log4.Warn($"[마이크테스트] NativeMonitoring 실패: 0x{ex.HResult:X8} {ex.Message}");
+            if (_capture != null)
+            {
+                try { _capture.Dispose(); } catch { }
+                _capture = null;
+            }
+            return false;
         }
+    }
+
+    private void TryStartMmeMonitoring(string deviceId)
+    {
+        // MixFormat 읽기 (포맷 우선순위 결정용)
+        int sampleRate = 48000;
+        int channels = 1;
+        try
+        {
+            var enumerator = new MMDeviceEnumerator();
+            var device = enumerator.EnumerateAudioEndPoints(DataFlow.Capture, DeviceState.Active)
+                                   .FirstOrDefault(d => d.ID == deviceId);
+            if (device != null)
+            {
+                var mixFmt = device.AudioClient.MixFormat;
+                sampleRate = mixFmt.SampleRate;
+                channels = mixFmt.Channels;
+            }
+        }
+        catch { }
+
+        // 시도할 포맷 목록 (MixFormat 기반 → 범용 순서)
+        var formatsToTry = new[]
+        {
+            new WaveFormat(sampleRate, 16, channels),
+            new WaveFormat(sampleRate, 16, 1),
+            new WaveFormat(48000, 16, 2),
+            new WaveFormat(48000, 16, 1),
+            new WaveFormat(44100, 16, 1),
+        };
+
+        int deviceCount = WaveInEvent.DeviceCount;
+        Log4.Info($"[마이크테스트] MME 장치 수: {deviceCount}");
+
+        for (int devIdx = 0; devIdx < Math.Max(1, deviceCount); devIdx++)
+        {
+            foreach (var fmt in formatsToTry)
+            {
+                try
+                {
+                    var mmeCapture = new WaveInEvent { DeviceNumber = devIdx, WaveFormat = fmt };
+                    mmeCapture.DataAvailable += (s, e) =>
+                    {
+                        if (e.BytesRecorded > 0 && _captureFormat != null)
+                            OnMonitoringDataAvailable(e.Buffer, e.BytesRecorded, _captureFormat);
+                    };
+                    mmeCapture.RecordingStopped += (s, e) =>
+                    {
+                        if (e.Exception != null)
+                            Log4.Warn($"[마이크테스트] MME 모니터링 중지: {e.Exception.Message}");
+                    };
+
+                    _captureFormat = fmt;
+                    _capture = mmeCapture;
+                    mmeCapture.StartRecording();
+                    _isMonitoring = true;
+
+                    Log4.Info($"[마이크테스트] MME 모니터링 시작 성공: devIdx={devIdx}, {fmt.SampleRate}Hz {fmt.BitsPerSample}bit {fmt.Channels}ch");
+                    return;
+                }
+                catch (Exception ex)
+                {
+                    Log4.Warn($"[마이크테스트] MME 시도 실패 (devIdx={devIdx}, {fmt.SampleRate}Hz {fmt.Channels}ch): {ex.Message}");
+                    if (_capture != null) { try { _capture.Dispose(); } catch { } _capture = null; }
+                }
+            }
+        }
+
+        Log4.Warn("[마이크테스트] MME 폴백도 실패 — 모니터링 불가");
+        _isMonitoring = false;
     }
 
     /// <summary>
@@ -121,18 +285,21 @@ public class MicrophoneTestService : IDisposable
     /// </summary>
     public void StopMonitoring()
     {
+        _isMonitoring = false;
+        if (_monitorCts != null)
+        {
+            _monitorCts.Cancel();
+            try { _monitorTask?.Wait(1000); } catch { }
+            _monitorCts.Dispose();
+            _monitorCts = null;
+            _monitorTask = null;
+            Log4.Debug("[마이크테스트] 모니터링 중지");
+        }
         if (_capture != null)
         {
-            _isMonitoring = false;
-            try
-            {
-                _capture.DataAvailable -= OnMonitoringDataAvailable;
-                _capture.StopRecording();
-            }
-            catch { }
+            try { _capture.StopRecording(); } catch { }
             _capture.Dispose();
             _capture = null;
-            Log4.Debug("[마이크테스트] 모니터링 중지");
         }
     }
 
@@ -156,17 +323,46 @@ public class MicrophoneTestService : IDisposable
             }
 
             _testRecordingPath = Path.Combine(Path.GetTempPath(), "maix_mic_test.wav");
-            _capture = new WasapiCapture(device);
-            _waveWriter = new WaveFileWriter(_testRecordingPath, _capture.WaveFormat);
-            _capture.DataAvailable += OnRecordingDataAvailable;
-            _capture.RecordingStopped += OnRecordingStopped;
-            _capture.StartRecording();
-            _isRecording = true;
-            Log4.Info($"[마이크테스트] 테스트 녹음 시작: {device.FriendlyName}");
+
+            // MixFormat을 WasapiCapture 생성 전에 읽기 (AudioClient 오염 방지)
+            WaveFormat? mixFormat = null;
+            try { mixFormat = device.AudioClient.MixFormat; } catch { }
+
+            // useEventSync: true로 시도, 실패 시 false로 재시도
+            Exception? lastEx = null;
+            foreach (var useEvent in new[] { true, false })
+            {
+                try
+                {
+                    _capture?.Dispose();
+                    _waveWriter?.Dispose();
+                    // 장치를 새로 열기 위해 enumerator에서 다시 가져옴
+                    var freshDevice = enumerator.EnumerateAudioEndPoints(DataFlow.Capture, DeviceState.Active)
+                                                 .FirstOrDefault(d => d.ID == deviceId);
+                    if (freshDevice == null) break;
+                    _capture = new WasapiCapture(freshDevice, useEvent, 100);
+                    if (mixFormat != null) _capture.WaveFormat = mixFormat;
+                    _waveWriter = new WaveFileWriter(_testRecordingPath, _capture.WaveFormat);
+                    _capture.DataAvailable += OnRecordingDataAvailable;
+                    _capture.RecordingStopped += OnRecordingStopped;
+                    _capture.StartRecording();
+                    _isRecording = true;
+                    Log4.Info($"[마이크테스트] 테스트 녹음 시작: {freshDevice.FriendlyName} (포맷: {_capture.WaveFormat}, useEvent={useEvent})");
+                    return;
+                }
+                catch (Exception ex)
+                {
+                    lastEx = ex;
+                    Log4.Warn($"[마이크테스트] 녹음 시도 실패 (useEvent={useEvent}): {ex.Message}");
+                    if (_capture != null) { try { _capture.Dispose(); } catch { } _capture = null; }
+                    if (_waveWriter != null) { try { _waveWriter.Dispose(); } catch { } _waveWriter = null; }
+                }
+            }
+            Log4.Warn($"[마이크테스트] 테스트 녹음 시작 최종 실패: {lastEx?.Message}\n{lastEx?.StackTrace}");
         }
         catch (Exception ex)
         {
-            Log4.Warn($"[마이크테스트] 테스트 녹음 시작 실패: {ex.Message}");
+            Log4.Warn($"[마이크테스트] 테스트 녹음 시작 실패 ({ex.GetType().Name}): {ex.Message}\n{ex.StackTrace}");
             CleanupRecording();
         }
     }
@@ -254,13 +450,34 @@ public class MicrophoneTestService : IDisposable
         }
     }
 
-    private void OnMonitoringDataAvailable(object? sender, WaveInEventArgs e)
+    private void OnMonitoringDataAvailable(byte[] buffer, int bytesRecorded, WaveFormat waveFormat)
     {
+        if (bytesRecorded == 0) return;
+
+        int bytesPerSample = waveFormat.BitsPerSample / 8;
+        if (bytesPerSample <= 0) return;
+
         float peak = 0;
-        for (int i = 0; i < e.BytesRecorded; i += 4)
+        for (int i = 0; i < bytesRecorded; i += bytesPerSample)
         {
-            if (i + 4 > e.BytesRecorded) break;
-            float sample = Math.Abs(BitConverter.ToSingle(e.Buffer, i));
+            if (i + bytesPerSample > bytesRecorded) break;
+
+            float sample;
+            if (waveFormat.Encoding == WaveFormatEncoding.IeeeFloat)
+                sample = Math.Abs(BitConverter.ToSingle(buffer, i));
+            else if (waveFormat.BitsPerSample == 16)
+                sample = Math.Abs(BitConverter.ToInt16(buffer, i) / 32768f);
+            else if (waveFormat.BitsPerSample == 24)
+            {
+                int value = buffer[i] | (buffer[i + 1] << 8) | (buffer[i + 2] << 16);
+                if ((value & 0x800000) != 0) value |= unchecked((int)0xFF000000);
+                sample = Math.Abs(value / 8388608f);
+            }
+            else if (waveFormat.BitsPerSample == 32)
+                sample = Math.Abs(BitConverter.ToInt32(buffer, i) / 2147483648f);
+            else
+                sample = 0;
+
             if (sample > peak) peak = sample;
         }
         peak = Math.Min(peak, 1.0f);
@@ -279,7 +496,9 @@ public class MicrophoneTestService : IDisposable
         }
 
         // 녹음 중에도 레벨 표시
-        OnMonitoringDataAvailable(sender, e);
+        var waveFormat = _capture?.WaveFormat;
+        if (waveFormat != null)
+            OnMonitoringDataAvailable(e.Buffer, e.BytesRecorded, waveFormat);
     }
 
     private void OnRecordingStopped(object? sender, StoppedEventArgs e)
@@ -336,6 +555,7 @@ public class MicrophoneTestService : IDisposable
 
     public void Dispose()
     {
+        _monitorCts?.Cancel();
         StopMonitoring();
         StopTestRecording();
         StopPlayback();
