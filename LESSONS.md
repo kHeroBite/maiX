@@ -189,3 +189,13 @@
 - **교훈**: NAudio 래퍼(WasapiCapture)가 실패하는 디바이스에서는 동일 래퍼 재생성이 아닌 COM 직접 호출로 우회해야 함. 폴백 단계에서 같은 추상화 레이어를 재시도하는 것은 무의미
 - **심각도**: 낮음 (패턴 기록)
 - **Level**: 1 (참고)
+
+## L-249: IAudioClient3 InitializeSharedAudioStream — Intel SST 저지연 공유 모드 폴백 (2026-03-20)
+
+- **문제**: L-247/L-248에서 WASAPI+NativeAutoConvert로도 Intel SST 디바이스에서 E_INVALIDARG 발생 가능
+- **해결**: IAudioClient3의 GetSharedModeEnginePeriod + InitializeSharedAudioStream을 WASAPI 실패 직후, NativeAutoConvert 전에 시도하는 2단계 폴백 추가
+- **폴백 순서**: WasapiCapture(1) → IAudioClient3(2) → NativeAutoConvert(3) → WaveInEvent MME(4)
+- **기술**: IAudioClient3 vtbl 오프셋 — GetSharedModeEnginePeriod=[18], InitializeSharedAudioStream=[20]. Activate 시 IID_IAudioClient3 사용
+- **교훈**: 최신 WASAPI API(IAudioClient3)는 드라이버 네이티브 주기(defaultPeriod)를 사용하여 호환성이 더 높을 수 있음. 구형 IAudioClient Initialize 대신 IAudioClient3 SharedAudioStream을 먼저 시도하는 것이 효과적
+- **심각도**: 낮음 (패턴 기록)
+- **Level**: 1 (참고)

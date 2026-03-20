@@ -99,7 +99,7 @@ public class MicrophoneTestService : IDisposable
     }
 
     /// <summary>
-    /// 지정한 장치로 실시간 모니터링 시작 (WASAPI → WasapiNative(AUTOCONVERTPCM) → WaveInEvent MME 폴백)
+    /// 지정한 장치로 실시간 모니터링 시작 (WASAPI → IAudioClient3 → WasapiNative(AUTOCONVERTPCM) → WaveInEvent MME 폴백)
     /// </summary>
     public void StartMonitoring(string deviceId)
     {
@@ -109,12 +109,17 @@ public class MicrophoneTestService : IDisposable
         if (TryStartWasapiMonitoring(deviceId))
             return;
 
-        // 2단계: WasapiNative(AUTOCONVERTPCM) 시도 — Intel SST 등 AUTOCONVERT 필수 드라이버 대응
-        Log4.Warn("[마이크테스트] WasapiCapture 실패 — WasapiNative(AUTOCONVERTPCM) 시도");
+        // 2단계: IAudioClient3 시도 — Intel SST 등 저지연 공유 모드 대응
+        Log4.Warn("[마이크테스트] WasapiCapture 실패 — IAudioClient3 시도");
+        if (TryStartAudioClient3Monitoring(deviceId))
+            return;
+
+        // 3단계: WasapiNative(AUTOCONVERTPCM) 시도 — AUTOCONVERT 필수 드라이버 대응
+        Log4.Warn("[마이크테스트] IAudioClient3 실패 — WasapiNative(AUTOCONVERTPCM) 시도");
         if (TryStartNativeMonitoring(deviceId))
             return;
 
-        // 3단계: WaveInEvent MME 폴백
+        // 4단계: WaveInEvent MME 폴백
         Log4.Warn("[마이크테스트] WasapiNative 실패 — WaveInEvent MME 폴백 시도");
         TryStartMmeMonitoring(deviceId);
     }
@@ -165,6 +170,103 @@ public class MicrophoneTestService : IDisposable
         }
         _isMonitoring = false;
         return false;
+    }
+
+    private bool TryStartAudioClient3Monitoring(string deviceId)
+    {
+        IntPtr pWfx = IntPtr.Zero;
+        try
+        {
+            var enumerator = new MMDeviceEnumerator();
+            var device = enumerator.EnumerateAudioEndPoints(DataFlow.Capture, DeviceState.Active)
+                                   .FirstOrDefault(d => d.ID == deviceId);
+            if (device == null) return false;
+
+            _nativeAudioClient = WasapiNative.ActivateAudioClient3(device);
+            if (_nativeAudioClient == IntPtr.Zero)
+            {
+                Log4.Warn("[마이크테스트] ActivateAudioClient3 실패");
+                return false;
+            }
+
+            int hr = WasapiNative.AudioClientGetMixFormat(_nativeAudioClient, out pWfx);
+            if (hr != 0 || pWfx == IntPtr.Zero)
+            {
+                Log4.Warn($"[마이크테스트] AC3 GetMixFormat 실패 hr=0x{hr:X8}");
+                WasapiNative.ComRelease(ref _nativeAudioClient);
+                return false;
+            }
+
+            hr = WasapiNative.AudioClient3GetSharedModeEnginePeriod(
+                _nativeAudioClient, pWfx, out uint defaultPeriod, out _, out _, out _);
+            uint periodFrames = (hr == 0 && defaultPeriod > 0) ? defaultPeriod : 480u;
+            Log4.Info($"[마이크테스트] AC3 period={periodFrames} hr=0x{hr:X8}");
+
+            hr = WasapiNative.AudioClient3InitializeSharedAudioStream(
+                _nativeAudioClient, 0, periodFrames, pWfx, IntPtr.Zero);
+            if (hr != 0)
+            {
+                Log4.Warn($"[마이크테스트] AC3 InitializeSharedAudioStream hr=0x{hr:X8} — AUTOCONVERT 재시도");
+                hr = WasapiNative.AudioClient3InitializeSharedAudioStream(
+                    _nativeAudioClient,
+                    WasapiNative.AUDCLNT_STREAMFLAGS_AUTOCONVERTPCM | WasapiNative.AUDCLNT_STREAMFLAGS_SRC_DEFAULT_QUALITY,
+                    periodFrames, pWfx, IntPtr.Zero);
+            }
+            if (hr != 0)
+            {
+                Log4.Warn($"[마이크테스트] AC3 InitializeSharedAudioStream 최종 실패 hr=0x{hr:X8}");
+                WasapiNative.ComRelease(ref _nativeAudioClient);
+                return false;
+            }
+
+            var captureIid = WasapiNative.IID_IAudioCaptureClient;
+            hr = WasapiNative.AudioClientGetService(_nativeAudioClient, ref captureIid, out _nativeCaptureClient);
+            if (hr != 0 || _nativeCaptureClient == IntPtr.Zero)
+            {
+                Log4.Warn($"[마이크테스트] AC3 GetService hr=0x{hr:X8}");
+                WasapiNative.ComRelease(ref _nativeAudioClient);
+                return false;
+            }
+
+            _nativeCaptureFormat = ParseWaveFormatFromPtr(pWfx);
+            WasapiNative.AudioClientStart(_nativeAudioClient);
+            _nativeMonitorCts = new CancellationTokenSource();
+            _nativeMonitorTask = Task.Run(() => NativeCaptureLoop(_nativeMonitorCts.Token));
+            _isMonitoring = true;
+
+            Log4.Info("[마이크테스트] IAudioClient3 모니터링 시작 성공");
+            return true;
+        }
+        catch (Exception ex)
+        {
+            Log4.Error($"[마이크테스트] TryStartAudioClient3Monitoring 예외: {ex}");
+            CleanupNativeResources();
+            return false;
+        }
+        finally
+        {
+            if (pWfx != IntPtr.Zero)
+                Marshal.FreeCoTaskMem(pWfx);
+        }
+    }
+
+    private static WaveFormat? ParseWaveFormatFromPtr(IntPtr pWfx)
+    {
+        if (pWfx == IntPtr.Zero) return null;
+        try
+        {
+            ushort tag = (ushort)Marshal.ReadInt16(pWfx, 0);
+            ushort channels = (ushort)Marshal.ReadInt16(pWfx, 2);
+            int sampleRate = Marshal.ReadInt32(pWfx, 4);
+            ushort bits = (ushort)Marshal.ReadInt16(pWfx, 14);
+            if (tag == 3 || tag == 0xFFFE)
+            {
+                // IEEE_FLOAT 또는 EXTENSIBLE — float 포맷으로 처리
+                return WaveFormat.CreateIeeeFloatWaveFormat(sampleRate, channels);
+            }
+            return new WaveFormat(sampleRate, bits, channels);
+        }
+        catch { return null; }
     }
 
     private bool TryStartNativeMonitoring(string deviceId)

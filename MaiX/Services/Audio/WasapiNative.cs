@@ -404,4 +404,82 @@ internal static class WasapiNative
         release(pUnknown);
         pUnknown = IntPtr.Zero;
     }
+
+    // IID_IAudioClient3: {7ED4EE07-8E67-4CD4-8C1A-2B7A5987AD42}
+    public static Guid IID_IAudioClient3 =
+        new Guid(0x7ED4EE07, 0x8E67, 0x4CD4, 0x8C, 0x1A, 0x2B, 0x7A, 0x59, 0x87, 0xAD, 0x42);
+
+    /// <summary>
+    /// IAudioClient3로 Activate — ActivateAudioClient와 동일, IID만 IAudioClient3
+    /// </summary>
+    public static unsafe IntPtr ActivateAudioClient3(NAudio.CoreAudioApi.MMDevice device)
+    {
+        string deviceId = device.ID;
+        Log4.Info($"[WasapiNative] AC3 DeviceId: {deviceId}");
+
+        var clsid = CLSID_MMDeviceEnumerator;
+        var iid = IID_IMMDeviceEnumerator;
+        const uint CLSCTX_ALL = 0x17;
+        int hr = CoCreateInstance(ref clsid, IntPtr.Zero, CLSCTX_ALL, ref iid, out IntPtr pEnumerator);
+        if (hr != 0) { Log4.Warn($"[WasapiNative] AC3 CoCreateInstance hr=0x{hr:X8}"); return IntPtr.Zero; }
+
+        try
+        {
+            var enumVtbl = *(IntPtr**)pEnumerator;
+            var getDevice = (delegate* unmanaged[Stdcall]<IntPtr, char*, IntPtr*, int>)enumVtbl[5];
+            IntPtr pDevice;
+            fixed (char* pId = deviceId)
+                hr = getDevice(pEnumerator, pId, &pDevice);
+            if (hr != 0) { Log4.Warn($"[WasapiNative] AC3 GetDevice hr=0x{hr:X8}"); return IntPtr.Zero; }
+
+            try
+            {
+                var devVtbl = *(IntPtr**)pDevice;
+                var activate = (delegate* unmanaged[Stdcall]<IntPtr, Guid*, uint, IntPtr, IntPtr*, int>)devVtbl[3];
+                var iidAC3 = IID_IAudioClient3;
+                IntPtr pAC3;
+                hr = activate(pDevice, &iidAC3, CLSCTX_ALL, IntPtr.Zero, &pAC3);
+                Log4.Info($"[WasapiNative] AC3 Activate hr=0x{hr:X8}, pAC3=0x{pAC3:X}");
+                return hr == 0 ? pAC3 : IntPtr.Zero;
+            }
+            finally
+            {
+                var devVtbl2 = *(IntPtr**)pDevice;
+                ((delegate* unmanaged[Stdcall]<IntPtr, uint>)devVtbl2[2])(pDevice);
+            }
+        }
+        finally
+        {
+            var enumVtbl2 = *(IntPtr**)pEnumerator;
+            ((delegate* unmanaged[Stdcall]<IntPtr, uint>)enumVtbl2[2])(pEnumerator);
+        }
+    }
+
+    /// <summary>
+    /// IAudioClient3::GetSharedModeEnginePeriod — vtbl[18]
+    /// </summary>
+    public static unsafe int AudioClient3GetSharedModeEnginePeriod(
+        IntPtr pAC3, IntPtr pWfx,
+        out uint defaultPeriodInFrames, out uint fundamentalPeriodInFrames,
+        out uint minPeriodInFrames, out uint maxPeriodInFrames)
+    {
+        var vtbl = *(IntPtr**)pAC3;
+        var fn = (delegate* unmanaged[Stdcall]<IntPtr, IntPtr, uint*, uint*, uint*, uint*, int>)vtbl[18];
+        uint def, fund, min, max;
+        int hr = fn(pAC3, pWfx, &def, &fund, &min, &max);
+        defaultPeriodInFrames = def; fundamentalPeriodInFrames = fund;
+        minPeriodInFrames = min; maxPeriodInFrames = max;
+        return hr;
+    }
+
+    /// <summary>
+    /// IAudioClient3::InitializeSharedAudioStream — vtbl[20]
+    /// </summary>
+    public static unsafe int AudioClient3InitializeSharedAudioStream(
+        IntPtr pAC3, uint streamFlags, uint periodInFrames, IntPtr pWfx, IntPtr sessionGuid)
+    {
+        var vtbl = *(IntPtr**)pAC3;
+        var fn = (delegate* unmanaged[Stdcall]<IntPtr, uint, uint, IntPtr, IntPtr, int>)vtbl[20];
+        return fn(pAC3, streamFlags, periodInFrames, pWfx, sessionGuid);
+    }
 }
