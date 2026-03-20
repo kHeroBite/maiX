@@ -180,3 +180,12 @@
 - **교훈**: AUTOCONVERTPCM은 만능이 아님 — 드라이버 거부 시 API 레벨 폴백(WASAPI→MME)이 최종 방어선
 - **심각도**: 중간 (미해결 근본 원인 존재)
 - **Level**: 2 (인지 — MEMORY 반영)
+
+## L-248: WASAPI 모니터링에서 WasapiCapture 재생성은 동일 실패 재발 — COM 직접 호출이 안전 (2026-03-20)
+
+- **문제**: TryStartNativeMonitoring에서 `new WasapiCapture(device)` 재호출 시 동일한 E_INVALIDARG 발생 — NAudio WasapiCapture 내부의 Initialize 호출이 동일 경로를 타기 때문
+- **근본원인**: WasapiCapture는 내부적으로 AudioClient.Initialize를 호출하는데, 이미 L-247에서 확인된 Intel SST 드라이버 비호환이 동일 적용됨. NAudio 래퍼 사용 vs 직접 사용의 차이 없음
+- **해결**: TryStartNativeMonitoring을 WasapiNative COM 직접 호출로 교체 — ActivateAudioClient→InitializeWithMixFormat(4단계 AUTOCONVERTPCM 폴백)→GetService(IAudioCaptureClient)→GetMixFormat→AudioClientStart→NativeCaptureLoop
+- **교훈**: NAudio 래퍼(WasapiCapture)가 실패하는 디바이스에서는 동일 래퍼 재생성이 아닌 COM 직접 호출로 우회해야 함. 폴백 단계에서 같은 추상화 레이어를 재시도하는 것은 무의미
+- **심각도**: 낮음 (패턴 기록)
+- **Level**: 1 (참고)

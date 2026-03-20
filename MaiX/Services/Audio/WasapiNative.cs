@@ -392,4 +392,16 @@ internal static class WasapiNative
             releaseEnum(pEnumerator);
         }
     }
+
+    /// <summary>
+    /// COM 포인터 안전 Release — vtbl[2] 호출 후 IntPtr.Zero 대입
+    /// </summary>
+    public static unsafe void ComRelease(ref IntPtr pUnknown)
+    {
+        if (pUnknown == IntPtr.Zero) return;
+        var vtbl = *(IntPtr**)pUnknown;
+        var release = (delegate* unmanaged[Stdcall]<IntPtr, uint>)vtbl[2];
+        release(pUnknown);
+        pUnknown = IntPtr.Zero;
+    }
 }

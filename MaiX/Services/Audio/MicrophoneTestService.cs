@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Runtime.InteropServices;
 using System.Threading;
 using System.Threading.Tasks;
 using NAudio.CoreAudioApi;
@@ -30,6 +31,13 @@ public class MicrophoneTestService : IDisposable
     private CancellationTokenSource? _monitorCts;
     private Task? _monitorTask;
     private WaveFormat? _captureFormat;
+
+    // Native COM 직접 모니터링용 필드
+    private IntPtr _nativeAudioClient = IntPtr.Zero;
+    private IntPtr _nativeCaptureClient = IntPtr.Zero;
+    private CancellationTokenSource? _nativeMonitorCts;
+    private Task? _nativeMonitorTask;
+    private WaveFormat? _nativeCaptureFormat;
 
     /// <summary>
     /// 볼륨 레벨 변경 이벤트 (0.0 ~ 1.0)
@@ -172,42 +180,149 @@ public class MicrophoneTestService : IDisposable
                 return false;
             }
 
-            var mixFmt = device.AudioClient.MixFormat;
-            Log4.Info($"[마이크테스트] NativeMonitoring MixFormat: {mixFmt.SampleRate}Hz {mixFmt.Channels}ch {mixFmt.BitsPerSample}bit");
-
-            // MixFormat으로 WasapiCapture 재시도 (AUTOCONVERTPCM 경로 활용)
-            var capture = new WasapiCapture(device, false, 100);
-            capture.WaveFormat = mixFmt;
-
-            _captureFormat = mixFmt;
-            _capture = capture;
-
-            capture.DataAvailable += (s, e) =>
+            // 1) ActivateAudioClient — 순수 P/Invoke로 IAudioClient COM 포인터 획득
+            _nativeAudioClient = WasapiNative.ActivateAudioClient(device);
+            if (_nativeAudioClient == IntPtr.Zero)
             {
-                if (e.BytesRecorded > 0 && _captureFormat != null)
-                    OnMonitoringDataAvailable(e.Buffer, e.BytesRecorded, _captureFormat);
-            };
-            capture.RecordingStopped += (s, e) =>
-            {
-                if (e.Exception != null && _isMonitoring)
-                    Log4.Warn($"[마이크테스트] NativeMonitoring 중지: {e.Exception.Message}");
-            };
+                Log4.Warn("[마이크테스트] WasapiNative.ActivateAudioClient 실패 — IntPtr.Zero 반환");
+                return false;
+            }
 
-            capture.StartRecording();
+            // 2) InitializeWithMixFormat — 4단계 AUTOCONVERTPCM 폴백
+            int hr = WasapiNative.InitializeWithMixFormat(_nativeAudioClient, out long _);
+            if (hr != 0)
+            {
+                Log4.Warn($"[마이크테스트] WasapiNative.InitializeWithMixFormat 실패 hr=0x{hr:X8}");
+                WasapiNative.ComRelease(ref _nativeAudioClient);
+                return false;
+            }
+
+            // 3) GetService → IAudioCaptureClient
+            var iidCapture = WasapiNative.IID_IAudioCaptureClient;
+            hr = WasapiNative.AudioClientGetService(_nativeAudioClient, ref iidCapture, out _nativeCaptureClient);
+            if (hr != 0 || _nativeCaptureClient == IntPtr.Zero)
+            {
+                Log4.Warn($"[마이크테스트] AudioClientGetService(IAudioCaptureClient) 실패 hr=0x{hr:X8}");
+                WasapiNative.ComRelease(ref _nativeAudioClient);
+                return false;
+            }
+
+            // 4) GetMixFormat로 실제 캡처 포맷 획득
+            hr = WasapiNative.AudioClientGetMixFormat(_nativeAudioClient, out IntPtr pWfx);
+            if (hr == 0 && pWfx != IntPtr.Zero)
+            {
+                try
+                {
+                    var rawFmt = Marshal.PtrToStructure<WasapiNative.WAVEFORMATEXTENSIBLE>(pWfx);
+                    bool isFloat = rawFmt.SubFormat == WasapiNative.KSDATAFORMAT_SUBTYPE_IEEE_FLOAT;
+                    _nativeCaptureFormat = isFloat
+                        ? WaveFormat.CreateIeeeFloatWaveFormat((int)rawFmt.nSamplesPerSec, rawFmt.nChannels)
+                        : new WaveFormat((int)rawFmt.nSamplesPerSec, rawFmt.wBitsPerSample, rawFmt.nChannels);
+                    Log4.Info($"[마이크테스트] NativeCaptureFormat: {_nativeCaptureFormat.SampleRate}Hz {_nativeCaptureFormat.BitsPerSample}bit {_nativeCaptureFormat.Channels}ch isFloat={isFloat}");
+                }
+                finally
+                {
+                    Marshal.FreeCoTaskMem(pWfx);
+                }
+            }
+            else
+            {
+                _nativeCaptureFormat = WaveFormat.CreateIeeeFloatWaveFormat(48000, 2);
+                Log4.Warn("[마이크테스트] GetMixFormat 실패 — 48kHz float stereo 폴백");
+            }
+
+            // 5) AudioClientStart
+            hr = WasapiNative.AudioClientStart(_nativeAudioClient);
+            if (hr != 0)
+            {
+                Log4.Warn($"[마이크테스트] AudioClientStart 실패 hr=0x{hr:X8}");
+                WasapiNative.ComRelease(ref _nativeCaptureClient);
+                WasapiNative.ComRelease(ref _nativeAudioClient);
+                return false;
+            }
+
+            // 6) 캡처 루프 Task 시작
+            _nativeMonitorCts = new CancellationTokenSource();
+            _nativeMonitorTask = Task.Run(() => NativeCaptureLoop(_nativeMonitorCts.Token));
             _isMonitoring = true;
-            Log4.Info("[마이크테스트] WasapiNative MixFormat 직접 시도 성공");
+
+            Log4.Info("[마이크테스트] WasapiNative COM 직접 모니터링 시작 성공");
             return true;
         }
         catch (Exception ex)
         {
-            Log4.Warn($"[마이크테스트] NativeMonitoring 실패: 0x{ex.HResult:X8} {ex.Message}");
-            if (_capture != null)
-            {
-                try { _capture.Dispose(); } catch { }
-                _capture = null;
-            }
+            Log4.Error($"[마이크테스트] TryStartNativeMonitoring 예외: {ex}");
+            CleanupNativeResources();
             return false;
         }
+    }
+
+    private void NativeCaptureLoop(CancellationToken ct)
+    {
+        try
+        {
+            while (!ct.IsCancellationRequested)
+            {
+                int hr = WasapiNative.CaptureClientGetNextPacketSize(_nativeCaptureClient, out uint packetSize);
+                if (hr != 0 || packetSize == 0)
+                {
+                    Thread.Sleep(10);
+                    continue;
+                }
+
+                hr = WasapiNative.CaptureClientGetBuffer(
+                    _nativeCaptureClient,
+                    out IntPtr pData,
+                    out uint numFrames,
+                    out uint flags,
+                    out ulong devicePos,
+                    out ulong qpcPos);
+
+                if (hr != 0 || numFrames == 0)
+                {
+                    if (hr != 0) WasapiNative.CaptureClientReleaseBuffer(_nativeCaptureClient, 0);
+                    Thread.Sleep(5);
+                    continue;
+                }
+
+                // 바이트 복사
+                int bytesPerFrame = _nativeCaptureFormat?.BlockAlign ?? 4;
+                int totalBytes = (int)numFrames * bytesPerFrame;
+                byte[] buffer = new byte[totalBytes];
+                if (pData != IntPtr.Zero)
+                    Marshal.Copy(pData, buffer, 0, totalBytes);
+
+                WasapiNative.CaptureClientReleaseBuffer(_nativeCaptureClient, numFrames);
+
+                // dB 미터 업데이트 이벤트 발생
+                var fmt = _nativeCaptureFormat ?? WaveFormat.CreateIeeeFloatWaveFormat(48000, 2);
+                OnMonitoringDataAvailable(buffer, totalBytes, fmt);
+            }
+        }
+        catch (OperationCanceledException) { }
+        catch (Exception ex)
+        {
+            Log4.Error($"[마이크테스트] NativeCaptureLoop 예외: {ex}");
+        }
+    }
+
+    private void CleanupNativeResources()
+    {
+        _nativeMonitorCts?.Cancel();
+        try { _nativeMonitorTask?.Wait(TimeSpan.FromSeconds(2)); } catch { }
+        _nativeMonitorCts?.Dispose();
+        _nativeMonitorCts = null;
+        _nativeMonitorTask = null;
+
+        if (_nativeAudioClient != IntPtr.Zero)
+        {
+            try { WasapiNative.AudioClientStop(_nativeAudioClient); } catch { }
+            WasapiNative.ComRelease(ref _nativeAudioClient);
+        }
+        if (_nativeCaptureClient != IntPtr.Zero)
+            WasapiNative.ComRelease(ref _nativeCaptureClient);
+
+        _nativeCaptureFormat = null;
     }
 
     private void TryStartMmeMonitoring(string deviceId)
@@ -301,6 +416,9 @@ public class MicrophoneTestService : IDisposable
             _capture.Dispose();
             _capture = null;
         }
+
+        // Native COM 리소스 정리
+        CleanupNativeResources();
     }
 
     /// <summary>
@@ -556,9 +674,11 @@ public class MicrophoneTestService : IDisposable
     public void Dispose()
     {
         _monitorCts?.Cancel();
+        _nativeMonitorCts?.Cancel();
         StopMonitoring();
         StopTestRecording();
         StopPlayback();
         CleanupRecording();
+        CleanupNativeResources();
     }
 }
