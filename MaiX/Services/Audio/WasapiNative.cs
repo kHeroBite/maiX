@@ -34,6 +34,29 @@ internal static class WasapiNative
     public static readonly Guid KSDATAFORMAT_SUBTYPE_IEEE_FLOAT =
         new Guid(0x00000003, 0x0000, 0x0010, 0x80, 0x00, 0x00, 0xAA, 0x00, 0x38, 0x9B, 0x71);
 
+    // AudioClientProperties — IAudioClient2::SetClientProperties 인자
+    [StructLayout(LayoutKind.Sequential)]
+    public struct AudioClientProperties
+    {
+        public uint cbSize;         // sizeof(AudioClientProperties) = 16
+        public int  bIsOffload;     // BOOL: 0=스트리밍, 1=오프로드
+        public uint eCategory;      // AUDIO_STREAM_CATEGORY (4=Communications)
+        public uint Options;        // AUDCLNT_STREAMOPTIONS (0=None)
+    }
+
+    /// <summary>
+    /// IAudioClient2::SetClientProperties — vtbl[16]
+    /// Intel SST 등 AUDCLNT_E_OFFLOAD_MODE_ONLY(0x88890021) 장치 대응
+    /// Initialize/InitializeSharedAudioStream 전에 호출 필수
+    /// </summary>
+    public static unsafe int AudioClient2SetClientProperties(IntPtr pAudioClient2, ref AudioClientProperties props)
+    {
+        var vtbl = *(IntPtr**)pAudioClient2;
+        var fn = (delegate* unmanaged[Stdcall]<IntPtr, AudioClientProperties*, int>)vtbl[16];
+        fixed (AudioClientProperties* pProps = &props)
+            return fn(pAudioClient2, pProps);
+    }
+
     /// <summary>
     /// IAudioClient::Initialize를 직접 vtbl 호출 — WaveFormatExtensible IntPtr 전달
     /// </summary>
@@ -354,6 +377,18 @@ internal static class WasapiNative
                 Log4.Warn($"[WasapiNative] Initialize 시도{i + 1} ActivateAudioClient 실패 ({desc})");
                 continue;
             }
+
+            // SetClientProperties 시도 (Intel SST 등 OFFLOAD_MODE_ONLY 장치 대응 — 실패 시 무시)
+            var offloadProps = new AudioClientProperties
+            {
+                cbSize    = (uint)Marshal.SizeOf<AudioClientProperties>(),
+                bIsOffload = 1,
+                eCategory = 4,
+                Options   = 0
+            };
+            int hrProp = AudioClient2SetClientProperties(pClient, ref offloadProps);
+            if (hrProp != 0)
+                Log4.Info($"[WasapiNative] SetClientProperties hr=0x{(uint)hrProp:X8} (무시)");
 
             int hr;
             if (useMix)

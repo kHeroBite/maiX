@@ -208,3 +208,12 @@
 - **교훈**: WASAPI COM 인터페이스에서 Initialize 재시도가 필요하면 반드시 기존 인스턴스를 Release하고 새 인스턴스를 Activate해야 함. 이는 IAudioClient뿐 아니라 일반적인 COM 패턴
 - **심각도**: 높음 (캡처 완전 실패 → 마이크 기능 사용 불가)
 - **Level**: 2 (인지)
+
+## L-251: NAudio MMDevice.AudioClient 싱글톤 캐시 — WasapiCapture와 동일 디바이스 인스턴스 공유 시 COM 오염 (2026-03-20)
+
+- **문제**: WasapiCapture 생성 후 같은 MMDevice 인스턴스의 AudioClient.MixFormat 접근 시 COM 인스턴스 오염 → StartRecording()에서 E_INVALIDARG (0x80070057) 발생
+- **근본 원인**: NAudio의 MMDevice.AudioClient는 싱글톤 캐시 — 한 번 생성되면 해당 디바이스 인스턴스에서 계속 재사용. WasapiCapture 내부에서도 같은 AudioClient를 사용하므로, 외부에서 MixFormat을 읽으면 WasapiCapture의 Initialize 과정과 충돌
+- **해결**: MixFormat 읽기용 MMDeviceEnumerator/MMDevice 인스턴스와 WasapiCapture 전달용 인스턴스를 완전히 분리 (fmtEnum/fmtDevice vs freshEnum/freshDevice)
+- **교훈**: NAudio에서 동일 MMDevice 인스턴스를 WasapiCapture에 전달하면서 AudioClient 속성에도 접근하면 안 됨. COM 리소스를 사용하는 라이브러리에서는 "읽기 전용" 접근도 내부 상태를 변경할 수 있음
+- **심각도**: 높음 (마이크 모니터링 + 녹음 모두 실패)
+- **Level**: 2 (인지)

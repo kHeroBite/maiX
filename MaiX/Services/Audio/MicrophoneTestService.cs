@@ -126,22 +126,36 @@ public class MicrophoneTestService : IDisposable
 
     private bool TryStartWasapiMonitoring(string deviceId)
     {
-        // useEventSync true → false 순서로 WasapiCapture 시도 (NAudio 내부 Initialize 위임)
-        var enumerator = new MMDeviceEnumerator();
+        // MixFormat을 별도 인스턴스에서 읽기 (NAudio AudioClient 싱글톤 캐시 오염 방지)
+        WaveFormat? mixFmt = null;
+        try
+        {
+            using var fmtEnum = new MMDeviceEnumerator();
+            var fmtDevice = fmtEnum.EnumerateAudioEndPoints(DataFlow.Capture, DeviceState.Active)
+                                    .FirstOrDefault(d => d.ID == deviceId);
+            if (fmtDevice != null) mixFmt = fmtDevice.AudioClient.MixFormat;
+        }
+        catch { }
+
+        // useEventSync false → true 순서로 WasapiCapture 시도 (NAudio 내부 Initialize 위임)
         foreach (var useEvent in new[] { false, true })
         {
             try
             {
-                var device = enumerator.EnumerateAudioEndPoints(DataFlow.Capture, DeviceState.Active)
-                                       .FirstOrDefault(d => d.ID == deviceId);
-                if (device == null)
+                // WasapiCapture에 전달할 freshDevice — AudioClient 미사용 상태의 새 인스턴스
+                var freshEnum = new MMDeviceEnumerator();
+                var freshDevice = freshEnum.EnumerateAudioEndPoints(DataFlow.Capture, DeviceState.Active)
+                                           .FirstOrDefault(d => d.ID == deviceId);
+                if (freshDevice == null)
                 {
                     Log4.Warn($"[마이크테스트] 모니터링 장치를 찾을 수 없음: {deviceId}");
                     return false;
                 }
 
-                var wasapi = new WasapiCapture(device, useEvent, 100);
-                Log4.Info($"[마이크테스트] WasapiCapture 시도 (useEvent={useEvent}): {wasapi.WaveFormat.SampleRate}Hz {wasapi.WaveFormat.BitsPerSample}bit {wasapi.WaveFormat.Channels}ch");
+                var wasapi = new WasapiCapture(freshDevice, useEvent, 100);
+                // MixFormat 주입 (드라이버 네이티브 포맷 강제 — 0x80070057 방지)
+                if (mixFmt != null) wasapi.WaveFormat = mixFmt;
+                Log4.Info($"[마이크테스트] WasapiCapture 시도 (useEvent={useEvent}): {wasapi.WaveFormat.SampleRate}Hz {wasapi.WaveFormat.BitsPerSample}bit {wasapi.WaveFormat.Channels}ch (mixFmt={(mixFmt != null ? "적용" : "기본")})");
 
                 _captureFormat = wasapi.WaveFormat;
                 _capture = wasapi;
@@ -188,6 +202,17 @@ public class MicrophoneTestService : IDisposable
                 Log4.Warn("[마이크테스트] ActivateAudioClient3 실패");
                 return false;
             }
+
+            // SetClientProperties — Intel SST OFFLOAD_MODE_ONLY 대응
+            var 오프로드속성 = new WasapiNative.AudioClientProperties
+            {
+                cbSize    = (uint)System.Runtime.InteropServices.Marshal.SizeOf<WasapiNative.AudioClientProperties>(),
+                bIsOffload = 1,
+                eCategory = 4,
+                Options   = 0
+            };
+            int hrProp = WasapiNative.AudioClient2SetClientProperties(_nativeAudioClient, ref 오프로드속성);
+            Log4.Info($"[마이크테스트] AC3 SetClientProperties hr=0x{(uint)hrProp:X8}");
 
             int hr = WasapiNative.AudioClientGetMixFormat(_nativeAudioClient, out pWfx);
             if (hr != 0 || pWfx == IntPtr.Zero)
@@ -528,9 +553,16 @@ public class MicrophoneTestService : IDisposable
 
             _testRecordingPath = Path.Combine(Path.GetTempPath(), "maix_mic_test.wav");
 
-            // MixFormat을 WasapiCapture 생성 전에 읽기 (AudioClient 오염 방지)
+            // MixFormat을 별도 인스턴스에서 읽기 (NAudio AudioClient 싱글톤 캐시 오염 방지)
             WaveFormat? mixFormat = null;
-            try { mixFormat = device.AudioClient.MixFormat; } catch { }
+            try
+            {
+                using var fmtEnum = new MMDeviceEnumerator();
+                var fmtDevice = fmtEnum.EnumerateAudioEndPoints(DataFlow.Capture, DeviceState.Active)
+                                        .FirstOrDefault(d => d.ID == deviceId);
+                if (fmtDevice != null) mixFormat = fmtDevice.AudioClient.MixFormat;
+            }
+            catch { }
 
             // useEventSync: true로 시도, 실패 시 false로 재시도
             Exception? lastEx = null;
