@@ -166,8 +166,34 @@ public class SpeechRecognitionService : IDisposable
                 }
             }
 
+            // 모델 파일 존재 검증 (네이티브 크래시 방지)
+            var modelDir = Path.Combine(ModelsDir, SenseVoiceModelName);
+            var modelPath = Path.Combine(modelDir, "model.int8.onnx");
+            var tokensPath = Path.Combine(modelDir, "tokens.txt");
+
+            if (!File.Exists(modelPath))
+            {
+                Utils.Log4.Error($"[STT] SenseVoice 모델 파일 없음: {modelPath}");
+                return false;
+            }
+            if (!File.Exists(tokensPath))
+            {
+                Utils.Log4.Error($"[STT] SenseVoice 토큰 파일 없음: {tokensPath}");
+                return false;
+            }
+
             var config = CreateOfflineRecognizerConfig();
-            _recognizer = new SherpaOnnx.OfflineRecognizer(config);
+
+            // 주의: AccessViolationException 등 네이티브 크래시는 이 catch로 잡히지 않음
+            try
+            {
+                _recognizer = new SherpaOnnx.OfflineRecognizer(config);
+            }
+            catch (Exception ex)
+            {
+                Utils.Log4.Error($"[STT] SenseVoice 인식기 생성 실패 (네이티브 오류): {ex.Message}");
+                return false;
+            }
 
             _isSenseVoiceInitialized = true;
             Utils.Log4.Info("[STT] SenseVoice 서비스 초기화 완료");

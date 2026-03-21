@@ -234,3 +234,11 @@
 - **교훈**: 스트리밍 오디오 STT에서 고정 길이 청크 분할은 필연적으로 경계 문제 발생. 오버랩 윈도우(전체 청크의 10~20%)를 적용하면 경계 단어 인식률이 크게 향상됨
 - **심각도**: 중간 (인식률 저하, 특정 단어 누락)
 - **Level**: 1 (참고)
+
+## L-254: SherpaOnnx 네이티브 크래시는 try-catch로 잡을 수 없음 — 모델 파일 사전 검증 필수 (2026-03-21)
+
+- **문제**: SherpaOnnx OfflineRecognizer 생성 시 모델 파일이 없거나 손상되면 AccessViolationException 등 네이티브 크래시 발생. C# try-catch로 잡을 수 없어 앱 전체가 비정상 종료
+- **해결**: OfflineRecognizer 생성 전에 model.int8.onnx, tokens.txt 파일 존재를 사전 검증. 추가로 try-catch 래핑하여 잡히는 관리 예외도 방어
+- **교훈**: 네이티브 interop(P/Invoke, ONNX Runtime 등)에서 발생하는 비관리 예외는 CLR catch 블록으로 포착 불가. 네이티브 라이브러리 호출 전에 입력 파일/경로/파라미터를 사전 검증하는 방어 코드가 필수
+- **심각도**: 높음 (앱 크래시, 사용자 데이터 손실 가능)
+- **Level**: 2 (인지 — MEMORY.md 기록)
