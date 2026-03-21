@@ -756,12 +756,6 @@ public class SpeechRecognitionService : IDisposable
             }
         }
 
-        // SenseVoice도 초기화 (화자분리용)
-        if (!_isSenseVoiceInitialized)
-        {
-            await InitializeSenseVoiceAsync(cancellationToken);
-        }
-
         if (!File.Exists(audioPath))
         {
             throw new FileNotFoundException("오디오 파일을 찾을 수 없습니다.", audioPath);

@@ -6138,6 +6138,8 @@ public partial class MainWindow : FluentWindow
         {
             Log4.Info("[OneNote] 녹음 목록 STT 분석 중지 요청");
             _oneNoteViewModel.CancelSTT();
+            _oneNoteViewModel.IsSTTInProgress = false;
+            _oneNoteViewModel.SttProgressText = "STT 분석이 취소되었습니다";
             UpdateSTTButtonState(false);
             UpdateRecordingListSTTButton(false);
             return;
@@ -6988,7 +6990,10 @@ public partial class MainWindow : FluentWindow
         {
             Log4.Info("[OneNote] STT 분석 중지 요청");
             _oneNoteViewModel.CancelSTT();
+            _oneNoteViewModel.IsSTTInProgress = false;
+            _oneNoteViewModel.SttProgressText = "STT 분석이 취소되었습니다";
             UpdateSTTButtonState(false);
+            UpdateRecordingListSTTButton(false);
             return;
         }
 

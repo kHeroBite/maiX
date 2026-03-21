@@ -260,3 +260,13 @@
 - **교훈**: 30초 청크 기준 Vulkan GPU Whisper에서 약 24초 처리로 실시간 가능. Whisper 초기화는 기존 InitializeWhisperAsync 재사용하여 1회 보장. ViewModel에 _realtimeSTTModelType 필드를 두고 MainWindow에서 모델 변경 시 동기화
 - **심각도**: 낮음 (기능 확장)
 - **Level**: 1 (참고)
+
+## L-257: Whisper 후처리에서 SenseVoice 불필요 초기화 → AccessViolationException (2026-03-22)
+
+- **문제**: TranscribeWithWhisperAsync 내부에 "화자분리용" SenseVoice 초기화 코드가 남아있어, Whisper 실행 중 SherpaOnnx 네이티브 충돌(AccessViolationException) 발생
+- **근본 원인**: Whisper는 세그먼트 타임스탬프로 화자분리하므로 SenseVoice가 불필요하나, 초기 개발 시 삽입된 SenseVoice 초기화 코드가 제거되지 않고 잔존. Whisper와 SenseVoice가 동시에 SherpaOnnx 네이티브 리소스를 점유하면서 크래시 발생
+- **해결**: TranscribeWithWhisperAsync에서 SenseVoice 초기화 코드 6줄 제거
+- **추가 수정**: STT 분석 버튼 첫 클릭 무시 버그 — CancelSTT() 후 IsSTTInProgress가 true로 남아 다음 클릭이 취소로 동작. CancelSTT() 후 IsSTTInProgress=false 강제 리셋 + 취소 피드백 추가
+- **교훈**: 모델별 초기화는 해당 모델 경로에서만 수행. 다른 모델의 초기화 코드가 잔존하면 네이티브 리소스 충돌로 크래시 발생. 동일 패턴 방지: 새 모델 추가 시 기존 모델 초기화 의존성 점검 필수
+- **심각도**: 높음 (앱 크래시)
+- **Level**: 1 (참고)
