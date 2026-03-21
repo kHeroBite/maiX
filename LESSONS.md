@@ -242,3 +242,12 @@
 - **교훈**: 네이티브 interop(P/Invoke, ONNX Runtime 등)에서 발생하는 비관리 예외는 CLR catch 블록으로 포착 불가. 네이티브 라이브러리 호출 전에 입력 파일/경로/파라미터를 사전 검증하는 방어 코드가 필수
 - **심각도**: 높음 (앱 크래시, 사용자 데이터 손실 가능)
 - **Level**: 2 (인지 — MEMORY.md 기록)
+
+## L-255: SherpaOnnx OfflineRecognizer 스레드 안전 미보장 — lock 직렬화 필수 (2026-03-21)
+
+- **문제**: 실시간 STT에서 SherpaOnnx OfflineRecognizer의 Decode를 연속 호출 시 세 번째 청크에서 AccessViolationException 발생. 네이티브 메모리 동시 접근으로 인한 크래시
+- **근본 원인**: SherpaOnnx OfflineRecognizer는 내부적으로 스레드 안전하지 않음. 실시간 STT 이벤트가 비동기로 빠르게 연속 발생하면 이전 Decode가 완료되기 전에 다음 Decode가 시작되어 네이티브 메모리 충돌
+- **해결**: `_recognizerLock` 객체로 Decode 호출 전체(CreateStream → AcceptWaveform → Decode → Result 읽기)를 lock으로 감싸서 직렬화
+- **교훈**: 네이티브 interop 라이브러리(SherpaOnnx, ONNX Runtime 등)의 추론/디코드 메서드는 스레드 안전하지 않다고 가정하고, 반드시 lock이나 SemaphoreSlim으로 동시 접근을 직렬화할 것. 특히 "처음 1~2회는 성공하고 N번째에서 크래시"하는 패턴은 네이티브 리소스 경쟁의 전형적 증상
+- **심각도**: 높음 (앱 크래시, 실시간 STT 불가)
+- **Level**: 2 (인지)

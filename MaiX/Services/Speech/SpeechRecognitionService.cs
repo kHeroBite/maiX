@@ -65,6 +65,7 @@ public class SpeechRecognitionService : IDisposable
     private const string EmbeddingModelUrl = "https://github.com/k2-fsa/sherpa-onnx/releases/download/speaker-recongition-models/3dspeaker_speech_eres2net_base_sv_zh-cn_3dspeaker_16k.onnx";
 
     private SherpaOnnx.OfflineRecognizer? _recognizer;
+    private readonly object _recognizerLock = new();  // SherpaOnnx Decode 스레드 안전 보호
     private WhisperFactory? _whisperFactory;
     private WhisperProcessor? _whisperProcessor;
     private SherpaOnnx.OfflineSpeakerDiarization? _speakerDiarizer;
@@ -196,6 +197,7 @@ public class SpeechRecognitionService : IDisposable
             }
 
             _isSenseVoiceInitialized = true;
+            Utils.Log4.Info($"[STT] ★ _recognizer 초기화 완료: HashCode={_recognizer?.GetHashCode()}");
             Utils.Log4.Info("[STT] SenseVoice 서비스 초기화 완료");
             return true;
         }
@@ -540,6 +542,7 @@ public class SpeechRecognitionService : IDisposable
             }
 
             Utils.Log4.Debug($"[STT] 실시간 청크: 음성 구간 {voiceSegments.Count}개 감지");
+            Utils.Log4.Info($"[STT] ★ 음성구간 처리 시작: {voiceSegments.Count}개, 총샘플={resampledSamples.Length}");
 
             // 각 음성 구간 STT 수행
             // 실시간 STT에서는 일정 시간 이상 침묵 후 새 음성이면 화자 전환 가능성
@@ -574,13 +577,18 @@ public class SpeechRecognitionService : IDisposable
                     }
                 }
 
-                // STT 수행
-                using var stream = _recognizer!.CreateStream();
-                stream.AcceptWaveform(targetSampleRate, chunk);
-                _recognizer.Decode(stream);
-                var result = stream.Result;
-
-                var text = result.Text?.Trim() ?? string.Empty;
+                // STT 수행 — lock으로 네이티브 Decode 직렬화 (스레드 안전 보호)
+                string text;
+                lock (_recognizerLock)
+                {
+                    using var stream = _recognizer!.CreateStream();
+                    stream.AcceptWaveform(targetSampleRate, chunk);
+                    Utils.Log4.Info($"[STT] ★ Decode 시작: 청크={chunkStartTime:mm\\:ss}, 구간=[{startSample}~{endSample}]");
+                    _recognizer.Decode(stream);
+                    var result = stream.Result;
+                    text = result.Text?.Trim() ?? string.Empty;
+                    Utils.Log4.Info($"[STT] ★ Decode 완료: text='{text}'");
+                }
 
                 if (!string.IsNullOrWhiteSpace(text))
                 {
