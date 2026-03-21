@@ -251,3 +251,12 @@
 - **교훈**: 네이티브 interop 라이브러리(SherpaOnnx, ONNX Runtime 등)의 추론/디코드 메서드는 스레드 안전하지 않다고 가정하고, 반드시 lock이나 SemaphoreSlim으로 동시 접근을 직렬화할 것. 특히 "처음 1~2회는 성공하고 N번째에서 크래시"하는 패턴은 네이티브 리소스 경쟁의 전형적 증상
 - **심각도**: 높음 (앱 크래시, 실시간 STT 불가)
 - **Level**: 2 (인지)
+
+## L-256: 실시간 STT Whisper 전환 — STTModelType 파라미터 기반 분기 (2026-03-21)
+
+- **상황**: 실시간 STT가 SenseVoice 고정이어서 Whisper 모델 선택 시에도 SenseVoice로만 전사
+- **근본 원인**: ProcessRealtimeChunkAsync에 모델 유형 파라미터가 없어 SenseVoice 경로만 존재
+- **해결**: ProcessRealtimeChunkAsync에 STTModelType 파라미터 추가, Whisper 계열이면 ProcessRealtimeChunkWithWhisperAsync로 분기. float[] → 임시 WAV → Whisper 전사 → finally 블록에서 임시 파일 삭제
+- **교훈**: 30초 청크 기준 Vulkan GPU Whisper에서 약 24초 처리로 실시간 가능. Whisper 초기화는 기존 InitializeWhisperAsync 재사용하여 1회 보장. ViewModel에 _realtimeSTTModelType 필드를 두고 MainWindow에서 모델 변경 시 동기화
+- **심각도**: 낮음 (기능 확장)
+- **Level**: 1 (참고)

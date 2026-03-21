@@ -227,6 +227,11 @@ public partial class OneNoteViewModel : ViewModelBase
     private int _summaryIntervalSeconds = 30;
 
     /// <summary>
+    /// 실시간 STT에 사용할 모델 유형 (외부에서 설정)
+    /// </summary>
+    private Services.Speech.STTModelType _realtimeSTTModelType = Services.Speech.STTModelType.SenseVoice;
+
+    /// <summary>
     /// 오디오 플레이어 서비스
     /// </summary>
     private Services.Audio.AudioPlayerService? _audioPlayerService;
@@ -2918,9 +2923,9 @@ public partial class OneNoteViewModel : ViewModelBase
                 Buffer.BlockCopy(audioData, 0, _realtimeOverlapBuffer, 0, audioData.Length);
             }
 
-            // STT 서비스로 청크 처리
+            // STT 서비스로 청크 처리 (선택된 모델 유형 전달)
             var segments = await _speechService.ProcessRealtimeChunkAsync(
-                dataToProcess, adjustedStartTime, 16000, _realtimeSTTCts.Token);
+                dataToProcess, adjustedStartTime, 16000, _realtimeSTTCts.Token, _realtimeSTTModelType);
 
             Log4.Info($"[녹음] ★ STT 처리 결과: {segments.Count}개 세그먼트");
 
@@ -4068,6 +4073,15 @@ public partial class OneNoteViewModel : ViewModelBase
             _realtimeSummaryTimer.Interval = _summaryIntervalSeconds * 1000;
             _realtimeSummaryTimer.Start();
         }
+    }
+
+    /// <summary>
+    /// 실시간 STT 모델 유형 설정
+    /// </summary>
+    public void SetRealtimeSTTModelType(Services.Speech.STTModelType modelType)
+    {
+        _realtimeSTTModelType = modelType;
+        Log4.Info($"[녹음] 실시간 STT 모델 설정: {modelType}");
     }
 
     /// <summary>

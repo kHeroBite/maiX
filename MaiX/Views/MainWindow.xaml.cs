@@ -7882,6 +7882,19 @@ public partial class MainWindow : FluentWindow
         {
             var modelTag = selectedItem.Tag?.ToString() ?? "whispergpu";
             SaveOneNoteRecordingSettings();
+
+            // ViewModel에 실시간 STT 모델 유형 업데이트
+            if (_oneNoteViewModel != null)
+            {
+                var modelType = modelTag?.ToLowerInvariant() switch
+                {
+                    "whisper" => Services.Speech.STTModelType.Whisper,
+                    "whispergpu" => Services.Speech.STTModelType.WhisperGpu,
+                    _ => Services.Speech.STTModelType.SenseVoice
+                };
+                _oneNoteViewModel.SetRealtimeSTTModelType(modelType);
+            }
+
             Log4.Debug($"[OneNote] STT 모델 변경: {modelTag}");
         }
     }
@@ -8056,6 +8069,17 @@ public partial class MainWindow : FluentWindow
                         OneNoteSTTModelSelector.SelectedIndex = i;
                         break;
                     }
+                }
+                // ViewModel에도 실시간 STT 모델 유형 설정
+                if (_oneNoteViewModel != null)
+                {
+                    var modelType = modelTag?.ToLowerInvariant() switch
+                    {
+                        "whisper" => Services.Speech.STTModelType.Whisper,
+                        "whispergpu" => Services.Speech.STTModelType.WhisperGpu,
+                        _ => Services.Speech.STTModelType.SenseVoice
+                    };
+                    _oneNoteViewModel.SetRealtimeSTTModelType(modelType);
                 }
             }
 

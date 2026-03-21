@@ -465,12 +465,14 @@ public class SpeechRecognitionService : IDisposable
     /// <param name="chunkStartTime">이 청크의 시작 시간</param>
     /// <param name="sampleRate">샘플레이트 (기본 16000)</param>
     /// <param name="cancellationToken">취소 토큰</param>
+    /// <param name="modelType">STT 모델 유형 (기본 SenseVoice)</param>
     /// <returns>인식된 세그먼트 리스트 (비어있을 수 있음)</returns>
     public async Task<List<Models.TranscriptSegment>> ProcessRealtimeChunkAsync(
         byte[] audioData,
         TimeSpan chunkStartTime,
         int sampleRate = 16000,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default,
+        STTModelType modelType = STTModelType.SenseVoice)
     {
         var segments = new List<Models.TranscriptSegment>();
 
@@ -479,18 +481,38 @@ public class SpeechRecognitionService : IDisposable
 
         try
         {
-            // SenseVoice 초기화 확인
-            if (!_isSenseVoiceInitialized || _recognizer == null)
+            var useWhisper = modelType == STTModelType.Whisper || modelType == STTModelType.WhisperGpu;
+
+            // 모델별 초기화
+            if (useWhisper)
             {
-                var initialized = await InitializeSenseVoiceAsync(cancellationToken);
-                if (!initialized)
+                var useGpu = modelType == STTModelType.WhisperGpu;
+                var needsInit = useGpu ? !_isWhisperGpuInitialized : !_isWhisperInitialized;
+                if (needsInit || _whisperProcessor == null)
                 {
-                    Utils.Log4.Warn("[STT] 실시간 청크 처리 불가: SenseVoice 초기화 실패");
-                    return segments;
+                    var initialized = await InitializeWhisperAsync(useGpu, cancellationToken);
+                    if (!initialized)
+                    {
+                        Utils.Log4.Warn($"[STT] 실시간 청크 처리 불가: Whisper 초기화 실패 (GPU: {useGpu})");
+                        return segments;
+                    }
+                }
+            }
+            else
+            {
+                // SenseVoice 초기화 확인
+                if (!_isSenseVoiceInitialized || _recognizer == null)
+                {
+                    var initialized = await InitializeSenseVoiceAsync(cancellationToken);
+                    if (!initialized)
+                    {
+                        Utils.Log4.Warn("[STT] 실시간 청크 처리 불가: SenseVoice 초기화 실패");
+                        return segments;
+                    }
                 }
             }
 
-            Utils.Log4.Debug($"[STT] 실시간 청크 처리 시작: {chunkStartTime:mm\\:ss}, {audioData.Length} bytes");
+            Utils.Log4.Debug($"[STT] 실시간 청크 처리 시작: {chunkStartTime:mm\\:ss}, {audioData.Length} bytes, 모델: {modelType}");
 
             // byte[] → float[] 변환 (16bit PCM)
             var sampleCount = audioData.Length / 2;
@@ -532,6 +554,14 @@ public class SpeechRecognitionService : IDisposable
                 resampledSamples = samples;
             }
 
+            // Whisper 모델: 전체 청크를 임시 WAV로 저장 후 일괄 전사
+            if (useWhisper)
+            {
+                return await ProcessRealtimeChunkWithWhisperAsync(
+                    resampledSamples, chunkStartTime, targetSampleRate, cancellationToken);
+            }
+
+            // SenseVoice 모델: 음성 구간별 개별 전사 (기존 로직)
             // 음성 구간 감지
             var voiceSegments = DetectVoiceSegments(resampledSamples, targetSampleRate);
 
@@ -624,6 +654,79 @@ public class SpeechRecognitionService : IDisposable
         {
             Utils.Log4.Error($"[STT] 실시간 청크 처리 실패: {ex.Message}");
             return segments;
+        }
+    }
+
+    /// <summary>
+    /// Whisper를 사용한 실시간 청크 전사
+    /// float[] 샘플을 임시 WAV로 저장 후 Whisper로 전사
+    /// </summary>
+    private async Task<List<Models.TranscriptSegment>> ProcessRealtimeChunkWithWhisperAsync(
+        float[] resampledSamples,
+        TimeSpan chunkStartTime,
+        int targetSampleRate,
+        CancellationToken cancellationToken)
+    {
+        var segments = new List<Models.TranscriptSegment>();
+        var tempWavPath = Path.Combine(Path.GetTempPath(), $"whisper_realtime_{Guid.NewGuid()}.wav");
+
+        try
+        {
+            // float[] 샘플을 임시 WAV 파일로 저장
+            await SaveAsWavAsync(resampledSamples, targetSampleRate, tempWavPath, cancellationToken);
+
+            Utils.Log4.Info($"[STT] ★ Whisper 실시간 전사 시작: {chunkStartTime:mm\\:ss}, 샘플수={resampledSamples.Length}");
+
+            // Whisper로 전사
+            using var fileStream = File.OpenRead(tempWavPath);
+            await foreach (var segment in _whisperProcessor!.ProcessAsync(fileStream, cancellationToken))
+            {
+                if (string.IsNullOrWhiteSpace(segment.Text))
+                    continue;
+
+                var text = segment.Text.Trim();
+
+                // 전체 녹음 기준 시간으로 변환
+                var segmentStartTime = chunkStartTime + segment.Start;
+                var segmentEndTime = chunkStartTime + segment.End;
+
+                // 화자 전환 감지
+                if (_lastSegmentEndTime != TimeSpan.Zero)
+                {
+                    var silenceDuration = (segmentStartTime - _lastSegmentEndTime).TotalSeconds;
+                    if (silenceDuration > SpeakerChangeSilenceThreshold && _realtimeSpeakerIndex < 10)
+                    {
+                        _realtimeSpeakerIndex++;
+                        Utils.Log4.Debug($"[STT] 화자 전환 감지: {silenceDuration:F1}초 침묵 → 화자 {_realtimeSpeakerIndex}");
+                    }
+                }
+
+                var transcriptSegment = new Models.TranscriptSegment
+                {
+                    StartTime = segmentStartTime,
+                    EndTime = segmentEndTime,
+                    Speaker = $"화자 {_realtimeSpeakerIndex}",
+                    Text = text,
+                    Confidence = 0.90
+                };
+
+                segments.Add(transcriptSegment);
+                SegmentRecognized?.Invoke(transcriptSegment);
+
+                _lastSegmentEndTime = segmentEndTime;
+
+                var displayText = text.Length > 40 ? text[..40] + "..." : text;
+                Utils.Log4.Debug($"[STT] Whisper 실시간 세그먼트: [{segmentStartTime:mm\\:ss}] 화자{_realtimeSpeakerIndex}: {displayText}");
+            }
+
+            Utils.Log4.Info($"[STT] ★ Whisper 실시간 전사 완료: {segments.Count}개 세그먼트");
+            return segments;
+        }
+        finally
+        {
+            // 임시 WAV 파일 삭제
+            try { if (File.Exists(tempWavPath)) File.Delete(tempWavPath); }
+            catch { /* 임시 파일 삭제 실패 무시 */ }
         }
     }
 
