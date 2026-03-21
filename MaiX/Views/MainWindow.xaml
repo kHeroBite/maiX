@@ -7627,6 +7627,7 @@
                                                  SelectionChanged="OneNoteRecordingsList_SelectionChanged">
                                             <ListBox.ItemContainerStyle>
                                                 <Style TargetType="ListBoxItem">
+                                                    <Setter Property="Focusable" Value="False"/>
                                                     <Setter Property="Padding" Value="0"/>
                                                     <Setter Property="Margin" Value="0,0,0,6"/>
                                                     <Setter Property="HorizontalContentAlignment" Value="Stretch"/>

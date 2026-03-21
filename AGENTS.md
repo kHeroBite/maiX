@@ -127,9 +127,9 @@ WSL에서_실행 (기본):
 
 ## 스킬 시스템 (범용 48개 + 프로젝트스킬 10개)
 
-**모든 사용자 메시지에 메인이 6-way 판단** (판단만 수행. kO 로딩은 수정 작업 시만 — 질문/계획은 kO 미경유) → 질문/계획/퀵/라이트/미디엄/풀
+**모든 사용자 메시지에 메인이 5-way 판단** (판단만 수행. kO 로딩은 수정 작업 시만 — 질문/계획은 kO 경유 경량) → 질문/계획/퀵/미디엄/풀
 
-> **v3.2 아키텍처**: 메인 = 6-way 판단 + 수정 시 Skill('kO') 로딩 → 메인이 직접 팀에이전트 spawn+오케스트레이션. kFinish = 메인 직접 실행.
+> **v4.0 아키텍처**: 메인 = 5-way 판단 + 수정 시 Skill('kO') 로딩 → 메인이 직접 팀에이전트 spawn+오케스트레이션. kFinish = 메인 직접 실행.
 > **팀에이전트 spawn 방식**: Claude Code가 자동으로 pane 생성 + 팀 join. Task 도구 team_name 필수.
 > **kO 팀에이전트 spawn 절대 금지 (L-214)**: Claude Code는 flat team 구조. kO는 스킬로만 로딩.
 
@@ -139,17 +139,17 @@ WSL에서_실행 (기본):
 - kO를 팀에이전트(Agent)로 spawn 절대 금지 (L-214) — kO는 스킬로만 로딩
 
 ```
-사용자 메시지 → [메인] (6-way 판단, 1턴 이내)
+사용자 메시지 → [메인] (5-way 판단, 1턴 이내)
   ├─ 질문 → 메인 직접 응답 (Read/Grep/Glob 0~2회)
-  ├─ 계획 → TeamCreate + kPlan spawn + 대기 → kFinish (상세: "계획 분류 절차" 참조)
+  ├─ 계획 → Skill('kO') 경량 경로 → kPlan → kFinish (상세: "계획 분류 절차" 참조)
   │           └─ kPlan: 코드 탐색 + 분석/설계 결과만 반환 (파일 수정 금지)
   ├─ 퀵(비코드) → Skill('kO') → kDev → kDone → kFinish
-  │                 비코드(.md/.json/.yaml)만 수정. 코드 수정 1건이라도 있으면 라이트 격상.
-  └─ 라이트/미디엄/풀(코드) → Skill('kO') → kPlan → kDev×N → kTest → kDone → kFinish
-                                코드(.cs 등) 수정 포함. kPlan+kTest 필수.
+  │                 비코드(.md/.json/.yaml)만 수정. 코드 수정 1건이라도 있으면 미디엄 격상.
+  └─ 미디엄/풀(코드) → Skill('kO') → kPlan → kDev×N → kTest → kDone → kFinish
+                          코드(.cs 등) 수정 포함. kPlan+kTest 필수.
 
 ⚠️ kFinish 자동 발동 (L-200 — 절대 규칙):
-  원칙: 팀에이전트 사용 시(계획/퀵/라이트/미디엄/풀) 완료 후 반드시 kFinish 실행 [COMPACT]
+  원칙: 팀에이전트 사용 시(계획/퀵/미디엄/풀) 완료 후 반드시 kFinish 실행 [COMPACT]
   순서: 마지막 에이전트 완료 → Skill('kFinish') 즉시 실행 (shutdown은 kFinish_cleanup이 잔류 멤버에 보충 발송)
   금지:
     - 완료 후 kFinish 없이 사용자에게 응답만 하고 종료
@@ -161,7 +161,7 @@ WSL에서_실행 (기본):
     - 적용: 계획 단독 완료, kPlan 에스컬레이션 실패, kDev/kTest 실패 중단
   커밋_필수 (L-205): kFinish 완료 후 미커밋 변경이 있으면 반드시 git add + commit + push 수행
 
-6-way 분류 기준:
+5-way 분류 기준:
   질문: 코드 탐색 0~2회로 답변 가능 (아키텍처 질문, 파일 위치, 설정 확인 등)
   계획: 사용자가 명시적으로 계획/플랜/구상/설계/분석/파악/조사/생각 등을 요청한 경우에만 해당. 파일 수정 없이 분석/설계 결과만 반환.
         ⚡ 즉시 kPlan spawn 트리거 (메인 직접 탐색 금지):
@@ -171,48 +171,47 @@ WSL에서_실행 (기본):
         ⚠️ 질문 vs 계획 구분 기준:
           - 코드 탐색 0~2회로 답변 가능 = 질문 (예: "이 함수 뭐하는 거야?", "파일 어디있어?")
           - 코드 탐색 3회+ 필요 OR "분석/파악/조사" 키워드 포함 = 계획 (예: "모든 스킬을 분석하라", "현황을 파악하라")
-        ❌ 계획 분류 금지 (구현 요청은 라이트/미디엄/풀로 분류):
-          - "~~ 추가해줘" / "~~ 구현해줘" / "~~ 만들어줘" → 무조건 라이트/미디엄/풀
+        ❌ 계획 분류 금지 (구현 요청은 미디엄/풀로 분류):
+          - "~~ 추가해줘" / "~~ 구현해줘" / "~~ 만들어줘" → 무조건 미디엄/풀
           - 여러 파일/레이어 변경이 필요해도 구현 요청이면 계획 분류 금지
           - DB/UI/로직 등 복잡도와 무관하게 구현 요청 = 구현 분류
   퀵: 비코드 파일(.md/.json/.yaml 등)만 수정 — 코드 파일 수정 0건
-  라이트: 코드 파일 1~2개 AND 단위작업 1~2개 AND 복잡도 낮음
-  미디엄: 코드 파일 2~4개 OR 단위작업 3~5개 OR 복잡도 중간
+  미디엄: 코드 파일 1~4개 OR 단위작업 1~5개 OR 복잡도 낮음~중간
   풀: 코드 파일 5개+ OR 단위작업 6개+ OR 복잡도 높음
 
 다중 작업 (L-178):
   원칙: 사용자 메시지에 수정 작업이 2개 이상이면 Skill('kO') 로딩 후 오케스트레이션
-  예외: 질문만 2개+ → 메인 직접 응답 (kO 미경유). 질문+수정 혼합 → 질문 즉시 응답 + 수정은 kO 경유
+  예외: 질문만 2개+ → 메인 직접 응답 (kO 직접). 질문+수정 혼합 → 질문 즉시 응답 + 수정은 kO 경유
 
 메인 역할 경계 (L-162):
-  원칙: 메인 = 디스패처 + 오케스트레이터. 6-way 판단 + spawn + 대기 + kFinish
+  원칙: 메인 = 디스패처 + 오케스트레이터. 5-way 판단 + spawn + 대기 + kFinish
   질문: Read/Grep/Glob 0~2회만. 초과 시 계획으로 격상하여 kPlan spawn
-  계획: 사전 코드 탐색 없이 즉시 kPlan spawn (코드 탐색은 kPlan 역할)
+  계획: 사전 코드 탐색 없이 즉시 Skill('kO') 경량 경로 → kPlan spawn (코드 탐색은 kPlan 역할)
         금지 패턴: "먼저 현황을 파악하겠습니다" + 탐색 시작 → 이미 위반
         새 기능 요청은 코드를 보기 전에 계획으로 분류하고 즉시 kPlan spawn
-  퀵/라이트+: Skill('kO') 로딩 → kO 지침에 따라 팀에이전트 spawn
+  퀵/미디엄+: Skill('kO') 로딩 → kO 지침에 따라 팀에이전트 spawn
   금지: "먼저 현황을 파악하겠습니다" 식의 메인 직접 탐색 (3회+ = 계획 = kPlan 위임)
 
 인터럽트 처리 (L-162):
-  원칙: 매 사용자 메시지마다 독립 6-way 재판단 수행
+  원칙: 매 사용자 메시지마다 독립 5-way 재판단 수행
   "결이 같은 요청": 진행 중 에이전트에 SendMessage로 추가 지시
   "결이 다른 요청": 같은 팀에 새 에이전트 spawn 또는 새 TeamCreate
   질문: 팀 진행 중이어도 메인 직접 응답 (0~2회 탐색)
 
-계획 분류 절차 (L-219 — kO 미경유, 메인 직접 수행):
+계획 분류 절차 (L-219 — kO 경유 경량 경로):
   판정_기준: 사용자가 명시적으로 계획/플랜/구상/설계/분석을 요청하고 파일 수정 없음 → 계획 분류 (메인 사전 탐색 불필요)
-  금지: 구현 요청("추가해줘", "구현해줘", "만들어줘")을 복잡하다는 이유로 계획 분류 금지 — 반드시 라이트/미디엄/풀로 분류
+  금지: 구현 요청("추가해줘", "구현해줘", "만들어줘")을 복잡하다는 이유로 계획 분류 금지 — 반드시 미디엄/풀로 분류
   절차:
-    1. SID 결정: MY_SID=$(echo "$CLAUDE_SESSION_ID" | cut -c1-8); EXISTING=$(ls /tmp/claude_pipeline_state_* 2>/dev/null | head -1); [ -z "$MY_SID" ] && MY_SID=$(basename "$EXISTING" 2>/dev/null | sed 's/claude_pipeline_state_//'); SHORT_SID="${MY_SID:-nosid}"
-    2. TeamCreate (team_name 자동 생성)
-    3. BEFORE 스냅샷: tmux list-panes -a -F '#{pane_id}' | sort > /tmp/claude_panes_before_${SHORT_SID}.txt
-    4. pipeline_state 설정: echo "PLAN ${SHORT_SID}" > /tmp/claude_pipeline_state_${SHORT_SID}
-    5. kPlan spawn: Agent(team_name, name="kPlan-1", mode="bypassPermissions", prompt="Skill('kPlan') + 사용자 요구사항 + Skill('kInfra_{project}')")
-    6. kPlan 완료 대기 → 결과 수신 → 사용자에게 결과 전달
-    7. shutdown_request 발송 (fire-and-forget)
-    8. kFinish 실행 (팀 정리 + IDLE 전환 — kDev/kTest/kDone 미수행이므로 경량 모드)
+    1. Skill('kO') 로딩 — 계획 경량 경로 (DEV→TEST→DONE 자동 스킵)
+    2. SID 결정: SID=$(echo "$CLAUDE_SESSION_ID" | cut -c1-12); SID_DIR="/tmp/claude/${SID}"
+    3. TeamCreate (team_name 자동 생성)
+    4. BEFORE 스냅샷: tmux list-panes -a -F '#{pane_id}' | sort > ${SID_DIR}/panes/before.txt
+    5. pipeline_state 설정: echo "PLAN" > ${SID_DIR}/state
+    6. kPlan spawn: Agent(team_name, name="kPlan-1", mode="bypassPermissions", prompt="Skill('kPlan') + 사용자 요구사항 + Skill('kInfra_{project}')") — opus 모델 (미디엄/풀)
+    7. kPlan 완료 대기 → 결과 수신 → 사용자에게 결과 전달
+    8. shutdown_request 발송 (fire-and-forget)
+    9. kFinish 실행 (팀 정리 + IDLE 전환 — kDev/kTest/kDone 스킵)
   금지:
-    - kO 스킬 로딩 (계획은 kO 미경유)
     - 메인 직접 코드 탐색 후 계획 (코드 탐색은 kPlan 역할)
     - kPlan 결과를 기반으로 메인이 직접 수정 시작 (수정 필요 시 사용자에게 결과 공유 후 새 메시지 대기)
 ```
@@ -225,7 +224,12 @@ WSL에서_실행 (기본):
 
 ### 메인 + 서브스킬 (28개)
 
-> **파이프라인 순서 엄수 (L-008)**: 메인(kO 지침)이 kPlan(1) → kDev(2) → kTest(3) → kDone(4) 순서로 팀에이전트 spawn. 이전 단계 완료 전 다음 진입 금지. **진입 기반 상태 전환**: spawn 직전에 해당 단계 상태 설정 (비정상종료 시 실패 단계 식별 가능). **실패 시 역라우팅 허용**: DEV→PLAN, TEST→DEV, TEST→PLAN, DONE→TEST (최대 2회 — `/tmp/claude_reroute_counter_${SHORT_SID}` 카운터 파일로 강제). TEST→PLAN은 설계/계획 재검토가 필요한 경우만.
+> **파이프라인 순서 엄수 (L-008)**: 메인(kO 지침)이 kPlan(1) → kDev(2) → kTest(3) → kDone(4) 순서로 팀에이전트 spawn. 이전 단계 완료 전 다음 진입 금지. **진입 기반 상태 전환**: spawn 직전에 해당 단계 상태 설정 (비정상종료 시 실패 단계 식별 가능). **실패 시 역라우팅 허용**: DEV→PLAN, TEST→DEV, TEST→PLAN, DONE→TEST (최대 2회 — `/tmp/claude/${SID}/reroute_count` 카운터 파일로 강제). TEST→PLAN은 설계/계획 재검토가 필요한 경우만.
+
+#### 모델 배정
+- **kPlan** (미디엄/풀): `model: "opus"` — 복잡한 계획/설계 품질 확보
+- **kPlan** (퀵/계획): `model` 미지정 (기본 모델)
+- **kDev/kTest/kDone**: `model` 미지정 (기본 모델)
 
 #### kPlan 계열 (5개) — 순수 계획 수립
 kPlan(메인) → kPlan_deep(심층설계) / kPlan_sim(시뮬레이션) / kPlan_review(검증) / kPlan_parallel(병렬에이전트결정)
@@ -388,12 +392,14 @@ kDone(메인) → kDone_review(프로세스개선) / kDone_trans(우회감지) /
 
 ## kO 경로 강제화 (프로젝트 훅)
 
-`/.claude/settings.json`의 `PreToolUse`에서 `/.claude/hooks/ko_route_guard.sh`를 실행하여 아래를 하드 차단한다.
+`/.claude/settings.json`의 `PreToolUse`에서 `/.claude/hooks/write_guard.sh`를 실행하여 아래를 하드 차단한다.
 
-- 분류(`question|plan|quick|light|medium|full`)가 기록되지 않은 상태의 수정/팀명령
-- `question`/`plan` 분류에서 `kO` 호출 또는 파일 수정 시도
+- 분류(`question|plan|quick|medium|full`)가 기록되지 않은 상태의 수정/팀명령
+- `question` 분류에서 파일 수정 시도
 - `plan` 분류에서 `kPlan` 이외 팀에이전트 단계 진입
-- `quick|light|medium|full` 분류에서 `kO` 미경유 수정/팀명령
+- `quick|medium|full` 분류에서 `kO` 미경유 수정/팀명령
+- NTFS(`/mnt/c/`) 직접 수정 시도 (Edit/Write 도구)
+- `~/.claude/teams/` 보호 (팀 디렉토리 직접 수정 금지)
 
 즉, 질문/답변만 직접 처리하고, 수정 분류는 반드시 `kO` 선행 후 파이프라인으로만 진행된다.
 
