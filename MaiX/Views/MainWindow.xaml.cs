@@ -1056,6 +1056,8 @@ public partial class MainWindow : FluentWindow
     private async void MainWindow_Loaded(object sender, RoutedEventArgs e)
     {
         Log4.Debug("MainWindow_Loaded 시작");
+        Log4.Info($"[진단] 실행파일 경로: {Environment.ProcessPath}");
+        Log4.Info($"[진단] 현재 디렉토리: {AppDomain.CurrentDomain.BaseDirectory}");
 
         // GPU 모드 체크마크 및 타이틀바 아이콘 초기화
         UpdateGpuModeCheckmark();
