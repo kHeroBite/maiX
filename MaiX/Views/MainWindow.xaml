@@ -7375,7 +7375,7 @@
                                             <Grid>
                                                 <Grid.RowDefinitions>
                                                     <RowDefinition Height="Auto"/>
-                                                    <RowDefinition Height="160"/>
+                                                    <RowDefinition Height="Auto"/>
                                                 </Grid.RowDefinitions>
 
                                                 <!-- 탭 헤더 -->
@@ -7472,6 +7472,11 @@
                                                             <RowDefinition Height="Auto"/>
                                                             <RowDefinition Height="Auto"/>
                                                             <RowDefinition Height="Auto"/>
+                                                            <RowDefinition Height="Auto"/>
+                                                            <RowDefinition Height="Auto"/>
+                                                            <RowDefinition Height="Auto"/>
+                                                            <RowDefinition Height="Auto"/>
+                                                            <RowDefinition Height="Auto"/>
                                                         </Grid.RowDefinitions>
 
                                                         <!-- 첫 번째 줄: STT 주기 -->
@@ -7554,10 +7559,49 @@
                                                             <ComboBoxItem Content="5분" Tag="300"/>
                                                             <ComboBoxItem Content="10분" Tag="600"/>
                                                         </ComboBox>
+
+                                                        <!-- 구분선 -->
+                                                        <Separator Grid.Row="3" Grid.ColumnSpan="3" Margin="0,8,0,4"/>
+
+                                                        <!-- 후처리 섹션 헤더 -->
+                                                        <TextBlock Grid.Row="4" Grid.ColumnSpan="3" Text="후처리" FontSize="12" FontWeight="SemiBold"
+                                                                   Foreground="{DynamicResource TextFillColorSecondaryBrush}" Margin="0,0,0,6"/>
+
+                                                        <!-- STT 후처리 체크박스 -->
+                                                        <CheckBox x:Name="OneNotePostSTTCheckBox" Grid.Row="5" Grid.ColumnSpan="3"
+                                                                  Content="STT 후처리"
+                                                                  ToolTip="녹음 완료 후 전체 파일 STT 처리"
+                                                                  FontSize="12" Margin="0,0,0,4"
+                                                                  Checked="OneNotePostSTT_Changed"
+                                                                  Unchecked="OneNotePostSTT_Changed"/>
+
+                                                        <!-- 요약 후처리 체크박스 -->
+                                                        <CheckBox x:Name="OneNotePostSummaryCheckBox" Grid.Row="6" Grid.ColumnSpan="3"
+                                                                  Content="요약 후처리"
+                                                                  ToolTip="STT 결과로 전체 요약 생성 (STT 후처리 필요)"
+                                                                  FontSize="12" Margin="0,0,0,4"
+                                                                  Checked="OneNotePostSummary_Changed"
+                                                                  Unchecked="OneNotePostSummary_Changed"/>
+
+                                                        <!-- 화자분리 후처리 체크박스 -->
+                                                        <CheckBox x:Name="OneNotePostDiarizationCheckBox" Grid.Row="7" Grid.ColumnSpan="3"
+                                                                  Content="화자분리 후처리"
+                                                                  ToolTip="sherpa-onnx 모델로 정밀 화자분리 수행"
+                                                                  FontSize="12" Margin="0,0,0,0"
+                                                                  Checked="OneNotePostDiarization_Changed"
+                                                                  Unchecked="OneNotePostDiarization_Changed"/>
                                                     </Grid>
                                                 </Border>
                                             </Grid>
                                         </Border>
+
+                                        <!-- 후처리 상태 표시 -->
+                                        <TextBlock x:Name="OneNotePostProcessingStatusText"
+                                                   Text="{Binding PostProcessingStatus}"
+                                                   Visibility="{Binding IsPostProcessing, Converter={StaticResource BoolToVisibilityConverter}}"
+                                                   Foreground="#FF8C00"
+                                                   FontSize="12" FontWeight="SemiBold"
+                                                   Margin="0,0,0,4"/>
 
                                         <!-- 녹음 파일 목록 헤더 -->
                                         <Grid Margin="0,0,0,8">

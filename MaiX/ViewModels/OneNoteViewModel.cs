@@ -289,6 +289,36 @@ public partial class OneNoteViewModel : ViewModelBase
     private bool _isAutoSummaryEnabled = true;
 
     /// <summary>
+    /// 후처리 STT 활성화 여부 (녹음 완료 후 파일 기반 STT)
+    /// </summary>
+    [ObservableProperty]
+    private bool _isPostSTTEnabled = false;
+
+    /// <summary>
+    /// 후처리 요약 활성화 여부 (후처리 STT 완료 후 AI 요약)
+    /// </summary>
+    [ObservableProperty]
+    private bool _isPostSummaryEnabled = false;
+
+    /// <summary>
+    /// 후처리 화자분리 활성화 여부 (녹음 완료 후 화자분리)
+    /// </summary>
+    [ObservableProperty]
+    private bool _isPostDiarizationEnabled = false;
+
+    /// <summary>
+    /// 후처리 진행 상태 텍스트
+    /// </summary>
+    [ObservableProperty]
+    private string _postProcessingStatus = string.Empty;
+
+    /// <summary>
+    /// 후처리 진행 중 여부
+    /// </summary>
+    [ObservableProperty]
+    private bool _isPostProcessing = false;
+
+    /// <summary>
     /// AI 분석 활성화 여부 (STT가 활성화되어 있으면 true)
     /// </summary>
     public bool IsAIAnalysisEnabled => IsAutoSTTEnabled;
@@ -2644,12 +2674,113 @@ public partial class OneNoteViewModel : ViewModelBase
                 {
                     await SaveRealtimeSummaryAsync(filePath);
                 }
+
+                // 후처리 실행 (실시간 결과 저장 완료 후)
+                await RunPostProcessingAsync(filePath);
             }
             catch (Exception ex)
             {
                 _logger.Error(ex, "[녹음] 실시간 STT/요약 저장 실패");
             }
         });
+    }
+
+    /// <summary>
+    /// 녹음 완료 후 후처리 (STT / 요약 / 화자분리) 수행
+    /// </summary>
+    private async Task RunPostProcessingAsync(string filePath)
+    {
+        if (!IsPostSTTEnabled && !IsPostDiarizationEnabled) return;
+
+        IsPostProcessing = true;
+        var recording = CurrentPageRecordings.FirstOrDefault(r => r.FilePath == filePath);
+        if (recording == null) { IsPostProcessing = false; return; }
+
+        try
+        {
+            // 1. STT 후처리 (파일 기반 STT — 실시간 STT보다 정확)
+            if (IsPostSTTEnabled)
+            {
+                PostProcessingStatus = "STT 후처리 중...";
+                Log4.Info("[후처리] STT 시작");
+                await RunSTTAsync(recording);
+                Log4.Info("[후처리] STT 완료");
+            }
+
+            // 2. 요약 후처리 (STT 완료 후)
+            if (IsPostSummaryEnabled && IsPostSTTEnabled)
+            {
+                PostProcessingStatus = "요약 생성 중...";
+                Log4.Info("[후처리] 요약 시작");
+                await RunSummaryAsync(recording);
+                Log4.Info("[후처리] 요약 완료");
+            }
+
+            // 3. 화자분리 후처리 (STT 없이 화자분리만 수행)
+            if (IsPostDiarizationEnabled && !IsPostSTTEnabled)
+            {
+                PostProcessingStatus = "화자분리 중...";
+                Log4.Info("[후처리] 화자분리 시작");
+                await RunPostDiarizationAsync(filePath);
+                Log4.Info("[후처리] 화자분리 완료");
+            }
+
+            PostProcessingStatus = "후처리 완료";
+            Log4.Info("[후처리] 전체 완료");
+        }
+        catch (Exception ex)
+        {
+            Log4.Error($"[후처리] 오류: {ex.Message}");
+            PostProcessingStatus = $"후처리 오류: {ex.Message}";
+        }
+        finally
+        {
+            IsPostProcessing = false;
+            await Task.Delay(3000);
+            PostProcessingStatus = string.Empty;
+        }
+    }
+
+    /// <summary>
+    /// 후처리 화자분리 — STT 결과를 화자분리 포함 STT로 재수행
+    /// (SpeechRecognitionService.TranscribeFileAsync가 화자분리를 포함하므로 RunSTTAsync 재호출)
+    /// </summary>
+    private async Task RunPostDiarizationAsync(string filePath)
+    {
+        try
+        {
+            if (_speechService == null) return;
+
+            var recording = CurrentPageRecordings.FirstOrDefault(r => r.FilePath == filePath);
+            if (recording == null)
+            {
+                Log4.Warn("[후처리] 화자분리 대상 녹음을 찾을 수 없음");
+                return;
+            }
+
+            // 화자분리 모델 초기화 (미초기화 시)
+            if (!_speechService.IsSpeakerDiarizationInitialized)
+            {
+                Log4.Info("[후처리] 화자분리 모델 초기화 중...");
+                PostProcessingStatus = "화자분리 모델 로딩 중...";
+                var initialized = await _speechService.InitializeSpeakerDiarizationAsync();
+                if (!initialized)
+                {
+                    Log4.Warn("[후처리] 화자분리 모델 초기화 실패");
+                    return;
+                }
+            }
+
+            // STT + 화자분리 재수행 (TranscribeFileAsync가 화자분리를 포함)
+            Log4.Info("[후처리] 화자분리 포함 STT 재수행");
+            await RunSTTAsync(recording);
+
+            Log4.Info($"[후처리] 화자분리 완료 — 세그먼트 {STTSegments.Count}개");
+        }
+        catch (Exception ex)
+        {
+            Log4.Error($"[후처리] 화자분리 오류: {ex.Message}");
+        }
     }
 
     /// <summary>

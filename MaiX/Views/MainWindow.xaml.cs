@@ -7927,6 +7927,43 @@ public partial class MainWindow : FluentWindow
     }
 
     /// <summary>
+    /// STT 후처리 체크박스 변경
+    /// </summary>
+    private void OneNotePostSTT_Changed(object sender, RoutedEventArgs e)
+    {
+        if (_oneNoteViewModel == null) return;
+        _oneNoteViewModel.IsPostSTTEnabled = OneNotePostSTTCheckBox.IsChecked == true;
+        // STT 미체크 시 요약 비활성화
+        OneNotePostSummaryCheckBox.IsEnabled = _oneNoteViewModel.IsPostSTTEnabled;
+        if (!_oneNoteViewModel.IsPostSTTEnabled)
+        {
+            OneNotePostSummaryCheckBox.IsChecked = false;
+            _oneNoteViewModel.IsPostSummaryEnabled = false;
+        }
+        SaveOneNoteRecordingSettings();
+    }
+
+    /// <summary>
+    /// 요약 후처리 체크박스 변경
+    /// </summary>
+    private void OneNotePostSummary_Changed(object sender, RoutedEventArgs e)
+    {
+        if (_oneNoteViewModel == null) return;
+        _oneNoteViewModel.IsPostSummaryEnabled = OneNotePostSummaryCheckBox.IsChecked == true;
+        SaveOneNoteRecordingSettings();
+    }
+
+    /// <summary>
+    /// 화자분리 후처리 체크박스 변경
+    /// </summary>
+    private void OneNotePostDiarization_Changed(object sender, RoutedEventArgs e)
+    {
+        if (_oneNoteViewModel == null) return;
+        _oneNoteViewModel.IsPostDiarizationEnabled = OneNotePostDiarizationCheckBox.IsChecked == true;
+        SaveOneNoteRecordingSettings();
+    }
+
+    /// <summary>
     /// OneNote 녹음 설정 저장
     /// </summary>
     private void SaveOneNoteRecordingSettings()
@@ -7951,7 +7988,10 @@ public partial class MainWindow : FluentWindow
             {
                 STTModel = (OneNoteSTTModelSelector?.SelectedItem as System.Windows.Controls.ComboBoxItem)?.Tag?.ToString() ?? "whispergpu",
                 STTIntervalSeconds = int.TryParse((OneNoteSTTIntervalSelector?.SelectedItem as System.Windows.Controls.ComboBoxItem)?.Tag?.ToString(), out int sttInterval) ? sttInterval : 15,
-                SummaryIntervalSeconds = int.TryParse((OneNoteSummaryIntervalSelector?.SelectedItem as System.Windows.Controls.ComboBoxItem)?.Tag?.ToString(), out int summaryInterval) ? summaryInterval : 30
+                SummaryIntervalSeconds = int.TryParse((OneNoteSummaryIntervalSelector?.SelectedItem as System.Windows.Controls.ComboBoxItem)?.Tag?.ToString(), out int summaryInterval) ? summaryInterval : 30,
+                PostSTTEnabled = OneNotePostSTTCheckBox.IsChecked == true,
+                PostSummaryEnabled = OneNotePostSummaryCheckBox.IsChecked == true,
+                PostDiarizationEnabled = OneNotePostDiarizationCheckBox.IsChecked == true
             };
 
             var settingsPath = System.IO.Path.Combine(
@@ -8055,6 +8095,27 @@ public partial class MainWindow : FluentWindow
                 }
                 // ViewModel에도 설정
                 _oneNoteViewModel?.SetSummaryInterval(intervalSeconds);
+            }
+
+            // 후처리 설정 로드
+            if (root.TryGetProperty("PostSTTEnabled", out var postSTTProp))
+            {
+                var postSTT = postSTTProp.GetBoolean();
+                OneNotePostSTTCheckBox.IsChecked = postSTT;
+                if (_oneNoteViewModel != null) _oneNoteViewModel.IsPostSTTEnabled = postSTT;
+            }
+            if (root.TryGetProperty("PostSummaryEnabled", out var postSumProp))
+            {
+                var postSum = postSumProp.GetBoolean();
+                OneNotePostSummaryCheckBox.IsChecked = postSum;
+                if (_oneNoteViewModel != null) _oneNoteViewModel.IsPostSummaryEnabled = postSum;
+                OneNotePostSummaryCheckBox.IsEnabled = OneNotePostSTTCheckBox.IsChecked == true;
+            }
+            if (root.TryGetProperty("PostDiarizationEnabled", out var postDiarProp))
+            {
+                var postDiar = postDiarProp.GetBoolean();
+                OneNotePostDiarizationCheckBox.IsChecked = postDiar;
+                if (_oneNoteViewModel != null) _oneNoteViewModel.IsPostDiarizationEnabled = postDiar;
             }
 
             Log4.Info($"[OneNote] 녹음 설정 로드 완료: STT모델={root.GetProperty("STTModel").GetString()}, STT주기={root.GetProperty("STTIntervalSeconds").GetInt32()}초, 요약주기={root.GetProperty("SummaryIntervalSeconds").GetInt32()}초");
