@@ -1634,6 +1634,28 @@ public partial class OneNoteViewModel : ViewModelBase
     }
 
     /// <summary>
+    /// 페이지 삭제 시 연결된 로컬 녹음/STT/요약 파일 일괄 삭제 (OneNote 서버 파일 제외)
+    /// </summary>
+    public void DeleteRecordingsForPage(string pageId)
+    {
+        if (string.IsNullOrEmpty(pageId)) return;
+
+        var sanitized = SanitizePageId(pageId);
+        var toDelete = Recordings
+            .Where(r => r.Source != Models.RecordingSource.OneNote
+                     && SanitizePageId(r.LinkedPageId ?? string.Empty) == sanitized)
+            .ToList();
+
+        foreach (var recording in toDelete)
+        {
+            DeleteRecording(recording);
+        }
+
+        if (toDelete.Count > 0)
+            Utils.Log4.Info($"[OneNote] 페이지 삭제로 녹음 {toDelete.Count}개 함께 삭제: {pageId}");
+    }
+
+    /// <summary>
     /// 선택된 녹음 변경 시 STT/요약 로드
     /// </summary>
     partial void OnSelectedRecordingChanged(Models.RecordingInfo? value)

@@ -12533,6 +12533,9 @@ public partial class MainWindow : FluentWindow
                             await graphService.DeletePageAsync(page.Id);
                             Log4.Info($"[OneNote] 노트 삭제 완료 (Graph API): {page.Title}");
 
+                            // 연결된 로컬 녹음 파일 삭제
+                            _oneNoteViewModel?.DeleteRecordingsForPage(page.Id);
+
                             // 즐겨찾기에서 제거
                             RemovePageFromFavorites(page.Id);
 
@@ -12751,6 +12754,9 @@ public partial class MainWindow : FluentWindow
                         {
                             await graphService.DeletePageAsync(favoriteItem.Id);
                             Log4.Info($"[OneNote] 즐겨찾기 노트 삭제 완료 (Graph API): {favoriteItem.Title}");
+
+                            // 연결된 로컬 녹음 파일 삭제
+                            _oneNoteViewModel?.DeleteRecordingsForPage(favoriteItem.Id);
 
                             // 즐겨찾기에서 제거
                             RemovePageFromFavorites(favoriteItem.Id);
