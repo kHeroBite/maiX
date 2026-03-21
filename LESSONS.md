@@ -270,3 +270,29 @@
 - **교훈**: 모델별 초기화는 해당 모델 경로에서만 수행. 다른 모델의 초기화 코드가 잔존하면 네이티브 리소스 충돌로 크래시 발생. 동일 패턴 방지: 새 모델 추가 시 기존 모델 초기화 의존성 점검 필수
 - **심각도**: 높음 (앱 크래시)
 - **Level**: 1 (참고)
+
+## L-258: 화자분리 SemaphoreSlim + 타임아웃으로 네이티브 크래시 방지 (2026-03-22)
+
+- **문제**: 화자분리(_speakerDiarizer.Process)가 동시 호출되면 네이티브 리소스 충돌로 크래시, 또는 무한 블로킹
+- **근본 원인**: sherpa-onnx 네이티브 OfflineSpeakerDiarization.Process()가 thread-safe하지 않고, 입력 검증 없이 빈 배열도 전달됨
+- **해결**: SemaphoreSlim(1,1)로 동시 접근 차단, 입력/리샘플링 후 유효성 검증, Task.Run + 5분 타임아웃으로 무한 블로킹 방지
+- **교훈**: 네이티브 interop 호출은 항상 (1) 동시 접근 Lock (2) 입력 유효성 검증 (3) 타임아웃이 3종 세트로 필요. 특히 sherpa-onnx는 내부에서 예외를 던지지 않고 행(hang)하는 경우가 있어 타임아웃이 필수
+- **심각도**: 높음 (앱 크래시)
+- **Level**: 1 (참고)
+
+## L-259: WPF ListBox 내부 Button 첫 클릭 무시 — PreviewMouseLeftButtonDown 패턴 (2026-03-22)
+
+- **문제**: ListBox 내 Button을 클릭하면 첫 번째 클릭이 ListBoxItem 선택에 소비되어 Button.Click 이벤트가 발생하지 않음
+- **근본 원인**: WPF ListBox는 미선택 ListBoxItem 내부 클릭 시 먼저 해당 아이템을 선택하고 이벤트를 소비. 두 번째 클릭부터 Button.Click이 전파됨
+- **해결**: ListBox에 PreviewMouseLeftButtonDown 핸들러 추가 — ButtonBase/Slider가 포함된 ListBoxItem을 FindVisualParent로 탐색, 미선택 시 프로그래밍적으로 IsSelected=true 설정
+- **교훈**: WPF ListBox 내 인터랙티브 컨트롤(Button, Slider 등)이 있으면 PreviewMouseLeftButtonDown에서 선 선택 패턴 적용 필수. 이전 커밋(b6eb6fa4)의 Focusable=False 방식은 불완전 — PreviewMouseLeftButtonDown이 근본 해결
+- **심각도**: 중간 (UX 불편)
+- **Level**: 1 (참고)
+
+## L-260: 자동 후처리 — 녹음 종료 시 STT→화자분리→요약 자동 실행 (2026-03-22)
+
+- **문제**: 녹음 종료 후 STT, 화자분리, 요약을 사용자가 각각 수동으로 실행해야 함
+- **해결**: StopRecording에서 RunPostProcessingAsync를 Dispatcher.InvokeAsync로 자동 호출. 후처리 순서를 STT→화자분리→요약으로 변경 (기존: STT→요약→화자분리). 화자분리는 STT 유무와 무관하게 독립 실행 가능하도록 변경
+- **교훈**: 후처리 순서는 데이터 의존성 기반으로 결정 — STT(원본 텍스트 생성) → 화자분리(텍스트에 화자 라벨 부여) → 요약(화자분리된 텍스트 요약). Dispatcher.InvokeAsync로 UI 스레드에서 실행해야 바인딩 프로퍼티(IsPostProcessing) 안전 갱신
+- **심각도**: 낮음 (기능 추가)
+- **Level**: 1 (참고)

@@ -6274,6 +6274,30 @@ public partial class MainWindow : FluentWindow
     }
 
     /// <summary>
+    /// 녹음 목록 PreviewMouseLeftButtonDown — ListBoxItem 미선택 시 Button 클릭이 선택으로 소비되는 버그 수정
+    /// Button/Slider 클릭 시 해당 ListBoxItem을 먼저 선택하여 Click 이벤트가 정상 전파되게 함
+    /// </summary>
+    private void OneNoteRecordingsList_PreviewMouseLeftButtonDown(object sender, System.Windows.Input.MouseButtonEventArgs e)
+    {
+        var originalSource = e.OriginalSource as DependencyObject;
+        if (originalSource == null) return;
+
+        // 클릭된 요소에서 Button 또는 Slider를 찾기 (Visual Tree 상위 탐색)
+        var button = FindVisualParent<System.Windows.Controls.Primitives.ButtonBase>(originalSource);
+        var slider = FindVisualParent<System.Windows.Controls.Slider>(originalSource);
+
+        if (button != null || slider != null)
+        {
+            var element = (DependencyObject)(button ?? (DependencyObject)slider!);
+            var listBoxItem = FindVisualParent<ListBoxItem>(element);
+            if (listBoxItem != null && !listBoxItem.IsSelected)
+            {
+                listBoxItem.IsSelected = true;
+            }
+        }
+    }
+
+    /// <summary>
     /// 녹음 목록 선택 변경 이벤트
     /// </summary>
     private async void OneNoteRecordingsList_SelectionChanged(object sender, System.Windows.Controls.SelectionChangedEventArgs e)

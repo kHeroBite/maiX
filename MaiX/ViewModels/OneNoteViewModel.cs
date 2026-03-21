@@ -2727,7 +2727,10 @@ public partial class OneNoteViewModel : ViewModelBase
     /// </summary>
     private async Task RunPostProcessingAsync(string filePath)
     {
-        if (!IsPostSTTEnabled && !IsPostDiarizationEnabled) return;
+        if (!IsPostSTTEnabled && !IsPostDiarizationEnabled && !IsPostSummaryEnabled) return;
+
+        // 이미 후처리 진행 중이면 중복 실행 방지
+        if (IsPostProcessing) return;
 
         IsPostProcessing = true;
         var recording = CurrentPageRecordings.FirstOrDefault(r => r.FilePath == filePath);
@@ -2744,22 +2747,22 @@ public partial class OneNoteViewModel : ViewModelBase
                 Log4.Info("[후처리] STT 완료");
             }
 
-            // 2. 요약 후처리 (STT 완료 후)
-            if (IsPostSummaryEnabled && IsPostSTTEnabled)
-            {
-                PostProcessingStatus = "요약 생성 중...";
-                Log4.Info("[후처리] 요약 시작");
-                await RunSummaryAsync(recording);
-                Log4.Info("[후처리] 요약 완료");
-            }
-
-            // 3. 화자분리 후처리 (STT 없이 화자분리만 수행)
-            if (IsPostDiarizationEnabled && !IsPostSTTEnabled)
+            // 2. 화자분리 후처리 (옵션 체크 시 — STT 유무 무관)
+            if (IsPostDiarizationEnabled)
             {
                 PostProcessingStatus = "화자분리 중...";
                 Log4.Info("[후처리] 화자분리 시작");
                 await RunPostDiarizationAsync(filePath);
                 Log4.Info("[후처리] 화자분리 완료");
+            }
+
+            // 3. 요약 후처리 (STT 결과가 있을 때)
+            if (IsPostSummaryEnabled && (IsPostSTTEnabled || STTSegments.Count > 0))
+            {
+                PostProcessingStatus = "요약 생성 중...";
+                Log4.Info("[후처리] 요약 시작");
+                await RunSummaryAsync(recording);
+                Log4.Info("[후처리] 요약 완료");
             }
 
             PostProcessingStatus = "후처리 완료";
@@ -3319,7 +3322,7 @@ public partial class OneNoteViewModel : ViewModelBase
                 _lastCompletedRecordingPath = null;
             }
 
-            // 비동기 작업 (STT/요약 저장)
+            // 비동기 작업 (STT/요약 저장 + 자동 후처리)
             if (!string.IsNullOrEmpty(filePath))
             {
                 _ = Task.Run(async () =>
@@ -3334,10 +3337,16 @@ public partial class OneNoteViewModel : ViewModelBase
                         {
                             await SaveRealtimeSummaryAsync(filePath);
                         }
+
+                        // 자동 후처리 실행 (UI 스레드에서 실행 — IsPostProcessing 등 UI 바인딩 프로퍼티 사용)
+                        await System.Windows.Application.Current.Dispatcher.InvokeAsync(async () =>
+                        {
+                            await RunPostProcessingAsync(filePath);
+                        });
                     }
                     catch (Exception ex)
                     {
-                        _logger.Error(ex, "[녹음] 실시간 STT/요약 저장 실패");
+                        _logger.Error(ex, "[녹음] 실시간 STT/요약 저장 또는 후처리 실패");
                     }
                 });
             }

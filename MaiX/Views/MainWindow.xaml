@@ -7564,7 +7564,7 @@
                                                         <Separator Grid.Row="3" Grid.ColumnSpan="3" Margin="0,8,0,4"/>
 
                                                         <!-- 후처리 섹션 헤더 -->
-                                                        <TextBlock Grid.Row="4" Grid.ColumnSpan="3" Text="후처리" FontSize="12" FontWeight="SemiBold"
+                                                        <TextBlock Grid.Row="4" Grid.ColumnSpan="3" Text="자동 후처리" FontSize="12" FontWeight="SemiBold"
                                                                    Foreground="{DynamicResource TextFillColorSecondaryBrush}" Margin="0,0,0,6"/>
 
                                                         <!-- STT 후처리 체크박스 -->
@@ -7575,21 +7575,21 @@
                                                                   Checked="OneNotePostSTT_Changed"
                                                                   Unchecked="OneNotePostSTT_Changed"/>
 
-                                                        <!-- 요약 후처리 체크박스 -->
-                                                        <CheckBox x:Name="OneNotePostSummaryCheckBox" Grid.Row="6" Grid.ColumnSpan="3"
-                                                                  Content="요약 후처리"
-                                                                  ToolTip="STT 결과로 전체 요약 생성 (STT 후처리 필요)"
-                                                                  FontSize="12" Margin="0,0,0,4"
-                                                                  Checked="OneNotePostSummary_Changed"
-                                                                  Unchecked="OneNotePostSummary_Changed"/>
-
                                                         <!-- 화자분리 후처리 체크박스 -->
-                                                        <CheckBox x:Name="OneNotePostDiarizationCheckBox" Grid.Row="7" Grid.ColumnSpan="3"
+                                                        <CheckBox x:Name="OneNotePostDiarizationCheckBox" Grid.Row="6" Grid.ColumnSpan="3"
                                                                   Content="화자분리 후처리"
                                                                   ToolTip="sherpa-onnx 모델로 정밀 화자분리 수행"
-                                                                  FontSize="12" Margin="0,0,0,0"
+                                                                  FontSize="12" Margin="0,0,0,4"
                                                                   Checked="OneNotePostDiarization_Changed"
                                                                   Unchecked="OneNotePostDiarization_Changed"/>
+
+                                                        <!-- 요약 후처리 체크박스 -->
+                                                        <CheckBox x:Name="OneNotePostSummaryCheckBox" Grid.Row="7" Grid.ColumnSpan="3"
+                                                                  Content="요약 후처리"
+                                                                  ToolTip="STT 결과로 전체 요약 생성 (STT 후처리 필요)"
+                                                                  FontSize="12" Margin="0,0,0,0"
+                                                                  Checked="OneNotePostSummary_Changed"
+                                                                  Unchecked="OneNotePostSummary_Changed"/>
                                                     </Grid>
                                                 </Border>
                                             </Grid>
@@ -7624,6 +7624,7 @@
                                                  Background="Transparent"
                                                  BorderThickness="0"
                                                  SelectedItem="{Binding SelectedRecording, Mode=TwoWay}"
+                                                 PreviewMouseLeftButtonDown="OneNoteRecordingsList_PreviewMouseLeftButtonDown"
                                                  SelectionChanged="OneNoteRecordingsList_SelectionChanged">
                                             <ListBox.ItemContainerStyle>
                                                 <Style TargetType="ListBoxItem">

@@ -69,6 +69,7 @@ public class SpeechRecognitionService : IDisposable
     private WhisperFactory? _whisperFactory;
     private WhisperProcessor? _whisperProcessor;
     private SherpaOnnx.OfflineSpeakerDiarization? _speakerDiarizer;
+    private readonly SemaphoreSlim _diarizationLock = new(1, 1);  // 화자분리 동시 접근 방지
     private bool _isSenseVoiceInitialized;
     private bool _isWhisperInitialized;
     private bool _isWhisperGpuInitialized;
@@ -1312,9 +1313,17 @@ public class SpeechRecognitionService : IDisposable
         // sherpa-onnx 화자분리 사용 가능한 경우
         if (_speakerDiarizer != null && _isSpeakerDiarizationInitialized)
         {
+            await _diarizationLock.WaitAsync(cancellationToken);
             try
             {
                 Utils.Log4.Info("[STT] sherpa-onnx 화자분리 수행 중...");
+
+                // 입력 유효성 검증
+                if (samples == null || samples.Length == 0)
+                {
+                    Utils.Log4.Warn("[STT] 화자분리 입력 데이터 없음 — 폴백 사용");
+                    return PerformSpeakerDiarizationFallback(samples ?? Array.Empty<float>(), sampleRate, segments);
+                }
 
                 // 샘플레이트가 다르면 리샘플링 필요
                 float[] processedSamples = samples;
@@ -1324,8 +1333,18 @@ public class SpeechRecognitionService : IDisposable
                     processedSamples = ResampleAudio(samples, sampleRate, _speakerDiarizer.SampleRate);
                 }
 
-                // 화자분리 수행
-                var diarizationResult = _speakerDiarizer.Process(processedSamples);
+                if (processedSamples == null || processedSamples.Length == 0)
+                {
+                    Utils.Log4.Warn("[STT] 리샘플링 후 데이터 없음 — 폴백 사용");
+                    return PerformSpeakerDiarizationFallback(samples, sampleRate, segments);
+                }
+
+                // 별도 스레드에서 네이티브 호출 (타임아웃 5분)
+                using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+                timeoutCts.CancelAfter(TimeSpan.FromMinutes(5));
+
+                var diarizer = _speakerDiarizer;
+                var diarizationResult = await Task.Run(() => diarizer.Process(processedSamples), timeoutCts.Token);
 
                 // 화자 수 카운트
                 var speakers = new HashSet<int>();
@@ -1379,9 +1398,17 @@ public class SpeechRecognitionService : IDisposable
 
                 return speakerLabels;
             }
+            catch (OperationCanceledException)
+            {
+                Utils.Log4.Warn("[STT] 화자분리 타임아웃 (5분 초과) — 폴백 사용");
+            }
             catch (Exception ex)
             {
                 Utils.Log4.Warn($"[STT] sherpa-onnx 화자분리 실패, 폴백 사용: {ex.Message}");
+            }
+            finally
+            {
+                _diarizationLock.Release();
             }
         }
 
