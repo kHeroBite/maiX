@@ -187,6 +187,16 @@ public partial class OneNoteViewModel : ViewModelBase
     private CancellationTokenSource? _realtimeSTTCts;
 
     /// <summary>
+    /// 실시간 STT 오버랩 버퍼 — 이전 청크 끝 5초를 보관하여 다음 청크에 붙임 (단어 잘림 방지)
+    /// </summary>
+    private byte[]? _realtimeOverlapBuffer;
+
+    /// <summary>
+    /// 실시간 STT 오버랩 시간 (초)
+    /// </summary>
+    private const int RealtimeOverlapSeconds = 5;
+
+    /// <summary>
     /// 수동 STT 분석 취소 토큰
     /// </summary>
     private CancellationTokenSource? _manualSTTCts;
@@ -207,9 +217,9 @@ public partial class OneNoteViewModel : ViewModelBase
     private int _lastSummarySegmentCount = 0;
 
     /// <summary>
-    /// STT 청크 간격 (초), 기본 15초
+    /// STT 청크 간격 (초), 기본 30초
     /// </summary>
-    private int _sttChunkIntervalSeconds = 15;
+    private int _sttChunkIntervalSeconds = 30;
 
     /// <summary>
     /// 요약 업데이트 간격 (초), 기본 30초
@@ -2816,6 +2826,7 @@ public partial class OneNoteViewModel : ViewModelBase
 
         _realtimeSTTCts?.Cancel();
         _realtimeSTTCts = new CancellationTokenSource();
+        _realtimeOverlapBuffer = null;
 
         // 실시간 모드 활성화 (설정된 청크 간격 사용)
         _recordingService.RealtimeEnabled = true;
@@ -2846,6 +2857,7 @@ public partial class OneNoteViewModel : ViewModelBase
         _realtimeSummaryTimer?.Stop();
         _realtimeSummaryTimer?.Dispose();
         _realtimeSummaryTimer = null;
+        _realtimeOverlapBuffer = null;
 
         if (_recordingService != null)
         {
@@ -2868,9 +2880,47 @@ public partial class OneNoteViewModel : ViewModelBase
         {
             Log4.Info($"[녹음] ★ 실시간 청크 수신: {chunkStartTime:mm\\:ss}, {audioData.Length} bytes");
 
+            // 오버랩 처리: 이전 청크 끝 5초를 현재 청크 앞에 붙여서 단어 잘림 방지
+            byte[] dataToProcess;
+            TimeSpan adjustedStartTime;
+
+            if (_realtimeOverlapBuffer != null && _realtimeOverlapBuffer.Length > 0)
+            {
+                // 오버랩 버퍼 + 현재 청크 결합
+                dataToProcess = new byte[_realtimeOverlapBuffer.Length + audioData.Length];
+                Buffer.BlockCopy(_realtimeOverlapBuffer, 0, dataToProcess, 0, _realtimeOverlapBuffer.Length);
+                Buffer.BlockCopy(audioData, 0, dataToProcess, _realtimeOverlapBuffer.Length, audioData.Length);
+
+                // 시작 시간에서 오버랩 시간만큼 빼기 (0 미만이면 Zero)
+                adjustedStartTime = chunkStartTime - TimeSpan.FromSeconds(RealtimeOverlapSeconds);
+                if (adjustedStartTime < TimeSpan.Zero)
+                    adjustedStartTime = TimeSpan.Zero;
+
+                Log4.Info($"[녹음] ★ 오버랩 적용: {_realtimeOverlapBuffer.Length} bytes 앞에 붙임, 시작시간 {adjustedStartTime:mm\\:ss}");
+            }
+            else
+            {
+                dataToProcess = audioData;
+                adjustedStartTime = chunkStartTime;
+            }
+
+            // 이전 청크 끝 5초를 오버랩 버퍼로 보관 (16000Hz * 2bytes * 5초 = 160000 bytes)
+            int overlapBytes = 16000 * 2 * RealtimeOverlapSeconds;
+            if (audioData.Length >= overlapBytes)
+            {
+                _realtimeOverlapBuffer = new byte[overlapBytes];
+                Buffer.BlockCopy(audioData, audioData.Length - overlapBytes, _realtimeOverlapBuffer, 0, overlapBytes);
+            }
+            else
+            {
+                // 청크가 오버랩보다 짧으면 전체를 보관
+                _realtimeOverlapBuffer = new byte[audioData.Length];
+                Buffer.BlockCopy(audioData, 0, _realtimeOverlapBuffer, 0, audioData.Length);
+            }
+
             // STT 서비스로 청크 처리
             var segments = await _speechService.ProcessRealtimeChunkAsync(
-                audioData, chunkStartTime, 44100, _realtimeSTTCts.Token);
+                dataToProcess, adjustedStartTime, 16000, _realtimeSTTCts.Token);
 
             Log4.Info($"[녹음] ★ STT 처리 결과: {segments.Count}개 세그먼트");
 

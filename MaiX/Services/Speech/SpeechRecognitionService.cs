@@ -433,15 +433,15 @@ public class SpeechRecognitionService : IDisposable
     /// 실시간 오디오 청크 처리 (녹음 중 STT용)
     /// byte[] 형태의 raw PCM 데이터를 받아서 바로 STT 처리
     /// </summary>
-    /// <param name="audioData">44100Hz, 16bit, Mono PCM 데이터</param>
+    /// <param name="audioData">16000Hz, 16bit, Mono PCM 데이터</param>
     /// <param name="chunkStartTime">이 청크의 시작 시간</param>
-    /// <param name="sampleRate">샘플레이트 (기본 44100)</param>
+    /// <param name="sampleRate">샘플레이트 (기본 16000)</param>
     /// <param name="cancellationToken">취소 토큰</param>
     /// <returns>인식된 세그먼트 리스트 (비어있을 수 있음)</returns>
     public async Task<List<Models.TranscriptSegment>> ProcessRealtimeChunkAsync(
         byte[] audioData,
         TimeSpan chunkStartTime,
-        int sampleRate = 44100,
+        int sampleRate = 16000,
         CancellationToken cancellationToken = default)
     {
         var segments = new List<Models.TranscriptSegment>();
