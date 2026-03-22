@@ -322,6 +322,12 @@ public partial class OneNoteViewModel : ViewModelBase
     private bool _isPostDiarizationEnabled = false;
 
     /// <summary>
+    /// 후처리 STT 화자분리 활성화 여부 (옵션 탭 독립 체크박스)
+    /// </summary>
+    [ObservableProperty]
+    private bool _isDiarizationEnabled = false;
+
+    /// <summary>
     /// 후처리 진행 상태 텍스트
     /// </summary>
     [ObservableProperty]

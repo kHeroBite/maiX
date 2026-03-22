@@ -6129,6 +6129,7 @@ public partial class MainWindow : FluentWindow
 
     private async void OneNoteRecordingRunSTT_Click(object sender, RoutedEventArgs e)
     {
+        Log4.Debug($"[DEBUG][클릭] OneNoteRecordingRunSTT_Click 진입 — sender={sender?.GetType().Name}, IsSTTInProgress={_oneNoteViewModel?.IsSTTInProgress}");
         if (_oneNoteViewModel == null) return;
 
         var clickedButton = sender as Wpf.Ui.Controls.Button;
@@ -6279,17 +6280,20 @@ public partial class MainWindow : FluentWindow
     /// </summary>
     private void OneNoteRecordingsList_PreviewMouseLeftButtonDown(object sender, System.Windows.Input.MouseButtonEventArgs e)
     {
+        Log4.Debug($"[DEBUG][클릭] PreviewMouseLeftButtonDown 진입 — OriginalSource={e.OriginalSource?.GetType().Name}, ClickCount={e.ClickCount}, Handled={e.Handled}");
         var originalSource = e.OriginalSource as DependencyObject;
         if (originalSource == null) return;
 
         // 클릭된 요소에서 Button 또는 Slider를 찾기 (Visual Tree 상위 탐색)
         var button = FindVisualParent<System.Windows.Controls.Primitives.ButtonBase>(originalSource);
         var slider = FindVisualParent<System.Windows.Controls.Slider>(originalSource);
+        Log4.Debug($"[DEBUG][클릭] PreviewMouseLeftButtonDown — Button={button?.GetType().Name ?? "null"}, Slider={slider?.GetType().Name ?? "null"}");
 
         if (button != null || slider != null)
         {
             var element = (DependencyObject)(button ?? (DependencyObject)slider!);
             var listBoxItem = FindVisualParent<ListBoxItem>(element);
+            Log4.Debug($"[DEBUG][클릭] PreviewMouseLeftButtonDown — ListBoxItem={listBoxItem?.GetType().Name ?? "null"}, IsSelected={listBoxItem?.IsSelected}");
             if (listBoxItem != null && !listBoxItem.IsSelected)
             {
                 listBoxItem.IsSelected = true;
@@ -6302,6 +6306,7 @@ public partial class MainWindow : FluentWindow
     /// </summary>
     private async void OneNoteRecordingsList_SelectionChanged(object sender, System.Windows.Controls.SelectionChangedEventArgs e)
     {
+        Log4.Debug($"[DEBUG][클릭] SelectionChanged 진입 — AddedItems={e.AddedItems.Count}, RemovedItems={e.RemovedItems.Count}");
         Log4.Info($"[OneNote] OneNoteRecordingsList_SelectionChanged 호출됨");
 
         if (_oneNoteViewModel == null)
@@ -8006,6 +8011,16 @@ public partial class MainWindow : FluentWindow
     }
 
     /// <summary>
+    /// 화자분리 독립 체크박스 변경 (옵션 탭)
+    /// </summary>
+    private void OneNoteDiarization_Changed(object sender, RoutedEventArgs e)
+    {
+        if (_oneNoteViewModel == null) return;
+        _oneNoteViewModel.IsDiarizationEnabled = OneNoteDiarizationCheckBox.IsChecked == true;
+        SaveOneNoteRecordingSettings();
+    }
+
+    /// <summary>
     /// OneNote 녹음 설정 저장
     /// </summary>
     private void SaveOneNoteRecordingSettings()
@@ -8031,6 +8046,7 @@ public partial class MainWindow : FluentWindow
                 STTModel = (OneNoteSTTModelSelector?.SelectedItem as System.Windows.Controls.ComboBoxItem)?.Tag?.ToString() ?? "whispergpu",
                 STTIntervalSeconds = int.TryParse((OneNoteSTTIntervalSelector?.SelectedItem as System.Windows.Controls.ComboBoxItem)?.Tag?.ToString(), out int sttInterval) ? sttInterval : 15,
                 SummaryIntervalSeconds = int.TryParse((OneNoteSummaryIntervalSelector?.SelectedItem as System.Windows.Controls.ComboBoxItem)?.Tag?.ToString(), out int summaryInterval) ? summaryInterval : 30,
+                DiarizationEnabled = OneNoteDiarizationCheckBox.IsChecked == true,
                 PostSTTEnabled = OneNotePostSTTCheckBox.IsChecked == true,
                 PostSummaryEnabled = OneNotePostSummaryCheckBox.IsChecked == true,
                 PostDiarizationEnabled = OneNotePostDiarizationCheckBox.IsChecked == true
@@ -8169,6 +8185,12 @@ public partial class MainWindow : FluentWindow
                 var postDiar = postDiarProp.GetBoolean();
                 OneNotePostDiarizationCheckBox.IsChecked = postDiar;
                 if (_oneNoteViewModel != null) _oneNoteViewModel.IsPostDiarizationEnabled = postDiar;
+            }
+            if (root.TryGetProperty("DiarizationEnabled", out var diarProp))
+            {
+                var diar = diarProp.GetBoolean();
+                OneNoteDiarizationCheckBox.IsChecked = diar;
+                if (_oneNoteViewModel != null) _oneNoteViewModel.IsDiarizationEnabled = diar;
             }
 
             Log4.Info($"[OneNote] 녹음 설정 로드 완료: STT모델={root.GetProperty("STTModel").GetString()}, STT주기={root.GetProperty("STTIntervalSeconds").GetInt32()}초, 요약주기={root.GetProperty("SummaryIntervalSeconds").GetInt32()}초");

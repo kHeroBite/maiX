@@ -7477,6 +7477,7 @@
                                                             <RowDefinition Height="Auto"/>
                                                             <RowDefinition Height="Auto"/>
                                                             <RowDefinition Height="Auto"/>
+                                                            <RowDefinition Height="Auto"/>
                                                         </Grid.RowDefinitions>
 
                                                         <!-- 첫 번째 줄: STT 주기 -->
@@ -7529,8 +7530,16 @@
                                                             <ComboBoxItem Content="Whisper (GPU)" Tag="whispergpu"/>
                                                         </ComboBox>
 
+                                                        <!-- 화자분리 on/off (독립 옵션) -->
+                                                        <CheckBox x:Name="OneNoteDiarizationCheckBox" Grid.Row="2" Grid.ColumnSpan="3"
+                                                                  Content="화자분리"
+                                                                  ToolTip="후처리 STT 시 화자분리 적용"
+                                                                  FontSize="12" Margin="0,0,0,6"
+                                                                  Checked="OneNoteDiarization_Changed"
+                                                                  Unchecked="OneNoteDiarization_Changed"/>
+
                                                         <!-- 세 번째 줄: 요약 주기 -->
-                                                        <ToggleButton x:Name="OneNoteAutoSummaryToggle" Grid.Row="2" Grid.Column="0"
+                                                        <ToggleButton x:Name="OneNoteAutoSummaryToggle" Grid.Row="3" Grid.Column="0"
                                                                       IsChecked="True"
                                                                       ToolTip="자동 요약 (STT 결과를 AI로 요약)"
                                                                       Width="24" Height="24"
@@ -7538,10 +7547,10 @@
                                                                       Click="OneNoteAutoSummaryToggle_Click">
                                                             <ui:SymbolIcon Symbol="Sparkle16" FontSize="12" Foreground="#333333"/>
                                                         </ToggleButton>
-                                                        <TextBlock Grid.Row="2" Grid.Column="1" Text="요약" FontSize="12" FontWeight="SemiBold"
+                                                        <TextBlock Grid.Row="3" Grid.Column="1" Text="요약" FontSize="12" FontWeight="SemiBold"
                                                                    VerticalAlignment="Center" Margin="0,0,8,0"
                                                                    Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
-                                                        <ComboBox x:Name="OneNoteSummaryIntervalSelector" Grid.Row="2" Grid.Column="2"
+                                                        <ComboBox x:Name="OneNoteSummaryIntervalSelector" Grid.Row="3" Grid.Column="2"
                                                                   Width="90" Height="28"
                                                                   FontSize="11"
                                                                   Padding="8,4"
@@ -7561,14 +7570,14 @@
                                                         </ComboBox>
 
                                                         <!-- 구분선 -->
-                                                        <Separator Grid.Row="3" Grid.ColumnSpan="3" Margin="0,8,0,4"/>
+                                                        <Separator Grid.Row="4" Grid.ColumnSpan="3" Margin="0,8,0,4"/>
 
                                                         <!-- 후처리 섹션 헤더 -->
-                                                        <TextBlock Grid.Row="4" Grid.ColumnSpan="3" Text="자동 후처리" FontSize="12" FontWeight="SemiBold"
+                                                        <TextBlock Grid.Row="5" Grid.ColumnSpan="3" Text="자동 후처리" FontSize="12" FontWeight="SemiBold"
                                                                    Foreground="{DynamicResource TextFillColorSecondaryBrush}" Margin="0,0,0,6"/>
 
                                                         <!-- STT 후처리 체크박스 -->
-                                                        <CheckBox x:Name="OneNotePostSTTCheckBox" Grid.Row="5" Grid.ColumnSpan="3"
+                                                        <CheckBox x:Name="OneNotePostSTTCheckBox" Grid.Row="6" Grid.ColumnSpan="3"
                                                                   Content="STT 후처리"
                                                                   ToolTip="녹음 완료 후 전체 파일 STT 처리"
                                                                   FontSize="12" Margin="0,0,0,4"
@@ -7576,7 +7585,7 @@
                                                                   Unchecked="OneNotePostSTT_Changed"/>
 
                                                         <!-- 화자분리 후처리 체크박스 -->
-                                                        <CheckBox x:Name="OneNotePostDiarizationCheckBox" Grid.Row="6" Grid.ColumnSpan="3"
+                                                        <CheckBox x:Name="OneNotePostDiarizationCheckBox" Grid.Row="7" Grid.ColumnSpan="3"
                                                                   Content="화자분리 후처리"
                                                                   ToolTip="sherpa-onnx 모델로 정밀 화자분리 수행"
                                                                   FontSize="12" Margin="0,0,0,4"
@@ -7584,7 +7593,7 @@
                                                                   Unchecked="OneNotePostDiarization_Changed"/>
 
                                                         <!-- 요약 후처리 체크박스 -->
-                                                        <CheckBox x:Name="OneNotePostSummaryCheckBox" Grid.Row="7" Grid.ColumnSpan="3"
+                                                        <CheckBox x:Name="OneNotePostSummaryCheckBox" Grid.Row="8" Grid.ColumnSpan="3"
                                                                   Content="요약 후처리"
                                                                   ToolTip="STT 결과로 전체 요약 생성 (STT 후처리 필요)"
                                                                   FontSize="12" Margin="0,0,0,0"
