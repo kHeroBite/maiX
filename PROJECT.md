@@ -431,6 +431,23 @@ Audio_Services:
     역할: 마이크 테스트 전용 서비스 (장치 열거, 실시간 모니터링, 테스트 녹음/재생, 볼륨 조절)
 ```
 
+#### 5.8 Services/Speech (음성 인식/합성)
+
+```yaml
+Speech_Services:
+  - 파일명: SpeechRecognitionService.cs
+    경로: Services/Speech/
+    역할: STT 서비스 (Whisper 로컬 + Jarvis 서버 모드 분기, 화자분리 지원)
+
+  - 파일명: ServerSpeechService.cs
+    경로: Services/Speech/
+    역할: Jarvis 서버 HTTP 클라이언트 (STT/TTS/화자분리 API 호출)
+
+  - 파일명: TextToSpeechService.cs
+    경로: Services/Speech/
+    역할: TTS 서비스 (NAudio WaveOutEvent 재생, 서버 모드 SynthesizeAsync 연동)
+```
+
 ### 6. Data (데이터베이스)
 
 ```yaml
