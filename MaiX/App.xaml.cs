@@ -175,6 +175,7 @@ public partial class App : Application
                 path: Path.Combine(logPath, "MaiX-.log"),
                 rollingInterval: RollingInterval.Day,
                 retainedFileCountLimit: Settings.Logging.RetainedFileCountLimit,
+                flushToDiskInterval: TimeSpan.FromSeconds(1),
                 outputTemplate: "[{Timestamp:yyyy-MM-dd HH:mm:ss.fff}] [{Level:u3}] {Message:lj}{NewLine}{Exception}")
             .CreateLogger();
 
@@ -361,6 +362,8 @@ public partial class App : Application
         {
             var ex = args.ExceptionObject as Exception;
             Log4.Error($"[UnhandledException] {ex?.Message}\n{ex?.StackTrace}");
+            Log.Fatal(ex, "처리되지 않은 예외 발생 (IsTerminating={IsTerminating})", args.IsTerminating);
+            Log.CloseAndFlush();
         };
         DispatcherUnhandledException += (s, args) =>
         {

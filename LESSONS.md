@@ -296,3 +296,20 @@
 - **교훈**: 후처리 순서는 데이터 의존성 기반으로 결정 — STT(원본 텍스트 생성) → 화자분리(텍스트에 화자 라벨 부여) → 요약(화자분리된 텍스트 요약). Dispatcher.InvokeAsync로 UI 스레드에서 실행해야 바인딩 프로퍼티(IsPostProcessing) 안전 갱신
 - **심각도**: 낮음 (기능 추가)
 - **Level**: 1 (참고)
+
+## L-261: 네이티브 라이브러리 크래시 방어 — 조건부 호출 패턴 (2026-03-22)
+
+- **문제**: sherpa-onnx 화자분리(diarizer.Process())가 특정 오디오에서 네이티브 크래시 발생 — 기본 STT에서도 항상 호출되어 불필요한 크래시 위험
+- **근본 원인**: TranscribeFileAsync가 화자분리를 무조건 호출 — 일반 STT에서는 화자분리 불필요하나 네이티브 호출이 항상 실행됨
+- **해결**: `enableDiarization` 파라미터 추가 (기본값 false) — false이면 네이티브 diarizer.Process() 완전 스킵, 폴백 휴리스틱 사용. RunPostDiarizationAsync에서만 true로 호출
+- **교훈**: 네이티브 라이브러리 호출은 명시적 opt-in 파라미터로 보호해야 함. 기본값을 안전한 경로(managed fallback)로 설정하고, 사용자가 의도적으로 활성화할 때만 네이티브 경로 진입
+- **심각도**: 높음 (앱 크래시)
+- **Level**: 1 (참고)
+
+## L-262: 크래시 시 로그 유실 방지 — flushToDiskInterval + CloseAndFlush 패턴 (2026-03-22)
+
+- **문제**: 앱 크래시 시 Serilog/log4net 버퍼에 남은 로그가 디스크에 기록되지 않아 디버깅 불가
+- **해결**: Serilog에 `flushToDiskInterval: TimeSpan.FromSeconds(1)` 추가 + UnhandledException에서 `Log.Fatal` + `Log.CloseAndFlush()` 호출 + log4net `immediateFlush=true`
+- **교훈**: 크래시 디버깅을 위해 로그 프레임워크는 (1) 주기적 flush 설정 (2) UnhandledException 핸들러에서 명시적 flush/close를 반드시 구현해야 함
+- **심각도**: 중간 (디버깅 편의)
+- **Level**: 1 (참고)

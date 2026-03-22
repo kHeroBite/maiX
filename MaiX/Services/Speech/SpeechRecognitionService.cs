@@ -434,6 +434,7 @@ public class SpeechRecognitionService : IDisposable
     public async Task<Models.TranscriptResult> TranscribeFileAsync(
         string audioPath,
         STTModelType modelType = STTModelType.SenseVoice,
+        bool enableDiarization = false,
         CancellationToken cancellationToken = default)
     {
         // Task.Run으로 백그라운드 스레드에서 실행하여 UI 블로킹 방지
@@ -441,9 +442,9 @@ public class SpeechRecognitionService : IDisposable
         {
             return modelType switch
             {
-                STTModelType.Whisper => await TranscribeWithWhisperAsync(audioPath, useGpu: false, cancellationToken),
-                STTModelType.WhisperGpu => await TranscribeWithWhisperAsync(audioPath, useGpu: true, cancellationToken),
-                _ => await TranscribeWithSenseVoiceAsync(audioPath, cancellationToken)
+                STTModelType.Whisper => await TranscribeWithWhisperAsync(audioPath, useGpu: false, enableDiarization, cancellationToken),
+                STTModelType.WhisperGpu => await TranscribeWithWhisperAsync(audioPath, useGpu: true, enableDiarization, cancellationToken),
+                _ => await TranscribeWithSenseVoiceAsync(audioPath, enableDiarization, cancellationToken)
             };
         }, cancellationToken);
     }
@@ -455,7 +456,7 @@ public class SpeechRecognitionService : IDisposable
         string audioPath,
         CancellationToken cancellationToken = default)
     {
-        return await TranscribeWithSenseVoiceAsync(audioPath, cancellationToken);
+        return await TranscribeWithSenseVoiceAsync(audioPath, enableDiarization: false, cancellationToken);
     }
 
     /// <summary>
@@ -742,6 +743,7 @@ public class SpeechRecognitionService : IDisposable
     private async Task<Models.TranscriptResult> TranscribeWithWhisperAsync(
         string audioPath,
         bool useGpu,
+        bool enableDiarization,
         CancellationToken cancellationToken)
     {
         // Whisper 초기화 확인 (GPU/CPU 모드에 따라)
@@ -793,8 +795,17 @@ public class SpeechRecognitionService : IDisposable
 
             ProgressChanged?.Invoke(0.1);
 
-            // 2. sherpa-onnx로 화자분리 (비동기)
-            var speakerLabels = await PerformSpeakerDiarizationAsync(samples, sampleRate, voiceSegments, cancellationToken);
+            // 2. 화자분리 (enableDiarization=true일 때만 네이티브 호출)
+            Dictionary<int, string> speakerLabels;
+            if (enableDiarization)
+            {
+                speakerLabels = await PerformSpeakerDiarizationAsync(samples, sampleRate, voiceSegments, cancellationToken);
+            }
+            else
+            {
+                Utils.Log4.Info("[STT] 화자분리 비활성 — 폴백 휴리스틱 사용");
+                speakerLabels = PerformSpeakerDiarizationFallback(samples, sampleRate, voiceSegments);
+            }
             ProgressChanged?.Invoke(0.15);
 
             // 3. Whisper로 오디오 STT 수행 (청크 단위 처리)
@@ -1063,6 +1074,7 @@ public class SpeechRecognitionService : IDisposable
     /// </summary>
     private async Task<Models.TranscriptResult> TranscribeWithSenseVoiceAsync(
         string audioPath,
+        bool enableDiarization,
         CancellationToken cancellationToken)
     {
         if (!_isSenseVoiceInitialized || _recognizer == null)
@@ -1109,8 +1121,17 @@ public class SpeechRecognitionService : IDisposable
                 voiceSegments.Add((0, samples.Length));
             }
 
-            // 화자 분리를 위한 음성 특성 분석 (비동기)
-            var speakerLabels = await PerformSpeakerDiarizationAsync(samples, sampleRate, voiceSegments, cancellationToken);
+            // 화자분리 (enableDiarization=true일 때만 네이티브 호출)
+            Dictionary<int, string> speakerLabels;
+            if (enableDiarization)
+            {
+                speakerLabels = await PerformSpeakerDiarizationAsync(samples, sampleRate, voiceSegments, cancellationToken);
+            }
+            else
+            {
+                Utils.Log4.Info("[STT] 화자분리 비활성 — 폴백 휴리스틱 사용");
+                speakerLabels = PerformSpeakerDiarizationFallback(samples, sampleRate, voiceSegments);
+            }
 
             // 각 음성 구간에 대해 STT 수행
             var totalSegments = voiceSegments.Count;

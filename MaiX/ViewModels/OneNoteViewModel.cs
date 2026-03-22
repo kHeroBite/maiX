@@ -1905,7 +1905,7 @@ public partial class OneNoteViewModel : ViewModelBase
     /// </summary>
     /// <param name="recording">녹음 정보</param>
     /// <param name="modelType">STT 모델 유형 (기본: SenseVoice)</param>
-    public async Task RunSTTAsync(Models.RecordingInfo recording, Services.Speech.STTModelType modelType = Services.Speech.STTModelType.SenseVoice)
+    public async Task RunSTTAsync(Models.RecordingInfo recording, Services.Speech.STTModelType modelType = Services.Speech.STTModelType.SenseVoice, bool enableDiarization = false)
     {
         if (recording == null || string.IsNullOrEmpty(recording.FilePath))
         {
@@ -2061,7 +2061,7 @@ public partial class OneNoteViewModel : ViewModelBase
             try
             {
                 // 실제 STT 수행 (선택된 모델로)
-                var result = await _speechService.TranscribeFileAsync(recording.FilePath, modelType);
+                var result = await _speechService.TranscribeFileAsync(recording.FilePath, modelType, enableDiarization);
 
                 SttProgress = 1.0;
                 SttProgressText = "완료!";
@@ -2811,9 +2811,9 @@ public partial class OneNoteViewModel : ViewModelBase
                 }
             }
 
-            // STT + 화자분리 재수행 (TranscribeFileAsync가 화자분리를 포함)
+            // STT + 화자분리 재수행 (enableDiarization=true로 네이티브 화자분리 활성화)
             Log4.Info("[후처리] 화자분리 포함 STT 재수행");
-            await RunSTTAsync(recording);
+            await RunSTTAsync(recording, enableDiarization: true);
 
             Log4.Info($"[후처리] 화자분리 완료 — 세그먼트 {STTSegments.Count}개");
         }
