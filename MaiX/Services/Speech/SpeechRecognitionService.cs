@@ -437,6 +437,42 @@ public class SpeechRecognitionService : IDisposable
         bool enableDiarization = false,
         CancellationToken cancellationToken = default)
     {
+        // 서버 STT 모드 분기
+        var prefs = App.Settings?.UserPreferences;
+        if (prefs?.SttMode == "server" && !string.IsNullOrEmpty(prefs.SpeechServerUrl))
+        {
+            Utils.Log4.Info($"[STT] 서버 모드 실행: {prefs.SpeechServerUrl}");
+            try
+            {
+                var serverSvc = new ServerSpeechService(prefs.SpeechServerUrl);
+                var serverResult = await serverSvc.TranscribeFileAsync(audioPath, cancellationToken);
+
+                // 화자분리도 서버 모드인 경우
+                if (enableDiarization && prefs.DiarizationMode == "server")
+                {
+                    Utils.Log4.Info("[STT] 서버 화자분리 실행");
+                    try
+                    {
+                        var diarSegments = await serverSvc.DiarizeAsync(audioPath, ct: cancellationToken);
+                        // 서버 화자분리 결과로 세그먼트 화자 업데이트
+                        foreach (var seg in serverResult.Segments)
+                        {
+                            var matching = diarSegments.FirstOrDefault(d =>
+                                d.Start <= seg.StartTime && seg.StartTime < d.End);
+                            if (matching.Speaker != null)
+                                seg.Speaker = matching.Speaker;
+                        }
+                    }
+                    catch (Exception ex) { Utils.Log4.Warn($"[STT] 서버 화자분리 실패, 스킵: {ex.Message}"); }
+                }
+                return serverResult;
+            }
+            catch (Exception ex)
+            {
+                Utils.Log4.Warn($"[STT] 서버 모드 실패, 클라이언트 폴백: {ex.Message}");
+            }
+        }
+
         // Task.Run으로 백그라운드 스레드에서 실행하여 UI 블로킹 방지
         return await Task.Run(async () =>
         {

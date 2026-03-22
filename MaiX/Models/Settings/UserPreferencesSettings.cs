@@ -180,4 +180,28 @@ public class UserPreferencesSettings
     /// </summary>
     [XmlElement("PreferredMicrophoneDeviceId")]
     public string? PreferredMicrophoneDeviceId { get; set; }
+
+    /// <summary>
+    /// STT 모드 (client: 로컬, server: Jarvis 서버)
+    /// </summary>
+    [XmlElement("SttMode")]
+    public string SttMode { get; set; } = "client";
+
+    /// <summary>
+    /// 화자분리 모드 (client: 로컬, server: Jarvis 서버)
+    /// </summary>
+    [XmlElement("DiarizationMode")]
+    public string DiarizationMode { get; set; } = "client";
+
+    /// <summary>
+    /// TTS 모드 (client: 로컬, server: Jarvis 서버)
+    /// </summary>
+    [XmlElement("TtsMode")]
+    public string TtsMode { get; set; } = "client";
+
+    /// <summary>
+    /// 음성 서버 URL (STT/TTS/화자분리 서버 주소)
+    /// </summary>
+    [XmlElement("SpeechServerUrl")]
+    public string SpeechServerUrl { get; set; } = "http://172.10.74.2:18989";
 }

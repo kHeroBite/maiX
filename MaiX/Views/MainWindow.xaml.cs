@@ -16751,7 +16751,7 @@ public partial class MainWindow : FluentWindow
             "mail" => new[] { ("mail_signature", "서명 관리") },
             "api" => new[] { ("api_ai_providers", "AI Provider"), ("api_tinymce", "TinyMCE") },
             "general" => new[] { ("general_theme", "일반"), ("general_account", "계정") },
-            "system" => new[] { ("system_microphone", "마이크 설정") },
+            "system" => new[] { ("system_microphone", "마이크 설정"), ("system_stt_tts", "STT/TTS 설정") },
             _ => Array.Empty<(string, string)>()
         };
     }
@@ -16932,6 +16932,9 @@ public partial class MainWindow : FluentWindow
                 break;
             case "system_microphone":
                 ShowMicrophoneSettings();
+                break;
+            case "system_stt_tts":
+                ShowSttTtsSettings();
                 break;
         }
     }
@@ -19204,6 +19207,186 @@ public partial class MainWindow : FluentWindow
                 App.Settings?.SaveUserPreferences();
                 deviceStatus.Text = "선호 장치가 저장되었습니다.";
             }
+        };
+    }
+
+    /// <summary>
+    /// STT/TTS 설정 UI 표시 (시스템 > STT/TTS 설정)
+    /// </summary>
+    private void ShowSttTtsSettings()
+    {
+        if (SettingsContentPanel == null) return;
+
+        var prefs = App.Settings?.UserPreferences;
+        if (prefs == null) return;
+
+        // 헤더
+        SettingsContentPanel.Children.Add(CreateSettingsSectionHeader("STT/TTS 설정"));
+
+        // === 서버 URL 그룹 ===
+        var urlGroup = CreateSettingsGroupBorder();
+        var urlStack = new StackPanel { Margin = new Thickness(16) };
+        urlStack.Children.Add(CreateSettingsLabel("음성 서버 URL"));
+
+        var urlRow = new Grid { Margin = new Thickness(0, 8, 0, 0) };
+        urlRow.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        urlRow.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+
+        var urlBox = new System.Windows.Controls.TextBox
+        {
+            Text = prefs.SpeechServerUrl ?? "http://172.10.74.2:18989",
+            Height = 32,
+            VerticalContentAlignment = VerticalAlignment.Center,
+            Margin = new Thickness(0, 0, 8, 0)
+        };
+        Grid.SetColumn(urlBox, 0);
+
+        var testBtn = new Wpf.Ui.Controls.Button
+        {
+            Content = "연결 테스트",
+            Height = 32
+        };
+        Grid.SetColumn(testBtn, 1);
+
+        var connStatus = new System.Windows.Controls.TextBlock
+        {
+            Text = "",
+            FontSize = 12,
+            Foreground = (Brush)FindResource("TextFillColorSecondaryBrush"),
+            Margin = new Thickness(0, 4, 0, 0)
+        };
+
+        urlRow.Children.Add(urlBox);
+        urlRow.Children.Add(testBtn);
+        urlStack.Children.Add(urlRow);
+        urlStack.Children.Add(connStatus);
+        urlGroup.Child = urlStack;
+        SettingsContentPanel.Children.Add(urlGroup);
+
+        // === STT 모드 그룹 ===
+        var sttGroup = CreateSettingsGroupBorder();
+        var sttStack = new StackPanel { Margin = new Thickness(16) };
+        sttStack.Children.Add(CreateSettingsLabel("STT (음성 인식) 모드"));
+
+        var sttPanel = new WrapPanel { Margin = new Thickness(0, 8, 0, 0) };
+        var sttClientRadio = new System.Windows.Controls.RadioButton
+        {
+            Content = "클라이언트 (로컬)",
+            GroupName = "SttMode",
+            IsChecked = (prefs.SttMode ?? "client") == "client",
+            Margin = new Thickness(0, 0, 16, 0),
+            VerticalContentAlignment = VerticalAlignment.Center
+        };
+        var sttServerRadio = new System.Windows.Controls.RadioButton
+        {
+            Content = "서버 (Jarvis)",
+            GroupName = "SttMode",
+            IsChecked = prefs.SttMode == "server",
+            VerticalContentAlignment = VerticalAlignment.Center
+        };
+        sttPanel.Children.Add(sttClientRadio);
+        sttPanel.Children.Add(sttServerRadio);
+        sttStack.Children.Add(sttPanel);
+        sttGroup.Child = sttStack;
+        SettingsContentPanel.Children.Add(sttGroup);
+
+        // === 화자분리 모드 그룹 ===
+        var diarGroup = CreateSettingsGroupBorder();
+        var diarStack = new StackPanel { Margin = new Thickness(16) };
+        diarStack.Children.Add(CreateSettingsLabel("화자분리 모드"));
+
+        var diarPanel = new WrapPanel { Margin = new Thickness(0, 8, 0, 0) };
+        var diarClientRadio = new System.Windows.Controls.RadioButton
+        {
+            Content = "클라이언트 (로컬)",
+            GroupName = "DiarizationMode",
+            IsChecked = (prefs.DiarizationMode ?? "client") == "client",
+            Margin = new Thickness(0, 0, 16, 0),
+            VerticalContentAlignment = VerticalAlignment.Center
+        };
+        var diarServerRadio = new System.Windows.Controls.RadioButton
+        {
+            Content = "서버 (Jarvis)",
+            GroupName = "DiarizationMode",
+            IsChecked = prefs.DiarizationMode == "server",
+            VerticalContentAlignment = VerticalAlignment.Center
+        };
+        diarPanel.Children.Add(diarClientRadio);
+        diarPanel.Children.Add(diarServerRadio);
+        diarStack.Children.Add(diarPanel);
+        diarGroup.Child = diarStack;
+        SettingsContentPanel.Children.Add(diarGroup);
+
+        // === TTS 모드 그룹 ===
+        var ttsGroup = CreateSettingsGroupBorder();
+        var ttsStack = new StackPanel { Margin = new Thickness(16) };
+        ttsStack.Children.Add(CreateSettingsLabel("TTS (음성 합성) 모드"));
+
+        var ttsPanel = new WrapPanel { Margin = new Thickness(0, 8, 0, 0) };
+        var ttsClientRadio = new System.Windows.Controls.RadioButton
+        {
+            Content = "클라이언트 (로컬)",
+            GroupName = "TtsMode",
+            IsChecked = (prefs.TtsMode ?? "client") == "client",
+            Margin = new Thickness(0, 0, 16, 0),
+            VerticalContentAlignment = VerticalAlignment.Center
+        };
+        var ttsServerRadio = new System.Windows.Controls.RadioButton
+        {
+            Content = "서버 (Jarvis)",
+            GroupName = "TtsMode",
+            IsChecked = prefs.TtsMode == "server",
+            VerticalContentAlignment = VerticalAlignment.Center
+        };
+        ttsPanel.Children.Add(ttsClientRadio);
+        ttsPanel.Children.Add(ttsServerRadio);
+        ttsStack.Children.Add(ttsPanel);
+        ttsGroup.Child = ttsStack;
+        SettingsContentPanel.Children.Add(ttsGroup);
+
+        // === 저장 버튼 ===
+        var saveBtn = new Wpf.Ui.Controls.Button
+        {
+            Content = "설정 저장",
+            Appearance = Wpf.Ui.Controls.ControlAppearance.Primary,
+            Margin = new Thickness(0, 8, 0, 0)
+        };
+        SettingsContentPanel.Children.Add(saveBtn);
+
+        // === 이벤트 바인딩 ===
+        // 연결 테스트
+        testBtn.Click += async (s, e) =>
+        {
+            connStatus.Text = "연결 중...";
+            testBtn.IsEnabled = false;
+            try
+            {
+                using var svc = new MaiX.Services.Speech.ServerSpeechService(urlBox.Text.Trim());
+                var ok = await svc.TestConnectionAsync();
+                connStatus.Text = ok ? "✅ 연결 성공" : "❌ 연결 실패";
+                connStatus.Foreground = ok
+                    ? new SolidColorBrush(Colors.Green)
+                    : new SolidColorBrush(Colors.Red);
+            }
+            catch (Exception ex)
+            {
+                connStatus.Text = $"❌ 오류: {ex.Message}";
+                connStatus.Foreground = new SolidColorBrush(Colors.Red);
+            }
+            finally { testBtn.IsEnabled = true; }
+        };
+
+        // 저장
+        saveBtn.Click += (s, e) =>
+        {
+            if (prefs == null) return;
+            prefs.SpeechServerUrl = string.IsNullOrWhiteSpace(urlBox.Text)
+                ? "http://172.10.74.2:18989" : urlBox.Text.Trim();
+            prefs.SttMode = sttServerRadio.IsChecked == true ? "server" : "client";
+            prefs.DiarizationMode = diarServerRadio.IsChecked == true ? "server" : "client";
+            prefs.TtsMode = ttsServerRadio.IsChecked == true ? "server" : "client";
+            App.Settings?.SaveUserPreferences();
+            ShowSettingsSavedMessage();
         };
     }
 
