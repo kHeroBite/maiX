@@ -162,23 +162,17 @@ WSL에서_실행 (기본):
   커밋_필수 (L-205): kFinish 완료 후 미커밋 변경이 있으면 반드시 git add + commit + push 수행
 
 5-way 분류 기준:
-  질문: 코드 탐색 0~2회로 답변 가능 (아키텍처 질문, 파일 위치, 설정 확인 등)
-  계획: 사용자가 명시적으로 계획/플랜/구상/설계/분석/파악/조사/생각 등을 요청한 경우에만 해당. 파일 수정 없이 분석/설계 결과만 반환.
+  > 상세: kO SKILL.md "핵심_분류_기준" 섹션 참조
+  질문: Read/Grep/Glob 0~2회로 답변 가능
+  계획: 명시적 분석/계획 요청 + 파일 수정 없음 (구현 요청은 금지)
         ⚡ 즉시 kPlan spawn 트리거 (메인 직접 탐색 금지):
-          - "~~ 계획 세워줘" / "~~ 설계해줘" / "~~ 구상해줘" / "~~ 분석해줘" 명시적 요청
-          - "~~ 파악하라" / "~~ 조사하라" / "~~ 분석하라" / "~~ 현황을 파악하라" 탐색/분석 요청
-          - "어떻게 하면 좋을까?" / "방향을 잡아줘" 등 설계 의도가 명확한 경우
-        ⚠️ 질문 vs 계획 구분 기준:
-          - 코드 탐색 0~2회로 답변 가능 = 질문 (예: "이 함수 뭐하는 거야?", "파일 어디있어?")
-          - 코드 탐색 3회+ 필요 OR "분석/파악/조사" 키워드 포함 = 계획 (예: "모든 스킬을 분석하라", "현황을 파악하라")
-        ❌ 계획 분류 금지 (구현 요청은 미디엄/풀로 분류):
-          - "~~ 추가해줘" / "~~ 구현해줘" / "~~ 만들어줘" → 무조건 미디엄/풀
-          - 여러 파일/레이어 변경이 필요해도 구현 요청이면 계획 분류 금지
-          - DB/UI/로직 등 복잡도와 무관하게 구현 요청 = 구현 분류
-  퀵: 비코드 파일(.md/.json/.yaml 등)만 수정 — 코드 파일 수정 0건
-  미디엄: 코드 파일 1~4개 OR 단위작업 1~5개 OR 복잡도 낮음~중간
-  풀: 코드 파일 5개+ OR 단위작업 6개+ OR 복잡도 높음
-    풀_토론_프로세스: kPlan×2 병렬 spawn → 토론(debate) → 투표(vote) → kPlan-final 통합. 상세: kO SKILL.md 참조.
+          - "~~ 계획/설계/구상/분석/파악/조사해줘" 명시적 요청
+          - "어떻게 하면 좋을까?" / "방향을 잡아줘" 등 설계 의도 명확
+        ⚠️ 질문 vs 계획: 탐색 0~2회=질문 / 3회+ OR "분석/파악/조사" 키워드=계획
+        ❌ 계획 분류 금지: "추가/구현/만들어줘" → 무조건 미디엄/풀 (복잡도 무관)
+  퀵: 비코드 파일(.md/.json/.yaml)만 수정
+  미디엄: 코드 1~4개 또는 단위작업 1~5개
+  풀: 코드 5개+ 또는 단위작업 6개+ 또는 복잡도 높음
 
 다중 작업 (L-178):
   원칙: 사용자 메시지에 수정 작업이 2개 이상이면 Skill('kO') 로딩 후 오케스트레이션
@@ -199,22 +193,11 @@ WSL에서_실행 (기본):
   "결이 다른 요청": 같은 팀에 새 에이전트 spawn 또는 새 TeamCreate
   질문: 팀 진행 중이어도 메인 직접 응답 (0~2회 탐색)
 
-계획 분류 절차 (L-219 — kO 경유 경량 경로):
-  판정_기준: 사용자가 명시적으로 계획/플랜/구상/설계/분석을 요청하고 파일 수정 없음 → 계획 분류 (메인 사전 탐색 불필요)
-  금지: 구현 요청("추가해줘", "구현해줘", "만들어줘")을 복잡하다는 이유로 계획 분류 금지 — 반드시 미디엄/풀로 분류
-  절차:
-    1. Skill('kO') 로딩 — 계획 경량 경로 (DEV→TEST→DONE 자동 스킵)
-    2. SID 결정: SID=$(echo "$CLAUDE_SESSION_ID" | cut -c1-12); SID_DIR="/tmp/claude/${SID}"
-    3. TeamCreate (team_name 자동 생성)
-    4. BEFORE 스냅샷: tmux list-panes -a -F '#{pane_id}' | sort > ${SID_DIR}/panes/before.txt
-    5. pipeline_state 설정: echo "PLAN" > ${SID_DIR}/state
-    6. kPlan spawn: Agent(team_name, name="kPlan-1", mode="bypassPermissions", prompt="Skill('kPlan') + 사용자 요구사항 + Skill('kInfra_{project}')") — opus 모델 (미디엄/풀)
-    7. kPlan 완료 대기 → 결과 수신 → 사용자에게 결과 전달
-    8. shutdown_request 발송 (fire-and-forget)
-    9. kFinish 실행 (팀 정리 + IDLE 전환 — kDev/kTest/kDone 스킵)
-  금지:
-    - 메인 직접 코드 탐색 후 계획 (코드 탐색은 kPlan 역할)
-    - kPlan 결과를 기반으로 메인이 직접 수정 시작 (수정 필요 시 사용자에게 결과 공유 후 새 메시지 대기)
+계획 분류 절차 (L-219):
+  > 상세: kO SKILL.md "계획 분류 절차" 섹션 참조
+  판정_기준: 사용자가 명시적으로 계획/분석을 요청하고 파일 수정 없음 → 계획 분류
+  금지: 구현 요청을 계획으로 분류 금지 (미디엄/풀로 분류)
+  절차: Skill('kO') 경량 경로 → kPlan spawn → 결과 수신 → kFinish
 ```
 
 ### 오케스트레이션 (1개)
@@ -225,12 +208,10 @@ WSL에서_실행 (기본):
 
 ### 메인 + 서브스킬 (28개)
 
-> **파이프라인 순서 엄수 (L-008)**: 메인(kO 지침)이 kPlan(1) → kDev(2) → kTest(3) → kDone(4) 순서로 팀에이전트 spawn. 이전 단계 완료 전 다음 진입 금지. **진입 기반 상태 전환**: spawn 직전에 해당 단계 상태 설정 (비정상종료 시 실패 단계 식별 가능). **실패 시 역라우팅 허용**: DEV→PLAN, TEST→DEV, TEST→PLAN, DONE→TEST (최대 2회 — `/tmp/claude/${SID}/reroute_count` 카운터 파일로 강제). TEST→PLAN은 설계/계획 재검토가 필요한 경우만.
+> **파이프라인 순서 엄수 (L-008)**: 메인(kO 지침)이 kPlan(1) → kDev(2) → kTest(3) → kDone(4) 순서로 팀에이전트 spawn. 이전 단계 완료 전 다음 진입 금지. **진입 기반 상태 전환**: spawn 직전에 해당 단계 상태 설정 (비정상종료 시 실패 단계 식별 가능). **실패 시 역라우팅 허용**: DEV→PLAN, TEST→DEV, TEST→PLAN, DONE→TEST (최대 5회 — `/tmp/claude/${SID}/reroute_count` 카운터 파일로 강제). TEST→PLAN은 설계/계획 재검토가 필요한 경우만.
 
 #### 모델 배정
-- **kPlan** (미디엄/풀): `model: "opus"` — 복잡한 계획/설계 품질 확보
-- **kPlan** (퀵/계획): `model` 미지정 (기본 모델)
-- **kDev/kTest/kDone**: `model` 미지정 (기본 모델)
+- kPlan (미디엄/풀): opus / kPlan (퀵/계획)/kDev/kTest/kDone: 기본 모델
 
 #### kPlan 계열 (5개) — 순수 계획 수립
 kPlan(메인) → kPlan_deep(심층설계) / kPlan_sim(시뮬레이션) / kPlan_review(검증) / kPlan_parallel(병렬에이전트결정)
@@ -308,25 +289,8 @@ kDone(메인) → kDone_review(프로세스개선) / kDone_trans(우회감지) /
 
 ### 스킬 공유 (다중 프로젝트)
 
-```yaml
-공유_방식: skills 폴더 자체를 심볼릭링크 — AI/.claude/skills/ → Mars/MaiX에서 폴더 심볼릭링크.
-공유_대상: AI ↔ Mars ↔ MaiX (3개 프로젝트)
-공유_범위: 범용 스킬 + 프로젝트스킬 모두 포함 (AI 원본에서 통합 관리)
-원본_소스: /mnt/c/DATA/Project/AI/.claude/skills/
-심볼릭링크: {프로젝트}/.claude/skills → AI/.claude/skills/ (폴더 자체)
-
-프로젝트스킬: AI 원본 skills/ 안에 _{project} 접미사로 포함 (별도 디렉토리 불필요)
-  예: AI/.claude/skills/kInfra_mars/, AI/.claude/skills/kRules_mars/ 등
-
-외부_스킬_설치:
-  도구: npx skills add {owner/repo} --skill {skill-name} -a claude-code -y
-  설치_후: skills 폴더 심볼릭링크이므로 AI에 설치하면 전체 프로젝트 자동 반영
-  .agents/skills: skills CLI 원본 디렉토리 — 동기화 필요
-
-금지:
-  - 범용 스킬에 프로젝트 고유 경로/설정 추가
-  - 한 프로젝트에만 범용 스킬 수정 후 다른 프로젝트 미반영 (AI 원본 수정 시 심볼릭링크로 자동 반영)
-```
+AI/.claude/skills/ 폴더를 심볼릭링크로 공유 (AI ↔ Mars ↔ MaiX). 외부 스킬 설치 시 AI에 설치하면 전체 자동 반영.
+> 상세: kCopy SKILL.md 참조
 
 ### Hooks 공유
 기타 hook 운영/동기화/금지 규칙은 [AI/hooks.md](./AI/hooks.md) 참조.
@@ -403,6 +367,39 @@ kDone(메인) → kDone_review(프로세스개선) / kDone_trans(우회감지) /
 - `~/.claude/teams/` 보호 (팀 디렉토리 직접 수정 금지)
 
 즉, 질문/답변만 직접 처리하고, 수정 분류는 반드시 `kO` 선행 후 파이프라인으로만 진행된다.
+
+---
+
+## 멀티세션 오류 처리 (L-275)
+
+### "Already leading team" 오류
+
+```yaml
+증상: TeamCreate 시 "Error: Already leading team '{팀명}'. A leader can only manage one team at a time."
+원인: 이전 세션/파이프라인의 팀이 kFinish 미완료로 잔류
+해결:
+  1. TeamDelete("{기존팀명}") 호출 (이전 팀 디렉토리 제거)
+  2. 즉시 TeamCreate 재시도
+  팀명_충돌_지속 시: 기존팀명에 "-v2" 접미사 추가 후 재시도 (예: mars-plan → mars-plan-v2)
+  팀명_기록: /tmp/claude/${SID}/team_name 파일 업데이트 필수
+예방:
+  - kFinish 반드시 실행 (L-200 절대 규칙)
+  - 이미 kO SKILL.md "TeamCreate_실패_재시도" 섹션에 문서화됨
+```
+
+### L-111 오류: general-purpose 에이전트 활성 팀 없음
+
+```yaml
+증상: Agent(subagent_type=general-purpose) 호출 시 PreToolUse hook이 차단
+      "❌ L-111 위반: general-purpose 에이전트는 활성 팀 필수! TeamCreate를 먼저 호출하세요."
+원인: TeamCreate 없이 또는 이전 팀 잔류 상태에서 Agent 직접 호출
+해결:
+  1. "Already leading team" 오류 해결 절차 선행 (위 참조)
+  2. TeamCreate 성공 확인 후 Agent 호출
+예방:
+  - Agent 호출 전 반드시 TeamCreate 완료 확인
+  - kO SKILL.md 순서 엄수: TeamCreate → agents 디렉토리 생성 → Agent spawn
+```
 
 ---
 
