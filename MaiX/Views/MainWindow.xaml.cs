@@ -19344,6 +19344,59 @@ public partial class MainWindow : FluentWindow
         ttsGroup.Child = ttsStack;
         SettingsContentPanel.Children.Add(ttsGroup);
 
+        // === 실시간 STT 오버랩 설정 그룹 ===
+        var overlapGroup = CreateSettingsGroupBorder();
+        var overlapStack = new StackPanel { Margin = new Thickness(16) };
+        overlapStack.Children.Add(CreateSettingsLabel("실시간 STT 오버랩 (단어 잘림 방지)"));
+
+        var overlapDescText = new System.Windows.Controls.TextBlock
+        {
+            Text = "청크 간 오버랩 시간을 설정합니다. 0이면 비활성화됩니다.",
+            FontSize = 12,
+            Foreground = (Brush)FindResource("TextFillColorSecondaryBrush"),
+            Margin = new Thickness(0, 4, 0, 8)
+        };
+        overlapStack.Children.Add(overlapDescText);
+
+        var overlapRow = new Grid { Margin = new Thickness(0, 0, 0, 0) };
+        overlapRow.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        overlapRow.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+
+        var overlapSlider = new Slider
+        {
+            Minimum = 0,
+            Maximum = 30,
+            Value = prefs.RealtimeOverlapSeconds,
+            TickFrequency = 1,
+            IsSnapToTickEnabled = true,
+            VerticalAlignment = VerticalAlignment.Center
+        };
+        Grid.SetColumn(overlapSlider, 0);
+
+        var overlapValueLabel = new System.Windows.Controls.TextBlock
+        {
+            Text = prefs.RealtimeOverlapSeconds == 0 ? "오버랩 없음" : $"{prefs.RealtimeOverlapSeconds}초",
+            FontSize = 14,
+            FontWeight = FontWeights.SemiBold,
+            Width = 80,
+            TextAlignment = TextAlignment.Right,
+            VerticalAlignment = VerticalAlignment.Center,
+            Margin = new Thickness(8, 0, 0, 0)
+        };
+        Grid.SetColumn(overlapValueLabel, 1);
+
+        overlapSlider.ValueChanged += (s, e) =>
+        {
+            var val = (int)overlapSlider.Value;
+            overlapValueLabel.Text = val == 0 ? "오버랩 없음" : $"{val}초";
+        };
+
+        overlapRow.Children.Add(overlapSlider);
+        overlapRow.Children.Add(overlapValueLabel);
+        overlapStack.Children.Add(overlapRow);
+        overlapGroup.Child = overlapStack;
+        SettingsContentPanel.Children.Add(overlapGroup);
+
         // === 저장 버튼 ===
         var saveBtn = new Wpf.Ui.Controls.Button
         {
@@ -19385,6 +19438,7 @@ public partial class MainWindow : FluentWindow
             prefs.SttMode = sttServerRadio.IsChecked == true ? "server" : "client";
             prefs.DiarizationMode = diarServerRadio.IsChecked == true ? "server" : "client";
             prefs.TtsMode = ttsServerRadio.IsChecked == true ? "server" : "client";
+            prefs.RealtimeOverlapSeconds = (int)overlapSlider.Value;
             App.Settings?.SaveUserPreferences();
             ShowSettingsSavedMessage();
         };

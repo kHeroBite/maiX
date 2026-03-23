@@ -204,4 +204,10 @@ public class UserPreferencesSettings
     /// </summary>
     [XmlElement("SpeechServerUrl")]
     public string SpeechServerUrl { get; set; } = "http://172.10.74.2:18989";
+
+    /// <summary>
+    /// 실시간 STT 오버랩 시간 (초, 0=비활성화, 기본값 0)
+    /// </summary>
+    [XmlElement("RealtimeOverlapSeconds")]
+    public int RealtimeOverlapSeconds { get; set; } = 0;
 }
