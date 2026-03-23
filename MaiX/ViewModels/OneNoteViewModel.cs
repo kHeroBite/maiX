@@ -2942,9 +2942,18 @@ public partial class OneNoteViewModel : ViewModelBase
             {
                 System.Windows.Application.Current?.Dispatcher.Invoke(() =>
                 {
+                    // 오버랩 구간 중복 세그먼트 필터링: chunkStartTime 이전은 이미 이전 청크에서 처리됨
+                    var newSegments = segments.Where(s => s.StartTime >= chunkStartTime).ToList();
+
+                    if (newSegments.Count == 0)
+                    {
+                        Log4.Info($"[녹음] ★ 실시간 STT: 전체 {segments.Count}개 세그먼트가 오버랩 구간 — 스킵");
+                        return;
+                    }
+
                     // 화자분리 전 데이터 저장 (화자 정보 없이)
                     _liveSegmentsBeforeDiarization ??= new List<Models.TranscriptSegment>();
-                    foreach (var segment in segments)
+                    foreach (var segment in newSegments)
                     {
                         // 화자분리 전 버전 저장 (화자 없음)
                         _liveSegmentsBeforeDiarization.Add(new Models.TranscriptSegment
@@ -2960,7 +2969,7 @@ public partial class OneNoteViewModel : ViewModelBase
                         LiveSTTSegments.Add(segment);
                     }
 
-                    Log4.Info($"[녹음] ★ 실시간 STT: {segments.Count}개 세그먼트 추가 (총 {LiveSTTSegments.Count}개)");
+                    Log4.Info($"[녹음] ★ 실시간 STT: {newSegments.Count}개 세그먼트 추가 (총 {LiveSTTSegments.Count}개, 오버랩 필터: {segments.Count - newSegments.Count}개 제외)");
                 });
             }
         }
