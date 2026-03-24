@@ -443,6 +443,10 @@ Speech_Services:
     경로: Services/Speech/
     역할: Jarvis 서버 HTTP 클라이언트 (STT/TTS/화자분리 API 호출)
 
+  - 파일명: ServerWebSocketSpeechService.cs
+    경로: Services/Speech/
+    역할: WebSocket 기반 서버 STT 서비스 (실시간 오디오 스트리밍, 청크 결과 수신)
+
   - 파일명: TextToSpeechService.cs
     경로: Services/Speech/
     역할: TTS 서비스 (NAudio WaveOutEvent 재생, 서버 모드 SynthesizeAsync 연동)

@@ -191,6 +191,11 @@ public partial class OneNoteViewModel : ViewModelBase
     /// </summary>
     private byte[]? _realtimeOverlapBuffer;
 
+    /// <summary>
+    /// 서버 모드 WebSocket STT 서비스
+    /// </summary>
+    private Services.Speech.ServerWebSocketSpeechService? _serverWsSpeech;
+
     // RealtimeOverlapSeconds는 App.Settings?.UserPreferences?.RealtimeOverlapSeconds에서 참조
 
     /// <summary>
@@ -2829,7 +2834,7 @@ public partial class OneNoteViewModel : ViewModelBase
     /// <summary>
     /// 실시간 STT 시작
     /// </summary>
-    private void StartRealtimeSTT()
+    private async void StartRealtimeSTT()
     {
         if (_recordingService == null) return;
 
@@ -2838,6 +2843,40 @@ public partial class OneNoteViewModel : ViewModelBase
         _realtimeSTTCts?.Cancel();
         _realtimeSTTCts = new CancellationTokenSource();
         _realtimeOverlapBuffer = null;
+
+        // 서버 모드 분기: WebSocket STT 서버 사용
+        if (App.Settings?.UserPreferences?.SttMode == "server")
+        {
+            try
+            {
+                var serverUrl = App.Settings.UserPreferences.SpeechServerUrl;
+                var sttModel = App.Settings.UserPreferences.ServerSttModel;
+                Log4.Info($"[녹음] ★ 서버 모드 STT 시작 (URL: {serverUrl}, 모델: {sttModel})");
+
+                _serverWsSpeech?.Dispose();
+                _serverWsSpeech = new Services.Speech.ServerWebSocketSpeechService();
+
+                // 이벤트 구독: 청크 결과 수신 시 LiveSTTSegments에 추가
+                _serverWsSpeech.SttChunkReceived += OnServerSttChunkReceived;
+                _serverWsSpeech.ErrorOccurred += error => Log4.Error($"[녹음] ★ 서버 STT 오류: {error}");
+
+                // WebSocket 연결 + 모델 로딩 대기
+                await _serverWsSpeech.ConnectSttAsync(serverUrl, sttModel, _realtimeSTTCts.Token);
+
+                // STT 세션 시작
+                await _serverWsSpeech.StartSttSessionAsync(sttModel, 16000, 1, 16, _realtimeSTTCts.Token);
+
+                Log4.Info("[녹음] ★ 서버 모드 STT 세션 시작 완료");
+            }
+            catch (Exception ex)
+            {
+                Log4.Error($"[녹음] ★ 서버 모드 STT 연결 실패: {ex.Message}");
+                _serverWsSpeech?.Dispose();
+                _serverWsSpeech = null;
+                // 서버 연결 실패 시 로컬 모드로 Fallback하지 않고 에러만 기록
+                return;
+            }
+        }
 
         // 실시간 모드 활성화 (설정된 청크 간격 사용)
         _recordingService.RealtimeEnabled = true;
@@ -2860,7 +2899,7 @@ public partial class OneNoteViewModel : ViewModelBase
     /// <summary>
     /// 실시간 STT 중지
     /// </summary>
-    private void StopRealtimeSTT()
+    private async void StopRealtimeSTT()
     {
         _realtimeSTTCts?.Cancel();
         _realtimeSTTCts = null;
@@ -2869,6 +2908,29 @@ public partial class OneNoteViewModel : ViewModelBase
         _realtimeSummaryTimer?.Dispose();
         _realtimeSummaryTimer = null;
         _realtimeOverlapBuffer = null;
+
+        // 서버 모드 정리
+        if (_serverWsSpeech != null)
+        {
+            try
+            {
+                if (_serverWsSpeech.IsSttConnected)
+                {
+                    await _serverWsSpeech.StopSttSessionAsync();
+                }
+                await _serverWsSpeech.DisconnectAsync();
+            }
+            catch (Exception ex)
+            {
+                Log4.Error($"[녹음] ★ 서버 STT 종료 오류: {ex.Message}");
+            }
+            finally
+            {
+                _serverWsSpeech.SttChunkReceived -= OnServerSttChunkReceived;
+                _serverWsSpeech.Dispose();
+                _serverWsSpeech = null;
+            }
+        }
 
         if (_recordingService != null)
         {
@@ -2890,6 +2952,14 @@ public partial class OneNoteViewModel : ViewModelBase
         try
         {
             Log4.Info($"[녹음] ★ 실시간 청크 수신: {chunkStartTime:mm\\:ss}, {audioData.Length} bytes");
+
+            // 서버 모드: 오버랩 스킵, 서버에 직접 오디오 전송
+            if (App.Settings?.UserPreferences?.SttMode == "server" && _serverWsSpeech?.IsSttConnected == true)
+            {
+                await _serverWsSpeech.SendAudioChunkAsync(audioData, _realtimeSTTCts.Token);
+                Log4.Info($"[녹음] ★ 서버 모드: 청크 전송 완료 ({audioData.Length} bytes)");
+                return;
+            }
 
             // 오버랩 처리: 설정값에 따라 이전 청크 끝 N초를 현재 청크 앞에 붙여서 단어 잘림 방지
             var overlapSecs = App.Settings?.UserPreferences?.RealtimeOverlapSeconds ?? 0;
@@ -2986,6 +3056,41 @@ public partial class OneNoteViewModel : ViewModelBase
         {
             Log4.Error($"[녹음] ★ 실시간 청크 처리 실패: {ex.Message}");
         }
+    }
+
+    /// <summary>
+    /// 서버 모드 STT 청크 수신 이벤트 핸들러
+    /// </summary>
+    private void OnServerSttChunkReceived(Services.Speech.SttChunkResult chunk)
+    {
+        if (string.IsNullOrWhiteSpace(chunk.Text))
+            return;
+
+        System.Windows.Application.Current?.Dispatcher.Invoke(() =>
+        {
+            var segment = new Models.TranscriptSegment
+            {
+                StartTime = TimeSpan.Zero,
+                EndTime = TimeSpan.Zero,
+                Text = chunk.Text.Trim(),
+                Confidence = chunk.Confidence,
+                Speaker = null
+            };
+
+            // 화자분리 전 데이터 저장
+            _liveSegmentsBeforeDiarization ??= new List<Models.TranscriptSegment>();
+            _liveSegmentsBeforeDiarization.Add(new Models.TranscriptSegment
+            {
+                StartTime = segment.StartTime,
+                EndTime = segment.EndTime,
+                Text = segment.Text,
+                Confidence = segment.Confidence,
+                Speaker = null
+            });
+
+            LiveSTTSegments.Add(segment);
+            Log4.Info($"[녹음] ★ 서버 STT 청크 수신: '{chunk.Text}' (ChunkId: {chunk.ChunkId}, 신뢰도: {chunk.Confidence:F2}, 총 {LiveSTTSegments.Count}개)");
+        });
     }
 
     /// <summary>

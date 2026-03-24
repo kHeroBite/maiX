@@ -206,6 +206,12 @@ public class UserPreferencesSettings
     public string SpeechServerUrl { get; set; } = "http://172.10.74.2:18989";
 
     /// <summary>
+    /// 서버 STT 모델 (small, medium, large-v3)
+    /// </summary>
+    [XmlElement("ServerSttModel")]
+    public string ServerSttModel { get; set; } = "small";
+
+    /// <summary>
     /// 실시간 STT 오버랩 시간 (초, 0=비활성화, 기본값 0)
     /// </summary>
     [XmlElement("RealtimeOverlapSeconds")]

@@ -19290,6 +19290,42 @@ public partial class MainWindow : FluentWindow
         sttGroup.Child = sttStack;
         SettingsContentPanel.Children.Add(sttGroup);
 
+        // === 서버 STT 모델 선택 그룹 ===
+        var sttModelGroup = CreateSettingsGroupBorder();
+        var sttModelStack = new StackPanel { Margin = new Thickness(16) };
+        sttModelStack.Children.Add(CreateSettingsLabel("서버 STT 모델"));
+
+        var sttModelDescText = new System.Windows.Controls.TextBlock
+        {
+            Text = "서버 모드에서 사용할 Whisper 모델을 선택합니다.",
+            FontSize = 12,
+            Foreground = (Brush)FindResource("TextFillColorSecondaryBrush"),
+            Margin = new Thickness(0, 4, 0, 8)
+        };
+        sttModelStack.Children.Add(sttModelDescText);
+
+        var serverModelComboBox = new System.Windows.Controls.ComboBox
+        {
+            Height = 32,
+            Width = 200,
+            HorizontalAlignment = HorizontalAlignment.Left,
+            IsEnabled = prefs.SttMode == "server"
+        };
+        serverModelComboBox.Items.Add("small");
+        serverModelComboBox.Items.Add("medium");
+        serverModelComboBox.Items.Add("large-v3");
+        serverModelComboBox.SelectedItem = prefs.ServerSttModel ?? "small";
+        if (serverModelComboBox.SelectedIndex < 0)
+            serverModelComboBox.SelectedIndex = 0;
+
+        sttModelStack.Children.Add(serverModelComboBox);
+        sttModelGroup.Child = sttModelStack;
+        SettingsContentPanel.Children.Add(sttModelGroup);
+
+        // STT 모드 라디오버튼 변경 시 ComboBox 활성/비활성 연동
+        sttClientRadio.Checked += (s, e) => serverModelComboBox.IsEnabled = false;
+        sttServerRadio.Checked += (s, e) => serverModelComboBox.IsEnabled = true;
+
         // === 화자분리 모드 그룹 ===
         var diarGroup = CreateSettingsGroupBorder();
         var diarStack = new StackPanel { Margin = new Thickness(16) };
@@ -19430,7 +19466,7 @@ public partial class MainWindow : FluentWindow
         };
 
         // 저장
-        saveBtn.Click += (s, e) =>
+        saveBtn.Click += async (s, e) =>
         {
             if (prefs == null) return;
             prefs.SpeechServerUrl = string.IsNullOrWhiteSpace(urlBox.Text)
@@ -19438,8 +19474,26 @@ public partial class MainWindow : FluentWindow
             prefs.SttMode = sttServerRadio.IsChecked == true ? "server" : "client";
             prefs.DiarizationMode = diarServerRadio.IsChecked == true ? "server" : "client";
             prefs.TtsMode = ttsServerRadio.IsChecked == true ? "server" : "client";
+            prefs.ServerSttModel = serverModelComboBox.SelectedItem?.ToString() ?? "small";
             prefs.RealtimeOverlapSeconds = (int)overlapSlider.Value;
             App.Settings?.SaveUserPreferences();
+
+            // 서버 모드이고 서버 URL 입력됐으면 모델 변경 API 호출
+            if (prefs.SttMode == "server" && !string.IsNullOrWhiteSpace(prefs.SpeechServerUrl))
+            {
+                try
+                {
+                    using var httpClient = new System.Net.Http.HttpClient { Timeout = TimeSpan.FromSeconds(5) };
+                    var json = System.Text.Json.JsonSerializer.Serialize(new { model = prefs.ServerSttModel });
+                    var content = new System.Net.Http.StringContent(json, System.Text.Encoding.UTF8, "application/json");
+                    await httpClient.PostAsync($"{prefs.SpeechServerUrl.TrimEnd('/')}/api/stt/model", content);
+                }
+                catch
+                {
+                    // 서버 오프라인 가능 — 실패 시 무시
+                }
+            }
+
             ShowSettingsSavedMessage();
         };
     }
