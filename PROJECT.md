@@ -375,6 +375,7 @@ Graph_Services:
 
   - 파일명: GraphOneNoteService.cs
     역할: OneNote 노트북/페이지 조회
+    의존성: IHttpClientFactory (P2-03 소켓 재사용 패턴 — new HttpClient() 직접 생성 제거)
 ```
 
 #### 5.6 Services/기타
@@ -404,10 +405,12 @@ Other_Services:
   - 파일명: BackgroundSyncService.cs
     경로: Services/Sync/
     역할: 백그라운드 메일 동기화
+    참고: Interlocked.CompareExchange 레이스컨디션 방지 + MailSyncCompleted 500ms Debounce + ODataError 410 처리
 
   - 파일명: PromptService.cs
     경로: Services/Storage/
     역할: AI 프롬프트 CRUD
+    참고: 파일 우선(Resources/Prompts/*.txt) + DB Fallback 패턴 (P4-02)
 
   - 파일명: DefaultPromptTemplates.cs
     경로: Services/Storage/
@@ -499,6 +502,7 @@ Converters:
 <PackageReference Include="NPOI" />
 <PackageReference Include="ClosedXML" />
 <PackageReference Include="PdfPig" />
+<PackageReference Include="Microsoft.Extensions.Http" />
 ```
 
 ## 아키텍처 다이어그램

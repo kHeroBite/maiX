@@ -30,11 +30,14 @@ public class GraphOneNoteService
     private readonly GraphAuthService _authService;
     private readonly MaiXDbContext _dbContext;
     private readonly ILogger _logger;
+    // P2-03: IHttpClientFactory 주입 — new HttpClient() 직접 생성 → 소켓 재사용 패턴
+    private readonly IHttpClientFactory _httpClientFactory;
 
-    public GraphOneNoteService(GraphAuthService authService, MaiXDbContext dbContext)
+    public GraphOneNoteService(GraphAuthService authService, MaiXDbContext dbContext, IHttpClientFactory httpClientFactory)
     {
         _authService = authService ?? throw new ArgumentNullException(nameof(authService));
         _dbContext = dbContext ?? throw new ArgumentNullException(nameof(dbContext));
+        _httpClientFactory = httpClientFactory ?? throw new ArgumentNullException(nameof(httpClientFactory));
         _logger = Log.ForContext<GraphOneNoteService>();
     }
 
@@ -1171,7 +1174,7 @@ public class GraphOneNoteService
 </html>";
 
             // REST API 직접 호출 (Graph SDK가 스트림을 지원하지 않는 경우)
-            var httpClient = new System.Net.Http.HttpClient();
+            var httpClient = _httpClientFactory.CreateClient();
             var token = await _authService.GetAccessTokenAsync();
             httpClient.DefaultRequestHeaders.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", token);
 
@@ -1249,7 +1252,7 @@ public class GraphOneNoteService
         try
         {
             var token = await _authService.GetAccessTokenAsync();
-            using var httpClient = new HttpClient();
+            var httpClient = _httpClientFactory.CreateClient();
             httpClient.DefaultRequestHeaders.Authorization =
                 new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", token);
 
@@ -1340,7 +1343,7 @@ public class GraphOneNoteService
         try
         {
             var token = await _authService.GetAccessTokenAsync();
-            using var httpClient = new HttpClient();
+            var httpClient = _httpClientFactory.CreateClient();
             httpClient.DefaultRequestHeaders.Authorization =
                 new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", token);
 
@@ -1410,7 +1413,7 @@ public class GraphOneNoteService
 
         try
         {
-            var httpClient = new System.Net.Http.HttpClient();
+            var httpClient = _httpClientFactory.CreateClient();
             var token = await _authService.GetAccessTokenAsync();
             httpClient.DefaultRequestHeaders.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", token);
 
@@ -1445,7 +1448,7 @@ public class GraphOneNoteService
 
         try
         {
-            var httpClient = new System.Net.Http.HttpClient();
+            var httpClient = _httpClientFactory.CreateClient();
             var token = await _authService.GetAccessTokenAsync();
             httpClient.DefaultRequestHeaders.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", token);
 
@@ -1490,7 +1493,7 @@ public class GraphOneNoteService
 
             var accessToken = await _authService.GetAccessTokenAsync();
 
-            using var httpClient = new HttpClient();
+            var httpClient = _httpClientFactory.CreateClient();
             httpClient.DefaultRequestHeaders.Authorization =
                 new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", accessToken);
 
@@ -1551,7 +1554,7 @@ public class GraphOneNoteService
             var accessToken = await _authService.GetAccessTokenAsync();
             Log4.Debug("[GraphOneNote] 액세스 토큰 획득 완료");
 
-            using var httpClient = new HttpClient();
+            var httpClient = _httpClientFactory.CreateClient();
             httpClient.DefaultRequestHeaders.Authorization =
                 new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", accessToken);
 
@@ -2276,7 +2279,7 @@ public class GraphOneNoteService
             _logger.Debug("변환할 이미지 {Count}개 발견", matches.Count);
 
             var accessToken = await _authService.GetAccessTokenAsync();
-            using var httpClient = new HttpClient();
+            var httpClient = _httpClientFactory.CreateClient();
             httpClient.DefaultRequestHeaders.Authorization =
                 new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", accessToken);
 
@@ -2334,7 +2337,7 @@ public class GraphOneNoteService
         try
         {
             var accessToken = await _authService.GetAccessTokenAsync();
-            using var httpClient = new HttpClient();
+            var httpClient = _httpClientFactory.CreateClient();
             httpClient.DefaultRequestHeaders.Authorization =
                 new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", accessToken);
 
@@ -2604,7 +2607,7 @@ public class GraphOneNoteService
         try
         {
             var accessToken = await _authService.GetAccessTokenAsync();
-            using var httpClient = new HttpClient();
+            var httpClient = _httpClientFactory.CreateClient();
             httpClient.DefaultRequestHeaders.Authorization =
                 new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", accessToken);
 

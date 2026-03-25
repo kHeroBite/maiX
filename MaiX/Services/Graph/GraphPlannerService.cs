@@ -485,7 +485,7 @@ public class GraphPlannerService
         try
         {
             // Beta API 엔드포인트 직접 호출
-            var httpClient = _authService.GetHttpClient();
+            var httpClient = await _authService.GetHttpClientAsync();
             var response = await httpClient.GetAsync($"https://graph.microsoft.com/beta/planner/plans/{planId}/details");
 
             if (response.IsSuccessStatusCode)

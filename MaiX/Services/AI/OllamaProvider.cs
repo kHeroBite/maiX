@@ -43,7 +43,8 @@ namespace MaiX.Services.AI
             {
                 try
                 {
-                    var response = _httpClient.GetAsync("http://localhost:11434/api/tags")
+                    // P2-05: 데드락 방지 — Task.Run으로 동기 컨텍스트에서 비동기 호출 격리
+                    var response = Task.Run(() => _httpClient.GetAsync("http://localhost:11434/api/tags"))
                         .GetAwaiter().GetResult();
                     return response.IsSuccessStatusCode;
                 }

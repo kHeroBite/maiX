@@ -7,6 +7,7 @@ namespace MaiX.Models;
 
 /// <summary>
 /// 이메일 모델 - Graph API에서 가져온 이메일과 AI 분석 결과를 저장
+/// DB 엔티티: UI 바인딩에는 EmailViewModel 사용 권장 (INotifyPropertyChanged 미구현)
 /// </summary>
 public class Email
 {

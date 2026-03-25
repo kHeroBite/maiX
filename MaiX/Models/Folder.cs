@@ -6,6 +6,7 @@ namespace MaiX.Models;
 
 /// <summary>
 /// 폴더 모델 - Outlook 메일 폴더 정보
+/// DB 엔티티: UI 바인딩에는 FolderViewModel 사용 권장 (INotifyPropertyChanged 미구현)
 /// </summary>
 public class Folder
 {

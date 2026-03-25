@@ -906,9 +906,11 @@ public partial class ComposeWindow : FluentWindow
         try
         {
             // 로컬 DB에서 발신자 검색
-            var optionsBuilder = new DbContextOptionsBuilder<MaiXDbContext>();
-            optionsBuilder.UseSqlite($"Data Source={App.DatabasePath}");
-            using var context = new MaiXDbContext(optionsBuilder.Options);
+            // P4-06: DI 우회(new MaiXDbContext) → IDbContextFactory 패턴으로 전환
+            var dbFactory = (App.Current as App)?.GetService<Microsoft.EntityFrameworkCore.IDbContextFactory<MaiXDbContext>>();
+            using var context = dbFactory != null
+                ? await dbFactory.CreateDbContextAsync()
+                : new MaiXDbContext(new DbContextOptionsBuilder<MaiXDbContext>().UseSqlite($"Data Source={App.DatabasePath}").Options);
             var emails = await context.Emails
                 .Select(e => e.From)
                 .Distinct()

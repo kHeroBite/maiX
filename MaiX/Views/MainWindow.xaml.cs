@@ -799,10 +799,14 @@ public partial class MainWindow : FluentWindow
         // 이메일만 있는 경우 DB에서 이름 조회
         try
         {
-            using var context = new Data.MaiXDbContext(
-                new Microsoft.EntityFrameworkCore.DbContextOptionsBuilder<Data.MaiXDbContext>()
-                    .UseSqlite($"Data Source={App.DatabasePath}")
-                    .Options);
+            // P4-06: DI 우회(new MaiXDbContext) → IDbContextFactory 패턴으로 전환
+            var dbFactory = (App.Current as App)?.GetService<Microsoft.EntityFrameworkCore.IDbContextFactory<Data.MaiXDbContext>>();
+            using var context = dbFactory != null
+                ? dbFactory.CreateDbContext()
+                : new Data.MaiXDbContext(
+                    new Microsoft.EntityFrameworkCore.DbContextOptionsBuilder<Data.MaiXDbContext>()
+                        .UseSqlite($"Data Source={App.DatabasePath}")
+                        .Options);
 
             // From 필드에서 해당 이메일을 가진 레코드 검색
             var fromWithName = context.Emails

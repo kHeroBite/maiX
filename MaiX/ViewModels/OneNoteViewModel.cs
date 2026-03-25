@@ -1512,14 +1512,21 @@ public partial class OneNoteViewModel : ViewModelBase
     /// </summary>
     public async void SeekToTime(TimeSpan time)
     {
-        // 현재 선택된 녹음이 재생 중이 아니면 재생 시작
-        if (SelectedRecording != null && CurrentPlayingRecording?.FilePath != SelectedRecording.FilePath)
+        try
         {
-            await PlayRecordingAsync(SelectedRecording);
-        }
+            // 현재 선택된 녹음이 재생 중이 아니면 재생 시작
+            if (SelectedRecording != null && CurrentPlayingRecording?.FilePath != SelectedRecording.FilePath)
+            {
+                await PlayRecordingAsync(SelectedRecording);
+            }
 
-        // 해당 위치로 이동
-        _audioPlayerService?.Seek(time);
+            // 해당 위치로 이동
+            _audioPlayerService?.Seek(time);
+        }
+        catch (Exception ex)
+        {
+            _logger.Error(ex, "[OneNote] SeekToTime 실패");
+        }
     }
 
     /// <summary>
@@ -1815,6 +1822,8 @@ public partial class OneNoteViewModel : ViewModelBase
     /// </summary>
     private async void LoadSummaryResultAsync(Models.RecordingInfo recording)
     {
+        try
+        {
         CurrentSummary = null;
         Utils.Log4.Info($"[OneNote] LoadSummaryResultAsync 시작: {recording.FileName}, FilePath: {recording.FilePath}");
 
@@ -1890,6 +1899,11 @@ public partial class OneNoteViewModel : ViewModelBase
         catch (Exception ex)
         {
             _logger.Warning(ex, "[OneNote] 요약 결과 로드 실패: {FileName}", recording.FileName);
+        }
+        }
+        catch (Exception ex)
+        {
+            _logger.Error(ex, "[OneNote] LoadSummaryResultAsync 실패: {FileName}", recording.FileName);
         }
     }
 
@@ -2587,10 +2601,14 @@ public partial class OneNoteViewModel : ViewModelBase
     {
         if (_recordingService == null) return;
 
+        try
+        {
         Log4.Info("[녹음] ★ 실시간 STT 시작");
 
-        _realtimeSTTCts?.Cancel();
+        var oldRealtimeCts = _realtimeSTTCts;
         _realtimeSTTCts = new CancellationTokenSource();
+        oldRealtimeCts?.Cancel();
+        oldRealtimeCts?.Dispose();
 
 
         // 서버 WebSocket STT 연결
@@ -2640,6 +2658,11 @@ public partial class OneNoteViewModel : ViewModelBase
         _realtimeSummaryTimer.Start();
 
         Log4.Info($"[녹음] ★ 실시간 STT 모드 활성화 (STT: {_sttChunkIntervalSeconds}초, 요약: {_summaryIntervalSeconds}초)");
+        }
+        catch (Exception ex)
+        {
+            Log4.Error($"[녹음] ★ StartRealtimeSTT 실패: {ex.Message}");
+        }
     }
 
     /// <summary>
@@ -2647,7 +2670,10 @@ public partial class OneNoteViewModel : ViewModelBase
     /// </summary>
     private async void StopRealtimeSTT()
     {
+        try
+        {
         _realtimeSTTCts?.Cancel();
+        _realtimeSTTCts?.Dispose();
         _realtimeSTTCts = null;
 
         _realtimeSummaryTimer?.Stop();
@@ -2686,6 +2712,11 @@ public partial class OneNoteViewModel : ViewModelBase
         }
 
         _logger.Information("[녹음] 실시간 STT 모드 비활성화");
+        }
+        catch (Exception ex)
+        {
+            Log4.Error($"[녹음] ★ StopRealtimeSTT 실패: {ex.Message}");
+        }
     }
 
     /// <summary>

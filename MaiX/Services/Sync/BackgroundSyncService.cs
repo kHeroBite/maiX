@@ -56,11 +56,14 @@ public class BackgroundSyncService : BackgroundService
     private DateTime _lastFullSyncTime = DateTime.MinValue;
     private DateTime _lastCalendarSyncTime = DateTime.MinValue;
     private DateTime _lastChatSyncTime = DateTime.MinValue;
-    private bool _isSyncing;
-    private bool _isFavoriteSyncing;
-    private bool _isCalendarSyncing;
-    private bool _isChatSyncing;
+    // P2-02: Interlocked.CompareExchange 패턴 (0=비활성, 1=활성) — 레이스 컨디션 방지
+    private int _isSyncing;
+    private int _isFavoriteSyncing;
+    private int _isCalendarSyncing;
+    private int _isChatSyncing;
     private bool _isPaused;
+    // P3-03: MailSyncCompleted Debounce 타이머 (500ms 내 중복 호출 병합)
+    private System.Timers.Timer? _mailSyncDebounceTimer;
     private int _syncCount;
     private int _favoriteSyncCount;
     private int _fullSyncCount;
@@ -180,6 +183,20 @@ public class BackgroundSyncService : BackgroundService
     }
 
     /// <summary>
+    /// P3-03: MailSyncCompleted 이벤트를 Debounce하여 발생 (500ms 내 중복 호출 병합)
+    /// </summary>
+    private void RaiseMailSyncCompleted()
+    {
+        if (_mailSyncDebounceTimer == null)
+        {
+            _mailSyncDebounceTimer = new System.Timers.Timer(500) { AutoReset = false };
+            _mailSyncDebounceTimer.Elapsed += (_, _) => MailSyncCompleted?.Invoke();
+        }
+        _mailSyncDebounceTimer.Stop();
+        _mailSyncDebounceTimer.Start();
+    }
+
+    /// <summary>
     /// 마지막 동기화 시간
     /// </summary>
     public DateTime LastSyncTime => _lastSyncTime;
@@ -187,7 +204,7 @@ public class BackgroundSyncService : BackgroundService
     /// <summary>
     /// 현재 동기화 중 여부
     /// </summary>
-    public bool IsSyncing => _isSyncing;
+    public bool IsSyncing => _isSyncing == 1;
 
     /// <summary>
     /// 동기화 일시정지 여부
@@ -430,13 +447,11 @@ public class BackgroundSyncService : BackgroundService
     /// </summary>
     private async Task ExecuteCalendarSyncAsync(CancellationToken stoppingToken)
     {
-        if (_isCalendarSyncing)
+        if (Interlocked.CompareExchange(ref _isCalendarSyncing, 1, 0) != 0)
         {
             Log4.Debug("[BackgroundSyncService] 이미 캘린더 동기화 진행 중 - 건너뜀");
             return;
         }
-
-        _isCalendarSyncing = true;
         Log4.Debug($"[BackgroundSyncService] 캘린더 동기화 시작 (#{_calendarSyncCount + 1})");
 
         try
@@ -458,7 +473,7 @@ public class BackgroundSyncService : BackgroundService
         }
         finally
         {
-            _isCalendarSyncing = false;
+            Interlocked.Exchange(ref _isCalendarSyncing, 0);
         }
 
         Log4.Debug($"[BackgroundSyncService] 캘린더 동기화 완료 (#{_calendarSyncCount})");
@@ -513,13 +528,11 @@ public class BackgroundSyncService : BackgroundService
     /// </summary>
     private async Task ExecuteChatSyncAsync(CancellationToken stoppingToken)
     {
-        if (_isChatSyncing)
+        if (Interlocked.CompareExchange(ref _isChatSyncing, 1, 0) != 0)
         {
             Log4.Debug("[BackgroundSyncService] 이미 채팅 동기화 진행 중 - 건너뜀");
             return;
         }
-
-        _isChatSyncing = true;
         Log4.Debug($"[BackgroundSyncService] 채팅 동기화 시작 (#{_chatSyncCount + 1})");
 
         try
@@ -537,7 +550,7 @@ public class BackgroundSyncService : BackgroundService
         }
         finally
         {
-            _isChatSyncing = false;
+            Interlocked.Exchange(ref _isChatSyncing, 0);
         }
 
         Log4.Debug($"[BackgroundSyncService] 채팅 동기화 완료 (#{_chatSyncCount})");
@@ -574,13 +587,11 @@ public class BackgroundSyncService : BackgroundService
     /// </summary>
     public async Task SyncFavoriteFoldersAsync(CancellationToken ct = default)
     {
-        if (_isFavoriteSyncing)
+        if (Interlocked.CompareExchange(ref _isFavoriteSyncing, 1, 0) != 0)
         {
             _logger.Warning("이미 즐겨찾기 동기화 진행 중 - 건너뜀");
             return;
         }
-
-        _isFavoriteSyncing = true;
         _logger.Debug("즐겨찾기 폴더 동기화 시작");
 
         try
@@ -703,10 +714,8 @@ public class BackgroundSyncService : BackgroundService
             _logger.Information("즐겨찾기 폴더 동기화 완료: 변경 {Changed}건, 삭제 {Deleted}건",
                 totalChanged, totalDeleted);
 
-            // 동기화 완료 이벤트 (UI 갱신용)
-            var handlerCount = MailSyncCompleted?.GetInvocationList().Length ?? 0;
-            _logger.Information("MailSyncCompleted 이벤트 발생: 핸들러 {Count}개, this 해시코드: {Hash}", handlerCount, this.GetHashCode());
-            MailSyncCompleted?.Invoke();
+            // 동기화 완료 이벤트 (UI 갱신용) — Debounce 적용
+            RaiseMailSyncCompleted();
         }
         catch (Exception ex)
         {
@@ -714,7 +723,7 @@ public class BackgroundSyncService : BackgroundService
         }
         finally
         {
-            _isFavoriteSyncing = false;
+            Interlocked.Exchange(ref _isFavoriteSyncing, 0);
         }
     }
 
@@ -723,13 +732,11 @@ public class BackgroundSyncService : BackgroundService
     /// </summary>
     public async Task SyncAllAccountsAsync(CancellationToken ct = default)
     {
-        if (_isSyncing)
+        if (Interlocked.CompareExchange(ref _isSyncing, 1, 0) != 0)
         {
             _logger.Warning("이미 동기화 진행 중 - 건너뜀");
             return;
         }
-
-        _isSyncing = true;
         _logger.Information("전체 계정 동기화 시작");
 
         try
@@ -758,8 +765,8 @@ public class BackgroundSyncService : BackgroundService
             Interlocked.Increment(ref _syncCount);
             _logger.Information("계정 동기화 완료: {Email}", graphAuthService.CurrentUserEmail);
 
-            // 동기화 완료 이벤트 발생 (UI 갱신용)
-            MailSyncCompleted?.Invoke();
+            // 동기화 완료 이벤트 발생 (UI 갱신용) — Debounce 적용
+            RaiseMailSyncCompleted();
         }
         catch (Exception ex)
         {
@@ -768,7 +775,7 @@ public class BackgroundSyncService : BackgroundService
         }
         finally
         {
-            _isSyncing = false;
+            Interlocked.Exchange(ref _isSyncing, 0);
         }
     }
 
@@ -853,8 +860,8 @@ public class BackgroundSyncService : BackgroundService
         _logger.Information("전체 폴더 동기화 완료: 변경 {Changed}건, 삭제 {Deleted}건",
             totalChanged, totalDeleted);
 
-        // 동기화 완료 이벤트 (UI 갱신용)
-        MailSyncCompleted?.Invoke();
+        // 동기화 완료 이벤트 (UI 갱신용) — Debounce 적용
+        RaiseMailSyncCompleted();
     }
 
 
@@ -950,6 +957,19 @@ public class BackgroundSyncService : BackgroundService
             _logger.Debug("Delta Query 완료: 변경 {Count}건, 삭제 {Deleted}건 (폴더: {FolderId})",
                 messages.Count(), deletedIds.Count(), folderId);
 
+            return (messages.ToList(), deletedIds.ToList());
+        }
+        catch (Microsoft.Graph.Models.ODataErrors.ODataError odataEx)
+            when (odataEx.ResponseStatusCode == 410 ||
+                  odataEx.Error?.Code?.Contains("syncStateNotFound", StringComparison.OrdinalIgnoreCase) == true ||
+                  odataEx.Error?.Code?.Contains("resyncRequired", StringComparison.OrdinalIgnoreCase) == true)
+        {
+            // P3-04: DeltaLink 410 Gone — deltaLink 리셋 후 전체 재동기화
+            _logger.Warning("DeltaLink 만료(410 Gone) 감지 — deltaLink 초기화 후 재시도 (폴더: {FolderId})", folderId);
+            syncState.DeltaLink = null;
+            var (messages, newDeltaLink, deletedIds) = await mailService.GetMessagesDeltaAsync(folderId, null);
+            if (!string.IsNullOrEmpty(newDeltaLink))
+                syncState.DeltaLink = newDeltaLink;
             return (messages.ToList(), deletedIds.ToList());
         }
         catch (Exception ex)
@@ -1752,7 +1772,7 @@ public class BackgroundSyncService : BackgroundService
             if (changed > 0 || deleted > 0)
             {
                 EmailsSynced?.Invoke(savedEmails.Count);
-                MailSyncCompleted?.Invoke();
+                RaiseMailSyncCompleted();
             }
 
             _logger.Information("보낸편지함 동기화 완료: 변경 {Changed}건, 삭제 {Deleted}건", changed, deleted);
@@ -1830,8 +1850,8 @@ public class BackgroundSyncService : BackgroundService
         // 마지막 동기화 시간 업데이트 (UI 표시용)
         _lastSyncTime = DateTime.UtcNow;
 
-        // 동기화 완료 이벤트 발생
-        MailSyncCompleted?.Invoke();
+        // 동기화 완료 이벤트 발생 — Debounce 적용
+        RaiseMailSyncCompleted();
 
         _logger.Information("폴더 강제 새로고침 완료: {FolderId}", folderId);
     }
@@ -1900,8 +1920,8 @@ public class BackgroundSyncService : BackgroundService
             // 폴더 동기화 완료 이벤트 발생
             FoldersSynced?.Invoke();
 
-            // 동기화 완료 이벤트 발생 (UI에서 동기화 시간 표시용)
-            MailSyncCompleted?.Invoke();
+            // 동기화 완료 이벤트 발생 (UI에서 동기화 시간 표시용) — Debounce 적용
+            RaiseMailSyncCompleted();
         }
         catch (Exception ex)
         {
@@ -2261,7 +2281,7 @@ public class BackgroundSyncService : BackgroundService
     {
         return new SyncStatus
         {
-            IsSyncing = _isSyncing,
+            IsSyncing = _isSyncing == 1,
             IsPaused = _isPaused,
             LastSyncTime = _lastSyncTime,
             SyncCount = _syncCount,

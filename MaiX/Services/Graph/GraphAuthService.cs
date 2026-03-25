@@ -395,7 +395,7 @@ namespace MaiX.Services.Graph
         /// 인증된 HttpClient 생성 (Beta API 등 직접 호출용)
         /// </summary>
         /// <returns>Authorization 헤더가 설정된 HttpClient</returns>
-        public System.Net.Http.HttpClient GetHttpClient()
+        public async Task<System.Net.Http.HttpClient> GetHttpClientAsync()
         {
             if (!IsLoggedIn)
             {
@@ -403,7 +403,7 @@ namespace MaiX.Services.Graph
             }
 
             var httpClient = new System.Net.Http.HttpClient();
-            var token = GetAccessTokenAsync().GetAwaiter().GetResult();
+            var token = await GetAccessTokenAsync();
             httpClient.DefaultRequestHeaders.Authorization =
                 new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", token);
             return httpClient;

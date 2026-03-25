@@ -21,7 +21,7 @@ namespace MaiX.ViewModels;
 /// <summary>
 /// 메인 화면 ViewModel - 폴더/이메일 목록 관리
 /// </summary>
-public partial class MainViewModel : ViewModelBase
+public partial class MainViewModel : ViewModelBase, IDisposable
 {
     private readonly MaiXDbContext _dbContext;
     private readonly BackgroundSyncService _syncService;
@@ -3080,6 +3080,31 @@ public partial class MainViewModel : ViewModelBase
         }
 
         return result;
+    }
+
+    #endregion
+
+    #region IDisposable
+
+    private bool _disposed;
+
+    public void Dispose()
+    {
+        if (_disposed) return;
+        _disposed = true;
+
+        // BackgroundSyncService 이벤트 구독 해제
+        _syncService.PausedChanged -= OnSyncPausedChanged;
+        _syncService.FoldersSynced -= OnFoldersSynced;
+        _syncService.EmailsSynced -= OnEmailsSynced;
+        _syncService.MailSyncStarted -= OnMailSyncStarted;
+        _syncService.MailSyncProgress -= OnMailSyncProgress;
+        _syncService.MailSyncCompleted -= OnMailSyncCompleted;
+        _syncService.CalendarSyncStarted -= OnCalendarSyncStarted;
+        _syncService.CalendarSyncProgress -= OnCalendarSyncProgress;
+        _syncService.CalendarSynced -= OnCalendarSynced;
+
+        GC.SuppressFinalize(this);
     }
 
     #endregion

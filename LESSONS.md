@@ -336,3 +336,12 @@
 - **교훈**: (1) WebSocket 프로토콜 설계 시 메시지 타입명과 필드명 스펙을 API 문서에 명시적으로 정의 (2) Python 서버는 snake_case, C# 클라이언트는 System.Text.Json JsonNamingPolicy.SnakeCaseLower 또는 [JsonPropertyName] 어트리뷰트로 자동 변환 고려 (3) is_final 같은 상태 완료 신호는 클라이언트가 반드시 처리해야 UI 상태가 정확히 동기화됨
 - **심각도**: 중간 (기능 오작동)
 - **Level**: 2 (규칙화 권장)
+
+## L-266: NuGet 패키지 의존성 사전 확인 — 새 인터페이스 사용 시 .csproj 점검 필수 (2026-03-26)
+
+- **문제**: `IHttpClientFactory` 주입 구현 시 `Microsoft.Extensions.Http` 패키지가 `.csproj`에 없어 빌드 실패
+- **원인**: `IHttpClientFactory`는 `System.Net.Http` 네임스페이스이지만 별도 NuGet 패키지(`Microsoft.Extensions.Http`)가 필요. 네임스페이스만 보고 패키지 추가를 생략함
+- **해결**: `Microsoft.Extensions.Http` 10.0.2 패키지를 `.csproj`에 추가 후 빌드 성공
+- **교훈**: 새 인터페이스/타입(특히 `Microsoft.Extensions.*`)을 처음 사용할 때는 구현 전에 `.csproj`에 해당 NuGet 패키지가 있는지 확인. `IHttpClientFactory` → `Microsoft.Extensions.Http`, `IMemoryCache` → `Microsoft.Extensions.Caching.Memory` 등
+- **심각도**: 낮음 (빌드 오류로 즉시 감지 가능)
+- **Level**: 1 (참고)

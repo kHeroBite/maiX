@@ -14,12 +14,14 @@ using MaiX.Services.AI;
 namespace MaiX.Services.Storage;
 
 /// <summary>
-/// 프롬프트 서비스 - DB에서 프롬프트 관리 및 실행
+/// 프롬프트 서비스 - 파일 우선 + DB Fallback 패턴 (P4-02)
+/// 외부 파일(Resources/Prompts/*.txt) 수정이 DB보다 우선 적용됨
 /// </summary>
 public class PromptService
 {
     private readonly MaiXDbContext _dbContext;
     private readonly AIService _aiService;
+    private readonly PromptCacheService _promptCache;
     private readonly ILogger _logger;
 
     /// <summary>
@@ -27,10 +29,11 @@ public class PromptService
     /// </summary>
     private static readonly Regex VariablePattern = new(@"\{\{(\w+)\}\}", RegexOptions.Compiled);
 
-    public PromptService(MaiXDbContext dbContext, AIService aiService)
+    public PromptService(MaiXDbContext dbContext, AIService aiService, PromptCacheService promptCache)
     {
         _dbContext = dbContext ?? throw new ArgumentNullException(nameof(dbContext));
         _aiService = aiService ?? throw new ArgumentNullException(nameof(aiService));
+        _promptCache = promptCache ?? throw new ArgumentNullException(nameof(promptCache));
         _logger = Log.ForContext<PromptService>();
     }
 
@@ -47,12 +50,27 @@ public class PromptService
             return null;
         }
 
+        // P4-02: 파일 우선 조회 — 외부 파일 수정이 DB보다 우선 적용됨 (Resources/Prompts/{key}.txt)
+        var fileTemplate = await _promptCache.GetTemplateAsync(promptKey);
+        if (!string.IsNullOrEmpty(fileTemplate))
+        {
+            _logger.Debug("파일에서 프롬프트 로드: {Key}", promptKey);
+            return new Prompt
+            {
+                PromptKey = promptKey,
+                Name = promptKey,
+                Template = fileTemplate,
+                IsSystem = true
+            };
+        }
+
+        // Fallback: DB에서 조회
         var prompt = await _dbContext.Prompts
             .FirstOrDefaultAsync(p => p.PromptKey == promptKey);
 
         if (prompt == null)
         {
-            _logger.Debug("프롬프트를 찾을 수 없음: {Key}", promptKey);
+            _logger.Debug("프롬프트를 찾을 수 없음 (파일+DB 모두 없음): {Key}", promptKey);
         }
 
         return prompt;

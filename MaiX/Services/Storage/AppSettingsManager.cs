@@ -1,4 +1,6 @@
 using System;
+using System.Security.Cryptography;
+using System.Text;
 using MaiX.Models;
 using MaiX.Models.Settings;
 using MaiX.Utils;
@@ -83,6 +85,7 @@ public class AppSettingsManager
 
             Login = _loginService.Load();
             AIProviders = _aiProvidersService.Load();
+            DecryptAllApiKeys(AIProviders);
             Notification = _notificationService.Load();
             Sync = _syncService.Load();
             Database = _databaseService.Load();
@@ -108,7 +111,7 @@ public class AppSettingsManager
             Log4.Debug("[AppSettingsManager] 모든 설정 저장 시작");
 
             _loginService.Save(Login);
-            _aiProvidersService.Save(AIProviders);
+            _aiProvidersService.Save(CreateEncryptedCopy(AIProviders));
             _notificationService.Save(Notification);
             _syncService.Save(Sync);
             _databaseService.Save(Database);
@@ -146,7 +149,7 @@ public class AppSettingsManager
     /// </summary>
     public void SaveAIProviders()
     {
-        _aiProvidersService.Save(AIProviders);
+        _aiProvidersService.Save(CreateEncryptedCopy(AIProviders));
     }
 
     /// <summary>
@@ -188,6 +191,86 @@ public class AppSettingsManager
     {
         _loginService.Delete();
         Login = new LoginSettings();
+    }
+
+    /// <summary>
+    /// API 키를 DPAPI로 암호화 (CurrentUser 범위)
+    /// </summary>
+    private static string EncryptApiKey(string plainText)
+    {
+        if (string.IsNullOrEmpty(plainText)) return plainText;
+        var bytes = Encoding.UTF8.GetBytes(plainText);
+        var encrypted = ProtectedData.Protect(bytes, null, DataProtectionScope.CurrentUser);
+        return Convert.ToBase64String(encrypted);
+    }
+
+    /// <summary>
+    /// DPAPI로 암호화된 API 키 복호화. 기존 평문 키는 그대로 반환 (하위 호환)
+    /// </summary>
+    private static string DecryptApiKey(string encryptedText)
+    {
+        if (string.IsNullOrEmpty(encryptedText)) return encryptedText;
+        try
+        {
+            var bytes = Convert.FromBase64String(encryptedText);
+            var decrypted = ProtectedData.Unprotect(bytes, null, DataProtectionScope.CurrentUser);
+            return Encoding.UTF8.GetString(decrypted);
+        }
+        catch
+        {
+            // 기존 평문 키 하위 호환: 복호화 실패 시 원본 반환 (다음 저장 시 암호화됨)
+            return encryptedText;
+        }
+    }
+
+    /// <summary>
+    /// AIProvidersSettings 내 모든 API 키를 복호화
+    /// </summary>
+    private static void DecryptAllApiKeys(AIProvidersSettings settings)
+    {
+        if (settings.Claude != null) settings.Claude.ApiKey = DecryptApiKey(settings.Claude.ApiKey);
+        if (settings.OpenAI != null) settings.OpenAI.ApiKey = DecryptApiKey(settings.OpenAI.ApiKey);
+        if (settings.Gemini != null) settings.Gemini.ApiKey = DecryptApiKey(settings.Gemini.ApiKey);
+        if (settings.Ollama != null) settings.Ollama.ApiKey = DecryptApiKey(settings.Ollama.ApiKey);
+        if (settings.LMStudio != null) settings.LMStudio.ApiKey = DecryptApiKey(settings.LMStudio.ApiKey);
+        if (settings.TinyMCE != null) settings.TinyMCE.ApiKey = DecryptApiKey(settings.TinyMCE.ApiKey);
+    }
+
+    /// <summary>
+    /// AIProvidersSettings 내 모든 API 키를 암호화한 복사본 반환 (원본 유지)
+    /// </summary>
+    private static AIProvidersSettings CreateEncryptedCopy(AIProvidersSettings settings)
+    {
+        return new AIProvidersSettings
+        {
+            DefaultProvider = settings.DefaultProvider,
+            Claude = CloneWithEncryptedKey(settings.Claude),
+            OpenAI = CloneWithEncryptedKey(settings.OpenAI),
+            Gemini = CloneWithEncryptedKey(settings.Gemini),
+            Ollama = CloneWithEncryptedKey(settings.Ollama),
+            LMStudio = CloneWithEncryptedKey(settings.LMStudio),
+            TinyMCE = CloneWithEncryptedTinyMCE(settings.TinyMCE)
+        };
+    }
+
+    private static AIProviderConfig CloneWithEncryptedKey(AIProviderConfig config)
+    {
+        if (config == null) return null;
+        return new AIProviderConfig
+        {
+            ApiKey = EncryptApiKey(config.ApiKey),
+            Model = config.Model,
+            BaseUrl = config.BaseUrl
+        };
+    }
+
+    private static TinyMCEConfig CloneWithEncryptedTinyMCE(TinyMCEConfig config)
+    {
+        if (config == null) return null;
+        return new TinyMCEConfig
+        {
+            ApiKey = EncryptApiKey(config.ApiKey)
+        };
     }
 
     /// <summary>

@@ -187,6 +187,9 @@ public partial class App : Application
     /// </summary>
     private static void ConfigureServices(IServiceCollection services)
     {
+        // P2-03: IHttpClientFactory 등록 (GraphOneNoteService 소켓 재사용)
+        services.AddHttpClient();
+
         // XML 설정 매니저 등록
         services.AddSingleton(Settings);
         services.AddSingleton(Settings.AIProviders);
@@ -227,9 +230,16 @@ public partial class App : Application
         services.AddSingleton<LMStudioProvider>();
 
         // AI 서비스 등록 (Singleton - Provider 관리)
+        // P3-05: DI에 등록된 Provider 인스턴스를 AIService에 재사용 (이중 인스턴스 방지)
         services.AddSingleton<AIService>(sp =>
         {
             var aiService = new AIService();
+            // DI Provider 인스턴스 교체 (AIService 기본 생성자에서 new한 것을 대체)
+            aiService.RegisterProvider(sp.GetRequiredService<ClaudeProvider>());
+            aiService.RegisterProvider(sp.GetRequiredService<OpenAIProvider>());
+            aiService.RegisterProvider(sp.GetRequiredService<GeminiProvider>());
+            aiService.RegisterProvider(sp.GetRequiredService<OllamaProvider>());
+            aiService.RegisterProvider(sp.GetRequiredService<LMStudioProvider>());
             var aiConfig = Settings.AIProviders;
 
             // Claude 설정
@@ -283,7 +293,8 @@ public partial class App : Application
         services.AddSingleton<OcrConverter>();
         services.AddSingleton<AttachmentProcessor>();
         services.AddSingleton<PromptCacheService>();
-        services.AddSingleton<FileAnalysisService>();
+        // P1-02: FileAnalysisService는 Scoped GraphOneNoteService를 주입받으므로 Scoped로 변경
+        services.AddScoped<FileAnalysisService>();
         services.AddSingleton<FileAnalysisCacheService>();
         services.AddSingleton<CloudLinkDownloader>();
 
@@ -524,7 +535,14 @@ public partial class App : Application
                 catch (Exception loadingEx)
                 {
                     loadingWindow.Close();
-                    throw loadingEx;
+                    // P3-02: 사용자에게 오류 메시지 표시 + 스택 트레이스 보존 (throw loadingEx → throw)
+                    Log4.Error($"[OnStartup] 초기화 실패: {loadingEx.Message}");
+                    MessageBox.Show(
+                        $"애플리케이션 초기화 중 오류가 발생했습니다.\n\n{loadingEx.Message}",
+                        "초기화 오류",
+                        MessageBoxButton.OK,
+                        MessageBoxImage.Error);
+                    throw;
                 }
             }
             else
