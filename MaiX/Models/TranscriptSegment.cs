@@ -34,6 +34,11 @@ public class TranscriptSegment
     public double Confidence { get; set; } = 1.0;
 
     /// <summary>
+    /// STT 청크 ID (화자분리 매핑용)
+    /// </summary>
+    public int ChunkId { get; set; }
+
+    /// <summary>
     /// 시간 범위 표시 (예: "00:05 - 00:12")
     /// </summary>
     public string TimeRange => $"{StartTime:mm\\:ss} - {EndTime:mm\\:ss}";

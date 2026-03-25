@@ -210,4 +210,10 @@ public class UserPreferencesSettings
     /// </summary>
     [XmlElement("RealtimeOverlapSeconds")]
     public int RealtimeOverlapSeconds { get; set; } = 0;
+
+    /// <summary>
+    /// TTS 화자 ID (기본 화자 0)
+    /// </summary>
+    [XmlElement("TtsSpeakerId")]
+    public int TtsSpeakerId { get; set; } = 0;
 }

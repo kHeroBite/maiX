@@ -2526,6 +2526,37 @@ public partial class OneNoteViewModel : ViewModelBase
 
         try
         {
+            // 후처리 화자분리 (녹음 파일이 존재하고 서버 URL이 설정된 경우)
+            var speechServerUrl = App.Settings?.UserPreferences?.SpeechServerUrl;
+            if (!string.IsNullOrWhiteSpace(speechServerUrl) && File.Exists(filePath))
+            {
+                try
+                {
+                    PostProcessingStatus = "화자분리 분석 중...";
+                    Log4.Info("[후처리] 화자분리 시작");
+                    using var svc = new Services.Speech.ServerSpeechService(speechServerUrl);
+                    var diarizeResult = await svc.DiarizeAsync(filePath, numSpeakers: 0);
+                    Log4.Info($"[후처리] 화자분리 완료: {diarizeResult?.Count ?? 0}개 세그먼트");
+
+                    // STT 세그먼트에 화자 정보 반영
+                    if (diarizeResult != null && diarizeResult.Count > 0)
+                    {
+                        foreach (var seg in STTSegments)
+                        {
+                            var match = diarizeResult.FirstOrDefault(d =>
+                                seg.StartTime >= d.Start - TimeSpan.FromSeconds(0.5) &&
+                                seg.StartTime <= d.End + TimeSpan.FromSeconds(0.5));
+                            if (match != default)
+                                seg.Speaker = match.Speaker;
+                        }
+                    }
+                }
+                catch (Exception diarizeEx)
+                {
+                    Log4.Error($"[후처리] 화자분리 오류: {diarizeEx.Message}");
+                }
+            }
+
             // 요약 후처리 (STT 결과가 있을 때)
             if (IsPostSummaryEnabled && STTSegments.Count > 0)
             {
@@ -2576,15 +2607,16 @@ public partial class OneNoteViewModel : ViewModelBase
 
             // 이벤트 구독: 청크 결과 수신 시 LiveSTTSegments에 추가
             _serverWsSpeech.SttChunkReceived += OnServerSttChunkReceived;
+            _serverWsSpeech.DiarizeChunkReceived += OnDiarizeChunkReceived;
             _serverWsSpeech.ErrorOccurred += error => Log4.Error($"[녹음] ★ 서버 STT 오류: {error}");
 
-            // WebSocket 연결 + 모델 로딩 대기
-            await _serverWsSpeech.ConnectSttAsync(serverUrl, sttModel, _realtimeSTTCts.Token);
+            // Split WebSocket 연결 (STT+화자분리 통합) + 모델 로딩 대기
+            await _serverWsSpeech.ConnectSplitAsync(serverUrl, sttModel, _realtimeSTTCts.Token);
 
-            // STT 세션 시작
-            await _serverWsSpeech.StartSttSessionAsync(sttModel, 16000, 1, 16, _realtimeSTTCts.Token);
+            // Split 세션 시작
+            await _serverWsSpeech.StartSplitSessionAsync(sttModel, 16000, 1, 16, _realtimeSTTCts.Token);
 
-            Log4.Info("[녹음] ★ 서버 STT 세션 시작 완료");
+            Log4.Info("[녹음] ★ 서버 Split(STT+화자분리) 세션 시작 완료");
         }
         catch (Exception ex)
         {
@@ -2630,9 +2662,9 @@ public partial class OneNoteViewModel : ViewModelBase
         {
             try
             {
-                if (_serverWsSpeech.IsSttConnected)
+                if (_serverWsSpeech.IsSplitConnected)
                 {
-                    await _serverWsSpeech.StopSttSessionAsync();
+                    await _serverWsSpeech.StopSplitSessionAsync();
                 }
                 await _serverWsSpeech.DisconnectAsync();
             }
@@ -2643,6 +2675,7 @@ public partial class OneNoteViewModel : ViewModelBase
             finally
             {
                 _serverWsSpeech.SttChunkReceived -= OnServerSttChunkReceived;
+                _serverWsSpeech.DiarizeChunkReceived -= OnDiarizeChunkReceived;
                 _serverWsSpeech.Dispose();
                 _serverWsSpeech = null;
             }
@@ -2669,10 +2702,10 @@ public partial class OneNoteViewModel : ViewModelBase
         {
             Log4.Info($"[녹음] ★ 실시간 청크 수신: {chunkStartTime:mm\\:ss}, {audioData.Length} bytes");
 
-            // 서버에 직접 오디오 전송
-            if (_serverWsSpeech?.IsSttConnected == true)
+            // 서버에 직접 오디오 전송 (Split WebSocket)
+            if (_serverWsSpeech?.IsSplitConnected == true)
             {
-                await _serverWsSpeech.SendAudioChunkAsync(audioData, _realtimeSTTCts.Token);
+                await _serverWsSpeech.SendSplitAudioChunkAsync(audioData, _realtimeSTTCts.Token);
                 Log4.Info($"[녹음] ★ 서버 청크 전송 완료 ({audioData.Length} bytes)");
             }
         }
@@ -2702,6 +2735,7 @@ public partial class OneNoteViewModel : ViewModelBase
                 EndTime = TimeSpan.Zero,
                 Text = chunk.Text.Trim(),
                 Confidence = chunk.Confidence,
+                ChunkId = chunk.ChunkId,
                 Speaker = null
             };
 
@@ -2713,11 +2747,29 @@ public partial class OneNoteViewModel : ViewModelBase
                 EndTime = segment.EndTime,
                 Text = segment.Text,
                 Confidence = segment.Confidence,
+                ChunkId = chunk.ChunkId,
                 Speaker = null
             });
 
             LiveSTTSegments.Add(segment);
             Log4.Info($"[녹음] ★ 서버 STT 청크 수신: '{chunk.Text}' (ChunkId: {chunk.ChunkId}, 신뢰도: {chunk.Confidence:F2}, 총 {LiveSTTSegments.Count}개)");
+        });
+    }
+
+    /// <summary>
+    /// 화자분리 청크 수신 이벤트 핸들러
+    /// </summary>
+    private void OnDiarizeChunkReceived(Services.Speech.DiarizeChunkResult result)
+    {
+        System.Windows.Application.Current?.Dispatcher.Invoke(() =>
+        {
+            // chunk_id가 일치하는 STT 세그먼트에 화자 정보 업데이트
+            var matchingSegment = LiveSTTSegments.LastOrDefault(s => s.ChunkId == result.ChunkId);
+            if (matchingSegment != null)
+            {
+                matchingSegment.Speaker = result.Speaker;
+            }
+            Log4.Debug2($"[녹음] 화자분리: {result.Speaker} ({result.Start:F1}s~{result.End:F1}s, ChunkId: {result.ChunkId})");
         });
     }
 

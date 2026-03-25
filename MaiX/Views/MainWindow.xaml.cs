@@ -19225,6 +19225,7 @@ public partial class MainWindow : FluentWindow
             HorizontalAlignment = HorizontalAlignment.Left,
             IsEnabled = true
         };
+        // 기본 하드코딩 항목 (서버 조회 실패 시 Fallback)
         serverModelComboBox.Items.Add("small");
         serverModelComboBox.Items.Add("medium");
         serverModelComboBox.Items.Add("large-v3");
@@ -19235,6 +19236,36 @@ public partial class MainWindow : FluentWindow
         sttModelStack.Children.Add(serverModelComboBox);
         sttModelGroup.Child = sttModelStack;
         SettingsContentPanel.Children.Add(sttModelGroup);
+
+        // 서버에서 STT 모델 목록 동적 로딩
+        _ = Task.Run(async () =>
+        {
+            try
+            {
+                var serverUrl = prefs.SpeechServerUrl;
+                if (string.IsNullOrWhiteSpace(serverUrl)) return;
+
+                using var svc = new MaiX.Services.Speech.ServerSpeechService(serverUrl);
+                var (models, active) = await svc.GetSttModelsAsync();
+                if (models.Count == 0) return;
+
+                await Dispatcher.InvokeAsync(() =>
+                {
+                    serverModelComboBox.Items.Clear();
+                    foreach (var m in models)
+                        serverModelComboBox.Items.Add(m);
+
+                    if (models.Contains(prefs.ServerSttModel ?? "small"))
+                        serverModelComboBox.SelectedItem = prefs.ServerSttModel;
+                    else if (models.Count > 0)
+                        serverModelComboBox.SelectedIndex = 0;
+                });
+            }
+            catch
+            {
+                // 서버 미응답 시 기존 하드코딩 항목 유지
+            }
+        });
 
         // === TTS 모드 그룹 ===
         var ttsGroup = CreateSettingsGroupBorder();
@@ -19262,6 +19293,76 @@ public partial class MainWindow : FluentWindow
         ttsStack.Children.Add(ttsPanel);
         ttsGroup.Child = ttsStack;
         SettingsContentPanel.Children.Add(ttsGroup);
+
+        // === TTS 화자 선택 그룹 ===
+        var ttsSpeakerGroup = CreateSettingsGroupBorder();
+        var ttsSpeakerStack = new StackPanel { Margin = new Thickness(16) };
+        ttsSpeakerStack.Children.Add(CreateSettingsLabel("TTS 화자"));
+
+        var ttsSpeakerDescText = new System.Windows.Controls.TextBlock
+        {
+            Text = "서버 TTS에서 사용할 화자를 선택합니다.",
+            FontSize = 12,
+            Foreground = (Brush)FindResource("TextFillColorSecondaryBrush"),
+            Margin = new Thickness(0, 4, 0, 8)
+        };
+        ttsSpeakerStack.Children.Add(ttsSpeakerDescText);
+
+        var ttsSpeakerComboBox = new System.Windows.Controls.ComboBox
+        {
+            Height = 32,
+            Width = 300,
+            HorizontalAlignment = HorizontalAlignment.Left,
+            DisplayMemberPath = "Display",
+            SelectedValuePath = "Id",
+            IsEnabled = true
+        };
+        // 기본 항목
+        ttsSpeakerComboBox.Items.Add(new { Id = 0, Display = "기본 화자" });
+        ttsSpeakerComboBox.SelectedIndex = 0;
+
+        ttsSpeakerStack.Children.Add(ttsSpeakerComboBox);
+        ttsSpeakerGroup.Child = ttsSpeakerStack;
+        SettingsContentPanel.Children.Add(ttsSpeakerGroup);
+
+        // 서버에서 TTS 화자 목록 동적 로딩
+        _ = Task.Run(async () =>
+        {
+            try
+            {
+                var serverUrl = prefs.SpeechServerUrl;
+                if (string.IsNullOrWhiteSpace(serverUrl)) return;
+
+                using var svc = new MaiX.Services.Speech.ServerSpeechService(serverUrl);
+                var speakers = await svc.GetTtsSpeakersAsync();
+                if (speakers.Count == 0) return;
+
+                await Dispatcher.InvokeAsync(() =>
+                {
+                    ttsSpeakerComboBox.Items.Clear();
+                    foreach (var sp in speakers)
+                        ttsSpeakerComboBox.Items.Add(new { sp.Id, Display = $"{sp.Name} ({sp.Engine})" });
+
+                    // 현재 저장된 TtsSpeakerId 기반 선택
+                    var savedId = prefs.TtsSpeakerId;
+                    for (int i = 0; i < ttsSpeakerComboBox.Items.Count; i++)
+                    {
+                        dynamic item = ttsSpeakerComboBox.Items[i];
+                        if (item.Id == savedId)
+                        {
+                            ttsSpeakerComboBox.SelectedIndex = i;
+                            break;
+                        }
+                    }
+                    if (ttsSpeakerComboBox.SelectedIndex < 0 && ttsSpeakerComboBox.Items.Count > 0)
+                        ttsSpeakerComboBox.SelectedIndex = 0;
+                });
+            }
+            catch
+            {
+                // 서버 미응답 시 기본 항목 유지
+            }
+        });
 
         // === 실시간 STT 오버랩 설정 그룹 ===
         var overlapGroup = CreateSettingsGroupBorder();
@@ -19357,6 +19458,18 @@ public partial class MainWindow : FluentWindow
             prefs.TtsMode = ttsServerRadio.IsChecked == true ? "server" : "client";
             prefs.ServerSttModel = serverModelComboBox.SelectedItem?.ToString() ?? "small";
             prefs.RealtimeOverlapSeconds = (int)overlapSlider.Value;
+
+            // TTS 화자 ID 저장
+            if (ttsSpeakerComboBox.SelectedItem != null)
+            {
+                try
+                {
+                    dynamic selectedSpeaker = ttsSpeakerComboBox.SelectedItem;
+                    prefs.TtsSpeakerId = (int)selectedSpeaker.Id;
+                }
+                catch { }
+            }
+
             App.Settings?.SaveUserPreferences();
 
             // 서버 URL 입력됐으면 모델 변경 API 호출

@@ -87,13 +87,30 @@ public class ServerSpeechService : IDisposable
         )).ToList();
     }
 
-    /// <summary>서버 TTS: 텍스트 → WAV bytes (비스트리밍 preview)</summary>
+    /// <summary>서버 TTS: 텍스트 → WAV bytes</summary>
     public async Task<byte[]> SynthesizeAsync(string text, int speakerId = 0, CancellationToken ct = default)
     {
         var req = new { text, speaker_id = speakerId, engine = "vits2" };
-        var resp = await _http.PostAsJsonAsync($"{_baseUrl}/api/tts/preview", req, ct);
+        var resp = await _http.PostAsJsonAsync($"{_baseUrl}/api/tts", req, ct);
         resp.EnsureSuccessStatusCode();
         return await resp.Content.ReadAsByteArrayAsync(ct);
+    }
+
+    /// <summary>서버 STT 모델 목록 조회</summary>
+    public async Task<(List<string> Models, string? Active)> GetSttModelsAsync(CancellationToken ct = default)
+    {
+        var resp = await _http.GetAsync($"{_baseUrl}/api/stt/models", ct);
+        resp.EnsureSuccessStatusCode();
+        var json = await resp.Content.ReadFromJsonAsync<SttModelsResponse>(cancellationToken: ct);
+        return (json?.Models ?? new(), json?.Active);
+    }
+
+    /// <summary>서버 TTS 화자 목록 조회</summary>
+    public async Task<List<TtsSpeakerInfo>> GetTtsSpeakersAsync(CancellationToken ct = default)
+    {
+        var resp = await _http.GetAsync($"{_baseUrl}/api/tts/speakers", ct);
+        resp.EnsureSuccessStatusCode();
+        return await resp.Content.ReadFromJsonAsync<List<TtsSpeakerInfo>>(cancellationToken: ct) ?? new();
     }
 
     public void Dispose()
@@ -107,4 +124,8 @@ public class ServerSpeechService : IDisposable
     private record SttResult(string Text, string Language, float Confidence, bool IsFinal);
     private record DiarizeSegment(float Start, float End, string Speaker);
     private record DiarizeResult(List<DiarizeSegment> Segments, int SpeakerCount);
+    private record SttModelsResponse(List<string> Models, string? Active);
 }
+
+/// <summary>TTS 화자 정보</summary>
+public record TtsSpeakerInfo(int Id, string Name, string Language, string Engine);
