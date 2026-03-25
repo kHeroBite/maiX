@@ -596,3 +596,11 @@ curl -s http://localhost:5858/api/status
 1. `Models/` 폴더에 생성
 2. EF Core 엔티티인 경우 `MaiXDbContext`에 DbSet 추가
 3. 마이그레이션 생성: `dotnet ef migrations add {Name}`
+
+---
+
+## 작업 이력
+
+| 날짜 | 작업 | 주요 변경 파일 | 비고 |
+|------|------|----------------|------|
+| 2026-03-26 | P1~P4 코드 품질 이슈 17건 수정 (kPlan_dual 검증 기반) | App.xaml.cs, BackgroundSyncService.cs, GraphAuthService.cs, GraphOneNoteService.cs, GraphPlannerService.cs, MainViewModel.cs, OneNoteViewModel.cs, AppSettingsManager.cs, PromptService.cs, ComposeWindow.xaml.cs, EmailViewWindow.xaml.cs, MainWindow.xaml.cs, Email.cs, Folder.cs, LMStudioProvider.cs, OllamaProvider.cs, MaiX.csproj | P1: 비동기/DI Scoped 수정, P2: 레이스컨디션/HttpClientFactory/CTS/Task.Run, P3: DPAPI/Debounce/410Gone/AIService이중방지, P4: PromptService파일우선/DbContextFactory/DB엔티티주석 |
