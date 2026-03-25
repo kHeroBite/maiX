@@ -11,8 +11,8 @@ namespace MaiX.Services.AI;
 
 public class FileAnalysisService
 {
-    // STT (음성→텍스트) 서비스 — lazy 초기화
-    private Speech.SpeechRecognitionService? _speechService;
+    // STT (음성→텍스트) 서비스 — 서버 모드 전용
+    private Speech.ServerSpeechService? _serverSpeechService;
     private readonly SemaphoreSlim _speechInitLock = new(1, 1);
 
     private readonly AIService _aiService;
@@ -258,8 +258,8 @@ public class FileAnalysisService
         {
             if (IsAudioExtension(extension))
             {
-                var speechService = await EnsureSpeechServiceAsync(ct).ConfigureAwait(false);
-                var result = await speechService.TranscribeFileAsync(filePath, ct).ConfigureAwait(false);
+                var serverSpeech = await EnsureServerSpeechServiceAsync(ct).ConfigureAwait(false);
+                var result = await serverSpeech.TranscribeFileAsync(filePath, ct).ConfigureAwait(false);
                 _log.Info($"STT 완료: {filePath}, 텍스트 길이={result.FullText.Length}");
                 return result.FullText;
             }
@@ -282,33 +282,22 @@ public class FileAnalysisService
 
 
     /// <summary>
-    /// STT 서비스를 lazy 초기화하여 반환
+    /// 서버 STT 서비스를 lazy 초기화하여 반환
     /// </summary>
-    private async Task<Speech.SpeechRecognitionService> EnsureSpeechServiceAsync(CancellationToken ct)
+    private async Task<Speech.ServerSpeechService> EnsureServerSpeechServiceAsync(CancellationToken ct)
     {
-        if (_speechService?.IsInitialized == true)
-            return _speechService;
+        if (_serverSpeechService != null)
+            return _serverSpeechService;
 
         await _speechInitLock.WaitAsync(ct).ConfigureAwait(false);
         try
         {
-            if (_speechService?.IsInitialized == true)
-                return _speechService;
+            if (_serverSpeechService != null)
+                return _serverSpeechService;
 
-            _speechService ??= new Speech.SpeechRecognitionService();
-
-            if (_speechService.NeedsSenseVoiceModelDownload())
-            {
-                _log.Info("STT 모델 다운로드 시작 (SenseVoice)...");
-                await _speechService.DownloadSenseVoiceModelAsync(ct).ConfigureAwait(false);
-            }
-
-            if (!_speechService.IsSenseVoiceInitialized)
-            {
-                await _speechService.InitializeSenseVoiceAsync(ct).ConfigureAwait(false);
-            }
-
-            return _speechService;
+            var serverUrl = App.Settings.UserPreferences.SpeechServerUrl;
+            _serverSpeechService = new Speech.ServerSpeechService(serverUrl);
+            return _serverSpeechService;
         }
         finally
         {

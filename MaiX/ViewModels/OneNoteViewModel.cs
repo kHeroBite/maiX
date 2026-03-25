@@ -24,8 +24,6 @@ public partial class OneNoteViewModel : ViewModelBase
 {
     private readonly GraphOneNoteService _oneNoteService;
     private readonly ILogger _logger;
-    private readonly Services.Speech.SpeechRecognitionService _speechService;
-
     /// <summary>
     /// 녹음 완료 후 새 파일이 선택되었을 때 발생하는 이벤트
     /// </summary>
@@ -187,11 +185,6 @@ public partial class OneNoteViewModel : ViewModelBase
     private CancellationTokenSource? _realtimeSTTCts;
 
     /// <summary>
-    /// 실시간 STT 오버랩 버퍼 — 이전 청크 끝 5초를 보관하여 다음 청크에 붙임 (단어 잘림 방지)
-    /// </summary>
-    private byte[]? _realtimeOverlapBuffer;
-
-    /// <summary>
     /// 서버 모드 WebSocket STT 서비스
     /// </summary>
     private Services.Speech.ServerWebSocketSpeechService? _serverWsSpeech;
@@ -227,11 +220,6 @@ public partial class OneNoteViewModel : ViewModelBase
     /// 요약 업데이트 간격 (초), 기본 30초
     /// </summary>
     private int _summaryIntervalSeconds = 30;
-
-    /// <summary>
-    /// 실시간 STT에 사용할 모델 유형 (외부에서 설정)
-    /// </summary>
-    private Services.Speech.STTModelType _realtimeSTTModelType = Services.Speech.STTModelType.SenseVoice;
 
     /// <summary>
     /// 오디오 플레이어 서비스
@@ -485,7 +473,6 @@ public partial class OneNoteViewModel : ViewModelBase
     {
         _oneNoteService = oneNoteService ?? throw new ArgumentNullException(nameof(oneNoteService));
         _logger = Log.ForContext<OneNoteViewModel>();
-        _speechService = new Services.Speech.SpeechRecognitionService();
 
         // 녹음 목록에 새 파일 추가 시 자동 선택
         _currentPageRecordings.CollectionChanged += OnCurrentPageRecordingsChanged;
@@ -1909,213 +1896,6 @@ public partial class OneNoteViewModel : ViewModelBase
     }
 
     /// <summary>
-    /// STT 분석 실행 (sherpa-onnx SenseVoice 또는 Whisper 사용)
-    /// </summary>
-    /// <param name="recording">녹음 정보</param>
-    /// <param name="modelType">STT 모델 유형 (기본: SenseVoice)</param>
-    public async Task RunSTTAsync(Models.RecordingInfo recording, Services.Speech.STTModelType modelType = Services.Speech.STTModelType.SenseVoice, bool enableDiarization = false)
-    {
-        if (recording == null || string.IsNullOrEmpty(recording.FilePath))
-        {
-            Utils.Log4.Warn("[OneNote] STT 실행 불가: 녹음 파일 없음");
-            return;
-        }
-
-        if (!File.Exists(recording.FilePath))
-        {
-            Utils.Log4.Warn($"[OneNote] STT 실행 불가: 파일이 존재하지 않음 - {recording.FilePath}");
-            return;
-        }
-
-        // 기존 취소 토큰 정리 및 새로 생성
-        _manualSTTCts?.Cancel();
-        _manualSTTCts?.Dispose();
-        _manualSTTCts = new CancellationTokenSource();
-
-        IsSTTInProgress = true;
-        SttProgress = 0;
-        SttProgressText = "준비 중...";
-        SttTimeRemaining = "예상 남은 시간: 계산 중...";
-        _sttStartTime = DateTime.Now;
-        STTSegments.Clear();
-
-        try
-        {
-            var modelName = modelType switch
-            {
-                Services.Speech.STTModelType.Whisper => "Whisper (CPU)",
-                Services.Speech.STTModelType.WhisperGpu => "Whisper (GPU)",
-                _ => "SenseVoice"
-            };
-            Utils.Log4.Info($"[OneNote] STT 분석 시작: {recording.FileName}, 모델: {modelName}");
-
-            // 모델 다운로드 진행률 이벤트 구독
-            void OnDownloadProgress(double progress, string message)
-            {
-                System.Windows.Application.Current.Dispatcher.Invoke(() =>
-                {
-                    SttProgress = progress * 0.3; // 다운로드는 전체의 30%
-                    SttProgressText = message;
-                    Utils.Log4.Debug($"[OneNote] 모델 다운로드: {progress:P0} - {message}");
-                });
-            }
-
-            _speechService.DownloadProgressChanged += OnDownloadProgress;
-
-            try
-            {
-                // STT 서비스 초기화 (선택된 모델에 따라)
-                bool needsInit = modelType switch
-                {
-                    Services.Speech.STTModelType.Whisper => !_speechService.IsWhisperInitialized,
-                    Services.Speech.STTModelType.WhisperGpu => !_speechService.IsWhisperGpuInitialized,
-                    _ => !_speechService.IsSenseVoiceInitialized
-                };
-
-                if (needsInit)
-                {
-                    Utils.Log4.Info($"[OneNote] {modelName} 서비스 초기화 중...");
-                    SttProgressText = $"{modelName} 모델 다운로드 중...";
-
-                    bool initialized;
-                    if (modelType == Services.Speech.STTModelType.Whisper)
-                    {
-                        initialized = await _speechService.InitializeWhisperAsync(useGpu: false);
-                    }
-                    else if (modelType == Services.Speech.STTModelType.WhisperGpu)
-                    {
-                        initialized = await _speechService.InitializeWhisperAsync(useGpu: true);
-                    }
-                    else
-                    {
-                        initialized = await _speechService.InitializeSenseVoiceAsync();
-                    }
-
-                    if (!initialized)
-                    {
-                        Utils.Log4.Error($"[OneNote] {modelName} 서비스 초기화 실패");
-                        return;
-                    }
-                }
-            }
-            finally
-            {
-                _speechService.DownloadProgressChanged -= OnDownloadProgress;
-            }
-
-            SttProgress = 0.3;
-            SttProgressText = "음성 분석 중...";
-
-            // 실제 분석 시작 시간 (VAD/화자분리 이후, progress > 15%부터)
-            DateTime? analysisStartTime = null;
-            double analysisStartProgress = 0;
-
-            // 진행률 이벤트 구독 (파일 분석에서는 SegmentRecognized 이벤트를 구독하지 않음 - 중복 표시 방지)
-            void OnProgressChanged(double progress)
-            {
-                System.Windows.Application.Current.Dispatcher.Invoke(() =>
-                {
-                    // 다운로드(30%) + 분석(70%)
-                    SttProgress = 0.3 + (progress * 0.7);
-
-                    // 예상 남은 시간 계산 (progress > 15% 이후부터, 실제 Whisper 분석 시작 기준)
-                    if (progress > 0.15)
-                    {
-                        // 분석 시작 시간 기록 (최초 1회)
-                        if (analysisStartTime == null)
-                        {
-                            analysisStartTime = DateTime.Now;
-                            analysisStartProgress = progress;
-                        }
-
-                        // 분석 시작 이후 경과 시간과 진행률로 예상 시간 계산
-                        var elapsed = DateTime.Now - analysisStartTime.Value;
-                        var progressSinceStart = progress - analysisStartProgress;
-
-                        if (progressSinceStart > 0.01 && elapsed.TotalSeconds > 2)
-                        {
-                            // 남은 진행률 (1.0까지)
-                            var remainingProgress = 1.0 - progress;
-                            // 진행률당 소요 시간
-                            var secondsPerProgress = elapsed.TotalSeconds / progressSinceStart;
-                            // 예상 남은 시간
-                            var remainingSeconds = remainingProgress * secondsPerProgress;
-                            var remaining = TimeSpan.FromSeconds(remainingSeconds);
-
-                            if (remaining.TotalSeconds > 0 && remaining.TotalMinutes < 60)
-                            {
-                                if (remaining.TotalMinutes >= 1)
-                                    SttTimeRemaining = $"예상 남은 시간: {(int)remaining.TotalMinutes}분 {remaining.Seconds}초";
-                                else
-                                    SttTimeRemaining = $"예상 남은 시간: {(int)remaining.TotalSeconds}초";
-                            }
-                            else if (remaining.TotalSeconds <= 0)
-                            {
-                                SttTimeRemaining = "거의 완료됨...";
-                            }
-                            else
-                            {
-                                SttTimeRemaining = "예상 남은 시간: 계산 중...";
-                            }
-                        }
-                    }
-
-                    SttProgressText = $"음성 분석 중... ({progress:P0})";
-                });
-            }
-
-            _speechService.ProgressChanged += OnProgressChanged;
-
-            try
-            {
-                // 실제 STT 수행 (선택된 모델로)
-                var result = await _speechService.TranscribeFileAsync(recording.FilePath, modelType, enableDiarization);
-
-                SttProgress = 1.0;
-                SttProgressText = "완료!";
-                SttTimeRemaining = string.Empty;
-
-                // 결과 저장
-                var sttPath = Path.ChangeExtension(recording.FilePath, ".stt.json");
-                await _speechService.SaveResultAsync(result, sttPath);
-                recording.STTResultPath = sttPath;
-
-                // 화자분리 전/후 데이터 저장
-                _segmentsBeforeDiarization = result.SegmentsBeforeDiarization;
-                _segmentsAfterDiarization = result.Segments.ToList();
-
-                // UI 갱신 (이미 실시간으로 추가되었지만, 최종 결과로 다시 설정)
-                STTSegments.Clear();
-                foreach (var segment in result.Segments)
-                {
-                    STTSegments.Add(segment);
-                }
-
-                // 화자분리 비교 데이터가 있으면 토글 버튼 표시 이벤트 발생
-                OnPropertyChanged(nameof(HasDiarizationComparison));
-
-                Utils.Log4.Info($"[OneNote] STT 완료: {recording.FileName}, {result.Segments.Count}개 세그먼트, 화자 {result.Speakers.Count}명, 화자분리 전 데이터: {(_segmentsBeforeDiarization?.Count ?? 0)}개");
-            }
-            finally
-            {
-                _speechService.ProgressChanged -= OnProgressChanged;
-            }
-        }
-        catch (Exception ex)
-        {
-            Utils.Log4.Error($"[OneNote] STT 실행 실패: {recording.FileName} - {ex.Message}");
-            SttProgressText = $"오류: {ex.Message}";
-        }
-        finally
-        {
-            IsSTTInProgress = false;
-            _sttStartTime = null;
-            _manualSTTCts?.Dispose();
-            _manualSTTCts = null;
-        }
-    }
-
-    /// <summary>
     /// 수동 STT 분석 취소
     /// </summary>
     public void CancelSTT()
@@ -2735,7 +2515,7 @@ public partial class OneNoteViewModel : ViewModelBase
     /// </summary>
     private async Task RunPostProcessingAsync(string filePath)
     {
-        if (!IsPostSTTEnabled && !IsPostDiarizationEnabled && !IsPostSummaryEnabled) return;
+        if (!IsPostSummaryEnabled) return;
 
         // 이미 후처리 진행 중이면 중복 실행 방지
         if (IsPostProcessing) return;
@@ -2746,26 +2526,8 @@ public partial class OneNoteViewModel : ViewModelBase
 
         try
         {
-            // 1. STT 후처리 (파일 기반 STT — 실시간 STT보다 정확)
-            if (IsPostSTTEnabled)
-            {
-                PostProcessingStatus = "STT 후처리 중...";
-                Log4.Info("[후처리] STT 시작");
-                await RunSTTAsync(recording);
-                Log4.Info("[후처리] STT 완료");
-            }
-
-            // 2. 화자분리 후처리 (옵션 체크 시 — STT 유무 무관)
-            if (IsPostDiarizationEnabled)
-            {
-                PostProcessingStatus = "화자분리 중...";
-                Log4.Info("[후처리] 화자분리 시작");
-                await RunPostDiarizationAsync(filePath);
-                Log4.Info("[후처리] 화자분리 완료");
-            }
-
-            // 3. 요약 후처리 (STT 결과가 있을 때)
-            if (IsPostSummaryEnabled && (IsPostSTTEnabled || STTSegments.Count > 0))
+            // 요약 후처리 (STT 결과가 있을 때)
+            if (IsPostSummaryEnabled && STTSegments.Count > 0)
             {
                 PostProcessingStatus = "요약 생성 중...";
                 Log4.Info("[후처리] 요약 시작");
@@ -2790,48 +2552,6 @@ public partial class OneNoteViewModel : ViewModelBase
     }
 
     /// <summary>
-    /// 후처리 화자분리 — STT 결과를 화자분리 포함 STT로 재수행
-    /// (SpeechRecognitionService.TranscribeFileAsync가 화자분리를 포함하므로 RunSTTAsync 재호출)
-    /// </summary>
-    private async Task RunPostDiarizationAsync(string filePath)
-    {
-        try
-        {
-            if (_speechService == null) return;
-
-            var recording = CurrentPageRecordings.FirstOrDefault(r => r.FilePath == filePath);
-            if (recording == null)
-            {
-                Log4.Warn("[후처리] 화자분리 대상 녹음을 찾을 수 없음");
-                return;
-            }
-
-            // 화자분리 모델 초기화 (미초기화 시)
-            if (!_speechService.IsSpeakerDiarizationInitialized)
-            {
-                Log4.Info("[후처리] 화자분리 모델 초기화 중...");
-                PostProcessingStatus = "화자분리 모델 로딩 중...";
-                var initialized = await _speechService.InitializeSpeakerDiarizationAsync();
-                if (!initialized)
-                {
-                    Log4.Warn("[후처리] 화자분리 모델 초기화 실패");
-                    return;
-                }
-            }
-
-            // STT + 화자분리 재수행 (enableDiarization=true로 네이티브 화자분리 활성화)
-            Log4.Info("[후처리] 화자분리 포함 STT 재수행");
-            await RunSTTAsync(recording, enableDiarization: true);
-
-            Log4.Info($"[후처리] 화자분리 완료 — 세그먼트 {STTSegments.Count}개");
-        }
-        catch (Exception ex)
-        {
-            Log4.Error($"[후처리] 화자분리 오류: {ex.Message}");
-        }
-    }
-
-    /// <summary>
     /// 실시간 STT 시작
     /// </summary>
     private async void StartRealtimeSTT()
@@ -2842,40 +2562,36 @@ public partial class OneNoteViewModel : ViewModelBase
 
         _realtimeSTTCts?.Cancel();
         _realtimeSTTCts = new CancellationTokenSource();
-        _realtimeOverlapBuffer = null;
 
-        // 서버 모드 분기: WebSocket STT 서버 사용
-        if (App.Settings?.UserPreferences?.SttMode == "server")
+
+        // 서버 WebSocket STT 연결
+        try
         {
-            try
-            {
-                var serverUrl = App.Settings.UserPreferences.SpeechServerUrl;
-                var sttModel = App.Settings.UserPreferences.ServerSttModel;
-                Log4.Info($"[녹음] ★ 서버 모드 STT 시작 (URL: {serverUrl}, 모델: {sttModel})");
+            var serverUrl = App.Settings?.UserPreferences?.SpeechServerUrl;
+            var sttModel = App.Settings?.UserPreferences?.ServerSttModel;
+            Log4.Info($"[녹음] ★ 서버 STT 시작 (URL: {serverUrl}, 모델: {sttModel})");
 
-                _serverWsSpeech?.Dispose();
-                _serverWsSpeech = new Services.Speech.ServerWebSocketSpeechService();
+            _serverWsSpeech?.Dispose();
+            _serverWsSpeech = new Services.Speech.ServerWebSocketSpeechService();
 
-                // 이벤트 구독: 청크 결과 수신 시 LiveSTTSegments에 추가
-                _serverWsSpeech.SttChunkReceived += OnServerSttChunkReceived;
-                _serverWsSpeech.ErrorOccurred += error => Log4.Error($"[녹음] ★ 서버 STT 오류: {error}");
+            // 이벤트 구독: 청크 결과 수신 시 LiveSTTSegments에 추가
+            _serverWsSpeech.SttChunkReceived += OnServerSttChunkReceived;
+            _serverWsSpeech.ErrorOccurred += error => Log4.Error($"[녹음] ★ 서버 STT 오류: {error}");
 
-                // WebSocket 연결 + 모델 로딩 대기
-                await _serverWsSpeech.ConnectSttAsync(serverUrl, sttModel, _realtimeSTTCts.Token);
+            // WebSocket 연결 + 모델 로딩 대기
+            await _serverWsSpeech.ConnectSttAsync(serverUrl, sttModel, _realtimeSTTCts.Token);
 
-                // STT 세션 시작
-                await _serverWsSpeech.StartSttSessionAsync(sttModel, 16000, 1, 16, _realtimeSTTCts.Token);
+            // STT 세션 시작
+            await _serverWsSpeech.StartSttSessionAsync(sttModel, 16000, 1, 16, _realtimeSTTCts.Token);
 
-                Log4.Info("[녹음] ★ 서버 모드 STT 세션 시작 완료");
-            }
-            catch (Exception ex)
-            {
-                Log4.Error($"[녹음] ★ 서버 모드 STT 연결 실패: {ex.Message}");
-                _serverWsSpeech?.Dispose();
-                _serverWsSpeech = null;
-                // 서버 연결 실패 시 로컬 모드로 Fallback하지 않고 에러만 기록
-                return;
-            }
+            Log4.Info("[녹음] ★ 서버 STT 세션 시작 완료");
+        }
+        catch (Exception ex)
+        {
+            Log4.Error($"[녹음] ★ 서버 STT 연결 실패: {ex.Message}");
+            _serverWsSpeech?.Dispose();
+            _serverWsSpeech = null;
+            return;
         }
 
         // 실시간 모드 활성화 (설정된 청크 간격 사용)
@@ -2907,7 +2623,7 @@ public partial class OneNoteViewModel : ViewModelBase
         _realtimeSummaryTimer?.Stop();
         _realtimeSummaryTimer?.Dispose();
         _realtimeSummaryTimer = null;
-        _realtimeOverlapBuffer = null;
+
 
         // 서버 모드 정리
         if (_serverWsSpeech != null)
@@ -2953,99 +2669,11 @@ public partial class OneNoteViewModel : ViewModelBase
         {
             Log4.Info($"[녹음] ★ 실시간 청크 수신: {chunkStartTime:mm\\:ss}, {audioData.Length} bytes");
 
-            // 서버 모드: 오버랩 스킵, 서버에 직접 오디오 전송
-            if (App.Settings?.UserPreferences?.SttMode == "server" && _serverWsSpeech?.IsSttConnected == true)
+            // 서버에 직접 오디오 전송
+            if (_serverWsSpeech?.IsSttConnected == true)
             {
                 await _serverWsSpeech.SendAudioChunkAsync(audioData, _realtimeSTTCts.Token);
-                Log4.Info($"[녹음] ★ 서버 모드: 청크 전송 완료 ({audioData.Length} bytes)");
-                return;
-            }
-
-            // 오버랩 처리: 설정값에 따라 이전 청크 끝 N초를 현재 청크 앞에 붙여서 단어 잘림 방지
-            var overlapSecs = App.Settings?.UserPreferences?.RealtimeOverlapSeconds ?? 0;
-            byte[] dataToProcess;
-            TimeSpan adjustedStartTime;
-
-            if (overlapSecs > 0 && _realtimeOverlapBuffer != null && _realtimeOverlapBuffer.Length > 0)
-            {
-                // 오버랩 버퍼 + 현재 청크 결합
-                dataToProcess = new byte[_realtimeOverlapBuffer.Length + audioData.Length];
-                Buffer.BlockCopy(_realtimeOverlapBuffer, 0, dataToProcess, 0, _realtimeOverlapBuffer.Length);
-                Buffer.BlockCopy(audioData, 0, dataToProcess, _realtimeOverlapBuffer.Length, audioData.Length);
-
-                // 시작 시간에서 오버랩 시간만큼 빼기 (0 미만이면 Zero)
-                adjustedStartTime = chunkStartTime - TimeSpan.FromSeconds(overlapSecs);
-                if (adjustedStartTime < TimeSpan.Zero)
-                    adjustedStartTime = TimeSpan.Zero;
-
-                Log4.Info($"[녹음] ★ 오버랩 적용: {_realtimeOverlapBuffer.Length} bytes 앞에 붙임, 시작시간 {adjustedStartTime:mm\\:ss}");
-            }
-            else
-            {
-                dataToProcess = audioData;
-                adjustedStartTime = chunkStartTime;
-            }
-
-            // 오버랩 버퍼 보관 (0초이면 비활성화)
-            if (overlapSecs > 0)
-            {
-                int overlapBytes = 16000 * 2 * overlapSecs;
-                if (audioData.Length >= overlapBytes)
-                {
-                    _realtimeOverlapBuffer = new byte[overlapBytes];
-                    Buffer.BlockCopy(audioData, audioData.Length - overlapBytes, _realtimeOverlapBuffer, 0, overlapBytes);
-                }
-                else
-                {
-                    // 청크가 오버랩보다 짧으면 전체를 보관
-                    _realtimeOverlapBuffer = new byte[audioData.Length];
-                    Buffer.BlockCopy(audioData, 0, _realtimeOverlapBuffer, 0, audioData.Length);
-                }
-            }
-            else
-            {
-                _realtimeOverlapBuffer = null;
-            }
-
-            // STT 서비스로 청크 처리 (선택된 모델 유형 전달)
-            var segments = await _speechService.ProcessRealtimeChunkAsync(
-                dataToProcess, adjustedStartTime, 16000, _realtimeSTTCts.Token, _realtimeSTTModelType);
-
-            Log4.Info($"[녹음] ★ STT 처리 결과: {segments.Count}개 세그먼트");
-
-            if (segments.Count > 0)
-            {
-                System.Windows.Application.Current?.Dispatcher.Invoke(() =>
-                {
-                    // 오버랩 구간 중복 세그먼트 필터링: chunkStartTime 이전은 이미 이전 청크에서 처리됨
-                    var newSegments = segments.Where(s => s.StartTime >= chunkStartTime).ToList();
-
-                    if (newSegments.Count == 0)
-                    {
-                        Log4.Info($"[녹음] ★ 실시간 STT: 전체 {segments.Count}개 세그먼트가 오버랩 구간 — 스킵");
-                        return;
-                    }
-
-                    // 화자분리 전 데이터 저장 (화자 정보 없이)
-                    _liveSegmentsBeforeDiarization ??= new List<Models.TranscriptSegment>();
-                    foreach (var segment in newSegments)
-                    {
-                        // 화자분리 전 버전 저장 (화자 없음)
-                        _liveSegmentsBeforeDiarization.Add(new Models.TranscriptSegment
-                        {
-                            StartTime = segment.StartTime,
-                            EndTime = segment.EndTime,
-                            Text = segment.Text,
-                            Confidence = segment.Confidence,
-                            Speaker = null  // 화자 정보 없음
-                        });
-
-                        // 원본 세그먼트 추가 (화자 정보 포함)
-                        LiveSTTSegments.Add(segment);
-                    }
-
-                    Log4.Info($"[녹음] ★ 실시간 STT: {newSegments.Count}개 세그먼트 추가 (총 {LiveSTTSegments.Count}개, 오버랩 필터: {segments.Count - newSegments.Count}개 제외)");
-                });
+                Log4.Info($"[녹음] ★ 서버 청크 전송 완료 ({audioData.Length} bytes)");
             }
         }
         catch (OperationCanceledException)
@@ -3287,7 +2915,7 @@ public partial class OneNoteViewModel : ViewModelBase
             {
                 AudioFilePath = audioFilePath,
                 CreatedAt = DateTime.Now,
-                ModelName = "SenseVoice-Realtime",
+                ModelName = "Server-Realtime",
                 Language = "ko",
                 TotalDuration = STTSegments.LastOrDefault()?.EndTime ?? TimeSpan.Zero,
                 Speakers = STTSegments.Select(s => s.Speaker).Distinct().ToList()
@@ -3296,7 +2924,13 @@ public partial class OneNoteViewModel : ViewModelBase
             result.Segments.AddRange(STTSegments);
 
             var sttPath = Path.ChangeExtension(audioFilePath, ".stt.json");
-            await _speechService.SaveResultAsync(result, sttPath);
+            var options = new STJ.JsonSerializerOptions
+            {
+                WriteIndented = true,
+                Encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping
+            };
+            var json = STJ.JsonSerializer.Serialize(result, options);
+            await File.WriteAllTextAsync(sttPath, json, System.Text.Encoding.UTF8);
 
             _logger.Information("[녹음] 실시간 STT 결과 저장: {Path}", sttPath);
         }
@@ -4207,15 +3841,6 @@ public partial class OneNoteViewModel : ViewModelBase
             _realtimeSummaryTimer.Interval = _summaryIntervalSeconds * 1000;
             _realtimeSummaryTimer.Start();
         }
-    }
-
-    /// <summary>
-    /// 실시간 STT 모델 유형 설정
-    /// </summary>
-    public void SetRealtimeSTTModelType(Services.Speech.STTModelType modelType)
-    {
-        _realtimeSTTModelType = modelType;
-        Log4.Info($"[녹음] 실시간 STT 모델 설정: {modelType}");
     }
 
     /// <summary>

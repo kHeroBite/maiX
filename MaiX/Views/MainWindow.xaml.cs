@@ -6761,7 +6761,6 @@ public partial class MainWindow : FluentWindow
             OneNoteSTTLiveText.Visibility = Visibility.Visible;
             OneNoteTabRunSTTButton.Content = "실시간 STT 중...";
             OneNoteTabRunSTTButton.IsEnabled = false;
-            OneNoteSTTModelSelector.IsEnabled = false;
         }
         else if (_oneNoteViewModel.IsRecording)
         {
@@ -6770,7 +6769,6 @@ public partial class MainWindow : FluentWindow
             OneNoteSTTLiveText.Visibility = Visibility.Collapsed;
             OneNoteTabRunSTTButton.Content = "녹음 중...";
             OneNoteTabRunSTTButton.IsEnabled = false;
-            OneNoteSTTModelSelector.IsEnabled = false;
         }
         else
         {
@@ -6784,7 +6782,6 @@ public partial class MainWindow : FluentWindow
                 OneNoteTabRunSTTButton.Content = "STT 분석";
                 OneNoteTabRunSTTButton.IsEnabled = true;
             }
-            OneNoteSTTModelSelector.IsEnabled = true;
         }
 
         // 요약 결과 업데이트
@@ -6962,20 +6959,7 @@ public partial class MainWindow : FluentWindow
             return;
         }
 
-        // 선택된 STT 모델 유형 확인
-        var selectedModel = Services.Speech.STTModelType.SenseVoice;
-        if (OneNoteSTTModelSelector?.SelectedItem is System.Windows.Controls.ComboBoxItem selectedItem)
-        {
-            var tag = selectedItem.Tag?.ToString()?.ToLowerInvariant();
-            selectedModel = tag switch
-            {
-                "whisper" => Services.Speech.STTModelType.Whisper,
-                "whispergpu" => Services.Speech.STTModelType.WhisperGpu,
-                _ => Services.Speech.STTModelType.SenseVoice
-            };
-        }
-
-        Log4.Debug($"[OneNote] STT 분석 대상: {recording.FileName}, FilePath: {recording.FilePath}, Model: {selectedModel}");
+        Log4.Debug($"[OneNote] STT 분석 대상: {recording.FileName}, FilePath: {recording.FilePath}");
 
         // 기존 STT 결과 확인
         if (recording.HasSTT)
@@ -6993,9 +6977,8 @@ public partial class MainWindow : FluentWindow
             }
         }
 
-        Log4.Debug("[OneNote] RunSTTAsync 호출 시작");
-        await _oneNoteViewModel.RunSTTAsync(recording, selectedModel);
-        Log4.Debug("[OneNote] RunSTTAsync 호출 완료");
+        Log4.Debug("[OneNote] 서버 STT 분석 실행");
+        await RunSTTAnalysisAsync(recording);
 
         // 좌측 녹음내용 패널 갱신
         UpdateRecordingContentPanel();
@@ -7150,20 +7133,7 @@ public partial class MainWindow : FluentWindow
     {
         if (_oneNoteViewModel == null) return;
 
-        // 선택된 STT 모델 유형 확인
-        var selectedModel = Services.Speech.STTModelType.SenseVoice;
-        if (OneNoteSTTModelSelector?.SelectedItem is System.Windows.Controls.ComboBoxItem selectedItem)
-        {
-            var tag = selectedItem.Tag?.ToString()?.ToLowerInvariant();
-            selectedModel = tag switch
-            {
-                "whisper" => Services.Speech.STTModelType.Whisper,
-                "whispergpu" => Services.Speech.STTModelType.WhisperGpu,
-                _ => Services.Speech.STTModelType.SenseVoice
-            };
-        }
-
-        Log4.Debug($"[OneNote] STT 분석 대상: {recording.FileName}, FilePath: {recording.FilePath}, Model: {selectedModel}");
+        Log4.Debug($"[OneNote] 서버 STT 분석 대상: {recording.FileName}, FilePath: {recording.FilePath}");
 
         // 기존 STT 결과 확인
         if (recording.HasSTT)
@@ -7223,12 +7193,36 @@ public partial class MainWindow : FluentWindow
 
         try
         {
-            Log4.Debug("[OneNote] RunSTTAsync 호출 시작");
-            await _oneNoteViewModel.RunSTTAsync(recording, selectedModel);
-            Log4.Debug("[OneNote] RunSTTAsync 호출 완료");
+            var serverUrl = App.Settings?.UserPreferences?.SpeechServerUrl ?? "http://172.10.74.2:18989";
+            Log4.Debug($"[OneNote] 서버 STT 분석 시작: {serverUrl}");
+            using var serverSpeech = new Services.Speech.ServerSpeechService(serverUrl);
+            var transcriptResult = await serverSpeech.TranscribeFileAsync(recording.FilePath);
+            Log4.Debug("[OneNote] 서버 STT 분석 완료");
+
+            // 결과를 녹음에 저장
+            if (transcriptResult?.Segments != null)
+            {
+                // STT 결과를 JSON 파일로 저장 후 STTResultPath 설정
+                var sttPath = System.IO.Path.Combine(
+                    System.IO.Path.GetDirectoryName(recording.FilePath) ?? "",
+                    System.IO.Path.GetFileNameWithoutExtension(recording.FilePath) + "_stt.json");
+                var json = System.Text.Json.JsonSerializer.Serialize(transcriptResult,
+                    new System.Text.Json.JsonSerializerOptions { WriteIndented = true });
+                await System.IO.File.WriteAllTextAsync(sttPath, json);
+                recording.STTResultPath = sttPath;
+            }
 
             // UI 갱신
             UpdateRecordingContentPanel();
+        }
+        catch (Exception ex)
+        {
+            Log4.Error($"[OneNote] 서버 STT 분석 실패: {ex.Message}");
+            System.Windows.MessageBox.Show(
+                $"서버 STT 분석에 실패했습니다.\n{ex.Message}",
+                "STT 오류",
+                System.Windows.MessageBoxButton.OK,
+                System.Windows.MessageBoxImage.Error);
         }
         finally
         {
@@ -7907,31 +7901,6 @@ public partial class MainWindow : FluentWindow
         }
     }
 
-    /// <summary>
-    /// STT 모델 선택 변경
-    /// </summary>
-    private void OneNoteSTTModelSelector_SelectionChanged(object sender, System.Windows.Controls.SelectionChangedEventArgs e)
-    {
-        if (sender is System.Windows.Controls.ComboBox comboBox && comboBox.SelectedItem is System.Windows.Controls.ComboBoxItem selectedItem)
-        {
-            var modelTag = selectedItem.Tag?.ToString() ?? "whispergpu";
-            SaveOneNoteRecordingSettings();
-
-            // ViewModel에 실시간 STT 모델 유형 업데이트
-            if (_oneNoteViewModel != null)
-            {
-                var modelType = modelTag?.ToLowerInvariant() switch
-                {
-                    "whisper" => Services.Speech.STTModelType.Whisper,
-                    "whispergpu" => Services.Speech.STTModelType.WhisperGpu,
-                    _ => Services.Speech.STTModelType.SenseVoice
-                };
-                _oneNoteViewModel.SetRealtimeSTTModelType(modelType);
-            }
-
-            Log4.Debug($"[OneNote] STT 모델 변경: {modelTag}");
-        }
-    }
 
     /// <summary>
     /// STT 분석 주기 선택 변경
@@ -8043,7 +8012,6 @@ public partial class MainWindow : FluentWindow
         {
             var settings = new
             {
-                STTModel = (OneNoteSTTModelSelector?.SelectedItem as System.Windows.Controls.ComboBoxItem)?.Tag?.ToString() ?? "whispergpu",
                 STTIntervalSeconds = int.TryParse((OneNoteSTTIntervalSelector?.SelectedItem as System.Windows.Controls.ComboBoxItem)?.Tag?.ToString(), out int sttInterval) ? sttInterval : 15,
                 SummaryIntervalSeconds = int.TryParse((OneNoteSummaryIntervalSelector?.SelectedItem as System.Windows.Controls.ComboBoxItem)?.Tag?.ToString(), out int summaryInterval) ? summaryInterval : 30,
                 DiarizationEnabled = OneNoteDiarizationCheckBox.IsChecked == true,
@@ -8100,33 +8068,6 @@ public partial class MainWindow : FluentWindow
             Log4.Debug($"[OneNote] 녹음 설정 JSON 로드됨: {json}");
             using var doc = System.Text.Json.JsonDocument.Parse(json);
             var root = doc.RootElement;
-
-            // STT 모델 선택
-            if (root.TryGetProperty("STTModel", out var sttModelProp))
-            {
-                var modelTag = sttModelProp.GetString();
-                Log4.Debug($"[OneNote] STT 모델 설정: {modelTag}");
-                for (int i = 0; i < OneNoteSTTModelSelector.Items.Count; i++)
-                {
-                    if (OneNoteSTTModelSelector.Items[i] is System.Windows.Controls.ComboBoxItem item &&
-                        item.Tag?.ToString() == modelTag)
-                    {
-                        OneNoteSTTModelSelector.SelectedIndex = i;
-                        break;
-                    }
-                }
-                // ViewModel에도 실시간 STT 모델 유형 설정
-                if (_oneNoteViewModel != null)
-                {
-                    var modelType = modelTag?.ToLowerInvariant() switch
-                    {
-                        "whisper" => Services.Speech.STTModelType.Whisper,
-                        "whispergpu" => Services.Speech.STTModelType.WhisperGpu,
-                        _ => Services.Speech.STTModelType.SenseVoice
-                    };
-                    _oneNoteViewModel.SetRealtimeSTTModelType(modelType);
-                }
-            }
 
             // STT 분석 주기
             if (root.TryGetProperty("STTIntervalSeconds", out var sttIntervalProp))
@@ -19263,33 +19204,6 @@ public partial class MainWindow : FluentWindow
         urlGroup.Child = urlStack;
         SettingsContentPanel.Children.Add(urlGroup);
 
-        // === STT 모드 그룹 ===
-        var sttGroup = CreateSettingsGroupBorder();
-        var sttStack = new StackPanel { Margin = new Thickness(16) };
-        sttStack.Children.Add(CreateSettingsLabel("STT (음성 인식) 모드"));
-
-        var sttPanel = new WrapPanel { Margin = new Thickness(0, 8, 0, 0) };
-        var sttClientRadio = new System.Windows.Controls.RadioButton
-        {
-            Content = "클라이언트 (로컬)",
-            GroupName = "SttMode",
-            IsChecked = (prefs.SttMode ?? "client") == "client",
-            Margin = new Thickness(0, 0, 16, 0),
-            VerticalContentAlignment = VerticalAlignment.Center
-        };
-        var sttServerRadio = new System.Windows.Controls.RadioButton
-        {
-            Content = "서버 (Jarvis)",
-            GroupName = "SttMode",
-            IsChecked = prefs.SttMode == "server",
-            VerticalContentAlignment = VerticalAlignment.Center
-        };
-        sttPanel.Children.Add(sttClientRadio);
-        sttPanel.Children.Add(sttServerRadio);
-        sttStack.Children.Add(sttPanel);
-        sttGroup.Child = sttStack;
-        SettingsContentPanel.Children.Add(sttGroup);
-
         // === 서버 STT 모델 선택 그룹 ===
         var sttModelGroup = CreateSettingsGroupBorder();
         var sttModelStack = new StackPanel { Margin = new Thickness(16) };
@@ -19297,7 +19211,7 @@ public partial class MainWindow : FluentWindow
 
         var sttModelDescText = new System.Windows.Controls.TextBlock
         {
-            Text = "서버 모드에서 사용할 Whisper 모델을 선택합니다.",
+            Text = "서버에서 사용할 Whisper 모델을 선택합니다.",
             FontSize = 12,
             Foreground = (Brush)FindResource("TextFillColorSecondaryBrush"),
             Margin = new Thickness(0, 4, 0, 8)
@@ -19309,7 +19223,7 @@ public partial class MainWindow : FluentWindow
             Height = 32,
             Width = 200,
             HorizontalAlignment = HorizontalAlignment.Left,
-            IsEnabled = prefs.SttMode == "server"
+            IsEnabled = true
         };
         serverModelComboBox.Items.Add("small");
         serverModelComboBox.Items.Add("medium");
@@ -19321,37 +19235,6 @@ public partial class MainWindow : FluentWindow
         sttModelStack.Children.Add(serverModelComboBox);
         sttModelGroup.Child = sttModelStack;
         SettingsContentPanel.Children.Add(sttModelGroup);
-
-        // STT 모드 라디오버튼 변경 시 ComboBox 활성/비활성 연동
-        sttClientRadio.Checked += (s, e) => serverModelComboBox.IsEnabled = false;
-        sttServerRadio.Checked += (s, e) => serverModelComboBox.IsEnabled = true;
-
-        // === 화자분리 모드 그룹 ===
-        var diarGroup = CreateSettingsGroupBorder();
-        var diarStack = new StackPanel { Margin = new Thickness(16) };
-        diarStack.Children.Add(CreateSettingsLabel("화자분리 모드"));
-
-        var diarPanel = new WrapPanel { Margin = new Thickness(0, 8, 0, 0) };
-        var diarClientRadio = new System.Windows.Controls.RadioButton
-        {
-            Content = "클라이언트 (로컬)",
-            GroupName = "DiarizationMode",
-            IsChecked = (prefs.DiarizationMode ?? "client") == "client",
-            Margin = new Thickness(0, 0, 16, 0),
-            VerticalContentAlignment = VerticalAlignment.Center
-        };
-        var diarServerRadio = new System.Windows.Controls.RadioButton
-        {
-            Content = "서버 (Jarvis)",
-            GroupName = "DiarizationMode",
-            IsChecked = prefs.DiarizationMode == "server",
-            VerticalContentAlignment = VerticalAlignment.Center
-        };
-        diarPanel.Children.Add(diarClientRadio);
-        diarPanel.Children.Add(diarServerRadio);
-        diarStack.Children.Add(diarPanel);
-        diarGroup.Child = diarStack;
-        SettingsContentPanel.Children.Add(diarGroup);
 
         // === TTS 모드 그룹 ===
         var ttsGroup = CreateSettingsGroupBorder();
@@ -19471,15 +19354,13 @@ public partial class MainWindow : FluentWindow
             if (prefs == null) return;
             prefs.SpeechServerUrl = string.IsNullOrWhiteSpace(urlBox.Text)
                 ? "http://172.10.74.2:18989" : urlBox.Text.Trim();
-            prefs.SttMode = sttServerRadio.IsChecked == true ? "server" : "client";
-            prefs.DiarizationMode = diarServerRadio.IsChecked == true ? "server" : "client";
             prefs.TtsMode = ttsServerRadio.IsChecked == true ? "server" : "client";
             prefs.ServerSttModel = serverModelComboBox.SelectedItem?.ToString() ?? "small";
             prefs.RealtimeOverlapSeconds = (int)overlapSlider.Value;
             App.Settings?.SaveUserPreferences();
 
-            // 서버 모드이고 서버 URL 입력됐으면 모델 변경 API 호출
-            if (prefs.SttMode == "server" && !string.IsNullOrWhiteSpace(prefs.SpeechServerUrl))
+            // 서버 URL 입력됐으면 모델 변경 API 호출
+            if (!string.IsNullOrWhiteSpace(prefs.SpeechServerUrl))
             {
                 try
                 {

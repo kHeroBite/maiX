@@ -435,9 +435,9 @@ Audio_Services:
 
 ```yaml
 Speech_Services:
-  - 파일명: SpeechRecognitionService.cs
+  - 파일명: SpeechRecognitionService.cs (삭제됨 — 2026-03-25)
     경로: Services/Speech/
-    역할: STT 서비스 (Whisper 로컬 + Jarvis 서버 모드 분기, 화자분리 지원)
+    역할: [삭제] 클라이언트 STT 제거, 서버 STT(ServerSpeechService)로 전면 전환
 
   - 파일명: ServerSpeechService.cs
     경로: Services/Speech/

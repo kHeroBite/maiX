@@ -182,16 +182,10 @@ public class UserPreferencesSettings
     public string? PreferredMicrophoneDeviceId { get; set; }
 
     /// <summary>
-    /// STT 모드 (client: 로컬, server: Jarvis 서버)
+    /// STT 모드 (server: Jarvis 서버)
     /// </summary>
     [XmlElement("SttMode")]
-    public string SttMode { get; set; } = "client";
-
-    /// <summary>
-    /// 화자분리 모드 (client: 로컬, server: Jarvis 서버)
-    /// </summary>
-    [XmlElement("DiarizationMode")]
-    public string DiarizationMode { get; set; } = "client";
+    public string SttMode { get; set; } = "server";
 
     /// <summary>
     /// TTS 모드 (client: 로컬, server: Jarvis 서버)
