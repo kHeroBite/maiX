@@ -7495,7 +7495,7 @@
                                                                   Width="90" Height="28"
                                                                   FontSize="11"
                                                                   Padding="8,4"
-                                                                  SelectedIndex="2"
+                                                                  SelectedIndex="7"
                                                                   HorizontalAlignment="Left"
                                                                   Margin="0,0,0,6"
                                                                   Background="{DynamicResource ControlFillColorDefaultBrush}"
@@ -7503,6 +7503,11 @@
                                                                   BorderThickness="1"
                                                                   SelectionChanged="OneNoteSTTIntervalSelector_SelectionChanged"
                                                                   ToolTip="STT 분석 주기 (실시간 청크 간격)">
+                                                            <ComboBoxItem Content="100ms" Tag="0.1"/>
+                                                            <ComboBoxItem Content="200ms" Tag="0.2"/>
+                                                            <ComboBoxItem Content="500ms" Tag="0.5"/>
+                                                            <ComboBoxItem Content="1초" Tag="1"/>
+                                                            <ComboBoxItem Content="3초" Tag="3"/>
                                                             <ComboBoxItem Content="5초" Tag="5"/>
                                                             <ComboBoxItem Content="10초" Tag="10"/>
                                                             <ComboBoxItem Content="15초" Tag="15"/>

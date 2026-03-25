@@ -7909,7 +7909,7 @@ public partial class MainWindow : FluentWindow
     {
         if (sender is System.Windows.Controls.ComboBox comboBox && comboBox.SelectedItem is System.Windows.Controls.ComboBoxItem selectedItem)
         {
-            if (int.TryParse(selectedItem.Tag?.ToString(), out int seconds))
+            if (float.TryParse(selectedItem.Tag?.ToString(), System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out float seconds))
             {
                 // ViewModel에 청크 간격 설정
                 if (_oneNoteViewModel != null)
@@ -8012,7 +8012,7 @@ public partial class MainWindow : FluentWindow
         {
             var settings = new
             {
-                STTIntervalSeconds = int.TryParse((OneNoteSTTIntervalSelector?.SelectedItem as System.Windows.Controls.ComboBoxItem)?.Tag?.ToString(), out int sttInterval) ? sttInterval : 15,
+                STTIntervalSeconds = float.TryParse((OneNoteSTTIntervalSelector?.SelectedItem as System.Windows.Controls.ComboBoxItem)?.Tag?.ToString(), System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out float sttInterval) ? sttInterval : 15f,
                 SummaryIntervalSeconds = int.TryParse((OneNoteSummaryIntervalSelector?.SelectedItem as System.Windows.Controls.ComboBoxItem)?.Tag?.ToString(), out int summaryInterval) ? summaryInterval : 30,
                 DiarizationEnabled = OneNoteDiarizationCheckBox.IsChecked == true,
                 PostSTTEnabled = OneNotePostSTTCheckBox.IsChecked == true,
@@ -8072,13 +8072,13 @@ public partial class MainWindow : FluentWindow
             // STT 분석 주기
             if (root.TryGetProperty("STTIntervalSeconds", out var sttIntervalProp))
             {
-                var intervalSeconds = sttIntervalProp.GetInt32();
+                var intervalSeconds = (float)sttIntervalProp.GetDouble();
                 Log4.Debug($"[OneNote] STT 주기 설정: {intervalSeconds}초");
                 for (int i = 0; i < OneNoteSTTIntervalSelector.Items.Count; i++)
                 {
                     if (OneNoteSTTIntervalSelector.Items[i] is System.Windows.Controls.ComboBoxItem item &&
-                        int.TryParse(item.Tag?.ToString(), out int itemSeconds) &&
-                        itemSeconds == intervalSeconds)
+                        float.TryParse(item.Tag?.ToString(), System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out float itemSeconds) &&
+                        Math.Abs(itemSeconds - intervalSeconds) < 0.01f)
                     {
                         OneNoteSTTIntervalSelector.SelectedIndex = i;
                         break;
@@ -19294,129 +19294,6 @@ public partial class MainWindow : FluentWindow
         ttsGroup.Child = ttsStack;
         SettingsContentPanel.Children.Add(ttsGroup);
 
-        // === TTS 화자 선택 그룹 ===
-        var ttsSpeakerGroup = CreateSettingsGroupBorder();
-        var ttsSpeakerStack = new StackPanel { Margin = new Thickness(16) };
-        ttsSpeakerStack.Children.Add(CreateSettingsLabel("TTS 화자"));
-
-        var ttsSpeakerDescText = new System.Windows.Controls.TextBlock
-        {
-            Text = "서버 TTS에서 사용할 화자를 선택합니다.",
-            FontSize = 12,
-            Foreground = (Brush)FindResource("TextFillColorSecondaryBrush"),
-            Margin = new Thickness(0, 4, 0, 8)
-        };
-        ttsSpeakerStack.Children.Add(ttsSpeakerDescText);
-
-        var ttsSpeakerComboBox = new System.Windows.Controls.ComboBox
-        {
-            Height = 32,
-            Width = 300,
-            HorizontalAlignment = HorizontalAlignment.Left,
-            DisplayMemberPath = "Display",
-            SelectedValuePath = "Id",
-            IsEnabled = true
-        };
-        // 기본 항목
-        ttsSpeakerComboBox.Items.Add(new { Id = 0, Display = "기본 화자" });
-        ttsSpeakerComboBox.SelectedIndex = 0;
-
-        ttsSpeakerStack.Children.Add(ttsSpeakerComboBox);
-        ttsSpeakerGroup.Child = ttsSpeakerStack;
-        SettingsContentPanel.Children.Add(ttsSpeakerGroup);
-
-        // 서버에서 TTS 화자 목록 동적 로딩
-        _ = Task.Run(async () =>
-        {
-            try
-            {
-                var serverUrl = prefs.SpeechServerUrl;
-                if (string.IsNullOrWhiteSpace(serverUrl)) return;
-
-                using var svc = new MaiX.Services.Speech.ServerSpeechService(serverUrl);
-                var speakers = await svc.GetTtsSpeakersAsync();
-                if (speakers.Count == 0) return;
-
-                await Dispatcher.InvokeAsync(() =>
-                {
-                    ttsSpeakerComboBox.Items.Clear();
-                    foreach (var sp in speakers)
-                        ttsSpeakerComboBox.Items.Add(new { sp.Id, Display = $"{sp.Name} ({sp.Engine})" });
-
-                    // 현재 저장된 TtsSpeakerId 기반 선택
-                    var savedId = prefs.TtsSpeakerId;
-                    for (int i = 0; i < ttsSpeakerComboBox.Items.Count; i++)
-                    {
-                        dynamic item = ttsSpeakerComboBox.Items[i];
-                        if (item.Id == savedId)
-                        {
-                            ttsSpeakerComboBox.SelectedIndex = i;
-                            break;
-                        }
-                    }
-                    if (ttsSpeakerComboBox.SelectedIndex < 0 && ttsSpeakerComboBox.Items.Count > 0)
-                        ttsSpeakerComboBox.SelectedIndex = 0;
-                });
-            }
-            catch
-            {
-                // 서버 미응답 시 기본 항목 유지
-            }
-        });
-
-        // === 실시간 STT 오버랩 설정 그룹 ===
-        var overlapGroup = CreateSettingsGroupBorder();
-        var overlapStack = new StackPanel { Margin = new Thickness(16) };
-        overlapStack.Children.Add(CreateSettingsLabel("실시간 STT 오버랩 (단어 잘림 방지)"));
-
-        var overlapDescText = new System.Windows.Controls.TextBlock
-        {
-            Text = "청크 간 오버랩 시간을 설정합니다. 0이면 비활성화됩니다.",
-            FontSize = 12,
-            Foreground = (Brush)FindResource("TextFillColorSecondaryBrush"),
-            Margin = new Thickness(0, 4, 0, 8)
-        };
-        overlapStack.Children.Add(overlapDescText);
-
-        var overlapRow = new Grid { Margin = new Thickness(0, 0, 0, 0) };
-        overlapRow.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-        overlapRow.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-
-        var overlapSlider = new Slider
-        {
-            Minimum = 0,
-            Maximum = 30,
-            Value = prefs.RealtimeOverlapSeconds,
-            TickFrequency = 1,
-            IsSnapToTickEnabled = true,
-            VerticalAlignment = VerticalAlignment.Center
-        };
-        Grid.SetColumn(overlapSlider, 0);
-
-        var overlapValueLabel = new System.Windows.Controls.TextBlock
-        {
-            Text = prefs.RealtimeOverlapSeconds == 0 ? "오버랩 없음" : $"{prefs.RealtimeOverlapSeconds}초",
-            FontSize = 14,
-            FontWeight = FontWeights.SemiBold,
-            Width = 80,
-            TextAlignment = TextAlignment.Right,
-            VerticalAlignment = VerticalAlignment.Center,
-            Margin = new Thickness(8, 0, 0, 0)
-        };
-        Grid.SetColumn(overlapValueLabel, 1);
-
-        overlapSlider.ValueChanged += (s, e) =>
-        {
-            var val = (int)overlapSlider.Value;
-            overlapValueLabel.Text = val == 0 ? "오버랩 없음" : $"{val}초";
-        };
-
-        overlapRow.Children.Add(overlapSlider);
-        overlapRow.Children.Add(overlapValueLabel);
-        overlapStack.Children.Add(overlapRow);
-        overlapGroup.Child = overlapStack;
-        SettingsContentPanel.Children.Add(overlapGroup);
-
         // === 저장 버튼 ===
         var saveBtn = new Wpf.Ui.Controls.Button
         {
@@ -19457,18 +19334,6 @@ public partial class MainWindow : FluentWindow
                 ? "http://172.10.74.2:18989" : urlBox.Text.Trim();
             prefs.TtsMode = ttsServerRadio.IsChecked == true ? "server" : "client";
             prefs.ServerSttModel = serverModelComboBox.SelectedItem?.ToString() ?? "small";
-            prefs.RealtimeOverlapSeconds = (int)overlapSlider.Value;
-
-            // TTS 화자 ID 저장
-            if (ttsSpeakerComboBox.SelectedItem != null)
-            {
-                try
-                {
-                    dynamic selectedSpeaker = ttsSpeakerComboBox.SelectedItem;
-                    prefs.TtsSpeakerId = (int)selectedSpeaker.Id;
-                }
-                catch { }
-            }
 
             App.Settings?.SaveUserPreferences();
 

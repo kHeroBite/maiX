@@ -30,7 +30,7 @@ public class AudioRecordingService : IDisposable
 
     // 실시간 STT용 버퍼
     private List<byte> _realtimeBuffer = new();
-    private int _realtimeChunkSeconds = 15; // 15초 단위 청크
+    private float _realtimeChunkSeconds = 15f; // 15초 단위 청크
     private bool _realtimeEnabled = false;
     private int _totalBytesProcessed = 0;
     private readonly object _bufferLock = new();
@@ -105,10 +105,10 @@ public class AudioRecordingService : IDisposable
     /// <summary>
     /// 실시간 청크 간격 (초 단위, 기본 15초)
     /// </summary>
-    public int RealtimeChunkSeconds
+    public float RealtimeChunkSeconds
     {
         get => _realtimeChunkSeconds;
-        set => _realtimeChunkSeconds = Math.Max(5, Math.Min(60, value)); // 5~60초 범위
+        set => _realtimeChunkSeconds = Math.Max(0.1f, Math.Min(60f, value)); // 0.1~60초 범위
     }
 
     /// <summary>
@@ -472,7 +472,7 @@ public class AudioRecordingService : IDisposable
 
                     // 청크 크기 계산: 16000Hz * 2bytes * 1ch = 32000 bytes/sec
                     var bytesPerSecond = _outputFormat.AverageBytesPerSecond;
-                    var chunkSizeBytes = bytesPerSecond * _realtimeChunkSeconds;
+                    var chunkSizeBytes = (int)(bytesPerSecond * _realtimeChunkSeconds);
 
                     if (_realtimeBuffer.Count >= chunkSizeBytes)
                     {

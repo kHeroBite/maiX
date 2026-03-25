@@ -189,8 +189,6 @@ public partial class OneNoteViewModel : ViewModelBase
     /// </summary>
     private Services.Speech.ServerWebSocketSpeechService? _serverWsSpeech;
 
-    // RealtimeOverlapSeconds는 App.Settings?.UserPreferences?.RealtimeOverlapSeconds에서 참조
-
     /// <summary>
     /// 수동 STT 분석 취소 토큰
     /// </summary>
@@ -214,7 +212,7 @@ public partial class OneNoteViewModel : ViewModelBase
     /// <summary>
     /// STT 청크 간격 (초), 기본 30초
     /// </summary>
-    private int _sttChunkIntervalSeconds = 30;
+    private float _sttChunkIntervalSeconds = 30f;
 
     /// <summary>
     /// 요약 업데이트 간격 (초), 기본 30초
@@ -3866,9 +3864,9 @@ public partial class OneNoteViewModel : ViewModelBase
     /// <summary>
     /// STT 청크 간격 설정 (초 단위)
     /// </summary>
-    public void SetSTTChunkInterval(int seconds)
+    public void SetSTTChunkInterval(float seconds)
     {
-        _sttChunkIntervalSeconds = Math.Max(5, Math.Min(60, seconds));
+        _sttChunkIntervalSeconds = Math.Max(0.1f, Math.Min(60f, seconds));
         Log4.Info($"[녹음] STT 청크 간격 설정: {_sttChunkIntervalSeconds}초");
 
         // 녹음 중이면 즉시 적용
