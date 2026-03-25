@@ -10,7 +10,7 @@
 ┌─────────────────────────────────────────────────────────────────┐
 │  Tier 1: CLAUDE.md (이 파일) — 범용 규칙                         │
 │  ● 모든 프로젝트에 공통 적용되는 규칙/정책/프로세스              │
-│  ● 스킬 전체 목록 및 설명 (범용 58개)                             │
+│  ● 스킬 전체 목록 및 설명 (범용 62개)                             │
 │  ● 실행 환경, 병렬화 정책, MCP 설정 등 범용 인프라               │
 ├─────────────────────────────────────────────────────────────────┤
 │  Tier 2: PROJECT.md — 프로젝트 고유 정보                         │
@@ -28,7 +28,6 @@
 **분리 원칙 (절대 위반 금지):**
 - CLAUDE.md, 가이드/유틸리티 스킬에 **특정 프로젝트명/경로/설정 금지**
 - 프로젝트 고유 정보는 **PROJECT.md 또는 프로젝트스킬(_{project})에만** 기재
-- Skill('kO') 로딩 시 **현재 프로젝트를 감지**하여 `kInfra_{project}` 자동 호출 → 프로젝트별 인프라 설정 로딩
 
 ---
 
@@ -61,7 +60,6 @@ Claude Code는 WSL2에서 실행되며, 프로젝트 파일은 Windows NTFS(`/mn
 
 ```yaml
 기본_환경: WSL2 (Linux)
-프로젝트_경로: kInfra_{project} 프로젝트스킬의 솔루션_경로 참조
 
 WSL에서_실행 (기본):
   - Bash 명령어, dotnet build, curl, MCP 도구
@@ -70,7 +68,6 @@ WSL에서_실행 (기본):
 
 도구_정책 (WSL 최우선):
   - WSL에서 최대한 리눅스 도구 사용, Windows 도구(.exe)는 최소화
-  - git push → kInfra_{project} 프로젝트스킬 참조
   - Windows 도구 사용 시: 반드시 사유 명시 + Fallback으로만 사용
 
 파일_수정 (/mnt/c/ 경로 — 절대 규칙):
@@ -88,9 +85,6 @@ WSL에서_실행 (기본):
   - 예외_Serena_심볼편집만: LSP 경유이므로 rsync 불필요 (유일한 예외)
   - 위반_감지: /mnt/c/ 경로에 Edit/Write 도구 직접 호출 시 즉시 중단 + 경고
 
-스크린샷:
-  - kInfra_{project} 프로젝트스킬에 경로/API 정의됨
-  - 사용자가 스크린샷 언급 시: 프로젝트스킬의 경로에서 최신 파일 자동 확인 (묻지 않고 직접 탐색)
 ```
 
 ---
@@ -150,19 +144,11 @@ WSL에서_실행 (기본):
 - MCP 호출은 각 도구를 직접 실행하며 Serena의 `execute_shell_command`로 다른 MCP를 우회 호출하지 않습니다.
 - 코드 수정 도구 선택: `.cs` 파일은 Serena, Designer/문서/JSON/YAML 파일은 Claude Code Edit/Write를 기본으로 사용합니다.
 
-### MCP MySQL 역할 분리 규칙 (L-284/L-285)
-
-메인(kO): MySQL 도구 사용 절대 금지 (SELECT 포함)
-kPlan: SELECT만 허용 (현황 파악용)
-kDev: DDL/DML 전담 (CREATE/INSERT/UPDATE/DROP 모두)
-팀에이전트_UUID: PIPELINE_UUID 환경변수만 사용. resolve_uuid 호출 금지.
+### MCP MySQL 역할 분리 규칙
+> → kO SKILL.md "MCP_MySQL_역할_분리" 섹션 참조 (유일 출처)
 
 ### MCP MySQL 한글 인코딩 규칙
-
-> **유일 출처**: 한글 INSERT/UPDATE 금지 규칙은 여기서만 정의. 프로젝트스킬은 참조만.
-> 한글 데이터 수정 방법 상세: /kRules_{project} 참조.
-
-**MCP MySQL로 한글 INSERT/UPDATE 절대 금지** (latin1 연결). SELECT/영문만 허용.
+> → domain-database SKILL.md "UTF-8 인코딩 필수 정책" 섹션 참조 (유일 출처)
 
 ### MCP 호출 규칙
 - 각 MCP 도구를 직접 호출. Serena의 `execute_shell_command`로 다른 MCP 호출 금지.
@@ -174,18 +160,6 @@ kDev: DDL/DML 전담 (CREATE/INSERT/UPDATE/DROP 모두)
 | C# 코드 심볼 수정/추가/리팩토링 | Serena |
 | Designer.cs, 비코드 파일, 주석/문자열 | Claude Code Edit |
 | Serena 오류 시 | Claude Code Edit (Fallback) |
-
-### 도메인 스킬 자동 트리거 기준
-
-| 상황 | 자동 로딩 스킬 |
-|------|---------------|
-| C# 코드 리뷰/리팩토링/품질 분석 | `domain-csharp` |
-| WinForms UI 설계/폼 생성/MDI/레이아웃 | `domain-winforms` |
-| DB 스키마 변경/테이블 생성/마이그레이션 | `domain-database` |
-| 새 라이브러리 도입/버전 업그레이드 | `domain-context7` |
-| NTFS 파일 수정/파일 잠금/다중 세션 충돌 | `domain-fileops` |
-
-**규칙**: 위 상황에 해당하면 작업 시작 전 해당 스킬을 반드시 로딩하라. "나중에 필요하면 보겠다" 패턴 금지.
 
 ---
 

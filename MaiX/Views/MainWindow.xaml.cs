@@ -1059,25 +1059,11 @@ public partial class MainWindow : FluentWindow
         Log4.Info($"[진단] 실행파일 경로: {Environment.ProcessPath}");
         Log4.Info($"[진단] 현재 디렉토리: {AppDomain.CurrentDomain.BaseDirectory}");
 
-        // GPU 모드 체크마크 및 타이틀바 아이콘 초기화
-        UpdateGpuModeCheckmark();
+        // 타이틀바 아이콘 초기화
         UpdateGpuIcon();
 
         // 저장된 동기화 설정 로드
         LoadSavedSyncSettings();
-
-        // 동기화/분석 기간 및 주기 현재 설정 표시 초기화
-        UpdateSyncPeriodCurrentDisplay();
-        UpdateFavoriteSyncPeriodCurrentDisplay();
-        UpdateFavoriteSyncIntervalCurrentDisplay();
-        UpdateFullSyncIntervalCurrentDisplay();
-        UpdateAIAnalysisPeriodCurrentDisplay();
-        UpdateFavoriteAiPeriodCurrentDisplay();
-        UpdateFavoriteAnalysisIntervalCurrentDisplay();
-        UpdateFullAnalysisIntervalCurrentDisplay();
-
-        // 자동 로그인 메뉴 상태 초기화
-        InitializeAutoLoginMenu();
 
         // 테마 아이콘 초기화
         UpdateThemeIcon();
@@ -1958,105 +1944,6 @@ public partial class MainWindow : FluentWindow
     private readonly Services.Storage.LoginSettingsService _loginSettingsService = new();
 
     /// <summary>
-    /// 자동 로그인 메뉴 클릭
-    /// </summary>
-    private async void MenuAutoLogin_Click(object sender, RoutedEventArgs e)
-    {
-        Log4.Info("메뉴: 자동 로그인 클릭");
-
-        var graphAuthService = ((App)Application.Current).GetService<Services.Graph.GraphAuthService>();
-        if (graphAuthService == null)
-        {
-            Log4.Error("GraphAuthService를 찾을 수 없습니다.");
-            return;
-        }
-
-        // 현재 자동 로그인 상태 확인
-        var loginSettings = _loginSettingsService.Load();
-        var isAutoLoginEnabled = loginSettings?.AutoLogin ?? false;
-
-        if (isAutoLoginEnabled)
-        {
-            // 자동 로그인 해제
-            var result = System.Windows.MessageBox.Show(
-                "자동 로그인을 해제하시겠습니까?\n\n다음 실행 시 로그인 창이 표시됩니다.",
-                "자동 로그인 해제",
-                System.Windows.MessageBoxButton.YesNo,
-                System.Windows.MessageBoxImage.Question);
-
-            if (result == System.Windows.MessageBoxResult.Yes)
-            {
-                loginSettings!.AutoLogin = false;
-                _loginSettingsService.Save(loginSettings);
-
-                // 토큰 캐시 삭제
-                Services.Graph.TokenCacheHelper.ClearCache();
-
-                Log4.Info("자동 로그인 해제됨");
-                _viewModel.StatusMessage = "자동 로그인이 해제되었습니다.";
-                UpdateAutoLoginMenuState(false);
-            }
-        }
-        else
-        {
-            // 자동 로그인 설정 - 로그인 창 표시
-            var result = System.Windows.MessageBox.Show(
-                "자동 로그인을 설정하시겠습니까?\n\n로그인 창이 표시되며, 로그인 성공 시 자동 로그인이 활성화됩니다.",
-                "자동 로그인 설정",
-                System.Windows.MessageBoxButton.YesNo,
-                System.Windows.MessageBoxImage.Question);
-
-            if (result == System.Windows.MessageBoxResult.Yes)
-            {
-                try
-                {
-                    _viewModel.StatusMessage = "로그인 중...";
-
-                    // 기존 토큰 캐시 삭제 후 새로 로그인
-                    Services.Graph.TokenCacheHelper.ClearCache();
-
-                    var loginSuccess = await graphAuthService.LoginInteractiveAsync();
-                    if (loginSuccess)
-                    {
-                        // 로그인 성공 - 자동 로그인 설정 저장
-                        var newSettings = loginSettings ?? new Models.LoginSettings();
-                        newSettings.Email = graphAuthService.CurrentUserEmail;
-                        newSettings.DisplayName = graphAuthService.CurrentUserDisplayName;
-                        newSettings.AutoLogin = true;
-                        newSettings.LastLoginAt = DateTime.Now;
-
-                        // Azure AD 설정도 저장
-                        if (!string.IsNullOrEmpty(graphAuthService.ClientId))
-                        {
-                            newSettings.AzureAd = new Models.Settings.AzureAdSettings
-                            {
-                                ClientId = graphAuthService.ClientId,
-                                TenantId = "common"
-                            };
-                        }
-
-                        _loginSettingsService.Save(newSettings);
-
-                        Log4.Info($"자동 로그인 설정 완료: {newSettings.Email}");
-                        _viewModel.StatusMessage = $"자동 로그인이 설정되었습니다. ({newSettings.Email})";
-                        UpdateAutoLoginMenuState(true);
-                    }
-                    else
-                    {
-                        Log4.Warn("로그인 취소됨");
-                        _viewModel.StatusMessage = "로그인이 취소되었습니다.";
-                    }
-                }
-                catch (Exception ex)
-                {
-                    Log4.Error($"자동 로그인 설정 실패: {ex.Message}");
-                    _viewModel.StatusMessage = "로그인 중 오류가 발생했습니다.";
-                }
-            }
-        }
-    }
-
-    /// <summary>
     /// 로그아웃 메뉴 클릭
     /// </summary>
     private async void MenuLogout_Click(object sender, RoutedEventArgs e)
@@ -2108,27 +1995,6 @@ public partial class MainWindow : FluentWindow
     }
 
     /// <summary>
-    /// 자동 로그인 메뉴 체크 상태 업데이트
-    /// </summary>
-    private void UpdateAutoLoginMenuState(bool isEnabled)
-    {
-        if (AutoLoginCheckIcon != null)
-        {
-            AutoLoginCheckIcon.Visibility = isEnabled ? Visibility.Visible : Visibility.Collapsed;
-        }
-    }
-
-    /// <summary>
-    /// 자동 로그인 메뉴 초기화 (Loaded 이벤트에서 호출)
-    /// </summary>
-    private void InitializeAutoLoginMenu()
-    {
-        var loginSettings = _loginSettingsService.Load();
-        var isAutoLoginEnabled = loginSettings?.AutoLogin ?? false;
-        UpdateAutoLoginMenuState(isAutoLoginEnabled);
-    }
-
-    /// <summary>
     /// 저장된 동기화 설정 로드 및 적용
     /// </summary>
     private void LoadSavedSyncSettings()
@@ -2167,7 +2033,6 @@ public partial class MainWindow : FluentWindow
         if (prefs.FavoriteSyncIntervalSeconds > 0)
         {
             _viewModel.SetFavoriteSyncInterval(prefs.FavoriteSyncIntervalSeconds);
-            UpdateFavoriteSyncIntervalCurrentDisplay(prefs.FavoriteSyncIntervalSeconds);
             Log4.Debug($"즐겨찾기 동기화 주기 로드: {prefs.FavoriteSyncIntervalSeconds}초");
         }
 
@@ -2175,7 +2040,6 @@ public partial class MainWindow : FluentWindow
         if (prefs.FullSyncIntervalSeconds > 0)
         {
             _viewModel.SetFullSyncInterval(prefs.FullSyncIntervalSeconds);
-            UpdateFullSyncIntervalCurrentDisplay(prefs.FullSyncIntervalSeconds);
             Log4.Debug($"전체 동기화 주기 로드: {prefs.FullSyncIntervalSeconds}초");
         }
 
@@ -2211,7 +2075,6 @@ public partial class MainWindow : FluentWindow
         if (prefs.FavoriteAnalysisIntervalSeconds > 0)
         {
             _viewModel.SetFavoriteAnalysisInterval(prefs.FavoriteAnalysisIntervalSeconds);
-            UpdateFavoriteAnalysisIntervalCurrentDisplay(prefs.FavoriteAnalysisIntervalSeconds);
             Log4.Debug($"즐겨찾기 AI 분석 주기 로드: {prefs.FavoriteAnalysisIntervalSeconds}초");
         }
 
@@ -2219,7 +2082,6 @@ public partial class MainWindow : FluentWindow
         if (prefs.FullAnalysisIntervalSeconds > 0)
         {
             _viewModel.SetFullAnalysisInterval(prefs.FullAnalysisIntervalSeconds);
-            UpdateFullAnalysisIntervalCurrentDisplay(prefs.FullAnalysisIntervalSeconds);
             Log4.Debug($"전체 AI 분석 주기 로드: {prefs.FullAnalysisIntervalSeconds}초");
         }
 
@@ -2262,7 +2124,6 @@ public partial class MainWindow : FluentWindow
     {
         Log4.Info("메뉴: GPU 모드 토글");
         Services.Theme.RenderModeService.Instance.ToggleGpuMode();
-        UpdateGpuModeCheckmark();
         SyncSettingsUIFromMenu(); // 설정 UI 동기화
 
         // 사용자에게 재시작 안내
@@ -2270,18 +2131,6 @@ public partial class MainWindow : FluentWindow
         _viewModel.StatusMessage = $"렌더링 모드가 {currentMode}로 변경되었습니다. 완전 적용을 위해 앱을 재시작하세요.";
     }
 
-    /// <summary>
-    /// GPU 모드 체크마크 업데이트
-    /// </summary>
-    private void UpdateGpuModeCheckmark()
-    {
-        var isGpuMode = Services.Theme.RenderModeService.Instance.IsGpuMode;
-        // 체크마크 표시/숨김
-        if (GpuModeCheckMark != null)
-        {
-            GpuModeCheckMark.Visibility = isGpuMode ? Visibility.Visible : Visibility.Collapsed;
-        }
-    }
 
     /// <summary>
     /// API 관리 메뉴 클릭
@@ -2339,486 +2188,6 @@ public partial class MainWindow : FluentWindow
     #endregion
 
     #region 동기화 메뉴 이벤트
-
-    // 메일 동기화 기간 설정
-    private void MenuMailSync5_Click(object sender, RoutedEventArgs e) => SetMailSyncPeriod(SyncPeriodType.Count, 5);
-    private void MenuMailSyncDay_Click(object sender, RoutedEventArgs e) => SetMailSyncPeriod(SyncPeriodType.Days, 1);
-    private void MenuMailSyncWeek_Click(object sender, RoutedEventArgs e) => SetMailSyncPeriod(SyncPeriodType.Weeks, 1);
-    private void MenuMailSyncMonth_Click(object sender, RoutedEventArgs e) => SetMailSyncPeriod(SyncPeriodType.Months, 1);
-    private void MenuMailSyncYear_Click(object sender, RoutedEventArgs e) => SetMailSyncPeriod(SyncPeriodType.Years, 1);
-    private void MenuMailSyncAll_Click(object sender, RoutedEventArgs e) => SetMailSyncPeriod(SyncPeriodType.All, 0);
-
-    private void SetMailSyncPeriod(SyncPeriodType periodType, int value)
-    {
-        var settings = new SyncPeriodSettings { PeriodType = periodType, Value = value };
-        _viewModel.MailSyncPeriodSettings = settings;
-        Log4.Info($"메일 동기화 기간 설정: {settings.ToDisplayString()}");
-        _viewModel.StatusMessage = $"메일 동기화 기간: {settings.ToDisplayString()}";
-        UpdateSyncPeriodCurrentDisplay(settings);
-
-        // 설정 저장
-        App.Settings.UserPreferences.MailSyncPeriodType = periodType.ToString();
-        App.Settings.UserPreferences.MailSyncPeriodValue = value;
-        App.Settings.SaveUserPreferences();
-    }
-
-    /// <summary>
-    /// 동기화 기간 현재 설정 표시 업데이트
-    /// </summary>
-    private void UpdateSyncPeriodCurrentDisplay(SyncPeriodSettings? settings = null)
-    {
-        settings ??= _viewModel.MailSyncPeriodSettings ?? SyncPeriodSettings.Default;
-        if (MenuSyncPeriodCurrent != null)
-        {
-            MenuSyncPeriodCurrent.Header = $"현재: {settings.ToDisplayString()}";
-        }
-
-        // 동기화 기간 메뉴 하이라이팅
-        var highlightColor = new System.Windows.Media.SolidColorBrush(
-            (System.Windows.Media.Color)System.Windows.Media.ColorConverter.ConvertFromString("#2196F3"));
-
-        var menuItems = new[] { MenuMailSync5, MenuMailSyncDay, MenuMailSyncWeek, MenuMailSyncMonth, MenuMailSyncYear, MenuMailSyncAll };
-        var periodTypes = new[] { (SyncPeriodType.Count, 5), (SyncPeriodType.Days, 1), (SyncPeriodType.Weeks, 1), (SyncPeriodType.Months, 1), (SyncPeriodType.Years, 1), (SyncPeriodType.All, 0) };
-
-        for (int i = 0; i < menuItems.Length; i++)
-        {
-            if (menuItems[i] != null)
-            {
-                bool isSelected = settings.PeriodType == periodTypes[i].Item1 && settings.Value == periodTypes[i].Item2;
-                // 선택된 항목은 하이라이트, 그 외는 시스템 기본값 사용 (null로 리셋)
-                menuItems[i].ClearValue(System.Windows.Controls.Control.ForegroundProperty);
-                if (isSelected)
-                    menuItems[i].Foreground = highlightColor;
-            }
-        }
-    }
-
-    // AI 분석 기간 설정
-    private void MenuAIAnalysis5_Click(object sender, RoutedEventArgs e) => SetAiAnalysisPeriod(SyncPeriodType.Count, 5);
-    private void MenuAIAnalysisDay_Click(object sender, RoutedEventArgs e) => SetAiAnalysisPeriod(SyncPeriodType.Days, 1);
-    private void MenuAIAnalysisWeek_Click(object sender, RoutedEventArgs e) => SetAiAnalysisPeriod(SyncPeriodType.Weeks, 1);
-    private void MenuAIAnalysisMonth_Click(object sender, RoutedEventArgs e) => SetAiAnalysisPeriod(SyncPeriodType.Months, 1);
-    private void MenuAIAnalysisYear_Click(object sender, RoutedEventArgs e) => SetAiAnalysisPeriod(SyncPeriodType.Years, 1);
-    private void MenuAIAnalysisAll_Click(object sender, RoutedEventArgs e) => SetAiAnalysisPeriod(SyncPeriodType.All, 0);
-
-    private void SetAiAnalysisPeriod(SyncPeriodType periodType, int value)
-    {
-        var settings = new SyncPeriodSettings { PeriodType = periodType, Value = value };
-        _viewModel.AiAnalysisPeriodSettings = settings;
-        Log4.Info($"AI 분석 기간 설정: {settings.ToDisplayString()}");
-        _viewModel.StatusMessage = $"AI 분석 기간: {settings.ToDisplayString()}";
-        UpdateAIAnalysisPeriodCurrentDisplay(settings);
-
-        // 설정 저장
-        App.Settings.UserPreferences.AiAnalysisPeriodType = periodType.ToString();
-        App.Settings.UserPreferences.AiAnalysisPeriodValue = value;
-        App.Settings.SaveUserPreferences();
-    }
-
-    /// <summary>
-    /// AI 분석 기간 현재 설정 표시 업데이트
-    /// </summary>
-    private void UpdateAIAnalysisPeriodCurrentDisplay(SyncPeriodSettings? settings = null)
-    {
-        settings ??= _viewModel.AiAnalysisPeriodSettings ?? SyncPeriodSettings.Default;
-        if (MenuAIAnalysisPeriodCurrent != null)
-        {
-            MenuAIAnalysisPeriodCurrent.Header = $"현재: {settings.ToDisplayString()}";
-        }
-
-        // AI 분석 기간 메뉴 하이라이팅
-        var highlightColor = new System.Windows.Media.SolidColorBrush(
-            (System.Windows.Media.Color)System.Windows.Media.ColorConverter.ConvertFromString("#2196F3"));
-
-        var menuItems = new[] { MenuAIAnalysis5, MenuAIAnalysisDay, MenuAIAnalysisWeek, MenuAIAnalysisMonth, MenuAIAnalysisYear, MenuAIAnalysisAll };
-        var periodTypes = new[] { (SyncPeriodType.Count, 5), (SyncPeriodType.Days, 1), (SyncPeriodType.Weeks, 1), (SyncPeriodType.Months, 1), (SyncPeriodType.Years, 1), (SyncPeriodType.All, 0) };
-
-        for (int i = 0; i < menuItems.Length; i++)
-        {
-            if (menuItems[i] != null)
-            {
-                bool isSelected = settings.PeriodType == periodTypes[i].Item1 && settings.Value == periodTypes[i].Item2;
-                // 선택된 항목은 하이라이트, 그 외는 시스템 기본값 사용 (null로 리셋)
-                menuItems[i].ClearValue(System.Windows.Controls.Control.ForegroundProperty);
-                if (isSelected)
-                    menuItems[i].Foreground = highlightColor;
-            }
-        }
-    }
-
-    // 즐겨찾기 메일 동기화 주기 설정
-    private void MenuFavoriteSyncInterval_Click(object sender, RoutedEventArgs e)
-    {
-        if (sender is System.Windows.Controls.MenuItem menuItem && menuItem.Tag is string tagStr && int.TryParse(tagStr, out int seconds))
-        {
-            SetFavoriteSyncInterval(seconds);
-        }
-    }
-
-    private void SetFavoriteSyncInterval(int seconds)
-    {
-        _viewModel.SetFavoriteSyncInterval(seconds);
-        var displayText = GetIntervalDisplayText(seconds);
-        Log4.Info($"즐겨찾기 동기화 주기 설정: {displayText}");
-        _viewModel.StatusMessage = $"즐겨찾기 동기화 주기: {displayText}";
-        UpdateFavoriteSyncIntervalCurrentDisplay(seconds);
-
-        // 설정 저장
-        App.Settings.UserPreferences.FavoriteSyncIntervalSeconds = seconds;
-        App.Settings.SaveUserPreferences();
-    }
-
-    private void UpdateFavoriteSyncIntervalCurrentDisplay(int? seconds = null)
-    {
-        seconds ??= _viewModel.FavoriteSyncIntervalSeconds;
-        if (MenuFavoriteSyncIntervalCurrent != null)
-        {
-            MenuFavoriteSyncIntervalCurrent.Header = $"현재: {GetIntervalDisplayText(seconds.Value)}";
-        }
-
-        // 즐겨찾기 동기화 주기 메뉴 하이라이팅
-        var highlightColor = new System.Windows.Media.SolidColorBrush(
-            (System.Windows.Media.Color)System.Windows.Media.ColorConverter.ConvertFromString("#2196F3"));
-
-        var menuItems = new System.Windows.Controls.MenuItem?[] { MenuFavoriteSyncInterval1s, MenuFavoriteSyncInterval5s, MenuFavoriteSyncInterval10s, MenuFavoriteSyncInterval30s, MenuFavoriteSyncInterval1m, MenuFavoriteSyncInterval5m };
-        var intervalSeconds = new[] { 1, 5, 10, 30, 60, 300 };
-
-        for (int i = 0; i < menuItems.Length; i++)
-        {
-            if (menuItems[i] != null)
-            {
-                bool isSelected = seconds == intervalSeconds[i];
-                menuItems[i]!.ClearValue(System.Windows.Controls.Control.ForegroundProperty);
-                if (isSelected)
-                    menuItems[i]!.Foreground = highlightColor;
-            }
-        }
-    }
-
-    // 전체메일 동기화 주기 설정
-    private void MenuFullSyncInterval_Click(object sender, RoutedEventArgs e)
-    {
-        if (sender is System.Windows.Controls.MenuItem menuItem && menuItem.Tag is string tagStr && int.TryParse(tagStr, out int seconds))
-        {
-            SetFullSyncInterval(seconds);
-        }
-    }
-
-    private void SetFullSyncInterval(int seconds)
-    {
-        _viewModel.SetFullSyncInterval(seconds);
-        var displayText = GetIntervalDisplayText(seconds);
-        Log4.Info($"전체메일 동기화 주기 설정: {displayText}");
-        _viewModel.StatusMessage = $"전체메일 동기화 주기: {displayText}";
-        UpdateFullSyncIntervalCurrentDisplay(seconds);
-
-        // 설정 저장
-        App.Settings.UserPreferences.FullSyncIntervalSeconds = seconds;
-        App.Settings.SaveUserPreferences();
-    }
-
-    private void UpdateFullSyncIntervalCurrentDisplay(int? seconds = null)
-    {
-        seconds ??= _viewModel.FullSyncIntervalSeconds;
-        if (MenuFullSyncIntervalCurrent != null)
-        {
-            MenuFullSyncIntervalCurrent.Header = $"현재: {GetIntervalDisplayText(seconds.Value)}";
-        }
-
-        // 전체메일 동기화 주기 메뉴 하이라이팅
-        var highlightColor = new System.Windows.Media.SolidColorBrush(
-            (System.Windows.Media.Color)System.Windows.Media.ColorConverter.ConvertFromString("#2196F3"));
-
-        var menuItems = new System.Windows.Controls.MenuItem?[] { MenuFullSyncInterval1s, MenuFullSyncInterval5s, MenuFullSyncInterval10s, MenuFullSyncInterval30s, MenuFullSyncInterval1m, MenuFullSyncInterval5m, MenuFullSyncInterval10m, MenuFullSyncInterval30m, MenuFullSyncInterval1h };
-        var intervalSeconds = new[] { 1, 5, 10, 30, 60, 300, 600, 1800, 3600 };
-
-        for (int i = 0; i < menuItems.Length; i++)
-        {
-            if (menuItems[i] != null)
-            {
-                bool isSelected = seconds == intervalSeconds[i];
-                menuItems[i]!.ClearValue(System.Windows.Controls.Control.ForegroundProperty);
-                if (isSelected)
-                    menuItems[i]!.Foreground = highlightColor;
-            }
-        }
-    }
-
-    // 즐겨찾기 AI 분석 주기 설정
-    private void MenuFavoriteAnalysisInterval_Click(object sender, RoutedEventArgs e)
-    {
-        if (sender is System.Windows.Controls.MenuItem menuItem && menuItem.Tag is string tagStr && int.TryParse(tagStr, out int seconds))
-        {
-            SetFavoriteAnalysisInterval(seconds);
-        }
-    }
-
-    private void SetFavoriteAnalysisInterval(int seconds)
-    {
-        _viewModel.SetFavoriteAnalysisInterval(seconds);
-        var displayText = GetIntervalDisplayText(seconds);
-        Log4.Info($"즐겨찾기 AI 분석 주기 설정: {displayText}");
-        _viewModel.StatusMessage = $"즐겨찾기 AI 분석 주기: {displayText}";
-        UpdateFavoriteAnalysisIntervalCurrentDisplay(seconds);
-
-        // 설정 저장
-        App.Settings.UserPreferences.FavoriteAnalysisIntervalSeconds = seconds;
-        App.Settings.SaveUserPreferences();
-    }
-
-    private void UpdateFavoriteAnalysisIntervalCurrentDisplay(int? seconds = null)
-    {
-        seconds ??= _viewModel.FavoriteAnalysisIntervalSeconds;
-        if (MenuFavoriteAnalysisIntervalCurrent != null)
-        {
-            MenuFavoriteAnalysisIntervalCurrent.Header = $"현재: {GetIntervalDisplayText(seconds.Value)}";
-        }
-
-        // 즐겨찾기 AI 분석 주기 메뉴 하이라이팅
-        var highlightColor = new System.Windows.Media.SolidColorBrush(
-            (System.Windows.Media.Color)System.Windows.Media.ColorConverter.ConvertFromString("#2196F3"));
-
-        var menuItems = new System.Windows.Controls.MenuItem?[] { MenuFavoriteAnalysisInterval1s, MenuFavoriteAnalysisInterval5s, MenuFavoriteAnalysisInterval10s, MenuFavoriteAnalysisInterval30s, MenuFavoriteAnalysisInterval1m, MenuFavoriteAnalysisInterval5m };
-        var intervalSeconds = new[] { 1, 5, 10, 30, 60, 300 };
-
-        for (int i = 0; i < menuItems.Length; i++)
-        {
-            if (menuItems[i] != null)
-            {
-                bool isSelected = seconds == intervalSeconds[i];
-                menuItems[i]!.ClearValue(System.Windows.Controls.Control.ForegroundProperty);
-                if (isSelected)
-                    menuItems[i]!.Foreground = highlightColor;
-            }
-        }
-    }
-
-    // 전체메일 AI 분석 주기 설정
-    private void MenuFullAnalysisInterval_Click(object sender, RoutedEventArgs e)
-    {
-        if (sender is System.Windows.Controls.MenuItem menuItem && menuItem.Tag is string tagStr && int.TryParse(tagStr, out int seconds))
-        {
-            SetFullAnalysisInterval(seconds);
-        }
-    }
-
-    private void SetFullAnalysisInterval(int seconds)
-    {
-        _viewModel.SetFullAnalysisInterval(seconds);
-        var displayText = GetIntervalDisplayText(seconds);
-        Log4.Info($"전체메일 AI 분석 주기 설정: {displayText}");
-        _viewModel.StatusMessage = $"전체메일 AI 분석 주기: {displayText}";
-        UpdateFullAnalysisIntervalCurrentDisplay(seconds);
-
-        // 설정 저장
-        App.Settings.UserPreferences.FullAnalysisIntervalSeconds = seconds;
-        App.Settings.SaveUserPreferences();
-    }
-
-    private void UpdateFullAnalysisIntervalCurrentDisplay(int? seconds = null)
-    {
-        seconds ??= _viewModel.FullAnalysisIntervalSeconds;
-        if (MenuFullAnalysisIntervalCurrent != null)
-        {
-            MenuFullAnalysisIntervalCurrent.Header = $"현재: {GetIntervalDisplayText(seconds.Value)}";
-        }
-
-        // 전체메일 AI 분석 주기 메뉴 하이라이팅
-        var highlightColor = new System.Windows.Media.SolidColorBrush(
-            (System.Windows.Media.Color)System.Windows.Media.ColorConverter.ConvertFromString("#2196F3"));
-
-        var menuItems = new System.Windows.Controls.MenuItem?[] { MenuFullAnalysisInterval1s, MenuFullAnalysisInterval5s, MenuFullAnalysisInterval10s, MenuFullAnalysisInterval30s, MenuFullAnalysisInterval1m, MenuFullAnalysisInterval5m, MenuFullAnalysisInterval10m, MenuFullAnalysisInterval30m, MenuFullAnalysisInterval1h };
-        var intervalSeconds = new[] { 1, 5, 10, 30, 60, 300, 600, 1800, 3600 };
-
-        for (int i = 0; i < menuItems.Length; i++)
-        {
-            if (menuItems[i] != null)
-            {
-                bool isSelected = seconds == intervalSeconds[i];
-                menuItems[i]!.ClearValue(System.Windows.Controls.Control.ForegroundProperty);
-                if (isSelected)
-                    menuItems[i]!.Foreground = highlightColor;
-            }
-        }
-    }
-
-    private static string GetIntervalDisplayText(int seconds)
-    {
-        return seconds switch
-        {
-            < 60 => $"{seconds}초",
-            60 => "1분",
-            < 3600 => $"{seconds / 60}분",
-            3600 => "1시간",
-            _ => $"{seconds / 3600}시간"
-        };
-    }
-
-    // 즐겨찾기 동기화 기간 설정 (신규)
-    private void MenuFavoriteSyncPeriod_Click(object sender, RoutedEventArgs e)
-    {
-        if (sender is System.Windows.Controls.MenuItem menuItem && menuItem.Tag is string tagStr)
-        {
-            var parts = tagStr.Split(':');
-            if (parts.Length == 2 && int.TryParse(parts[1], out int value))
-            {
-                SetFavoriteSyncPeriod(parts[0], value);
-            }
-        }
-    }
-
-    private void SetFavoriteSyncPeriod(string periodType, int value)
-    {
-        App.Settings.UserPreferences.FavoriteSyncPeriodType = periodType;
-        App.Settings.UserPreferences.FavoriteSyncPeriodValue = value;
-        App.Settings.SaveUserPreferences();
-
-        var displayText = GetPeriodDisplayText(periodType, value);
-        Log4.Info($"즐겨찾기 동기화 기간 설정: {displayText}");
-        _viewModel.StatusMessage = $"즐겨찾기 동기화 기간: {displayText}";
-        UpdateFavoriteSyncPeriodCurrentDisplay(periodType, value);
-    }
-
-    private void UpdateFavoriteSyncPeriodCurrentDisplay(string? periodType = null, int? value = null)
-    {
-        periodType ??= App.Settings.UserPreferences.FavoriteSyncPeriodType;
-        value ??= App.Settings.UserPreferences.FavoriteSyncPeriodValue;
-
-        if (MenuFavoriteSyncPeriodCurrent != null)
-        {
-            MenuFavoriteSyncPeriodCurrent.Header = $"현재: {GetPeriodDisplayText(periodType, value.Value)}";
-        }
-
-        // 즐겨찾기 동기화 기간 메뉴 하이라이팅
-        var highlightColor = new System.Windows.Media.SolidColorBrush(
-            (System.Windows.Media.Color)System.Windows.Media.ColorConverter.ConvertFromString("#0078D4"));
-
-        var menuItems = new System.Windows.Controls.MenuItem?[] { MenuFavoriteSyncPeriod5, MenuFavoriteSyncPeriodDay, MenuFavoriteSyncPeriodWeek, MenuFavoriteSyncPeriodMonth, MenuFavoriteSyncPeriodYear, MenuFavoriteSyncPeriodAll };
-        var periodTypes = new[] { ("Count", 5), ("Days", 1), ("Weeks", 1), ("Months", 1), ("Years", 1), ("All", 0) };
-
-        for (int i = 0; i < menuItems.Length; i++)
-        {
-            if (menuItems[i] != null)
-            {
-                bool isSelected = periodType == periodTypes[i].Item1 && value == periodTypes[i].Item2;
-                menuItems[i]!.ClearValue(System.Windows.Controls.Control.ForegroundProperty);
-                if (isSelected)
-                    menuItems[i]!.Foreground = highlightColor;
-            }
-        }
-    }
-
-    // 즐겨찾기 AI 분석 기간 설정 (신규)
-    private void MenuFavoriteAiPeriod_Click(object sender, RoutedEventArgs e)
-    {
-        if (sender is System.Windows.Controls.MenuItem menuItem && menuItem.Tag is string tagStr)
-        {
-            var parts = tagStr.Split(':');
-            if (parts.Length == 2 && int.TryParse(parts[1], out int value))
-            {
-                SetFavoriteAiPeriod(parts[0], value);
-            }
-        }
-    }
-
-    private void SetFavoriteAiPeriod(string periodType, int value)
-    {
-        App.Settings.UserPreferences.FavoriteAiPeriodType = periodType;
-        App.Settings.UserPreferences.FavoriteAiPeriodValue = value;
-        App.Settings.SaveUserPreferences();
-
-        var displayText = GetPeriodDisplayText(periodType, value);
-        Log4.Info($"즐겨찾기 AI 분석 기간 설정: {displayText}");
-        _viewModel.StatusMessage = $"즐겨찾기 AI 분석 기간: {displayText}";
-        UpdateFavoriteAiPeriodCurrentDisplay(periodType, value);
-    }
-
-    private void UpdateFavoriteAiPeriodCurrentDisplay(string? periodType = null, int? value = null)
-    {
-        periodType ??= App.Settings.UserPreferences.FavoriteAiPeriodType;
-        value ??= App.Settings.UserPreferences.FavoriteAiPeriodValue;
-
-        if (MenuFavoriteAiPeriodCurrent != null)
-        {
-            MenuFavoriteAiPeriodCurrent.Header = $"현재: {GetPeriodDisplayText(periodType, value.Value)}";
-        }
-
-        // 즐겨찾기 AI 분석 기간 메뉴 하이라이팅
-        var highlightColor = new System.Windows.Media.SolidColorBrush(
-            (System.Windows.Media.Color)System.Windows.Media.ColorConverter.ConvertFromString("#FFD700"));
-
-        var menuItems = new System.Windows.Controls.MenuItem?[] { MenuFavoriteAiPeriod5, MenuFavoriteAiPeriodDay, MenuFavoriteAiPeriodWeek, MenuFavoriteAiPeriodMonth, MenuFavoriteAiPeriodYear, MenuFavoriteAiPeriodAll };
-        var periodTypes = new[] { ("Count", 5), ("Days", 1), ("Weeks", 1), ("Months", 1), ("Years", 1), ("All", 0) };
-
-        for (int i = 0; i < menuItems.Length; i++)
-        {
-            if (menuItems[i] != null)
-            {
-                bool isSelected = periodType == periodTypes[i].Item1 && value == periodTypes[i].Item2;
-                menuItems[i]!.ClearValue(System.Windows.Controls.Control.ForegroundProperty);
-                if (isSelected)
-                    menuItems[i]!.Foreground = highlightColor;
-            }
-        }
-    }
-
-    private static string GetPeriodDisplayText(string periodType, int value)
-    {
-        return periodType switch
-        {
-            "Count" => $"최근 {value}건",
-            "Days" => value == 1 ? "하루" : $"{value}일",
-            "Weeks" => value == 1 ? "1주일" : $"{value}주",
-            "Months" => value == 1 ? "1달" : $"{value}개월",
-            "Years" => value == 1 ? "1년" : $"{value}년",
-            "All" => "전체",
-            _ => "알 수 없음"
-        };
-    }
-
-    /// <summary>
-    /// 동기화 상세 설정 다이얼로그 열기
-    /// </summary>
-    private void MenuSyncSettings_Click(object sender, RoutedEventArgs e)
-    {
-        Log4.Info("동기화 설정 다이얼로그 열기");
-
-        var dialog = new SyncSettingsDialog
-        {
-            Owner = this
-        };
-
-        // 현재 설정 로드
-        dialog.LoadSettings(
-            _viewModel.MailSyncPeriodSettings ?? SyncPeriodSettings.Default,
-            _viewModel.AiAnalysisPeriodSettings ?? SyncPeriodSettings.Default
-        );
-
-        // 다이얼로그 표시
-        if (dialog.ShowDialog() == true && dialog.IsSaved)
-        {
-            // 메일 동기화 기간 적용 및 저장
-            if (dialog.MailSyncSettings != null)
-            {
-                _viewModel.MailSyncPeriodSettings = dialog.MailSyncSettings;
-                App.Settings.UserPreferences.MailSyncPeriodType = dialog.MailSyncSettings.PeriodType.ToString();
-                App.Settings.UserPreferences.MailSyncPeriodValue = dialog.MailSyncSettings.Value;
-            }
-
-            // AI 분석 기간 적용 및 저장
-            if (dialog.AiAnalysisSettings != null)
-            {
-                _viewModel.AiAnalysisPeriodSettings = dialog.AiAnalysisSettings;
-                App.Settings.UserPreferences.AiAnalysisPeriodType = dialog.AiAnalysisSettings.PeriodType.ToString();
-                App.Settings.UserPreferences.AiAnalysisPeriodValue = dialog.AiAnalysisSettings.Value;
-            }
-
-            // 설정 파일에 저장
-            App.Settings.SaveUserPreferences();
-
-            _viewModel.StatusMessage = "동기화 설정이 저장되었습니다.";
-        }
-    }
 
     /// <summary>
     /// 전체 재동기화 메뉴 클릭
@@ -4169,15 +3538,6 @@ public partial class MainWindow : FluentWindow
     {
         Log4.Info("네비게이션: 설정 모드");
         ShowSettingsView();
-    }
-
-    /// <summary>
-    /// 타이틀바 설정 버튼 클릭 (동기화 설정으로 연결)
-    /// </summary>
-    private void SettingsButton_Click(object sender, RoutedEventArgs e)
-    {
-        Log4.Info("타이틀바: 동기화 설정");
-        MenuSyncSettings_Click(sender, e);
     }
 
     /// <summary>
@@ -9610,7 +8970,6 @@ public partial class MainWindow : FluentWindow
         Log4.Info("타이틀바: GPU 모드 토글");
         Services.Theme.RenderModeService.Instance.ToggleGpuMode();
         UpdateGpuIcon();
-        UpdateGpuModeCheckmark(); // 메뉴 체크마크 동기화
         SyncSettingsUIFromMenu(); // 설정 UI 동기화
 
         // 사용자에게 재시작 안내
@@ -9649,30 +9008,6 @@ public partial class MainWindow : FluentWindow
         // AI 분석 별 색상 업데이트 (라이트모드: 진한 주황, 다크모드: 밝은 골드)
         UpdateAISyncStarColors(themeService.IsDarkMode);
 
-        // 테마 메뉴 하이라이팅 업데이트
-        UpdateThemeMenuHighlight(themeService.IsDarkMode);
-    }
-
-    /// <summary>
-    /// 테마 메뉴 하이라이팅 업데이트
-    /// </summary>
-    private void UpdateThemeMenuHighlight(bool isDarkMode)
-    {
-        var highlightColor = new System.Windows.Media.SolidColorBrush(
-            (System.Windows.Media.Color)System.Windows.Media.ColorConverter.ConvertFromString("#2196F3"));
-        var normalBrush = (System.Windows.Media.Brush)FindResource("TextFillColorPrimaryBrush");
-
-        if (MenuThemeDarkIcon != null && MenuThemeDarkText != null)
-        {
-            MenuThemeDarkIcon.Foreground = isDarkMode ? highlightColor : normalBrush;
-            MenuThemeDarkText.Foreground = isDarkMode ? highlightColor : normalBrush;
-        }
-
-        if (MenuThemeLightIcon != null && MenuThemeLightText != null)
-        {
-            MenuThemeLightIcon.Foreground = isDarkMode ? normalBrush : highlightColor;
-            MenuThemeLightText.Foreground = isDarkMode ? normalBrush : highlightColor;
-        }
     }
 
     /// <summary>
@@ -9689,18 +9024,6 @@ public partial class MainWindow : FluentWindow
                 (System.Windows.Media.Color)System.Windows.Media.ColorConverter.ConvertFromString("#FFDF00"));
             AISyncStar3.Foreground = new System.Windows.Media.SolidColorBrush(
                 (System.Windows.Media.Color)System.Windows.Media.ColorConverter.ConvertFromString("#FFC125"));
-
-            // AI 메뉴 아이콘 색상 (다크모드)
-            MenuAISyncPauseIcon.Foreground = new System.Windows.Media.SolidColorBrush(
-                (System.Windows.Media.Color)System.Windows.Media.ColorConverter.ConvertFromString("#FFD700")); // 분석 중지: 노랑
-            MenuAISyncResumeIcon.Foreground = new System.Windows.Media.SolidColorBrush(
-                (System.Windows.Media.Color)System.Windows.Media.ColorConverter.ConvertFromString("#888888")); // 분석 시작: 회색
-
-            // 메일 동기화 메뉴 아이콘 색상 (다크모드)
-            MenuMailSyncPauseIcon.Foreground = new System.Windows.Media.SolidColorBrush(
-                (System.Windows.Media.Color)System.Windows.Media.ColorConverter.ConvertFromString("#2196F3")); // 동기화 중지: 파랑
-            MenuMailSyncResumeIcon.Foreground = new System.Windows.Media.SolidColorBrush(
-                (System.Windows.Media.Color)System.Windows.Media.ColorConverter.ConvertFromString("#888888")); // 동기화 시작: 회색
         }
         else
         {
@@ -9711,18 +9034,6 @@ public partial class MainWindow : FluentWindow
                 (System.Windows.Media.Color)System.Windows.Media.ColorConverter.ConvertFromString("#D98C00"));
             AISyncStar3.Foreground = new System.Windows.Media.SolidColorBrush(
                 (System.Windows.Media.Color)System.Windows.Media.ColorConverter.ConvertFromString("#CC7A00"));
-
-            // AI 메뉴 아이콘 색상 (라이트모드: 진한 색상)
-            MenuAISyncPauseIcon.Foreground = new System.Windows.Media.SolidColorBrush(
-                (System.Windows.Media.Color)System.Windows.Media.ColorConverter.ConvertFromString("#E69500")); // 분석 중지: 진한 주황
-            MenuAISyncResumeIcon.Foreground = new System.Windows.Media.SolidColorBrush(
-                (System.Windows.Media.Color)System.Windows.Media.ColorConverter.ConvertFromString("#555555")); // 분석 시작: 진한 회색
-
-            // 메일 동기화 메뉴 아이콘 색상 (라이트모드: 진한 색상)
-            MenuMailSyncPauseIcon.Foreground = new System.Windows.Media.SolidColorBrush(
-                (System.Windows.Media.Color)System.Windows.Media.ColorConverter.ConvertFromString("#1565C0")); // 동기화 중지: 진한 파랑
-            MenuMailSyncResumeIcon.Foreground = new System.Windows.Media.SolidColorBrush(
-                (System.Windows.Media.Color)System.Windows.Media.ColorConverter.ConvertFromString("#555555")); // 동기화 시작: 진한 회색
         }
     }
 
@@ -9800,25 +9111,6 @@ public partial class MainWindow : FluentWindow
                 return result;
         }
         return null;
-    }
-
-    /// <summary>
-    /// 재로그인 메뉴 클릭
-    /// </summary>
-    private void MenuRelogin_Click(object sender, RoutedEventArgs e)
-    {
-        Log4.Info("메뉴: 재로그인");
-        // 로그아웃 후 다시 로그인
-        MenuLogout_Click(sender, e);
-    }
-
-    /// <summary>
-    /// 종료 메뉴 클릭
-    /// </summary>
-    private void MenuExit_Click(object sender, RoutedEventArgs e)
-    {
-        Log4.Info("메뉴: 종료");
-        Application.Current.Shutdown();
     }
 
     #endregion
@@ -17555,6 +16847,25 @@ public partial class MainWindow : FluentWindow
 
         intervalGroup.Child = intervalStack;
         SettingsContentPanel.Children.Add(intervalGroup);
+
+        // 전체 재동기화 버튼
+        var resyncGroup = CreateSettingsGroupBorder();
+        var resyncStack = new StackPanel();
+        resyncStack.Children.Add(CreateSettingsLabel("전체 재동기화"));
+        resyncStack.Children.Add(CreateSettingsDescription("메일, 캘린더, 채팅, 원노트를 모두 다시 동기화합니다."));
+
+        var resyncButton = new Wpf.Ui.Controls.Button
+        {
+            Content = "전체 재동기화",
+            Appearance = Wpf.Ui.Controls.ControlAppearance.Primary,
+            Margin = new Thickness(0, 8, 0, 0),
+            Padding = new Thickness(24, 8, 24, 8)
+        };
+        resyncButton.Click += MenuForceResync_Click;
+        resyncStack.Children.Add(resyncButton);
+
+        resyncGroup.Child = resyncStack;
+        SettingsContentPanel.Children.Add(resyncGroup);
     }
 
     #endregion
@@ -18657,16 +17968,14 @@ public partial class MainWindow : FluentWindow
         {
             if (_isUpdatingSettingsUI) return;
             Services.Theme.RenderModeService.Instance.SetGpuMode(true);
-            UpdateGpuModeCheckmark(); // 상단 메뉴 체크마크 동기화
-            Log4.Info("설정 UI: GPU 모드 활성화 (상단 메뉴 동기화, 재시작 필요)");
+            Log4.Info("설정 UI: GPU 모드 활성화 (재시작 필요)");
             ShowSettingsMessage("GPU 가속이 활성화되었습니다. 변경 사항은 앱 재시작 후 적용됩니다.", isError: false);
         };
         _settingsGpuCheckBox.Unchecked += (s, e) =>
         {
             if (_isUpdatingSettingsUI) return;
             Services.Theme.RenderModeService.Instance.SetGpuMode(false);
-            UpdateGpuModeCheckmark(); // 상단 메뉴 체크마크 동기화
-            Log4.Info("설정 UI: GPU 모드 비활성화 (상단 메뉴 동기화, 재시작 필요)");
+            Log4.Info("설정 UI: GPU 모드 비활성화 (재시작 필요)");
             ShowSettingsMessage("GPU 가속이 비활성화되었습니다. 변경 사항은 앱 재시작 후 적용됩니다.", isError: false);
         };
 
