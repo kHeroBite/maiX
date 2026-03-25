@@ -50,8 +50,8 @@
                 <Grid HorizontalAlignment="Stretch">
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="Auto"/>
-                        <ColumnDefinition Width="Auto"/>
                         <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="Auto"/>
                     </Grid.ColumnDefinitions>
 
                     <!-- Column 0: 로고 (mAiX - Ai 하늘색, X 도트 디자인) -->
@@ -84,9 +84,8 @@
                         </Canvas>
                     </StackPanel>
 
-                    <!-- Column 1: (메뉴 삭제됨) -->
-                    <!-- Column 2: 검색 영역 (폴더선택 + 검색창 + 고급검색) - 창 크기에 따라 축소 -->
-                    <Grid Grid.Column="2" HorizontalAlignment="Stretch" VerticalAlignment="Center" Margin="0,0,8,0">
+                    <!-- Column 1: 검색 영역 (폴더선택 + 검색창 + 고급검색) - 중앙 정렬 -->
+                    <Grid Grid.Column="1" HorizontalAlignment="Center" VerticalAlignment="Center" Margin="0,0,8,0">
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="Auto"/>
                             <ColumnDefinition Width="*" MinWidth="100"/>
@@ -7059,7 +7058,7 @@
                                                             <RowDefinition Height="Auto"/>
                                                         </Grid.RowDefinitions>
 
-                                                        <!-- 첫 번째 줄: STT 주기 -->
+                                                        <!-- 첫 번째 줄: STT on/off -->
                                                         <ToggleButton x:Name="OneNoteAutoSTTToggle" Grid.Row="0" Grid.Column="0"
                                                                       IsChecked="True"
                                                                       ToolTip="자동 STT 분석 (녹음 시 실시간 음성인식)"
@@ -7068,33 +7067,9 @@
                                                                       Click="OneNoteAutoSTTToggle_Click">
                                                             <ui:SymbolIcon Symbol="Mic16" FontSize="12" Foreground="#333333"/>
                                                         </ToggleButton>
-                                                        <TextBlock Grid.Row="0" Grid.Column="1" Text="STT" FontSize="12" FontWeight="SemiBold"
+                                                        <TextBlock Grid.Row="0" Grid.Column="1" Grid.ColumnSpan="2" Text="STT" FontSize="12" FontWeight="SemiBold"
                                                                    VerticalAlignment="Center" Margin="0,0,8,6"
                                                                    Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
-                                                        <ComboBox x:Name="OneNoteSTTIntervalSelector" Grid.Row="0" Grid.Column="2"
-                                                                  Width="90" Height="28"
-                                                                  FontSize="11"
-                                                                  Padding="8,4"
-                                                                  SelectedIndex="7"
-                                                                  HorizontalAlignment="Left"
-                                                                  Margin="0,0,0,6"
-                                                                  Background="{DynamicResource ControlFillColorDefaultBrush}"
-                                                                  BorderBrush="{DynamicResource ControlStrokeColorDefaultBrush}"
-                                                                  BorderThickness="1"
-                                                                  SelectionChanged="OneNoteSTTIntervalSelector_SelectionChanged"
-                                                                  ToolTip="STT 분석 주기 (실시간 청크 간격)">
-                                                            <ComboBoxItem Content="100ms" Tag="0.1"/>
-                                                            <ComboBoxItem Content="200ms" Tag="0.2"/>
-                                                            <ComboBoxItem Content="500ms" Tag="0.5"/>
-                                                            <ComboBoxItem Content="1초" Tag="1"/>
-                                                            <ComboBoxItem Content="3초" Tag="3"/>
-                                                            <ComboBoxItem Content="5초" Tag="5"/>
-                                                            <ComboBoxItem Content="10초" Tag="10"/>
-                                                            <ComboBoxItem Content="15초" Tag="15"/>
-                                                            <ComboBoxItem Content="20초" Tag="20"/>
-                                                            <ComboBoxItem Content="30초" Tag="30"/>
-                                                            <ComboBoxItem Content="1분" Tag="60"/>
-                                                        </ComboBox>
 
                                                         <!-- 화자분리 on/off (독립 옵션) -->
                                                         <CheckBox x:Name="OneNoteDiarizationCheckBox" Grid.Row="1" Grid.ColumnSpan="3"
@@ -7104,7 +7079,7 @@
                                                                   Checked="OneNoteDiarization_Changed"
                                                                   Unchecked="OneNoteDiarization_Changed"/>
 
-                                                        <!-- 두 번째 줄: 요약 주기 -->
+                                                        <!-- 두 번째 줄: 요약 on/off -->
                                                         <ToggleButton x:Name="OneNoteAutoSummaryToggle" Grid.Row="2" Grid.Column="0"
                                                                       IsChecked="True"
                                                                       ToolTip="자동 요약 (STT 결과를 AI로 요약)"
@@ -7113,27 +7088,9 @@
                                                                       Click="OneNoteAutoSummaryToggle_Click">
                                                             <ui:SymbolIcon Symbol="Sparkle16" FontSize="12" Foreground="#333333"/>
                                                         </ToggleButton>
-                                                        <TextBlock Grid.Row="2" Grid.Column="1" Text="요약" FontSize="12" FontWeight="SemiBold"
+                                                        <TextBlock Grid.Row="2" Grid.Column="1" Grid.ColumnSpan="2" Text="요약" FontSize="12" FontWeight="SemiBold"
                                                                    VerticalAlignment="Center" Margin="0,0,8,0"
                                                                    Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
-                                                        <ComboBox x:Name="OneNoteSummaryIntervalSelector" Grid.Row="2" Grid.Column="2"
-                                                                  Width="90" Height="28"
-                                                                  FontSize="11"
-                                                                  Padding="8,4"
-                                                                  SelectedIndex="2"
-                                                                  HorizontalAlignment="Left"
-                                                                  Background="{DynamicResource ControlFillColorDefaultBrush}"
-                                                                  BorderBrush="{DynamicResource ControlStrokeColorDefaultBrush}"
-                                                                  BorderThickness="1"
-                                                                  SelectionChanged="OneNoteSummaryIntervalSelector_SelectionChanged"
-                                                                  ToolTip="AI 요약 주기">
-                                                            <ComboBoxItem Content="10초" Tag="10"/>
-                                                            <ComboBoxItem Content="20초" Tag="20"/>
-                                                            <ComboBoxItem Content="30초" Tag="30"/>
-                                                            <ComboBoxItem Content="1분" Tag="60"/>
-                                                            <ComboBoxItem Content="5분" Tag="300"/>
-                                                            <ComboBoxItem Content="10분" Tag="600"/>
-                                                        </ComboBox>
 
                                                         <!-- 구분선 -->
                                                         <Separator Grid.Row="3" Grid.ColumnSpan="3" Margin="0,8,0,4"/>

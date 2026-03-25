@@ -7262,45 +7262,6 @@ public partial class MainWindow : FluentWindow
     }
 
 
-    /// <summary>
-    /// STT 분석 주기 선택 변경
-    /// </summary>
-    private void OneNoteSTTIntervalSelector_SelectionChanged(object sender, System.Windows.Controls.SelectionChangedEventArgs e)
-    {
-        if (sender is System.Windows.Controls.ComboBox comboBox && comboBox.SelectedItem is System.Windows.Controls.ComboBoxItem selectedItem)
-        {
-            if (float.TryParse(selectedItem.Tag?.ToString(), System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out float seconds))
-            {
-                // ViewModel에 청크 간격 설정
-                if (_oneNoteViewModel != null)
-                {
-                    _oneNoteViewModel.SetSTTChunkInterval(seconds);
-                }
-                SaveOneNoteRecordingSettings();
-                Log4.Debug($"[OneNote] STT 분석 주기 변경: {seconds}초");
-            }
-        }
-    }
-
-    /// <summary>
-    /// 요약 주기 선택 변경
-    /// </summary>
-    private void OneNoteSummaryIntervalSelector_SelectionChanged(object sender, System.Windows.Controls.SelectionChangedEventArgs e)
-    {
-        if (sender is System.Windows.Controls.ComboBox comboBox && comboBox.SelectedItem is System.Windows.Controls.ComboBoxItem selectedItem)
-        {
-            if (int.TryParse(selectedItem.Tag?.ToString(), out int seconds))
-            {
-                // ViewModel에 요약 간격 설정
-                if (_oneNoteViewModel != null)
-                {
-                    _oneNoteViewModel.SetSummaryInterval(seconds);
-                }
-                SaveOneNoteRecordingSettings();
-                Log4.Debug($"[OneNote] 요약 주기 변경: {seconds}초");
-            }
-        }
-    }
 
     /// <summary>
     /// STT 후처리 체크박스 변경
@@ -7370,10 +7331,11 @@ public partial class MainWindow : FluentWindow
 
         try
         {
+            var prefs = App.Settings?.UserPreferences;
             var settings = new
             {
-                STTIntervalSeconds = float.TryParse((OneNoteSTTIntervalSelector?.SelectedItem as System.Windows.Controls.ComboBoxItem)?.Tag?.ToString(), System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out float sttInterval) ? sttInterval : 15f,
-                SummaryIntervalSeconds = int.TryParse((OneNoteSummaryIntervalSelector?.SelectedItem as System.Windows.Controls.ComboBoxItem)?.Tag?.ToString(), out int summaryInterval) ? summaryInterval : 30,
+                STTIntervalSeconds = prefs?.STTIntervalSeconds ?? 15f,
+                SummaryIntervalSeconds = prefs?.SummaryIntervalSeconds ?? 30,
                 DiarizationEnabled = OneNoteDiarizationCheckBox.IsChecked == true,
                 PostSTTEnabled = OneNotePostSTTCheckBox.IsChecked == true,
                 PostSummaryEnabled = OneNotePostSummaryCheckBox.IsChecked == true,
@@ -7429,42 +7391,31 @@ public partial class MainWindow : FluentWindow
             using var doc = System.Text.Json.JsonDocument.Parse(json);
             var root = doc.RootElement;
 
-            // STT 분석 주기
+            // STT 분석 주기 — UserPreferences에서 ViewModel으로 직접 전달
+            var prefs = App.Settings?.UserPreferences;
             if (root.TryGetProperty("STTIntervalSeconds", out var sttIntervalProp))
             {
                 var intervalSeconds = (float)sttIntervalProp.GetDouble();
                 Log4.Debug($"[OneNote] STT 주기 설정: {intervalSeconds}초");
-                for (int i = 0; i < OneNoteSTTIntervalSelector.Items.Count; i++)
-                {
-                    if (OneNoteSTTIntervalSelector.Items[i] is System.Windows.Controls.ComboBoxItem item &&
-                        float.TryParse(item.Tag?.ToString(), System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out float itemSeconds) &&
-                        Math.Abs(itemSeconds - intervalSeconds) < 0.01f)
-                    {
-                        OneNoteSTTIntervalSelector.SelectedIndex = i;
-                        break;
-                    }
-                }
-                // ViewModel에도 설정
+                if (prefs != null) prefs.STTIntervalSeconds = intervalSeconds;
                 _oneNoteViewModel?.SetSTTChunkInterval(intervalSeconds);
             }
+            else
+            {
+                _oneNoteViewModel?.SetSTTChunkInterval(prefs?.STTIntervalSeconds ?? 15f);
+            }
 
-            // 요약 주기
+            // 요약 주기 — UserPreferences에서 ViewModel으로 직접 전달
             if (root.TryGetProperty("SummaryIntervalSeconds", out var summaryIntervalProp))
             {
                 var intervalSeconds = summaryIntervalProp.GetInt32();
                 Log4.Debug($"[OneNote] 요약 주기 설정: {intervalSeconds}초");
-                for (int i = 0; i < OneNoteSummaryIntervalSelector.Items.Count; i++)
-                {
-                    if (OneNoteSummaryIntervalSelector.Items[i] is System.Windows.Controls.ComboBoxItem item &&
-                        int.TryParse(item.Tag?.ToString(), out int itemSeconds) &&
-                        itemSeconds == intervalSeconds)
-                    {
-                        OneNoteSummaryIntervalSelector.SelectedIndex = i;
-                        break;
-                    }
-                }
-                // ViewModel에도 설정
+                if (prefs != null) prefs.SummaryIntervalSeconds = intervalSeconds;
                 _oneNoteViewModel?.SetSummaryInterval(intervalSeconds);
+            }
+            else
+            {
+                _oneNoteViewModel?.SetSummaryInterval(prefs?.SummaryIntervalSeconds ?? 30);
             }
 
             // 후처리 설정 로드
@@ -7494,7 +7445,7 @@ public partial class MainWindow : FluentWindow
                 if (_oneNoteViewModel != null) _oneNoteViewModel.IsDiarizationEnabled = diar;
             }
 
-            Log4.Info($"[OneNote] 녹음 설정 로드 완료: STT모델={root.GetProperty("STTModel").GetString()}, STT주기={root.GetProperty("STTIntervalSeconds").GetInt32()}초, 요약주기={root.GetProperty("SummaryIntervalSeconds").GetInt32()}초");
+            Log4.Info($"[OneNote] 녹음 설정 로드 완료: STT주기={prefs?.STTIntervalSeconds ?? 15f}초, 요약주기={prefs?.SummaryIntervalSeconds ?? 30}초");
         }
         catch (Exception ex)
         {
@@ -18576,6 +18527,84 @@ public partial class MainWindow : FluentWindow
             }
         });
 
+        // === 녹음 STT 분석 주기 그룹 ===
+        var sttIntervalGroup = CreateSettingsGroupBorder();
+        var sttIntervalStack = new StackPanel { Margin = new Thickness(16) };
+        sttIntervalStack.Children.Add(CreateSettingsLabel("녹음 STT 분석 주기"));
+
+        var sttIntervalDescText = new System.Windows.Controls.TextBlock
+        {
+            Text = "녹음 시 실시간 STT 분석 청크 간격을 설정합니다.",
+            FontSize = 12,
+            Foreground = (Brush)FindResource("TextFillColorSecondaryBrush"),
+            Margin = new Thickness(0, 4, 0, 8)
+        };
+        sttIntervalStack.Children.Add(sttIntervalDescText);
+
+        var sttIntervalComboBox = new System.Windows.Controls.ComboBox
+        {
+            Height = 32,
+            Width = 200,
+            HorizontalAlignment = HorizontalAlignment.Left
+        };
+        var sttIntervalItems = new (string 표시, float 값)[]
+        {
+            ("100ms", 0.1f), ("500ms", 0.5f), ("1초", 1f), ("2초", 2f),
+            ("5초", 5f), ("10초", 10f), ("30초", 30f), ("1분", 60f)
+        };
+        int sttSelectedIdx = 0;
+        for (int i = 0; i < sttIntervalItems.Length; i++)
+        {
+            var ci = new System.Windows.Controls.ComboBoxItem { Content = sttIntervalItems[i].표시, Tag = sttIntervalItems[i].값 };
+            sttIntervalComboBox.Items.Add(ci);
+            if (Math.Abs((float)sttIntervalItems[i].값 - prefs.STTIntervalSeconds) < 0.01f)
+                sttSelectedIdx = i;
+        }
+        sttIntervalComboBox.SelectedIndex = sttSelectedIdx;
+
+        sttIntervalStack.Children.Add(sttIntervalComboBox);
+        sttIntervalGroup.Child = sttIntervalStack;
+        SettingsContentPanel.Children.Add(sttIntervalGroup);
+
+        // === AI 요약 주기 그룹 ===
+        var summaryIntervalGroup = CreateSettingsGroupBorder();
+        var summaryIntervalStack = new StackPanel { Margin = new Thickness(16) };
+        summaryIntervalStack.Children.Add(CreateSettingsLabel("AI 요약 주기"));
+
+        var summaryIntervalDescText = new System.Windows.Controls.TextBlock
+        {
+            Text = "녹음 중 AI 요약을 생성하는 간격을 설정합니다.",
+            FontSize = 12,
+            Foreground = (Brush)FindResource("TextFillColorSecondaryBrush"),
+            Margin = new Thickness(0, 4, 0, 8)
+        };
+        summaryIntervalStack.Children.Add(summaryIntervalDescText);
+
+        var summaryIntervalComboBox = new System.Windows.Controls.ComboBox
+        {
+            Height = 32,
+            Width = 200,
+            HorizontalAlignment = HorizontalAlignment.Left
+        };
+        var summaryIntervalItems = new (string 표시, int 값)[]
+        {
+            ("10초", 10), ("30초", 30), ("1분", 60), ("2분", 120),
+            ("5분", 300), ("10분", 600)
+        };
+        int summarySelectedIdx = 0;
+        for (int i = 0; i < summaryIntervalItems.Length; i++)
+        {
+            var ci = new System.Windows.Controls.ComboBoxItem { Content = summaryIntervalItems[i].표시, Tag = summaryIntervalItems[i].값 };
+            summaryIntervalComboBox.Items.Add(ci);
+            if (summaryIntervalItems[i].값 == prefs.SummaryIntervalSeconds)
+                summarySelectedIdx = i;
+        }
+        summaryIntervalComboBox.SelectedIndex = summarySelectedIdx;
+
+        summaryIntervalStack.Children.Add(summaryIntervalComboBox);
+        summaryIntervalGroup.Child = summaryIntervalStack;
+        SettingsContentPanel.Children.Add(summaryIntervalGroup);
+
         // === TTS 모드 그룹 ===
         var ttsGroup = CreateSettingsGroupBorder();
         var ttsStack = new StackPanel { Margin = new Thickness(16) };
@@ -18643,6 +18672,14 @@ public partial class MainWindow : FluentWindow
                 ? "http://172.10.74.2:18989" : urlBox.Text.Trim();
             prefs.TtsMode = ttsServerRadio.IsChecked == true ? "server" : "client";
             prefs.ServerSttModel = serverModelComboBox.SelectedItem?.ToString() ?? "small";
+
+            // STT 분석 주기 저장
+            if (sttIntervalComboBox.SelectedItem is System.Windows.Controls.ComboBoxItem sttItem && sttItem.Tag is float sttVal)
+                prefs.STTIntervalSeconds = sttVal;
+
+            // AI 요약 주기 저장
+            if (summaryIntervalComboBox.SelectedItem is System.Windows.Controls.ComboBoxItem sumItem && sumItem.Tag is int sumVal)
+                prefs.SummaryIntervalSeconds = sumVal;
 
             App.Settings?.SaveUserPreferences();
 

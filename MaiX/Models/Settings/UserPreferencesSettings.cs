@@ -205,4 +205,16 @@ public class UserPreferencesSettings
     [XmlElement("ServerSttModel")]
     public string ServerSttModel { get; set; } = "small";
 
+    /// <summary>
+    /// 녹음 STT 분석 주기 (초 단위)
+    /// </summary>
+    [XmlElement("STTIntervalSeconds")]
+    public float STTIntervalSeconds { get; set; } = 15f;
+
+    /// <summary>
+    /// AI 요약 주기 (초 단위)
+    /// </summary>
+    [XmlElement("SummaryIntervalSeconds")]
+    public int SummaryIntervalSeconds { get; set; } = 30;
+
 }
