@@ -145,7 +145,7 @@ WSL에서_실행 (기본):
 - 코드 수정 도구 선택: `.cs` 파일은 Serena, Designer/문서/JSON/YAML 파일은 Claude Code Edit/Write를 기본으로 사용합니다.
 
 ### MCP MySQL 역할 분리 규칙
-> → kO SKILL.md "MCP_MySQL_역할_분리" 섹션 참조 (유일 출처)
+> → ko SKILL.md "MCP_MySQL_역할_분리" 섹션 참조 (유일 출처)
 
 ### MCP MySQL 한글 인코딩 규칙
 > → domain-database SKILL.md "UTF-8 인코딩 필수 정책" 섹션 참조 (유일 출처)

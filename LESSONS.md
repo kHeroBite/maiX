@@ -11,9 +11,9 @@
 
 ## L-046: 파이프라인 컨텍스트 복원 시 상태 전이 주의 (2026-02-17)
 
-- **문제**: 컨텍스트 복원 후 kO→kPlan→kDev→kTest 재전이 시 kDev가 증거 파일 클리어, kO가 상태를 KO로 리셋
-- **근본원인**: pipeline_gate.sh의 kDev 전이 시 증거 파일 삭제 로직 + kO의 상태 KO 리셋이 컨텍스트 복원 흐름과 충돌
-- **해결**: team-lead가 수동으로 파이프라인 상태를 DEV로 설정 후 kTest 재실행
+- **문제**: 컨텍스트 복원 후 ko→kplan→kdev→ktest 재전이 시 kdev가 증거 파일 클리어, ko가 상태를 KO로 리셋
+- **근본원인**: pipeline_gate.sh의 kdev 전이 시 증거 파일 삭제 로직 + ko의 상태 KO 리셋이 컨텍스트 복원 흐름과 충돌
+- **해결**: team-lead가 수동으로 파이프라인 상태를 DEV로 설정 후 ktest 재실행
 - **교훈**: 컨텍스트 복원 시 파이프라인 상태 전이를 최소화하고, 이미 완료된 단계의 재전이를 피해야 함
 - **심각도**: 중간
 
@@ -41,11 +41,11 @@
 - **심각도**: 낮음
 - **Level**: 1 (참고용)
 
-## L-050: 팀에이전트 파이프라인 복구 시 kDev 호출 전 상태를 PLAN으로 설정 (2026-02-17)
+## L-050: 팀에이전트 파이프라인 복구 시 kdev 호출 전 상태를 PLAN으로 설정 (2026-02-17)
 
-- **문제**: 팀에이전트에서 파이프라인 상태를 DEV로 수동 설정 후 kDev 호출 → pipeline_gate.sh 차단
-- **근본원인**: pipeline_gate.sh는 kDev를 PLAN 상태에서만 허용 (PLAN→DEV 전이는 gate 내부 관리)
-- **해결**: 수동 복구 시 `echo 'PLAN' > /tmp/claude_pipeline_state` 후 kDev 호출
+- **문제**: 팀에이전트에서 파이프라인 상태를 DEV로 수동 설정 후 kdev 호출 → pipeline_gate.sh 차단
+- **근본원인**: pipeline_gate.sh는 kdev를 PLAN 상태에서만 허용 (PLAN→DEV 전이는 gate 내부 관리)
+- **해결**: 수동 복구 시 `echo 'PLAN' > /tmp/claude_pipeline_state` 후 kdev 호출
 - **교훈**: 파이프라인 상태 수동 복구 시 항상 이전 단계 상태로 설정 (gate가 전이를 관리하므로)
 - **심각도**: 낮음
 - **Level**: 1 (참고용)
@@ -80,8 +80,8 @@
 ## L-054: WasapiCapture Shared Mode에서 WaveFormat 강제 교체 금지 (2026-03-16)
 
 - **문제**: WasapiCapture의 WaveFormat을 16bit PCM으로 강제 교체하면 `AudioClient.Initialize`에서 `E_INVALIDARG` 발생 → 녹음 버튼 클릭 시 아무 반응 없음
-- **근본원인**: WASAPI Shared Mode는 Windows 오디오 믹서가 포맷을 결정하므로 클라이언트가 WaveFormat을 변경할 수 없음 (보통 48kHz 32bit float 2ch)
-- **해결**: 캡처 장치 네이티브 포맷 유지 + `OnDataAvailable`에서 float→PCM, 스테레오→mono, 리샘플링(→16kHz) 후처리 변환
+- **근본원인**: WASAPI Shared Mode는 Windows 오디오 믹서가 포맷을 결정하므로 클라이언트가 WaveFormat을 변경할 수 없음 (보통 48khz 32bit float 2ch)
+- **해결**: 캡처 장치 네이티브 포맷 유지 + `OnDataAvailable`에서 float→PCM, 스테레오→mono, 리샘플링(→16khz) 후처리 변환
 - **교훈**: WASAPI Shared Mode 녹음 시 WaveFormat을 절대 교체하지 말고, 후처리 파이프라인(float→PCM, 채널 다운믹스, 리샘플링)으로 원하는 출력 포맷을 얻어야 함
 - **심각도**: 중간 (3건 연속 시도 실패 — L-051~L-053 관련)
 - **Level**: 2 (인지 — MEMORY 반영)
@@ -95,14 +95,14 @@
 - **심각도**: 중간 (4회 반복 수정 — L-051~L-054 관련)
 - **Level**: 2 (인지 — MEMORY 반영)
 
-## L-232: kTest spawn 프롬프트에 테스트 단계 생략 지시 금지 (2026-03-16)
+## L-232: ktest spawn 프롬프트에 테스트 단계 생략 지시 금지 (2026-03-16)
 
-- **문제**: kO가 kTest 에이전트 spawn 시 프롬프트에 "사용자 수동 테스트 예정", "배포 스킵" 등 테스트 단계 생략 지시를 포함하여 kTest가 build→deploy→run→quality 전 단계를 수행하지 못함
-- **근본원인**: 메인/kO가 사용자 의도를 과도 해석하여 kTest에 테스트 축소 지시를 삽입
-- **해결**: kO SKILL.md 제약 사항에 L-232 규칙 추가 — kTest spawn 프롬프트에 테스트 단계 생략 지시 금지
-- **교훈**: kTest는 항상 독립적으로 전 단계(build/deploy/run/quality) 수행해야 하며, 상위 단계에서 테스트 범위를 축소하는 지시를 삽입해서는 안 됨
+- **문제**: ko가 ktest 에이전트 spawn 시 프롬프트에 "사용자 수동 테스트 예정", "배포 스킵" 등 테스트 단계 생략 지시를 포함하여 ktest가 build→deploy→run→quality 전 단계를 수행하지 못함
+- **근본원인**: 메인/ko가 사용자 의도를 과도 해석하여 ktest에 테스트 축소 지시를 삽입
+- **해결**: ko SKILL.md 제약 사항에 L-232 규칙 추가 — ktest spawn 프롬프트에 테스트 단계 생략 지시 금지
+- **교훈**: ktest는 항상 독립적으로 전 단계(build/deploy/run/quality) 수행해야 하며, 상위 단계에서 테스트 범위를 축소하는 지시를 삽입해서는 안 됨
 - **심각도**: 중간
-- **Level**: 3 (강제 — kO SKILL.md 규칙 반영)
+- **Level**: 3 (강제 — ko SKILL.md 규칙 반영)
 
 ## L-239: NAudio WaveInEvent에 비표준 샘플레이트 하드코딩 금지 (2026-03-19)
 - **문제**: WaveInEvent fallback에서 16000Hz 하드코딩 → Windows MME API SupportedWaveFormat에 16000Hz 매핑 없음 → waveInOpen에서 InvalidParameter 오류 → 녹음 버튼 무반응
@@ -112,12 +112,12 @@
 - **심각도**: 높음 (녹음 기능 전체 불가)
 - **Level**: 2 (코드 패턴 — GetBestWaveFormat 강제 사용)
 
-## L-240: phase_guard.sh kInfra_* KO 전환 — 파이프라인 진행 중 덮어쓰기 금지 (2026-03-19)
-- **문제**: kDone 프롬프트에 Skill('kInfra_maix') 포함 시 phase_guard.sh PostToolUse hook이 DONE 상태를 KO로 덮어씀 → pipeline_order_guard.sh가 KO 상태에서 DONE spawn을 차단 → kDone spawn 실패 + 좀비 pane 생성
-- **근본원인**: phase_guard.sh의 kInfra_* 처리에 현재 상태 조건이 없어 IDLE/FINISH 이외 상태도 무조건 KO로 전환
-- **해결**: phase_guard.sh kInfra_* 분기에 IDLE/FINISH 상태일 때만 KO 전환하는 조건 추가 (kO 분기와 동일한 조건)
-- **교훈**: kDone 프롬프트에서 Skill('kInfra_*') 호출 제거로 회피 가능하나 hook 자체도 안전해야 함. IDLE/FINISH 이외 파이프라인 진행 중 상태는 어떤 스킬 로딩으로도 KO 전환 금지
-- **심각도**: 높음 (kDone 진입 완전 차단 → 좀비 pane 생성)
+## L-240: phase_guard.sh kinfra_* KO 전환 — 파이프라인 진행 중 덮어쓰기 금지 (2026-03-19)
+- **문제**: kdone 프롬프트에 Skill('kinfra_maix') 포함 시 phase_guard.sh PostToolUse hook이 DONE 상태를 KO로 덮어씀 → pipeline_order_guard.sh가 KO 상태에서 DONE spawn을 차단 → kdone spawn 실패 + 좀비 pane 생성
+- **근본원인**: phase_guard.sh의 kinfra_* 처리에 현재 상태 조건이 없어 IDLE/FINISH 이외 상태도 무조건 KO로 전환
+- **해결**: phase_guard.sh kinfra_* 분기에 IDLE/FINISH 상태일 때만 KO 전환하는 조건 추가 (ko 분기와 동일한 조건)
+- **교훈**: kdone 프롬프트에서 Skill('kinfra_*') 호출 제거로 회피 가능하나 hook 자체도 안전해야 함. IDLE/FINISH 이외 파이프라인 진행 중 상태는 어떤 스킬 로딩으로도 KO 전환 금지
+- **심각도**: 높음 (kdone 진입 완전 차단 → 좀비 pane 생성)
 - **Level**: 3 (강제 — phase_guard.sh hook 수정)
 
 ## L-241: WasapiCapture 버퍼 크기가 장치마다 다름 — 다단계 재시도 필수 (2026-03-19)
@@ -204,7 +204,7 @@
 
 - **문제**: Intel SST 마이크에서 WASAPI 캡처가 완전히 실패. 동일 IAudioClient 인스턴스로 다른 flags/format으로 4번 재시도했으나 모두 실패
 - **근본 원인**: COM 규약상 IAudioClient::Initialize()는 인스턴스당 단 1회만 호출 가능. 성공이든 실패든 1회 호출 후 내부 상태가 변경되어 재호출 시 AUDCLNT_E_ALREADY_INITIALIZED(0x88890002) 또는 E_FAIL 반환
-- **해결**: 각 폴백 시도마다 ComRelease 후 새 IAudioClient를 ActivateAudioClientById()로 재획득. 4단계 폴백: (1) MixFormat+flags=0, (2) MixFormat+AUTOCONVERT, (3) PCM 16bit/48kHz/1ch+flags=0, (4) PCM 16bit+AUTOCONVERT
+- **해결**: 각 폴백 시도마다 ComRelease 후 새 IAudioClient를 ActivateAudioClientById()로 재획득. 4단계 폴백: (1) MixFormat+flags=0, (2) MixFormat+AUTOCONVERT, (3) PCM 16bit/48khz/1ch+flags=0, (4) PCM 16bit+AUTOCONVERT
 - **교훈**: WASAPI COM 인터페이스에서 Initialize 재시도가 필요하면 반드시 기존 인스턴스를 Release하고 새 인스턴스를 Activate해야 함. 이는 IAudioClient뿐 아니라 일반적인 COM 패턴
 - **심각도**: 높음 (캡처 완전 실패 → 마이크 기능 사용 불가)
 - **Level**: 2 (인지)
@@ -218,10 +218,10 @@
 - **심각도**: 높음 (마이크 모니터링 + 녹음 모두 실패)
 - **Level**: 2 (인지)
 
-## L-252: 실시간 STT 샘플레이트 불일치 — 녹음 16kHz 데이터에 44100Hz 전달 시 음질 파괴 (2026-03-21)
+## L-252: 실시간 STT 샘플레이트 불일치 — 녹음 16khz 데이터에 44100Hz 전달 시 음질 파괴 (2026-03-21)
 
-- **문제**: 실시간 STT 청크 처리 시 녹음 포맷(16000Hz)과 다른 샘플레이트(44100Hz)를 ProcessRealtimeChunkAsync에 전달 → WAV 헤더에 잘못된 샘플레이트 기록 → Whisper가 2.76배 느린 속도로 해석하여 인식률 극저하
-- **근본 원인**: AudioRecordingService는 16000Hz로 캡처하지만, OnRealtimeChunkReady 이벤트 핸들러에서 하드코딩된 44100을 전달. 녹음 파일 STT는 파일에서 샘플레이트를 읽으므로 정상 동작했지만, 실시간 청크는 호출자가 직접 지정하는 구조
+- **문제**: 실시간 STT 청크 처리 시 녹음 포맷(16000Hz)과 다른 샘플레이트(44100Hz)를 ProcessRealtimeChunkasync에 전달 → WAV 헤더에 잘못된 샘플레이트 기록 → Whisper가 2.76배 느린 속도로 해석하여 인식률 극저하
+- **근본 원인**: AudioRecordingService는 16000Hz로 캡처하지만, OnRealtimeChunkready 이벤트 핸들러에서 하드코딩된 44100을 전달. 녹음 파일 STT는 파일에서 샘플레이트를 읽으므로 정상 동작했지만, 실시간 청크는 호출자가 직접 지정하는 구조
 - **해결**: sampleRate 파라미터를 16000으로 수정 + 기본값도 44100→16000으로 변경
 - **교훈**: 오디오 파이프라인에서 샘플레이트는 소스(캡처 장치)에서 싱크(STT 엔진)까지 일관되게 전달해야 함. 하드코딩된 매직넘버 대신 녹음 서비스의 실제 설정값을 참조할 것
 - **심각도**: 높음 (실시간 STT 완전 무용화)
@@ -255,8 +255,8 @@
 ## L-256: 실시간 STT Whisper 전환 — STTModelType 파라미터 기반 분기 (2026-03-21)
 
 - **상황**: 실시간 STT가 SenseVoice 고정이어서 Whisper 모델 선택 시에도 SenseVoice로만 전사
-- **근본 원인**: ProcessRealtimeChunkAsync에 모델 유형 파라미터가 없어 SenseVoice 경로만 존재
-- **해결**: ProcessRealtimeChunkAsync에 STTModelType 파라미터 추가, Whisper 계열이면 ProcessRealtimeChunkWithWhisperAsync로 분기. float[] → 임시 WAV → Whisper 전사 → finally 블록에서 임시 파일 삭제
+- **근본 원인**: ProcessRealtimeChunkasync에 모델 유형 파라미터가 없어 SenseVoice 경로만 존재
+- **해결**: ProcessRealtimeChunkasync에 STTModelType 파라미터 추가, Whisper 계열이면 ProcessRealtimeChunkwithwhisperasync로 분기. float[] → 임시 WAV → Whisper 전사 → finally 블록에서 임시 파일 삭제
 - **교훈**: 30초 청크 기준 Vulkan GPU Whisper에서 약 24초 처리로 실시간 가능. Whisper 초기화는 기존 InitializeWhisperAsync 재사용하여 1회 보장. ViewModel에 _realtimeSTTModelType 필드를 두고 MainWindow에서 모델 변경 시 동기화
 - **심각도**: 낮음 (기능 확장)
 - **Level**: 1 (참고)
@@ -306,10 +306,10 @@
 - **심각도**: 높음 (앱 크래시)
 - **Level**: 1 (참고)
 
-## L-262: 크래시 시 로그 유실 방지 — flushToDiskInterval + CloseAndFlush 패턴 (2026-03-22)
+## L-262: 크래시 시 로그 유실 방지 — flushToDiskinterval + CloseAndFlush 패턴 (2026-03-22)
 
 - **문제**: 앱 크래시 시 Serilog/log4net 버퍼에 남은 로그가 디스크에 기록되지 않아 디버깅 불가
-- **해결**: Serilog에 `flushToDiskInterval: TimeSpan.FromSeconds(1)` 추가 + UnhandledException에서 `Log.Fatal` + `Log.CloseAndFlush()` 호출 + log4net `immediateFlush=true`
+- **해결**: Serilog에 `flushToDiskinterval: TimeSpan.FromSeconds(1)` 추가 + UnhandledException에서 `Log.Fatal` + `Log.CloseAndFlush()` 호출 + log4net `immediateFlush=true`
 - **교훈**: 크래시 디버깅을 위해 로그 프레임워크는 (1) 주기적 flush 설정 (2) UnhandledException 핸들러에서 명시적 flush/close를 반드시 구현해야 함
 - **심각도**: 중간 (디버깅 편의)
 - **Level**: 1 (참고)
@@ -331,7 +331,7 @@
 - **Level**: 1 (참고)
 ## L-265: WebSocket 프로토콜 메시지 타입/필드명 스펙 명시화 — 네이밍 컨벤션 불일치 방지 (2026-03-25)
 
-- **문제**: /ws/split WebSocket 프로토콜에서 클라이언트(C# camelCase)와 서버(Python snake_case) 간 메시지 필드명 불일치 발생 (`chunkSeconds`/`bitDepth` vs `sample_rate`/`bit_depth`, `type:"start"` vs `type:"config"`, `type:"stop"` vs `type:"end"`)
+- **문제**: /ws/split WebSocket 프로토콜에서 클라이언트(C# camelCase)와 서버(Python snake_case) 간 메시지 필드명 불일치 발생 (`chunkseconds`/`bitDepth` vs `sample_rate`/`bit_depth`, `type:"start"` vs `type:"config"`, `type:"stop"` vs `type:"end"`)
 - **해결**: 서버 프로토콜 스펙에 맞춰 클라이언트 코드 수정 (config 메시지 snake_case, end 메시지 type 수정, is_final 이벤트 처리 추가)
 - **교훈**: (1) WebSocket 프로토콜 설계 시 메시지 타입명과 필드명 스펙을 API 문서에 명시적으로 정의 (2) Python 서버는 snake_case, C# 클라이언트는 System.Text.Json JsonNamingPolicy.SnakeCaseLower 또는 [JsonPropertyName] 어트리뷰트로 자동 변환 고려 (3) is_final 같은 상태 완료 신호는 클라이언트가 반드시 처리해야 UI 상태가 정확히 동기화됨
 - **심각도**: 중간 (기능 오작동)

@@ -382,7 +382,7 @@ Graph_Services:
 
 ```yaml
 Other_Services:
-  - 파일명: CloudLinkDownloader.cs
+  - 파일명: CloudLinkdownloader.cs
     경로: Services/Cloud/
     역할: 클라우드 링크 다운로드 (OneDrive, SharePoint)
 
@@ -493,7 +493,7 @@ Converters:
 <!-- MaiX.csproj 주요 NuGet 패키지 -->
 <PackageReference Include="Microsoft.Identity.Client" />
 <PackageReference Include="Microsoft.Graph" />
-<PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" />
+<PackageReference Include="Microsoft.EntityFrameworkcore.Sqlite" />
 <PackageReference Include="CommunityToolkit.Mvvm" />
 <PackageReference Include="WPF-UI" />
 <PackageReference Include="log4net" />
@@ -603,4 +603,4 @@ curl -s http://localhost:5858/api/status
 
 | 날짜 | 작업 | 주요 변경 파일 | 비고 |
 |------|------|----------------|------|
-| 2026-03-26 | P1~P4 코드 품질 이슈 17건 수정 (kPlan_dual 검증 기반) | App.xaml.cs, BackgroundSyncService.cs, GraphAuthService.cs, GraphOneNoteService.cs, GraphPlannerService.cs, MainViewModel.cs, OneNoteViewModel.cs, AppSettingsManager.cs, PromptService.cs, ComposeWindow.xaml.cs, EmailViewWindow.xaml.cs, MainWindow.xaml.cs, Email.cs, Folder.cs, LMStudioProvider.cs, OllamaProvider.cs, MaiX.csproj | P1: 비동기/DI Scoped 수정, P2: 레이스컨디션/HttpClientFactory/CTS/Task.Run, P3: DPAPI/Debounce/410Gone/AIService이중방지, P4: PromptService파일우선/DbContextFactory/DB엔티티주석 |
+| 2026-03-26 | P1~P4 코드 품질 이슈 17건 수정 (kplan_dual 검증 기반) | App.xaml.cs, BackgroundSyncService.cs, GraphAuthService.cs, GraphOneNoteService.cs, GraphPlannerService.cs, MainViewModel.cs, OneNoteViewModel.cs, AppSettingsManager.cs, PromptService.cs, ComposeWindow.xaml.cs, EmailViewWindow.xaml.cs, MainWindow.xaml.cs, Email.cs, Folder.cs, LMStudioProvider.cs, OllamaProvider.cs, MaiX.csproj | P1: 비동기/DI Scoped 수정, P2: 레이스컨디션/HttpClientFactory/CTS/Task.Run, P3: DPAPI/Debounce/410Gone/AIService이중방지, P4: PromptService파일우선/DbContextFactory/DB엔티티주석 |
