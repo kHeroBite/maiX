@@ -329,3 +329,10 @@
 - **교훈**: 서버 API 경로/스키마 변경 시 반드시 클라이언트 코드도 같은 작업 단위에서 동기화. 가능하면 서버가 모델/화자 목록을 동적으로 제공하는 API 추가
 - **심각도**: 낮음 (프로세스)
 - **Level**: 1 (참고)
+## L-265: WebSocket 프로토콜 메시지 타입/필드명 스펙 명시화 — 네이밍 컨벤션 불일치 방지 (2026-03-25)
+
+- **문제**: /ws/split WebSocket 프로토콜에서 클라이언트(C# camelCase)와 서버(Python snake_case) 간 메시지 필드명 불일치 발생 (`chunkSeconds`/`bitDepth` vs `sample_rate`/`bit_depth`, `type:"start"` vs `type:"config"`, `type:"stop"` vs `type:"end"`)
+- **해결**: 서버 프로토콜 스펙에 맞춰 클라이언트 코드 수정 (config 메시지 snake_case, end 메시지 type 수정, is_final 이벤트 처리 추가)
+- **교훈**: (1) WebSocket 프로토콜 설계 시 메시지 타입명과 필드명 스펙을 API 문서에 명시적으로 정의 (2) Python 서버는 snake_case, C# 클라이언트는 System.Text.Json JsonNamingPolicy.SnakeCaseLower 또는 [JsonPropertyName] 어트리뷰트로 자동 변환 고려 (3) is_final 같은 상태 완료 신호는 클라이언트가 반드시 처리해야 UI 상태가 정확히 동기화됨
+- **심각도**: 중간 (기능 오작동)
+- **Level**: 2 (규칙화 권장)

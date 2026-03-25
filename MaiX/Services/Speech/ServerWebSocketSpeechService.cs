@@ -282,13 +282,10 @@ public class ServerWebSocketSpeechService : IDisposable
 
         var startMsg = new
         {
-            type = "start",
-            model,
-            chunkSeconds = 3.0,
-            overlapSeconds = 0.5,
-            sampleRate,
+            type = "config",
+            sample_rate = sampleRate,
             channels,
-            bitDepth,
+            bit_depth = bitDepth,
         };
 
         await SendJsonAsync(_splitWebSocket!, startMsg, ct);
@@ -317,7 +314,7 @@ public class ServerWebSocketSpeechService : IDisposable
         if (!IsSplitConnected)
             return null;
 
-        var stopMsg = new { type = "stop" };
+        var stopMsg = new { type = "end" };
         await SendJsonAsync(_splitWebSocket!, stopMsg, ct);
 
         var finalTcs = new TaskCompletionSource<string>();
@@ -543,7 +540,10 @@ public class ServerWebSocketSpeechService : IDisposable
                     var sttChunkId = data.TryGetProperty("chunk_id", out var sci) ? sci.GetInt32() : 0;
                     var sttConfidence = data.TryGetProperty("confidence", out var scf) ? scf.GetSingle() : 0f;
                     var sttLatency = data.TryGetProperty("latency_ms", out var slm) ? slm.GetInt32() : 0;
+                    var isFinal = data.TryGetProperty("is_final", out var isFinalProp) && isFinalProp.GetBoolean();
                     SttChunkReceived?.Invoke(new SttChunkResult(sttText, sttChunkId, sttConfidence, sttLatency, ""));
+                    if (isFinal)
+                        SttFinalReceived?.Invoke(sttText);
                     break;
 
                 case "diarize":

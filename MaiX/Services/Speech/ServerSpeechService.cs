@@ -91,7 +91,7 @@ public class ServerSpeechService : IDisposable
     public async Task<byte[]> SynthesizeAsync(string text, int speakerId = 0, CancellationToken ct = default)
     {
         var req = new { text, speaker_id = speakerId, engine = "vits2" };
-        var resp = await _http.PostAsJsonAsync($"{_baseUrl}/api/tts", req, ct);
+        var resp = await _http.PostAsJsonAsync($"{_baseUrl}/api/tts/preview", req, ct);
         resp.EnsureSuccessStatusCode();
         return await resp.Content.ReadAsByteArrayAsync(ct);
     }
