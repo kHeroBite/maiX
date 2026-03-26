@@ -16,7 +16,8 @@ namespace mAIx.Services.Speech;
 /// <summary>
 /// STT/TTS 청크 결과 레코드
 /// </summary>
-public record SttChunkResult(string Text, int ChunkId, float Confidence, int LatencyMs, string Model);
+public record SttChunkResult(string Text, int ChunkId, float Confidence, int LatencyMs, string Model,
+    float StartSeconds = 0f, float EndSeconds = 0f);
 
 /// <summary>
 /// 화자분리 청크 결과 레코드
@@ -541,7 +542,12 @@ public class ServerWebSocketSpeechService : IDisposable
                     var sttConfidence = data.TryGetProperty("confidence", out var scf) ? scf.GetSingle() : 0f;
                     var sttLatency = data.TryGetProperty("latency_ms", out var slm) ? slm.GetInt32() : 0;
                     var isFinal = data.TryGetProperty("is_final", out var isFinalProp) && isFinalProp.GetBoolean();
-                    SttChunkReceived?.Invoke(new SttChunkResult(sttText, sttChunkId, sttConfidence, sttLatency, ""));
+                    // 시간 필드 파싱 (서버가 제공 시 사용, 없으면 chunk_id × 1.5초 폴백)
+                    var splitStart = data.TryGetProperty("start_time", out var ssf) ? ssf.GetSingle() :
+                                     data.TryGetProperty("start", out var ssf2) ? ssf2.GetSingle() : sttChunkId * 1.5f;
+                    var splitEnd = data.TryGetProperty("end_time", out var sef) ? sef.GetSingle() :
+                                   data.TryGetProperty("end", out var sef2) ? sef2.GetSingle() : (sttChunkId + 1) * 1.5f;
+                    SttChunkReceived?.Invoke(new SttChunkResult(sttText, sttChunkId, sttConfidence, sttLatency, "", splitStart, splitEnd));
                     if (isFinal)
                         SttFinalReceived?.Invoke(sttText);
                     break;
@@ -615,7 +621,12 @@ public class ServerWebSocketSpeechService : IDisposable
                     var confidence = data.TryGetProperty("confidence", out var cf) ? cf.GetSingle() : 0f;
                     var latencyMs = data.TryGetProperty("latency_ms", out var lms) ? lms.GetInt32() : 0;
                     var chunkModel = data.TryGetProperty("model", out var cm) ? cm.GetString() ?? "" : "";
-                    SttChunkReceived?.Invoke(new SttChunkResult(chunkText, chunkId, confidence, latencyMs, chunkModel));
+                    // 시간 필드 파싱 (서버가 제공 시 사용, 없으면 chunk_id × 1.5초 폴백)
+                    var sttStart = data.TryGetProperty("start_time", out var stf) ? stf.GetSingle() :
+                                   data.TryGetProperty("start", out var stf2) ? stf2.GetSingle() : chunkId * 1.5f;
+                    var sttEnd = data.TryGetProperty("end_time", out var etf) ? etf.GetSingle() :
+                                 data.TryGetProperty("end", out var etf2) ? etf2.GetSingle() : (chunkId + 1) * 1.5f;
+                    SttChunkReceived?.Invoke(new SttChunkResult(chunkText, chunkId, confidence, latencyMs, chunkModel, sttStart, sttEnd));
                     break;
 
                 case "stt_final":

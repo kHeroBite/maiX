@@ -50,6 +50,24 @@ public class ServerSpeechService : IDisposable
         var json = await resp.Content.ReadFromJsonAsync<SttResult>(cancellationToken: ct)
             ?? throw new InvalidOperationException("STT 서버 응답 파싱 실패");
 
+        // 서버가 segments 배열 반환 시 시간 정보 포함 파싱 (우선)
+        if (json.Segments != null && json.Segments.Count > 0)
+        {
+            return new TranscriptResult
+            {
+                AudioFilePath = audioFilePath,
+                Segments = json.Segments.Select(s => new TranscriptSegment
+                {
+                    Text = s.Text,
+                    Speaker = string.IsNullOrEmpty(s.Speaker) ? "화자 1" : s.Speaker,
+                    StartTime = TimeSpan.FromSeconds(s.Start),
+                    EndTime = TimeSpan.FromSeconds(s.End),
+                    Confidence = s.Confidence,
+                }).ToList(),
+            };
+        }
+
+        // 폴백: 단일 텍스트 세그먼트
         var segment = new TranscriptSegment
         {
             Text = json.Text,
@@ -121,7 +139,8 @@ public class ServerSpeechService : IDisposable
     }
 
     // 응답 역직렬화용 내부 레코드
-    private record SttResult(string Text, string Language, float Confidence, bool IsFinal);
+    private record SttSegment(string Text, float Start, float End, string Speaker, float Confidence);
+    private record SttResult(string Text, string Language, float Confidence, bool IsFinal, List<SttSegment>? Segments);
     private record DiarizeSegment(float Start, float End, string Speaker);
     private record DiarizeResult(List<DiarizeSegment> Segments, int SpeakerCount);
     private record SttModelsResponse(List<string> Models, string? Active);

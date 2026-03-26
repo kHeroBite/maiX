@@ -363,3 +363,21 @@
 - **교훈**: NTFS 환경에서 대소문자만 다른 폴더/파일 리네임 시 반드시 `git mv` 2단계 방식 사용 (MaiX→tmp→mAIx). OS 레벨 rename만으로는 git이 동일 경로로 인식함
 - **심각도**: 중간 (git 이력 누락)
 - **Level**: 1 (참고)
+
+## L-269: STT 실시간 시간 정보 수신 — 서버 필드명 우선순위 파싱 패턴 (2026-03-27)
+
+- **문제**: STT 실시간 청크 UI에 시간이 항상 00:00으로 표시됨
+- **원인**: `SttChunkResult` 레코드에 StartSeconds/EndSeconds 필드가 없었고, OnSttChunkReceived에서 `TimeSpan.Zero`를 하드코딩
+- **해결**: (1) `SttChunkResult`에 `StartSeconds`/`EndSeconds` 기본값 0f 추가 (2) JSON 파싱 시 `start_time` → `start` → `chunk_id × 1.5초` 폴백 순서 적용 (3) `TimeSpan.Zero` → `TimeSpan.FromSeconds(chunk.StartSeconds/EndSeconds)`로 수정
+- **교훈**: WebSocket 서버 응답 JSON의 필드명이 버전마다 다를 수 있으므로 복수 필드명 우선순위 파싱 + 폴백 값 패턴을 적용하면 서버 업그레이드 시에도 시간 정보 안정적으로 수신 가능
+- **심각도**: 낮음 (시간 표시 버그, 핵심 기능 영향 없음)
+- **Level**: 1 (참고)
+
+## L-270: RunPostProcessingAsync 조건 체크 — 복수 플래그 중 하나라도 true이면 진행 (2026-03-27)
+
+- **문제**: `IsPostSTTEnabled=true`이어도 `IsPostSummaryEnabled=false`이면 후처리가 실행되지 않는 버그
+- **원인**: `RunPostProcessingAsync` 진입 조건이 `if (!IsPostSummaryEnabled) return;`으로 되어 있어 STT 단독 후처리 불가
+- **해결**: `if (!IsPostSTTEnabled && !IsPostSummaryEnabled) return;`으로 수정 + 파일 기반 STT 후처리 단계 별도 추가 (실시간 STT 결과 없을 때만 반영)
+- **교훈**: 후처리 진입 조건은 개별 기능 플래그 AND가 아닌 OR 조합으로 설계해야 함. 새 후처리 단계 추가 시 기존 조건과 충돌 여부 반드시 확인
+- **심각도**: 낮음 (설정 조합에 따른 기능 미작동)
+- **Level**: 1 (참고)

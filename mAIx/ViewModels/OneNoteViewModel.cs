@@ -2527,7 +2527,8 @@ public partial class OneNoteViewModel : ViewModelBase
     /// </summary>
     private async Task RunPostProcessingAsync(string filePath)
     {
-        if (!IsPostSummaryEnabled) return;
+        // IsPostSTTEnabled 또는 IsPostSummaryEnabled 중 하나라도 true여야 진행
+        if (!IsPostSTTEnabled && !IsPostSummaryEnabled) return;
 
         // 이미 후처리 진행 중이면 중복 실행 방지
         if (IsPostProcessing) return;
@@ -2538,8 +2539,36 @@ public partial class OneNoteViewModel : ViewModelBase
 
         try
         {
-            // 후처리 화자분리 (녹음 파일이 존재하고 서버 URL이 설정된 경우)
             var speechServerUrl = App.Settings?.UserPreferences?.SpeechServerUrl;
+
+            // 파일 기반 STT 후처리 (IsPostSTTEnabled=true이고 실시간 STT 결과 없을 때)
+            if (IsPostSTTEnabled && !string.IsNullOrWhiteSpace(speechServerUrl) && File.Exists(filePath))
+            {
+                try
+                {
+                    PostProcessingStatus = "STT 분석 중...";
+                    Log4.Info("[후처리] 파일 기반 STT 시작");
+                    using var sttSvc = new Services.Speech.ServerSpeechService(speechServerUrl);
+                    var sttResult = await sttSvc.TranscribeFileAsync(filePath);
+                    Log4.Info($"[후처리] 파일 기반 STT 완료: {sttResult.Segments.Count}개 세그먼트");
+
+                    // 실시간 STT 결과가 없을 때만 파일 STT 결과 반영 (중복 방지)
+                    if (STTSegments.Count == 0 && sttResult.Segments.Count > 0)
+                    {
+                        await System.Windows.Application.Current.Dispatcher.InvokeAsync(() =>
+                        {
+                            foreach (var seg in sttResult.Segments)
+                                STTSegments.Add(seg);
+                        });
+                    }
+                }
+                catch (Exception sttEx)
+                {
+                    Log4.Error($"[후처리] 파일 STT 오류: {sttEx.Message}");
+                }
+            }
+
+            // 후처리 화자분리 (녹음 파일이 존재하고 서버 URL이 설정된 경우)
             if (!string.IsNullOrWhiteSpace(speechServerUrl) && File.Exists(filePath))
             {
                 try
@@ -2569,7 +2598,7 @@ public partial class OneNoteViewModel : ViewModelBase
                 }
             }
 
-            // 요약 후처리 (STT 결과가 있을 때)
+            // 요약 후처리 (IsPostSummaryEnabled=true이고 STT 결과가 있을 때)
             if (IsPostSummaryEnabled && STTSegments.Count > 0)
             {
                 PostProcessingStatus = "요약 생성 중...";
@@ -2759,8 +2788,8 @@ public partial class OneNoteViewModel : ViewModelBase
         {
             var segment = new Models.TranscriptSegment
             {
-                StartTime = TimeSpan.Zero,
-                EndTime = TimeSpan.Zero,
+                StartTime = TimeSpan.FromSeconds(chunk.StartSeconds),
+                EndTime = TimeSpan.FromSeconds(chunk.EndSeconds),
                 Text = chunk.Text.Trim(),
                 Confidence = chunk.Confidence,
                 ChunkId = chunk.ChunkId,
