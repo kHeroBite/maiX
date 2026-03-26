@@ -134,7 +134,7 @@ public class ServerWebSocketSpeechService : IDisposable
         {
             type = "start",
             model,
-            chunkSeconds = 3.0,
+            chunkSeconds = 2.0,
             overlapSeconds = 0.5,
             sampleRate,
             channels,

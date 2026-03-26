@@ -345,3 +345,12 @@
 - **교훈**: 새 인터페이스/타입(특히 `Microsoft.Extensions.*`)을 처음 사용할 때는 구현 전에 `.csproj`에 해당 NuGet 패키지가 있는지 확인. `IHttpClientFactory` → `Microsoft.Extensions.Http`, `IMemoryCache` → `Microsoft.Extensions.Caching.Memory` 등
 - **심각도**: 낮음 (빌드 오류로 즉시 감지 가능)
 - **Level**: 1 (참고)
+
+## L-267: WebSocket 엔드포인트 경로 확인 우선 — 존재하지 않는 엔드포인트 연결 버그 (2026-03-26)
+
+- **문제**: OneNoteViewModel이 `ConnectSplitAsync()`(/ws/split)를 호출했으나 서버에 해당 엔드포인트가 없어 STT 실시간 응답 수신 불가
+- **원인**: 서버 API 변경(엔드포인트 통합/제거) 시 클라이언트 코드를 동시에 업데이트하지 않음. 클라이언트는 /ws/split을 호출하도록 구현되어 있었으나 서버는 /ws/stt만 운영 중
+- **해결**: `ConnectSplitAsync()` → `ConnectSttAsync()`로 전환, 서버의 실제 /ws/stt 엔드포인트 사용
+- **교훈**: 서버 WebSocket/REST API 경로 변경 시 (1) 클라이언트 코드를 즉시 동일 커밋에서 반영 (2) 새 기능 구현 전 서버 실제 엔드포인트 목록 확인 (RESTAPI.md/MCP.md 참조) (3) 연결 실패 시 엔드포인트 존재 여부를 첫 번째 점검 항목으로
+- **심각도**: 높음 (핵심 기능 STT 수신 완전 불가)
+- **Level**: 2 (규칙화 권장)

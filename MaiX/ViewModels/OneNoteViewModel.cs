@@ -2623,16 +2623,16 @@ public partial class OneNoteViewModel : ViewModelBase
 
             // 이벤트 구독: 청크 결과 수신 시 LiveSTTSegments에 추가
             _serverWsSpeech.SttChunkReceived += OnServerSttChunkReceived;
-            _serverWsSpeech.DiarizeChunkReceived += OnDiarizeChunkReceived;
             _serverWsSpeech.ErrorOccurred += error => Log4.Error($"[녹음] ★ 서버 STT 오류: {error}");
 
-            // Split WebSocket 연결 (STT+화자분리 통합) + 모델 로딩 대기
-            await _serverWsSpeech.ConnectSplitAsync(serverUrl, sttModel, _realtimeSTTCts.Token);
+            // STT WebSocket 연결 (/ws/stt) + 모델 로딩 대기
+            var model = string.IsNullOrWhiteSpace(sttModel) ? "small" : sttModel;
+            await _serverWsSpeech.ConnectSttAsync(serverUrl, model, _realtimeSTTCts.Token);
 
-            // Split 세션 시작
-            await _serverWsSpeech.StartSplitSessionAsync(sttModel, 16000, 1, 16, _realtimeSTTCts.Token);
+            // STT 세션 시작
+            await _serverWsSpeech.StartSttSessionAsync(model, 16000, 1, 16, _realtimeSTTCts.Token);
 
-            Log4.Info("[녹음] ★ 서버 Split(STT+화자분리) 세션 시작 완료");
+            Log4.Info("[녹음] ★ 서버 STT 세션 시작 완료");
         }
         catch (Exception ex)
         {
@@ -2686,9 +2686,9 @@ public partial class OneNoteViewModel : ViewModelBase
         {
             try
             {
-                if (_serverWsSpeech.IsSplitConnected)
+                if (_serverWsSpeech.IsSttConnected)
                 {
-                    await _serverWsSpeech.StopSplitSessionAsync();
+                    await _serverWsSpeech.StopSttSessionAsync();
                 }
                 await _serverWsSpeech.DisconnectAsync();
             }
@@ -2699,7 +2699,6 @@ public partial class OneNoteViewModel : ViewModelBase
             finally
             {
                 _serverWsSpeech.SttChunkReceived -= OnServerSttChunkReceived;
-                _serverWsSpeech.DiarizeChunkReceived -= OnDiarizeChunkReceived;
                 _serverWsSpeech.Dispose();
                 _serverWsSpeech = null;
             }
@@ -2731,10 +2730,10 @@ public partial class OneNoteViewModel : ViewModelBase
         {
             Log4.Info($"[녹음] ★ 실시간 청크 수신: {chunkStartTime:mm\\:ss}, {audioData.Length} bytes");
 
-            // 서버에 직접 오디오 전송 (Split WebSocket)
-            if (_serverWsSpeech?.IsSplitConnected == true)
+            // 서버에 직접 오디오 전송 (STT WebSocket)
+            if (_serverWsSpeech?.IsSttConnected == true)
             {
-                await _serverWsSpeech.SendSplitAudioChunkAsync(audioData, _realtimeSTTCts.Token);
+                await _serverWsSpeech.SendAudioChunkAsync(audioData, _realtimeSTTCts.Token);
                 Log4.Info($"[녹음] ★ 서버 청크 전송 완료 ({audioData.Length} bytes)");
             }
         }

@@ -18487,7 +18487,7 @@ public partial class MainWindow : FluentWindow
             Height = 32,
             Width = 200,
             HorizontalAlignment = HorizontalAlignment.Left,
-            IsEnabled = true
+            IsEnabled = false
         };
         // 기본 하드코딩 항목 (서버 조회 실패 시 Fallback)
         serverModelComboBox.Items.Add("small");
@@ -18519,7 +18519,10 @@ public partial class MainWindow : FluentWindow
                     foreach (var m in models)
                         serverModelComboBox.Items.Add(m);
 
-                    if (models.Contains(prefs.ServerSttModel ?? "small"))
+                    // active 모델 우선 선택, 없으면 저장된 모델, 없으면 첫 번째
+                    if (!string.IsNullOrWhiteSpace(active) && models.Contains(active))
+                        serverModelComboBox.SelectedItem = active;
+                    else if (models.Contains(prefs.ServerSttModel ?? "small"))
                         serverModelComboBox.SelectedItem = prefs.ServerSttModel;
                     else if (models.Count > 0)
                         serverModelComboBox.SelectedIndex = 0;
@@ -18531,10 +18534,10 @@ public partial class MainWindow : FluentWindow
             }
         });
 
-        // === 녹음 STT 분석 주기 그룹 ===
+        // === 녹음청크길이 그룹 ===
         var sttIntervalGroup = CreateSettingsGroupBorder();
         var sttIntervalStack = new StackPanel { Margin = new Thickness(16) };
-        sttIntervalStack.Children.Add(CreateSettingsLabel("녹음 STT 분석 주기"));
+        sttIntervalStack.Children.Add(CreateSettingsLabel("녹음청크길이"));
 
         var sttIntervalDescText = new System.Windows.Controls.TextBlock
         {
@@ -18619,7 +18622,8 @@ public partial class MainWindow : FluentWindow
         {
             Content = "클라이언트 (로컬)",
             GroupName = "TtsMode",
-            IsChecked = (prefs.TtsMode ?? "client") == "client",
+            IsChecked = false,
+            IsEnabled = false,
             Margin = new Thickness(0, 0, 16, 0),
             VerticalContentAlignment = VerticalAlignment.Center
         };
@@ -18627,7 +18631,8 @@ public partial class MainWindow : FluentWindow
         {
             Content = "서버 (Jarvis)",
             GroupName = "TtsMode",
-            IsChecked = prefs.TtsMode == "server",
+            IsChecked = true,
+            IsEnabled = false,
             VerticalContentAlignment = VerticalAlignment.Center
         };
         ttsPanel.Children.Add(ttsClientRadio);
@@ -18674,7 +18679,7 @@ public partial class MainWindow : FluentWindow
             if (prefs == null) return;
             prefs.SpeechServerUrl = string.IsNullOrWhiteSpace(urlBox.Text)
                 ? "http://172.10.74.2:18989" : urlBox.Text.Trim();
-            prefs.TtsMode = ttsServerRadio.IsChecked == true ? "server" : "client";
+            prefs.TtsMode = "server"; // TTS 모드는 항상 서버로 고정
             prefs.ServerSttModel = serverModelComboBox.SelectedItem?.ToString() ?? "small";
 
             // STT 분석 주기 저장
