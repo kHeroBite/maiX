@@ -14,7 +14,7 @@
 
 ```json
 {
-  "프로젝트명": "MaiX",
+  "프로젝트명": "mAIx",
   "설명": "Microsoft 365 이메일 클라이언트 + AI 분석 시스템",
   "개발자": "김기로",
   "프레임워크": ".NET 10.0-windows",
@@ -24,10 +24,10 @@
     "종류": "SQLite (EF Core)",
     "경로": "%APPDATA%\\MaiX\\MaiX.db"
   },
-  "빌드_경로": "C:\\DATA\\Project\\MaiX",
-  "솔루션": "MaiX.sln",
-  "메인_프로젝트": "MaiX/MaiX.csproj",
-  "실행파일": "MaiX\\bin\\Debug\\net10.0-windows\\MaiX.exe",
+  "빌드_경로": "C:\\DATA\\Project\\mAIx",
+  "솔루션": "mAIx.sln",
+  "메인_프로젝트": "mAIx/mAIx.csproj",
+  "실행파일": "mAIx\\bin\\Debug\\net10.0-windows\\mAIx.exe",
   "인코딩": "UTF-8",
   "줄_끝": "CRLF",
   "REST_API_포트": 5858,
@@ -39,13 +39,13 @@
 ## 디렉토리 구조
 
 ```
-MaiX/
-├── MaiX/                      # 메인 프로젝트
+mAIx/
+├── mAIx/                      # 메인 프로젝트
 │   ├── App.xaml               # WPF Application 정의
 │   ├── App.xaml.cs            # 애플리케이션 진입점
 │   ├── appsettings.json       # 설정 파일
 │   ├── log4net.config         # 로깅 설정
-│   ├── MaiX.csproj           # 프로젝트 파일
+│   ├── mAIx.csproj           # 프로젝트 파일
 │   │
 │   ├── Assets/                # 리소스 (이미지, 아이콘)
 │   ├── Controls/              # 커스텀 컨트롤
@@ -604,3 +604,4 @@ curl -s http://localhost:5858/api/status
 | 날짜 | 작업 | 주요 변경 파일 | 비고 |
 |------|------|----------------|------|
 | 2026-03-26 | P1~P4 코드 품질 이슈 17건 수정 (kplan_dual 검증 기반) | App.xaml.cs, BackgroundSyncService.cs, GraphAuthService.cs, GraphOneNoteService.cs, GraphPlannerService.cs, MainViewModel.cs, OneNoteViewModel.cs, AppSettingsManager.cs, PromptService.cs, ComposeWindow.xaml.cs, EmailViewWindow.xaml.cs, MainWindow.xaml.cs, Email.cs, Folder.cs, LMStudioProvider.cs, OllamaProvider.cs, MaiX.csproj | P1: 비동기/DI Scoped 수정, P2: 레이스컨디션/HttpClientFactory/CTS/Task.Run, P3: DPAPI/Debounce/410Gone/AIService이중방지, P4: PromptService파일우선/DbContextFactory/DB엔티티주석 |
+| 2026-03-26 | 프로젝트명 MaiX → mAIx 전체 변경 | mAIx.sln, mAIx/mAIx.csproj, 181개 .cs + 13개 .xaml (namespace/using/clr-namespace), mAIx/Data/mAIxDbContext.cs, Assets/mAIx.ico + icon.png | namespace MaiX→mAIx 일괄 변경, 아이콘 교체, 타이틀바 로고 mAiX→mAIx |

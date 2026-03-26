@@ -354,3 +354,12 @@
 - **교훈**: 서버 WebSocket/REST API 경로 변경 시 (1) 클라이언트 코드를 즉시 동일 커밋에서 반영 (2) 새 기능 구현 전 서버 실제 엔드포인트 목록 확인 (RESTAPI.md/MCP.md 참조) (3) 연결 실패 시 엔드포인트 존재 여부를 첫 번째 점검 항목으로
 - **심각도**: 높음 (핵심 기능 STT 수신 완전 불가)
 - **Level**: 2 (규칙화 권장)
+
+## L-268: git core.ignorecase=true 환경에서 폴더 리네임 시 git mv 필수 (2026-03-26)
+
+- **문제**: NTFS(Windows)에서 MaiX/ → mAIx/ 폴더명 변경 시 git이 이를 인식하지 못함
+- **원인**: NTFS는 대소문자 무감(case-insensitive), git config core.ignorecase=true → 단순 OS 리네임으로는 git이 폴더명 변경을 추적 불가
+- **해결**: `git mv MaiX tmp_mAIx && git mv tmp_mAIx mAIx` 방식으로 임시 이름을 거쳐 리네임하면 git이 추적 가능
+- **교훈**: NTFS 환경에서 대소문자만 다른 폴더/파일 리네임 시 반드시 `git mv` 2단계 방식 사용 (MaiX→tmp→mAIx). OS 레벨 rename만으로는 git이 동일 경로로 인식함
+- **심각도**: 중간 (git 이력 누락)
+- **Level**: 1 (참고)
