@@ -1,6 +1,6 @@
 using System.Windows;
 
-namespace MaiX.Views;
+namespace mAIx.Views;
 
 /// <summary>
 /// 로딩 화면 - 투명 배경 스피너만 표시

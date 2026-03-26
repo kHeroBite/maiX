@@ -8,18 +8,18 @@ using CommunityToolkit.Mvvm.Input;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Graph.Models;
-using MaiX.Data;
-using MaiX.Models;
-using MaiX.Services.Graph;
+using mAIx.Data;
+using mAIx.Models;
+using mAIx.Services.Graph;
 using Serilog;
 
 // 모호한 참조 해결을 위한 별칭
-using MaiXTodo = MaiX.Models.Todo;
-using MaiXEmail = MaiX.Models.Email;
-using MaiXMeetingInfo = MaiX.Services.Graph.MeetingInfo;
-using MaiXCalendarEvent = MaiX.Models.CalendarEvent;
+using mAIxTodo = mAIx.Models.Todo;
+using mAIxEmail = mAIx.Models.Email;
+using mAIxMeetingInfo = mAIx.Services.Graph.MeetingInfo;
+using mAIxCalendarEvent = mAIx.Models.CalendarEvent;
 
-namespace MaiX.ViewModels;
+namespace mAIx.ViewModels;
 
 /// <summary>
 /// Calendar 뷰모델 - 일정 관리 및 마감일 연동
@@ -132,7 +132,7 @@ public partial class CalendarViewModel : ViewModelBase
     private async Task<List<EventItemViewModel>> LoadEventsFromDbAsync()
     {
         using var scope = _serviceProvider.CreateScope();
-        var dbContext = scope.ServiceProvider.GetRequiredService<MaiXDbContext>();
+        var dbContext = scope.ServiceProvider.GetRequiredService<mAIxDbContext>();
         var graphAuthService = scope.ServiceProvider.GetRequiredService<GraphAuthService>();
 
         if (!graphAuthService.IsLoggedIn || string.IsNullOrEmpty(graphAuthService.CurrentUserEmail))
@@ -235,7 +235,7 @@ public partial class CalendarViewModel : ViewModelBase
     /// <summary>
     /// DB CalendarEvent를 EventItemViewModel로 변환
     /// </summary>
-    private EventItemViewModel MapFromDbEvent(MaiXCalendarEvent dbEvent)
+    private EventItemViewModel MapFromDbEvent(mAIxCalendarEvent dbEvent)
     {
         var categories = new List<string>();
         if (!string.IsNullOrEmpty(dbEvent.Categories))
@@ -296,7 +296,7 @@ public partial class CalendarViewModel : ViewModelBase
     /// </summary>
     /// <param name="email">이메일 정보</param>
     [RelayCommand]
-    public async Task CreateDeadlineEventAsync(MaiXEmail email)
+    public async Task CreateDeadlineEventAsync(mAIxEmail email)
     {
         if (email == null || !email.Deadline.HasValue)
         {
@@ -325,7 +325,7 @@ public partial class CalendarViewModel : ViewModelBase
     /// </summary>
     /// <param name="todo">할일 정보</param>
     [RelayCommand]
-    public async Task CreateEventFromTodoAsync(MaiXTodo todo)
+    public async Task CreateEventFromTodoAsync(mAIxTodo todo)
     {
         if (todo == null)
             return;
@@ -351,7 +351,7 @@ public partial class CalendarViewModel : ViewModelBase
     /// </summary>
     /// <param name="eventId">이벤트 ID</param>
     [RelayCommand]
-    public async Task<MaiXMeetingInfo?> ParseMeetingInviteAsync(string eventId)
+    public async Task<mAIxMeetingInfo?> ParseMeetingInviteAsync(string eventId)
     {
         if (string.IsNullOrEmpty(eventId))
             return null;

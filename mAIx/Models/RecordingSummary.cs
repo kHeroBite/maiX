@@ -1,7 +1,7 @@
 using System;
 using System.Collections.Generic;
 
-namespace MaiX.Models;
+namespace mAIx.Models;
 
 /// <summary>
 /// 녹음 AI 요약 결과

@@ -8,7 +8,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using Serilog;
 
-namespace MaiX.Services.AI
+namespace mAIx.Services.AI
 {
     /// <summary>
     /// LM Studio 로컬 AI Provider (OpenAI 호환 API)

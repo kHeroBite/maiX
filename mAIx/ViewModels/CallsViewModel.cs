@@ -5,10 +5,10 @@ using System.Threading.Tasks;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Microsoft.Graph.Models;
-using MaiX.Services.Graph;
+using mAIx.Services.Graph;
 using Serilog;
 
-namespace MaiX.ViewModels;
+namespace mAIx.ViewModels;
 
 /// <summary>
 /// 통화/프레즌스 ViewModel

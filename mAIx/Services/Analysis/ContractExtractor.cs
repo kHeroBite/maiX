@@ -3,9 +3,9 @@ using System.Globalization;
 using System.Text.Json;
 using System.Text.RegularExpressions;
 using Serilog;
-using MaiX.Models;
+using mAIx.Models;
 
-namespace MaiX.Services.Analysis;
+namespace mAIx.Services.Analysis;
 
 /// <summary>
 /// 계약 정보 추출기 - AI 응답에서 7가지 계약 정보 파싱

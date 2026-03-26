@@ -7,10 +7,10 @@ using Microsoft.Graph;
 using Microsoft.Identity.Client;
 using Microsoft.Kiota.Abstractions;
 using Microsoft.Kiota.Abstractions.Authentication;
-using MaiX.Models.Settings;
-using MaiX.Utils;
+using mAIx.Models.Settings;
+using mAIx.Utils;
 
-namespace MaiX.Services.Graph
+namespace mAIx.Services.Graph
 {
     /// <summary>
     /// MSAL 기반 Microsoft Graph OAuth 2.0 인증 서비스

@@ -1,9 +1,9 @@
 using System;
 using System.Threading.Tasks;
 using CommunityToolkit.Mvvm.ComponentModel;
-using MaiX.Utils;
+using mAIx.Utils;
 
-namespace MaiX.ViewModels;
+namespace mAIx.ViewModels;
 
 /// <summary>
 /// ViewModel 기본 클래스 - 공통 로딩/에러 처리 제공

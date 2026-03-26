@@ -3,7 +3,7 @@ using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
 
-namespace MaiX.Services.Converter
+namespace mAIx.Services.Converter
 {
     /// <summary>
     /// 문서 변환 인터페이스

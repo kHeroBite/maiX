@@ -3,7 +3,7 @@ using System.Globalization;
 using System.Windows.Data;
 using System.Windows.Media;
 
-namespace MaiX.Converters;
+namespace mAIx.Converters;
 
 /// <summary>
 /// FlagStatus를 색상으로 변환하는 컨버터

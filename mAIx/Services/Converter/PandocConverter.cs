@@ -7,7 +7,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using Serilog;
 
-namespace MaiX.Services.Converter
+namespace mAIx.Services.Converter
 {
     /// <summary>
     /// Pandoc CLI 기반 문서 변환기

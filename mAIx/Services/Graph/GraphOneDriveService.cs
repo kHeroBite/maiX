@@ -6,10 +6,10 @@ using System.Threading.Tasks;
 using Microsoft.Graph;
 using Microsoft.Graph.Models;
 using Microsoft.Graph.Models.ODataErrors;
-using MaiX.Models;
-using MaiX.Utils;
+using mAIx.Models;
+using mAIx.Utils;
 
-namespace MaiX.Services.Graph;
+namespace mAIx.Services.Graph;
 
 /// <summary>
 /// Microsoft OneDrive 연동 서비스

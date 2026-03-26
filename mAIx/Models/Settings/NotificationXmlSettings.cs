@@ -1,7 +1,7 @@
 using System;
 using System.Xml.Serialization;
 
-namespace MaiX.Models.Settings;
+namespace mAIx.Models.Settings;
 
 /// <summary>
 /// 알림 설정 (ntfy 연동)
@@ -20,7 +20,7 @@ public class NotificationXmlSettings
     /// ntfy 토픽 이름
     /// </summary>
     [XmlElement("NtfyTopic")]
-    public string NtfyTopic { get; set; } = "MaiX";
+    public string NtfyTopic { get; set; } = "mAIx";
 
     /// <summary>
     /// ntfy 인증 토큰 (선택)

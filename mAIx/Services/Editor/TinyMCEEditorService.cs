@@ -1,9 +1,9 @@
-using MaiX.Services.Theme;
-using MaiX.Utils;
+using mAIx.Services.Theme;
+using mAIx.Utils;
 using Microsoft.Win32;
 using Microsoft.Web.WebView2.Wpf;
 
-namespace MaiX.Services.Editor;
+namespace mAIx.Services.Editor;
 
 /// <summary>
 /// TinyMCE 에디터 HTML 생성 서비스
@@ -617,7 +617,7 @@ public static class TinyMCEEditorService
             if (string.IsNullOrEmpty(fileName) || string.IsNullOrEmpty(base64Data))
                 return null;
 
-            var tempDir = System.IO.Path.Combine(System.IO.Path.GetTempPath(), "MaiX_Drop", Guid.NewGuid().ToString("N")[..8]);
+            var tempDir = System.IO.Path.Combine(System.IO.Path.GetTempPath(), "mAIx_Drop", Guid.NewGuid().ToString("N")[..8]);
             System.IO.Directory.CreateDirectory(tempDir);
 
             // 원본 파일명 유지 (충돌 방지는 GUID 서브디렉토리)
@@ -682,7 +682,7 @@ public static class TinyMCEEditorService
                     var downloadFileName = !string.IsNullOrEmpty(fileName) ? fileName : "downloaded_file";
                     var saveDir = System.IO.Path.Combine(
                         Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
-                        "MaiX", "MaiX_Drop");
+                        "mAIx", "mAIx_Drop");
                     var localPath = await graphService.DownloadAudioResourceAsync(url, downloadFileName, saveDir);
                     if (!string.IsNullOrEmpty(localPath) && System.IO.File.Exists(localPath))
                     {
@@ -817,7 +817,7 @@ public static class TinyMCEEditorService
 
                     var saveDir = System.IO.Path.Combine(
                         Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
-                        "MaiX", "MaiX_Drop");
+                        "mAIx", "mAIx_Drop");
                     var localPath = await graphService.DownloadAudioResourceAsync(e.Uri, fileName, saveDir);
                     if (!string.IsNullOrEmpty(localPath) && System.IO.File.Exists(localPath))
                     {

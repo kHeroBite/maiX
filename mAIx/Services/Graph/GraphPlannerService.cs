@@ -5,10 +5,10 @@ using System.Text.Json;
 using System.Threading.Tasks;
 using Microsoft.Graph;
 using Microsoft.Graph.Models;
-using MaiX.Utils;
-using MaiX.ViewModels;
+using mAIx.Utils;
+using mAIx.ViewModels;
 
-namespace MaiX.Services.Graph;
+namespace mAIx.Services.Graph;
 
 /// <summary>
 /// Microsoft Planner 연동 서비스

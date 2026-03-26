@@ -3,10 +3,10 @@ using System.Windows;
 using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Navigation;
-using MaiX.Utils;
-using MaiX.ViewModels;
+using mAIx.Utils;
+using mAIx.ViewModels;
 
-namespace MaiX.Views;
+namespace mAIx.Views;
 
 /// <summary>
 /// 로그인 윈도우 - Microsoft 365 계정 인증

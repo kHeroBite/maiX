@@ -7,12 +7,12 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
 using Microsoft.Win32;
-using MaiX.Utils;
-using MaiX.ViewModels;
-using MaiX.Services.Graph;
+using mAIx.Utils;
+using mAIx.ViewModels;
+using mAIx.Services.Graph;
 using Wpf.Ui.Controls;
 
-namespace MaiX.Views.Dialogs;
+namespace mAIx.Views.Dialogs;
 
 /// <summary>
 /// Planner 작업 상세 편집 다이얼로그

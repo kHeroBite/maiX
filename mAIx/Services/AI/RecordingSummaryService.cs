@@ -5,11 +5,11 @@ using System.Text;
 using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
-using MaiX.Services.Storage;
+using mAIx.Services.Storage;
 using Microsoft.Extensions.DependencyInjection;
 using Serilog;
 
-namespace MaiX.Services.AI;
+namespace mAIx.Services.AI;
 
 /// <summary>
 /// 녹음 AI 요약 서비스

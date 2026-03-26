@@ -3,7 +3,7 @@ using System.IO;
 using NAudio.Wave;
 using Serilog;
 
-namespace MaiX.Services.Audio;
+namespace mAIx.Services.Audio;
 
 /// <summary>
 /// 내장 오디오 플레이어 서비스 (NAudio 사용)

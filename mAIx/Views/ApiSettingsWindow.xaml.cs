@@ -7,10 +7,10 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
 using Wpf.Ui.Controls;
-using MaiX.Services.Storage;
-using MaiX.Utils;
+using mAIx.Services.Storage;
+using mAIx.Utils;
 
-namespace MaiX.Views;
+namespace mAIx.Views;
 
 /// <summary>
 /// API 관리 창 - LLM Provider API 키 및 설정 관리

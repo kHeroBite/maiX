@@ -5,11 +5,11 @@ using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Graph;
 using Microsoft.Graph.Models;
-using MaiX.Data;
-using MaiX.Models;
+using mAIx.Data;
+using mAIx.Models;
 using Serilog;
 
-namespace MaiX.Services.Graph;
+namespace mAIx.Services.Graph;
 
 /// <summary>
 /// Microsoft Teams 메시지 연동 서비스
@@ -17,7 +17,7 @@ namespace MaiX.Services.Graph;
 public class GraphTeamsService
 {
     private readonly GraphAuthService _authService;
-    private readonly IDbContextFactory<MaiXDbContext> _dbContextFactory;
+    private readonly IDbContextFactory<mAIxDbContext> _dbContextFactory;
     private readonly ILogger _logger;
     private string? _cachedCurrentUserId;
 
@@ -28,7 +28,7 @@ public class GraphTeamsService
     // 로컬 파일 캐시 경로
     private readonly string _photoCacheDir;
 
-    public GraphTeamsService(GraphAuthService authService, IDbContextFactory<MaiXDbContext> dbContextFactory)
+    public GraphTeamsService(GraphAuthService authService, IDbContextFactory<mAIxDbContext> dbContextFactory)
     {
         _authService = authService ?? throw new ArgumentNullException(nameof(authService));
         _dbContextFactory = dbContextFactory ?? throw new ArgumentNullException(nameof(dbContextFactory));
@@ -37,7 +37,7 @@ public class GraphTeamsService
         // 사진 캐시 디렉토리 초기화
         _photoCacheDir = System.IO.Path.Combine(
             Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
-            "MaiX", "cache", "photos");
+            "mAIx", "cache", "photos");
         if (!System.IO.Directory.Exists(_photoCacheDir))
         {
             System.IO.Directory.CreateDirectory(_photoCacheDir);

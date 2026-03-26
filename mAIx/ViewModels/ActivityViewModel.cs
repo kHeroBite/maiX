@@ -4,10 +4,10 @@ using System.Linq;
 using System.Threading.Tasks;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
-using MaiX.Services.Graph;
+using mAIx.Services.Graph;
 using Serilog;
 
-namespace MaiX.ViewModels;
+namespace mAIx.ViewModels;
 
 /// <summary>
 /// Activity ViewModel - 활동 피드 관리

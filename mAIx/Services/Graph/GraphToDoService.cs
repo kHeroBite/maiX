@@ -3,7 +3,7 @@ using Microsoft.Graph.Models;
 using Serilog;
 using Serilog.Core;
 
-namespace MaiX.Services.Graph
+namespace mAIx.Services.Graph
 {
     /// <summary>
     /// Microsoft To Do API 연동 서비스

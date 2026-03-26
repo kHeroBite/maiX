@@ -1,14 +1,14 @@
 using System;
 using System.IO;
 using System.Xml.Serialization;
-using MaiX.Models;
-using MaiX.Utils;
+using mAIx.Models;
+using mAIx.Utils;
 
-namespace MaiX.Services.Storage;
+namespace mAIx.Services.Storage;
 
 /// <summary>
 /// 로그인 설정 파일 관리 서비스
-/// 저장 위치: %APPDATA%\MaiX\conf\autologin.xml
+/// 저장 위치: %APPDATA%\mAIx\conf\autologin.xml
 /// </summary>
 public class LoginSettingsService
 {

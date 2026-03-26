@@ -5,10 +5,10 @@ using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.Graph;
 using Microsoft.Graph.Models;
-using MaiX.Services.Analysis;
+using mAIx.Services.Analysis;
 using Serilog;
 
-namespace MaiX.Services.Graph;
+namespace mAIx.Services.Graph;
 
 /// <summary>
 /// Microsoft 연락처 연동 서비스

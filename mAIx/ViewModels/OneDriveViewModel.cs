@@ -5,11 +5,11 @@ using System.Threading.Tasks;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Microsoft.Graph.Models;
-using MaiX.Models;
-using MaiX.Services.Graph;
+using mAIx.Models;
+using mAIx.Services.Graph;
 using Serilog;
 
-namespace MaiX.ViewModels;
+namespace mAIx.ViewModels;
 
 /// <summary>
 /// OneDrive ViewModel - 파일/폴더 관리

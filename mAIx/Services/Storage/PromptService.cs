@@ -7,11 +7,11 @@ using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
 using Serilog;
-using MaiX.Data;
-using MaiX.Models;
-using MaiX.Services.AI;
+using mAIx.Data;
+using mAIx.Models;
+using mAIx.Services.AI;
 
-namespace MaiX.Services.Storage;
+namespace mAIx.Services.Storage;
 
 /// <summary>
 /// 프롬프트 서비스 - 파일 우선 + DB Fallback 패턴 (P4-02)
@@ -19,7 +19,7 @@ namespace MaiX.Services.Storage;
 /// </summary>
 public class PromptService
 {
-    private readonly MaiXDbContext _dbContext;
+    private readonly mAIxDbContext _dbContext;
     private readonly AIService _aiService;
     private readonly PromptCacheService _promptCache;
     private readonly ILogger _logger;
@@ -29,7 +29,7 @@ public class PromptService
     /// </summary>
     private static readonly Regex VariablePattern = new(@"\{\{(\w+)\}\}", RegexOptions.Compiled);
 
-    public PromptService(MaiXDbContext dbContext, AIService aiService, PromptCacheService promptCache)
+    public PromptService(mAIxDbContext dbContext, AIService aiService, PromptCacheService promptCache)
     {
         _dbContext = dbContext ?? throw new ArgumentNullException(nameof(dbContext));
         _aiService = aiService ?? throw new ArgumentNullException(nameof(aiService));

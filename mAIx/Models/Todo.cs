@@ -2,7 +2,7 @@ using System;
 using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
 
-namespace MaiX.Models;
+namespace mAIx.Models;
 
 /// <summary>
 /// TODO 모델 - AI가 이메일에서 추출한 할 일 항목

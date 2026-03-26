@@ -10,14 +10,14 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Graph.Models;
 using Serilog;
-using MaiX.Data;
-using MaiX.Models;
-using MaiX.Services.Analysis;
-using MaiX.Services.Graph;
-using MaiX.Services.Notification;
-using MaiX.Utils;
+using mAIx.Data;
+using mAIx.Models;
+using mAIx.Services.Analysis;
+using mAIx.Services.Graph;
+using mAIx.Services.Notification;
+using mAIx.Utils;
 
-namespace MaiX.Services.Sync;
+namespace mAIx.Services.Sync;
 
 /// <summary>
 /// 백그라운드 동기화 서비스 - IHostedService 구현
@@ -597,7 +597,7 @@ public class BackgroundSyncService : BackgroundService
         try
         {
             using var scope = _serviceProvider.CreateScope();
-            var dbContext = scope.ServiceProvider.GetRequiredService<MaiXDbContext>();
+            var dbContext = scope.ServiceProvider.GetRequiredService<mAIxDbContext>();
             var graphAuthService = scope.ServiceProvider.GetRequiredService<GraphAuthService>();
             var graphMailService = scope.ServiceProvider.GetRequiredService<GraphMailService>();
             var emailAnalyzer = scope.ServiceProvider.GetRequiredService<EmailAnalyzer>();
@@ -787,7 +787,7 @@ public class BackgroundSyncService : BackgroundService
         _logger.Debug("계정 동기화 시작: {Email}", accountEmail);
 
         using var scope = _serviceProvider.CreateScope();
-        var dbContext = scope.ServiceProvider.GetRequiredService<MaiXDbContext>();
+        var dbContext = scope.ServiceProvider.GetRequiredService<mAIxDbContext>();
         var graphAuthService = scope.ServiceProvider.GetRequiredService<GraphAuthService>();
         var graphMailService = scope.ServiceProvider.GetRequiredService<GraphMailService>();
         var emailAnalyzer = scope.ServiceProvider.GetRequiredService<EmailAnalyzer>();
@@ -869,7 +869,7 @@ public class BackgroundSyncService : BackgroundService
     /// 단일 폴더 동기화
     /// </summary>
     private async Task<(int Changed, int Deleted, List<Email> SavedEmails)> SyncFolderAsync(
-        MaiXDbContext dbContext,
+        mAIxDbContext dbContext,
         GraphMailService graphMailService,
         string accountEmail,
         Models.Folder folder,
@@ -983,7 +983,7 @@ public class BackgroundSyncService : BackgroundService
     /// Delta Query에서 삭제된 메일 처리
     /// </summary>
     private async Task ProcessDeletedEmailsAsync(
-        MaiXDbContext dbContext,
+        mAIxDbContext dbContext,
         List<string> deletedIds,
         CancellationToken ct)
     {
@@ -1010,7 +1010,7 @@ public class BackgroundSyncService : BackgroundService
     /// 이메일 DB 저장
     /// </summary>
     private async Task<List<Email>> SaveEmailsAsync(
-        MaiXDbContext dbContext,
+        mAIxDbContext dbContext,
         List<Message> messages,
         string accountEmail,
         string folderId,
@@ -1271,7 +1271,7 @@ public class BackgroundSyncService : BackgroundService
     /// <param name="ct">취소 토큰</param>
     /// <returns>업데이트된 메일 수</returns>
     private async Task<int> SyncReadStatusAsync(
-        MaiXDbContext dbContext,
+        mAIxDbContext dbContext,
         GraphMailService graphMailService,
         string folderId,
         CancellationToken ct)
@@ -1347,7 +1347,7 @@ public class BackgroundSyncService : BackgroundService
     /// 메일 저장 (진행률 이벤트 포함)
     /// </summary>
     private async Task SaveEmailsWithProgressAsync(
-        MaiXDbContext dbContext,
+        mAIxDbContext dbContext,
         List<Message> messages,
         string accountEmail,
         string folderId,
@@ -1561,7 +1561,7 @@ public class BackgroundSyncService : BackgroundService
 
         // 변경사항 저장
         using var scope = _serviceProvider.CreateScope();
-        var dbContext = scope.ServiceProvider.GetRequiredService<MaiXDbContext>();
+        var dbContext = scope.ServiceProvider.GetRequiredService<mAIxDbContext>();
 
         foreach (var email in emails)
         {
@@ -1748,7 +1748,7 @@ public class BackgroundSyncService : BackgroundService
         _logger.Information("보낸편지함 동기화 요청: {Email}", accountEmail);
 
         using var scope = _serviceProvider.CreateScope();
-        var dbContext = scope.ServiceProvider.GetRequiredService<MaiXDbContext>();
+        var dbContext = scope.ServiceProvider.GetRequiredService<mAIxDbContext>();
         var graphMailService = scope.ServiceProvider.GetRequiredService<GraphMailService>();
 
         // 보낸편지함 폴더 찾기
@@ -1791,7 +1791,7 @@ public class BackgroundSyncService : BackgroundService
         _logger.Information("폴더 강제 새로고침 요청: {FolderId}", folderId);
 
         using var scope = _serviceProvider.CreateScope();
-        var dbContext = scope.ServiceProvider.GetRequiredService<MaiXDbContext>();
+        var dbContext = scope.ServiceProvider.GetRequiredService<mAIxDbContext>();
         var graphMailService = scope.ServiceProvider.GetRequiredService<GraphMailService>();
 
         // 해당 폴더의 deltaLink 초기화
@@ -1867,7 +1867,7 @@ public class BackgroundSyncService : BackgroundService
         {
             using var scope = _serviceProvider.CreateScope();
             var graphMailService = scope.ServiceProvider.GetRequiredService<GraphMailService>();
-            var dbContext = scope.ServiceProvider.GetRequiredService<MaiXDbContext>();
+            var dbContext = scope.ServiceProvider.GetRequiredService<mAIxDbContext>();
             var graphAuthService = scope.ServiceProvider.GetRequiredService<GraphAuthService>();
 
             if (!graphAuthService.IsLoggedIn || string.IsNullOrEmpty(graphAuthService.CurrentUserEmail))
@@ -1941,7 +1941,7 @@ public class BackgroundSyncService : BackgroundService
         {
             using var scope = _serviceProvider.CreateScope();
             var graphAuthService = scope.ServiceProvider.GetRequiredService<GraphAuthService>();
-            var dbContext = scope.ServiceProvider.GetRequiredService<MaiXDbContext>();
+            var dbContext = scope.ServiceProvider.GetRequiredService<mAIxDbContext>();
 
             // 로그인 상태 확인
             if (!graphAuthService.IsLoggedIn || string.IsNullOrEmpty(graphAuthService.CurrentUserEmail))
@@ -2086,7 +2086,7 @@ public class BackgroundSyncService : BackgroundService
             try
             {
                 using var errorScope = _serviceProvider.CreateScope();
-                var errorDbContext = errorScope.ServiceProvider.GetRequiredService<MaiXDbContext>();
+                var errorDbContext = errorScope.ServiceProvider.GetRequiredService<mAIxDbContext>();
                 var graphAuthService = errorScope.ServiceProvider.GetRequiredService<GraphAuthService>();
 
                 if (graphAuthService.IsLoggedIn && !string.IsNullOrEmpty(graphAuthService.CurrentUserEmail))

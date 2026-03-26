@@ -1,6 +1,6 @@
 using System;
 
-namespace MaiX.Services.Notification;
+namespace mAIx.Services.Notification;
 
 /// <summary>
 /// 알림 설정 모델 - ntfy 및 알림 동작 설정
@@ -15,7 +15,7 @@ public class NotificationSettings
     /// <summary>
     /// ntfy 토픽 이름
     /// </summary>
-    public string NtfyTopic { get; set; } = "MaiX";
+    public string NtfyTopic { get; set; } = "mAIx";
 
     /// <summary>
     /// ntfy 인증 토큰 (선택적)

@@ -1,9 +1,9 @@
 using System;
 using System.Globalization;
 using System.Windows.Data;
-using MaiX.ViewModels;
+using mAIx.ViewModels;
 
-namespace MaiX.Converters;
+namespace mAIx.Converters;
 
 /// <summary>
 /// FavoriteItemType을 아이콘 Symbol로 변환하는 컨버터

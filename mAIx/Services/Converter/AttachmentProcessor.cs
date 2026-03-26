@@ -6,10 +6,10 @@ using System.Text;
 using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
-using MaiX.Services.Cloud;
+using mAIx.Services.Cloud;
 using Serilog;
 
-namespace MaiX.Services.Converter
+namespace mAIx.Services.Converter
 {
     /// <summary>
     /// 첨부파일 처리 메인 서비스
@@ -48,7 +48,7 @@ namespace MaiX.Services.Converter
             _cloudDownloader = new CloudLinkDownloader();
 
             // 임시 폴더 설정
-            _tempFolder = Path.Combine(Path.GetTempPath(), "MaiX", "attachments");
+            _tempFolder = Path.Combine(Path.GetTempPath(), "mAIx", "attachments");
             Directory.CreateDirectory(_tempFolder);
 
             // 변환기 등록

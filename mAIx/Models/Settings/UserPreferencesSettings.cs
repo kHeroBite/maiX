@@ -1,6 +1,6 @@
 using System.Xml.Serialization;
 
-namespace MaiX.Models.Settings;
+namespace mAIx.Models.Settings;
 
 /// <summary>
 /// 사용자 환경 설정 (테마, UI 설정 등)

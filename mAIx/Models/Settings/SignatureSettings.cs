@@ -1,6 +1,6 @@
 using System.Collections.Generic;
 
-namespace MaiX.Models.Settings;
+namespace mAIx.Models.Settings;
 
 /// <summary>
 /// 이메일 서명 설정

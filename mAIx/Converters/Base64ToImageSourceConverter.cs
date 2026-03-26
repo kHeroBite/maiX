@@ -4,7 +4,7 @@ using System.IO;
 using System.Windows.Data;
 using System.Windows.Media.Imaging;
 
-namespace MaiX.Converters;
+namespace mAIx.Converters;
 
 /// <summary>
 /// Base64 문자열을 ImageSource로 변환하는 컨버터

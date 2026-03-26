@@ -3,7 +3,7 @@ using System.Globalization;
 using System.Windows;
 using System.Windows.Data;
 
-namespace MaiX.Converters;
+namespace mAIx.Converters;
 
 /// <summary>
 /// bool을 TextDecorations로 변환 (true이면 Strikethrough)

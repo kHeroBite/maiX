@@ -9,11 +9,11 @@ using System.Windows.Media;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Microsoft.Graph.Models;
-using MaiX.Services.Graph;
-using MaiX.Utils;
+using mAIx.Services.Graph;
+using mAIx.Utils;
 using Serilog;
 
-namespace MaiX.ViewModels;
+namespace mAIx.ViewModels;
 
 /// <summary>
 /// Planner ViewModel - 플랜/버킷/작업 관리
@@ -28,7 +28,7 @@ public partial class PlannerViewModel : ViewModelBase
     /// </summary>
     private static readonly string PinnedPlansFilePath = Path.Combine(
         Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
-        "MaiX", "pinned_plans.json");
+        "mAIx", "pinned_plans.json");
 
     /// <summary>
     /// 플랜 목록

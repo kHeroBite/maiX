@@ -8,7 +8,7 @@ using System.Threading.Tasks;
 using OpenMcdf;
 using Serilog;
 
-namespace MaiX.Services.Converter
+namespace mAIx.Services.Converter
 {
     /// <summary>
     /// HWP 파일 변환기 (OpenMcdf 사용)

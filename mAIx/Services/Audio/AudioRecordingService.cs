@@ -5,9 +5,9 @@ using System.Linq;
 using System.Runtime.InteropServices;
 using NAudio.CoreAudioApi;
 using NAudio.Wave;
-using MaiX.Utils;
+using mAIx.Utils;
 
-namespace MaiX.Services.Audio;
+namespace mAIx.Services.Audio;
 
 /// <summary>
 /// 오디오 녹음 서비스 (NAudio 사용)
@@ -115,7 +115,7 @@ public class AudioRecordingService : IDisposable
     /// 녹음 파일 저장 디렉토리
     /// </summary>
     public static string RecordingsDirectory => Path.Combine(
-        Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "MaiX", "recordings");
+        Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "mAIx", "recordings");
 
     /// <summary>
     /// 녹음 시작

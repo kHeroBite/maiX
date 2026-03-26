@@ -10,7 +10,7 @@ using DocumentFormat.OpenXml.Presentation;
 using A = DocumentFormat.OpenXml.Drawing;
 using Serilog;
 
-namespace MaiX.Services.Converter
+namespace mAIx.Services.Converter
 {
     /// <summary>
     /// DocumentFormat.OpenXml 라이브러리를 사용한 PPTX 변환기

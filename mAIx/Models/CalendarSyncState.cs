@@ -1,7 +1,7 @@
 using System;
 using System.ComponentModel.DataAnnotations;
 
-namespace MaiX.Models;
+namespace mAIx.Models;
 
 /// <summary>
 /// 캘린더 동기화 상태 (Delta Query 토큰 관리)

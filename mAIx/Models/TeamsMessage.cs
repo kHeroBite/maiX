@@ -1,7 +1,7 @@
 using System;
 using System.ComponentModel.DataAnnotations;
 
-namespace MaiX.Models;
+namespace mAIx.Models;
 
 /// <summary>
 /// Teams 메시지 모델 - Microsoft Teams 메시지 연동

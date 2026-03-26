@@ -6,9 +6,9 @@ using System.Net.Http;
 using System.Net.Http.Json;
 using System.Threading;
 using System.Threading.Tasks;
-using MaiX.Models;
+using mAIx.Models;
 
-namespace MaiX.Services.Speech;
+namespace mAIx.Services.Speech;
 
 /// <summary>
 /// Jarvis 음성 서버 HTTP 클라이언트

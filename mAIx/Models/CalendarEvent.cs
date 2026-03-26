@@ -1,7 +1,7 @@
 using System;
 using System.ComponentModel.DataAnnotations;
 
-namespace MaiX.Models;
+namespace mAIx.Models;
 
 /// <summary>
 /// 캘린더 이벤트 (Graph API 동기화용)

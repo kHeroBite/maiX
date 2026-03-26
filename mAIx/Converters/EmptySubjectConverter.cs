@@ -2,7 +2,7 @@ using System;
 using System.Globalization;
 using System.Windows.Data;
 
-namespace MaiX.Converters;
+namespace mAIx.Converters;
 
 /// <summary>
 /// 빈 제목을 "(제목 없음)"으로 변환하는 컨버터

@@ -1,0 +1,1 @@
+/mnt/c/DATA/Project/AI/hooks.md

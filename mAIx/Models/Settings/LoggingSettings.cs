@@ -1,7 +1,7 @@
 using System;
 using System.Xml.Serialization;
 
-namespace MaiX.Models.Settings;
+namespace mAIx.Models.Settings;
 
 /// <summary>
 /// 로깅 설정
@@ -23,7 +23,7 @@ public class LoggingSettings
     public int RetainedFileCountLimit { get; set; } = 30;
 
     /// <summary>
-    /// 로그 파일 경로 (기본: %APPDATA%\MaiX\logs)
+    /// 로그 파일 경로 (기본: %APPDATA%\mAIx\logs)
     /// </summary>
     [XmlElement("LogPath")]
     public string? LogPath { get; set; }

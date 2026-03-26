@@ -2,10 +2,10 @@ using System;
 using System.IO;
 using System.Threading;
 using System.Threading.Tasks;
-using MaiX.Models;
+using mAIx.Models;
 using NAudio.Wave;
 
-namespace MaiX.Services.Speech;
+namespace mAIx.Services.Speech;
 
 /// <summary>
 /// TTS 재생 서비스 — 서버/클라이언트 모드 지원

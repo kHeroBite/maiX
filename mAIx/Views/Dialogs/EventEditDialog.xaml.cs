@@ -13,16 +13,16 @@ using System.Windows.Media;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Graph.Models;
 using Wpf.Ui.Controls;
-using MaiX.Models;
-using MaiX.Services.Graph;
-using MaiX.Services.Search;
-using MaiX.Utils;
+using mAIx.Models;
+using mAIx.Services.Graph;
+using mAIx.Services.Search;
+using mAIx.Utils;
 
 using Application = System.Windows.Application;
 using MessageBoxButton = System.Windows.MessageBoxButton;
 using MessageBoxResult = System.Windows.MessageBoxResult;
 
-namespace MaiX.Views.Dialogs;
+namespace mAIx.Views.Dialogs;
 
 /// <summary>
 /// 일정 편집 다이얼로그 (아웃룩 스타일)

@@ -5,7 +5,7 @@ using System.Threading.Tasks;
 using Microsoft.Graph;
 using Microsoft.Graph.Models;
 
-namespace MaiX.Services.Graph
+namespace mAIx.Services.Graph
 {
     /// <summary>
     /// Microsoft Graph 메일 서비스

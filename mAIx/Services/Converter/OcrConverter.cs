@@ -6,7 +6,7 @@ using System.Threading.Tasks;
 using Serilog;
 using Tesseract;
 
-namespace MaiX.Services.Converter
+namespace mAIx.Services.Converter
 {
     /// <summary>
     /// 이미지 OCR 변환기 (Tesseract 사용)

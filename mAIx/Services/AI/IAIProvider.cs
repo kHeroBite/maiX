@@ -3,7 +3,7 @@ using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
 
-namespace MaiX.Services.AI
+namespace mAIx.Services.AI
 {
     /// <summary>
     /// AI Provider 공통 인터페이스

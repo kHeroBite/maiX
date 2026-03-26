@@ -1,6 +1,6 @@
 using System.ComponentModel.DataAnnotations;
 
-namespace MaiX.Models;
+namespace mAIx.Models;
 
 /// <summary>
 /// 서명 모델 - 이메일 서명 템플릿

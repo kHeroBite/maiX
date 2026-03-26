@@ -4,13 +4,13 @@ using System.Linq;
 using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Controls;
-using MaiX.Models;
-using MaiX.Services.AI;
-using MaiX.Services.Storage;
+using mAIx.Models;
+using mAIx.Services.AI;
+using mAIx.Services.Storage;
 using Microsoft.Extensions.DependencyInjection;
 using Wpf.Ui.Controls;
 
-namespace MaiX.Views;
+namespace mAIx.Views;
 
 public partial class PromptSettingsWindow : FluentWindow
 {

@@ -3,7 +3,7 @@ using System.Globalization;
 using System.Windows.Data;
 using Wpf.Ui.Controls;
 
-namespace MaiX.Converters;
+namespace mAIx.Converters;
 
 /// <summary>
 /// 플래그 상태(문자열)에 따라 버튼 Appearance를 변환하는 컨버터

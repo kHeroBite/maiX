@@ -1,11 +1,11 @@
 using System;
 using System.Security.Cryptography;
 using System.Text;
-using MaiX.Models;
-using MaiX.Models.Settings;
-using MaiX.Utils;
+using mAIx.Models;
+using mAIx.Models.Settings;
+using mAIx.Utils;
 
-namespace MaiX.Services.Storage;
+namespace mAIx.Services.Storage;
 
 /// <summary>
 /// 모든 XML 설정 파일을 관리하는 통합 매니저

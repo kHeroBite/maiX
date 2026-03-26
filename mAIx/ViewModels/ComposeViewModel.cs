@@ -3,12 +3,12 @@ using System.Linq;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Microsoft.Graph.Models;
-using MaiX.Models;
-using MaiX.Services.Graph;
-using MaiX.Services.Sync;
-using MaiX.Utils;
+using mAIx.Models;
+using mAIx.Services.Graph;
+using mAIx.Services.Sync;
+using mAIx.Utils;
 
-namespace MaiX.ViewModels;
+namespace mAIx.ViewModels;
 
 /// <summary>
 /// 메일 작성 모드

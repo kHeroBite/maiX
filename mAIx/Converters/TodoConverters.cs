@@ -2,7 +2,7 @@ using System.Globalization;
 using System.Windows.Data;
 using Wpf.Ui.Controls;
 
-namespace MaiX.Converters
+namespace mAIx.Converters
 {
     /// <summary>
     /// IsAddedToTodo 상태에 따라 To Do 아이콘을 반환하는 컨버터

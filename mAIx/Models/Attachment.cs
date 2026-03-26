@@ -2,7 +2,7 @@ using System;
 using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
 
-namespace MaiX.Models;
+namespace mAIx.Models;
 
 /// <summary>
 /// 첨부파일 모델 - 이메일 첨부파일과 변환 상태 관리

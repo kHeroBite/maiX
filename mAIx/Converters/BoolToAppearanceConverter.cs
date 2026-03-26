@@ -3,7 +3,7 @@ using System.Globalization;
 using System.Windows.Data;
 using Wpf.Ui.Controls;
 
-namespace MaiX.Converters;
+namespace mAIx.Converters;
 
 /// <summary>
 /// bool 값에 따라 버튼 Appearance를 변환하는 컨버터

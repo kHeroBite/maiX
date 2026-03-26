@@ -1,7 +1,7 @@
 using System;
 using System.Text.Json.Serialization;
 
-namespace MaiX.Models.Settings;
+namespace mAIx.Models.Settings;
 
 /// <summary>
 /// 동기화 기간 설정 타입

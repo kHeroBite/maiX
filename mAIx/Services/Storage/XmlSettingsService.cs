@@ -1,9 +1,9 @@
 using System;
 using System.IO;
 using System.Xml.Serialization;
-using MaiX.Utils;
+using mAIx.Utils;
 
-namespace MaiX.Services.Storage;
+namespace mAIx.Services.Storage;
 
 /// <summary>
 /// 범용 XML 설정 파일 로더/저장기

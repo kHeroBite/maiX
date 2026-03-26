@@ -1,7 +1,7 @@
 using System;
 using System.Xml.Serialization;
 
-namespace MaiX.Models.Settings;
+namespace mAIx.Models.Settings;
 
 /// <summary>
 /// AI Provider 설정

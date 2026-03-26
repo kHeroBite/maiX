@@ -1,13 +1,13 @@
-using MaiX.Models;
-using MaiX.Services.Converter;
-using MaiX.Services.Graph;
+using mAIx.Models;
+using mAIx.Services.Converter;
+using mAIx.Services.Graph;
 using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Threading;
 using System.Threading.Tasks;
 
-namespace MaiX.Services.AI;
+namespace mAIx.Services.AI;
 
 public class FileAnalysisService
 {
@@ -229,7 +229,7 @@ public class FileAnalysisService
         {
             try
             {
-                var tempDir = Path.Combine(Path.GetTempPath(), "MaiX_Attachments");
+                var tempDir = Path.Combine(Path.GetTempPath(), "mAIx_Attachments");
                 Directory.CreateDirectory(tempDir);
 
                 var localPath = await _graphOneNoteService.DownloadAudioResourceAsync(

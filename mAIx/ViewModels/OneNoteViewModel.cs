@@ -8,14 +8,14 @@ using System.Threading.Tasks;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Microsoft.Graph.Models;
-using MaiX.Models;
-using MaiX.Utils;
-using MaiX.Services.Graph;
+using mAIx.Models;
+using mAIx.Utils;
+using mAIx.Services.Graph;
 using Newtonsoft.Json;
 using Serilog;
 using STJ = System.Text.Json;
 
-namespace MaiX.ViewModels;
+namespace mAIx.ViewModels;
 
 /// <summary>
 /// OneNote ViewModel - 노트북/섹션/페이지 관리
@@ -31,7 +31,7 @@ public partial class OneNoteViewModel : ViewModelBase
 
     // 캐시 관련
     private static readonly string CacheDir = Path.Combine(
-        Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "MaiX", "cache");
+        Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "mAIx", "cache");
     private static readonly string NotebooksCacheFile = Path.Combine(CacheDir, "onenote_notebooks.json");
     private static readonly string CustomSitesFile = Path.Combine(CacheDir, "onenote_custom_sites.json");
     private bool _isInitialLoadFromCache = false;
@@ -95,7 +95,7 @@ public partial class OneNoteViewModel : ViewModelBase
     /// 즐겨찾기 저장 파일 경로
     /// </summary>
     private static readonly string FavoritesFile = Path.Combine(
-        Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "MaiX", "onenote_favorites.json");
+        Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "mAIx", "onenote_favorites.json");
 
     /// <summary>
     /// 검색어
@@ -172,7 +172,7 @@ public partial class OneNoteViewModel : ViewModelBase
     /// 녹음 파일 저장 경로
     /// </summary>
     private static readonly string RecordingsDir = Path.Combine(
-        Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "MaiX", "recordings");
+        Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "mAIx", "recordings");
 
     /// <summary>
     /// 녹음 서비스
@@ -1120,14 +1120,14 @@ public partial class OneNoteViewModel : ViewModelBase
                     FileName = fileInfo.Name,
                     CreatedTime = fileInfo.CreationTime,
                     Duration = GetAudioDuration(file),
-                    // MaiX에서 녹음한 파일은 "recording_" 접두사로 구분
+                    // mAIx에서 녹음한 파일은 "recording_" 접두사로 구분
                     Source = fileInfo.Name.StartsWith("recording_", StringComparison.OrdinalIgnoreCase)
-                        ? Models.RecordingSource.MaiX
+                        ? Models.RecordingSource.mAIx
                         : Models.RecordingSource.External
                 };
 
                 // 파일명에서 페이지 ID 추출 (형식: recording_{pageId}_{yyyyMMdd}_{HHmmss}.wav)
-                if (recording.Source == Models.RecordingSource.MaiX)
+                if (recording.Source == Models.RecordingSource.mAIx)
                 {
                     var nameParts = Path.GetFileNameWithoutExtension(fileInfo.Name).Split('_');
                     // 최소 4개 부분: recording, pageId, yyyyMMdd, HHmmss
@@ -1160,9 +1160,9 @@ public partial class OneNoteViewModel : ViewModelBase
                 Recordings.Add(recording);
             }
 
-            _logger.Information("녹음 파일 {Count}개 로드됨 (MaiX: {MaiXCount}, 외부: {ExternalCount})",
+            _logger.Information("녹음 파일 {Count}개 로드됨 (mAIx: {mAIxCount}, 외부: {ExternalCount})",
                 Recordings.Count,
-                Recordings.Count(r => r.Source == Models.RecordingSource.MaiX),
+                Recordings.Count(r => r.Source == Models.RecordingSource.mAIx),
                 Recordings.Count(r => r.Source == Models.RecordingSource.External));
 
             // 현재 페이지 필터링 적용
@@ -1189,7 +1189,7 @@ public partial class OneNoteViewModel : ViewModelBase
         {
             LoadRecordings();
             // LoadRecordings()가 FilterRecordingsForCurrentPage()를 호출하므로
-            // CurrentPageRecordings가 이미 채워져 있음 - MaiX 녹음 추가 불필요
+            // CurrentPageRecordings가 이미 채워져 있음 - mAIx 녹음 추가 불필요
         }
 
         // 페이지가 선택되지 않았으면 모든 녹음 표시
@@ -1210,7 +1210,7 @@ public partial class OneNoteViewModel : ViewModelBase
         var sanitizedPageId = SanitizePageId(pageId);
         Log4.Info($"★★★ 페이지 {pageId} ({SelectedPage.Title}) 녹음 로드 시작 (Sanitized: {sanitizedPageId}) ★★★");
 
-        // 1. 해당 페이지에 연결된 MaiX 녹음 추가 (sanitized ID로 비교)
+        // 1. 해당 페이지에 연결된 mAIx 녹음 추가 (sanitized ID로 비교)
         // LoadRecordings()를 호출한 경우 이미 FilterRecordingsForCurrentPage에서 추가됨
         if (needsManualFilter)
         {
@@ -1270,9 +1270,9 @@ public partial class OneNoteViewModel : ViewModelBase
                 }
             }
 
-            var mailxCount = CurrentPageRecordings.Count(r => r.Source == Models.RecordingSource.MaiX);
+            var mailxCount = CurrentPageRecordings.Count(r => r.Source == Models.RecordingSource.mAIx);
             var oneNoteCount = CurrentPageRecordings.Count(r => r.Source == Models.RecordingSource.OneNote);
-            Log4.Info($"★★★ 페이지 {pageId} 녹음 로드 완료: MaiX {mailxCount}개, OneNote {oneNoteCount}개 ★★★");
+            Log4.Info($"★★★ 페이지 {pageId} 녹음 로드 완료: mAIx {mailxCount}개, OneNote {oneNoteCount}개 ★★★");
         }
         catch (Exception ex)
         {
@@ -1557,7 +1557,7 @@ public partial class OneNoteViewModel : ViewModelBase
 
         if (SelectedPage == null)
         {
-            // 페이지 선택 안 됨: 모든 MaiX/외부 녹음 표시
+            // 페이지 선택 안 됨: 모든 mAIx/외부 녹음 표시
             foreach (var recording in Recordings)
             {
                 CurrentPageRecordings.Add(recording);
@@ -1738,15 +1738,15 @@ public partial class OneNoteViewModel : ViewModelBase
         Utils.Log4.Info($"[OneNote] STT 기본 경로: {sttPath}, 존재: {File.Exists(sttPath ?? "")}");
 
         // STT 결과 파일이 없으면 같은 기본 파일명의 STT 파일 검색 (OneNote 녹음 재다운로드 대응)
-        // 단, MaiX 자체 녹음(recording_으로 시작)은 정확한 파일명 매칭만 사용
+        // 단, mAIx 자체 녹음(recording_으로 시작)은 정확한 파일명 매칭만 사용
         if (string.IsNullOrEmpty(sttPath) || !File.Exists(sttPath))
         {
             var fileName = Path.GetFileNameWithoutExtension(recording.FileName);
 
-            // MaiX 자체 녹음 파일인 경우 기본명 검색 건너뜀 (정확한 매칭만 사용)
+            // mAIx 자체 녹음 파일인 경우 기본명 검색 건너뜀 (정확한 매칭만 사용)
             if (fileName.StartsWith("recording_"))
             {
-                Utils.Log4.Info($"[OneNote] MaiX 녹음 파일 - STT 파일 없음: {recording.FileName}");
+                Utils.Log4.Info($"[OneNote] mAIx 녹음 파일 - STT 파일 없음: {recording.FileName}");
                 return;
             }
 
@@ -1836,15 +1836,15 @@ public partial class OneNoteViewModel : ViewModelBase
         Utils.Log4.Info($"[OneNote] 요약 기본 경로: {summaryPath}, 존재: {File.Exists(summaryPath ?? "")}");
 
         // 요약 결과 파일이 없으면 같은 기본 파일명의 요약 파일 검색 (OneNote 녹음 재다운로드 대응)
-        // 단, MaiX 자체 녹음(recording_으로 시작)은 정확한 파일명 매칭만 사용
+        // 단, mAIx 자체 녹음(recording_으로 시작)은 정확한 파일명 매칭만 사용
         if (string.IsNullOrEmpty(summaryPath) || !File.Exists(summaryPath))
         {
             var fileName = Path.GetFileNameWithoutExtension(recording.FileName);
 
-            // MaiX 자체 녹음 파일인 경우 기본명 검색 건너뜀 (정확한 매칭만 사용)
+            // mAIx 자체 녹음 파일인 경우 기본명 검색 건너뜀 (정확한 매칭만 사용)
             if (fileName.StartsWith("recording_"))
             {
-                Utils.Log4.Info($"[OneNote] MaiX 녹음 파일 - 요약 파일 없음: {recording.FileName}");
+                Utils.Log4.Info($"[OneNote] mAIx 녹음 파일 - 요약 파일 없음: {recording.FileName}");
                 return;
             }
 

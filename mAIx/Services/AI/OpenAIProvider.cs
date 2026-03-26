@@ -9,7 +9,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using Serilog;
 
-namespace MaiX.Services.AI
+namespace mAIx.Services.AI
 {
     /// <summary>
     /// OpenAI API Provider

@@ -5,11 +5,11 @@ using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
 using System.Windows;
-using MaiX.Models;
-using MaiX.Services.Graph;
+using mAIx.Models;
+using mAIx.Services.Graph;
 using Serilog;
 
-namespace MaiX.Services.Cache;
+namespace mAIx.Services.Cache;
 
 /// <summary>
 /// 프로필 사진 캐시 서비스

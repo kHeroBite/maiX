@@ -8,7 +8,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using Serilog;
 
-namespace MaiX.Services.Converter
+namespace mAIx.Services.Converter
 {
     /// <summary>
     /// Windows 내장 OCR 변환기

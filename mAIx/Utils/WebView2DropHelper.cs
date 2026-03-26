@@ -8,8 +8,8 @@ using System.Windows;
 using ComIDataObject = System.Runtime.InteropServices.ComTypes.IDataObject;
 using System.Windows.Interop;
 using Microsoft.Web.WebView2.Wpf;
-using MaiX.Services.Editor;
-namespace MaiX.Utils
+using mAIx.Services.Editor;
+namespace mAIx.Utils
 {
     /// <summary>
     /// WebView2의 Chrome_WidgetWin hwnd에 커스텀 OLE IDropTarget을 등록하여

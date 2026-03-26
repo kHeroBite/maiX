@@ -3,7 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using Serilog;
 
-namespace MaiX.Services.Analysis;
+namespace mAIx.Services.Analysis;
 
 /// <summary>
 /// 우선순위 계산기 - 100점 기준 우선순위 점수 계산

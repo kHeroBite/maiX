@@ -5,7 +5,7 @@ using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
 
-namespace MaiX.Services.AI;
+namespace mAIx.Services.AI;
 
 /// <summary>
 /// 프롬프트 파일 캐시 서비스 — Singleton

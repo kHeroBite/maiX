@@ -3,7 +3,7 @@ using System.Globalization;
 using System.Windows.Data;
 using Wpf.Ui.Controls;
 
-namespace MaiX.Converters;
+namespace mAIx.Converters;
 
 /// <summary>
 /// 재생 중 여부를 Play/Pause 아이콘으로 변환

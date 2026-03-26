@@ -1,4 +1,4 @@
-namespace MaiX.Models;
+namespace mAIx.Models;
 
 /// <summary>
 /// 검색 폴더 선택 옵션 아이템

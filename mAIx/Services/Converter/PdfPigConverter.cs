@@ -8,7 +8,7 @@ using UglyToad.PdfPig;
 using UglyToad.PdfPig.Content;
 using Serilog;
 
-namespace MaiX.Services.Converter
+namespace mAIx.Services.Converter
 {
     /// <summary>
     /// PdfPig 라이브러리를 사용한 PDF 변환기

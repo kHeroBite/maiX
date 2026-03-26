@@ -9,21 +9,21 @@ using System.Windows.Data;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Microsoft.EntityFrameworkCore;
-using MaiX.Data;
-using MaiX.Models;
-using MaiX.Services.Graph;
-using MaiX.Services.Search;
-using MaiX.Services.Sync;
-using MaiX.Utils;
+using mAIx.Data;
+using mAIx.Models;
+using mAIx.Services.Graph;
+using mAIx.Services.Search;
+using mAIx.Services.Sync;
+using mAIx.Utils;
 
-namespace MaiX.ViewModels;
+namespace mAIx.ViewModels;
 
 /// <summary>
 /// 메인 화면 ViewModel - 폴더/이메일 목록 관리
 /// </summary>
 public partial class MainViewModel : ViewModelBase, IDisposable
 {
-    private readonly MaiXDbContext _dbContext;
+    private readonly mAIxDbContext _dbContext;
     private readonly BackgroundSyncService _syncService;
     private readonly GraphMailService _graphMailService;
 
@@ -32,7 +32,7 @@ public partial class MainViewModel : ViewModelBase, IDisposable
     /// </summary>
     public CalendarViewModel? CalendarViewModel { get; set; }
 
-    public MainViewModel(MaiXDbContext dbContext, BackgroundSyncService syncService, GraphMailService graphMailService)
+    public MainViewModel(mAIxDbContext dbContext, BackgroundSyncService syncService, GraphMailService graphMailService)
     {
         try
         {
@@ -318,7 +318,7 @@ public partial class MainViewModel : ViewModelBase, IDisposable
     /// 애플리케이션 타이틀
     /// </summary>
     [ObservableProperty]
-    private string _title = "MaiX";
+    private string _title = "mAIx";
 
     /// <summary>
     /// 상태 메시지

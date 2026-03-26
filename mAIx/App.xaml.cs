@@ -7,24 +7,24 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Serilog;
 using Serilog.Events;
-using MaiX.Data;
-using MaiX.Models.Settings;
-using MaiX.Services.AI;
-using MaiX.Services.Analysis;
-using MaiX.Services.Cloud;
-using MaiX.Services.Converter;
-using MaiX.Services.Graph;
-using MaiX.Services.Notification;
-using MaiX.Services.Cache;
-using MaiX.Services.Search;
-using MaiX.Services.Storage;
-using MaiX.Services.Sync;
-using MaiX.ViewModels;
-using MaiX.Services.Api;
-using MaiX.Utils;
-using MaiX.Views;
+using mAIx.Data;
+using mAIx.Models.Settings;
+using mAIx.Services.AI;
+using mAIx.Services.Analysis;
+using mAIx.Services.Cloud;
+using mAIx.Services.Converter;
+using mAIx.Services.Graph;
+using mAIx.Services.Notification;
+using mAIx.Services.Cache;
+using mAIx.Services.Search;
+using mAIx.Services.Storage;
+using mAIx.Services.Sync;
+using mAIx.ViewModels;
+using mAIx.Services.Api;
+using mAIx.Utils;
+using mAIx.Views;
 
-namespace MaiX;
+namespace mAIx;
 
 /// <summary>
 /// 애플리케이션 진입점 - DI 컨테이너 구성 및 서비스 등록
@@ -40,7 +40,7 @@ public partial class App : Application
     /// </summary>
     public static string AppDataPath { get; } = Path.Combine(
         Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
-        "MaiX");
+        "mAIx");
 
     /// <summary>
     /// 로그 폴더 경로
@@ -50,7 +50,7 @@ public partial class App : Application
     /// <summary>
     /// SQLite 데이터베이스 경로
     /// </summary>
-    public static string DatabasePath { get; } = Path.Combine(AppDataPath, "MaiX.db");
+    public static string DatabasePath { get; } = Path.Combine(AppDataPath, "mAIx.db");
 
     /// <summary>
     /// 통합 설정 매니저 (XML 파일 기반)
@@ -172,14 +172,14 @@ public partial class App : Application
         Log.Logger = new LoggerConfiguration()
             .MinimumLevel.Is(logLevel)
             .WriteTo.File(
-                path: Path.Combine(logPath, "MaiX-.log"),
+                path: Path.Combine(logPath, "mAIx-.log"),
                 rollingInterval: RollingInterval.Day,
                 retainedFileCountLimit: Settings.Logging.RetainedFileCountLimit,
                 flushToDiskInterval: TimeSpan.FromSeconds(1),
                 outputTemplate: "[{Timestamp:yyyy-MM-dd HH:mm:ss.fff}] [{Level:u3}] {Message:lj}{NewLine}{Exception}")
             .CreateLogger();
 
-        Log.Information("MaiX 애플리케이션 시작");
+        Log.Information("mAIx 애플리케이션 시작");
     }
 
     /// <summary>
@@ -199,13 +199,13 @@ public partial class App : Application
         services.AddSingleton(Settings.Logging);
 
         // DbContext 등록 (SQLite) - Factory 패턴 사용
-        services.AddDbContextFactory<MaiXDbContext>(options =>
+        services.AddDbContextFactory<mAIxDbContext>(options =>
         {
             options.UseSqlite($"Data Source={DatabasePath}");
         });
 
         // DbContext 직접 등록 (기존 호환성)
-        services.AddDbContext<MaiXDbContext>(options =>
+        services.AddDbContext<mAIxDbContext>(options =>
         {
             options.UseSqlite($"Data Source={DatabasePath}");
         });
@@ -411,7 +411,7 @@ public partial class App : Application
         Services.Theme.RenderModeService.Instance.SettingsManager = Settings;
         Services.Theme.RenderModeService.Instance.LoadSavedRenderMode(gpuModeOverride);
 
-        Log4.Info("========== MaiX 앱 시작 (빌드: 2026-01-26 20:48) ==========");
+        Log4.Info("========== mAIx 앱 시작 (빌드: 2026-01-26 20:48) ==========");
         Log4.Debug("OnStartup 시작");
         await _host.StartAsync();
         Log4.Debug("Host 시작 완료");
@@ -428,7 +428,7 @@ public partial class App : Application
             // 데이터베이스 마이그레이션 실행
             Log4.Debug("DB 마이그레이션 시작");
             using var scope = _host.Services.CreateScope();
-            var dbContext = scope.ServiceProvider.GetRequiredService<MaiXDbContext>();
+            var dbContext = scope.ServiceProvider.GetRequiredService<mAIxDbContext>();
 
             Log.Information("데이터베이스 마이그레이션 시작");
             await dbContext.Database.MigrateAsync();
@@ -575,8 +575,8 @@ public partial class App : Application
     /// </summary>
     protected override async void OnExit(ExitEventArgs e)
     {
-        Log4.Info("MaiX 애플리케이션 종료");
-        Log.Information("MaiX 애플리케이션 종료");
+        Log4.Info("mAIx 애플리케이션 종료");
+        Log.Information("mAIx 애플리케이션 종료");
 
         // REST API 서버 종료
         _restApiServer?.Stop();

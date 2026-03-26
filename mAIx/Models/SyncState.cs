@@ -1,7 +1,7 @@
 using System;
 using System.ComponentModel.DataAnnotations;
 
-namespace MaiX.Models;
+namespace mAIx.Models;
 
 /// <summary>
 /// 동기화 상태 모델 - Graph API Delta 동기화 상태 관리

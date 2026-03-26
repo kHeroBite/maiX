@@ -2,7 +2,7 @@ using System.Collections.ObjectModel;
 using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
 
-namespace MaiX.Models;
+namespace mAIx.Models;
 
 /// <summary>
 /// 폴더 모델 - Outlook 메일 폴더 정보

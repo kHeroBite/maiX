@@ -9,9 +9,9 @@ using System.Threading.Channels;
 using System.Threading.Tasks;
 using Microsoft.Graph.Models;
 using Serilog;
-using MaiX.Models;
+using mAIx.Models;
 
-namespace MaiX.Services.Notification;
+namespace mAIx.Services.Notification;
 
 /// <summary>
 /// 알림 서비스 - ntfy를 통한 푸시 알림 발송

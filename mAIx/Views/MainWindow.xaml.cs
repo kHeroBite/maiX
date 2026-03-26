@@ -13,18 +13,18 @@ using Microsoft.Web.WebView2.Core;
 using Serilog;
 using Wpf.Ui;
 using Wpf.Ui.Controls;
-using MaiX.Models;
-using MaiX.Models.Settings;
-using MaiX.Services.Search;
-using MaiX.Utils;
-using MaiX.ViewModels;
-using MaiX.Views.Dialogs;
-using MaiX.Services.Graph;
-using MaiX.Services.Storage;
-using MaiX.Services.Audio;
-using MaiX.Data;
+using mAIx.Models;
+using mAIx.Models.Settings;
+using mAIx.Services.Search;
+using mAIx.Utils;
+using mAIx.ViewModels;
+using mAIx.Views.Dialogs;
+using mAIx.Services.Graph;
+using mAIx.Services.Storage;
+using mAIx.Services.Audio;
+using mAIx.Data;
 
-namespace MaiX.Views;
+namespace mAIx.Views;
 
 /// <summary>
 /// 메인 윈도우 - 3단 레이아웃 (폴더트리 | 메일리스트 | 본문+AI)
@@ -799,12 +799,12 @@ public partial class MainWindow : FluentWindow
         // 이메일만 있는 경우 DB에서 이름 조회
         try
         {
-            // P4-06: DI 우회(new MaiXDbContext) → IDbContextFactory 패턴으로 전환
-            var dbFactory = (App.Current as App)?.GetService<Microsoft.EntityFrameworkCore.IDbContextFactory<Data.MaiXDbContext>>();
+            // P4-06: DI 우회(new mAIxDbContext) → IDbContextFactory 패턴으로 전환
+            var dbFactory = (App.Current as App)?.GetService<Microsoft.EntityFrameworkCore.IDbContextFactory<Data.mAIxDbContext>>();
             using var context = dbFactory != null
                 ? dbFactory.CreateDbContext()
-                : new Data.MaiXDbContext(
-                    new Microsoft.EntityFrameworkCore.DbContextOptionsBuilder<Data.MaiXDbContext>()
+                : new Data.mAIxDbContext(
+                    new Microsoft.EntityFrameworkCore.DbContextOptionsBuilder<Data.mAIxDbContext>()
                         .UseSqlite($"Data Source={App.DatabasePath}")
                         .Options);
 
@@ -7348,7 +7348,7 @@ public partial class MainWindow : FluentWindow
 
             var settingsPath = System.IO.Path.Combine(
                 Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
-                "MaiX", "settings", "onenote_recording.json");
+                "mAIx", "settings", "onenote_recording.json");
 
             var settingsDir = System.IO.Path.GetDirectoryName(settingsPath);
             if (!string.IsNullOrEmpty(settingsDir) && !System.IO.Directory.Exists(settingsDir))
@@ -7380,7 +7380,7 @@ public partial class MainWindow : FluentWindow
 
             var settingsPath = System.IO.Path.Combine(
                 Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
-                "MaiX", "settings", "onenote_recording.json");
+                "mAIx", "settings", "onenote_recording.json");
 
             Log4.Debug($"[OneNote] 녹음 설정 파일 경로: {settingsPath}");
 
@@ -7964,7 +7964,7 @@ public partial class MainWindow : FluentWindow
 
             var app = (App)Application.Current;
             using var scope = app.ServiceProvider.CreateScope();
-            var dbContext = scope.ServiceProvider.GetRequiredService<Data.MaiXDbContext>();
+            var dbContext = scope.ServiceProvider.GetRequiredService<Data.mAIxDbContext>();
 
             // DB에서 해당 월의 캘린더 이벤트 조회 (삭제되지 않은 것만)
             var dbEvents = await dbContext.CalendarEvents
@@ -9077,7 +9077,7 @@ public partial class MainWindow : FluentWindow
     /// </summary>
     private static string RecentSearchesFilePath => System.IO.Path.Combine(
         Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
-        "MaiX", "recent_searches.json");
+        "mAIx", "recent_searches.json");
 
     /// <summary>
     /// 최근 검색어 로드 (JSON 파일에서)
@@ -16571,7 +16571,7 @@ public partial class MainWindow : FluentWindow
                 // 프롬프트가 비어있으면 시드 후 재로딩
                 if (allPrompts.Count == 0)
                 {
-                    var dbContext = scope.ServiceProvider.GetRequiredService<MaiXDbContext>();
+                    var dbContext = scope.ServiceProvider.GetRequiredService<mAIxDbContext>();
                     await DefaultPromptTemplates.SeedDatabaseAsync(dbContext);
                     allPrompts = await promptService.GetAllPromptsAsync();
                 }
@@ -18509,7 +18509,7 @@ public partial class MainWindow : FluentWindow
                 var serverUrl = prefs.SpeechServerUrl;
                 if (string.IsNullOrWhiteSpace(serverUrl)) return;
 
-                using var svc = new MaiX.Services.Speech.ServerSpeechService(serverUrl);
+                using var svc = new mAIx.Services.Speech.ServerSpeechService(serverUrl);
                 var (models, active) = await svc.GetSttModelsAsync();
                 if (models.Count == 0) return;
 
@@ -18658,7 +18658,7 @@ public partial class MainWindow : FluentWindow
             testBtn.IsEnabled = false;
             try
             {
-                using var svc = new MaiX.Services.Speech.ServerSpeechService(urlBox.Text.Trim());
+                using var svc = new mAIx.Services.Speech.ServerSpeechService(urlBox.Text.Trim());
                 var ok = await svc.TestConnectionAsync();
                 connStatus.Text = ok ? "✅ 연결 성공" : "❌ 연결 실패";
                 connStatus.Foreground = ok

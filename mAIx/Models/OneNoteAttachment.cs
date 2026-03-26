@@ -1,6 +1,6 @@
 using CommunityToolkit.Mvvm.ComponentModel;
 
-namespace MaiX.Models;
+namespace mAIx.Models;
 
 public partial class OneNoteAttachment : ObservableObject
 {

@@ -1,7 +1,7 @@
 using System;
 using System.Xml.Serialization;
 
-namespace MaiX.Models.Settings;
+namespace mAIx.Models.Settings;
 
 /// <summary>
 /// 메일 동기화 설정

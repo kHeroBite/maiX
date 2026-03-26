@@ -1,12 +1,12 @@
 using System;
 using System.Xml.Serialization;
-using MaiX.Models.Settings;
+using mAIx.Models.Settings;
 
-namespace MaiX.Models;
+namespace mAIx.Models;
 
 /// <summary>
 /// 로그인 설정 모델
-/// 저장 위치: %APPDATA%\MaiX\conf\autologin.xml
+/// 저장 위치: %APPDATA%\mAIx\conf\autologin.xml
 /// </summary>
 [Serializable]
 [XmlRoot("LoginSettings")]

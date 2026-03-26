@@ -7,16 +7,16 @@ using Microsoft.Win32;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Graph.Models;
 using Wpf.Ui.Controls;
-using MaiX.ViewModels;
-using MaiX.Models;
-using MaiX.Utils;
-using MaiX.Services.Theme;
-using MaiX.Services.Graph;
-using MaiX.Services.Search;
-using MaiX.Views.Dialogs;
-using MaiX.Data;
+using mAIx.ViewModels;
+using mAIx.Models;
+using mAIx.Utils;
+using mAIx.Services.Theme;
+using mAIx.Services.Graph;
+using mAIx.Services.Search;
+using mAIx.Views.Dialogs;
+using mAIx.Data;
 
-namespace MaiX.Views;
+namespace mAIx.Views;
 
 /// <summary>
 /// 메일 작성 창
@@ -89,7 +89,7 @@ public partial class ComposeWindow : FluentWindow
             // WebView2 환경 생성
             var userDataFolder = System.IO.Path.Combine(
                 Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
-                "MaiX", "WebView2Cache", "Editor");
+                "mAIx", "WebView2Cache", "Editor");
 
             System.IO.Directory.CreateDirectory(userDataFolder);
 
@@ -906,11 +906,11 @@ public partial class ComposeWindow : FluentWindow
         try
         {
             // 로컬 DB에서 발신자 검색
-            // P4-06: DI 우회(new MaiXDbContext) → IDbContextFactory 패턴으로 전환
-            var dbFactory = (App.Current as App)?.GetService<Microsoft.EntityFrameworkCore.IDbContextFactory<MaiXDbContext>>();
+            // P4-06: DI 우회(new mAIxDbContext) → IDbContextFactory 패턴으로 전환
+            var dbFactory = (App.Current as App)?.GetService<Microsoft.EntityFrameworkCore.IDbContextFactory<mAIxDbContext>>();
             using var context = dbFactory != null
                 ? await dbFactory.CreateDbContextAsync()
-                : new MaiXDbContext(new DbContextOptionsBuilder<MaiXDbContext>().UseSqlite($"Data Source={App.DatabasePath}").Options);
+                : new mAIxDbContext(new DbContextOptionsBuilder<mAIxDbContext>().UseSqlite($"Data Source={App.DatabasePath}").Options);
             var emails = await context.Emails
                 .Select(e => e.From)
                 .Distinct()

@@ -2,7 +2,7 @@ using System;
 using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
 
-namespace MaiX.Models;
+namespace mAIx.Models;
 
 /// <summary>
 /// 프롬프트 테스트 이력 모델 - 프롬프트 테스트 결과 저장

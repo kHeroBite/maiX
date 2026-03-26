@@ -2,7 +2,7 @@ using System.Windows;
 using System.Windows.Input;
 using Wpf.Ui.Controls;
 
-namespace MaiX.Views.Dialogs;
+namespace mAIx.Views.Dialogs;
 
 /// <summary>
 /// 링크 삽입 다이얼로그

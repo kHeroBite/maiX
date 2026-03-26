@@ -1,15 +1,15 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Diagnostics;
-using MaiX.Models;
+using mAIx.Models;
 
-namespace MaiX.Data;
+namespace mAIx.Data;
 
 /// <summary>
-/// MaiX 데이터베이스 컨텍스트 - SQLite 기반 로컬 데이터 저장소
+/// mAIx 데이터베이스 컨텍스트 - SQLite 기반 로컬 데이터 저장소
 /// </summary>
-public class MaiXDbContext : DbContext
+public class mAIxDbContext : DbContext
 {
-    public MaiXDbContext(DbContextOptions<MaiXDbContext> options) : base(options)
+    public mAIxDbContext(DbContextOptions<mAIxDbContext> options) : base(options)
     {
     }
 
@@ -23,7 +23,7 @@ public class MaiXDbContext : DbContext
     }
 
     // ===== DbSet 정의 (12개) =====
-    // Note: Account는 DB에 저장하지 않고 로컬 XML 파일로 관리 (%APPDATA%\MaiX\conf\autologin.xml)
+    // Note: Account는 DB에 저장하지 않고 로컬 XML 파일로 관리 (%APPDATA%\mAIx\conf\autologin.xml)
 
     /// <summary>
     /// 이메일 테이블

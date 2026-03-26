@@ -9,7 +9,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using Serilog;
 
-namespace MaiX.Services.Converter
+namespace mAIx.Services.Converter
 {
     /// <summary>
     /// HwpSharp 라이브러리를 사용한 HWP 파일 변환기

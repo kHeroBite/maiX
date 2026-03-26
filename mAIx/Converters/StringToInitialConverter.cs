@@ -3,7 +3,7 @@ using System.Globalization;
 using System.Text.Json;
 using System.Windows.Data;
 
-namespace MaiX.Converters;
+namespace mAIx.Converters;
 
 /// <summary>
 /// 문자열(이름/이메일)을 이니셜로 변환하는 컨버터

@@ -1,7 +1,7 @@
 using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
 
-namespace MaiX.Models;
+namespace mAIx.Models;
 
 /// <summary>
 /// 계약정보 모델 - AI가 이메일에서 추출한 계약/사업 관련 정보

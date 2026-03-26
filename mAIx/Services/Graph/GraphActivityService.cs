@@ -4,9 +4,9 @@ using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.Graph;
 using Microsoft.Graph.Models;
-using MaiX.Utils;
+using mAIx.Utils;
 
-namespace MaiX.Services.Graph;
+namespace mAIx.Services.Graph;
 
 /// <summary>
 /// 활동 피드 서비스

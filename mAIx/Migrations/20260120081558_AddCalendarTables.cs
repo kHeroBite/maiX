@@ -3,7 +3,7 @@ using Microsoft.EntityFrameworkCore.Migrations;
 
 #nullable disable
 
-namespace MaiX.Migrations
+namespace mAIx.Migrations
 {
     /// <inheritdoc />
     public partial class AddCalendarTables : Migration

@@ -2,13 +2,13 @@ using System;
 using System.Threading.Tasks;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
-using MaiX.Models;
-using MaiX.Models.Settings;
-using MaiX.Services.Graph;
-using MaiX.Services.Storage;
-using MaiX.Utils;
+using mAIx.Models;
+using mAIx.Models.Settings;
+using mAIx.Services.Graph;
+using mAIx.Services.Storage;
+using mAIx.Utils;
 
-namespace MaiX.ViewModels;
+namespace mAIx.ViewModels;
 
 /// <summary>
 /// 로그인 화면 ViewModel - Microsoft 365 MSAL 인증 관리

@@ -4,22 +4,22 @@ using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
 using Serilog;
-using MaiX.Data;
-using MaiX.Models;
-using MaiX.Services.Converter;
+using mAIx.Data;
+using mAIx.Models;
+using mAIx.Services.Converter;
 
-namespace MaiX.Services.Storage;
+namespace mAIx.Services.Storage;
 
 /// <summary>
 /// 문서 변환기 설정 서비스 - DB에서 변환기 설정 관리
 /// </summary>
 public class ConverterSettingService
 {
-    private readonly MaiXDbContext _dbContext;
+    private readonly mAIxDbContext _dbContext;
     private readonly AttachmentProcessor _attachmentProcessor;
     private readonly ILogger _logger;
 
-    public ConverterSettingService(MaiXDbContext dbContext, AttachmentProcessor attachmentProcessor)
+    public ConverterSettingService(mAIxDbContext dbContext, AttachmentProcessor attachmentProcessor)
     {
         _dbContext = dbContext ?? throw new ArgumentNullException(nameof(dbContext));
         _attachmentProcessor = attachmentProcessor ?? throw new ArgumentNullException(nameof(attachmentProcessor));

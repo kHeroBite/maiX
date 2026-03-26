@@ -7,7 +7,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using Serilog;
 
-namespace MaiX.Services.AI
+namespace mAIx.Services.AI
 {
     /// <summary>
     /// AI 서비스 통합 관리 클래스

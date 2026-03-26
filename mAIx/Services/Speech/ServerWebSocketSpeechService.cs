@@ -11,7 +11,7 @@ using System.Text.Json.Serialization;
 using System.Threading;
 using System.Threading.Tasks;
 
-namespace MaiX.Services.Speech;
+namespace mAIx.Services.Speech;
 
 /// <summary>
 /// STT/TTS 청크 결과 레코드

@@ -9,7 +9,7 @@ using NPOI.SS.UserModel;
 using NPOI.XSSF.UserModel;
 using Serilog;
 
-namespace MaiX.Services.Converter
+namespace mAIx.Services.Converter
 {
     /// <summary>
     /// NPOI 라이브러리를 사용한 Excel 파일 변환기

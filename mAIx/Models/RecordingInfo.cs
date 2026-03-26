@@ -2,7 +2,7 @@ using System;
 using System.ComponentModel;
 using System.Runtime.CompilerServices;
 
-namespace MaiX.Models;
+namespace mAIx.Models;
 
 /// <summary>
 /// 녹음 파일 출처 구분
@@ -10,9 +10,9 @@ namespace MaiX.Models;
 public enum RecordingSource
 {
     /// <summary>
-    /// MaiX에서 직접 녹음한 파일
+    /// mAIx에서 직접 녹음한 파일
     /// </summary>
-    MaiX,
+    mAIx,
 
     /// <summary>
     /// OneNote 페이지에 첨부된 녹음
@@ -95,7 +95,7 @@ public class RecordingInfo : INotifyPropertyChanged
     public string DurationDisplay => Duration.ToString(@"mm\:ss");
 
     /// <summary>
-    /// 파일 출처 (MaiX 녹음 vs 외부 파일)
+    /// 파일 출처 (mAIx 녹음 vs 외부 파일)
     /// </summary>
     public RecordingSource Source
     {
@@ -132,7 +132,7 @@ public class RecordingInfo : INotifyPropertyChanged
     /// </summary>
     public string SourceDisplay => Source switch
     {
-        RecordingSource.MaiX => "MaiX",
+        RecordingSource.mAIx => "mAIx",
         RecordingSource.OneNote => "OneNote",
         _ => "외부"
     };
@@ -142,7 +142,7 @@ public class RecordingInfo : INotifyPropertyChanged
     /// </summary>
     public string SourceIcon => Source switch
     {
-        RecordingSource.MaiX => "Mic24",
+        RecordingSource.mAIx => "Mic24",
         RecordingSource.OneNote => "Note24",
         _ => "Document24"
     };
@@ -301,7 +301,7 @@ public class RecordingInfo : INotifyPropertyChanged
         {
             var prefix = Source switch
             {
-                RecordingSource.MaiX => "🎙️",
+                RecordingSource.mAIx => "🎙️",
                 RecordingSource.OneNote => "📓",
                 _ => "📁"
             };

@@ -11,7 +11,7 @@
     <RuntimeIdentifier>win-x64</RuntimeIdentifier>
     <OutputPath>bin\$(Configuration)\net10.0-windows\win-x64\</OutputPath>
     <AppendRuntimeIdentifierToOutputPath>false</AppendRuntimeIdentifierToOutputPath>
-    <ApplicationIcon>Assets\MaiX.ico</ApplicationIcon>
+    <ApplicationIcon>Assets\mAIx.ico</ApplicationIcon>
   </PropertyGroup>
 
   <ItemGroup>
@@ -91,7 +91,7 @@
   <!-- Assets 리소스 -->
   <ItemGroup>
     <Resource Include="Assets\icon.png" />
-    <Resource Include="Assets\MaiX.ico" />
+    <Resource Include="Assets\mAIx.ico" />
   </ItemGroup>
 
   <!-- TinyMCE 에디터 파일 (출력 디렉토리에 복사) -->

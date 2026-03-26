@@ -3,7 +3,7 @@ using System.Globalization;
 using System.Text.Json;
 using System.Windows.Data;
 
-namespace MaiX.Converters;
+namespace mAIx.Converters;
 
 /// <summary>
 /// JSON 배열 문자열을 표시용 문자열로 변환

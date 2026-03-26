@@ -1,7 +1,7 @@
 using System;
-using MaiX.Services.Graph;
+using mAIx.Services.Graph;
 
-namespace MaiX.Models;
+namespace mAIx.Models;
 
 /// <summary>
 /// SharePoint 휴지통 아이템 모델

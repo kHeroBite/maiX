@@ -3,21 +3,21 @@ using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
-using MaiX.Data;
+using mAIx.Data;
 
 #nullable disable
 
-namespace MaiX.Migrations
+namespace mAIx.Migrations
 {
-    [DbContext(typeof(MaiXDbContext))]
-    partial class MaiXDbContextModelSnapshot : ModelSnapshot
+    [DbContext(typeof(mAIxDbContext))]
+    partial class mAIxDbContextModelSnapshot : ModelSnapshot
     {
         protected override void BuildModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder.HasAnnotation("ProductVersion", "10.0.2");
 
-            modelBuilder.Entity("MaiX.Models.AISetting", b =>
+            modelBuilder.Entity("mAIx.Models.AISetting", b =>
                 {
                     b.Property<int>("Id")
                         .ValueGeneratedOnAdd()
@@ -52,7 +52,7 @@ namespace MaiX.Migrations
                     b.ToTable("AISettings");
                 });
 
-            modelBuilder.Entity("MaiX.Models.Attachment", b =>
+            modelBuilder.Entity("mAIx.Models.Attachment", b =>
                 {
                     b.Property<int>("Id")
                         .ValueGeneratedOnAdd()
@@ -111,7 +111,7 @@ namespace MaiX.Migrations
                     b.ToTable("Attachments");
                 });
 
-            modelBuilder.Entity("MaiX.Models.CalendarEvent", b =>
+            modelBuilder.Entity("mAIx.Models.CalendarEvent", b =>
                 {
                     b.Property<int>("Id")
                         .ValueGeneratedOnAdd()
@@ -289,7 +289,7 @@ namespace MaiX.Migrations
                     b.ToTable("CalendarEvents");
                 });
 
-            modelBuilder.Entity("MaiX.Models.CalendarSyncState", b =>
+            modelBuilder.Entity("mAIx.Models.CalendarSyncState", b =>
                 {
                     b.Property<int>("Id")
                         .ValueGeneratedOnAdd()
@@ -354,7 +354,7 @@ namespace MaiX.Migrations
                     b.ToTable("CalendarSyncStates");
                 });
 
-            modelBuilder.Entity("MaiX.Models.ChatFavorite", b =>
+            modelBuilder.Entity("mAIx.Models.ChatFavorite", b =>
                 {
                     b.Property<string>("ChatId")
                         .HasColumnType("TEXT");
@@ -383,7 +383,7 @@ namespace MaiX.Migrations
                     b.ToTable("ChatFavorites");
                 });
 
-            modelBuilder.Entity("MaiX.Models.ContractInfo", b =>
+            modelBuilder.Entity("mAIx.Models.ContractInfo", b =>
                 {
                     b.Property<int>("Id")
                         .ValueGeneratedOnAdd()
@@ -425,7 +425,7 @@ namespace MaiX.Migrations
                     b.ToTable("ContractInfos");
                 });
 
-            modelBuilder.Entity("MaiX.Models.ConverterSetting", b =>
+            modelBuilder.Entity("mAIx.Models.ConverterSetting", b =>
                 {
                     b.Property<int>("Id")
                         .ValueGeneratedOnAdd()
@@ -456,7 +456,7 @@ namespace MaiX.Migrations
                     b.ToTable("ConverterSettings");
                 });
 
-            modelBuilder.Entity("MaiX.Models.Email", b =>
+            modelBuilder.Entity("mAIx.Models.Email", b =>
                 {
                     b.Property<int>("Id")
                         .ValueGeneratedOnAdd()
@@ -600,7 +600,7 @@ namespace MaiX.Migrations
                     b.ToTable("Emails");
                 });
 
-            modelBuilder.Entity("MaiX.Models.Folder", b =>
+            modelBuilder.Entity("mAIx.Models.Folder", b =>
                 {
                     b.Property<string>("Id")
                         .HasMaxLength(500)
@@ -640,7 +640,7 @@ namespace MaiX.Migrations
                     b.ToTable("Folders");
                 });
 
-            modelBuilder.Entity("MaiX.Models.OneNotePage", b =>
+            modelBuilder.Entity("mAIx.Models.OneNotePage", b =>
                 {
                     b.Property<string>("Id")
                         .HasMaxLength(500)
@@ -669,7 +669,7 @@ namespace MaiX.Migrations
                     b.ToTable("OneNotePages");
                 });
 
-            modelBuilder.Entity("MaiX.Models.Prompt", b =>
+            modelBuilder.Entity("mAIx.Models.Prompt", b =>
                 {
                     b.Property<int>("Id")
                         .ValueGeneratedOnAdd()
@@ -711,7 +711,7 @@ namespace MaiX.Migrations
                     b.ToTable("Prompts");
                 });
 
-            modelBuilder.Entity("MaiX.Models.PromptTestHistory", b =>
+            modelBuilder.Entity("mAIx.Models.PromptTestHistory", b =>
                 {
                     b.Property<int>("Id")
                         .ValueGeneratedOnAdd()
@@ -746,7 +746,7 @@ namespace MaiX.Migrations
                     b.ToTable("PromptTestHistories");
                 });
 
-            modelBuilder.Entity("MaiX.Models.Signature", b =>
+            modelBuilder.Entity("mAIx.Models.Signature", b =>
                 {
                     b.Property<int>("Id")
                         .ValueGeneratedOnAdd()
@@ -776,7 +776,7 @@ namespace MaiX.Migrations
                     b.ToTable("Signatures");
                 });
 
-            modelBuilder.Entity("MaiX.Models.SyncState", b =>
+            modelBuilder.Entity("mAIx.Models.SyncState", b =>
                 {
                     b.Property<int>("Id")
                         .ValueGeneratedOnAdd()
@@ -806,7 +806,7 @@ namespace MaiX.Migrations
                     b.ToTable("SyncStates");
                 });
 
-            modelBuilder.Entity("MaiX.Models.TeamsMessage", b =>
+            modelBuilder.Entity("mAIx.Models.TeamsMessage", b =>
                 {
                     b.Property<string>("Id")
                         .HasMaxLength(500)
@@ -834,7 +834,7 @@ namespace MaiX.Migrations
                     b.ToTable("TeamsMessages");
                 });
 
-            modelBuilder.Entity("MaiX.Models.Todo", b =>
+            modelBuilder.Entity("mAIx.Models.Todo", b =>
                 {
                     b.Property<int>("Id")
                         .ValueGeneratedOnAdd()
@@ -866,9 +866,9 @@ namespace MaiX.Migrations
                     b.ToTable("Todos");
                 });
 
-            modelBuilder.Entity("MaiX.Models.Attachment", b =>
+            modelBuilder.Entity("mAIx.Models.Attachment", b =>
                 {
-                    b.HasOne("MaiX.Models.Email", "Email")
+                    b.HasOne("mAIx.Models.Email", "Email")
                         .WithMany("Attachments")
                         .HasForeignKey("EmailId")
                         .OnDelete(DeleteBehavior.Cascade)
@@ -877,20 +877,20 @@ namespace MaiX.Migrations
                     b.Navigation("Email");
                 });
 
-            modelBuilder.Entity("MaiX.Models.ContractInfo", b =>
+            modelBuilder.Entity("mAIx.Models.ContractInfo", b =>
                 {
-                    b.HasOne("MaiX.Models.Email", "Email")
+                    b.HasOne("mAIx.Models.Email", "Email")
                         .WithOne("ContractInfo")
-                        .HasForeignKey("MaiX.Models.ContractInfo", "EmailId")
+                        .HasForeignKey("mAIx.Models.ContractInfo", "EmailId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 
                     b.Navigation("Email");
                 });
 
-            modelBuilder.Entity("MaiX.Models.PromptTestHistory", b =>
+            modelBuilder.Entity("mAIx.Models.PromptTestHistory", b =>
                 {
-                    b.HasOne("MaiX.Models.Prompt", "Prompt")
+                    b.HasOne("mAIx.Models.Prompt", "Prompt")
                         .WithMany("TestHistories")
                         .HasForeignKey("PromptId")
                         .OnDelete(DeleteBehavior.Cascade)
@@ -899,9 +899,9 @@ namespace MaiX.Migrations
                     b.Navigation("Prompt");
                 });
 
-            modelBuilder.Entity("MaiX.Models.Todo", b =>
+            modelBuilder.Entity("mAIx.Models.Todo", b =>
                 {
-                    b.HasOne("MaiX.Models.Email", "Email")
+                    b.HasOne("mAIx.Models.Email", "Email")
                         .WithMany("Todos")
                         .HasForeignKey("EmailId")
                         .OnDelete(DeleteBehavior.Cascade)
@@ -910,7 +910,7 @@ namespace MaiX.Migrations
                     b.Navigation("Email");
                 });
 
-            modelBuilder.Entity("MaiX.Models.Email", b =>
+            modelBuilder.Entity("mAIx.Models.Email", b =>
                 {
                     b.Navigation("Attachments");
 
@@ -919,7 +919,7 @@ namespace MaiX.Migrations
                     b.Navigation("Todos");
                 });
 
-            modelBuilder.Entity("MaiX.Models.Prompt", b =>
+            modelBuilder.Entity("mAIx.Models.Prompt", b =>
                 {
                     b.Navigation("TestHistories");
                 });

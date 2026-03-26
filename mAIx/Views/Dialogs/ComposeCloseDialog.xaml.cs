@@ -1,7 +1,7 @@
 using System.Windows;
 using System.Windows.Input;
 
-namespace MaiX.Views.Dialogs;
+namespace mAIx.Views.Dialogs;
 
 /// <summary>
 /// 메일 작성 창 닫기 확인 대화상자

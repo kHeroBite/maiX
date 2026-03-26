@@ -3,7 +3,7 @@ using System.IO;
 using System.Security.Cryptography;
 using Microsoft.Identity.Client;
 
-namespace MaiX.Services.Graph
+namespace mAIx.Services.Graph
 {
     /// <summary>
     /// MSAL 토큰 캐시 헬퍼
@@ -16,7 +16,7 @@ namespace MaiX.Services.Graph
         /// </summary>
         private static readonly string CacheFilePath = Path.Combine(
             Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-            "MaiX",
+            "mAIx",
             "msal_token_cache.bin");
 
         private static readonly object FileLock = new object();

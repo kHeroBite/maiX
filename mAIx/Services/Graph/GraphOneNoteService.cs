@@ -11,16 +11,16 @@ using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Graph;
 using Microsoft.Graph.Models;
-using MaiX.Data;
-using MaiX.Utils;
+using mAIx.Data;
+using mAIx.Utils;
 using Serilog;
 
 // 모호한 참조 해결을 위한 별칭
-using MaiXTodo = MaiX.Models.Todo;
-using MaiXEmail = MaiX.Models.Email;
-using MaiXOneNotePage = MaiX.Models.OneNotePage;
+using mAIxTodo = mAIx.Models.Todo;
+using mAIxEmail = mAIx.Models.Email;
+using mAIxOneNotePage = mAIx.Models.OneNotePage;
 
-namespace MaiX.Services.Graph;
+namespace mAIx.Services.Graph;
 
 /// <summary>
 /// Microsoft OneNote 연동 서비스
@@ -28,12 +28,12 @@ namespace MaiX.Services.Graph;
 public class GraphOneNoteService
 {
     private readonly GraphAuthService _authService;
-    private readonly MaiXDbContext _dbContext;
+    private readonly mAIxDbContext _dbContext;
     private readonly ILogger _logger;
     // P2-03: IHttpClientFactory 주입 — new HttpClient() 직접 생성 → 소켓 재사용 패턴
     private readonly IHttpClientFactory _httpClientFactory;
 
-    public GraphOneNoteService(GraphAuthService authService, MaiXDbContext dbContext, IHttpClientFactory httpClientFactory)
+    public GraphOneNoteService(GraphAuthService authService, mAIxDbContext dbContext, IHttpClientFactory httpClientFactory)
     {
         _authService = authService ?? throw new ArgumentNullException(nameof(authService));
         _dbContext = dbContext ?? throw new ArgumentNullException(nameof(dbContext));
@@ -770,7 +770,7 @@ public class GraphOneNoteService
     /// <param name="sectionId">섹션 ID</param>
     /// <param name="email">이메일 정보</param>
     /// <returns>생성된 페이지</returns>
-    public async Task<OnenotePage?> CreatePageFromEmailAsync(string sectionId, MaiXEmail email)
+    public async Task<OnenotePage?> CreatePageFromEmailAsync(string sectionId, mAIxEmail email)
     {
         if (string.IsNullOrEmpty(sectionId))
             throw new ArgumentNullException(nameof(sectionId));
@@ -807,7 +807,7 @@ public class GraphOneNoteService
     /// <param name="sectionId">섹션 ID</param>
     /// <param name="todo">할일 정보</param>
     /// <returns>생성된 페이지</returns>
-    public async Task<OnenotePage?> CreatePageFromTodoAsync(string sectionId, MaiXTodo todo)
+    public async Task<OnenotePage?> CreatePageFromTodoAsync(string sectionId, mAIxTodo todo)
     {
         if (string.IsNullOrEmpty(sectionId))
             throw new ArgumentNullException(nameof(sectionId));
@@ -912,7 +912,7 @@ public class GraphOneNoteService
     /// <param name="onenotePage">Graph API 페이지</param>
     /// <param name="linkedEmailId">연결된 이메일 ID (선택)</param>
     /// <returns>저장된 OneNotePage</returns>
-    public async Task<MaiXOneNotePage> SavePageAsync(OnenotePage onenotePage, int? linkedEmailId = null)
+    public async Task<mAIxOneNotePage> SavePageAsync(OnenotePage onenotePage, int? linkedEmailId = null)
     {
         if (onenotePage == null)
             throw new ArgumentNullException(nameof(onenotePage));
@@ -932,7 +932,7 @@ public class GraphOneNoteService
             }
             else
             {
-                var page = new MaiXOneNotePage
+                var page = new mAIxOneNotePage
                 {
                     Id = pageId,
                     SectionId = onenotePage.ParentSection?.Id,
@@ -963,7 +963,7 @@ public class GraphOneNoteService
     /// </summary>
     /// <param name="emailId">이메일 ID</param>
     /// <returns>연결된 페이지 목록</returns>
-    public async Task<IEnumerable<MaiXOneNotePage>> GetLinkedPagesAsync(int emailId)
+    public async Task<IEnumerable<mAIxOneNotePage>> GetLinkedPagesAsync(int emailId)
     {
         return await _dbContext.OneNotePages
             .Where(p => p.LinkedEmailId == emailId)
@@ -974,7 +974,7 @@ public class GraphOneNoteService
     /// <summary>
     /// 이메일 HTML 콘텐츠 생성
     /// </summary>
-    private string BuildEmailHtmlContent(MaiXEmail email)
+    private string BuildEmailHtmlContent(mAIxEmail email)
     {
         var dateStr = email.ReceivedDateTime?.ToString("yyyy-MM-dd HH:mm") ?? "날짜 없음";
         var priorityStr = email.PriorityLevel ?? "normal";
@@ -1019,7 +1019,7 @@ public class GraphOneNoteService
     /// <summary>
     /// 할일 HTML 콘텐츠 생성
     /// </summary>
-    private string BuildTodoHtmlContent(MaiXTodo todo)
+    private string BuildTodoHtmlContent(mAIxTodo todo)
     {
         var dueDateStr = todo.DueDate?.ToString("yyyy-MM-dd") ?? "마감일 없음";
         var priorityStr = todo.Priority switch
@@ -2195,9 +2195,9 @@ public class GraphOneNoteService
         // OneNote가 <object> 태그의 인라인 placeholder로 삽입하는 문자 — 카드 변환 후 잔존
         result = result.Replace("\uFFFC", "");
 
-        // 2단계: MaiX 드롭 카드가 API 왕복 후 변질된 패턴 제거
+        // 2단계: mAIx 드롭 카드가 API 왕복 후 변질된 패턴 제거
         var droppedCardRegex = new Regex(
-            @"<a\s+href=""file:///[^""]*MaiX_Drop/[^""]*?/([^""/]+)""[^>]*>\s*<div[^>]*>\s*<img[^>]*/?>\\s*</div>\s*</a>\s*(?:<div[^>]*>\s*<p[^>]*><a[^>]*>[^<]*</a></p>\s*</div>)?",
+            @"<a\s+href=""file:///[^""]*mAIx_Drop/[^""]*?/([^""/]+)""[^>]*>\s*<div[^>]*>\s*<img[^>]*/?>\\s*</div>\s*</a>\s*(?:<div[^>]*>\s*<p[^>]*><a[^>]*>[^<]*</a></p>\s*</div>)?",
             RegexOptions.IgnoreCase | RegexOptions.Singleline);
 
         result = droppedCardRegex.Replace(result, match =>
@@ -2358,7 +2358,7 @@ public class GraphOneNoteService
             // 디버깅용: HTML 전체를 파일로 저장
             try
             {
-                var debugDir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "MaiX", "debug");
+                var debugDir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "mAIx", "debug");
                 Directory.CreateDirectory(debugDir);
                 var debugFile = Path.Combine(debugDir, $"page_{pageId.Replace("!", "_").Replace("-", "_")}.html");
                 File.WriteAllText(debugFile, html);

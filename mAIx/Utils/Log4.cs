@@ -1,6 +1,6 @@
 /*
  * ==========================================
- * MaiX 로깅 시스템 - MARS LOG4 클래스 이식
+ * mAIx 로깅 시스템 - MARS LOG4 클래스 이식
  * ==========================================
  *
  * log4net 라이브러리를 래핑한 통합 로깅 관리 클래스입니다.
@@ -11,7 +11,7 @@
  * - 스택 트레이스 자동 추가
  * - 스레드 안전한 로깅
  *
- * 로그 저장 경로: %APPDATA%\MaiX\logs\yyyyMMdd.log
+ * 로그 저장 경로: %APPDATA%\mAIx\logs\yyyyMMdd.log
  */
 
 using log4net;
@@ -24,7 +24,7 @@ using System.Runtime.CompilerServices;
 
 #nullable enable
 
-namespace MaiX.Utils;
+namespace mAIx.Utils;
 
 /// <summary>
 /// log4net 라이브러리를 래핑한 통합 로깅 관리 클래스입니다.
@@ -69,7 +69,7 @@ public static class Log4
         {
             // AppData 경로 설정
             string appDataPath = Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData);
-            string logPath = Path.Combine(appDataPath, "MaiX", "logs");
+            string logPath = Path.Combine(appDataPath, "mAIx", "logs");
 
             // 로그 폴더 자동 생성
             if (!Directory.Exists(logPath))
@@ -108,7 +108,7 @@ public static class Log4
                 }
             }
 
-            Info($"★☆★☆★☆★☆★☆★☆★☆★☆★☆★ MaiX 로깅 시스템 초기화 완료 ★☆★☆★☆★☆★☆★☆★☆★☆★☆★☆★☆★☆★");
+            Info($"★☆★☆★☆★☆★☆★☆★☆★☆★☆★ mAIx 로깅 시스템 초기화 완료 ★☆★☆★☆★☆★☆★☆★☆★☆★☆★☆★☆★☆★");
             Info($"로그 저장 경로: {logPath}");
         }
         catch (Exception ex)

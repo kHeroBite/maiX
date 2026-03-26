@@ -4,7 +4,7 @@ using System.Windows;
 using System.Windows.Data;
 using System.Windows.Media;
 
-namespace MaiX.Converters;
+namespace mAIx.Converters;
 
 /// <summary>
 /// 부울 값 또는 플래그 상태(문자열)를 Foreground 색상으로 변환하는 컨버터

@@ -4,10 +4,10 @@ using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
 using Serilog;
-using MaiX.Data;
-using MaiX.Models;
+using mAIx.Data;
+using mAIx.Models;
 
-namespace MaiX.Services.Storage;
+namespace mAIx.Services.Storage;
 
 /// <summary>
 /// 기본 프롬프트 템플릿 정의 - 19개 기본 프롬프트
@@ -844,7 +844,7 @@ JSON 형식으로 응답:
     /// </summary>
     /// <param name="dbContext">DB 컨텍스트</param>
     /// <returns>삽입된 프롬프트 수</returns>
-    public static async Task<int> SeedDatabaseAsync(MaiXDbContext dbContext)
+    public static async Task<int> SeedDatabaseAsync(mAIxDbContext dbContext)
     {
         if (dbContext == null)
             throw new ArgumentNullException(nameof(dbContext));

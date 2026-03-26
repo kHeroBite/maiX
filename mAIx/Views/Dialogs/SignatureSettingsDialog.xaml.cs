@@ -10,10 +10,10 @@ using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
 using Wpf.Ui.Controls;
-using MaiX.Models.Settings;
-using MaiX.Utils;
+using mAIx.Models.Settings;
+using mAIx.Utils;
 
-namespace MaiX.Views.Dialogs;
+namespace mAIx.Views.Dialogs;
 
 /// <summary>
 /// 서명 관리 다이얼로그 - RichTextBox 에디터 지원

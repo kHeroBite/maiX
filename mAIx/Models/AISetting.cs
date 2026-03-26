@@ -1,6 +1,6 @@
 using System.ComponentModel.DataAnnotations;
 
-namespace MaiX.Models;
+namespace mAIx.Models;
 
 /// <summary>
 /// AI 설정 모델 - LLM 제공자 및 API 설정

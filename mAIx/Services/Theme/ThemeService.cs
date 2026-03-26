@@ -4,10 +4,10 @@ using System.Windows;
 using System.Windows.Media;
 using Wpf.Ui.Appearance;
 using Wpf.Ui.Controls;
-using MaiX.Services.Storage;
-using MaiX.Utils;
+using mAIx.Services.Storage;
+using mAIx.Utils;
 
-namespace MaiX.Services.Theme;
+namespace mAIx.Services.Theme;
 
 /// <summary>
 /// 테마 관리 서비스 - 다크/라이트 모드 전환 및 기능별 AccentColor 관리

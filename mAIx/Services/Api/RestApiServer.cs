@@ -1,6 +1,6 @@
 /*
  * ==========================================
- * MaiX REST API 서버 - MARS RestApiServer 이식
+ * mAIx REST API 서버 - MARS RestApiServer 이식
  * ==========================================
  *
  * HttpListener 기반 REST API 서버입니다.
@@ -34,11 +34,11 @@ using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
-using MaiX.Utils;
+using mAIx.Utils;
 
 #nullable enable
 
-namespace MaiX.Services.Api;
+namespace mAIx.Services.Api;
 
 /// <summary>
 /// REST API 서버 클래스

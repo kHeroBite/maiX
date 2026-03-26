@@ -3,11 +3,11 @@ using System.IO;
 using System.Text.Json;
 using log4net;
 
-namespace MaiX.Services.AI;
+namespace mAIx.Services.AI;
 
 /// <summary>
 /// AI 분석 결과를 JSON 파일로 로컬 캐시하는 서비스
-/// 캐시 경로: %APPDATA%/MaiX/analysis_cache/{PageId}.json
+/// 캐시 경로: %APPDATA%/mAIx/analysis_cache/{PageId}.json
 /// </summary>
 public class FileAnalysisCacheService
 {
@@ -18,7 +18,7 @@ public class FileAnalysisCacheService
     public FileAnalysisCacheService()
     {
         var appData = Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData);
-        _cacheDir = Path.Combine(appData, "MaiX", "analysis_cache");
+        _cacheDir = Path.Combine(appData, "mAIx", "analysis_cache");
         Directory.CreateDirectory(_cacheDir);
     }
 

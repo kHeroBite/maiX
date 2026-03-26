@@ -7,7 +7,7 @@ using System.Threading.Tasks;
 using ClosedXML.Excel;
 using Serilog;
 
-namespace MaiX.Services.Converter
+namespace mAIx.Services.Converter
 {
     /// <summary>
     /// ClosedXML 라이브러리를 사용한 XLSX 변환기

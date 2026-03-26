@@ -6,11 +6,11 @@ using System.Threading;
 using System.Threading.Channels;
 using System.Threading.Tasks;
 using Serilog;
-using MaiX.Models;
-using MaiX.Services.AI;
-using MaiX.Services.Storage;
+using mAIx.Models;
+using mAIx.Services.AI;
+using mAIx.Services.Storage;
 
-namespace MaiX.Services.Analysis;
+namespace mAIx.Services.Analysis;
 
 /// <summary>
 /// 이메일 분석기 - 7단계 AI 분석 파이프라인 실행

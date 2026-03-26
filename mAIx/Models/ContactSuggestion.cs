@@ -1,6 +1,6 @@
 using CommunityToolkit.Mvvm.ComponentModel;
 
-namespace MaiX.Models;
+namespace mAIx.Models;
 
 /// <summary>
 /// 연락처 소스 유형

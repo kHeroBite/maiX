@@ -6,14 +6,14 @@ using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Graph.Models;
-using MaiX.Data;
-using MaiX.Models;
-using MaiX.Services.Cache;
-using MaiX.Services.Graph;
-using MaiX.Utils;
+using mAIx.Data;
+using mAIx.Models;
+using mAIx.Services.Cache;
+using mAIx.Services.Graph;
+using mAIx.Utils;
 using Serilog;
 
-namespace MaiX.Services.Search;
+namespace mAIx.Services.Search;
 
 /// <summary>
 /// 연락처 통합 검색 서비스
@@ -23,7 +23,7 @@ namespace MaiX.Services.Search;
 /// </summary>
 public class ContactSearchService
 {
-    private readonly MaiXDbContext _dbContext;
+    private readonly mAIxDbContext _dbContext;
     private readonly GraphContactService _contactService;
     private readonly GraphAuthService _authService;
     private readonly ProfilePhotoCacheService _photoCacheService;
@@ -40,7 +40,7 @@ public class ContactSearchService
     private const int DebounceDelayMs = 300;
 
     public ContactSearchService(
-        MaiXDbContext dbContext,
+        mAIxDbContext dbContext,
         GraphContactService contactService,
         GraphAuthService authService,
         ProfilePhotoCacheService photoCacheService)

@@ -4,9 +4,9 @@ using System.Globalization;
 using System.Text.Json;
 using System.Text.RegularExpressions;
 using Serilog;
-using MaiX.Models;
+using mAIx.Models;
 
-namespace MaiX.Services.Analysis;
+namespace mAIx.Services.Analysis;
 
 /// <summary>
 /// 할일 추출기 - AI 응답에서 액션 아이템 파싱

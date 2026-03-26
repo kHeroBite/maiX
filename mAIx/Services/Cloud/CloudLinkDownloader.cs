@@ -4,10 +4,10 @@ using System.Net.Http;
 using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
-using MaiX.Services.Converter;
+using mAIx.Services.Converter;
 using Serilog;
 
-namespace MaiX.Services.Cloud
+namespace mAIx.Services.Cloud
 {
     /// <summary>
     /// 클라우드 파일 다운로드 서비스
@@ -37,7 +37,7 @@ namespace MaiX.Services.Cloud
                 Timeout = TimeSpan.FromMinutes(5) // 대용량 파일 고려
             };
             _httpClient.DefaultRequestHeaders.Add("User-Agent",
-                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) MaiX/1.0");
+                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) mAIx/1.0");
         }
 
         /// <summary>

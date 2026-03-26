@@ -7,7 +7,7 @@ using System.Threading.Tasks;
 using NPOI.XWPF.UserModel;
 using Serilog;
 
-namespace MaiX.Services.Converter
+namespace mAIx.Services.Converter
 {
     /// <summary>
     /// NPOI 라이브러리를 사용한 Word 문서 변환기

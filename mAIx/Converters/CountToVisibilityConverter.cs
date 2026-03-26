@@ -3,7 +3,7 @@ using System.Globalization;
 using System.Windows;
 using System.Windows.Data;
 
-namespace MaiX.Converters;
+namespace mAIx.Converters;
 
 /// <summary>
 /// 컬렉션 Count를 기반으로 특정 인덱스 항목의 Visibility를 결정하는 컨버터

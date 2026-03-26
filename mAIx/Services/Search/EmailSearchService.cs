@@ -7,10 +7,10 @@ using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
 using Serilog;
-using MaiX.Data;
-using MaiX.Models;
+using mAIx.Data;
+using mAIx.Models;
 
-namespace MaiX.Services.Search;
+namespace mAIx.Services.Search;
 
 /// <summary>
 /// 이메일 검색 서비스 - 전문 검색, 필터링, 하이라이트 지원
@@ -18,7 +18,7 @@ namespace MaiX.Services.Search;
 /// </summary>
 public class EmailSearchService
 {
-    private readonly MaiXDbContext _dbContext;
+    private readonly mAIxDbContext _dbContext;
     private readonly ILogger _logger;
 
     // 검색 결과 캐시 (간단한 메모리 캐시)
@@ -26,7 +26,7 @@ public class EmailSearchService
     private static readonly TimeSpan CacheExpiration = TimeSpan.FromMinutes(5);
     private const int MaxCacheSize = 100;
 
-    public EmailSearchService(MaiXDbContext dbContext)
+    public EmailSearchService(mAIxDbContext dbContext)
     {
         _dbContext = dbContext ?? throw new ArgumentNullException(nameof(dbContext));
         _logger = Log.ForContext<EmailSearchService>();

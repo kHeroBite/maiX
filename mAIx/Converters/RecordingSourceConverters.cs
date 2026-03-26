@@ -3,9 +3,9 @@ using System.Globalization;
 using System.Windows;
 using System.Windows.Data;
 using System.Windows.Media;
-using MaiX.Models;
+using mAIx.Models;
 
-namespace MaiX.Converters;
+namespace mAIx.Converters;
 
 /// <summary>
 /// RecordingSource를 Visibility로 변환 (ConverterParameter로 비교)
@@ -32,18 +32,18 @@ public class RecordingSourceToVisibilityConverter : IValueConverter
 
 /// <summary>
 /// RecordingSource를 배경색(Brush)으로 변환
-/// MaiX: 파란색, External: 회색
+/// mAIx: 파란색, External: 회색
 /// </summary>
 public class RecordingSourceToBackgroundConverter : IValueConverter
 {
-    private static readonly SolidColorBrush MaiXBrush = new(Color.FromRgb(0, 120, 212));  // #0078D4
+    private static readonly SolidColorBrush mAIxBrush = new(Color.FromRgb(0, 120, 212));  // #0078D4
     private static readonly SolidColorBrush ExternalBrush = new(Color.FromRgb(136, 136, 136));  // #888888
 
     public object Convert(object value, Type targetType, object parameter, CultureInfo culture)
     {
         if (value is RecordingSource source)
         {
-            return source == RecordingSource.MaiX ? MaiXBrush : ExternalBrush;
+            return source == RecordingSource.mAIx ? mAIxBrush : ExternalBrush;
         }
         return ExternalBrush;
     }

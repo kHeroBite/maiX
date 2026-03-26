@@ -6,7 +6,7 @@ using Microsoft.Graph;
 using Microsoft.Graph.Models;
 using Serilog;
 
-namespace MaiX.Services.Graph;
+namespace mAIx.Services.Graph;
 
 /// <summary>
 /// Microsoft Graph 통화/프레즌스 연동 서비스

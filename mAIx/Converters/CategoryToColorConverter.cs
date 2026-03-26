@@ -5,7 +5,7 @@ using System.Windows;
 using System.Windows.Data;
 using System.Windows.Media;
 
-namespace MaiX.Converters;
+namespace mAIx.Converters;
 
 /// <summary>
 /// 카테고리 JSON 배열에서 첫 번째 카테고리의 색상을 반환하는 컨버터

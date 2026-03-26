@@ -7,10 +7,10 @@ using Microsoft.Graph.Models;
 using Serilog;
 
 // 모호한 참조 해결을 위한 별칭
-using MaiXTodo = MaiX.Models.Todo;
-using MaiXEmail = MaiX.Models.Email;
+using mAIxTodo = mAIx.Models.Todo;
+using mAIxEmail = mAIx.Models.Email;
 
-namespace MaiX.Services.Graph;
+namespace mAIx.Services.Graph;
 
 /// <summary>
 /// Microsoft Calendar 연동 서비스
@@ -99,7 +99,7 @@ public class GraphCalendarService
     /// </summary>
     /// <param name="email">이메일 정보</param>
     /// <returns>생성된 일정</returns>
-    public async Task<Event?> CreateDeadlineEventFromEmailAsync(MaiXEmail email)
+    public async Task<Event?> CreateDeadlineEventFromEmailAsync(mAIxEmail email)
     {
         if (email == null)
             throw new ArgumentNullException(nameof(email));
@@ -158,7 +158,7 @@ public class GraphCalendarService
     /// </summary>
     /// <param name="todo">할일 정보</param>
     /// <returns>생성된 일정</returns>
-    public async Task<Event?> CreateEventFromTodoAsync(MaiXTodo todo)
+    public async Task<Event?> CreateEventFromTodoAsync(mAIxTodo todo)
     {
         if (todo == null)
             throw new ArgumentNullException(nameof(todo));
@@ -626,7 +626,7 @@ public class GraphCalendarService
     /// <param name="extractedTime">추출된 시간 (선택)</param>
     /// <returns>생성된 일정</returns>
     public async Task<Event?> CreateEventFromEmailContentAsync(
-        MaiXEmail email,
+        mAIxEmail email,
         DateTime extractedDate,
         TimeSpan? extractedTime = null)
     {
@@ -684,7 +684,7 @@ public class GraphCalendarService
     /// <summary>
     /// 이메일로부터 일정 본문 생성
     /// </summary>
-    private string BuildEventBodyFromEmail(MaiXEmail email)
+    private string BuildEventBodyFromEmail(mAIxEmail email)
     {
         var summary = !string.IsNullOrEmpty(email.SummaryOneline)
             ? $"<p><strong>요약:</strong> {email.SummaryOneline}</p>"
@@ -1231,13 +1231,13 @@ public class GraphCalendarService
     /// <param name="calendarId">캘린더 ID (선택)</param>
     /// <param name="calendarName">캘린더 이름 (선택)</param>
     /// <returns>CalendarEvent 모델</returns>
-    public MaiX.Models.CalendarEvent ConvertToCalendarEvent(
+    public mAIx.Models.CalendarEvent ConvertToCalendarEvent(
         Event graphEvent,
         string accountEmail,
         string? calendarId = null,
         string? calendarName = null)
     {
-        var calendarEvent = new MaiX.Models.CalendarEvent
+        var calendarEvent = new mAIx.Models.CalendarEvent
         {
             GraphId = graphEvent.Id,
             ICalUId = graphEvent.ICalUId,

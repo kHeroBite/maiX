@@ -1,7 +1,7 @@
 using System;
 using System.Collections.Generic;
 
-namespace MaiX.Models;
+namespace mAIx.Models;
 
 /// <summary>
 /// 이메일 분석 결과 데이터 클래스

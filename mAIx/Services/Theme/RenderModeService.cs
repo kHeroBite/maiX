@@ -1,10 +1,10 @@
 using System;
 using System.Windows.Interop;
 using System.Windows.Media;
-using MaiX.Services.Storage;
-using MaiX.Utils;
+using mAIx.Services.Storage;
+using mAIx.Utils;
 
-namespace MaiX.Services.Theme;
+namespace mAIx.Services.Theme;
 
 /// <summary>
 /// 렌더링 모드 관리 서비스 (GPU/CPU 모드 전환)

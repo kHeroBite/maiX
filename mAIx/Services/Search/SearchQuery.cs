@@ -1,6 +1,6 @@
 using System;
 
-namespace MaiX.Services.Search;
+namespace mAIx.Services.Search;
 
 /// <summary>
 /// 이메일 검색 쿼리 모델 - 다양한 검색 조건 정의

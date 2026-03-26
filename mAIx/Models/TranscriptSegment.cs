@@ -1,7 +1,7 @@
 using System;
 using System.Collections.Generic;
 
-namespace MaiX.Models;
+namespace mAIx.Models;
 
 /// <summary>
 /// STT 전사 세그먼트 (화자별 발화 단위)

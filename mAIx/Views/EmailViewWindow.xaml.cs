@@ -2,12 +2,12 @@ using System.Text.Json;
 using System.Windows;
 using System.Windows.Input;
 using Microsoft.EntityFrameworkCore;
-using MaiX.Models;
-using MaiX.Utils;
-using MaiX.ViewModels;
+using mAIx.Models;
+using mAIx.Utils;
+using mAIx.ViewModels;
 using Wpf.Ui.Controls;
 
-namespace MaiX.Views;
+namespace mAIx.Views;
 
 /// <summary>
 /// 메일 보기 창
@@ -400,12 +400,12 @@ public partial class EmailViewWindow : FluentWindow
         // 이메일만 있는 경우 DB에서 이름 조회
         try
         {
-            // P4-06: DI 우회(new MaiXDbContext) → IDbContextFactory 패턴으로 전환
-            var dbFactory = (App.Current as App)?.GetService<Microsoft.EntityFrameworkCore.IDbContextFactory<Data.MaiXDbContext>>();
+            // P4-06: DI 우회(new mAIxDbContext) → IDbContextFactory 패턴으로 전환
+            var dbFactory = (App.Current as App)?.GetService<Microsoft.EntityFrameworkCore.IDbContextFactory<Data.mAIxDbContext>>();
             using var context = dbFactory != null
                 ? dbFactory.CreateDbContext()
-                : new Data.MaiXDbContext(
-                    new Microsoft.EntityFrameworkCore.DbContextOptionsBuilder<Data.MaiXDbContext>()
+                : new Data.mAIxDbContext(
+                    new Microsoft.EntityFrameworkCore.DbContextOptionsBuilder<Data.mAIxDbContext>()
                         .UseSqlite($"Data Source={App.DatabasePath}")
                         .Options);
 

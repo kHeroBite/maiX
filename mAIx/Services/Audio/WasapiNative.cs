@@ -1,8 +1,8 @@
 using System;
 using System.Runtime.InteropServices;
-using MaiX.Utils;
+using mAIx.Utils;
 
-namespace MaiX.Services.Audio;
+namespace mAIx.Services.Audio;
 
 /// <summary>
 /// WASAPI IAudioClient COM P/Invoke — NAudio 마샬링 버그 우회

@@ -6,12 +6,12 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Graph.Models;
-using MaiX.Data;
-using MaiX.Models;
-using MaiX.Services.Graph;
+using mAIx.Data;
+using mAIx.Models;
+using mAIx.Services.Graph;
 using Serilog;
 
-namespace MaiX.ViewModels;
+namespace mAIx.ViewModels;
 
 /// <summary>
 /// Teams 뷰모델 - 채팅방 및 메시지 관리
@@ -19,7 +19,7 @@ namespace MaiX.ViewModels;
 public partial class TeamsViewModel : ViewModelBase
 {
     private readonly GraphTeamsService _teamsService;
-    private readonly IDbContextFactory<MaiXDbContext> _dbContextFactory;
+    private readonly IDbContextFactory<mAIxDbContext> _dbContextFactory;
     private readonly ILogger _logger;
 
     /// <summary>
@@ -199,7 +199,7 @@ public partial class TeamsViewModel : ViewModelBase
     /// </summary>
     public bool CanSendMessage => !string.IsNullOrWhiteSpace(NewMessageText) && HasSelectedChat;
 
-    public TeamsViewModel(GraphTeamsService teamsService, IDbContextFactory<MaiXDbContext> dbContextFactory)
+    public TeamsViewModel(GraphTeamsService teamsService, IDbContextFactory<mAIxDbContext> dbContextFactory)
     {
         _teamsService = teamsService ?? throw new ArgumentNullException(nameof(teamsService));
         _dbContextFactory = dbContextFactory ?? throw new ArgumentNullException(nameof(dbContextFactory));

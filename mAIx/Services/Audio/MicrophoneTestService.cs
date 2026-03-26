@@ -6,9 +6,9 @@ using System.Threading;
 using System.Threading.Tasks;
 using NAudio.CoreAudioApi;
 using NAudio.Wave;
-using MaiX.Utils;
+using mAIx.Utils;
 
-namespace MaiX.Services.Audio;
+namespace mAIx.Services.Audio;
 
 /// <summary>
 /// 마이크 장치 정보

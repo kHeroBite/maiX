@@ -3,7 +3,7 @@ using System.Globalization;
 using System.Windows;
 using System.Windows.Data;
 
-namespace MaiX.Converters;
+namespace mAIx.Converters;
 
 /// <summary>
 /// 문자열이 파라미터와 일치하면 Visible, 아니면 Collapsed를 반환하는 컨버터
