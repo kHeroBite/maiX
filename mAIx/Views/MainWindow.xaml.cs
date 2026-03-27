@@ -18468,65 +18468,19 @@ public partial class MainWindow : FluentWindow
         urlGroup.Child = urlStack;
         SettingsContentPanel.Children.Add(urlGroup);
 
-        // === 서버 STT 모델 선택 그룹 ===
-        var sttModelGroup = CreateSettingsGroupBorder();
-        var sttModelStack = new StackPanel { Margin = new Thickness(16) };
-        sttModelStack.Children.Add(CreateSettingsLabel("서버 STT 모델"));
-
-        var sttModelDescText = new System.Windows.Controls.TextBlock
+        // === STT 옵션 통합 그룹 ===
+        var sttOptsGroup = CreateSettingsGroupBorder();
+        var sttOptsStack = new StackPanel { Margin = new Thickness(16) };
+        sttOptsStack.Children.Add(CreateSettingsLabel("STT 옵션"));
+        sttOptsStack.Children.Add(new System.Windows.Controls.TextBlock
         {
-            Text = "서버에서 사용할 Whisper 모델을 선택합니다.",
-            FontSize = 12,
-            Foreground = (Brush)FindResource("TextFillColorSecondaryBrush"),
-            Margin = new Thickness(0, 4, 0, 8)
-        };
-        sttModelStack.Children.Add(sttModelDescText);
-
-        // STT 모델 읽기전용 텍스트 표시
-        var sttModelValueText = new System.Windows.Controls.TextBlock
-        {
-            Text = prefs.ServerSttModel ?? "small",
-            FontSize = 14,
-            FontWeight = FontWeights.SemiBold,
-            Margin = new Thickness(0, 4, 0, 0),
-        };
-
-        sttModelStack.Children.Add(sttModelValueText);
-        sttModelGroup.Child = sttModelStack;
-        SettingsContentPanel.Children.Add(sttModelGroup);
-
-        // 서버에서 active 모델 동적 업데이트
-        _ = Task.Run(async () =>
-        {
-            try
-            {
-                var serverUrl = prefs.SpeechServerUrl;
-                if (string.IsNullOrWhiteSpace(serverUrl)) return;
-
-                using var svc = new mAIx.Services.Speech.ServerSpeechService(serverUrl);
-                var (models, active) = await svc.GetSttModelsAsync();
-                var display = !string.IsNullOrWhiteSpace(active) ? active : (prefs.ServerSttModel ?? "small");
-                await Dispatcher.InvokeAsync(() => sttModelValueText.Text = display);
-            }
-            catch
-            {
-                // 서버 미응답 시 저장된 모델명 유지
-            }
-        });
-
-        // === 서버 옵션 (읽기전용) 그룹 ===
-        var serverOptsGroup = CreateSettingsGroupBorder();
-        var serverOptsStack = new StackPanel { Margin = new Thickness(16) };
-        serverOptsStack.Children.Add(CreateSettingsLabel("서버 옵션"));
-        serverOptsStack.Children.Add(new System.Windows.Controls.TextBlock
-        {
-            Text = "음성 인식 서버에 전송되는 현재 설정값입니다.",
+            Text = "음성 인식 서버의 현재 설정값입니다.",
             FontSize = 12,
             Foreground = (Brush)FindResource("TextFillColorSecondaryBrush"),
             Margin = new Thickness(0, 4, 0, 8)
         });
 
-        void AddServerOptionRow(string label, string value)
+        System.Windows.Controls.TextBlock AddServerOptionRow(StackPanel parent, string label, string value)
         {
             var row = new Grid { Margin = new Thickness(0, 4, 0, 0) };
             row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(140) });
@@ -18549,17 +18503,103 @@ public partial class MainWindow : FluentWindow
             Grid.SetColumn(val, 1);
             row.Children.Add(lbl);
             row.Children.Add(val);
-            serverOptsStack.Children.Add(row);
+            parent.Children.Add(row);
+            return val;
         }
 
-        AddServerOptionRow("서버청크길이", "2.0초");
-        AddServerOptionRow("오버랩", "0.5초");
-        AddServerOptionRow("채널", "1 (모노)");
-        AddServerOptionRow("샘플레이트", "16,000 Hz");
-        AddServerOptionRow("압축포맷", "PCM (무압축)");
+        // STT 옵션 항목: 모델(서버API), 청크/오버랩(하드코딩), 채널/샘플레이트/포맷(서버API)
+        var sttModelVal = AddServerOptionRow(sttOptsStack, "모델", "조회 중...");
+        AddServerOptionRow(sttOptsStack, "청크길이", "2.0초");
+        AddServerOptionRow(sttOptsStack, "오버랩", "0.5초");
+        var sttChannelVal = AddServerOptionRow(sttOptsStack, "채널", "조회 중...");
+        var sttSampleRateVal = AddServerOptionRow(sttOptsStack, "샘플레이트", "조회 중...");
+        var sttFormatVal = AddServerOptionRow(sttOptsStack, "압축포맷", "조회 중...");
 
-        serverOptsGroup.Child = serverOptsStack;
-        SettingsContentPanel.Children.Add(serverOptsGroup);
+        sttOptsGroup.Child = sttOptsStack;
+        SettingsContentPanel.Children.Add(sttOptsGroup);
+
+        // === VAD 옵션 그룹 ===
+        var vadGroup = CreateSettingsGroupBorder();
+        var vadStack = new StackPanel { Margin = new Thickness(16) };
+        vadStack.Children.Add(CreateSettingsLabel("VAD 옵션"));
+        vadStack.Children.Add(new System.Windows.Controls.TextBlock
+        {
+            Text = "음성 활동 감지(VAD) 서버 설정값입니다.",
+            FontSize = 12,
+            Foreground = (Brush)FindResource("TextFillColorSecondaryBrush"),
+            Margin = new Thickness(0, 4, 0, 8)
+        });
+        var vadModelVal = AddServerOptionRow(vadStack, "현재 모델", "조회 중...");
+        var vadAvailVal = AddServerOptionRow(vadStack, "사용 가능 모델", "조회 중...");
+        vadGroup.Child = vadStack;
+        SettingsContentPanel.Children.Add(vadGroup);
+
+        // === 화자분리 옵션 그룹 ===
+        var diarizeGroup = CreateSettingsGroupBorder();
+        var diarizeStack = new StackPanel { Margin = new Thickness(16) };
+        diarizeStack.Children.Add(CreateSettingsLabel("화자분리 옵션"));
+        diarizeStack.Children.Add(new System.Windows.Controls.TextBlock
+        {
+            Text = "화자 분리 기능 서버 지원 정보입니다.",
+            FontSize = 12,
+            Foreground = (Brush)FindResource("TextFillColorSecondaryBrush"),
+            Margin = new Thickness(0, 4, 0, 8)
+        });
+        AddServerOptionRow(diarizeStack, "상태", "지원됨 (/api/diarize)");
+        diarizeGroup.Child = diarizeStack;
+        SettingsContentPanel.Children.Add(diarizeGroup);
+
+        // 서버 API 비동기 조회 (STT 모델 + STT 옵션 + VAD)
+        _ = Task.Run(async () =>
+        {
+            try
+            {
+                var serverUrl = prefs.SpeechServerUrl;
+                if (string.IsNullOrWhiteSpace(serverUrl)) return;
+
+                using var svc = new mAIx.Services.Speech.ServerSpeechService(serverUrl);
+                var fullStatusTask = svc.GetFullModelStatusAsync();
+                var audioCapTask = svc.GetAudioCapabilitiesAsync();
+                await Task.WhenAll(fullStatusTask, audioCapTask);
+
+                var fullStatus = fullStatusTask.Result;
+                var audioCap = audioCapTask.Result;
+
+                await Dispatcher.InvokeAsync(() =>
+                {
+                    // STT 모델
+                    var sttModel = fullStatus?.Stt?.CurrentModel ?? prefs.ServerSttModel ?? "small";
+                    sttModelVal.Text = sttModel;
+
+                    // 오디오 캐퍼빌리티
+                    var channels = audioCap?.SupportedChannels?.FirstOrDefault() ?? "1 (모노)";
+                    var sampleRate = audioCap?.SupportedSampleRates?.FirstOrDefault() ?? "16000";
+                    var format = audioCap?.SupportedFormats?.FirstOrDefault() ?? "PCM (무압축)";
+                    sttChannelVal.Text = channels;
+                    sttSampleRateVal.Text = sampleRate.EndsWith("Hz", StringComparison.OrdinalIgnoreCase)
+                        ? sampleRate : $"{sampleRate} Hz";
+                    sttFormatVal.Text = format;
+
+                    // VAD
+                    vadModelVal.Text = fullStatus?.Vad?.CurrentModel ?? "서버 미연결";
+                    var availModels = fullStatus?.Vad?.AvailableModels;
+                    vadAvailVal.Text = availModels != null && availModels.Count > 0
+                        ? string.Join(", ", availModels) : "서버 미연결";
+                });
+            }
+            catch
+            {
+                await Dispatcher.InvokeAsync(() =>
+                {
+                    sttModelVal.Text = prefs.ServerSttModel ?? "small";
+                    sttChannelVal.Text = "1 (모노)";
+                    sttSampleRateVal.Text = "16,000 Hz";
+                    sttFormatVal.Text = "PCM (무압축)";
+                    vadModelVal.Text = "서버 미연결";
+                    vadAvailVal.Text = "서버 미연결";
+                });
+            }
+        });
 
         // === 녹음청크길이 그룹 ===
         var sttIntervalGroup = CreateSettingsGroupBorder();
@@ -18667,6 +18707,71 @@ public partial class MainWindow : FluentWindow
         ttsStack.Children.Add(ttsPanel);
         ttsGroup.Child = ttsStack;
         SettingsContentPanel.Children.Add(ttsGroup);
+
+        // === TTS 옵션 그룹 ===
+        var ttsOptsGroup = CreateSettingsGroupBorder();
+        var ttsOptsStack = new StackPanel { Margin = new Thickness(16) };
+        ttsOptsStack.Children.Add(CreateSettingsLabel("TTS 옵션"));
+        ttsOptsStack.Children.Add(new System.Windows.Controls.TextBlock
+        {
+            Text = "음성 합성 서버의 현재 설정값입니다.",
+            FontSize = 12,
+            Foreground = (Brush)FindResource("TextFillColorSecondaryBrush"),
+            Margin = new Thickness(0, 4, 0, 8)
+        });
+        var ttsCurrentEngineVal = AddServerOptionRow(ttsOptsStack, "현재 엔진", "조회 중...");
+        var ttsReadyEnginesVal = AddServerOptionRow(ttsOptsStack, "Ready 엔진", "조회 중...");
+        var ttsEngineDeviceVal = AddServerOptionRow(ttsOptsStack, "디바이스", "조회 중...");
+        ttsOptsGroup.Child = ttsOptsStack;
+        SettingsContentPanel.Children.Add(ttsOptsGroup);
+
+        // TTS 서버 API 비동기 조회
+        _ = Task.Run(async () =>
+        {
+            try
+            {
+                var serverUrl = prefs.SpeechServerUrl;
+                if (string.IsNullOrWhiteSpace(serverUrl)) return;
+
+                using var svc = new mAIx.Services.Speech.ServerSpeechService(serverUrl);
+                var fullStatusTask = svc.GetFullModelStatusAsync();
+                var enginesTask = svc.GetTtsEnginesAsync();
+                await Task.WhenAll(fullStatusTask, enginesTask);
+
+                var fullStatus = fullStatusTask.Result;
+                var engines = enginesTask.Result;
+
+                await Dispatcher.InvokeAsync(() =>
+                {
+                    var currentEngine = fullStatus?.Tts?.CurrentEngine ?? engines?.Active ?? "서버 미연결";
+                    ttsCurrentEngineVal.Text = currentEngine;
+
+                    var readyEngines = fullStatus?.Tts?.ReadyEngines;
+                    ttsReadyEnginesVal.Text = readyEngines != null && readyEngines.Count > 0
+                        ? string.Join(", ", readyEngines) : "서버 미연결";
+
+                    // 현재 엔진의 디바이스 정보
+                    if (engines?.Details != null && !string.IsNullOrEmpty(currentEngine)
+                        && engines.Details.TryGetValue(currentEngine, out var detail))
+                    {
+                        ttsEngineDeviceVal.Text = detail.Device ?? "알 수 없음";
+                    }
+                    else
+                    {
+                        ttsEngineDeviceVal.Text = "서버 미연결";
+                    }
+                });
+            }
+            catch
+            {
+                await Dispatcher.InvokeAsync(() =>
+                {
+                    ttsCurrentEngineVal.Text = "서버 미연결";
+                    ttsReadyEnginesVal.Text = "서버 미연결";
+                    ttsEngineDeviceVal.Text = "서버 미연결";
+                });
+            }
+        });
 
         // === 저장 버튼 ===
         var saveBtn = new Wpf.Ui.Controls.Button

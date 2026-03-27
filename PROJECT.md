@@ -445,6 +445,14 @@ Speech_Services:
   - 파일명: ServerSpeechService.cs
     경로: Services/Speech/
     역할: Jarvis 서버 HTTP 클라이언트 (STT/TTS/화자분리 API 호출)
+    API_메서드:
+      - GetFullModelStatusAsync(): STT/TTS/VAD 통합 상태 조회 (/api/models/full-status)
+      - GetTtsEnginesAsync(): TTS 엔진 목록 + 세부정보 조회 (/api/tts/engines)
+      - GetAudioCapabilitiesAsync(): 오디오 지원 포맷/채널/샘플레이트 조회 (/api/audio/capabilities)
+    DTO:
+      - FullModelStatusResponse: SttStatusInfo + TtsStatusInfo + VadStatusInfo
+      - TtsEnginesResponse: 엔진목록 + Ready목록 + Active + Details(TtsEngineDetail)
+      - AudioCapabilitiesResponse: SupportedFormats + SupportedSampleRates + SupportedChannels
 
   - 파일명: ServerWebSocketSpeechService.cs
     경로: Services/Speech/
@@ -608,3 +616,4 @@ curl -s http://localhost:5858/api/status
 | 2026-03-27 | STT 실시간 시간표시 수정 + 자동후처리(STT/요약) 로직 보완 | ServerWebSocketSpeechService.cs, ServerSpeechService.cs, OneNoteViewModel.cs | SttChunkResult에 StartSeconds/EndSeconds 추가, JSON 시간 파싱(start_time/start 폴백), segments 기반 시간 파싱 개선, TimeSpan.Zero→chunk 시간 반영, RunPostProcessingAsync IsPostSTTEnabled 체크 + 파일 STT 단계 추가 |
 | 2026-03-27 | 앱 아이콘 도트스타일 X 디자인으로 재생성 | mAIx/Assets/mAIx.ico, mAIx/Assets/icon.png | 투명배경, 멀티사이즈(.ico), 256×256(.png) 도트스타일 X 아이콘 |
 | 2026-03-27 | STT 설정 화면 서버옵션 읽기전용 표시 + 모델 텍스트 전환 | mAIx/Views/MainWindow.xaml.cs | ShowSttTtsSettings()에 청크길이/오버랩/채널/샘플레이트/압축포맷 읽기전용 TextBox 추가, STT 모델 ComboBox→TextBlock 변경 |
+| 2026-03-27 | 설정 STT/VAD/화자분리/TTS 서버옵션 통합 읽기전용 표시 추가 | mAIx/Services/Speech/ServerSpeechService.cs, mAIx/Views/MainWindow.xaml.cs | GetFullModelStatusAsync/GetTtsEnginesAsync/GetAudioCapabilitiesAsync 3개 API 메서드 + DTO 7개(FullModelStatusResponse/SttStatusInfo/TtsStatusInfo/VadStatusInfo/TtsEnginesResponse/TtsEngineDetail/AudioCapabilitiesResponse) 추가; ShowSttTtsSettings()에 STT옵션/VAD옵션/화자분리옵션/TTS옵션 4개 그룹 통합, Task.WhenAll 병렬 API 조회 |

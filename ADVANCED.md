@@ -522,3 +522,52 @@ private async Task LoadEmailsAsync()
     }
 }
 ```
+
+---
+
+## STT/TTS 설정 화면 패턴 (ShowSttTtsSettings)
+
+### 개요
+
+`ShowSttTtsSettings()` (MainWindow.xaml.cs)는 설정 > STT/TTS 설정 화면을 동적으로 생성하는 메서드.
+서버 API를 비동기 조회하여 읽기전용 현재값을 표시한다.
+
+### 그룹 구성 (2026-03-27 기준)
+
+| 그룹 | 내용 | API |
+|------|------|-----|
+| 서버 URL | 연결 테스트 버튼 포함 | `TestConnectionAsync()` |
+| STT 옵션 | 모델/청크길이/오버랩/채널/샘플레이트/압축포맷 (읽기전용) | `GetFullModelStatusAsync()` + `GetAudioCapabilitiesAsync()` |
+| VAD 옵션 | 현재 모델 / 사용 가능 모델 (읽기전용) | `GetFullModelStatusAsync()` |
+| 화자분리 옵션 | 서버 지원 여부 표시 (읽기전용, 하드코딩) | — |
+| TTS 옵션 | 현재 엔진 / Ready 엔진 / 디바이스 (읽기전용) | `GetFullModelStatusAsync()` + `GetTtsEnginesAsync()` |
+| 녹음청크길이 | ComboBox 편집 가능 | — |
+| AI 요약 주기 | ComboBox 편집 가능 | — |
+| TTS 모드 | RadioButton (서버 고정, 비활성화) | — |
+
+### 비동기 조회 패턴
+
+```csharp
+// STT/VAD/오디오캐퍼빌리티 — 첫 번째 Task.Run 블록
+var fullStatusTask = svc.GetFullModelStatusAsync();
+var audioCapTask = svc.GetAudioCapabilitiesAsync();
+await Task.WhenAll(fullStatusTask, audioCapTask);
+
+// TTS 엔진 — 두 번째 독립 Task.Run 블록
+var fullStatusTask2 = svc.GetFullModelStatusAsync();
+var enginesTask = svc.GetTtsEnginesAsync();
+await Task.WhenAll(fullStatusTask2, enginesTask);
+```
+
+- 서버 미연결 시 catch 블록에서 "서버 미연결" 폴백 텍스트 표시
+- `AddServerOptionRow()` 로컬 함수: 레이블(140px)+값 Grid Row 패턴
+
+### 읽기전용 텍스트 표시 헬퍼
+
+```csharp
+System.Windows.Controls.TextBlock AddServerOptionRow(StackPanel parent, string label, string value)
+{
+    // 140px 레이블 + Star값 TextBlock 2-컬럼 Grid
+    // 반환: 값 TextBlock (비동기 조회 후 갱신 대상)
+}
+```

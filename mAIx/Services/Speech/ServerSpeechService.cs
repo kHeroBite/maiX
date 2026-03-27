@@ -131,6 +131,33 @@ public class ServerSpeechService : IDisposable
         return await resp.Content.ReadFromJsonAsync<List<TtsSpeakerInfo>>(cancellationToken: ct) ?? new();
     }
 
+    /// <summary>통합 모델 상태 조회 (STT/TTS/VAD)</summary>
+    public async Task<FullModelStatusResponse?> GetFullModelStatusAsync(CancellationToken ct = default)
+    {
+        var resp = await _http.GetAsync($"{_baseUrl}/api/models/full-status", ct);
+        resp.EnsureSuccessStatusCode();
+        var opts = new System.Text.Json.JsonSerializerOptions { PropertyNameCaseInsensitive = true };
+        return await resp.Content.ReadFromJsonAsync<FullModelStatusResponse>(opts, ct);
+    }
+
+    /// <summary>TTS 엔진 목록 상세 조회</summary>
+    public async Task<TtsEnginesResponse?> GetTtsEnginesAsync(CancellationToken ct = default)
+    {
+        var resp = await _http.GetAsync($"{_baseUrl}/api/tts/engines", ct);
+        resp.EnsureSuccessStatusCode();
+        var opts = new System.Text.Json.JsonSerializerOptions { PropertyNameCaseInsensitive = true };
+        return await resp.Content.ReadFromJsonAsync<TtsEnginesResponse>(opts, ct);
+    }
+
+    /// <summary>오디오 지원 포맷/샘플레이트/채널 조회</summary>
+    public async Task<AudioCapabilitiesResponse?> GetAudioCapabilitiesAsync(CancellationToken ct = default)
+    {
+        var resp = await _http.GetAsync($"{_baseUrl}/api/audio/capabilities", ct);
+        resp.EnsureSuccessStatusCode();
+        var opts = new System.Text.Json.JsonSerializerOptions { PropertyNameCaseInsensitive = true };
+        return await resp.Content.ReadFromJsonAsync<AudioCapabilitiesResponse>(opts, ct);
+    }
+
     public void Dispose()
     {
         if (_disposed) return;
@@ -148,3 +175,20 @@ public class ServerSpeechService : IDisposable
 
 /// <summary>TTS 화자 정보</summary>
 public record TtsSpeakerInfo(int Id, string Name, string Language, string Engine);
+
+// FullModelStatus DTO
+public record SttStatusInfo(string CurrentModel, List<string> AvailableModels, string Engine);
+public record TtsStatusInfo(string CurrentEngine, List<string> ReadyEngines, List<string> AvailableEngines);
+public record VadStatusInfo(string CurrentModel, List<string> AvailableModels);
+public record FullModelStatusResponse(SttStatusInfo Stt, TtsStatusInfo Tts, VadStatusInfo Vad);
+
+// TtsEngines DTO
+public record TtsEngineDetail(string Name, string Type, string Device, bool Ready);
+public record TtsEnginesResponse(List<string> Engines, List<string> ReadyEngines, string Active,
+    Dictionary<string, TtsEngineDetail> Details);
+
+// AudioCapabilities DTO
+public record AudioCapabilitiesResponse(
+    List<string> SupportedFormats,
+    List<string> SupportedSampleRates,
+    List<string> SupportedChannels);
