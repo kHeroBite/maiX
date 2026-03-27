@@ -445,6 +445,7 @@ Speech_Services:
   - 파일명: ServerSpeechService.cs
     경로: Services/Speech/
     역할: Jarvis 서버 HTTP 클라이언트 (STT/TTS/화자분리 API 호출)
+    변경_2026-03-28: prefs(UserPreferencesSettings) 파라미터 추가 → 9개 REST 경로 설정값 사용
     API_메서드:
       - GetFullModelStatusAsync(): STT/TTS/VAD 통합 상태 조회 (/api/models/full-status)
       - GetTtsEnginesAsync(): TTS 엔진 목록 + 세부정보 조회 (/api/tts/engines)
@@ -457,10 +458,12 @@ Speech_Services:
   - 파일명: ServerWebSocketSpeechService.cs
     경로: Services/Speech/
     역할: WebSocket 기반 서버 STT 서비스 (실시간 오디오 스트리밍, 청크 결과 수신)
+    변경_2026-03-28: ConnectAsync에 wsPath 파라미터 추가 → 설정에서 WS 경로 주입 가능
 
   - 파일명: TextToSpeechService.cs
     경로: Services/Speech/
     역할: TTS 서비스 (NAudio WaveOutEvent 재생, 서버 모드 SynthesizeAsync 연동)
+    변경_2026-03-28: prefs(UserPreferencesSettings) 파라미터로 TTS 엔드포인트 설정값 사용
 ```
 
 ### 6. Data (데이터베이스)
@@ -617,3 +620,4 @@ curl -s http://localhost:5858/api/status
 | 2026-03-27 | 앱 아이콘 도트스타일 X 디자인으로 재생성 | mAIx/Assets/mAIx.ico, mAIx/Assets/icon.png | 투명배경, 멀티사이즈(.ico), 256×256(.png) 도트스타일 X 아이콘 |
 | 2026-03-27 | STT 설정 화면 서버옵션 읽기전용 표시 + 모델 텍스트 전환 | mAIx/Views/MainWindow.xaml.cs | ShowSttTtsSettings()에 청크길이/오버랩/채널/샘플레이트/압축포맷 읽기전용 TextBox 추가, STT 모델 ComboBox→TextBlock 변경 |
 | 2026-03-27 | 설정 STT/VAD/화자분리/TTS 서버옵션 통합 읽기전용 표시 추가 | mAIx/Services/Speech/ServerSpeechService.cs, mAIx/Views/MainWindow.xaml.cs | GetFullModelStatusAsync/GetTtsEnginesAsync/GetAudioCapabilitiesAsync 3개 API 메서드 + DTO 7개(FullModelStatusResponse/SttStatusInfo/TtsStatusInfo/VadStatusInfo/TtsEnginesResponse/TtsEngineDetail/AudioCapabilitiesResponse) 추가; ShowSttTtsSettings()에 STT옵션/VAD옵션/화자분리옵션/TTS옵션 4개 그룹 통합, Task.WhenAll 병렬 API 조회 |
+| 2026-03-28 | AI 서버 엔드포인트 클라이언트 직접 입력 기능 추가 | UserPreferencesSettings.cs, ServerSpeechService.cs, ServerWebSocketSpeechService.cs, MainWindow.xaml.cs, TextToSpeechService.cs, OneNoteViewModel.cs, FileAnalysisService.cs | UserPreferencesSettings에 REST 9개+WS 3개 엔드포인트 속성 추가; ServerSpeechService/TextToSpeechService/FileAnalysisService에 prefs 파라미터로 경로 설정값 주입; ServerWebSocketSpeechService.ConnectAsync에 wsPath 파라미터 추가; MainWindow에 엔드포인트 입력 UI Expander 추가 |

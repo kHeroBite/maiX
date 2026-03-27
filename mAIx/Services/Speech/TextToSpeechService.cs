@@ -39,7 +39,7 @@ public class TextToSpeechService : IDisposable
             _cts = CancellationTokenSource.CreateLinkedTokenSource(ct);
 
             // 서버에서 WAV 데이터 수신
-            using var serverSvc = new ServerSpeechService(prefs.SpeechServerUrl);
+            using var serverSvc = new ServerSpeechService(prefs.SpeechServerUrl, prefs);
             var wavBytes = await serverSvc.SynthesizeAsync(text, 0, _cts.Token);
 
             if (_cts.Token.IsCancellationRequested) return;

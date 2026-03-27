@@ -2548,7 +2548,7 @@ public partial class OneNoteViewModel : ViewModelBase
                 {
                     PostProcessingStatus = "STT 분석 중...";
                     Log4.Info("[후처리] 파일 기반 STT 시작");
-                    using var sttSvc = new Services.Speech.ServerSpeechService(speechServerUrl);
+                    using var sttSvc = new Services.Speech.ServerSpeechService(speechServerUrl, App.Settings?.UserPreferences);
                     var sttResult = await sttSvc.TranscribeFileAsync(filePath);
                     Log4.Info($"[후처리] 파일 기반 STT 완료: {sttResult.Segments.Count}개 세그먼트");
 
@@ -2575,7 +2575,7 @@ public partial class OneNoteViewModel : ViewModelBase
                 {
                     PostProcessingStatus = "화자분리 분석 중...";
                     Log4.Info("[후처리] 화자분리 시작");
-                    using var svc = new Services.Speech.ServerSpeechService(speechServerUrl);
+                    using var svc = new Services.Speech.ServerSpeechService(speechServerUrl, App.Settings?.UserPreferences);
                     var diarizeResult = await svc.DiarizeAsync(filePath, numSpeakers: 0);
                     Log4.Info($"[후처리] 화자분리 완료: {diarizeResult?.Count ?? 0}개 세그먼트");
 
@@ -2656,7 +2656,7 @@ public partial class OneNoteViewModel : ViewModelBase
 
             // STT WebSocket 연결 (/ws/stt) + 모델 로딩 대기
             var model = string.IsNullOrWhiteSpace(sttModel) ? "small" : sttModel;
-            await _serverWsSpeech.ConnectSttAsync(serverUrl, model, _realtimeSTTCts.Token);
+            await _serverWsSpeech.ConnectSttAsync(serverUrl, model, App.Settings?.UserPreferences?.WsEndpointStt ?? "/ws/stt", _realtimeSTTCts.Token);
 
             // STT 세션 시작
             await _serverWsSpeech.StartSttSessionAsync(model, 16000, 1, 16, _realtimeSTTCts.Token);

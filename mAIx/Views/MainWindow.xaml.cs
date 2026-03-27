@@ -18468,6 +18468,77 @@ public partial class MainWindow : FluentWindow
         urlGroup.Child = urlStack;
         SettingsContentPanel.Children.Add(urlGroup);
 
+        // === 엔드포인트 설정 (고급) Expander ===
+        var epGroup = CreateSettingsGroupBorder();
+        var epExpander = new System.Windows.Controls.Expander
+        {
+            Header = "엔드포인트 설정 (고급)",
+            IsExpanded = false,
+            Margin = new Thickness(0)
+        };
+
+        var epStack = new StackPanel { Margin = new Thickness(16) };
+        epStack.Children.Add(new System.Windows.Controls.TextBlock
+        {
+            Text = "서버 API 경로를 직접 지정합니다. 비워두면 기본값이 사용됩니다.",
+            FontSize = 12,
+            Foreground = (Brush)FindResource("TextFillColorSecondaryBrush"),
+            Margin = new Thickness(0, 0, 0, 8)
+        });
+
+        System.Windows.Controls.TextBox AddEndpointRow(StackPanel parent, string label, string placeholder)
+        {
+            var rowGrid = new Grid { Margin = new Thickness(0, 4, 0, 0) };
+            rowGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(160) });
+            rowGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+            var lbl = new System.Windows.Controls.TextBlock
+            {
+                Text = label,
+                FontSize = 13,
+                Foreground = (Brush)FindResource("TextFillColorSecondaryBrush"),
+                VerticalAlignment = VerticalAlignment.Center
+            };
+            var box = new System.Windows.Controls.TextBox
+            {
+                Height = 30,
+                VerticalContentAlignment = VerticalAlignment.Center,
+                Text = placeholder
+            };
+            Grid.SetColumn(lbl, 0);
+            Grid.SetColumn(box, 1);
+            rowGrid.Children.Add(lbl);
+            rowGrid.Children.Add(box);
+            parent.Children.Add(rowGrid);
+            return box;
+        }
+
+        var epSttBox = AddEndpointRow(epStack, "STT (REST)", prefs.EndpointStt ?? "/api/stt");
+        var epTtsBox = AddEndpointRow(epStack, "TTS (REST)", prefs.EndpointTts ?? "/api/tts/preview");
+        var epDiarizeBox = AddEndpointRow(epStack, "화자분리 (REST)", prefs.EndpointDiarize ?? "/api/diarize");
+        var epWsSttBox = AddEndpointRow(epStack, "STT WebSocket", prefs.WsEndpointStt ?? "/ws/stt");
+        var epWsTtsBox = AddEndpointRow(epStack, "TTS WebSocket", prefs.WsEndpointTts ?? "/ws/tts");
+        var epWsSplitBox = AddEndpointRow(epStack, "Split WebSocket", prefs.WsEndpointSplit ?? "/ws/split");
+
+        var epResetBtn = new Wpf.Ui.Controls.Button
+        {
+            Content = "기본값 리셋",
+            Margin = new Thickness(0, 8, 0, 0)
+        };
+        epResetBtn.Click += (s, e) =>
+        {
+            epSttBox.Text = "/api/stt";
+            epTtsBox.Text = "/api/tts/preview";
+            epDiarizeBox.Text = "/api/diarize";
+            epWsSttBox.Text = "/ws/stt";
+            epWsTtsBox.Text = "/ws/tts";
+            epWsSplitBox.Text = "/ws/split";
+        };
+        epStack.Children.Add(epResetBtn);
+
+        epExpander.Content = epStack;
+        epGroup.Child = epExpander;
+        SettingsContentPanel.Children.Add(epGroup);
+
         // === STT 옵션 통합 그룹 ===
         var sttOptsGroup = CreateSettingsGroupBorder();
         var sttOptsStack = new StackPanel { Margin = new Thickness(16) };
@@ -18557,7 +18628,7 @@ public partial class MainWindow : FluentWindow
                 var serverUrl = prefs.SpeechServerUrl;
                 if (string.IsNullOrWhiteSpace(serverUrl)) return;
 
-                using var svc = new mAIx.Services.Speech.ServerSpeechService(serverUrl);
+                using var svc = new mAIx.Services.Speech.ServerSpeechService(serverUrl, prefs);
                 var fullStatusTask = svc.GetFullModelStatusAsync();
                 var audioCapTask = svc.GetAudioCapabilitiesAsync();
                 await Task.WhenAll(fullStatusTask, audioCapTask);
@@ -18733,7 +18804,7 @@ public partial class MainWindow : FluentWindow
                 var serverUrl = prefs.SpeechServerUrl;
                 if (string.IsNullOrWhiteSpace(serverUrl)) return;
 
-                using var svc = new mAIx.Services.Speech.ServerSpeechService(serverUrl);
+                using var svc = new mAIx.Services.Speech.ServerSpeechService(serverUrl, prefs);
                 var fullStatusTask = svc.GetFullModelStatusAsync();
                 var enginesTask = svc.GetTtsEnginesAsync();
                 await Task.WhenAll(fullStatusTask, enginesTask);
@@ -18790,7 +18861,7 @@ public partial class MainWindow : FluentWindow
             testBtn.IsEnabled = false;
             try
             {
-                using var svc = new mAIx.Services.Speech.ServerSpeechService(urlBox.Text.Trim());
+                using var svc = new mAIx.Services.Speech.ServerSpeechService(urlBox.Text.Trim(), prefs);
                 var ok = await svc.TestConnectionAsync();
                 connStatus.Text = ok ? "✅ 연결 성공" : "❌ 연결 실패";
                 connStatus.Foreground = ok
@@ -18820,6 +18891,14 @@ public partial class MainWindow : FluentWindow
             // AI 요약 주기 저장
             if (summaryIntervalComboBox.SelectedItem is System.Windows.Controls.ComboBoxItem sumItem && sumItem.Tag is int sumVal)
                 prefs.SummaryIntervalSeconds = sumVal;
+
+            // 엔드포인트 저장 (빈값 → 기본값 자동 대체)
+            prefs.EndpointStt = string.IsNullOrWhiteSpace(epSttBox.Text) ? "/api/stt" : epSttBox.Text.Trim();
+            prefs.EndpointTts = string.IsNullOrWhiteSpace(epTtsBox.Text) ? "/api/tts/preview" : epTtsBox.Text.Trim();
+            prefs.EndpointDiarize = string.IsNullOrWhiteSpace(epDiarizeBox.Text) ? "/api/diarize" : epDiarizeBox.Text.Trim();
+            prefs.WsEndpointStt = string.IsNullOrWhiteSpace(epWsSttBox.Text) ? "/ws/stt" : epWsSttBox.Text.Trim();
+            prefs.WsEndpointTts = string.IsNullOrWhiteSpace(epWsTtsBox.Text) ? "/ws/tts" : epWsTtsBox.Text.Trim();
+            prefs.WsEndpointSplit = string.IsNullOrWhiteSpace(epWsSplitBox.Text) ? "/ws/split" : epWsSplitBox.Text.Trim();
 
             App.Settings?.SaveUserPreferences();
 

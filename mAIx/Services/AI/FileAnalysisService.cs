@@ -296,7 +296,7 @@ public class FileAnalysisService
                 return _serverSpeechService;
 
             var serverUrl = App.Settings.UserPreferences.SpeechServerUrl;
-            _serverSpeechService = new Speech.ServerSpeechService(serverUrl);
+            _serverSpeechService = new Speech.ServerSpeechService(serverUrl, App.Settings?.UserPreferences);
             return _serverSpeechService;
         }
         finally

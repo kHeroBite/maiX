@@ -93,15 +93,8 @@ WSL에서_실행 (기본):
 
 | 문서 | 내용 | 범위 |
 |------|------|------|
-| **[PROJECT.md](./PROJECT.md)** | 프로젝트 구조, 파일 인벤토리, **프로젝트스킬 상세** | 프로젝트 고유 |
-| **[ADVANCED.md](./ADVANCED.md)** | 새 폼, 메뉴 등록, 권한, 람다식, 리팩토링 | 프로젝트 고유 |
-| **[DATABASE.md](./DATABASE.md)** | 테이블, 스키마, FK, MCP 설정 | 프로젝트 고유 |
-| **[MCP.md](./MCP.md)** | MCP 서버 통합 문서 | 프로젝트 고유 |
-| **[RESTAPI.md](./restapi.md)** | REST API 엔드포인트 | 프로젝트 고유 |
 | **[HISTORY.md](./HISTORY.md)** | 버그 수정 및 작업 이력 | 프로젝트 고유 |
 | **[LESSONS.md](./LESSONS.md)** | 자기 개선 교훈 로그 | 프로젝트 고유 |
-
-> 프로젝트스킬(`_{project}`) 상세 설명은 **PROJECT.md** 참조.
 
 ---
 
@@ -161,9 +154,3 @@ WSL에서_실행 (기본):
 | Designer.cs, 비코드 파일, 주석/문자열 | Claude Code Edit |
 | Serena 오류 시 | Claude Code Edit (Fallback) |
 
----
-
-## 프로젝트 정보
-
-- **구조**: [PROJECT.md](./PROJECT.md) - 파일 추가/삭제 시 즉시 업데이트, **프로젝트스킬 상세 포함**
-- **DB**: [DATABASE.md](./DATABASE.md) - 테이블 변경 시 즉시 업데이트

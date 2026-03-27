@@ -217,4 +217,56 @@ public class UserPreferencesSettings
     [XmlElement("SummaryIntervalSeconds")]
     public int SummaryIntervalSeconds { get; set; } = 30;
 
+    // REST 엔드포인트 경로
+
+    /// <summary>헬스 체크 경로</summary>
+    [XmlElement("EndpointHealth")]
+    public string EndpointHealth { get; set; } = "/health";
+
+    /// <summary>STT API 경로</summary>
+    [XmlElement("EndpointStt")]
+    public string EndpointStt { get; set; } = "/api/stt";
+
+    /// <summary>TTS 미리듣기 API 경로</summary>
+    [XmlElement("EndpointTts")]
+    public string EndpointTts { get; set; } = "/api/tts/preview";
+
+    /// <summary>화자 분리 API 경로</summary>
+    [XmlElement("EndpointDiarize")]
+    public string EndpointDiarize { get; set; } = "/api/diarize";
+
+    /// <summary>STT 모델 목록 API 경로</summary>
+    [XmlElement("EndpointSttModels")]
+    public string EndpointSttModels { get; set; } = "/api/stt/models";
+
+    /// <summary>TTS 화자 목록 API 경로</summary>
+    [XmlElement("EndpointTtsSpeakers")]
+    public string EndpointTtsSpeakers { get; set; } = "/api/tts/speakers";
+
+    /// <summary>모델 전체 상태 API 경로</summary>
+    [XmlElement("EndpointModelsFullStatus")]
+    public string EndpointModelsFullStatus { get; set; } = "/api/models/full-status";
+
+    /// <summary>TTS 엔진 목록 API 경로</summary>
+    [XmlElement("EndpointTtsEngines")]
+    public string EndpointTtsEngines { get; set; } = "/api/tts/engines";
+
+    /// <summary>오디오 기능 API 경로</summary>
+    [XmlElement("EndpointAudioCapabilities")]
+    public string EndpointAudioCapabilities { get; set; } = "/api/audio/capabilities";
+
+    // WebSocket 엔드포인트 경로
+
+    /// <summary>STT WebSocket 경로</summary>
+    [XmlElement("WsEndpointStt")]
+    public string WsEndpointStt { get; set; } = "/ws/stt";
+
+    /// <summary>TTS WebSocket 경로</summary>
+    [XmlElement("WsEndpointTts")]
+    public string WsEndpointTts { get; set; } = "/ws/tts";
+
+    /// <summary>화자 분리 WebSocket 경로</summary>
+    [XmlElement("WsEndpointSplit")]
+    public string WsEndpointSplit { get; set; } = "/ws/split";
+
 }

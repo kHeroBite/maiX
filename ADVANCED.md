@@ -571,3 +571,48 @@ System.Windows.Controls.TextBlock AddServerOptionRow(StackPanel parent, string l
     // 반환: 값 TextBlock (비동기 조회 후 갱신 대상)
 }
 ```
+
+---
+
+## AI 서버 엔드포인트 설정 UI (2026-03-28 추가)
+
+### 개요
+
+rtx5070 AI 서버의 REST/WebSocket 엔드포인트를 클라이언트 설정 화면에서 직접 입력 가능.
+
+### 설정 모델 (UserPreferencesSettings.cs)
+
+```csharp
+// REST 엔드포인트 9개
+public string SttEndpointPath { get; set; }        // /api/stt/file
+public string TtsEndpointPath { get; set; }         // /api/tts/synthesize
+public string HealthEndpointPath { get; set; }      // /api/health
+public string FullStatusEndpointPath { get; set; }  // /api/models/full-status
+public string TtsEnginesEndpointPath { get; set; }  // /api/tts/engines
+public string AudioCapsEndpointPath { get; set; }   // /api/audio/capabilities
+// ... 나머지 3개 포함
+
+// WebSocket 엔드포인트 3개
+public string SttWsPath { get; set; }               // /ws/stt
+public string TtsWsPath { get; set; }               // /ws/tts
+public string VadWsPath { get; set; }               // /ws/vad
+```
+
+### UI 패턴 (MainWindow.xaml.cs)
+
+- `ShowSttTtsSettings()` 내 `Expander` 컨트롤로 엔드포인트 입력 섹션 추가
+- 각 `TextBox`에서 `LostFocus` 이벤트 → `prefs.XxxEndpointPath` 직접 저장
+- REST / WebSocket 두 그룹으로 시각적 구분
+
+### 서비스 주입 패턴
+
+```csharp
+// 생성자에 prefs 주입 → 경로 사용
+public ServerSpeechService(UserPreferencesSettings prefs)
+{
+    _sttPath = prefs.SttEndpointPath ?? "/api/stt/file";
+}
+
+// WS 연결 시 wsPath 파라미터
+await _wsService.ConnectAsync(baseUrl, prefs.SttWsPath ?? "/ws/stt");
+```

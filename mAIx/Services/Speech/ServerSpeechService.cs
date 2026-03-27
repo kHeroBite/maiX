@@ -7,6 +7,7 @@ using System.Net.Http.Json;
 using System.Threading;
 using System.Threading.Tasks;
 using mAIx.Models;
+using mAIx.Models.Settings;
 
 namespace mAIx.Services.Speech;
 
@@ -18,11 +19,13 @@ public class ServerSpeechService : IDisposable
 {
     private readonly HttpClient _http;
     private readonly string _baseUrl;
+    private readonly UserPreferencesSettings? _prefs;
     private bool _disposed;
 
-    public ServerSpeechService(string baseUrl)
+    public ServerSpeechService(string baseUrl, UserPreferencesSettings? prefs = null)
     {
         _baseUrl = baseUrl.TrimEnd('/');
+        _prefs = prefs;
         _http = new HttpClient { Timeout = TimeSpan.FromSeconds(120) };
     }
 
@@ -31,7 +34,7 @@ public class ServerSpeechService : IDisposable
     {
         try
         {
-            var resp = await _http.GetAsync($"{_baseUrl}/health", ct);
+            var resp = await _http.GetAsync($"{_baseUrl}{_prefs?.EndpointHealth ?? "/health"}", ct);
             return resp.IsSuccessStatusCode;
         }
         catch { return false; }
@@ -44,7 +47,7 @@ public class ServerSpeechService : IDisposable
         var fileBytes = await File.ReadAllBytesAsync(audioFilePath, ct);
         form.Add(new ByteArrayContent(fileBytes), "audio", Path.GetFileName(audioFilePath));
 
-        var resp = await _http.PostAsync($"{_baseUrl}/api/stt", form, ct);
+        var resp = await _http.PostAsync($"{_baseUrl}{_prefs?.EndpointStt ?? "/api/stt"}", form, ct);
         resp.EnsureSuccessStatusCode();
 
         var json = await resp.Content.ReadFromJsonAsync<SttResult>(cancellationToken: ct)
@@ -92,7 +95,7 @@ public class ServerSpeechService : IDisposable
         form.Add(new ByteArrayContent(fileBytes), "audio", Path.GetFileName(audioFilePath));
         form.Add(new StringContent(numSpeakers.ToString()), "num_speakers");
 
-        var resp = await _http.PostAsync($"{_baseUrl}/api/diarize", form, ct);
+        var resp = await _http.PostAsync($"{_baseUrl}{_prefs?.EndpointDiarize ?? "/api/diarize"}", form, ct);
         resp.EnsureSuccessStatusCode();
 
         var result = await resp.Content.ReadFromJsonAsync<DiarizeResult>(cancellationToken: ct);
@@ -109,7 +112,7 @@ public class ServerSpeechService : IDisposable
     public async Task<byte[]> SynthesizeAsync(string text, int speakerId = 0, CancellationToken ct = default)
     {
         var req = new { text, speaker_id = speakerId, engine = "vits2" };
-        var resp = await _http.PostAsJsonAsync($"{_baseUrl}/api/tts/preview", req, ct);
+        var resp = await _http.PostAsJsonAsync($"{_baseUrl}{_prefs?.EndpointTts ?? "/api/tts/preview"}", req, ct);
         resp.EnsureSuccessStatusCode();
         return await resp.Content.ReadAsByteArrayAsync(ct);
     }
@@ -117,7 +120,7 @@ public class ServerSpeechService : IDisposable
     /// <summary>서버 STT 모델 목록 조회</summary>
     public async Task<(List<string> Models, string? Active)> GetSttModelsAsync(CancellationToken ct = default)
     {
-        var resp = await _http.GetAsync($"{_baseUrl}/api/stt/models", ct);
+        var resp = await _http.GetAsync($"{_baseUrl}{_prefs?.EndpointSttModels ?? "/api/stt/models"}", ct);
         resp.EnsureSuccessStatusCode();
         var json = await resp.Content.ReadFromJsonAsync<SttModelsResponse>(cancellationToken: ct);
         return (json?.Models ?? new(), json?.Active);
@@ -126,7 +129,7 @@ public class ServerSpeechService : IDisposable
     /// <summary>서버 TTS 화자 목록 조회</summary>
     public async Task<List<TtsSpeakerInfo>> GetTtsSpeakersAsync(CancellationToken ct = default)
     {
-        var resp = await _http.GetAsync($"{_baseUrl}/api/tts/speakers", ct);
+        var resp = await _http.GetAsync($"{_baseUrl}{_prefs?.EndpointTtsSpeakers ?? "/api/tts/speakers"}", ct);
         resp.EnsureSuccessStatusCode();
         return await resp.Content.ReadFromJsonAsync<List<TtsSpeakerInfo>>(cancellationToken: ct) ?? new();
     }
@@ -134,7 +137,7 @@ public class ServerSpeechService : IDisposable
     /// <summary>통합 모델 상태 조회 (STT/TTS/VAD)</summary>
     public async Task<FullModelStatusResponse?> GetFullModelStatusAsync(CancellationToken ct = default)
     {
-        var resp = await _http.GetAsync($"{_baseUrl}/api/models/full-status", ct);
+        var resp = await _http.GetAsync($"{_baseUrl}{_prefs?.EndpointModelsFullStatus ?? "/api/models/full-status"}", ct);
         resp.EnsureSuccessStatusCode();
         var opts = new System.Text.Json.JsonSerializerOptions { PropertyNameCaseInsensitive = true };
         return await resp.Content.ReadFromJsonAsync<FullModelStatusResponse>(opts, ct);
@@ -143,7 +146,7 @@ public class ServerSpeechService : IDisposable
     /// <summary>TTS 엔진 목록 상세 조회</summary>
     public async Task<TtsEnginesResponse?> GetTtsEnginesAsync(CancellationToken ct = default)
     {
-        var resp = await _http.GetAsync($"{_baseUrl}/api/tts/engines", ct);
+        var resp = await _http.GetAsync($"{_baseUrl}{_prefs?.EndpointTtsEngines ?? "/api/tts/engines"}", ct);
         resp.EnsureSuccessStatusCode();
         var opts = new System.Text.Json.JsonSerializerOptions { PropertyNameCaseInsensitive = true };
         return await resp.Content.ReadFromJsonAsync<TtsEnginesResponse>(opts, ct);
@@ -152,7 +155,7 @@ public class ServerSpeechService : IDisposable
     /// <summary>오디오 지원 포맷/샘플레이트/채널 조회</summary>
     public async Task<AudioCapabilitiesResponse?> GetAudioCapabilitiesAsync(CancellationToken ct = default)
     {
-        var resp = await _http.GetAsync($"{_baseUrl}/api/audio/capabilities", ct);
+        var resp = await _http.GetAsync($"{_baseUrl}{_prefs?.EndpointAudioCapabilities ?? "/api/audio/capabilities"}", ct);
         resp.EnsureSuccessStatusCode();
         var opts = new System.Text.Json.JsonSerializerOptions { PropertyNameCaseInsensitive = true };
         return await resp.Content.ReadFromJsonAsync<AudioCapabilitiesResponse>(opts, ct);

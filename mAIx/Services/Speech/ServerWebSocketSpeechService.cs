@@ -82,12 +82,12 @@ public class ServerWebSocketSpeechService : IDisposable
     /// http://host:port → ws://host:port/ws/stt?model={model} 변환 후 연결
     /// model_loading → model_ready 이벤트 수신 대기
     /// </summary>
-    public async Task ConnectSttAsync(string serverBaseUrl, string model, CancellationToken ct = default)
+    public async Task ConnectSttAsync(string serverBaseUrl, string model, string wsPath = "/ws/stt", CancellationToken ct = default)
     {
         if (IsSttConnected)
             await DisconnectSttAsync();
 
-        var wsUrl = BuildWebSocketUrl(serverBaseUrl, $"/ws/stt?model={Uri.EscapeDataString(model)}");
+        var wsUrl = BuildWebSocketUrl(serverBaseUrl, $"{wsPath}?model={Uri.EscapeDataString(model)}");
         _sttWebSocket = new ClientWebSocket();
 
         await _sttWebSocket.ConnectAsync(new Uri(wsUrl), ct);
@@ -193,12 +193,12 @@ public class ServerWebSocketSpeechService : IDisposable
     /// <summary>
     /// TTS WebSocket 연결
     /// </summary>
-    public async Task ConnectTtsAsync(string serverBaseUrl, CancellationToken ct = default)
+    public async Task ConnectTtsAsync(string serverBaseUrl, string wsPath = "/ws/tts", CancellationToken ct = default)
     {
         if (IsTtsConnected)
             await DisconnectTtsAsync();
 
-        var wsUrl = BuildWebSocketUrl(serverBaseUrl, "/ws/tts");
+        var wsUrl = BuildWebSocketUrl(serverBaseUrl, wsPath);
         _ttsWebSocket = new ClientWebSocket();
 
         await _ttsWebSocket.ConnectAsync(new Uri(wsUrl), ct);
@@ -230,7 +230,7 @@ public class ServerWebSocketSpeechService : IDisposable
     /// Split(STT+화자분리) WebSocket 연결
     /// http://host:port → ws://host:port/ws/split?model={model} 변환 후 연결
     /// </summary>
-    public async Task ConnectSplitAsync(string? baseUrl, string model = "small", CancellationToken ct = default)
+    public async Task ConnectSplitAsync(string? baseUrl, string model = "small", string wsPath = "/ws/split", CancellationToken ct = default)
     {
         if (string.IsNullOrWhiteSpace(baseUrl))
             throw new ArgumentException("서버 URL이 지정되지 않았습니다.", nameof(baseUrl));
@@ -238,7 +238,7 @@ public class ServerWebSocketSpeechService : IDisposable
         if (IsSplitConnected)
             await DisconnectSplitAsync();
 
-        var wsUrl = BuildWebSocketUrl(baseUrl, $"/ws/split?model={Uri.EscapeDataString(model)}");
+        var wsUrl = BuildWebSocketUrl(baseUrl, $"{wsPath}?model={Uri.EscapeDataString(model)}");
         _splitWebSocket = new ClientWebSocket();
 
         await _splitWebSocket.ConnectAsync(new Uri(wsUrl), ct);
