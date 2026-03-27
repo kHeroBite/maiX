@@ -18482,26 +18482,20 @@ public partial class MainWindow : FluentWindow
         };
         sttModelStack.Children.Add(sttModelDescText);
 
-        var serverModelComboBox = new System.Windows.Controls.ComboBox
+        // STT 모델 읽기전용 텍스트 표시
+        var sttModelValueText = new System.Windows.Controls.TextBlock
         {
-            Height = 32,
-            Width = 200,
-            HorizontalAlignment = HorizontalAlignment.Left,
-            IsEnabled = false
+            Text = prefs.ServerSttModel ?? "small",
+            FontSize = 14,
+            FontWeight = FontWeights.SemiBold,
+            Margin = new Thickness(0, 4, 0, 0),
         };
-        // 기본 하드코딩 항목 (서버 조회 실패 시 Fallback)
-        serverModelComboBox.Items.Add("small");
-        serverModelComboBox.Items.Add("medium");
-        serverModelComboBox.Items.Add("large-v3");
-        serverModelComboBox.SelectedItem = prefs.ServerSttModel ?? "small";
-        if (serverModelComboBox.SelectedIndex < 0)
-            serverModelComboBox.SelectedIndex = 0;
 
-        sttModelStack.Children.Add(serverModelComboBox);
+        sttModelStack.Children.Add(sttModelValueText);
         sttModelGroup.Child = sttModelStack;
         SettingsContentPanel.Children.Add(sttModelGroup);
 
-        // 서버에서 STT 모델 목록 동적 로딩
+        // 서버에서 active 모델 동적 업데이트
         _ = Task.Run(async () =>
         {
             try
@@ -18511,28 +18505,61 @@ public partial class MainWindow : FluentWindow
 
                 using var svc = new mAIx.Services.Speech.ServerSpeechService(serverUrl);
                 var (models, active) = await svc.GetSttModelsAsync();
-                if (models.Count == 0) return;
-
-                await Dispatcher.InvokeAsync(() =>
-                {
-                    serverModelComboBox.Items.Clear();
-                    foreach (var m in models)
-                        serverModelComboBox.Items.Add(m);
-
-                    // active 모델 우선 선택, 없으면 저장된 모델, 없으면 첫 번째
-                    if (!string.IsNullOrWhiteSpace(active) && models.Contains(active))
-                        serverModelComboBox.SelectedItem = active;
-                    else if (models.Contains(prefs.ServerSttModel ?? "small"))
-                        serverModelComboBox.SelectedItem = prefs.ServerSttModel;
-                    else if (models.Count > 0)
-                        serverModelComboBox.SelectedIndex = 0;
-                });
+                var display = !string.IsNullOrWhiteSpace(active) ? active : (prefs.ServerSttModel ?? "small");
+                await Dispatcher.InvokeAsync(() => sttModelValueText.Text = display);
             }
             catch
             {
-                // 서버 미응답 시 기존 하드코딩 항목 유지
+                // 서버 미응답 시 저장된 모델명 유지
             }
         });
+
+        // === 서버 옵션 (읽기전용) 그룹 ===
+        var serverOptsGroup = CreateSettingsGroupBorder();
+        var serverOptsStack = new StackPanel { Margin = new Thickness(16) };
+        serverOptsStack.Children.Add(CreateSettingsLabel("서버 옵션"));
+        serverOptsStack.Children.Add(new System.Windows.Controls.TextBlock
+        {
+            Text = "음성 인식 서버에 전송되는 현재 설정값입니다.",
+            FontSize = 12,
+            Foreground = (Brush)FindResource("TextFillColorSecondaryBrush"),
+            Margin = new Thickness(0, 4, 0, 8)
+        });
+
+        void AddServerOptionRow(string label, string value)
+        {
+            var row = new Grid { Margin = new Thickness(0, 4, 0, 0) };
+            row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(140) });
+            row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+            var lbl = new System.Windows.Controls.TextBlock
+            {
+                Text = label,
+                FontSize = 13,
+                Foreground = (Brush)FindResource("TextFillColorSecondaryBrush"),
+                VerticalAlignment = VerticalAlignment.Center,
+            };
+            var val = new System.Windows.Controls.TextBlock
+            {
+                Text = value,
+                FontSize = 13,
+                FontWeight = FontWeights.SemiBold,
+                VerticalAlignment = VerticalAlignment.Center,
+            };
+            Grid.SetColumn(lbl, 0);
+            Grid.SetColumn(val, 1);
+            row.Children.Add(lbl);
+            row.Children.Add(val);
+            serverOptsStack.Children.Add(row);
+        }
+
+        AddServerOptionRow("서버청크길이", "2.0초");
+        AddServerOptionRow("오버랩", "0.5초");
+        AddServerOptionRow("채널", "1 (모노)");
+        AddServerOptionRow("샘플레이트", "16,000 Hz");
+        AddServerOptionRow("압축포맷", "PCM (무압축)");
+
+        serverOptsGroup.Child = serverOptsStack;
+        SettingsContentPanel.Children.Add(serverOptsGroup);
 
         // === 녹음청크길이 그룹 ===
         var sttIntervalGroup = CreateSettingsGroupBorder();
@@ -18680,7 +18707,6 @@ public partial class MainWindow : FluentWindow
             prefs.SpeechServerUrl = string.IsNullOrWhiteSpace(urlBox.Text)
                 ? "http://172.10.74.2:18989" : urlBox.Text.Trim();
             prefs.TtsMode = "server"; // TTS 모드는 항상 서버로 고정
-            prefs.ServerSttModel = serverModelComboBox.SelectedItem?.ToString() ?? "small";
 
             // STT 분석 주기 저장
             if (sttIntervalComboBox.SelectedItem is System.Windows.Controls.ComboBoxItem sttItem && sttItem.Tag is float sttVal)
@@ -18691,22 +18717,6 @@ public partial class MainWindow : FluentWindow
                 prefs.SummaryIntervalSeconds = sumVal;
 
             App.Settings?.SaveUserPreferences();
-
-            // 서버 URL 입력됐으면 모델 변경 API 호출
-            if (!string.IsNullOrWhiteSpace(prefs.SpeechServerUrl))
-            {
-                try
-                {
-                    using var httpClient = new System.Net.Http.HttpClient { Timeout = TimeSpan.FromSeconds(5) };
-                    var json = System.Text.Json.JsonSerializer.Serialize(new { model = prefs.ServerSttModel });
-                    var content = new System.Net.Http.StringContent(json, System.Text.Encoding.UTF8, "application/json");
-                    await httpClient.PostAsync($"{prefs.SpeechServerUrl.TrimEnd('/')}/api/stt/model", content);
-                }
-                catch
-                {
-                    // 서버 오프라인 가능 — 실패 시 무시
-                }
-            }
 
             ShowSettingsSavedMessage();
         };

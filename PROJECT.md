@@ -607,3 +607,4 @@ curl -s http://localhost:5858/api/status
 | 2026-03-26 | 프로젝트명 MaiX → mAIx 전체 변경 | mAIx.sln, mAIx/mAIx.csproj, 181개 .cs + 13개 .xaml (namespace/using/clr-namespace), mAIx/Data/mAIxDbContext.cs, Assets/mAIx.ico + icon.png | namespace MaiX→mAIx 일괄 변경, 아이콘 교체, 타이틀바 로고 mAiX→mAIx |
 | 2026-03-27 | STT 실시간 시간표시 수정 + 자동후처리(STT/요약) 로직 보완 | ServerWebSocketSpeechService.cs, ServerSpeechService.cs, OneNoteViewModel.cs | SttChunkResult에 StartSeconds/EndSeconds 추가, JSON 시간 파싱(start_time/start 폴백), segments 기반 시간 파싱 개선, TimeSpan.Zero→chunk 시간 반영, RunPostProcessingAsync IsPostSTTEnabled 체크 + 파일 STT 단계 추가 |
 | 2026-03-27 | 앱 아이콘 도트스타일 X 디자인으로 재생성 | mAIx/Assets/mAIx.ico, mAIx/Assets/icon.png | 투명배경, 멀티사이즈(.ico), 256×256(.png) 도트스타일 X 아이콘 |
+| 2026-03-27 | STT 설정 화면 서버옵션 읽기전용 표시 + 모델 텍스트 전환 | mAIx/Views/MainWindow.xaml.cs | ShowSttTtsSettings()에 청크길이/오버랩/채널/샘플레이트/압축포맷 읽기전용 TextBox 추가, STT 모델 ComboBox→TextBlock 변경 |
