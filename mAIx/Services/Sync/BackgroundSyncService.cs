@@ -751,14 +751,37 @@ public class BackgroundSyncService : BackgroundService
                 return;
             }
 
-            try
+            // Graph API 호출 실패 시 지수 백오프(1s→2s→4s) 재시도 (MaxRetryCount=3, 인증 오류 제외)
+            for (int attempt = 0; attempt <= MaxRetryCount; attempt++)
             {
-                await SyncAccountAsync(graphAuthService.CurrentUserEmail, ct);
-            }
-            catch (Exception ex)
-            {
-                Interlocked.Increment(ref _errorCount);
-                _logger.Error(ex, "계정 동기화 실패: {Email}", graphAuthService.CurrentUserEmail);
+                try
+                {
+                    await SyncAccountAsync(graphAuthService.CurrentUserEmail, ct);
+                    break;
+                }
+                catch (Exception ex) when (IsAuthenticationError(ex))
+                {
+                    // 인증 오류는 재시도 불필요 — 즉시 중단
+                    Interlocked.Increment(ref _errorCount);
+                    _logger.Error(ex, "계정 동기화 실패 (인증 오류, 재시도 불가): {Email}", graphAuthService.CurrentUserEmail);
+                    break;
+                }
+                catch (Exception ex)
+                {
+                    Interlocked.Increment(ref _errorCount);
+                    if (attempt < MaxRetryCount)
+                    {
+                        var delaySeconds = (int)Math.Pow(2, attempt);  // 1s, 2s, 4s
+                        _logger.Warning(ex, "계정 동기화 실패 (시도 {Attempt}/{Max}), {Delay}초 후 재시도: {Email}",
+                            attempt + 1, MaxRetryCount, delaySeconds, graphAuthService.CurrentUserEmail);
+                        await Task.Delay(TimeSpan.FromSeconds(delaySeconds), ct);
+                    }
+                    else
+                    {
+                        _logger.Error(ex, "계정 동기화 최종 실패 (재시도 {Max}회 소진): {Email}",
+                            MaxRetryCount, graphAuthService.CurrentUserEmail);
+                    }
+                }
             }
 
             _lastSyncTime = DateTime.UtcNow;
@@ -1247,14 +1270,18 @@ public class BackgroundSyncService : BackgroundService
                 };
 
                 dbContext.Emails.Add(email);
-                await dbContext.SaveChangesAsync(ct);
-
                 savedEmails.Add(email);
             }
             catch (Exception ex)
             {
                 _logger.Error(ex, "메일 저장 실패: {Subject}", message.Subject);
             }
+        }
+
+        // 신규 메일 일괄 저장 (N+1 방지: AddRange 후 한 번의 SaveChanges)
+        if (savedEmails.Count > 0)
+        {
+            await dbContext.SaveChangesAsync(ct);
         }
 
         _logger.Information("메일 저장 완료: {Count}건", savedEmails.Count);
@@ -2288,6 +2315,27 @@ public class BackgroundSyncService : BackgroundService
             ErrorCount = _errorCount,
             NextSyncTime = _lastSyncTime.AddSeconds(_syncIntervalSeconds)
         };
+    }
+
+    /// <summary>
+    /// 인증 오류 여부 판별 (재시도 불가 오류 분류)
+    /// </summary>
+    private static bool IsAuthenticationError(Exception ex)
+    {
+        // MsalUiRequiredException: 사용자 재로그인 필요
+        if (ex.GetType().Name.Contains("MsalUiRequiredException", StringComparison.OrdinalIgnoreCase))
+            return true;
+
+        // MsalException: MSAL 인증 오류 전반
+        if (ex.GetType().Name.Contains("MsalException", StringComparison.OrdinalIgnoreCase))
+            return true;
+
+        // ODataError 401 Unauthorized
+        if (ex is Microsoft.Graph.Models.ODataErrors.ODataError odataEx &&
+            odataEx.ResponseStatusCode == 401)
+            return true;
+
+        return false;
     }
 }
 

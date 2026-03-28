@@ -419,14 +419,15 @@ public partial class ComposeViewModel : ViewModelBase
             }
 
             // 보낸편지함 즉시 동기화 (비동기로 백그라운드 실행)
-            if (_syncService != null && _originalEmail != null)
+            var accountEmail = _originalEmail?.AccountEmail ?? _graphMailService.CurrentUserEmail;
+            if (_syncService != null && !string.IsNullOrEmpty(accountEmail))
             {
                 _ = Task.Run(async () =>
                 {
                     try
                     {
                         await Task.Delay(1000); // 서버 반영 대기
-                        await _syncService.SyncSentItemsAsync(_originalEmail.AccountEmail);
+                        await _syncService.SyncSentItemsAsync(accountEmail);
                     }
                     catch (Exception ex)
                     {

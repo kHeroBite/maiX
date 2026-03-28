@@ -20,6 +20,11 @@ namespace mAIx.Services.Graph
         }
 
         /// <summary>
+        /// 현재 로그인된 사용자 이메일
+        /// </summary>
+        public string? CurrentUserEmail => _authService.CurrentUserEmail;
+
+        /// <summary>
         /// 메일 폴더 목록 조회 (하위 폴더 포함, 페이징 처리)
         /// </summary>
         /// <returns>모든 폴더 목록 (최상위 + 하위 폴더)</returns>

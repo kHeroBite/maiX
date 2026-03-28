@@ -70,12 +70,12 @@ public class SyncPeriodSettings
     public DateTime? EndDate { get; set; }
 
     /// <summary>
-    /// 기본 설정 (최근 5건)
+    /// 기본 설정 (최근 100건)
     /// </summary>
     public static SyncPeriodSettings Default => new()
     {
         PeriodType = SyncPeriodType.Count,
-        Value = 5
+        Value = 100
     };
 
     /// <summary>

@@ -1971,8 +1971,10 @@ public partial class MainViewModel : ViewModelBase, IDisposable
         // 고급 검색 필드를 기본 필터로 적용
         if (!string.IsNullOrWhiteSpace(AdvancedSearchFrom))
             SearchKeyword = $"from:{AdvancedSearchFrom}";
+        else if (!string.IsNullOrWhiteSpace(AdvancedSearchTo))
+            SearchKeyword = $"to:{AdvancedSearchTo}";
         else if (!string.IsNullOrWhiteSpace(AdvancedSearchSubject))
-            SearchKeyword = AdvancedSearchSubject;
+            SearchKeyword = $"subject:{AdvancedSearchSubject}";
         else if (!string.IsNullOrWhiteSpace(AdvancedSearchBody))
             SearchKeyword = AdvancedSearchBody;
 
@@ -2055,9 +2057,34 @@ public partial class MainViewModel : ViewModelBase, IDisposable
                 }
             }
 
+            // 접두사(from:, to:, subject:) 파싱
+            string? fromPrefix = null;
+            string? toPrefix = null;
+            string? subjectPrefix = null;
+            string? generalKeyword = SearchKeyword;
+
+            if (!string.IsNullOrWhiteSpace(SearchKeyword))
+            {
+                if (SearchKeyword.StartsWith("from:", StringComparison.OrdinalIgnoreCase))
+                {
+                    fromPrefix = SearchKeyword.Substring(5).Trim();
+                    generalKeyword = null;
+                }
+                else if (SearchKeyword.StartsWith("to:", StringComparison.OrdinalIgnoreCase))
+                {
+                    toPrefix = SearchKeyword.Substring(3).Trim();
+                    generalKeyword = null;
+                }
+                else if (SearchKeyword.StartsWith("subject:", StringComparison.OrdinalIgnoreCase))
+                {
+                    subjectPrefix = SearchKeyword.Substring(8).Trim();
+                    generalKeyword = null;
+                }
+            }
+
             var query = new SearchQuery
             {
-                Keywords = SearchKeyword,
+                Keywords = generalKeyword,
                 FolderId = searchFolderId, // 콤보박스 선택 폴더 기준
                 IsRead = FilterUnreadOnly ? false : null,
                 HasAttachments = FilterHasAttachments ? true : null,
@@ -2069,10 +2096,14 @@ public partial class MainViewModel : ViewModelBase, IDisposable
             // 플래그 필터 (FlagStatus가 SearchQuery에 없으므로 후처리)
             var results = await _dbContext.Emails
                 .Where(e => string.IsNullOrEmpty(query.FolderId) || e.ParentFolderId == query.FolderId)
-                .Where(e => string.IsNullOrEmpty(query.Keywords) ||
-                           EF.Functions.Like(e.Subject ?? "", $"%{query.Keywords}%") ||
-                           EF.Functions.Like(e.Body ?? "", $"%{query.Keywords}%") ||
-                           EF.Functions.Like(e.From ?? "", $"%{query.Keywords}%"))
+                .Where(e => (string.IsNullOrEmpty(query.Keywords) && fromPrefix == null && toPrefix == null && subjectPrefix == null) ||
+                           (fromPrefix != null && EF.Functions.Like(e.From ?? "", $"%{fromPrefix}%")) ||
+                           (toPrefix != null && EF.Functions.Like(e.To ?? "", $"%{toPrefix}%")) ||
+                           (subjectPrefix != null && EF.Functions.Like(e.Subject ?? "", $"%{subjectPrefix}%")) ||
+                           (!string.IsNullOrEmpty(query.Keywords) && (
+                               EF.Functions.Like(e.Subject ?? "", $"%{query.Keywords}%") ||
+                               EF.Functions.Like(e.Body ?? "", $"%{query.Keywords}%") ||
+                               EF.Functions.Like(e.From ?? "", $"%{query.Keywords}%"))))
                 .Where(e => !query.IsRead.HasValue || e.IsRead == query.IsRead.Value)
                 .Where(e => !query.HasAttachments.HasValue || e.HasAttachments == query.HasAttachments.Value)
                 .Where(e => !query.FromDate.HasValue || e.ReceivedDateTime >= query.FromDate.Value)
@@ -2678,13 +2709,21 @@ public partial class MainViewModel : ViewModelBase, IDisposable
         // 현재 정렬 기준 적용 (일반 메일에만)
         IEnumerable<Email> sortedUnpinned = SortBy switch
         {
-            "date_desc" => unpinned.OrderByDescending(e => e.ReceivedDateTime),
-            "date_asc" => unpinned.OrderBy(e => e.ReceivedDateTime),
-            "sender_asc" => unpinned.OrderBy(e => e.From),
-            "sender_desc" => unpinned.OrderByDescending(e => e.From),
-            "subject_asc" => unpinned.OrderBy(e => e.Subject),
-            "subject_desc" => unpinned.OrderByDescending(e => e.Subject),
-            _ => unpinned.OrderByDescending(e => e.ReceivedDateTime)
+            "Subject" => SortDescending
+                ? unpinned.OrderByDescending(e => e.Subject)
+                : unpinned.OrderBy(e => e.Subject),
+            "From" => SortDescending
+                ? unpinned.OrderByDescending(e => e.From)
+                : unpinned.OrderBy(e => e.From),
+            "HasAttachments" => SortDescending
+                ? unpinned.OrderByDescending(e => e.HasAttachments).ThenByDescending(e => e.ReceivedDateTime)
+                : unpinned.OrderBy(e => e.HasAttachments).ThenByDescending(e => e.ReceivedDateTime),
+            "PriorityScore" => SortDescending
+                ? unpinned.OrderByDescending(e => e.PriorityScore)
+                : unpinned.OrderBy(e => e.PriorityScore),
+            _ => SortDescending
+                ? unpinned.OrderByDescending(e => e.ReceivedDateTime)
+                : unpinned.OrderBy(e => e.ReceivedDateTime)
         };
 
         // 고정 메일 + 정렬된 일반 메일 (새 리스트 할당으로 UI 업데이트)
