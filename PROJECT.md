@@ -398,14 +398,20 @@ Other_Services:
     경로: Services/Notification/
     역할: 데스크톱 알림
 
+  - 파일명: ToastNotificationService.cs
+    경로: Services/Notification/
+    역할: Windows 네이티브 토스트 알림 (PowerShell WinRT Interop — BurntToast NuGet 불필요)
+    참고: net10.0-windows TFM 호환, 새 메일 수신 시 ToastEnabled 설정에 따라 알림 발송
+
   - 파일명: NotificationSettings.cs
     경로: Services/Notification/
     역할: 알림 설정
 
   - 파일명: BackgroundSyncService.cs
     경로: Services/Sync/
-    역할: 백그라운드 메일 동기화
+    역할: 백그라운드 메일 동기화 (5개 독립 루프: 즐겨찾기/전체/캘린더/채팅/AI분석)
     참고: Interlocked.CompareExchange 레이스컨디션 방지 + MailSyncCompleted 500ms Debounce + ODataError 410 처리
+    변경_2026-03-28: 즐겨찾기 주기 30→10초; AI 분석 배치 루프(10분, 최대20건) 신규; ToastNotificationService DI 주입
 
   - 파일명: PromptService.cs
     경로: Services/Storage/
@@ -623,3 +629,4 @@ curl -s http://localhost:5858/api/status
 | 2026-03-28 | AI 서버 엔드포인트 클라이언트 직접 입력 기능 추가 | UserPreferencesSettings.cs, ServerSpeechService.cs, ServerWebSocketSpeechService.cs, MainWindow.xaml.cs, TextToSpeechService.cs, OneNoteViewModel.cs, FileAnalysisService.cs | UserPreferencesSettings에 REST 9개+WS 3개 엔드포인트 속성 추가; ServerSpeechService/TextToSpeechService/FileAnalysisService에 prefs 파라미터로 경로 설정값 주입; ServerWebSocketSpeechService.ConnectAsync에 wsPath 파라미터 추가; MainWindow에 엔드포인트 입력 UI Expander 추가 |
 | 2026-03-28 | 메일 읽지않은 카운트 불일치 버그 수정 | mAIx/ViewModels/MainViewModel.cs | OnMailSyncCompleted: RefreshEmailReadStatusAsync 후 RefreshFolderUnreadCountsAsync 무조건 호출 추가; OnEmailsSynced: newCount==0 else 브랜치에 RefreshFolderUnreadCountsAsync 호출 추가 — 다른 앱에서 메일 읽음/자동 동기화 시 폴더 카운트 미갱신 버그 수정 |
 | 2026-03-28 | 메일탭 전체 점검 — 초기 동기화 수/배치저장/발송후동기화/정렬통일/고급검색 개선 6건 | mAIx/Models/Settings/SyncPeriodSettings.cs, mAIx/Services/Graph/GraphMailService.cs, mAIx/Services/Sync/BackgroundSyncService.cs, mAIx/ViewModels/ComposeViewModel.cs, mAIx/ViewModels/MainViewModel.cs | T-01: SyncPeriodSettings Value 기본값 5→100; T-02: SaveEmailsAsync N+1→배치저장; T-03: 메일발송후 SyncSentItemsAsync 자동호출(ComposeViewModel+GraphMailService.CurrentUserEmail); T-04: ApplySortingWithPin 정렬기준 Subject/From/HasAttachments/PriorityScore/default=ReceivedDateTime으로 통일; T-05: 고급검색 To필드+to:/subject: 접두사 파싱 추가; T-06: SyncAllAccountsAsync 지수백오프 재시도 |
+| 2026-03-28 | 메일탭 실시간 동기화 + 알림 기능 + UX 고도화 (7개 수정) | mAIx/Services/Notification/ToastNotificationService.cs(신규), mAIx/Models/Settings/NotificationXmlSettings.cs, mAIx/Models/Settings/UserPreferencesSettings.cs, mAIx/App.xaml.cs, mAIx/Services/Sync/BackgroundSyncService.cs, mAIx/Services/Graph/GraphMailService.cs, mAIx/Views/MainWindow.xaml.cs | 즐겨찾기 동기화 30→10초 단축; Graph API 429 Retry-After+지수백오프(최대3회) 방어; 설정 변경 즉시 반영(SetFavoriteSyncInterval 호출); ToastNotificationService 신규(PowerShell WinRT Interop 네이티브 토스트); 알림 TODO→토스트 연동; AI 분석 배치 루프(5번째 독립루프, 10분 주기, 최대20건); 키보드 단축키 7종(Ctrl+D/Q/U, Enter, Ctrl+1~5) |

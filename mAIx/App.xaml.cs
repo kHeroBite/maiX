@@ -325,6 +325,10 @@ public partial class App : Application
         });
         services.AddSingleton<NotificationService>();
 
+        // Windows 네이티브 토스트 알림 서비스 등록
+        services.AddSingleton<ToastNotificationService>(sp =>
+            new ToastNotificationService(Settings.Notification));
+
         // 백그라운드 동기화 서비스 등록 (IHostedService)
         services.AddHostedService<BackgroundSyncService>();
         services.AddSingleton<BackgroundSyncService>(sp =>
@@ -580,6 +584,14 @@ public partial class App : Application
 
         // REST API 서버 종료
         _restApiServer?.Stop();
+
+        // 토스트 알림 서비스 정리
+        try
+        {
+            var toastService = _host.Services.GetService<ToastNotificationService>();
+            toastService?.Dispose();
+        }
+        catch { /* 종료 중 무시 */ }
 
         await _host.StopAsync();
         _host.Dispose();

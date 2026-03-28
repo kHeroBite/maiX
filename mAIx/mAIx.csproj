@@ -79,6 +79,7 @@
     <!-- 오디오 녹음 (OneNote AI 기능) -->
     <PackageReference Include="NAudio" Version="2.2.1" />
 
+
   </ItemGroup>
 
   <!-- log4net.config 파일을 출력 디렉토리에 복사 -->

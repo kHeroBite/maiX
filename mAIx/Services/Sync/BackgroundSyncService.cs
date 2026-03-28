@@ -27,6 +27,7 @@ public class BackgroundSyncService : BackgroundService
 {
     private readonly IServiceProvider _serviceProvider;
     private readonly ILogger _logger;
+    private readonly ToastNotificationService _toastNotificationService;
 
     // JSON 직렬화 옵션 (한글/특수문자 이스케이프 방지)
     private static readonly JsonSerializerOptions _jsonOptions = new()
@@ -41,7 +42,7 @@ public class BackgroundSyncService : BackgroundService
     private CancellationTokenSource? _intervalChangeCts;  // 주기 변경 시 타이머 재시작용
 
     // 즐겨찾기/전체 동기화 분리 설정
-    private int _favoriteSyncIntervalSeconds = 30;   // 기본값: 30초
+    private int _favoriteSyncIntervalSeconds = 10;   // 기본값: 10초
     private int _fullSyncIntervalSeconds = 300;      // 기본값: 5분 (300초)
     private int _calendarSyncIntervalSeconds = 60;   // 기본값: 1분 (60초)
     private int _chatSyncIntervalSeconds = 120;      // 기본값: 2분 (120초)
@@ -49,6 +50,8 @@ public class BackgroundSyncService : BackgroundService
     private CancellationTokenSource? _fullIntervalChangeCts;      // 전체 주기 변경용
     private CancellationTokenSource? _calendarIntervalChangeCts;  // 캘린더 주기 변경용
     private CancellationTokenSource? _chatIntervalChangeCts;      // 채팅 주기 변경용
+    private const int AnalysisBatchIntervalSeconds = 600;  // AI 분석 배치 주기: 10분
+    private const int AnalysisBatchMaxCount = 20;           // 배치당 최대 분석 건수
 
     // 상태
     private DateTime _lastSyncTime = DateTime.MinValue;
@@ -176,9 +179,10 @@ public class BackgroundSyncService : BackgroundService
     /// </summary>
     public event Action<int, int, int>? CalendarEventsSynced;
 
-    public BackgroundSyncService(IServiceProvider serviceProvider)
+    public BackgroundSyncService(IServiceProvider serviceProvider, ToastNotificationService toastNotificationService)
     {
         _serviceProvider = serviceProvider ?? throw new ArgumentNullException(nameof(serviceProvider));
+        _toastNotificationService = toastNotificationService ?? throw new ArgumentNullException(nameof(toastNotificationService));
         _logger = Log.ForContext<BackgroundSyncService>();
     }
 
@@ -261,14 +265,15 @@ public class BackgroundSyncService : BackgroundService
             _logger.Error(ex, "초기 동기화 실패");
         }
 
-        // 4개의 독립적인 동기화 루프 실행
+        // 5개의 독립적인 동기화/분석 루프 실행
         var favoriteTask = RunFavoriteSyncLoopAsync(stoppingToken);
         var fullTask = RunFullSyncLoopAsync(stoppingToken);
         var calendarTask = RunCalendarSyncLoopAsync(stoppingToken);
         var chatTask = RunChatSyncLoopAsync(stoppingToken);
+        var analysisBatchTask = RunAnalysisBatchLoopAsync(stoppingToken);
 
         // 모든 Task가 완료될 때까지 대기
-        await Task.WhenAll(favoriteTask, fullTask, calendarTask, chatTask);
+        await Task.WhenAll(favoriteTask, fullTask, calendarTask, chatTask, analysisBatchTask);
 
         _logger.Information("백그라운드 동기화 서비스 중지됨");
     }
@@ -583,6 +588,109 @@ public class BackgroundSyncService : BackgroundService
     }
 
     /// <summary>
+    /// AI 분석 배치 루프 (10분 주기, 미분석 메일 최대 20건 처리)
+    /// </summary>
+    private async Task RunAnalysisBatchLoopAsync(CancellationToken stoppingToken)
+    {
+        Log4.Info($"[BackgroundSyncService] AI 분석 배치 루프 시작 - 주기: {AnalysisBatchIntervalSeconds}초, 배치: {AnalysisBatchMaxCount}건");
+
+        using var timer = new PeriodicTimer(TimeSpan.FromSeconds(AnalysisBatchIntervalSeconds));
+
+        while (await timer.WaitForNextTickAsync(stoppingToken))
+        {
+            if (_isPaused)
+            {
+                Log4.Debug("[BackgroundSyncService] 분석 배치 일시정지 상태 - 건너뜀");
+                continue;
+            }
+
+            try
+            {
+                using var scope = _serviceProvider.CreateScope();
+                var dbContext = scope.ServiceProvider.GetRequiredService<mAIxDbContext>();
+                var graphAuthService = scope.ServiceProvider.GetRequiredService<GraphAuthService>();
+                var emailAnalyzer = scope.ServiceProvider.GetRequiredService<EmailAnalyzer>();
+
+                if (!graphAuthService.IsLoggedIn || string.IsNullOrEmpty(graphAuthService.CurrentUserEmail))
+                {
+                    Log4.Debug("[BackgroundSyncService] 분석 배치 - 로그인 없음, 건너뜀");
+                    continue;
+                }
+
+                var accountEmail = graphAuthService.CurrentUserEmail;
+
+                // 미분석 메일 조회 (pending 또는 failed 상태, 최대 20건)
+                var pendingEmails = await dbContext.Emails
+                    .Where(e => e.AccountEmail == accountEmail &&
+                                (e.AnalysisStatus == "pending" || e.AnalysisStatus == "failed"))
+                    .OrderBy(e => e.ReceivedDateTime)
+                    .Take(AnalysisBatchMaxCount)
+                    .ToListAsync(stoppingToken);
+
+                if (pendingEmails.Count == 0)
+                {
+                    Log4.Debug("[BackgroundSyncService] 분석 대기 메일 없음");
+                    continue;
+                }
+
+                Log4.Info($"[BackgroundSyncService] 분석 배치 시작: {pendingEmails.Count}건");
+
+                int successCount = 0;
+                int failCount = 0;
+
+                foreach (var email in pendingEmails)
+                {
+                    if (stoppingToken.IsCancellationRequested) break;
+
+                    try
+                    {
+                        var result = await emailAnalyzer.AnalyzeEmailAsync(email, stoppingToken);
+
+                        if (result.IsSuccess)
+                        {
+                            email.SummaryOneline = result.SummaryOneline;
+                            email.Summary = result.SummaryDetail;
+                            email.PriorityScore = result.PriorityScore;
+                            email.PriorityLevel = result.PriorityLevel;
+                            email.UrgencyLevel = result.UrgencyLevel;
+                            email.Deadline = result.Deadline;
+                            email.AnalysisStatus = "completed";
+                            dbContext.Emails.Update(email);
+                            successCount++;
+                        }
+                        else
+                        {
+                            email.AnalysisStatus = "failed";
+                            dbContext.Emails.Update(email);
+                            failCount++;
+                            _logger.Warning("분석 배치 실패: {Id} - {Error}", email.Id, result.ErrorMessage);
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        email.AnalysisStatus = "failed";
+                        dbContext.Emails.Update(email);
+                        failCount++;
+                        _logger.Error(ex, "분석 배치 처리 실패: {Id}", email.Id);
+                    }
+                }
+
+                await dbContext.SaveChangesAsync(stoppingToken);
+                Log4.Info($"[BackgroundSyncService] 분석 배치 완료: 성공 {successCount}건, 실패 {failCount}건");
+            }
+            catch (OperationCanceledException)
+            {
+                break;
+            }
+            catch (Exception ex)
+            {
+                Log4.Error($"[BackgroundSyncService] 분석 배치 루프 오류: {ex.Message}");
+                _logger.Error(ex, "분석 배치 루프 오류");
+            }
+        }
+    }
+
+    /// <summary>
     /// 즐겨찾기 폴더만 동기화 (IsFavorite == true인 폴더)
     /// </summary>
     public async Task SyncFavoriteFoldersAsync(CancellationToken ct = default)
@@ -706,6 +814,13 @@ public class BackgroundSyncService : BackgroundService
 
                 if (inboxEmails.Count > 0)
                 {
+                    // 토스트 알림: 가장 최신 메일 기준으로 발송
+                    var latestInbox = inboxEmails.OrderByDescending(e => e.ReceivedDateTime).First();
+                    _toastNotificationService.ShowNewMailNotification(
+                        latestInbox.From ?? "(발신자 없음)",
+                        latestInbox.Subject ?? "(제목 없음)",
+                        inboxEmails.Count > 1 ? $"외 {inboxEmails.Count - 1}건" : "");
+
                     await AnalyzeAndNotifyAsync(emailAnalyzer, notificationService, inboxEmails, ct);
                 }
             }
@@ -876,6 +991,13 @@ public class BackgroundSyncService : BackgroundService
 
             if (inboxEmails.Count > 0)
             {
+                // 토스트 알림: 가장 최신 메일 기준으로 발송
+                var latestInbox = inboxEmails.OrderByDescending(e => e.ReceivedDateTime).First();
+                _toastNotificationService.ShowNewMailNotification(
+                    latestInbox.From ?? "(발신자 없음)",
+                    latestInbox.Subject ?? "(제목 없음)",
+                    inboxEmails.Count > 1 ? $"외 {inboxEmails.Count - 1}건" : "");
+
                 await AnalyzeAndNotifyAsync(emailAnalyzer, notificationService, inboxEmails, ct);
             }
         }

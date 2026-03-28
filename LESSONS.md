@@ -390,3 +390,11 @@
 - **교훈**: kdone_docs의 L-052 체크리스트(settings.json 등록 hook 파일 존재 확인)를 매 작업마다 반드시 실행. hook 파일 등록 시 반드시 동시에 파일도 생성.
 - **심각도**: 낮음 (exit 0 fallback으로 실제 차단 없음)
 - **Level**: 1 (참고)
+
+## L-272: PowerShell WinRT Interop 토스트 패턴 — BurntToast NuGet 없이 net10.0-windows 네이티브 토스트 (2026-03-28)
+
+- **문제**: net10.0-windows WPF 앱에서 Windows 네이티브 토스트 알림이 필요한데, BurntToast 등 외부 NuGet 패키지 없이 구현 방법이 필요
+- **해결**: `ToastNotificationService.cs` 신규 생성 — PowerShell `Add-Type`으로 `Windows.UI.Notifications` WinRT 네임스페이스를 직접 로딩하여 토스트 발송. `Process.Start("powershell.exe", ...)` 비동기 호출 방식
+- **교훈**: net10.0-windows TFM에서 외부 NuGet 없이 Windows 네이티브 토스트 알림이 필요하면 PowerShell WinRT Interop 패턴 사용. `Windows.UI.Notifications.ToastNotificationManager` 직접 호출 가능. `NotificationXmlSettings`로 앱ID/활성화 여부 설정 관리
+- **심각도**: 낮음 (신규 기능 도입 패턴)
+- **Level**: 1 (참고)

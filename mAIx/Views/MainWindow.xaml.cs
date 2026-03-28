@@ -3389,6 +3389,68 @@ public partial class MainWindow : FluentWindow
                         e.Handled = true;
                     }
                     break;
+
+                case Key.D:
+                    // Ctrl+D: 선택 메일 삭제
+                    if (_viewModel.SelectedEmail != null)
+                    {
+                        _ = DeleteSelectedEmailAsync();
+                        e.Handled = true;
+                    }
+                    break;
+
+                case Key.Q:
+                    // Ctrl+Q: 선택 메일 읽음 처리
+                    if (_viewModel.SelectedEmail != null)
+                    {
+                        EmailMarkAsRead_Click(null, e);
+                        e.Handled = true;
+                    }
+                    break;
+
+                case Key.U:
+                    // Ctrl+U: 선택 메일 안읽음 처리
+                    if (_viewModel.SelectedEmail != null)
+                    {
+                        EmailMarkAsUnread_Click(null, e);
+                        e.Handled = true;
+                    }
+                    break;
+
+                case Key.D1:
+                    // Ctrl+1: 메일 탭
+                    NavMailButton.IsChecked = true;
+                    ShowMailView();
+                    e.Handled = true;
+                    break;
+
+                case Key.D2:
+                    // Ctrl+2: Teams 탭
+                    NavTeamsButton.IsChecked = true;
+                    ShowTeamsView();
+                    e.Handled = true;
+                    break;
+
+                case Key.D3:
+                    // Ctrl+3: 캘린더 탭
+                    NavCalendarButton.IsChecked = true;
+                    ShowCalendarView();
+                    e.Handled = true;
+                    break;
+
+                case Key.D4:
+                    // Ctrl+4: OneNote 탭
+                    NavOneNoteButton.IsChecked = true;
+                    ShowOneNoteView();
+                    e.Handled = true;
+                    break;
+
+                case Key.D5:
+                    // Ctrl+5: 설정 탭
+                    NavSettingsButton.IsChecked = true;
+                    ShowSettingsView();
+                    e.Handled = true;
+                    break;
             }
         }
         // Ctrl+Shift 키 조합
@@ -3424,6 +3486,37 @@ public partial class MainWindow : FluentWindow
                     // Delete: 선택된 메일 삭제 (실행취소 팝업 포함)
                     _ = DeleteSelectedEmailAsync();
                     e.Handled = true;
+                    break;
+
+                case Key.Enter:
+                    // Enter: 선택 메일 새 창에서 열기
+                    if (_viewModel.SelectedEmail != null)
+                    {
+                        try
+                        {
+                            if (IsDraftsFolder(_viewModel.SelectedFolder))
+                            {
+                                var graphMailService = (App.Current as App)?.GraphMailService;
+                                if (graphMailService != null)
+                                {
+                                    var syncService = (App.Current as App)?.BackgroundSyncService;
+                                    var vmCompose = new ViewModels.ComposeViewModel(graphMailService, syncService, ComposeMode.EditDraft, _viewModel.SelectedEmail);
+                                    var composeWindow = new ComposeWindow(vmCompose);
+                                    composeWindow.Show();
+                                }
+                            }
+                            else
+                            {
+                                var viewWindow = new EmailViewWindow(_viewModel.SelectedEmail);
+                                viewWindow.Show();
+                            }
+                            e.Handled = true;
+                        }
+                        catch (Exception ex)
+                        {
+                            Log4.Error($"Enter 키 메일 새 창 열기 실패: {ex.Message}");
+                        }
+                    }
                     break;
 
                 case Key.F5:
@@ -15938,7 +16031,7 @@ public partial class MainWindow : FluentWindow
             "sync_ms365" => new[] { ("sync_ms365_favorite", "즐겨찾기"), ("sync_ms365_all", "전체") },
             "mail" => new[] { ("mail_signature", "서명 관리") },
             "api" => new[] { ("api_ai_providers", "AI Provider"), ("api_tinymce", "TinyMCE") },
-            "general" => new[] { ("general_theme", "일반"), ("general_account", "계정") },
+            "general" => new[] { ("general_theme", "일반"), ("general_account", "계정"), ("general_notification", "알림") },
             "system" => new[] { ("system_microphone", "마이크 설정"), ("system_stt_tts", "STT/TTS 설정") },
             _ => Array.Empty<(string, string)>()
         };
@@ -16117,6 +16210,9 @@ public partial class MainWindow : FluentWindow
                 break;
             case "general_account":
                 ShowAccountSettings();
+                break;
+            case "general_notification":
+                ShowNotificationSettings();
                 break;
             case "system_microphone":
                 ShowMicrophoneSettings();
@@ -16654,7 +16750,8 @@ public partial class MainWindow : FluentWindow
             {
                 prefs.MailSyncIntervalSeconds = seconds;
                 App.Settings.SaveUserPreferences();
-                Log4.Info($"메일 동기화 주기 저장: {seconds}초");
+                _viewModel.SetSyncInterval(seconds);
+                Log4.Info($"메일 동기화 주기 저장 및 즉시 반영: {seconds}초");
             };
             mailWrap.Children.Add(radio);
         }
@@ -16684,7 +16781,8 @@ public partial class MainWindow : FluentWindow
             {
                 prefs.CalendarSyncIntervalSeconds = seconds;
                 App.Settings.SaveUserPreferences();
-                Log4.Info($"캘린더 동기화 주기 저장: {seconds}초");
+                _viewModel.SetCalendarSyncInterval(seconds);
+                Log4.Info($"캘린더 동기화 주기 저장 및 즉시 반영: {seconds}초");
             };
             calendarWrap.Children.Add(radio);
         }
@@ -16714,7 +16812,8 @@ public partial class MainWindow : FluentWindow
             {
                 prefs.ChatSyncIntervalSeconds = seconds;
                 App.Settings.SaveUserPreferences();
-                Log4.Info($"채팅 동기화 주기 저장: {seconds}초");
+                _viewModel.SetChatSyncInterval(seconds);
+                Log4.Info($"채팅 동기화 주기 저장 및 즉시 반영: {seconds}초");
             };
             chatWrap.Children.Add(radio);
         }
@@ -16793,7 +16892,8 @@ public partial class MainWindow : FluentWindow
             {
                 prefs.MailSyncIntervalSeconds = seconds;
                 App.Settings.SaveUserPreferences();
-                Log4.Info($"메일 동기화 주기 저장: {seconds}초");
+                _viewModel.SetSyncInterval(seconds);
+                Log4.Info($"메일 동기화 주기 저장 및 즉시 반영: {seconds}초");
             };
             intervalWrap.Children.Add(radio);
         }
@@ -16824,6 +16924,47 @@ public partial class MainWindow : FluentWindow
     }
 
     #endregion
+
+
+    /// <summary>
+    /// 알림 설정 UI 표시
+    /// </summary>
+    private void ShowNotificationSettings()
+    {
+        if (SettingsContentPanel == null) return;
+        var prefs = App.Settings.UserPreferences;
+
+        SettingsContentPanel.Children.Add(CreateSettingsSectionHeader("알림 설정"));
+
+        // 토스트 알림 활성화
+        var toastGroup = CreateSettingsGroupBorder();
+        var toastStack = new StackPanel();
+        toastStack.Children.Add(CreateSettingsLabel("토스트 알림"));
+
+        var toastToggle = new System.Windows.Controls.CheckBox
+        {
+            Content = "토스트 알림 활성화",
+            IsChecked = prefs.ToastNotificationEnabled,
+            Margin = new Thickness(0, 4, 0, 0)
+        };
+        toastToggle.Checked += (s, e) =>
+        {
+            prefs.ToastNotificationEnabled = true;
+            App.Settings.SaveUserPreferences();
+            Log4.Info("토스트 알림 활성화");
+        };
+        toastToggle.Unchecked += (s, e) =>
+        {
+            prefs.ToastNotificationEnabled = false;
+            App.Settings.SaveUserPreferences();
+            Log4.Info("토스트 알림 비활성화");
+        };
+        toastStack.Children.Add(toastToggle);
+        toastStack.Children.Add(CreateSettingsDescription("새 메일 수신 시 Windows 토스트 알림을 표시합니다."));
+
+        toastGroup.Child = toastStack;
+        SettingsContentPanel.Children.Add(toastGroup);
+    }
 
     #region 서명 설정
 

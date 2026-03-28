@@ -93,4 +93,10 @@ public class NotificationXmlSettings
     /// </summary>
     [XmlElement("ExcludeNonBusinessMail")]
     public bool ExcludeNonBusinessMail { get; set; } = true;
+
+    /// <summary>
+    /// Windows 네이티브 토스트 알림 활성화
+    /// </summary>
+    [XmlElement("ToastEnabled")]
+    public bool ToastEnabled { get; set; } = true;
 }

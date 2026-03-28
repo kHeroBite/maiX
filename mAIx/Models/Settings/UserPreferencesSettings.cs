@@ -98,10 +98,10 @@ public class UserPreferencesSettings
     public int FavoriteSyncPeriodValue { get; set; } = 5;
 
     /// <summary>
-    /// 즐겨찾기 메일 동기화 주기 (초 단위) - 기본 30초
+    /// 즐겨찾기 메일 동기화 주기 (초 단위) - 기본 10초
     /// </summary>
     [XmlElement("FavoriteSyncIntervalSeconds")]
-    public int FavoriteSyncIntervalSeconds { get; set; } = 30;
+    public int FavoriteSyncIntervalSeconds { get; set; } = 10;
 
     /// <summary>
     /// 전체메일 동기화 주기 (초 단위) - 기본 5분(300초)
@@ -268,5 +268,11 @@ public class UserPreferencesSettings
     /// <summary>화자 분리 WebSocket 경로</summary>
     [XmlElement("WsEndpointSplit")]
     public string WsEndpointSplit { get; set; } = "/ws/split";
+
+    /// <summary>
+    /// 토스트 알림 활성화 여부 (기본값: true)
+    /// </summary>
+    [XmlElement("ToastNotificationEnabled")]
+    public bool ToastNotificationEnabled { get; set; } = true;
 
 }

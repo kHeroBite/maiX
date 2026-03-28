@@ -1,9 +1,13 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Net;
+using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Graph;
 using Microsoft.Graph.Models;
+using Microsoft.Kiota.Abstractions;
+using Serilog;
 
 namespace mAIx.Services.Graph
 {
@@ -13,10 +17,54 @@ namespace mAIx.Services.Graph
     public class GraphMailService
     {
         private readonly GraphAuthService _authService;
+        private readonly ILogger _logger;
+        private const int MaxRetryCount = 3;
 
         public GraphMailService(GraphAuthService authService)
         {
             _authService = authService ?? throw new ArgumentNullException(nameof(authService));
+            _logger = Log.ForContext<GraphMailService>();
+        }
+
+        /// <summary>
+        /// Graph API 호출 시 429 Too Many Requests 처리 (Retry-After + Exponential Backoff)
+        /// </summary>
+        private static async Task<T> ExecuteWithRetryAsync<T>(Func<Task<T>> action, ILogger logger, CancellationToken ct = default)
+        {
+            for (int attempt = 0; attempt <= MaxRetryCount; attempt++)
+            {
+                try
+                {
+                    return await action();
+                }
+                catch (ApiException ex) when (ex.ResponseStatusCode == (int)HttpStatusCode.TooManyRequests)
+                {
+                    if (attempt >= MaxRetryCount)
+                    {
+                        logger.Error(ex, "Graph API 429 — 최대 재시도 {Max}회 소진", MaxRetryCount);
+                        throw;
+                    }
+
+                    // Retry-After 헤더 파싱 (없으면 지수 백오프)
+                    int waitSeconds;
+                    if (ex.ResponseHeaders != null &&
+                        ex.ResponseHeaders.TryGetValue("Retry-After", out var retryAfterValues))
+                    {
+                        var retryAfter = string.Join(",", retryAfterValues);
+                        waitSeconds = int.TryParse(retryAfter, out var parsed) ? parsed : (int)Math.Pow(2, attempt + 1);
+                    }
+                    else
+                    {
+                        waitSeconds = (int)Math.Pow(2, attempt + 1);  // 2s, 4s, 8s
+                    }
+
+                    logger.Warning("Graph API 429 — {Wait}초 대기 후 재시도 ({Attempt}/{Max})", waitSeconds, attempt + 1, MaxRetryCount);
+                    await Task.Delay(TimeSpan.FromSeconds(waitSeconds), ct);
+                }
+            }
+
+            // 도달 불가 (컴파일러 만족용)
+            throw new InvalidOperationException("ExecuteWithRetryAsync: 예상치 못한 종료");
         }
 
         /// <summary>
@@ -28,16 +76,16 @@ namespace mAIx.Services.Graph
         /// 메일 폴더 목록 조회 (하위 폴더 포함, 페이징 처리)
         /// </summary>
         /// <returns>모든 폴더 목록 (최상위 + 하위 폴더)</returns>
-        public async Task<IEnumerable<MailFolder>> GetFoldersAsync()
+        public async Task<IEnumerable<MailFolder>> GetFoldersAsync(CancellationToken ct = default)
         {
             var client = _authService.GetGraphClient();
             var allFolders = new List<MailFolder>();
 
-            // 최상위 폴더 조회 (페이징 처리)
-            var response = await client.Me.MailFolders.GetAsync(config =>
+            // 최상위 폴더 조회 (페이징 처리, 429 재시도 포함)
+            var response = await ExecuteWithRetryAsync(() => client.Me.MailFolders.GetAsync(config =>
             {
                 config.QueryParameters.Top = 100; // 한 번에 최대 100개
-            });
+            }), _logger, ct);
 
             // 모든 최상위 폴더 수집 (페이징)
             var topLevelFolders = new List<MailFolder>();
@@ -190,19 +238,21 @@ namespace mAIx.Services.Graph
 
                 if (string.IsNullOrEmpty(deltaLink))
                 {
-                    // 초기 동기화: 최근 50개 메일부터 시작
-                    response = await client.Me.MailFolders[folderId].Messages.Delta.GetAsDeltaGetResponseAsync(config =>
-                    {
-                        config.QueryParameters.Select = selectFields;
-                        config.QueryParameters.Top = 50;
-                    });
+                    // 초기 동기화: 최근 50개 메일부터 시작 (429 재시도 포함)
+                    response = await ExecuteWithRetryAsync(() =>
+                        client.Me.MailFolders[folderId].Messages.Delta.GetAsDeltaGetResponseAsync(config =>
+                        {
+                            config.QueryParameters.Select = selectFields;
+                            config.QueryParameters.Top = 50;
+                        }), _logger);
                 }
                 else
                 {
-                    // 이전 deltaLink로 변경분만 조회
-                    response = await client.Me.MailFolders[folderId].Messages.Delta
-                        .WithUrl(deltaLink)
-                        .GetAsDeltaGetResponseAsync();
+                    // 이전 deltaLink로 변경분만 조회 (429 재시도 포함)
+                    response = await ExecuteWithRetryAsync(() =>
+                        client.Me.MailFolders[folderId].Messages.Delta
+                            .WithUrl(deltaLink)
+                            .GetAsDeltaGetResponseAsync(), _logger);
                 }
 
                 // 페이징 처리
@@ -270,30 +320,33 @@ namespace mAIx.Services.Graph
         public async Task<IEnumerable<Message>> GetLatestMessagesAsync(
             string folderId,
             int count = 5,
-            DateTime? since = null)
+            DateTime? since = null,
+            CancellationToken ct = default)
         {
             var client = _authService.GetGraphClient();
 
-            var response = await client.Me.MailFolders[folderId].Messages
-                .GetAsync(config =>
-                {
-                    config.QueryParameters.Select = new[]
+            // 429 재시도 포함
+            var response = await ExecuteWithRetryAsync(() =>
+                client.Me.MailFolders[folderId].Messages
+                    .GetAsync(config =>
                     {
-                        "id", "internetMessageId", "conversationId", "subject",
-                        "from", "toRecipients", "ccRecipients", "bccRecipients",
-                        "receivedDateTime", "isRead", "flag", "importance",
-                        "hasAttachments", "categories", "parentFolderId", "body"
-                    };
-                    config.QueryParameters.Top = count;
-                    config.QueryParameters.Orderby = new[] { "receivedDateTime desc" };
+                        config.QueryParameters.Select = new[]
+                        {
+                            "id", "internetMessageId", "conversationId", "subject",
+                            "from", "toRecipients", "ccRecipients", "bccRecipients",
+                            "receivedDateTime", "isRead", "flag", "importance",
+                            "hasAttachments", "categories", "parentFolderId", "body"
+                        };
+                        config.QueryParameters.Top = count;
+                        config.QueryParameters.Orderby = new[] { "receivedDateTime desc" };
 
-                    // since 파라미터가 있으면 해당 시간 이후 메일만 조회
-                    if (since.HasValue)
-                    {
-                        var sinceUtc = since.Value.ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ssZ");
-                        config.QueryParameters.Filter = $"receivedDateTime ge {sinceUtc}";
-                    }
-                });
+                        // since 파라미터가 있으면 해당 시간 이후 메일만 조회
+                        if (since.HasValue)
+                        {
+                            var sinceUtc = since.Value.ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ssZ");
+                            config.QueryParameters.Filter = $"receivedDateTime ge {sinceUtc}";
+                        }
+                    }), _logger, ct);
 
             return response?.Value ?? new List<Message>();
         }
