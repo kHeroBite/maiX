@@ -9,6 +9,7 @@ using Microsoft.EntityFrameworkCore;
 using Serilog;
 using mAIx.Data;
 using mAIx.Models;
+using mAIx.Queries;
 
 namespace mAIx.Services.Search;
 
@@ -52,8 +53,28 @@ public class EmailSearchService
                 return cachedResult!;
             }
 
-            // 쿼리 빌드
-            var dbQuery = BuildQuery(query);
+            // FTS5 우선 시도 → 실패 시 LIKE 폴백
+            IQueryable<Email> dbQuery;
+            if (!string.IsNullOrWhiteSpace(query.Keywords))
+            {
+                try
+                {
+                    var fts5Ids = await SearchWithFts5Async(query.Keywords, ct);
+                    dbQuery = fts5Ids.Count > 0
+                        ? BuildQueryWithIds(query, fts5Ids)
+                        : BuildQuery(query);
+                    _logger.Debug("FTS5 검색: {Count}건 매칭", fts5Ids.Count);
+                }
+                catch (Exception ex)
+                {
+                    _logger.Warning(ex, "FTS5 검색 실패 — LIKE 폴백");
+                    dbQuery = BuildQuery(query);
+                }
+            }
+            else
+            {
+                dbQuery = BuildQuery(query);
+            }
 
             // 전체 개수 조회
             var totalCount = await dbQuery.CountAsync(ct);
@@ -183,6 +204,103 @@ public class EmailSearchService
     {
         // 향후 검색 기록 테이블 추가 시 구현
         return Task.FromResult(new List<string>());
+    }
+
+    /// <summary>
+    /// FTS5 MATCH 검색 — Email ID 목록 반환 (EmailsFts 가상 테이블 사용)
+    /// EF Core LINQ로 표현 불가능한 FTS5 전용 Raw SQL (EmailFtsQueries.BuildMatchQuery 참조)
+    /// </summary>
+    /// <param name="keywords">검색 키워드</param>
+    /// <param name="ct">취소 토큰</param>
+    /// <returns>매칭된 Email ID 목록</returns>
+    public async Task<List<int>> SearchWithFts5Async(string keywords, CancellationToken ct = default)
+    {
+        var ids = new List<int>();
+        if (string.IsNullOrWhiteSpace(keywords))
+            return ids;
+
+        var conn = _dbContext.Database.GetDbConnection();
+        if (conn.State != System.Data.ConnectionState.Open)
+            await conn.OpenAsync(ct);
+
+        using var cmd = conn.CreateCommand();
+        cmd.CommandText = EmailFtsQueries.BuildMatchQuery(keywords);
+        using var reader = await cmd.ExecuteReaderAsync(ct);
+        while (await reader.ReadAsync(ct))
+            ids.Add(reader.GetInt32(0));
+
+        return ids;
+    }
+
+    /// <summary>
+    /// FTS5 결과 ID 목록으로 필터된 쿼리 빌드 (키워드 LIKE 필터 제외)
+    /// </summary>
+    private IQueryable<Email> BuildQueryWithIds(SearchQuery query, List<int> emailIds)
+    {
+        var dbQuery = _dbContext.Emails.Where(e => emailIds.Contains(e.Id));
+
+        if (!string.IsNullOrWhiteSpace(query.AccountEmail))
+            dbQuery = dbQuery.Where(e => e.AccountEmail == query.AccountEmail);
+
+        if (query.FromDate.HasValue)
+            dbQuery = dbQuery.Where(e => e.ReceivedDateTime >= query.FromDate.Value);
+
+        if (query.ToDate.HasValue)
+        {
+            var toDateEnd = query.ToDate.Value.Date.AddDays(1).AddTicks(-1);
+            dbQuery = dbQuery.Where(e => e.ReceivedDateTime <= toDateEnd);
+        }
+
+        if (!string.IsNullOrWhiteSpace(query.FolderId))
+            dbQuery = dbQuery.Where(e => e.ParentFolderId == query.FolderId);
+
+        if (query.HasAttachments.HasValue)
+            dbQuery = dbQuery.Where(e => e.HasAttachments == query.HasAttachments.Value);
+
+        if (query.IsRead.HasValue)
+            dbQuery = dbQuery.Where(e => e.IsRead == query.IsRead.Value);
+
+        if (query.MinPriority.HasValue)
+            dbQuery = dbQuery.Where(e => e.PriorityScore >= query.MinPriority.Value);
+
+        if (query.MaxPriority.HasValue)
+            dbQuery = dbQuery.Where(e => e.PriorityScore <= query.MaxPriority.Value);
+
+        if (!string.IsNullOrWhiteSpace(query.PriorityLevel))
+            dbQuery = dbQuery.Where(e => e.PriorityLevel == query.PriorityLevel);
+
+        if (!string.IsNullOrWhiteSpace(query.Sender))
+        {
+            var sender = query.Sender.ToLower();
+            dbQuery = dbQuery.Where(e => e.From != null && e.From.ToLower().Contains(sender));
+        }
+
+        if (!string.IsNullOrWhiteSpace(query.Recipient))
+        {
+            var recipient = query.Recipient.ToLower();
+            dbQuery = dbQuery.Where(e => e.To != null && e.To.ToLower().Contains(recipient));
+        }
+
+        if (query.IsAnalyzed.HasValue)
+        {
+            if (query.IsAnalyzed.Value)
+                dbQuery = dbQuery.Where(e => e.AnalysisStatus == "completed");
+            else
+                dbQuery = dbQuery.Where(e => e.AnalysisStatus != "completed");
+        }
+
+        if (query.HasDeadline.HasValue)
+        {
+            if (query.HasDeadline.Value)
+                dbQuery = dbQuery.Where(e => e.Deadline != null);
+            else
+                dbQuery = dbQuery.Where(e => e.Deadline == null);
+        }
+
+        if (query.ExcludeNonBusiness)
+            dbQuery = dbQuery.Where(e => !e.IsNonBusiness);
+
+        return dbQuery;
     }
 
     /// <summary>

@@ -407,3 +407,12 @@
 - **교훈**: WPF UI(Fluent Design) XAML에서 `Symbol` 속성 사용 시 반드시 FluentSystemIcons 목록에서 실제 존재하는 심볼명 확인 후 사용. 추측 입력 금지. 빌드 오류 발생 시 FluentIcon 심볼명 미존재를 첫 번째 점검 항목으로
 - **심각도**: 낮음 (빌드 오류, 수정 용이)
 - **Level**: 1 (참고)
+
+## L-274: SQLite FTS5 가상 테이블 컬럼명 예약어 충돌 — [From] 대괄호 이스케이프 필수 (2026-03-29)
+
+- **문제**: FTS5 가상 테이블 생성 SQL에서 `From` 컬럼명 사용 시 SQLite 예약어 충돌로 Migration 실패
+- **원인**: Email 모델의 `From` 프로퍼티 이름을 FTS5 가상 테이블 컬럼명으로 그대로 사용. SQLite FTS5에서 `FROM`은 예약어로 처리됨
+- **해결**: `From` → `[From]` 대괄호 이스케이프 적용 후 정상 동작
+- **교훈**: SQLite FTS5 가상 테이블 SQL 작성 시 컬럼명이 SQLite 예약어인지 사전 확인 필수. 이메일 모델에서 충돌 가능한 예약어: `From`(FROM), `To`(TO), `Order`(ORDER), `Group`(GROUP), `Select`(SELECT), `Where`(WHERE), `Index`(INDEX). 예약어는 반드시 `[컬럼명]` 대괄호로 이스케이프할 것.
+- **심각도**: 중간 (예측 가능한 패턴, FTS5 작업 시 재발 가능)
+- **Level**: 1 (참고)

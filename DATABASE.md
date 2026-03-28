@@ -80,6 +80,11 @@ dotnet ef migrations script --project MaiX
 | Keywords | text | YES | - | NULL | 키워드 (JSON 배열) |
 | AnalysisStatus | string(20) | NO | IDX | "pending" | 분석 상태 |
 | AccountEmail | string(500) | NO | IDX | - | 소속 계정 |
+| **AI 분류 필드 (Phase 0 — 2026-03-29)** |
+| AiCategory | string(50) | YES | - | NULL | AI 자동 분류 (긴급/업무/일반) |
+| AiPriority | string(20) | YES | - | NULL | AI 우선순위 (high/medium/low) |
+| AiActionRequired | bool | NO | - | false | AI 액션 필요 여부 |
+| AiSummaryBrief | string(500) | YES | - | NULL | AI 간략 요약 (1-2줄) |
 
 **인덱스**:
 - `IX_Email_InternetMessageId` (UNIQUE)
@@ -427,3 +432,45 @@ var emailWithAttachments = await _context.Emails
 - 대량 데이터 조회 시 `AsNoTracking()` 사용
 - 필요한 필드만 `Select()` 로 가져오기
 - 인덱스 활용 (AccountEmail, ReceivedDateTime 등)
+
+
+---
+
+## 15. EmailsFts 가상 테이블 (FTS5 — 전문 검색)
+
+**설명**: Emails 전문 검색(Full-Text Search)용 FTS5 가상 테이블. Migration 20260329000002에서 생성.
+
+**DbSet**: (EF Core DbSet 없음 — Raw SQL 직접 사용)
+
+**컬럼 상세**:
+| 컬럼명 | 타입 | 설명 |
+|--------|------|------|
+| Subject | text | 이메일 제목 |
+| Body | text | 본문 |
+| [From] | text | 발신자 ([From] 대괄호 필수 — SQLite 예약어) |
+| AiSummaryBrief | text | AI 간략 요약 |
+
+**트리거**:
+- `EmailsFts_ai`: Emails INSERT 시 EmailsFts에 자동 INSERT
+- `EmailsFts_au`: Emails UPDATE 시 EmailsFts에 자동 UPDATE (DELETE + INSERT)
+- `EmailsFts_ad`: Emails DELETE 시 EmailsFts에 자동 DELETE
+
+**검색 방법**:
+```sql
+-- FTS5 MATCH 검색 (우선)
+SELECT e.* FROM Emails e
+JOIN EmailsFts f ON e.Id = f.rowid
+WHERE f.EmailsFts MATCH '검색어'
+ORDER BY rank;
+
+-- LIKE 폴백 (FTS5 실패 시)
+SELECT * FROM Emails
+WHERE Subject LIKE '%검색어%' OR Body LIKE '%검색어%';
+```
+
+**SQLite 예약어 주의**:
+- `From` 컬럼은 반드시 `[From]`으로 이스케이프 (L-274)
+- FTS5 가상 테이블 SQL 작성 시 예약어 확인 필수
+
+**쿼리 파일**: `mAIx/Queries/EmailFtsQueries.cs`
+

@@ -2,6 +2,50 @@
 
 > PROJECT.md 작업 이력 테이블의 상세 보완본
 
+## 2026-03-29: Phase 0 인프라 정비 — Email AI 분류 필드 + FTS5 검색 + AI 자동 트리거
+
+**커밋**: (kdone_git 완료 후 기재)
+**분류**: Fast Path (미디엄)
+**수정 파일**: 7개 (수정 4 + 신규 5 — Migration 4 + Queries 1)
+
+### 변경 내역
+
+#### 1. Email.cs — AI 분류 필드 4개 추가
+- `AiCategory` (string, NULL): AI 자동 분류 카테고리 (긴급/업무/일반)
+- `AiPriority` (string, NULL): AI 우선순위 (high/medium/low)
+- `AiActionRequired` (bool, DEFAULT false): AI 액션 필요 여부
+- `AiSummaryBrief` (string, NULL): AI 간략 요약 (1-2줄)
+
+#### 2. Migration 20260329000001 — AI 분류 컬럼 4개 DB 추가
+- Emails 테이블에 AiCategory/AiPriority/AiActionRequired/AiSummaryBrief 컬럼 추가
+- ModelSnapshot 업데이트
+
+#### 3. Migration 20260329000002 — FTS5 가상 테이블 + 트리거
+- `EmailsFts` FTS5 가상 테이블 생성 (Subject, Body, [From], AiSummaryBrief)
+  - SQLite 예약어 `From` → `[From]` 대괄호 이스케이프 적용 (역라우팅 수정)
+- INSERT/UPDATE/DELETE 트리거 3종
+- 초기 인덱싱: 기존 Emails 데이터 → EmailsFts 일괄 INSERT
+
+#### 4. EmailSearchService.cs — FTS5 검색 + LIKE 폴백
+- FTS5 MATCH 검색 우선 시도
+- FTS5 실패 시 LIKE 폴백 구조
+
+#### 5. EmailFtsQueries.cs (신규) — FTS5 SQL 쿼리 분리
+- `mAIx/Queries/EmailFtsQueries.cs`: FTS5 관련 SQL 쿼리 상수 분리 정의
+
+#### 6. BackgroundSyncService.cs — AI 배치 루프 AiCategory 자동 분류
+- PriorityScore 기반 AiCategory 자동 매핑 통합
+  - PriorityScore >= 70 → "긴급"
+  - PriorityScore >= 40 → "업무"
+  - else → "일반"
+
+### 테스트 결과
+- 빌드: 오류 0개 ✅
+- 실행: 정상 (health 200, Migration 자동 적용) ✅
+- 로그: ERROR 0건 ✅
+
+---
+
 ## 2026-03-28: 메일탭 UX 완성도 마지막 10% — INPC + 다중선택 도구바 + PreviewText
 
 **커밋**: (kdone_git 완료 후 기재)

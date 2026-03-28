@@ -209,6 +209,30 @@ public class Email : INotifyPropertyChanged
     /// </summary>
     public string? Keywords { get; set; }
 
+    // ===== AI 분류 필드 =====
+
+    /// <summary>
+    /// AI 분류 카테고리 (긴급/액션필요/FYI/대기/기타). 기본값 null (미분류)
+    /// </summary>
+    [MaxLength(50)]
+    public string? AiCategory { get; set; }
+
+    /// <summary>
+    /// AI 우선순위 점수 (0~100). 기본값 0
+    /// </summary>
+    public int AiPriority { get; set; } = 0;
+
+    /// <summary>
+    /// AI 판정: 액션 필요 여부. 기본값 false
+    /// </summary>
+    public bool AiActionRequired { get; set; } = false;
+
+    /// <summary>
+    /// AI 한줄 요약. 기본값 null
+    /// </summary>
+    [MaxLength(500)]
+    public string? AiSummaryBrief { get; set; }
+
     /// <summary>
     /// AI 분석 상태 (pending, completed, failed)
     /// </summary>

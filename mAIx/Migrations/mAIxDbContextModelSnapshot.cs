@@ -467,6 +467,20 @@ namespace mAIx.Migrations
                         .HasMaxLength(500)
                         .HasColumnType("TEXT");
 
+                    b.Property<bool>("AiActionRequired")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("AiCategory")
+                        .HasMaxLength(50)
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("AiPriority")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("AiSummaryBrief")
+                        .HasMaxLength(500)
+                        .HasColumnType("TEXT");
+
                     b.Property<string>("AnalysisStatus")
                         .IsRequired()
                         .HasMaxLength(20)

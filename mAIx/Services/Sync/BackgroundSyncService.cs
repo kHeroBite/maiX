@@ -655,6 +655,28 @@ public class BackgroundSyncService : BackgroundService
                             email.UrgencyLevel = result.UrgencyLevel;
                             email.Deadline = result.Deadline;
                             email.AnalysisStatus = "completed";
+
+                            // AI 분류 필드 매핑
+                            email.AiSummaryBrief = result.SummaryOneline;
+                            email.AiPriority = result.PriorityScore;
+                            bool hasTodos = result.Todos != null && result.Todos.Count > 0;
+                            if (result.PriorityScore >= 80)
+                            {
+                                email.AiCategory = "긴급";
+                                email.AiActionRequired = true;
+                            }
+                            else if (result.PriorityScore < 30)
+                            {
+                                email.AiCategory = "FYI";
+                                email.AiActionRequired = hasTodos;
+                            }
+                            else
+                            {
+                                email.AiCategory = "일반";
+                                email.AiActionRequired = hasTodos;
+                            }
+                            Log4.Debug($"[BackgroundSyncService] AI 분류 완료: Id={email.Id}, Category={email.AiCategory}, Priority={email.AiPriority}, ActionRequired={email.AiActionRequired}");
+
                             dbContext.Emails.Update(email);
                             successCount++;
                         }
