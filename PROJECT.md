@@ -175,16 +175,16 @@ ViewModels:
 ```yaml
 Models:
   - 파일명: Email.cs
-    역할: 이메일 데이터 모델
-    속성: Id, Subject, From, To, Body, ReceivedDateTime, IsRead, HasAttachments
+    역할: 이메일 데이터 모델 + INotifyPropertyChanged 구현 (EF Core 직접 바인딩 지원)
+    속성: Id, Subject, From, To, Body, ReceivedDateTime, IsRead(INPC), HasAttachments, FlagStatus(INPC), Categories(INPC), PreviewText(NotMapped), PreviewOrSummary(NotMapped)
 
   - 파일명: Attachment.cs
     역할: 첨부파일 모델
     속성: Id, Name, ContentType, Size, ContentBytes
 
   - 파일명: Folder.cs
-    역할: 메일 폴더 모델
-    속성: Id, DisplayName, UnreadCount
+    역할: 메일 폴더 모델 + INotifyPropertyChanged 구현 (EF Core 직접 바인딩 지원)
+    속성: Id, DisplayName, UnreadItemCount(INPC), IsFavorite(INPC), FavoriteOrder(INPC)
 
   - 파일명: Account.cs
     역할: 사용자 계정 모델
@@ -630,3 +630,4 @@ curl -s http://localhost:5858/api/status
 | 2026-03-28 | 메일 읽지않은 카운트 불일치 버그 수정 | mAIx/ViewModels/MainViewModel.cs | OnMailSyncCompleted: RefreshEmailReadStatusAsync 후 RefreshFolderUnreadCountsAsync 무조건 호출 추가; OnEmailsSynced: newCount==0 else 브랜치에 RefreshFolderUnreadCountsAsync 호출 추가 — 다른 앱에서 메일 읽음/자동 동기화 시 폴더 카운트 미갱신 버그 수정 |
 | 2026-03-28 | 메일탭 전체 점검 — 초기 동기화 수/배치저장/발송후동기화/정렬통일/고급검색 개선 6건 | mAIx/Models/Settings/SyncPeriodSettings.cs, mAIx/Services/Graph/GraphMailService.cs, mAIx/Services/Sync/BackgroundSyncService.cs, mAIx/ViewModels/ComposeViewModel.cs, mAIx/ViewModels/MainViewModel.cs | T-01: SyncPeriodSettings Value 기본값 5→100; T-02: SaveEmailsAsync N+1→배치저장; T-03: 메일발송후 SyncSentItemsAsync 자동호출(ComposeViewModel+GraphMailService.CurrentUserEmail); T-04: ApplySortingWithPin 정렬기준 Subject/From/HasAttachments/PriorityScore/default=ReceivedDateTime으로 통일; T-05: 고급검색 To필드+to:/subject: 접두사 파싱 추가; T-06: SyncAllAccountsAsync 지수백오프 재시도 |
 | 2026-03-28 | 메일탭 실시간 동기화 + 알림 기능 + UX 고도화 (7개 수정) | mAIx/Services/Notification/ToastNotificationService.cs(신규), mAIx/Models/Settings/NotificationXmlSettings.cs, mAIx/Models/Settings/UserPreferencesSettings.cs, mAIx/App.xaml.cs, mAIx/Services/Sync/BackgroundSyncService.cs, mAIx/Services/Graph/GraphMailService.cs, mAIx/Views/MainWindow.xaml.cs | 즐겨찾기 동기화 30→10초 단축; Graph API 429 Retry-After+지수백오프(최대3회) 방어; 설정 변경 즉시 반영(SetFavoriteSyncInterval 호출); ToastNotificationService 신규(PowerShell WinRT Interop 네이티브 토스트); 알림 TODO→토스트 연동; AI 분석 배치 루프(5번째 독립루프, 10분 주기, 최대20건); 키보드 단축키 7종(Ctrl+D/Q/U, Enter, Ctrl+1~5) |
+| 2026-03-28 | 메일탭 UX 완성도 마지막 10% — INPC + 다중선택 도구바 + PreviewText | mAIx/Models/Email.cs, mAIx/Models/Folder.cs, mAIx/Services/Graph/GraphMailService.cs, mAIx/Services/Sync/BackgroundSyncService.cs, mAIx/ViewModels/MainViewModel.cs, mAIx/Views/MainWindow.xaml, mAIx/Views/MainWindow.xaml.cs | (1) Email.cs: INotifyPropertyChanged 구현(IsRead/FlagStatus/Categories INPC), PreviewText(NotMapped)+PreviewOrSummary(폴백) 속성 추가; Folder.cs: INotifyPropertyChanged 구현(UnreadItemCount/IsFavorite/FavoriteOrder INPC); (2) BulkActionBar: MainWindow.xaml에 하단 오버레이 액션바(2건+ 선택 시), MainViewModel에 SelectedEmailCount/IsMultipleEmailsSelected/다건삭제·읽음·플래그 커맨드, MainWindow.xaml.cs에 7개 핸들러+SelectionChanged; (3) GraphMailService: bodyPreview selectFields 추가, BackgroundSyncService: PreviewText 매핑 |

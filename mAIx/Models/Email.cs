@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.ComponentModel;
 using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
 
@@ -7,10 +8,14 @@ namespace mAIx.Models;
 
 /// <summary>
 /// 이메일 모델 - Graph API에서 가져온 이메일과 AI 분석 결과를 저장
-/// DB 엔티티: UI 바인딩에는 EmailViewModel 사용 권장 (INotifyPropertyChanged 미구현)
+/// DB 엔티티 + INotifyPropertyChanged 구현 (EF Core 직접 바인딩 지원)
 /// </summary>
-public class Email
+public class Email : INotifyPropertyChanged
 {
+    public event PropertyChangedEventHandler? PropertyChanged;
+
+    protected void OnPropertyChanged(string propertyName)
+        => PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));
     [Key]
     public int Id { get; set; }
 
@@ -79,7 +84,12 @@ public class Email
     /// <summary>
     /// 읽음 여부
     /// </summary>
-    public bool IsRead { get; set; }
+    private bool _isRead;
+    public bool IsRead
+    {
+        get => _isRead;
+        set { if (_isRead != value) { _isRead = value; OnPropertyChanged(nameof(IsRead)); } }
+    }
 
     /// <summary>
     /// 중요도 (low, normal, high)
@@ -91,7 +101,12 @@ public class Email
     /// 플래그 상태 (flagged, complete, notFlagged)
     /// </summary>
     [MaxLength(20)]
-    public string? FlagStatus { get; set; }
+    private string? _flagStatus;
+    public string? FlagStatus
+    {
+        get => _flagStatus;
+        set { if (_flagStatus != value) { _flagStatus = value; OnPropertyChanged(nameof(FlagStatus)); } }
+    }
 
     /// <summary>
     /// 카테고리 목록 (JSON 배열)
@@ -129,6 +144,19 @@ public class Email
     /// </summary>
     [System.ComponentModel.DataAnnotations.Schema.NotMapped]
     public bool IsDraft { get; set; }
+
+    /// <summary>
+    /// 미리보기 텍스트 (DB 비저장, 런타임 할당)
+    /// Graph API BodyPreview 또는 Body에서 첫 100자 추출
+    /// </summary>
+    [NotMapped]
+    public string? PreviewText { get; set; }
+
+    /// <summary>
+    /// AI 요약 또는 미리보기 텍스트 중 우선 표시 값 (DB 비저장)
+    /// </summary>
+    [NotMapped]
+    public string? PreviewOrSummary => SummaryOneline ?? PreviewText;
 
     // ===== AI 분석 결과 필드 =====
 

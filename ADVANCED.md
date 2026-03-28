@@ -616,3 +616,52 @@ public ServerSpeechService(UserPreferencesSettings prefs)
 // WS 연결 시 wsPath 파라미터
 await _wsService.ConnectAsync(baseUrl, prefs.SttWsPath ?? "/ws/stt");
 ```
+
+---
+
+## 메일탭 INPC + BulkActionBar 패턴 (2026-03-28)
+
+### INotifyPropertyChanged on EF Core 엔티티
+
+```csharp
+// Email.cs / Folder.cs — EF Core 엔티티에 직접 INPC 구현
+public class Email : INotifyPropertyChanged
+{
+    public event PropertyChangedEventHandler? PropertyChanged;
+    protected void OnPropertyChanged(string propertyName)
+        => PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));
+
+    private bool _isRead;
+    public bool IsRead
+    {
+        get => _isRead;
+        set { if (_isRead != value) { _isRead = value; OnPropertyChanged(nameof(IsRead)); } }
+    }
+    // ... FlagStatus, Categories 동일 패턴
+}
+```
+
+적용 의도: ObservableCollection<Email>이 UI에 바인딩될 때 속성 변경 시 자동 갱신.
+
+### PreviewText / PreviewOrSummary 패턴
+
+```csharp
+[NotMapped]
+public string? PreviewText { get; set; }  // Graph API bodyPreview, 런타임 할당
+
+[NotMapped]
+public string? PreviewOrSummary => SummaryOneline ?? PreviewText;  // AI 요약 우선, 없으면 미리보기
+```
+
+XAML 바인딩: `Text="{Binding PreviewOrSummary}"` — AI 요약 없는 메일도 본문 미리보기 표시.
+
+### 다중 선택 BulkActionBar 패턴
+
+```yaml
+구성:
+  - MainViewModel: SelectedEmailCount(int), IsMultipleEmailsSelected(bool), 5개 Bulk커맨드
+  - MainWindow.xaml: BulkActionBar Border (VerticalAlignment=Bottom, Panel.ZIndex=10, Visibility=IsMultipleEmailsSelected)
+  - MainWindow.xaml.cs: EmailListBox_SelectionChanged → ViewModel.SelectedEmailCount 갱신
+
+트리거_조건: SelectionChanged → SelectedItems.Count >= 2 → IsMultipleEmailsSelected = true → BulkActionBar 표시
+```

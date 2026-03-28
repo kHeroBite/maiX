@@ -1345,13 +1345,26 @@ public class BackgroundSyncService : BackgroundService
                         _logger.Debug("메일 폴더 변경: {Subject} ({OldFolder} -> {NewFolder})",
                             existingEmail.Subject, existingEmail.ParentFolderId, newParentFolderId);
                         existingEmail.ParentFolderId = newParentFolderId;
-                        
+
                         // 폴더 이동 시 EntryId도 변경될 수 있음
                         if (!string.IsNullOrEmpty(message.Id) && existingEmail.EntryId != message.Id)
                         {
                             existingEmail.EntryId = message.Id;
                         }
                         updated = true;
+                    }
+
+                    // PreviewText 갱신 (비어 있을 때만 채움)
+                    if (string.IsNullOrEmpty(existingEmail.PreviewText))
+                    {
+                        var newPreview = !string.IsNullOrEmpty(message.BodyPreview)
+                            ? message.BodyPreview
+                            : StripHtmlAndTruncate(message.Body?.Content, 100);
+                        if (!string.IsNullOrEmpty(newPreview))
+                        {
+                            existingEmail.PreviewText = newPreview;
+                            updated = true;
+                        }
                     }
 
                     if (updated)
@@ -1384,11 +1397,14 @@ public class BackgroundSyncService : BackgroundService
                     Categories = message.Categories?.Count > 0
                         ? System.Text.Json.JsonSerializer.Serialize(message.Categories)
                         : null,
-                    ParentFolderId = !string.IsNullOrEmpty(message.ParentFolderId) 
-                        ? message.ParentFolderId 
+                    ParentFolderId = !string.IsNullOrEmpty(message.ParentFolderId)
+                        ? message.ParentFolderId
                         : folderId,  // 서버에서 받은 폴더 ID 사용, 없으면 현재 동기화 중인 폴더 ID
                     AccountEmail = accountEmail,
-                    AnalysisStatus = "pending"
+                    AnalysisStatus = "pending",
+                    PreviewText = !string.IsNullOrEmpty(message.BodyPreview)
+                        ? message.BodyPreview
+                        : StripHtmlAndTruncate(message.Body?.Content, 100)
                 };
 
                 dbContext.Emails.Add(email);
@@ -1651,6 +1667,22 @@ public class BackgroundSyncService : BackgroundService
             return $"{name} <{address}>";
 
         return address;
+    }
+
+    /// <summary>
+    /// HTML 태그 제거 후 지정 길이로 잘라내기 (PreviewText fallback용)
+    /// </summary>
+    private static string? StripHtmlAndTruncate(string? html, int maxLength)
+    {
+        if (string.IsNullOrEmpty(html))
+            return null;
+
+        // HTML 태그 제거 (단순 정규식)
+        var text = System.Text.RegularExpressions.Regex.Replace(html, "<[^>]+>", " ");
+        // 연속 공백/줄바꿈 정리
+        text = System.Text.RegularExpressions.Regex.Replace(text, @"\s+", " ").Trim();
+
+        return text.Length <= maxLength ? text : text[..maxLength];
     }
 
     /// <summary>

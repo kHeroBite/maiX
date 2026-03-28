@@ -1,4 +1,5 @@
 using System.Collections.ObjectModel;
+using System.ComponentModel;
 using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
 
@@ -6,10 +7,14 @@ namespace mAIx.Models;
 
 /// <summary>
 /// 폴더 모델 - Outlook 메일 폴더 정보
-/// DB 엔티티: UI 바인딩에는 FolderViewModel 사용 권장 (INotifyPropertyChanged 미구현)
+/// DB 엔티티 + INotifyPropertyChanged 구현 (EF Core 직접 바인딩 지원)
 /// </summary>
-public class Folder
+public class Folder : INotifyPropertyChanged
 {
+    public event PropertyChangedEventHandler? PropertyChanged;
+
+    protected void OnPropertyChanged(string propertyName)
+        => PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));
     /// <summary>
     /// Graph API 폴더 ID (문자열 PK)
     /// </summary>
@@ -38,7 +43,12 @@ public class Folder
     /// <summary>
     /// 읽지 않은 아이템 수
     /// </summary>
-    public int UnreadItemCount { get; set; }
+    private int _unreadItemCount;
+    public int UnreadItemCount
+    {
+        get => _unreadItemCount;
+        set { if (_unreadItemCount != value) { _unreadItemCount = value; OnPropertyChanged(nameof(UnreadItemCount)); } }
+    }
 
     /// <summary>
     /// 소속 계정 이메일
@@ -68,10 +78,20 @@ public class Folder
     /// <summary>
     /// 즐겨찾기 여부 (DB 저장)
     /// </summary>
-    public bool IsFavorite { get; set; }
+    private bool _isFavorite;
+    public bool IsFavorite
+    {
+        get => _isFavorite;
+        set { if (_isFavorite != value) { _isFavorite = value; OnPropertyChanged(nameof(IsFavorite)); } }
+    }
 
     /// <summary>
     /// 즐겨찾기 순서 (DB 저장, 낮을수록 위쪽)
     /// </summary>
-    public int FavoriteOrder { get; set; }
+    private int _favoriteOrder;
+    public int FavoriteOrder
+    {
+        get => _favoriteOrder;
+        set { if (_favoriteOrder != value) { _favoriteOrder = value; OnPropertyChanged(nameof(FavoriteOrder)); } }
+    }
 }

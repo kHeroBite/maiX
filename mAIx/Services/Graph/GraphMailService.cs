@@ -181,11 +181,11 @@ namespace mAIx.Services.Graph
         {
             var client = _authService.GetGraphClient();
 
-            // 필요한 필드 명시적 선택 (IsRead, Flag, Importance 포함)
+            // 필요한 필드 명시적 선택 (IsRead, Flag, Importance, bodyPreview 포함)
             var selectFields = new[] {
                 "id", "internetMessageId", "conversationId", "subject", "body",
                 "from", "toRecipients", "ccRecipients", "receivedDateTime",
-                "isRead", "flag", "importance", "hasAttachments"
+                "isRead", "flag", "importance", "hasAttachments", "bodyPreview"
             };
 
             if (string.IsNullOrEmpty(folderId))
@@ -227,11 +227,12 @@ namespace mAIx.Services.Graph
 
             try
             {
-                // 필요한 필드 명시적 선택 (categories, parentFolderId 추가)
+                // 필요한 필드 명시적 선택 (categories, parentFolderId, bodyPreview 추가)
                 var selectFields = new[] {
                     "id", "internetMessageId", "conversationId", "subject", "body",
                     "from", "toRecipients", "ccRecipients", "bccRecipients", "receivedDateTime",
-                    "isRead", "flag", "importance", "hasAttachments", "categories", "parentFolderId"
+                    "isRead", "flag", "importance", "hasAttachments", "categories", "parentFolderId",
+                    "bodyPreview"
                 };
 
                 Microsoft.Graph.Me.MailFolders.Item.Messages.Delta.DeltaGetResponse? response;
@@ -335,7 +336,8 @@ namespace mAIx.Services.Graph
                             "id", "internetMessageId", "conversationId", "subject",
                             "from", "toRecipients", "ccRecipients", "bccRecipients",
                             "receivedDateTime", "isRead", "flag", "importance",
-                            "hasAttachments", "categories", "parentFolderId", "body"
+                            "hasAttachments", "categories", "parentFolderId", "body",
+                            "bodyPreview"
                         };
                         config.QueryParameters.Top = count;
                         config.QueryParameters.Orderby = new[] { "receivedDateTime desc" };

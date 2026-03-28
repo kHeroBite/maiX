@@ -3135,6 +3135,67 @@ public partial class MainWindow : FluentWindow
         Log4.Debug("전체 선택 해제");
     }
 
+    /// <summary>
+    /// 메일 목록 선택 변경 → SelectedEmailCount 업데이트
+    /// </summary>
+    private void EmailListBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        var count = EmailListBox.SelectedItems.Count;
+        _viewModel.SelectedEmailCount = count;
+        Log4.Debug($"메일 선택 변경: {count}건");
+    }
+
+    #endregion
+
+    #region 다중 선택 일괄 작업 핸들러
+
+    private async void BulkDelete_Click(object sender, RoutedEventArgs e)
+    {
+        var emails = EmailListBox.SelectedItems.Cast<Email>().ToList();
+        if (emails.Count == 0) return;
+        Log4.Info($"일괄 삭제: {emails.Count}건");
+        await _viewModel.DeleteEmailsAsync(emails);
+        EmailListBox.UnselectAll();
+    }
+
+    private async void BulkMarkRead_Click(object sender, RoutedEventArgs e)
+    {
+        var emails = EmailListBox.SelectedItems.Cast<Email>().ToList();
+        if (emails.Count == 0) return;
+        await _viewModel.UpdateReadStatusAsync(emails, true);
+        EmailListBox.UnselectAll();
+    }
+
+    private async void BulkMarkUnread_Click(object sender, RoutedEventArgs e)
+    {
+        var emails = EmailListBox.SelectedItems.Cast<Email>().ToList();
+        if (emails.Count == 0) return;
+        await _viewModel.UpdateReadStatusAsync(emails, false);
+        EmailListBox.UnselectAll();
+    }
+
+    private async void BulkFlag_Click(object sender, RoutedEventArgs e)
+    {
+        var emails = EmailListBox.SelectedItems.Cast<Email>().ToList();
+        if (emails.Count == 0) return;
+        await _viewModel.UpdateFlagStatusAsync(emails, "flagged");
+        EmailListBox.UnselectAll();
+    }
+
+    private void BulkMove_Click(object sender, RoutedEventArgs e)
+    {
+        var emails = EmailListBox.SelectedItems.Cast<Email>().ToList();
+        if (emails.Count == 0) return;
+        Log4.Info($"일괄 이동: {emails.Count}건 — 드래그&드롭으로 폴더로 이동하세요");
+        _viewModel.StatusMessage = $"{emails.Count}건 선택됨 — 왼쪽 폴더 트리로 드래그하여 이동하세요";
+    }
+
+    private void BulkActionBar_Close_Click(object sender, RoutedEventArgs e)
+    {
+        EmailListBox.UnselectAll();
+        _viewModel.SelectedEmailCount = 0;
+    }
+
     #endregion
 
     #region Phase 1: 검색 및 키보드 단축키

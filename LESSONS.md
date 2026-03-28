@@ -398,3 +398,12 @@
 - **교훈**: net10.0-windows TFM에서 외부 NuGet 없이 Windows 네이티브 토스트 알림이 필요하면 PowerShell WinRT Interop 패턴 사용. `Windows.UI.Notifications.ToastNotificationManager` 직접 호출 가능. `NotificationXmlSettings`로 앱ID/활성화 여부 설정 관리
 - **심각도**: 낮음 (신규 기능 도입 패턴)
 - **Level**: 1 (참고)
+
+## L-273: WPF UI(FluentUI) XAML Symbol 속성 — 심볼명 사전 확인 필수 (2026-03-28)
+
+- **문제**: XAML BulkActionBar 구현 시 `Symbol="FolderMove24"` 사용 → 해당 심볼이 FluentSystemIcons에 존재하지 않아 빌드 오류 발생
+- **원인**: WPF UI 라이브러리의 FluentIcon 심볼명을 사전 검증 없이 추측하여 입력
+- **해결**: `FolderMove24` → `FolderArrowRight20`으로 수정 (실제 존재하는 심볼명으로 교체)
+- **교훈**: WPF UI(Fluent Design) XAML에서 `Symbol` 속성 사용 시 반드시 FluentSystemIcons 목록에서 실제 존재하는 심볼명 확인 후 사용. 추측 입력 금지. 빌드 오류 발생 시 FluentIcon 심볼명 미존재를 첫 번째 점검 항목으로
+- **심각도**: 낮음 (빌드 오류, 수정 용이)
+- **Level**: 1 (참고)

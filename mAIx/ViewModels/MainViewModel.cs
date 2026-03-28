@@ -368,6 +368,18 @@ public partial class MainViewModel : ViewModelBase, IDisposable
     [ObservableProperty]
     private Email? _selectedEmail;
 
+    /// <summary>
+    /// 현재 선택된 메일 건수 (다중 선택 액션바 표시 조건)
+    /// </summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(IsMultipleEmailsSelected))]
+    private int _selectedEmailCount;
+
+    /// <summary>
+    /// 2건 이상 선택 여부 (BulkActionBar 표시 트리거)
+    /// </summary>
+    public bool IsMultipleEmailsSelected => _selectedEmailCount >= 2;
+
     #region 임시보관함 편집 모드 프로퍼티
 
     /// <summary>
@@ -1442,6 +1454,58 @@ public partial class MainViewModel : ViewModelBase, IDisposable
                 StatusMessage = $"메일 삭제 실패: {ex.Message}";
             }
         }, "메일 삭제 실패");
+    }
+
+    /// <summary>
+    /// 여러 메일 일괄 삭제 (휴지통으로 이동)
+    /// </summary>
+    public async Task DeleteEmailsAsync(List<Email> emails)
+    {
+        if (emails == null || emails.Count == 0) return;
+
+        await ExecuteAsync(async () =>
+        {
+            StatusMessage = $"메일 삭제 중... (0/{emails.Count})";
+
+            var deletedItemsFolder = await _dbContext.Folders
+                .FirstOrDefaultAsync(f => f.DisplayName == "지운 편지함" ||
+                                          f.DisplayName.ToLower() == "deleted items" ||
+                                          f.DisplayName.ToLower() == "deleteditems");
+            int completed = 0;
+
+            foreach (var email in emails.ToList())
+            {
+                if (string.IsNullOrEmpty(email.EntryId)) continue;
+                try
+                {
+                    if (deletedItemsFolder != null && !string.IsNullOrEmpty(deletedItemsFolder.Id))
+                        await _graphMailService.MoveMessageAsync(email.EntryId, deletedItemsFolder.Id);
+                    else
+                        await _graphMailService.DeleteMessageAsync(email.EntryId);
+
+                    var dbEmail = await _dbContext.Emails.FindAsync(email.Id);
+                    if (dbEmail != null) _dbContext.Emails.Remove(dbEmail);
+
+                    completed++;
+                    StatusMessage = $"메일 삭제 중... ({completed}/{emails.Count})";
+                }
+                catch (Exception ex)
+                {
+                    Log4.Error($"메일 일괄 삭제 실패 [{email.Subject}]: {ex.Message}");
+                }
+            }
+
+            await _dbContext.SaveChangesAsync();
+
+            var deletedIds = emails.Select(e => e.Id).ToHashSet();
+            Emails = Emails.Where(e => !deletedIds.Contains(e.Id)).ToList();
+
+            if (SelectedEmail != null && deletedIds.Contains(SelectedEmail.Id))
+                SelectedEmail = null;
+
+            StatusMessage = $"메일 {completed}건 삭제 완료";
+            Log4.Info($"일괄 삭제 완료: {completed}건");
+        }, "메일 일괄 삭제 실패");
     }
 
     /// <summary>

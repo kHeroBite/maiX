@@ -1517,6 +1517,7 @@
                          Background="Transparent"
                          FocusVisualStyle="{x:Null}"
                          ScrollViewer.HorizontalScrollBarVisibility="Disabled"
+                         SelectionChanged="EmailListBox_SelectionChanged"
                          PreviewMouseRightButtonDown="EmailListBox_PreviewMouseRightButtonDown"
                          PreviewMouseLeftButtonDown="EmailListBox_PreviewMouseLeftButtonDown"
                          PreviewMouseMove="EmailListBox_PreviewMouseMove"
@@ -1943,13 +1944,13 @@
                                                 <ColumnDefinition Width="Auto"/>
                                             </Grid.ColumnDefinitions>
 
-                                            <!-- AI 요약 (있을 경우) -->
+                                            <!-- AI 요약 또는 미리보기 텍스트 (있을 경우) -->
                                             <TextBlock Grid.Column="0"
-                                                       Text="{Binding SummaryOneline}"
+                                                       Text="{Binding PreviewOrSummary}"
                                                        Foreground="{DynamicResource TextFillColorTertiaryBrush}"
                                                        FontSize="11"
                                                        TextTrimming="CharacterEllipsis"
-                                                       Visibility="{Binding SummaryOneline, Converter={StaticResource NullToVisibilityConverter}}"/>
+                                                       Visibility="{Binding PreviewOrSummary, Converter={StaticResource NullToVisibilityConverter}}"/>
 
                                             <!-- AI 분석 완료 아이콘 (✨ 이모지 모티프) -->
                                             <TextBlock Grid.Column="1"
@@ -2017,6 +2018,88 @@
                         </DataTemplate>
                     </ListBox.ItemTemplate>
                 </ListBox>
+
+                <!-- 다중 선택 일괄 작업 액션바 (2건+ 선택 시 하단 오버레이) -->
+                <Border x:Name="BulkActionBar"
+                        Grid.Row="1"
+                        VerticalAlignment="Bottom"
+                        HorizontalAlignment="Stretch"
+                        Margin="0"
+                        Padding="12,8"
+                        Background="{DynamicResource AcrylicBackgroundFillColorDefaultBrush}"
+                        BorderBrush="{DynamicResource ControlElevationBorderBrush}"
+                        BorderThickness="0,1,0,0"
+                        Visibility="{Binding IsMultipleEmailsSelected, Converter={StaticResource BoolToVisibilityConverter}}"
+                        Panel.ZIndex="10">
+                    <Border.Effect>
+                        <DropShadowEffect Color="Black" Opacity="0.15" BlurRadius="8" ShadowDepth="-2"/>
+                    </Border.Effect>
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto"/>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+
+                        <!-- 선택 건수 표시 -->
+                        <TextBlock Grid.Column="0"
+                                   VerticalAlignment="Center"
+                                   Margin="0,0,16,0"
+                                   FontSize="13"
+                                   FontWeight="SemiBold">
+                            <Run Text="{Binding SelectedEmailCount, Mode=OneWay}"/>
+                            <Run Text="건 선택됨"/>
+                        </TextBlock>
+
+                        <!-- 액션 버튼들 -->
+                        <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
+                            <ui:Button x:Name="BulkMarkReadButton"
+                                       ToolTip="읽음 표시"
+                                       Appearance="Secondary"
+                                       Height="28" Width="28" Padding="0" Margin="0,0,4,0"
+                                       Click="BulkMarkRead_Click">
+                                <ui:SymbolIcon Symbol="MailRead24" FontSize="14"/>
+                            </ui:Button>
+                            <ui:Button x:Name="BulkMarkUnreadButton"
+                                       ToolTip="읽지 않음 표시"
+                                       Appearance="Secondary"
+                                       Height="28" Width="28" Padding="0" Margin="0,0,4,0"
+                                       Click="BulkMarkUnread_Click">
+                                <ui:SymbolIcon Symbol="Mail24" FontSize="14"/>
+                            </ui:Button>
+                            <ui:Button x:Name="BulkFlagButton"
+                                       ToolTip="플래그 설정"
+                                       Appearance="Secondary"
+                                       Height="28" Width="28" Padding="0" Margin="0,0,4,0"
+                                       Click="BulkFlag_Click">
+                                <ui:SymbolIcon Symbol="Flag24" FontSize="14"/>
+                            </ui:Button>
+                            <ui:Button x:Name="BulkMoveButton"
+                                       ToolTip="폴더로 이동"
+                                       Appearance="Secondary"
+                                       Height="28" Width="28" Padding="0" Margin="0,0,4,0"
+                                       Click="BulkMove_Click">
+                                <ui:SymbolIcon Symbol="FolderArrowRight20" FontSize="14"/>
+                            </ui:Button>
+                            <ui:Button x:Name="BulkDeleteButton"
+                                       ToolTip="선택 항목 삭제"
+                                       Appearance="Danger"
+                                       Height="28" Width="28" Padding="0"
+                                       Click="BulkDelete_Click">
+                                <ui:SymbolIcon Symbol="Delete24" FontSize="14"/>
+                            </ui:Button>
+                        </StackPanel>
+
+                        <!-- 선택 해제 -->
+                        <ui:Button Grid.Column="2"
+                                   ToolTip="선택 해제"
+                                   Appearance="Transparent"
+                                   Height="28" Width="28" Padding="0"
+                                   Click="BulkActionBar_Close_Click">
+                            <ui:SymbolIcon Symbol="Dismiss24" FontSize="14"/>
+                        </ui:Button>
+                    </Grid>
+                </Border>
 
                 <!-- 삭제 실행취소 팝업 (메일 목록 하단) -->
                 <Border x:Name="UndoDeletePopup"
