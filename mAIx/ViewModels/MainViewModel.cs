@@ -117,6 +117,10 @@ public partial class MainViewModel : ViewModelBase, IDisposable
 
             // 현재 표시 중인 메일 목록의 읽음 상태 갱신
             await RefreshEmailReadStatusAsync();
+
+            // 읽음 상태 변경 여부와 무관하게 폴더 카운트 항상 갱신
+            // (다른 앱에서 메일을 읽은 경우 UI 메일 목록 변경 없어도 카운트 반영 필요)
+            await RefreshFolderUnreadCountsAsync();
         });
     }
 
@@ -845,6 +849,12 @@ public partial class MainViewModel : ViewModelBase, IDisposable
         {
             await LoadFoldersAsync();
             StatusMessage = $"{newCount}개 새 메일 동기화됨";
+        }
+        else
+        {
+            // 새 메일 없어도 읽음 상태 변경 시 폴더 카운트 갱신
+            // (시작/자동 동기화에서 읽음 상태만 변경된 경우 대응)
+            await RefreshFolderUnreadCountsAsync();
         }
 
         UpdateSyncStatus();

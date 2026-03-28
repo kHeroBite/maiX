@@ -381,3 +381,12 @@
 - **교훈**: 후처리 진입 조건은 개별 기능 플래그 AND가 아닌 OR 조합으로 설계해야 함. 새 후처리 단계 추가 시 기존 조건과 충돌 여부 반드시 확인
 - **심각도**: 낮음 (설정 조합에 따른 기능 미작동)
 - **Level**: 1 (참고)
+
+## L-271: settings.json 등록 hook 파일 미존재 — done_finish_guard.sh (2026-03-28)
+
+- **문제**: `settings.json`에 `done_finish_guard.sh`가 PostToolUse:Skill hook으로 등록되어 있었으나 실제 파일이 없었음
+- **원인**: hook 파일 생성 없이 settings.json에만 등록한 상태로 방치됨 (kfinish 스킵 방지 의도였으나 구현 미완)
+- **해결**: `done_finish_guard.sh` 파일 생성 (로깅 전용 — 차단 로직은 추후 요구사항 명확화 후 추가)
+- **교훈**: kdone_docs의 L-052 체크리스트(settings.json 등록 hook 파일 존재 확인)를 매 작업마다 반드시 실행. hook 파일 등록 시 반드시 동시에 파일도 생성.
+- **심각도**: 낮음 (exit 0 fallback으로 실제 차단 없음)
+- **Level**: 1 (참고)
