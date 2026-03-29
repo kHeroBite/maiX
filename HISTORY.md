@@ -2,6 +2,57 @@
 
 > PROJECT.md 작업 이력 테이블의 상세 보완본
 
+## 2026-03-29: Phase 2 — AI 기능 + 메일 스누즈 + TTS 읽기 + 일일 브리핑
+
+**분류**: Fast Path (k3)
+**수정 파일**: 12개 수정 + 3개 신규
+
+### 변경 내역
+
+#### 1. AiMailService.cs (신규) — AI 메서드 4개
+- `GenerateDraftAsync(email, tone)`: 답장 초안 생성 (톤 선택: 공식/친근/간결)
+- `SummarizeThreadAsync(emails)`: 스레드 전체 AI 요약
+- `GenerateDailyBriefingAsync(emails)`: 오늘 수신 메일 일일 브리핑
+- `GenerateMeetingBriefingAsync(emails)`: 회의 관련 메일 브리핑
+
+#### 2. 메일 스누즈
+- `Email.SnoozedUntil` (DateTime?, nullable): 스누즈 해제 예정 시각 (UTC)
+- Migration `20260329000004_AddSnoozedUntil`: SnoozedUntil 컬럼 + 인덱스 추가
+- `BackgroundSyncService`: 매 분 `SnoozedUntil <= UtcNow` 조건으로 자동 해제 루프
+- `MainViewModel.ShowSnoozedEmails` 토글: 스누즈 중인 메일 표시/숨김 필터
+
+#### 3. AI 답장 초안
+- `EmailViewWindow`: "AI 답장" 버튼 + 톤 선택 ComboBox
+- AiMailService.GenerateDraftAsync 호출 → ComposeWindow Body 자동 입력
+
+#### 4. TTS 메일 읽기
+- `EmailViewWindow`: "읽어주기/중지" 토글 버튼
+- `System.Speech.Synthesis.SpeechSynthesizer` 기반 (외부 NuGet 없음)
+- SpeakAsync / SpeakAsyncCancelAll + SpeakCompleted 이벤트로 버튼 상태 복원
+
+#### 5. AI 일일 브리핑
+- `MainWindow`: "📋 브리핑" 버튼 추가
+- `DailyBriefingDialog.xaml/.cs` (신규): FluentWindow 기반 브리핑 표시 다이얼로그
+- 오늘 수신 메일 목록을 AI에 전달 → 스트리밍 브리핑 표시
+
+#### 6. 스레드 AI 요약
+- `EmailViewWindow`: 접이식 패널 (Expander) 형태로 스레드 요약 섹션 추가
+- 같은 ConversationId 메일들을 AiMailService.SummarizeThreadAsync로 요약
+
+### 빌드/테스트
+- 빌드: 오류 0개 ✅
+- 런타임: 정상 (health 200, Migration 정상 적용) ✅
+- 로그: ERROR 0건 ✅
+- 품질: 11/11 항목 확인 ✅
+
+### 변경 파일
+수정: App.xaml.cs, mAIxDbContext.cs, mAIxDbContextModelSnapshot.cs, Email.cs,
+      BackgroundSyncService.cs, ComposeViewModel.cs, MainViewModel.cs,
+      EmailViewWindow.xaml/.cs, MainWindow.xaml/.cs, AGENTS.md
+신규: 20260329000004_AddSnoozedUntil.cs, DailyBriefingDialog.xaml/.cs
+
+---
+
 ## 2026-03-29: Phase 0 인프라 정비 — Email AI 분류 필드 + FTS5 검색 + AI 자동 트리거
 
 **커밋**: (kdone_git 완료 후 기재)

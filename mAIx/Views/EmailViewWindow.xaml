@@ -25,6 +25,8 @@
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto"/>
             <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
             <RowDefinition Height="*"/>
         </Grid.RowDefinitions>
 
@@ -107,9 +109,123 @@
             </Grid>
         </Border>
 
+        <!-- AI 도구바 -->
+        <Border Grid.Row="2"
+                Background="{DynamicResource SubtleFillColorSecondaryBrush}"
+                BorderBrush="{DynamicResource ControlElevationBorderBrush}"
+                BorderThickness="0,0,0,1"
+                Padding="12,8">
+            <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+
+                <!-- AI 답장 버튼 + 톤 드롭다운 -->
+                <ui:Button x:Name="AiReplyButton"
+                           Content="AI 답장"
+                           Icon="{ui:SymbolIcon Symbol=Mail24}"
+                           Appearance="Primary"
+                           Click="AiReplyButton_Click"
+                           Margin="0,0,4,0"/>
+                <ComboBox x:Name="ToneComboBox"
+                          Width="90"
+                          SelectedIndex="0"
+                          VerticalAlignment="Center"
+                          Margin="0,0,12,0"
+                          ToolTip="답장 톤 선택">
+                    <ComboBoxItem Content="정중"/>
+                    <ComboBoxItem Content="캐주얼"/>
+                    <ComboBoxItem Content="비즈니스"/>
+                </ComboBox>
+
+                <Separator Style="{StaticResource {x:Static ToolBar.SeparatorStyleKey}}"
+                           Margin="0,0,12,0"/>
+
+                <!-- TTS 읽어주기 / 중지 버튼 -->
+                <ui:Button x:Name="TtsButton"
+                           Content="읽어주기"
+                           Icon="{ui:SymbolIcon Symbol=Speaker224}"
+                           Click="TtsButton_Click"
+                           Margin="0,0,12,0"/>
+
+                <Separator Style="{StaticResource {x:Static ToolBar.SeparatorStyleKey}}"
+                           Margin="0,0,12,0"/>
+
+                <!-- 스누즈 버튼 -->
+                <ui:Button x:Name="SnoozeButton"
+                           Content="스누즈"
+                           Icon="{ui:SymbolIcon Symbol=Clock24}"
+                           Click="SnoozeButton_Click"
+                           Margin="0,0,0,0"/>
+
+                <!-- 스누즈 드롭다운 팝업 -->
+                <Popup x:Name="SnoozePopup"
+                       StaysOpen="False"
+                       PlacementTarget="{Binding ElementName=SnoozeButton}"
+                       Placement="Bottom">
+                    <Border Background="{DynamicResource ApplicationBackgroundBrush}"
+                            BorderBrush="{DynamicResource ControlElevationBorderBrush}"
+                            BorderThickness="1"
+                            CornerRadius="6"
+                            Padding="4">
+                        <StackPanel>
+                            <MenuItem Header="1시간 후" Tag="1h" Click="SnoozeMenuItem_Click" Padding="12,6"/>
+                            <MenuItem Header="3시간 후" Tag="3h" Click="SnoozeMenuItem_Click" Padding="12,6"/>
+                            <MenuItem Header="내일 아침 (9시)" Tag="tomorrow" Click="SnoozeMenuItem_Click" Padding="12,6"/>
+                            <MenuItem Header="다음 주 월요일" Tag="nextmonday" Click="SnoozeMenuItem_Click" Padding="12,6"/>
+                        </StackPanel>
+                    </Border>
+                </Popup>
+
+                <Separator Style="{StaticResource {x:Static ToolBar.SeparatorStyleKey}}"
+                           Margin="12,0,12,0"/>
+
+                <!-- 스레드 요약 토글 버튼 -->
+                <ui:Button x:Name="ThreadSummaryButton"
+                           Content="스레드 요약"
+                           Icon="{ui:SymbolIcon Symbol=TextBulletListSquare24}"
+                           Click="ThreadSummaryButton_Click"/>
+
+            </StackPanel>
+        </Border>
+
+        <!-- 스레드 요약 패널 (접이식) -->
+        <Border x:Name="ThreadSummaryPanel"
+                Grid.Row="3"
+                Visibility="Collapsed"
+                Background="{DynamicResource ControlFillColorSecondaryBrush}"
+                BorderBrush="{DynamicResource ControlElevationBorderBrush}"
+                BorderThickness="0,0,0,1"
+                Padding="16,12">
+            <Grid>
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="Auto"/>
+                </Grid.RowDefinitions>
+
+                <StackPanel Grid.Row="0" Orientation="Horizontal" Margin="0,0,0,8">
+                    <ui:SymbolIcon Symbol="TextBulletListSquare24" Margin="0,0,8,0"/>
+                    <TextBlock Text="스레드 요약"
+                               FontWeight="SemiBold"
+                               VerticalAlignment="Center"
+                               Foreground="{DynamicResource TextFillColorPrimaryBrush}"/>
+                    <ui:ProgressRing x:Name="ThreadSummaryLoading"
+                                     Width="16" Height="16"
+                                     IsIndeterminate="True"
+                                     Visibility="Collapsed"
+                                     Margin="8,0,0,0"/>
+                </StackPanel>
+
+                <TextBlock x:Name="ThreadSummaryText"
+                           Grid.Row="1"
+                           Text="요약을 불러오는 중..."
+                           TextWrapping="Wrap"
+                           Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                           FontSize="13"
+                           LineHeight="20"/>
+            </Grid>
+        </Border>
+
         <!-- 메일 본문 -->
         <wv2:WebView2 x:Name="BodyWebView"
-                      Grid.Row="2"
+                      Grid.Row="4"
                       DefaultBackgroundColor="Transparent"/>
     </Grid>
 </ui:FluentWindow>

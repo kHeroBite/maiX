@@ -579,6 +579,9 @@ namespace mAIx.Migrations
                     b.Property<DateTime?>("ScheduledSendTime")
                         .HasColumnType("TEXT");
 
+                    b.Property<DateTime?>("SnoozedUntil")
+                        .HasColumnType("TEXT");
+
                     b.Property<string>("SummaryOneline")
                         .HasMaxLength(500)
                         .HasColumnType("TEXT");
@@ -609,6 +612,9 @@ namespace mAIx.Migrations
 
                     b.HasIndex("ReceivedDateTime")
                         .HasDatabaseName("IX_Email_ReceivedDateTime");
+
+                    b.HasIndex("SnoozedUntil")
+                        .HasDatabaseName("IX_Email_SnoozedUntil");
 
                     b.HasIndex("InternetMessageId", "ParentFolderId")
                         .IsUnique()

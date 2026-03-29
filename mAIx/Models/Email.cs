@@ -214,6 +214,16 @@ public class Email : INotifyPropertyChanged
     /// </summary>
     public DateTime? ScheduledSendTime { get; set; }
 
+    /// <summary>
+    /// 스누즈 해제 시각. null = 스누즈 안 됨, 값 = 해당 시각까지 목록에서 숨김
+    /// </summary>
+    private DateTime? _snoozedUntil;
+    public DateTime? SnoozedUntil
+    {
+        get => _snoozedUntil;
+        set { if (_snoozedUntil != value) { _snoozedUntil = value; OnPropertyChanged(nameof(SnoozedUntil)); } }
+    }
+
     // ===== AI 분류 필드 =====
 
     /// <summary>

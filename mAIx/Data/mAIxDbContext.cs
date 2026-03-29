@@ -141,6 +141,10 @@ public class mAIxDbContext : DbContext
             // AnalysisStatus 인덱스 (분석 상태별 조회)
             entity.HasIndex(e => e.AnalysisStatus)
                 .HasDatabaseName("IX_Email_AnalysisStatus");
+
+            // SnoozedUntil 인덱스 (스누즈 해제 조회용)
+            entity.HasIndex(e => e.SnoozedUntil)
+                .HasDatabaseName("IX_Email_SnoozedUntil");
         });
 
         // ===== Attachment 인덱스 =====

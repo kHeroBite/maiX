@@ -88,7 +88,7 @@ public partial class ComposeViewModel : ViewModelBase
     /// <summary>
     /// 초기 본문 (답장/전달 시)
     /// </summary>
-    public string InitialBody { get; private set; } = "";
+    public string InitialBody { get; set; } = "";
 
     /// <summary>
     /// 첨부파일 목록

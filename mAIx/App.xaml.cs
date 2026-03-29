@@ -10,6 +10,7 @@ using Serilog.Events;
 using mAIx.Data;
 using mAIx.Models.Settings;
 using mAIx.Services.AI;
+using mAIx.Services.Speech;
 using mAIx.Services.Analysis;
 using mAIx.Services.Cloud;
 using mAIx.Services.Converter;
@@ -286,6 +287,8 @@ public partial class App : Application
         services.AddSingleton<ContractExtractor>();
         services.AddSingleton<TodoExtractor>();
         services.AddScoped<EmailAnalyzer>();
+        services.AddSingleton<AiMailService>();
+        services.AddSingleton<TextToSpeechService>();
 
         // 문서 변환 서비스 등록
         services.AddSingleton<HwpConverter>();

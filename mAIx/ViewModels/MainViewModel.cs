@@ -1053,9 +1053,18 @@ public partial class MainViewModel : ViewModelBase, IDisposable
             StatusMessage = "이메일 로딩 중...";
 
             // AsNoTracking()으로 캐시된 엔티티가 아닌 DB에서 최신 데이터 로드
-            var emails = await _dbContext.Emails
+            var query = _dbContext.Emails
                 .AsNoTracking()
-                .Where(e => e.ParentFolderId == SelectedFolder.Id)
+                .Where(e => e.ParentFolderId == SelectedFolder.Id);
+
+            // 스누즈 필터: ShowSnoozedEmails=false이면 스누즈 중인 메일 숨김
+            if (!ShowSnoozedEmails)
+            {
+                var now = DateTime.UtcNow;
+                query = query.Where(e => e.SnoozedUntil == null || e.SnoozedUntil <= now);
+            }
+
+            var emails = await query
                 .OrderByDescending(e => e.ReceivedDateTime)
                 .ToListAsync();
 
@@ -1875,7 +1884,37 @@ public partial class MainViewModel : ViewModelBase, IDisposable
         }
     }
 
+    #region 스누즈 메일 필터
+
+    /// <summary>
+    /// 스누즈 중인 메일 표시 여부 (false=숨김, true=표시)
+    /// </summary>
+    [ObservableProperty]
+    private bool _showSnoozedEmails;
+
+    /// <summary>
+    /// 스누즈 메일 표시 토글
+    /// </summary>
+    [RelayCommand]
+    private async Task ToggleShowSnoozedEmails()
+    {
+        ShowSnoozedEmails = !ShowSnoozedEmails;
+        if (IsSearchMode)
+            await SearchAsync();
+        else
+            await LoadEmailsAsync();
+        StatusMessage = ShowSnoozedEmails ? "스누즈 메일 포함 표시" : "스누즈 메일 숨김";
+    }
+
+    #endregion
+
     #region Phase 1: 검색 기능
+
+    /// <summary>
+    /// 검색 결과 건수
+    /// </summary>
+    [ObservableProperty]
+    private int _searchResultCount;
 
     /// <summary>
     /// 검색 키워드
@@ -2216,7 +2255,15 @@ public partial class MainViewModel : ViewModelBase, IDisposable
                 results = results.Where(e => e.AiCategory == SelectedAiCategory).ToList();
             }
 
+            // 스누즈 필터 후처리
+            if (!ShowSnoozedEmails)
+            {
+                var now = DateTime.UtcNow;
+                results = results.Where(e => e.SnoozedUntil == null || e.SnoozedUntil <= now).ToList();
+            }
+
             Emails = results;
+            SearchResultCount = Emails.Count;
             StatusMessage = $"검색 결과: {Emails.Count}건";
             IsSearching = false;
         }, "검색 실패");
@@ -2238,6 +2285,7 @@ public partial class MainViewModel : ViewModelBase, IDisposable
         FilterToDate = null;
         IsSearchMode = false;
         IsFilterPanelVisible = false;
+        SearchResultCount = 0;
 
         if (SelectedFolder != null)
         {

@@ -265,16 +265,17 @@ public class BackgroundSyncService : BackgroundService
             _logger.Error(ex, "초기 동기화 실패");
         }
 
-        // 6개의 독립적인 동기화/분석/예약발송 루프 실행
+        // 7개의 독립적인 동기화/분석/예약발송/스누즈 루프 실행
         var favoriteTask = RunFavoriteSyncLoopAsync(stoppingToken);
         var fullTask = RunFullSyncLoopAsync(stoppingToken);
         var calendarTask = RunCalendarSyncLoopAsync(stoppingToken);
         var chatTask = RunChatSyncLoopAsync(stoppingToken);
         var analysisBatchTask = RunAnalysisBatchLoopAsync(stoppingToken);
         var scheduledSendTask = RunScheduledSendLoopAsync(stoppingToken);
+        var snoozeCheckTask = RunSnoozeCheckLoopAsync(stoppingToken);
 
         // 모든 Task가 완료될 때까지 대기
-        await Task.WhenAll(favoriteTask, fullTask, calendarTask, chatTask, analysisBatchTask, scheduledSendTask);
+        await Task.WhenAll(favoriteTask, fullTask, calendarTask, chatTask, analysisBatchTask, scheduledSendTask, snoozeCheckTask);
 
         _logger.Information("백그라운드 동기화 서비스 중지됨");
     }
@@ -811,6 +812,82 @@ public class BackgroundSyncService : BackgroundService
             {
                 Log4.Error($"[BackgroundSyncService] 예약 발송 루프 오류: {ex.Message}");
                 _logger.Error(ex, "예약 발송 루프 오류");
+            }
+        }
+    }
+
+    /// <summary>
+    /// 스누즈 해제 루프 — 60초 주기로 SnoozedUntil이 도래한 메일을 해제하고 토스트 알림 발송
+    /// </summary>
+    private async Task RunSnoozeCheckLoopAsync(CancellationToken stoppingToken)
+    {
+        Log4.Info("[BackgroundSyncService] 스누즈 해제 루프 시작 - 주기: 60초");
+
+        using var timer = new PeriodicTimer(TimeSpan.FromSeconds(60));
+
+        while (await timer.WaitForNextTickAsync(stoppingToken))
+        {
+            if (_isPaused)
+            {
+                Log4.Debug("[BackgroundSyncService] 스누즈 해제 일시정지 상태 - 건너뜀");
+                continue;
+            }
+
+            try
+            {
+                using var scope = _serviceProvider.CreateScope();
+                var dbContext = scope.ServiceProvider.GetRequiredService<mAIxDbContext>();
+                var graphAuthService = scope.ServiceProvider.GetRequiredService<GraphAuthService>();
+
+                if (!graphAuthService.IsLoggedIn || string.IsNullOrEmpty(graphAuthService.CurrentUserEmail))
+                {
+                    Log4.Debug("[BackgroundSyncService] 스누즈 해제 - 로그인 없음, 건너뜀");
+                    continue;
+                }
+
+                var now = DateTime.UtcNow;
+                var accountEmail = graphAuthService.CurrentUserEmail;
+
+                // SnoozedUntil이 도래한 메일 조회
+                var snoozedEmails = await dbContext.Emails
+                    .Where(e => e.AccountEmail == accountEmail &&
+                                e.SnoozedUntil != null &&
+                                e.SnoozedUntil <= now)
+                    .ToListAsync(stoppingToken);
+
+                if (snoozedEmails.Count == 0)
+                {
+                    Log4.Debug("[BackgroundSyncService] 스누즈 해제 대상 메일 없음");
+                    continue;
+                }
+
+                Log4.Info($"[BackgroundSyncService] 스누즈 해제 처리: {snoozedEmails.Count}건");
+
+                foreach (var email in snoozedEmails)
+                {
+                    email.SnoozedUntil = null;
+                    dbContext.Emails.Update(email);
+
+                    // 스누즈 해제 토스트 알림
+                    _toastNotificationService.ShowNewMailNotification(
+                        "스누즈 메일이 돌아왔습니다",
+                        email.Subject ?? "(제목 없음)",
+                        email.From);
+
+                    Log4.Debug($"[BackgroundSyncService] 스누즈 해제: Id={email.Id}, Subject={email.Subject}");
+                }
+
+                await dbContext.SaveChangesAsync(stoppingToken);
+                Log4.Info($"[BackgroundSyncService] 스누즈 해제 완료: {snoozedEmails.Count}건");
+            }
+            catch (OperationCanceledException)
+            {
+                break;
+            }
+            catch (Exception ex)
+            {
+                Log4.Error($"[BackgroundSyncService] 스누즈 해제 루프 오류: {ex.Message}");
+                _logger.Error(ex, "스누즈 해제 루프 오류");
             }
         }
     }

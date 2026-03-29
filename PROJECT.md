@@ -128,6 +128,15 @@ Views:
     클래스:
       - MainWindow:
           설명: 이메일 목록, 상세보기, 사이드바 네비게이션, 설정탭 시스템 메뉴(마이크 설정 포함)
+          변경_2026-03-29(Phase2): "📋 브리핑" 버튼 추가 → DailyBriefingDialog 실행, 스누즈 토글 버튼 추가
+
+  - 파일명: DailyBriefingDialog.xaml / DailyBriefingDialog.xaml.cs (신규 — 2026-03-29 Phase2)
+    경로: MaiX/Views/Dialogs/
+    역할: AI 일일 브리핑 다이얼로그 — 오늘 수신 메일 기반 브리핑 생성 표시
+    클래스:
+      - DailyBriefingDialog (FluentWindow):
+          의존성: AiMailService, List<Email> (오늘 메일 목록)
+          기능: 로딩 시 AI 브리핑 자동 생성, ESC 키 닫기, CancellationToken 취소 지원
 
 ```
 
@@ -160,6 +169,7 @@ ViewModels:
     클래스:
       - MainViewModel:
           설명: 이메일 목록, 폴더 관리
+          변경_2026-03-29(Phase2): ShowSnoozedEmails 토글 추가 (스누즈 메일 표시/숨김), 브리핑 명령 추가
 
   - 파일명: TeamsViewModel.cs
     경로: MaiX/ViewModels/
@@ -177,6 +187,7 @@ Models:
   - 파일명: Email.cs
     역할: 이메일 데이터 모델 + INotifyPropertyChanged 구현 (EF Core 직접 바인딩 지원)
     속성: Id, Subject, From, To, Body, ReceivedDateTime, IsRead(INPC), HasAttachments, FlagStatus(INPC), Categories(INPC), PreviewText(NotMapped), PreviewOrSummary(NotMapped)
+    변경_2026-03-29: SnoozedUntil(DateTime?, nullable) 스누즈 해제 예정 시각 추가, ScheduledSendTime(DateTime?, nullable) 예약발송 시간 추가
 
   - 파일명: Attachment.cs
     역할: 첨부파일 모델
@@ -399,6 +410,16 @@ Other_Services:
     역할: FTS5 SQL 쿼리 상수 분리 정의
     참고: EmailSearchService.cs에서 참조. FTS5 MATCH + LIKE 폴백 SQL 포함.
 
+  - 파일명: AiMailService.cs (신규 — 2026-03-29 Phase2)
+    경로: Services/AI/
+    역할: 이메일 전용 AI 기능 서비스 (답장초안/스레드요약/일일브리핑/회의브리핑)
+    메서드:
+      - GenerateDraftAsync(email, tone): 톤 선택 답장 초안 생성
+      - SummarizeThreadAsync(emails): 스레드 전체 AI 요약
+      - GenerateDailyBriefingAsync(emails): 오늘 수신 메일 일일 브리핑
+      - GenerateMeetingBriefingAsync(emails): 회의 관련 메일 브리핑
+    의존성: AIService (AI 프로바이더 팩토리)
+
   - 파일명: NotificationService.cs
     경로: Services/Notification/
     역할: 데스크톱 알림
@@ -418,6 +439,7 @@ Other_Services:
     참고: Interlocked.CompareExchange 레이스컨디션 방지 + MailSyncCompleted 500ms Debounce + ODataError 410 처리
     변경_2026-03-28: 즐겨찾기 주기 30→10초; AI 분석 배치 루프(10분, 최대20건) 신규; ToastNotificationService DI 주입
     변경_2026-03-29: AI 배치 루프에 PriorityScore 기반 AiCategory 자동 분류 매핑 통합 (긴급/업무/일반)
+    변경_2026-03-29(Phase2): 스누즈 해제 루프 추가 — 매 분 SnoozedUntil <= UtcNow 조건으로 자동 해제 처리
 
   - 파일명: PromptService.cs
     경로: Services/Storage/

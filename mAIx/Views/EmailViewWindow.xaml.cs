@@ -1,8 +1,15 @@
 using System.Text.Json;
+using System.Threading;
 using System.Windows;
+using System.Windows.Controls;
+using System.Windows.Controls.Primitives;
 using System.Windows.Input;
 using Microsoft.EntityFrameworkCore;
+using mAIx.Data;
 using mAIx.Models;
+using mAIx.Services.AI;
+using mAIx.Services.Notification;
+using mAIx.Services.Speech;
 using mAIx.Utils;
 using mAIx.ViewModels;
 using Wpf.Ui.Controls;
@@ -15,12 +22,21 @@ namespace mAIx.Views;
 public partial class EmailViewWindow : FluentWindow
 {
     private readonly Email _email;
+    private readonly AiMailService? _aiMailService;
+    private readonly TextToSpeechService? _ttsService;
+    private readonly ToastNotificationService? _toastService;
     private bool _webView2Initialized = false;
+    private CancellationTokenSource? _ttsCts;
+    private bool _threadSummaryLoaded = false;
 
     public EmailViewWindow(Email email)
     {
         InitializeComponent();
         _email = email;
+
+        _aiMailService = (App.Current as App)?.GetService<AiMailService>();
+        _ttsService = (App.Current as App)?.GetService<TextToSpeechService>();
+        _toastService = (App.Current as App)?.GetService<ToastNotificationService>();
 
         Loaded += EmailViewWindow_Loaded;
         Closing += EmailViewWindow_Closing;
@@ -46,6 +62,10 @@ public partial class EmailViewWindow : FluentWindow
     {
         try
         {
+            // TTS 중지
+            _ttsCts?.Cancel();
+            _ttsService?.Stop();
+
             if (_webView2Initialized && BodyWebView.CoreWebView2 != null)
             {
                 // 이벤트 핸들러 해제
@@ -476,4 +496,231 @@ public partial class EmailViewWindow : FluentWindow
         // 이메일만 있는 경우 그대로 반환
         return emailString;
     }
+    // ─────────────────────────────────────────
+    // Task 1: AI 답장 초안
+    // ─────────────────────────────────────────
+
+    /// <summary>AI 답장 버튼 클릭 — 톤 선택 후 ComposeWindow 열기</summary>
+    private async void AiReplyButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (_aiMailService == null)
+        {
+            Log4.Warn("[EmailView] AiMailService 미등록 — AI 답장 불가");
+            return;
+        }
+
+        var tone = (ToneComboBox.SelectedItem as ComboBoxItem)?.Content?.ToString() ?? "정중";
+        AiReplyButton.IsEnabled = false;
+        AiReplyButton.Content = "생성 중...";
+
+        try
+        {
+            Log4.Debug($"[EmailView] AI 답장 초안 생성 시작 — Tone={tone}");
+            using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(60));
+            var draft = await _aiMailService.GenerateReplyDraftAsync(_email, tone, cts.Token);
+
+            var graphMailService = (App.Current as App)?.GraphMailService;
+            if (graphMailService == null) return;
+
+            var syncService = (App.Current as App)?.BackgroundSyncService;
+            var vm = new ComposeViewModel(graphMailService, syncService, ComposeMode.Reply, _email);
+            vm.InitialBody = draft + "\r\n\r\n" + vm.InitialBody;
+
+            var composeWindow = new ComposeWindow(vm);
+            composeWindow.Owner = this;
+            composeWindow.Show();
+            Log4.Debug("[EmailView] AI 답장 초안 ComposeWindow 열림");
+        }
+        catch (Exception ex)
+        {
+            Log4.Error($"[EmailView] AI 답장 초안 생성 실패: {ex.Message}");
+        }
+        finally
+        {
+            AiReplyButton.IsEnabled = true;
+            AiReplyButton.Content = "AI 답장";
+        }
+    }
+
+    // ─────────────────────────────────────────
+    // Task 2: TTS 읽어주기
+    // ─────────────────────────────────────────
+
+    /// <summary>읽어주기/중지 버튼 클릭</summary>
+    private async void TtsButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (_ttsService == null)
+        {
+            Log4.Warn("[EmailView] TextToSpeechService 미등록");
+            return;
+        }
+
+        if (_ttsService.IsSpeaking)
+        {
+            _ttsCts?.Cancel();
+            _ttsService.Stop();
+            TtsButton.Content = "읽어주기";
+            Log4.Debug("[EmailView] TTS 중지");
+            return;
+        }
+
+        var text = _email.PreviewOrSummary ?? _email.Body ?? "";
+        if (string.IsNullOrWhiteSpace(text))
+        {
+            Log4.Warn("[EmailView] TTS 대상 텍스트 없음");
+            return;
+        }
+
+        TtsButton.Content = "중지";
+        _ttsCts = new CancellationTokenSource();
+
+        try
+        {
+            Log4.Debug("[EmailView] TTS 읽기 시작");
+            await _ttsService.SpeakAsync(text, _ttsCts.Token);
+        }
+        catch (OperationCanceledException)
+        {
+            Log4.Debug("[EmailView] TTS 취소됨");
+        }
+        catch (Exception ex)
+        {
+            Log4.Error($"[EmailView] TTS 실패: {ex.Message}");
+        }
+        finally
+        {
+            TtsButton.Content = "읽어주기";
+            _ttsCts?.Dispose();
+            _ttsCts = null;
+        }
+    }
+
+    // ─────────────────────────────────────────
+    // Task 3: 스누즈
+    // ─────────────────────────────────────────
+
+    /// <summary>스누즈 버튼 클릭 — 팝업 열기</summary>
+    private void SnoozeButton_Click(object sender, RoutedEventArgs e)
+    {
+        SnoozePopup.IsOpen = true;
+    }
+
+    /// <summary>스누즈 메뉴 항목 선택</summary>
+    private async void SnoozeMenuItem_Click(object sender, RoutedEventArgs e)
+    {
+        SnoozePopup.IsOpen = false;
+
+        if (sender is not System.Windows.Controls.MenuItem menuItem) return;
+        var tag = menuItem.Tag?.ToString() ?? "";
+
+        var now = DateTime.Now;
+        DateTime snoozedUntil = tag switch
+        {
+            "1h"         => now.AddHours(1),
+            "3h"         => now.AddHours(3),
+            "tomorrow"   => now.Date.AddDays(1).AddHours(9),
+            "nextmonday" => GetNextMonday(now).AddHours(9),
+            _            => now.AddHours(1)
+        };
+
+        _email.SnoozedUntil = snoozedUntil;
+
+        try
+        {
+            var dbFactory = (App.Current as App)?.GetService<IDbContextFactory<mAIxDbContext>>();
+            if (dbFactory != null)
+            {
+                using var ctx = dbFactory.CreateDbContext();
+                ctx.Emails.Update(_email);
+                await ctx.SaveChangesAsync();
+            }
+
+            var label = tag switch
+            {
+                "1h"         => "1시간",
+                "3h"         => "3시간",
+                "tomorrow"   => "내일 아침",
+                "nextmonday" => "다음 주 월요일",
+                _            => ""
+            };
+            var msg = $"{label} 후 다시 알려드립니다 ({snoozedUntil:MM-dd HH:mm})";
+            Log4.Info($"[EmailView] 스누즈 설정: {msg}");
+
+            _toastService?.ShowNewMailNotification("스누즈 설정", msg, "");
+        }
+        catch (Exception ex)
+        {
+            Log4.Error($"[EmailView] 스누즈 DB 저장 실패: {ex.Message}");
+        }
+    }
+
+    private static DateTime GetNextMonday(DateTime from)
+    {
+        var daysUntilMonday = ((int)DayOfWeek.Monday - (int)from.DayOfWeek + 7) % 7;
+        if (daysUntilMonday == 0) daysUntilMonday = 7;
+        return from.Date.AddDays(daysUntilMonday);
+    }
+
+    // ─────────────────────────────────────────
+    // Task 4: 스레드 AI 요약
+    // ─────────────────────────────────────────
+
+    /// <summary>스레드 요약 패널 토글</summary>
+    private async void ThreadSummaryButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (ThreadSummaryPanel.Visibility == Visibility.Visible)
+        {
+            ThreadSummaryPanel.Visibility = Visibility.Collapsed;
+            return;
+        }
+
+        ThreadSummaryPanel.Visibility = Visibility.Visible;
+
+        if (_threadSummaryLoaded) return;
+
+        if (_aiMailService == null)
+        {
+            ThreadSummaryText.Text = "AI 서비스를 사용할 수 없습니다.";
+            return;
+        }
+
+        ThreadSummaryLoading.Visibility = Visibility.Visible;
+        ThreadSummaryText.Text = "스레드를 분석하는 중...";
+
+        try
+        {
+            List<Email> threadEmails;
+            var dbFactory = (App.Current as App)?.GetService<IDbContextFactory<mAIxDbContext>>();
+            if (dbFactory != null && !string.IsNullOrEmpty(_email.ConversationId))
+            {
+                using var ctx = dbFactory.CreateDbContext();
+                threadEmails = await ctx.Emails
+                    .Where(e => e.ConversationId == _email.ConversationId)
+                    .OrderBy(e => e.ReceivedDateTime)
+                    .ToListAsync();
+            }
+            else
+            {
+                threadEmails = new List<Email> { _email };
+            }
+
+            Log4.Debug($"[EmailView] 스레드 요약 — 메일 {threadEmails.Count}건");
+
+            using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(60));
+            var summary = await _aiMailService.GenerateThreadSummaryAsync(threadEmails, cts.Token);
+
+            ThreadSummaryText.Text = summary;
+            _threadSummaryLoaded = true;
+        }
+        catch (Exception ex)
+        {
+            Log4.Error($"[EmailView] 스레드 요약 실패: {ex.Message}");
+            ThreadSummaryText.Text = "요약 생성에 실패했습니다.";
+        }
+        finally
+        {
+            ThreadSummaryLoading.Visibility = Visibility.Collapsed;
+        }
+    }
+
 }

@@ -19,6 +19,7 @@ using mAIx.Services.Search;
 using mAIx.Utils;
 using mAIx.ViewModels;
 using mAIx.Views.Dialogs;
+using mAIx.Services.AI;
 using mAIx.Services.Graph;
 using mAIx.Services.Storage;
 using mAIx.Services.Audio;
@@ -3234,6 +3235,37 @@ public partial class MainWindow : FluentWindow
             _viewModel.ClearSearchCommand.Execute(null);
             e.Handled = true;
         }
+    }
+
+    #endregion
+
+    #region AI 일일 브리핑
+
+    /// <summary>
+    /// AI 일일 브리핑 버튼 클릭 — 오늘 수신 메일 기반 브리핑 다이얼로그 표시
+    /// </summary>
+    private async void DailyBriefingButton_Click(object sender, RoutedEventArgs e)
+    {
+        var aiMailService = (App.Current as App)?.GetService<AiMailService>();
+        if (aiMailService == null)
+        {
+            Log4.Warn("[MainWindow] AiMailService 미등록 — 브리핑 불가");
+            return;
+        }
+
+        // 오늘 수신된 메일 목록 수집
+        var today = DateTime.Today;
+        var todayEmails = _viewModel.Emails?
+            .Where(m => m.ReceivedDateTime.HasValue && m.ReceivedDateTime.Value.Date == today)
+            .ToList() ?? new List<Email>();
+
+        Log4.Debug($"[MainWindow] 브리핑 대상 메일 수={todayEmails.Count}");
+
+        var dialog = new DailyBriefingDialog(aiMailService, todayEmails)
+        {
+            Owner = this
+        };
+        dialog.ShowDialog();
     }
 
     #endregion

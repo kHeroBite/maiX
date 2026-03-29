@@ -85,6 +85,8 @@ dotnet ef migrations script --project MaiX
 | AiPriority | string(20) | YES | - | NULL | AI 우선순위 (high/medium/low) |
 | AiActionRequired | bool | NO | - | false | AI 액션 필요 여부 |
 | AiSummaryBrief | string(500) | YES | - | NULL | AI 간략 요약 (1-2줄) |
+| **스누즈 필드 (Phase 2 — 2026-03-29)** |
+| SnoozedUntil | datetime | YES | IDX | NULL | 스누즈 해제 예정 시각 (UTC). null=스누즈 미설정 |
 
 **인덱스**:
 - `IX_Email_InternetMessageId` (UNIQUE)
@@ -93,6 +95,7 @@ dotnet ef migrations script --project MaiX
 - `IX_Email_ReceivedDateTime`
 - `IX_Email_ParentFolderId`
 - `IX_Email_AnalysisStatus`
+- `IX_Email_SnoozedUntil` (Phase 2 추가)
 
 **관계**:
 - **1:N** → Attachments (첨부파일)

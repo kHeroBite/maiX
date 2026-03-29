@@ -442,3 +442,39 @@
 - **교훈**: UI에서 "취소" 버튼 클릭 → `_sendCts.Cancel()` 호출 → OperationCanceledException catch 후 상태 복원. CancellationToken 기반 패턴은 복잡한 타이머 관리 없이 구현 가능
 - **심각도**: 낮음 (새 패턴 도입)
 - **Level**: 1 (참고)
+
+## L-278: SpeechSynthesizer TTS — WPF에서 메일 본문 읽기 패턴 (2026-03-29)
+
+- **패턴**: WPF 앱에서 SpeechSynthesizer로 메일 본문 TTS 재생/중지 토글 구현
+- **구현**: `SpeechSynthesizer _synthesizer` 필드 + `SpeakAsync(text)` / `SpeakAsyncCancelAll()` + `SpeakCompleted` 이벤트로 버튼 상태 복원
+- **주의**: SpeechSynthesizer는 메인 스레드에서 생성하되, SpeakAsync는 비동기 처리. IDisposable — 윈도우 Closed 이벤트에서 반드시 Dispose 호출
+- **교훈**: WPF에서 TTS 기능이 필요하면 System.Speech.Synthesis.SpeechSynthesizer 사용 (외부 NuGet 불필요, .NET 10-windows 기본 포함)
+- **심각도**: 낮음 (신규 패턴 도입)
+- **Level**: 1 (참고)
+
+## L-279: AI 답장 초안 — ViewModel → ComposeWindow 자동 입력 패턴 (2026-03-29)
+
+- **패턴**: AI가 생성한 답장 초안을 ComposeWindow Body에 자동 삽입하는 방법
+- **구현**: `ComposeWindow`를 생성할 때 생성자 파라미터 또는 프로퍼티로 초기 본문 전달 → ComposeViewModel.Body 바인딩에 자동 반영
+- **주의**: AI 초안 생성은 비동기 (await AiMailService.GenerateDraftAsync) — UI 스레드 복귀 시 Dispatcher.Invoke 불필요 (WPF UI는 await 이후 자동 UI 스레드 복귀)
+- **교훈**: AI 생성 텍스트를 다른 Window에 전달할 때 생성자 파라미터 패턴이 가장 간결. ViewModel 프로퍼티 직접 주입도 가능하나 생성자 방식이 MVVM 패턴에 더 적합
+- **심각도**: 낮음 (신규 패턴 도입)
+- **Level**: 1 (참고)
+
+## L-280: 스누즈 해제 백그라운드 루프 — DateTime UTC 비교 패턴 (2026-03-29)
+
+- **패턴**: BackgroundSyncService에서 주기적으로 스누즈 해제 대상 메일을 체크하고 UI 갱신
+- **구현**: `_timer` 콜백에서 `SnoozedUntil.HasValue && SnoozedUntil <= DateTime.UtcNow` 조건으로 필터링 → SnoozedUntil = null 업데이트 → ObservableCollection 갱신
+- **주의**: DB 저장 시 UTC 기준 저장, 읽기/표시 시 로컬 변환 필요. HasValue 체크 없이 DateTime? 비교 시 NullReferenceException 가능
+- **교훈**: nullable DateTime 컬럼 비교는 항상 `.HasValue &&` 선행 체크 또는 EF Core LINQ `x.SnoozedUntil.HasValue && x.SnoozedUntil <= DateTime.UtcNow` 패턴 사용
+- **심각도**: 낮음 (신규 패턴 도입)
+- **Level**: 1 (참고)
+
+## L-281: kdone_docs 에이전트 spawn — team_name 없이 서브에이전트 호출 금지 (2026-03-29)
+
+- **문제**: kdone_docs에서 병렬 문서 업데이트를 위해 Agent 도구를 team_name 없이 직접 호출 → full_task_team_guard.sh hook이 차단
+- **원인**: 팀에이전트 맥락에서는 모든 Agent spawn에 team_name 필수 (hook 강제)
+- **해결**: 메인이 직접 순차/병렬 문서 업데이트 수행 (Fallback)
+- **교훈**: 팀에이전트(kdone-1 등) 내부에서 Agent spawn 시 반드시 team_name 지정. team_name 없는 spawn은 hook이 차단 → 메인 직접 처리로 Fallback
+- **심각도**: 낮음 (hook이 정상 차단, Fallback 작동)
+- **Level**: 1 (참고)
