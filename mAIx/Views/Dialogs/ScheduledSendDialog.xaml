@@ -1,0 +1,62 @@
+<ui:FluentWindow x:Class="mAIx.Views.Dialogs.ScheduledSendDialog"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
+        Title="예약 발송 설정"
+        Width="380"
+        Height="260"
+        WindowStartupLocation="CenterOwner"
+        ResizeMode="NoResize"
+        ExtendsContentIntoTitleBar="True"
+        WindowBackdropType="Mica">
+
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+
+        <!-- 타이틀바 -->
+        <ui:TitleBar Grid.Row="0"
+                     Title="예약 발송 설정"
+                     ShowMaximize="False"
+                     ShowMinimize="False"/>
+
+        <!-- 입력 영역 -->
+        <StackPanel Grid.Row="1" Margin="20,12,20,8">
+            <TextBlock Text="발송 날짜"
+                       FontSize="12"
+                       Margin="0,0,0,4"/>
+            <DatePicker x:Name="DatePickerControl"
+                        SelectedDateFormat="Long"
+                        Margin="0,0,0,16"
+                        HorizontalAlignment="Stretch"/>
+
+            <TextBlock Text="발송 시간 (HH:mm)"
+                       FontSize="12"
+                       Margin="0,0,0,4"/>
+            <ui:TextBox x:Name="TimeTextBox"
+                        PlaceholderText="예: 14:30"
+                        MaxLength="5"
+                        Margin="0,0,0,4"/>
+
+            <TextBlock x:Name="ValidationText"
+                       Foreground="#FF4444"
+                       FontSize="11"
+                       Visibility="Collapsed"/>
+        </StackPanel>
+
+        <!-- 버튼 영역 -->
+        <Border Grid.Row="2"
+                Background="{DynamicResource ControlFillColorDefaultBrush}"
+                BorderBrush="{DynamicResource ControlElevationBorderBrush}"
+                BorderThickness="0,1,0,0"
+                Padding="16,12">
+            <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
+                <ui:Button Content="취소" Appearance="Secondary" Width="80" Margin="0,0,8,0" Click="Cancel_Click"/>
+                <ui:Button Content="설정" Appearance="Primary" Width="80" Click="Confirm_Click"/>
+            </StackPanel>
+        </Border>
+    </Grid>
+</ui:FluentWindow>

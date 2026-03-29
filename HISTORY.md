@@ -86,3 +86,46 @@
 - 런타임: 신규 ERROR 0건 ✅
 - UI: 13건 메일 표시, BulkActionBar 코드 검증, PreviewOrSummary 바인딩 확인 ✅
 - 품질: 3/3 기능 대조 완료 ✅
+
+---
+
+## 2026-03-29 — Phase 1: AI 스마트 분류 UI + 첨부파일 AI 분석 + 예약발송 + 발송취소
+
+**분류**: k3 (Normal)
+**수정 파일**: 17개 (신규 6 + 수정 11)
+
+### 변경 내역
+
+#### 1. AI 카테고리 배지 UI
+- `AiCategoryToBadgeConverter.cs` 신규 — AI 카테고리 문자열 → 배지 색상/텍스트 IValueConverter
+- `App.xaml` — AiCategoryToBadgeConverter 리소스 등록
+- `MainWindow.xaml` — 메일 목록 3행 AI 배지 레이아웃 + 읽지않음 인디케이터
+
+#### 2. AI 정렬+필터
+- `MainViewModel.cs` — AiPriority 정렬 항목, FilterActionRequired, SelectedAiCategory 필터
+- `MainWindow.xaml.cs` — 필터 도구바 이벤트 핸들러
+- `Email.cs` — PreviewOrSummary 프로퍼티 확장 (AiSummaryBrief 우선 폴백)
+
+#### 3. 첨부파일 AI 분석
+- `EmailAnalyzer.cs` — PrepareEmailData에 첨부파일 텍스트 포함
+- `EmailAnalysisResult.cs` — AttachmentSummary, AttachmentRiskLevel 필드 추가
+- `BackgroundSyncService.cs` — RunAnalysisBatchLoopAsync Include Attachments
+
+#### 4. 예약발송+발송취소
+- `Email.cs` — ScheduledSendTime (DateTime?) 필드 추가
+- `ComposeViewModel.cs` — ScheduleMailAsync + 5초 카운트다운 CancellationToken 취소
+- `ComposeWindow.xaml` + `.cs` — 예약발송 버튼 UI 및 이벤트
+- `ScheduledSendDialog.xaml` + `.cs` 신규 — DateTimePicker 예약시간 선택 다이얼로그
+- `BackgroundSyncService.cs` — 예약발송 루프 추가
+- Migration `20260329000003_AddScheduledSendTime` (3파일)
+
+### 변경 파일
+- 신규: AiCategoryToBadgeConverter.cs, ScheduledSendDialog.xaml, ScheduledSendDialog.xaml.cs, Migration 3파일
+- 수정: App.xaml, MainWindow.xaml/cs, MainViewModel.cs, Email.cs, EmailAnalysisResult.cs, EmailAnalyzer.cs, BackgroundSyncService.cs, ComposeViewModel.cs, ComposeWindow.xaml/cs, mAIxDbContextModelSnapshot.cs
+
+### 테스트 결과
+- 빌드: 오류 0개 ✅
+- 실행: 정상 ✅
+- 로그: ERROR 0건 ✅
+- UI: PASS ✅
+- 품질: 8/8 Task 확인 ✅

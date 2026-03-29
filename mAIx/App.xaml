@@ -65,6 +65,9 @@
             <converters:DirectFavoriteToVisibilityConverter x:Key="DirectFavoriteToVisibilityConverter"/>
             <converters:IsSelectedToBackgroundConverter x:Key="IsSelectedToBackgroundConverter"/>
 
+            <!-- AI 카테고리 배지 컨버터 -->
+            <converters:AiCategoryToBadgeConverter x:Key="AiCategoryToBadgeConverter"/>
+
             <!-- ========== 기능별 AccentColor 리소스 ========== -->
             <!-- 기본값: Outlook Blue (ThemeService에서 동적으로 업데이트) -->
             <Color x:Key="FeatureAccentColor">#0078D4</Color>

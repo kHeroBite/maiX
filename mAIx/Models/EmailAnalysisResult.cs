@@ -151,6 +151,18 @@ public class EmailAnalysisResult
     /// 추출된 키워드 목록
     /// </summary>
     public List<string> Keywords { get; set; } = new();
+
+    // ===== 첨부파일 분석 =====
+
+    /// <summary>
+    /// 첨부파일 AI 분석 요약
+    /// </summary>
+    public string? AttachmentSummary { get; set; }
+
+    /// <summary>
+    /// 첨부파일 위험 수준 (safe, caution, risk)
+    /// </summary>
+    public string? AttachmentRiskLevel { get; set; }
 }
 
 /// <summary>

@@ -655,6 +655,30 @@ public string? PreviewOrSummary => SummaryOneline ?? PreviewText;  // AI 요약 
 
 XAML 바인딩: `Text="{Binding PreviewOrSummary}"` — AI 요약 없는 메일도 본문 미리보기 표시.
 
+### AI 카테고리 배지 (AiCategoryToBadgeConverter) [Phase 1]
+
+```yaml
+위치: mAIx/Converters/AiCategoryToBadgeConverter.cs
+역할: AI 카테고리 문자열 → 배지 배경색/전경색/텍스트 IValueConverter
+카테고리 매핑:
+  긴급: 빨강 배경, 흰색 텍스트
+  액션: 파랑 배경, 흰색 텍스트
+  FYI: 녹색 배경, 흰색 텍스트
+  일반: 회색 배경, 흰색 텍스트
+App.xaml: <local:AiCategoryToBadgeConverter x:Key="AiCategoryToBadgeConverter"/> 등록
+```
+
+### 예약발송 다이얼로그 (ScheduledSendDialog) [Phase 1]
+
+```yaml
+위치: mAIx/Views/Dialogs/ScheduledSendDialog.xaml + .cs
+역할: 예약발송 날짜/시간 선택 (DateTimePicker)
+호출: ComposeWindow에서 ShowDialog() 호출, DialogResult로 결과 반환
+ComposeViewModel: ScheduleMailAsync() + CancellationTokenSource 5초 카운트다운 취소
+  - _sendCts = new CancellationTokenSource()
+  - await Task.Delay(5000, _sendCts.Token) → 취소 버튼 클릭 시 Cancel()
+```
+
 ### 다중 선택 BulkActionBar 패턴
 
 ```yaml

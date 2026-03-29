@@ -576,6 +576,9 @@ namespace mAIx.Migrations
                     b.Property<string>("Summary")
                         .HasColumnType("TEXT");
 
+                    b.Property<DateTime?>("ScheduledSendTime")
+                        .HasColumnType("TEXT");
+
                     b.Property<string>("SummaryOneline")
                         .HasMaxLength(500)
                         .HasColumnType("TEXT");

@@ -416,3 +416,29 @@
 - **교훈**: SQLite FTS5 가상 테이블 SQL 작성 시 컬럼명이 SQLite 예약어인지 사전 확인 필수. 이메일 모델에서 충돌 가능한 예약어: `From`(FROM), `To`(TO), `Order`(ORDER), `Group`(GROUP), `Select`(SELECT), `Where`(WHERE), `Index`(INDEX). 예약어는 반드시 `[컬럼명]` 대괄호로 이스케이프할 것.
 - **심각도**: 중간 (예측 가능한 패턴, FTS5 작업 시 재발 가능)
 - **Level**: 1 (참고)
+
+## L-275: WPF IValueConverter — AI 카테고리 배지 색상 변환 패턴 (2026-03-29)
+
+- **패턴**: AI 카테고리 문자열 → 배지 UI 속성(색상/텍스트) 변환 시 IValueConverter 구현
+- **구현**: `AiCategoryToBadgeConverter : IValueConverter` — Convert()에서 카테고리 문자열 switch
+- **App.xaml 등록**: `<local:AiCategoryToBadgeConverter x:Key="AiCategoryToBadgeConverter"/>` ResourceDictionary에 추가
+- **교훈**: WPF에서 열거형/문자열 → UI 속성 변환은 IValueConverter 패턴으로 관심사 분리. ViewModel에 직접 색상 프로퍼티 추가보다 Converter가 MVVM 패턴에 적합
+- **심각도**: 낮음 (새 패턴 도입)
+- **Level**: 1 (참고)
+
+## L-276: EF Core DateTime? 컬럼 — SQLite 예약발송 시간 마이그레이션 패턴 (2026-03-29)
+
+- **패턴**: 예약발송 시간처럼 선택적(nullable) 날짜/시간 필드는 `DateTime?`으로 모델 선언
+- **구현**: `Email.ScheduledSendTime: DateTime?` → Migration에서 `nullable: true` 자동 적용
+- **BackgroundSync 쿼리**: `ScheduledSendTime <= DateTime.UtcNow && !IsSent` 조건으로 발송 대상 필터
+- **교훈**: 선택적 예약 기능 구현 시 `DateTime?` + UTC 기준 비교 패턴 사용. 로컬타임 비교 시 서머타임/타임존 문제 발생 가능 — UTC 유지 권장
+- **심각도**: 낮음 (새 패턴 도입)
+- **Level**: 1 (참고)
+
+## L-277: ComposeViewModel 5초 카운트다운 취소 — CancellationTokenSource 패턴 (2026-03-29)
+
+- **문제**: 예약발송/즉시발송 취소 기능 구현 시 타이머와 취소 토큰을 어떻게 연동하는가
+- **구현**: `CancellationTokenSource _sendCts` + `Task.Delay(5000, _sendCts.Token)` 패턴으로 5초 대기 중 취소 가능
+- **교훈**: UI에서 "취소" 버튼 클릭 → `_sendCts.Cancel()` 호출 → OperationCanceledException catch 후 상태 복원. CancellationToken 기반 패턴은 복잡한 타이머 관리 없이 구현 가능
+- **심각도**: 낮음 (새 패턴 도입)
+- **Level**: 1 (참고)

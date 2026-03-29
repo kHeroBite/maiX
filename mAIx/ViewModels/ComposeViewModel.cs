@@ -1,5 +1,8 @@
+using System;
 using System.Collections.ObjectModel;
 using System.Linq;
+using System.Threading;
+using System.Threading.Tasks;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Microsoft.Graph.Models;
@@ -97,6 +100,34 @@ public partial class ComposeViewModel : ViewModelBase
     /// </summary>
     [ObservableProperty]
     private string _importance = "normal";
+
+    /// <summary>
+    /// 예약 발송 활성화 여부
+    /// </summary>
+    [ObservableProperty]
+    private bool _isScheduledSend = false;
+
+    /// <summary>
+    /// 예약 발송 시간
+    /// </summary>
+    [ObservableProperty]
+    private DateTime _scheduledSendTime = DateTime.Now.AddHours(1);
+
+    /// <summary>
+    /// 발송 처리 중 (카운트다운 포함)
+    /// </summary>
+    [ObservableProperty]
+    private bool _isSending = false;
+
+    /// <summary>
+    /// 발송 취소용 CancellationTokenSource (View에서 접근 가능)
+    /// </summary>
+    public CancellationTokenSource? SendCts
+    {
+        get => _sendCts;
+        set => _sendCts = value;
+    }
+    private CancellationTokenSource? _sendCts;
 
     /// <summary>
     /// 첨부파일 유무
@@ -498,6 +529,59 @@ public partial class ComposeViewModel : ViewModelBase
         }
 
         return result;
+    }
+
+    /// <summary>
+    /// 발송 취소 커맨드 — 카운트다운 중 취소
+    /// </summary>
+    [RelayCommand]
+    public void CancelSend()
+    {
+        _sendCts?.Cancel();
+        Log4.Info("메일 발송 취소됨");
+    }
+
+    /// <summary>
+    /// 예약 발송 DB 저장 (실제 발송은 BackgroundSync가 처리)
+    /// </summary>
+    public async Task<bool> ScheduleMailAsync(mAIx.Data.mAIxDbContext dbContext)
+    {
+        try
+        {
+            var toRecipients = ParseEmailAddresses(To);
+            if (toRecipients.Count == 0)
+                throw new InvalidOperationException("받는 사람이 없습니다.");
+
+            // 예약 시간이 과거면 즉시 발송으로 처리
+            var sendTime = ScheduledSendTime < DateTime.Now ? DateTime.Now.AddSeconds(5) : ScheduledSendTime;
+
+            // DB에 예약 메일 저장 (발송 상태: scheduled)
+            var email = new mAIx.Models.Email
+            {
+                Subject = Subject,
+                Body = Body,
+                To = To,
+                Cc = Cc,
+                Bcc = Bcc,
+                From = _graphMailService.CurrentUserEmail ?? "",
+                AccountEmail = _graphMailService.CurrentUserEmail ?? "",
+                ScheduledSendTime = sendTime,
+                ReceivedDateTime = DateTime.Now,
+                AnalysisStatus = "scheduled",
+                IsRead = true
+            };
+
+            dbContext.Emails.Add(email);
+            await dbContext.SaveChangesAsync();
+
+            Log4.Info($"예약 발송 등록: {sendTime:yyyy-MM-dd HH:mm}, Subject={Subject}");
+            return true;
+        }
+        catch (Exception ex)
+        {
+            Log4.Error($"예약 발송 등록 실패: {ex.Message}");
+            throw;
+        }
     }
 
     /// <summary>

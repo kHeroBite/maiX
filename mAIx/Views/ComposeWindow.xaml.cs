@@ -36,6 +36,10 @@ public partial class ComposeWindow : FluentWindow
     private List<ContactSuggestion> _suggestions = new();
     private CancellationTokenSource? _searchCts;
 
+    // 카운트다운용 필드
+    private System.Windows.Threading.DispatcherTimer? _countdownTimer;
+    private int _countdownSeconds;
+
     // ContactSearchService 인스턴스
     private ContactSearchService? _contactSearchService;
 
@@ -376,37 +380,67 @@ public partial class ComposeWindow : FluentWindow
     }
 
     /// <summary>
-    /// 보내기 버튼 클릭
+    /// 보내기 버튼 클릭 — 5초 카운트다운 후 발송
     /// </summary>
     private async void SendButton_Click(object sender, RoutedEventArgs e)
     {
+        // 유효성 검사
+        if (string.IsNullOrWhiteSpace(_viewModel.To))
+        {
+            System.Windows.MessageBox.Show("받는 사람을 입력하세요.", "알림",
+                System.Windows.MessageBoxButton.OK, System.Windows.MessageBoxImage.Warning);
+            ToTextBox.Focus();
+            return;
+        }
+
+        if (string.IsNullOrWhiteSpace(_viewModel.Subject))
+        {
+            var result = System.Windows.MessageBox.Show("제목이 비어있습니다. 계속 보내시겠습니까?", "확인",
+                System.Windows.MessageBoxButton.YesNo, System.Windows.MessageBoxImage.Question);
+            if (result != System.Windows.MessageBoxResult.Yes) return;
+        }
+
+        // 에디터에서 본문 가져오기
+        var body = await GetEditorContentAsync();
+        _viewModel.Body = body;
+
+        // 카운트다운 오버레이 표시
+        _viewModel.IsSending = true;
+        SendCountdownOverlay.Visibility = Visibility.Visible;
+        _countdownSeconds = 5;
+        CountdownProgressBar.Value = 5;
+        CountdownText.Text = $"{_countdownSeconds}초 후 발송됩니다";
+
+        // CancellationTokenSource 초기화
+        _viewModel.SendCts?.Cancel(); // 이전 CTS 취소
+        var cts = new System.Threading.CancellationTokenSource();
+        _viewModel.SendCts = cts;
+
+        // 카운트다운 타이머
+        _countdownTimer?.Stop();
+        _countdownTimer = new System.Windows.Threading.DispatcherTimer
+        {
+            Interval = TimeSpan.FromSeconds(1)
+        };
+        _countdownTimer.Tick += (s, args) =>
+        {
+            _countdownSeconds--;
+            CountdownProgressBar.Value = _countdownSeconds;
+            CountdownText.Text = _countdownSeconds > 0 ? $"{_countdownSeconds}초 후 발송됩니다" : "발송 중...";
+            if (_countdownSeconds <= 0)
+                _countdownTimer.Stop();
+        };
+        _countdownTimer.Start();
+
         try
         {
-            // 유효성 검사
-            if (string.IsNullOrWhiteSpace(_viewModel.To))
-            {
-                System.Windows.MessageBox.Show("받는 사람을 입력하세요.", "알림",
-                    System.Windows.MessageBoxButton.OK, System.Windows.MessageBoxImage.Warning);
-                ToTextBox.Focus();
-                return;
-            }
+            // 5초 대기 (취소 가능)
+            await Task.Delay(5000, cts.Token);
 
-            if (string.IsNullOrWhiteSpace(_viewModel.Subject))
-            {
-                var result = System.Windows.MessageBox.Show("제목이 비어있습니다. 계속 보내시겠습니까?", "확인",
-                    System.Windows.MessageBoxButton.YesNo, System.Windows.MessageBoxImage.Question);
-                if (result != System.Windows.MessageBoxResult.Yes) return;
-            }
+            // 카운트다운 완료 — 실제 발송
+            _countdownTimer?.Stop();
+            CountdownText.Text = "발송 중...";
 
-            // 에디터에서 본문 가져오기
-            var body = await GetEditorContentAsync();
-            _viewModel.Body = body;
-
-            // 버튼 비활성화
-            SendButton.IsEnabled = false;
-            SendButton.Content = "보내는 중...";
-
-            // 메일 발송
             var success = await _viewModel.SendMailAsync();
 
             if (success)
@@ -421,18 +455,71 @@ public partial class ComposeWindow : FluentWindow
             {
                 System.Windows.MessageBox.Show("메일 발송에 실패했습니다.", "오류",
                     System.Windows.MessageBoxButton.OK, System.Windows.MessageBoxImage.Error);
-                SendButton.IsEnabled = true;
-                SendButton.Content = "보내기";
+                HideCountdownOverlay();
             }
+        }
+        catch (System.Threading.Tasks.TaskCanceledException)
+        {
+            // 취소됨 — 오버레이 숨기기
+            Log4.Info("메일 발송이 취소되었습니다.");
+            HideCountdownOverlay();
         }
         catch (Exception ex)
         {
             Log4.Error($"메일 발송 실패: {ex.Message}");
             System.Windows.MessageBox.Show($"메일 발송 실패: {ex.Message}", "오류",
                 System.Windows.MessageBoxButton.OK, System.Windows.MessageBoxImage.Error);
-            SendButton.IsEnabled = true;
-            SendButton.Content = "보내기";
+            HideCountdownOverlay();
         }
+    }
+
+    /// <summary>
+    /// 카운트다운 취소 버튼 클릭
+    /// </summary>
+    private void CancelSendButton_Click(object sender, RoutedEventArgs e)
+    {
+        _countdownTimer?.Stop();
+        _viewModel.SendCts?.Cancel();
+    }
+
+    /// <summary>
+    /// 카운트다운 오버레이 숨기기
+    /// </summary>
+    private void HideCountdownOverlay()
+    {
+        _countdownTimer?.Stop();
+        SendCountdownOverlay.Visibility = Visibility.Collapsed;
+        _viewModel.IsSending = false;
+        CountdownProgressBar.Value = 5;
+        CountdownText.Text = "5초 후 발송됩니다";
+    }
+
+    /// <summary>
+    /// 예약 발송 설정 클릭
+    /// </summary>
+    private void ScheduleSend_Click(object sender, RoutedEventArgs e)
+    {
+        // 예약 시간 선택 다이얼로그 (간단한 InputBox 사용)
+        var dialog = new ScheduledSendDialog(_viewModel.ScheduledSendTime)
+        {
+            Owner = this
+        };
+
+        if (dialog.ShowDialog() == true)
+        {
+            _viewModel.ScheduledSendTime = dialog.SelectedDateTime;
+            _viewModel.IsScheduledSend = true;
+            Log4.Debug2($"예약 발송 설정: {_viewModel.ScheduledSendTime:yyyy-MM-dd HH:mm}");
+        }
+    }
+
+    /// <summary>
+    /// 예약 발송 취소 클릭
+    /// </summary>
+    private void CancelSchedule_Click(object sender, RoutedEventArgs e)
+    {
+        _viewModel.IsScheduledSend = false;
+        Log4.Debug("예약 발송 취소");
     }
 
     /// <summary>

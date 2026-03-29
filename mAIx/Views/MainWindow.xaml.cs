@@ -3097,6 +3097,11 @@ public partial class MainWindow : FluentWindow
             priorityItem.Click += (s, args) => _viewModel.SortEmailsCommand.Execute("PriorityScore");
             contextMenu.Items.Add(priorityItem);
 
+            // AI 우선순위 정렬
+            var aiPriorityItem = new System.Windows.Controls.MenuItem { Header = "🤖 AI 우선순위" };
+            aiPriorityItem.Click += (s, args) => _viewModel.SortEmailsCommand.Execute("AiPriority");
+            contextMenu.Items.Add(aiPriorityItem);
+
             contextMenu.Items.Add(new Separator());
 
             // 읽지 않은 메일 정렬
@@ -3111,6 +3116,19 @@ public partial class MainWindow : FluentWindow
 
             button.ContextMenu = contextMenu;
             contextMenu.IsOpen = true;
+        }
+    }
+
+    /// <summary>
+    /// AI 카테고리 필터 ComboBox 선택 변경
+    /// </summary>
+    private async void AiCategoryFilterComboBox_SelectionChanged(object sender, System.Windows.Controls.SelectionChangedEventArgs e)
+    {
+        if (sender is System.Windows.Controls.ComboBox comboBox &&
+            comboBox.SelectedItem is System.Windows.Controls.ComboBoxItem item)
+        {
+            _viewModel.SelectedAiCategory = item.Content?.ToString() ?? "전체";
+            await _viewModel.SearchCommand.ExecuteAsync(null);
         }
     }
 

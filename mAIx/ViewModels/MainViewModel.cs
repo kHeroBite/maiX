@@ -1920,6 +1920,18 @@ public partial class MainViewModel : ViewModelBase, IDisposable
     private bool _filterFlaggedOnly;
 
     /// <summary>
+    /// 검색 필터: AI 액션 필요만
+    /// </summary>
+    [ObservableProperty]
+    private bool _filterActionRequired;
+
+    /// <summary>
+    /// 선택된 AI 카테고리 필터 (전체/긴급/액션필요/FYI/일반)
+    /// </summary>
+    [ObservableProperty]
+    private string _selectedAiCategory = "전체";
+
+    /// <summary>
     /// 검색 필터: 시작 날짜
     /// </summary>
     [ObservableProperty]
@@ -2078,6 +2090,16 @@ public partial class MainViewModel : ViewModelBase, IDisposable
     }
 
     /// <summary>
+    /// AI 액션 필요 필터 토글
+    /// </summary>
+    [RelayCommand]
+    private async Task ToggleFilterActionRequired()
+    {
+        FilterActionRequired = !FilterActionRequired;
+        await SearchAsync();
+    }
+
+    /// <summary>
     /// 검색 실행
     /// </summary>
     [RelayCommand]
@@ -2182,6 +2204,18 @@ public partial class MainViewModel : ViewModelBase, IDisposable
                 results = results.Where(e => e.FlagStatus == "flagged").ToList();
             }
 
+            // AI 액션 필요 필터 후처리
+            if (FilterActionRequired)
+            {
+                results = results.Where(e => e.AiActionRequired).ToList();
+            }
+
+            // AI 카테고리 필터 후처리
+            if (SelectedAiCategory != "전체" && !string.IsNullOrEmpty(SelectedAiCategory))
+            {
+                results = results.Where(e => e.AiCategory == SelectedAiCategory).ToList();
+            }
+
             Emails = results;
             StatusMessage = $"검색 결과: {Emails.Count}건";
             IsSearching = false;
@@ -2198,6 +2232,8 @@ public partial class MainViewModel : ViewModelBase, IDisposable
         FilterUnreadOnly = false;
         FilterHasAttachments = false;
         FilterFlaggedOnly = false;
+        FilterActionRequired = false;
+        SelectedAiCategory = "전체";
         FilterFromDate = null;
         FilterToDate = null;
         IsSearchMode = false;
@@ -2214,7 +2250,8 @@ public partial class MainViewModel : ViewModelBase, IDisposable
     /// </summary>
     private bool HasActiveFilters()
     {
-        return FilterUnreadOnly || FilterHasAttachments || FilterFlaggedOnly ||
+        return FilterUnreadOnly || FilterHasAttachments || FilterFlaggedOnly || FilterActionRequired ||
+               (SelectedAiCategory != "전체" && !string.IsNullOrEmpty(SelectedAiCategory)) ||
                FilterFromDate.HasValue || FilterToDate.HasValue;
     }
 
@@ -2317,6 +2354,7 @@ public partial class MainViewModel : ViewModelBase, IDisposable
         "Subject" => "제목",
         "From" => "발신자",
         "PriorityScore" => "중요도",
+        "AiPriority" => "AI 우선순위",
         "IsRead" => "읽음 상태",
         "FlagStatus" => "플래그",
         "HasAttachments" => "첨부파일",
@@ -2417,6 +2455,9 @@ public partial class MainViewModel : ViewModelBase, IDisposable
             "PriorityScore" => SortDescending
                 ? Emails.OrderByDescending(e => e.PriorityScore).ToList()
                 : Emails.OrderBy(e => e.PriorityScore).ToList(),
+            "AiPriority" => SortDescending
+                ? Emails.OrderByDescending(e => e.AiPriority).ToList()
+                : Emails.OrderBy(e => e.AiPriority).ToList(),
             _ => SortDescending
                 ? Emails.OrderByDescending(e => e.ReceivedDateTime).ToList()
                 : Emails.OrderBy(e => e.ReceivedDateTime).ToList()
@@ -2785,6 +2826,9 @@ public partial class MainViewModel : ViewModelBase, IDisposable
             "PriorityScore" => SortDescending
                 ? unpinned.OrderByDescending(e => e.PriorityScore)
                 : unpinned.OrderBy(e => e.PriorityScore),
+            "AiPriority" => SortDescending
+                ? unpinned.OrderByDescending(e => e.AiPriority)
+                : unpinned.OrderBy(e => e.AiPriority),
             _ => SortDescending
                 ? unpinned.OrderByDescending(e => e.ReceivedDateTime)
                 : unpinned.OrderBy(e => e.ReceivedDateTime)

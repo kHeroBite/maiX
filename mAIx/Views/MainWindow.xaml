@@ -401,6 +401,10 @@
 
                     <CheckBox Content="첨부파일 있는 메일만"
                               IsChecked="{Binding AdvancedSearchHasAttachment}"
+                              Margin="0,0,0,8"/>
+
+                    <CheckBox Content="AI 액션 필요 메일만"
+                              IsChecked="{Binding FilterActionRequired}"
                               Margin="0,0,0,12"/>
 
                     <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
@@ -1482,6 +1486,29 @@
                                        Command="{Binding ToggleFilterPanelCommand}">
                                 <ui:SymbolIcon Symbol="Filter24" FontSize="14"/>
                             </ui:Button>
+                            <!-- AI 액션 필요 필터 토글 -->
+                            <ui:Button ToolTip="AI 액션 필요 메일만"
+                                       Height="28"
+                                       Padding="6,0"
+                                       Margin="0,0,4,0"
+                                       Appearance="{Binding FilterActionRequired, Converter={StaticResource BoolToAppearanceConverter}}"
+                                       Command="{Binding ToggleFilterActionRequiredCommand}">
+                                <TextBlock Text="액션" FontSize="11"/>
+                            </ui:Button>
+                            <!-- AI 카테고리 필터 -->
+                            <ComboBox x:Name="AiCategoryFilterComboBox"
+                                      SelectedIndex="0"
+                                      Height="28"
+                                      MinWidth="80"
+                                      FontSize="11"
+                                      Margin="0,0,4,0"
+                                      SelectionChanged="AiCategoryFilterComboBox_SelectionChanged">
+                                <ComboBoxItem Content="전체"/>
+                                <ComboBoxItem Content="긴급"/>
+                                <ComboBoxItem Content="액션필요"/>
+                                <ComboBoxItem Content="FYI"/>
+                                <ComboBoxItem Content="일반"/>
+                            </ComboBox>
                         </StackPanel>
 
                         <!-- 오른쪽: 뷰 모드 버튼들 -->
@@ -1873,6 +1900,21 @@
                                                                ToolTip="첨부파일 있음"
                                                                Margin="4,0,0,0"
                                                                Visibility="{Binding HasAttachments, Converter={StaticResource BoolToVisibilityConverter}}"/>
+                                                <!-- AI 액션 필요 인디케이터 -->
+                                                <Border CornerRadius="8"
+                                                        Width="14" Height="14"
+                                                        Margin="4,0,0,0"
+                                                        Background="#F39C12"
+                                                        VerticalAlignment="Center"
+                                                        ToolTip="액션 필요"
+                                                        Visibility="{Binding AiActionRequired, Converter={StaticResource BoolToVisibilityConverter}}">
+                                                    <TextBlock Text="!"
+                                                               FontSize="10"
+                                                               FontWeight="Bold"
+                                                               Foreground="White"
+                                                               HorizontalAlignment="Center"
+                                                               VerticalAlignment="Center"/>
+                                                </Border>
                                             </StackPanel>
 
                                             <!-- Flag/Pin 버튼 영역 (Grid로 위치 고정) -->
@@ -1937,10 +1979,11 @@
                                                        VerticalAlignment="Center"/>
                                         </Grid>
 
-                                        <!-- 3행: AI 요약 + AI 아이콘 (항상 높이 보장) -->
+                                        <!-- 3행: AI 요약 + AI 배지 + AI 아이콘 (항상 높이 보장) -->
                                         <Grid Grid.Row="2" Margin="0,3,0,0" MinHeight="16">
                                             <Grid.ColumnDefinitions>
                                                 <ColumnDefinition Width="*"/>
+                                                <ColumnDefinition Width="Auto"/>
                                                 <ColumnDefinition Width="Auto"/>
                                             </Grid.ColumnDefinitions>
 
@@ -1952,8 +1995,23 @@
                                                        TextTrimming="CharacterEllipsis"
                                                        Visibility="{Binding PreviewOrSummary, Converter={StaticResource NullToVisibilityConverter}}"/>
 
+                                            <!-- AI 카테고리 배지 -->
+                                            <Border Grid.Column="1"
+                                                    CornerRadius="3"
+                                                    Padding="4,1"
+                                                    Margin="4,0,0,0"
+                                                    VerticalAlignment="Center"
+                                                    Background="{Binding AiCategory, Converter={StaticResource AiCategoryToBadgeConverter}}"
+                                                    Visibility="{Binding AiCategory, Converter={StaticResource NullToVisibilityConverter}}"
+                                                    ToolTip="{Binding AiCategory}">
+                                                <TextBlock Text="{Binding AiCategory}"
+                                                           FontSize="10"
+                                                           Foreground="White"
+                                                           VerticalAlignment="Center"/>
+                                            </Border>
+
                                             <!-- AI 분석 완료 아이콘 (✨ 이모지 모티프) -->
-                                            <TextBlock Grid.Column="1"
+                                            <TextBlock Grid.Column="2"
                                                        Text="✨"
                                                        FontSize="12"
                                                        ToolTip="AI 분석 완료"

@@ -265,15 +265,16 @@ public class BackgroundSyncService : BackgroundService
             _logger.Error(ex, "초기 동기화 실패");
         }
 
-        // 5개의 독립적인 동기화/분석 루프 실행
+        // 6개의 독립적인 동기화/분석/예약발송 루프 실행
         var favoriteTask = RunFavoriteSyncLoopAsync(stoppingToken);
         var fullTask = RunFullSyncLoopAsync(stoppingToken);
         var calendarTask = RunCalendarSyncLoopAsync(stoppingToken);
         var chatTask = RunChatSyncLoopAsync(stoppingToken);
         var analysisBatchTask = RunAnalysisBatchLoopAsync(stoppingToken);
+        var scheduledSendTask = RunScheduledSendLoopAsync(stoppingToken);
 
         // 모든 Task가 완료될 때까지 대기
-        await Task.WhenAll(favoriteTask, fullTask, calendarTask, chatTask, analysisBatchTask);
+        await Task.WhenAll(favoriteTask, fullTask, calendarTask, chatTask, analysisBatchTask, scheduledSendTask);
 
         _logger.Information("백그라운드 동기화 서비스 중지됨");
     }
@@ -619,8 +620,9 @@ public class BackgroundSyncService : BackgroundService
 
                 var accountEmail = graphAuthService.CurrentUserEmail;
 
-                // 미분석 메일 조회 (pending 또는 failed 상태, 최대 20건)
+                // 미분석 메일 조회 (pending 또는 failed 상태, 최대 20건) - 첨부파일 포함
                 var pendingEmails = await dbContext.Emails
+                    .Include(e => e.Attachments)
                     .Where(e => e.AccountEmail == accountEmail &&
                                 (e.AnalysisStatus == "pending" || e.AnalysisStatus == "failed"))
                     .OrderBy(e => e.ReceivedDateTime)
@@ -708,6 +710,107 @@ public class BackgroundSyncService : BackgroundService
             {
                 Log4.Error($"[BackgroundSyncService] 분석 배치 루프 오류: {ex.Message}");
                 _logger.Error(ex, "분석 배치 루프 오류");
+            }
+        }
+    }
+
+    /// <summary>
+    /// 예약 발송 루프 (60초 주기, ScheduledSendTime <= UtcNow 메일 자동 발송)
+    /// </summary>
+    private async Task RunScheduledSendLoopAsync(CancellationToken stoppingToken)
+    {
+        Log4.Info("[BackgroundSyncService] 예약 발송 루프 시작 - 주기: 60초");
+
+        using var timer = new PeriodicTimer(TimeSpan.FromSeconds(60));
+
+        while (await timer.WaitForNextTickAsync(stoppingToken))
+        {
+            if (_isPaused)
+            {
+                Log4.Debug("[BackgroundSyncService] 예약 발송 일시정지 상태 - 건너뜀");
+                continue;
+            }
+
+            try
+            {
+                using var scope = _serviceProvider.CreateScope();
+                var dbContext = scope.ServiceProvider.GetRequiredService<mAIxDbContext>();
+                var graphAuthService = scope.ServiceProvider.GetRequiredService<GraphAuthService>();
+                var graphMailService = scope.ServiceProvider.GetRequiredService<GraphMailService>();
+
+                if (!graphAuthService.IsLoggedIn || string.IsNullOrEmpty(graphAuthService.CurrentUserEmail))
+                {
+                    Log4.Debug("[BackgroundSyncService] 예약 발송 - 로그인 없음, 건너뜀");
+                    continue;
+                }
+
+                var now = DateTime.UtcNow;
+                var accountEmail = graphAuthService.CurrentUserEmail;
+
+                // 발송 시간이 도래한 예약 메일 조회
+                var scheduledEmails = await dbContext.Emails
+                    .Where(e => e.AccountEmail == accountEmail &&
+                                e.ScheduledSendTime != null &&
+                                e.ScheduledSendTime <= now)
+                    .ToListAsync(stoppingToken);
+
+                if (scheduledEmails.Count == 0)
+                {
+                    Log4.Debug("[BackgroundSyncService] 발송 대기 예약 메일 없음");
+                    continue;
+                }
+
+                Log4.Info($"[BackgroundSyncService] 예약 발송 시작: {scheduledEmails.Count}건");
+
+                foreach (var email in scheduledEmails)
+                {
+                    if (stoppingToken.IsCancellationRequested) break;
+
+                    try
+                    {
+                        // Graph API로 발송 (InternetMessageId가 있는 경우 Draft 발송, 없으면 새 메일 발송)
+                        if (!string.IsNullOrEmpty(email.InternetMessageId))
+                        {
+                            await graphMailService.SendDraftMessageAsync(email.InternetMessageId);
+                        }
+                        else
+                        {
+                            Log4.Warn($"[BackgroundSyncService] 예약 메일 InternetMessageId 없음, 건너뜀: Id={email.Id}");
+                            email.ScheduledSendTime = null;
+                            dbContext.Emails.Update(email);
+                            continue;
+                        }
+
+                        // 발송 완료 처리
+                        email.ScheduledSendTime = null;
+                        dbContext.Emails.Update(email);
+
+                        Log4.Info($"[BackgroundSyncService] 예약 메일 발송 완료: Id={email.Id}, Subject={email.Subject}");
+
+                        // 토스트 알림
+                        _toastNotificationService.ShowNewMailNotification(
+                            "예약 발송 완료",
+                            email.Subject ?? "(제목 없음)",
+                            $"수신: {email.To}");
+                    }
+                    catch (Exception ex)
+                    {
+                        Log4.Error($"[BackgroundSyncService] 예약 메일 발송 실패: Id={email.Id}, {ex.Message}");
+                        _logger.Error(ex, "예약 메일 발송 실패: {Id}", email.Id);
+                    }
+                }
+
+                await dbContext.SaveChangesAsync(stoppingToken);
+                Log4.Info($"[BackgroundSyncService] 예약 발송 처리 완료: {scheduledEmails.Count}건");
+            }
+            catch (OperationCanceledException)
+            {
+                break;
+            }
+            catch (Exception ex)
+            {
+                Log4.Error($"[BackgroundSyncService] 예약 발송 루프 오류: {ex.Message}");
+                _logger.Error(ex, "예약 발송 루프 오류");
             }
         }
     }

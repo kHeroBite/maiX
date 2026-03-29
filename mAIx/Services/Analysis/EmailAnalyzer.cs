@@ -176,7 +176,7 @@ public class EmailAnalyzer
     /// </summary>
     private Dictionary<string, string> PrepareEmailData(Email email)
     {
-        return new Dictionary<string, string>
+        var data = new Dictionary<string, string>
         {
             ["subject"] = email.Subject ?? string.Empty,
             ["body"] = email.Body ?? string.Empty,
@@ -187,6 +187,30 @@ public class EmailAnalyzer
             ["has_attachments"] = email.HasAttachments.ToString().ToLower(),
             ["importance"] = email.Importance ?? "normal"
         };
+
+        // 첨부파일 MarkdownContent 결합 (최대 5000자)
+        if (email.Attachments != null && email.Attachments.Count > 0)
+        {
+            var attachmentTexts = new System.Text.StringBuilder();
+            foreach (var att in email.Attachments)
+            {
+                if (!string.IsNullOrWhiteSpace(att.MarkdownContent))
+                {
+                    attachmentTexts.Append($"[{att.Name}]\n");
+                    attachmentTexts.Append(att.MarkdownContent);
+                    attachmentTexts.Append("\n\n");
+                }
+            }
+            var combined = attachmentTexts.ToString().Trim();
+            if (!string.IsNullOrEmpty(combined))
+            {
+                data["attachments_text"] = combined.Length > 5000
+                    ? combined[..5000]
+                    : combined;
+            }
+        }
+
+        return data;
     }
 
     /// <summary>

@@ -474,3 +474,33 @@ WHERE Subject LIKE '%검색어%' OR Body LIKE '%검색어%';
 
 **쿼리 파일**: `mAIx/Queries/EmailFtsQueries.cs`
 
+---
+
+## Phase 1 스키마 변경 (2026-03-29)
+
+### Emails 테이블 추가 컬럼
+| 컬럼명 | 타입 | NULL | 설명 |
+|--------|------|------|------|
+| `ScheduledSendTime` | DATETIME | NULL | 예약발송 시간. NULL이면 즉시발송 |
+
+### EmailAnalysisResults 테이블 추가 컬럼
+| 컬럼명 | 타입 | NULL | 설명 |
+|--------|------|------|------|
+| `AttachmentSummary` | TEXT | NULL | 첨부파일 AI 요약 |
+| `AttachmentRiskLevel` | TEXT | NULL | 첨부파일 위험 수준 |
+
+### Migration 이력 (Phase 1)
+| Migration | 설명 |
+|-----------|------|
+| `20260329000003_AddScheduledSendTime` | Emails.ScheduledSendTime 컬럼 추가 |
+
+### 예약발송 쿼리 패턴
+```csharp
+// BackgroundSyncService 예약발송 루프
+var pendingEmails = await context.Emails
+    .Where(e => e.ScheduledSendTime != null
+             && e.ScheduledSendTime <= DateTime.UtcNow
+             && !e.IsSent)
+    .ToListAsync();
+```
+

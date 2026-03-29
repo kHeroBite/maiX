@@ -156,7 +156,7 @@ public class Email : INotifyPropertyChanged
     /// AI 요약 또는 미리보기 텍스트 중 우선 표시 값 (DB 비저장)
     /// </summary>
     [NotMapped]
-    public string? PreviewOrSummary => SummaryOneline ?? PreviewText;
+    public string? PreviewOrSummary => AiSummaryBrief ?? SummaryOneline ?? PreviewText;
 
     // ===== AI 분석 결과 필드 =====
 
@@ -208,6 +208,11 @@ public class Email : INotifyPropertyChanged
     /// AI 추출 키워드 (JSON 배열)
     /// </summary>
     public string? Keywords { get; set; }
+
+    /// <summary>
+    /// 예약 발송 시간 (null이면 즉시 발송 또는 예약 없음)
+    /// </summary>
+    public DateTime? ScheduledSendTime { get; set; }
 
     // ===== AI 분류 필드 =====
 

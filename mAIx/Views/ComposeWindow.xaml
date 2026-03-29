@@ -148,8 +148,8 @@
                     <ColumnDefinition Width="Auto"/>
                 </Grid.ColumnDefinitions>
 
-                <!-- 왼쪽: 보내기 버튼 -->
-                <StackPanel Grid.Column="0" Orientation="Horizontal">
+                <!-- 왼쪽: 보내기 버튼 + 예약 발송 -->
+                <StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center">
                     <ui:Button x:Name="SendButton"
                               AutomationProperties.AutomationId="SendButton"
                               Icon="{ui:SymbolIcon Send24}"
@@ -158,6 +158,49 @@
                               Click="SendButton_Click"
                               MinWidth="100"
                               Padding="16,8"/>
+
+                    <!-- 예약 발송 드롭다운 버튼 -->
+                    <ui:DropDownButton x:Name="ScheduleDropDownButton"
+                                       AutomationProperties.AutomationId="ScheduleDropDownButton"
+                                       Icon="{ui:SymbolIcon CalendarClock24}"
+                                       ToolTip="예약 발송"
+                                       Appearance="Secondary"
+                                       Margin="4,0,0,0"
+                                       Padding="8,8">
+                        <ui:DropDownButton.Flyout>
+                            <ContextMenu>
+                                <MenuItem x:Name="ScheduleSendMenuItem"
+                                          Header="예약 발송 설정..."
+                                          Click="ScheduleSend_Click">
+                                    <MenuItem.Icon>
+                                        <ui:SymbolIcon Symbol="CalendarClock24"/>
+                                    </MenuItem.Icon>
+                                </MenuItem>
+                                <MenuItem x:Name="CancelScheduleMenuItem"
+                                          Header="예약 취소"
+                                          Click="CancelSchedule_Click"
+                                          Visibility="{Binding IsScheduledSend, Converter={StaticResource BoolToVisibilityConverter}}">
+                                    <MenuItem.Icon>
+                                        <ui:SymbolIcon Symbol="CalendarCancel24"/>
+                                    </MenuItem.Icon>
+                                </MenuItem>
+                            </ContextMenu>
+                        </ui:DropDownButton.Flyout>
+                    </ui:DropDownButton>
+
+                    <!-- 예약 발송 시간 표시 레이블 -->
+                    <Border x:Name="ScheduledTimeBadge"
+                            Background="#FF8C00"
+                            CornerRadius="6"
+                            Padding="8,4"
+                            Margin="6,0,0,0"
+                            VerticalAlignment="Center"
+                            Visibility="{Binding IsScheduledSend, Converter={StaticResource BoolToVisibilityConverter}}">
+                        <TextBlock x:Name="ScheduledTimeText"
+                                   Foreground="White"
+                                   FontSize="11"
+                                   Text="{Binding ScheduledSendTime, StringFormat='예약: {0:MM/dd HH:mm}'}"/>
+                    </Border>
                 </StackPanel>
 
                 <!-- 오른쪽: 중요도, 첨부, 삭제 버튼 -->
@@ -409,6 +452,48 @@
                            Padding="0,8"/>
             </Grid>
         </Border>
+
+        <!-- 발송 카운트다운 오버레이 (발송 클릭 시 5초 카운트다운) -->
+        <Grid x:Name="SendCountdownOverlay"
+              Grid.Row="0" Grid.RowSpan="4"
+              Background="#CC000000"
+              Visibility="Collapsed"
+              Panel.ZIndex="100">
+            <Border Background="{DynamicResource ControlFillColorDefaultBrush}"
+                    CornerRadius="12"
+                    Padding="32,24"
+                    Width="320"
+                    HorizontalAlignment="Center"
+                    VerticalAlignment="Center">
+                <StackPanel>
+                    <TextBlock Text="메일을 보내는 중..."
+                               FontSize="16"
+                               FontWeight="SemiBold"
+                               HorizontalAlignment="Center"
+                               Margin="0,0,0,12"/>
+                    <TextBlock x:Name="CountdownText"
+                               Text="5초 후 발송됩니다"
+                               FontSize="13"
+                               Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                               HorizontalAlignment="Center"
+                               Margin="0,0,0,16"/>
+                    <ProgressBar x:Name="CountdownProgressBar"
+                                 Minimum="0"
+                                 Maximum="5"
+                                 Value="5"
+                                 Height="6"
+                                 Margin="0,0,0,20"/>
+                    <ui:Button x:Name="CancelSendButton"
+                              Content="취소"
+                              Icon="{ui:SymbolIcon Dismiss24}"
+                              Appearance="Secondary"
+                              HorizontalAlignment="Center"
+                              Click="CancelSendButton_Click"
+                              MinWidth="100"
+                              Padding="16,8"/>
+                </StackPanel>
+            </Border>
+        </Grid>
 
         <!-- 메일 본문 에디터 및 첨부파일 영역 -->
         <Grid Grid.Row="3">
