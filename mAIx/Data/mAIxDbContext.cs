@@ -105,6 +105,11 @@ public class mAIxDbContext : DbContext
     /// </summary>
     public DbSet<ChatFavorite> ChatFavorites { get; set; } = null!;
 
+    /// <summary>
+    /// 메일 규칙 테이블
+    /// </summary>
+    public DbSet<MailRule> MailRules { get; set; } = null!;
+
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         base.OnModelCreating(modelBuilder);
@@ -244,6 +249,22 @@ public class mAIxDbContext : DbContext
             entity.HasIndex(s => new { s.AccountEmail, s.CalendarId })
                 .IsUnique()
                 .HasDatabaseName("IX_CalendarSyncState_AccountEmail_CalendarId");
+        });
+
+        // ===== MailRule 인덱스 =====
+        modelBuilder.Entity<MailRule>(entity =>
+        {
+            // IsEnabled 인덱스 (활성 규칙 조회)
+            entity.HasIndex(r => r.IsEnabled)
+                .HasDatabaseName("IX_MailRule_IsEnabled");
+
+            // Priority 인덱스 (우선순위 정렬)
+            entity.HasIndex(r => r.Priority)
+                .HasDatabaseName("IX_MailRule_Priority");
+
+            // AccountEmail 인덱스 (계정별 규칙 조회)
+            entity.HasIndex(r => r.AccountEmail)
+                .HasDatabaseName("IX_MailRule_AccountEmail");
         });
     }
 }

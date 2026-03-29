@@ -1,0 +1,199 @@
+<ui:FluentWindow x:Class="mAIx.Views.Dialogs.MailRuleSettingsDialog"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
+        Title="메일 규칙 관리"
+        Width="900"
+        Height="680"
+        WindowStartupLocation="CenterOwner"
+        ResizeMode="CanResize"
+        ExtendsContentIntoTitleBar="True"
+        WindowBackdropType="Mica">
+
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+
+        <!-- 타이틀바 -->
+        <ui:TitleBar Grid.Row="0"
+                     Title="메일 규칙 관리"
+                     ShowMaximize="True"
+                     ShowMinimize="False"/>
+
+        <!-- 메인 콘텐츠 -->
+        <Grid Grid.Row="1" Margin="16,8,16,8">
+            <Grid.RowDefinitions>
+                <RowDefinition Height="200"/>
+                <RowDefinition Height="8"/>
+                <RowDefinition Height="*"/>
+            </Grid.RowDefinitions>
+
+            <!-- 상단: 규칙 목록 -->
+            <ui:Card Grid.Row="0">
+                <Grid>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="*"/>
+                        <RowDefinition Height="Auto"/>
+                    </Grid.RowDefinitions>
+
+                    <TextBlock Grid.Row="0" Text="규칙 목록" FontSize="14" FontWeight="SemiBold" Margin="0,0,0,8"/>
+
+                    <ListView Grid.Row="1" x:Name="RulesListView"
+                              BorderThickness="1"
+                              BorderBrush="{DynamicResource ControlElevationBorderBrush}"
+                              Background="Transparent"
+                              SelectionChanged="RulesListView_SelectionChanged">
+                        <ListView.View>
+                            <GridView>
+                                <GridViewColumn Header="이름" Width="180" DisplayMemberBinding="{Binding Name}"/>
+                                <GridViewColumn Header="조건 타입" Width="140" DisplayMemberBinding="{Binding ConditionTypeDisplay}"/>
+                                <GridViewColumn Header="조건 값" Width="150" DisplayMemberBinding="{Binding ConditionValue}"/>
+                                <GridViewColumn Header="액션 타입" Width="140" DisplayMemberBinding="{Binding ActionTypeDisplay}"/>
+                                <GridViewColumn Header="액션 값" Width="120" DisplayMemberBinding="{Binding ActionValue}"/>
+                                <GridViewColumn Header="우선순위" Width="70" DisplayMemberBinding="{Binding Priority}"/>
+                                <GridViewColumn Header="활성화" Width="60">
+                                    <GridViewColumn.CellTemplate>
+                                        <DataTemplate>
+                                            <CheckBox IsChecked="{Binding IsEnabled}" IsEnabled="False" HorizontalAlignment="Center"/>
+                                        </DataTemplate>
+                                    </GridViewColumn.CellTemplate>
+                                </GridViewColumn>
+                            </GridView>
+                        </ListView.View>
+                    </ListView>
+
+                    <StackPanel Grid.Row="2" Orientation="Horizontal" Margin="0,8,0,0">
+                        <ui:Button x:Name="AddButton"
+                                   Icon="{ui:SymbolIcon Add24}"
+                                   Content="추가"
+                                   Appearance="Secondary"
+                                   Margin="0,0,4,0"
+                                   Click="AddButton_Click"/>
+                        <ui:Button x:Name="DeleteButton"
+                                   Icon="{ui:SymbolIcon Delete24}"
+                                   Content="삭제"
+                                   Appearance="Secondary"
+                                   Click="DeleteButton_Click"/>
+                    </StackPanel>
+                </Grid>
+            </ui:Card>
+
+            <!-- 하단: 편집 폼 -->
+            <ui:Card Grid.Row="2">
+                <Grid>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="*"/>
+                    </Grid.RowDefinitions>
+
+                    <TextBlock Grid.Row="0" Text="규칙 편집" FontSize="14" FontWeight="SemiBold" Margin="0,0,0,12"/>
+
+                    <Grid Grid.Row="1">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="16"/>
+                            <ColumnDefinition Width="*"/>
+                        </Grid.ColumnDefinitions>
+
+                        <!-- 왼쪽: 이름 / 조건 타입 / 조건 값 -->
+                        <StackPanel Grid.Column="0" Margin="0,0,0,8">
+                            <TextBlock Text="규칙 이름" FontSize="12" Margin="0,0,0,4"/>
+                            <ui:TextBox x:Name="NameTextBox"
+                                        PlaceholderText="예: 뉴스레터 자동 이동"
+                                        Margin="0,0,0,12"/>
+
+                            <TextBlock Text="조건 타입" FontSize="12" Margin="0,0,0,4"/>
+                            <ComboBox x:Name="ConditionTypeComboBox"
+                                      Margin="0,0,0,12">
+                                <ComboBoxItem Tag="FromContains" Content="발신자 포함"/>
+                                <ComboBoxItem Tag="SubjectContains" Content="제목 포함"/>
+                                <ComboBoxItem Tag="HasAttachment" Content="첨부파일 있음"/>
+                                <ComboBoxItem Tag="AiCategoryEquals" Content="AI 카테고리"/>
+                                <ComboBoxItem Tag="ToContains" Content="수신자 포함"/>
+                            </ComboBox>
+
+                            <TextBlock Text="조건 값" FontSize="12" Margin="0,0,0,4"/>
+                            <ui:TextBox x:Name="ConditionValueTextBox"
+                                        PlaceholderText="예: newsletter@, 뉴스레터, Marketing"/>
+                        </StackPanel>
+
+                        <!-- 오른쪽: 액션 타입 / 액션 값 / 우선순위 / 활성화 / 저장 -->
+                        <StackPanel Grid.Column="2" Margin="0,0,0,8">
+                            <TextBlock Text="액션 타입" FontSize="12" Margin="0,0,0,4"/>
+                            <ComboBox x:Name="ActionTypeComboBox"
+                                      Margin="0,0,0,12">
+                                <ComboBoxItem Tag="MoveToFolder" Content="폴더 이동"/>
+                                <ComboBoxItem Tag="SetCategory" Content="카테고리 설정"/>
+                                <ComboBoxItem Tag="SetFlag" Content="플래그"/>
+                                <ComboBoxItem Tag="MarkAsRead" Content="읽음 처리"/>
+                                <ComboBoxItem Tag="Delete" Content="삭제"/>
+                            </ComboBox>
+
+                            <TextBlock Text="액션 값 (폴더명/카테고리명)" FontSize="12" Margin="0,0,0,4"/>
+                            <ui:TextBox x:Name="ActionValueTextBox"
+                                        PlaceholderText="예: Newsletter, 뉴스레터"
+                                        Margin="0,0,0,12"/>
+
+                            <Grid Margin="0,0,0,12">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="16"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                </Grid.ColumnDefinitions>
+
+                                <StackPanel Grid.Column="0">
+                                    <TextBlock Text="우선순위 (낮을수록 먼저)" FontSize="12" Margin="0,0,0,4"/>
+                                    <ui:TextBox x:Name="PriorityTextBox" PlaceholderText="0"/>
+                                </StackPanel>
+
+                                <StackPanel Grid.Column="2" VerticalAlignment="Bottom">
+                                    <TextBlock Text="활성화" FontSize="12" Margin="0,0,0,4"/>
+                                    <CheckBox x:Name="IsEnabledCheckBox" Content="활성" IsChecked="True"/>
+                                </StackPanel>
+                            </Grid>
+
+                            <ui:Button x:Name="SaveRuleButton"
+                                       Icon="{ui:SymbolIcon Save24}"
+                                       Content="저장"
+                                       Appearance="Primary"
+                                       HorizontalAlignment="Right"
+                                       MinWidth="80"
+                                       Click="SaveRuleButton_Click"/>
+                        </StackPanel>
+                    </Grid>
+                </Grid>
+            </ui:Card>
+        </Grid>
+
+        <!-- 하단 버튼 영역 -->
+        <Border Grid.Row="2"
+                Background="{DynamicResource ControlFillColorDefaultBrush}"
+                BorderBrush="{DynamicResource ControlElevationBorderBrush}"
+                BorderThickness="0,1,0,0"
+                Padding="16,12">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
+                </Grid.ColumnDefinitions>
+
+                <TextBlock Grid.Column="0"
+                           x:Name="StatusText"
+                           VerticalAlignment="Center"
+                           FontSize="12"
+                           Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                           Text="규칙을 선택하거나 새로 추가하세요."/>
+
+                <ui:Button Grid.Column="1"
+                           Content="닫기"
+                           Appearance="Secondary"
+                           Width="80"
+                           Click="CloseButton_Click"/>
+            </Grid>
+        </Border>
+    </Grid>
+</ui:FluentWindow>

@@ -61,6 +61,7 @@ mAIx/
 │   │   ├── Converter/        # 문서 변환
 │   │   ├── Graph/            # Microsoft Graph API
 │   │   ├── Notification/     # 알림 서비스
+│   │   ├── Rules/            # 메일 규칙 엔진 (Phase3 신규)
 │   │   ├── Search/           # 검색 서비스
 │   │   ├── Storage/          # 데이터 저장
 │   │   └── Sync/             # 백그라운드 동기화
@@ -138,6 +139,14 @@ Views:
           의존성: AiMailService, List<Email> (오늘 메일 목록)
           기능: 로딩 시 AI 브리핑 자동 생성, ESC 키 닫기, CancellationToken 취소 지원
 
+  - 파일명: MailRuleSettingsDialog.xaml / MailRuleSettingsDialog.xaml.cs (신규 — 2026-03-29 Phase3)
+    경로: MaiX/Views/Dialogs/
+    역할: 메일 규칙 관리 다이얼로그 — 규칙 추가/편집/삭제/우선순위 관리
+    클래스:
+      - MailRuleSettingsDialog (FluentWindow):
+          의존성: mAIxDbContext, MailRule 목록
+          기능: 조건/액션 ComboBox 선택, 규칙 활성화 토글, 우선순위 순서 변경
+
 ```
 
 ### 3. ViewModels (MVVM)
@@ -188,6 +197,13 @@ Models:
     역할: 이메일 데이터 모델 + INotifyPropertyChanged 구현 (EF Core 직접 바인딩 지원)
     속성: Id, Subject, From, To, Body, ReceivedDateTime, IsRead(INPC), HasAttachments, FlagStatus(INPC), Categories(INPC), PreviewText(NotMapped), PreviewOrSummary(NotMapped)
     변경_2026-03-29: SnoozedUntil(DateTime?, nullable) 스누즈 해제 예정 시각 추가, ScheduledSendTime(DateTime?, nullable) 예약발송 시간 추가
+    변경_2026-03-29(Phase3): FollowUpDate(DateTime?, nullable) 팔로업 예정 날짜 추가
+
+  - 파일명: MailRule.cs (신규 — 2026-03-29 Phase3)
+    역할: 메일 자동 처리 규칙 모델
+    속성: Id, Name, ConditionType, ConditionValue, ActionType, ActionValue, IsEnabled, Priority, AccountEmail, CreatedAt
+    조건_타입: FromContains / SubjectContains / HasAttachment / AiCategoryEquals / ToContains
+    액션_타입: MoveToFolder / SetCategory / SetFlag / MarkAsRead / Delete
 
   - 파일명: Attachment.cs
     역할: 첨부파일 모델
@@ -410,6 +426,11 @@ Other_Services:
     역할: FTS5 SQL 쿼리 상수 분리 정의
     참고: EmailSearchService.cs에서 참조. FTS5 MATCH + LIKE 폴백 SQL 포함.
 
+  - 파일명: MailRuleService.cs (신규 — 2026-03-29 Phase3)
+    경로: Services/Rules/
+    역할: 메일 규칙 엔진 서비스 — DB에서 활성 규칙 로드 + 이메일에 조건/액션 적용
+    기능: 활성 규칙 우선순위 정렬 로드, 조건 매칭(5종), 액션 실행(5종), 계정별 필터
+
   - 파일명: AiMailService.cs (신규 — 2026-03-29 Phase2)
     경로: Services/AI/
     역할: 이메일 전용 AI 기능 서비스 (답장초안/스레드요약/일일브리핑/회의브리핑)
@@ -440,6 +461,7 @@ Other_Services:
     변경_2026-03-28: 즐겨찾기 주기 30→10초; AI 분석 배치 루프(10분, 최대20건) 신규; ToastNotificationService DI 주입
     변경_2026-03-29: AI 배치 루프에 PriorityScore 기반 AiCategory 자동 분류 매핑 통합 (긴급/업무/일반)
     변경_2026-03-29(Phase2): 스누즈 해제 루프 추가 — 매 분 SnoozedUntil <= UtcNow 조건으로 자동 해제 처리
+    변경_2026-03-29(Phase3): 3개 루프 추가 — 규칙 엔진(120초), 팔로업 알림(3600초), 회의 전 브리핑(300초)
 
   - 파일명: PromptService.cs
     경로: Services/Storage/

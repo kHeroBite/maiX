@@ -201,6 +201,24 @@
                                    FontSize="11"
                                    Text="{Binding ScheduledSendTime, StringFormat='예약: {0:MM/dd HH:mm}'}"/>
                     </Border>
+
+                    <!-- 팔로업 설정 -->
+                    <StackPanel Orientation="Horizontal" Margin="12,0,0,0" VerticalAlignment="Center">
+                        <ui:SymbolIcon Symbol="ArrowClockwise24" Margin="0,0,4,0" VerticalAlignment="Center" Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
+                        <TextBlock Text="팔로업:" VerticalAlignment="Center" FontSize="12"
+                                   Foreground="{DynamicResource TextFillColorSecondaryBrush}" Margin="0,0,4,0"/>
+                        <ComboBox x:Name="FollowUpComboBox"
+                                  Width="80"
+                                  Height="28"
+                                  ToolTip="발송 후 팔로업 리마인더 설정"
+                                  SelectionChanged="FollowUpComboBox_SelectionChanged">
+                            <ComboBoxItem Tag="0" Content="없음" IsSelected="True"/>
+                            <ComboBoxItem Tag="3" Content="3일"/>
+                            <ComboBoxItem Tag="7" Content="7일"/>
+                            <ComboBoxItem Tag="14" Content="14일"/>
+                            <ComboBoxItem Tag="30" Content="30일"/>
+                        </ComboBox>
+                    </StackPanel>
                 </StackPanel>
 
                 <!-- 오른쪽: 중요도, 첨부, 삭제 버튼 -->

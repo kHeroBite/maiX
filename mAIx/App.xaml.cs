@@ -19,6 +19,7 @@ using mAIx.Services.Notification;
 using mAIx.Services.Cache;
 using mAIx.Services.Search;
 using mAIx.Services.Storage;
+using mAIx.Services.Rules;
 using mAIx.Services.Sync;
 using mAIx.ViewModels;
 using mAIx.Services.Api;
@@ -331,6 +332,9 @@ public partial class App : Application
         // Windows 네이티브 토스트 알림 서비스 등록
         services.AddSingleton<ToastNotificationService>(sp =>
             new ToastNotificationService(Settings.Notification));
+
+        // 메일 규칙 서비스 등록
+        services.AddSingleton<MailRuleService>();
 
         // 백그라운드 동기화 서비스 등록 (IHostedService)
         services.AddHostedService<BackgroundSyncService>();

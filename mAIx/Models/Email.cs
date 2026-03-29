@@ -224,6 +224,16 @@ public class Email : INotifyPropertyChanged
         set { if (_snoozedUntil != value) { _snoozedUntil = value; OnPropertyChanged(nameof(SnoozedUntil)); } }
     }
 
+    /// <summary>
+    /// 팔로업 예정 일시. null = 팔로업 없음
+    /// </summary>
+    private DateTime? _followUpDate;
+    public DateTime? FollowUpDate
+    {
+        get => _followUpDate;
+        set { if (_followUpDate != value) { _followUpDate = value; OnPropertyChanged(nameof(FollowUpDate)); } }
+    }
+
     // ===== AI 분류 필드 =====
 
     /// <summary>

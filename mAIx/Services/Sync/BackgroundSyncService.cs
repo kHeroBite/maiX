@@ -12,9 +12,11 @@ using Microsoft.Graph.Models;
 using Serilog;
 using mAIx.Data;
 using mAIx.Models;
+using mAIx.Services.AI;
 using mAIx.Services.Analysis;
 using mAIx.Services.Graph;
 using mAIx.Services.Notification;
+using mAIx.Services.Rules;
 using mAIx.Utils;
 
 namespace mAIx.Services.Sync;
@@ -28,6 +30,10 @@ public class BackgroundSyncService : BackgroundService
     private readonly IServiceProvider _serviceProvider;
     private readonly ILogger _logger;
     private readonly ToastNotificationService _toastNotificationService;
+    private readonly MailRuleService _mailRuleService;
+
+    // 미팅 브리핑 중복 방지 HashSet
+    private readonly HashSet<string> _sentMeetingBriefings = new();
 
     // JSON 직렬화 옵션 (한글/특수문자 이스케이프 방지)
     private static readonly JsonSerializerOptions _jsonOptions = new()
@@ -179,10 +185,11 @@ public class BackgroundSyncService : BackgroundService
     /// </summary>
     public event Action<int, int, int>? CalendarEventsSynced;
 
-    public BackgroundSyncService(IServiceProvider serviceProvider, ToastNotificationService toastNotificationService)
+    public BackgroundSyncService(IServiceProvider serviceProvider, ToastNotificationService toastNotificationService, MailRuleService mailRuleService)
     {
         _serviceProvider = serviceProvider ?? throw new ArgumentNullException(nameof(serviceProvider));
         _toastNotificationService = toastNotificationService ?? throw new ArgumentNullException(nameof(toastNotificationService));
+        _mailRuleService = mailRuleService ?? throw new ArgumentNullException(nameof(mailRuleService));
         _logger = Log.ForContext<BackgroundSyncService>();
     }
 
@@ -265,7 +272,7 @@ public class BackgroundSyncService : BackgroundService
             _logger.Error(ex, "초기 동기화 실패");
         }
 
-        // 7개의 독립적인 동기화/분석/예약발송/스누즈 루프 실행
+        // 10개의 독립적인 동기화/분석/예약발송/스누즈/규칙/팔로업/미팅브리핑 루프 실행
         var favoriteTask = RunFavoriteSyncLoopAsync(stoppingToken);
         var fullTask = RunFullSyncLoopAsync(stoppingToken);
         var calendarTask = RunCalendarSyncLoopAsync(stoppingToken);
@@ -273,9 +280,12 @@ public class BackgroundSyncService : BackgroundService
         var analysisBatchTask = RunAnalysisBatchLoopAsync(stoppingToken);
         var scheduledSendTask = RunScheduledSendLoopAsync(stoppingToken);
         var snoozeCheckTask = RunSnoozeCheckLoopAsync(stoppingToken);
+        var ruleEngineTask = RunRuleEngineLoopAsync(stoppingToken);
+        var followUpTask = RunFollowUpCheckLoopAsync(stoppingToken);
+        var meetingBriefingTask = RunMeetingBriefingLoopAsync(stoppingToken);
 
         // 모든 Task가 완료될 때까지 대기
-        await Task.WhenAll(favoriteTask, fullTask, calendarTask, chatTask, analysisBatchTask, scheduledSendTask, snoozeCheckTask);
+        await Task.WhenAll(favoriteTask, fullTask, calendarTask, chatTask, analysisBatchTask, scheduledSendTask, snoozeCheckTask, ruleEngineTask, followUpTask, meetingBriefingTask);
 
         _logger.Information("백그라운드 동기화 서비스 중지됨");
     }
@@ -2654,6 +2664,163 @@ public class BackgroundSyncService : BackgroundService
         catch (Exception ex)
         {
             _logger.Warning(ex, "캘린더 알림 체크 실패");
+        }
+    }
+
+    /// <summary>
+    /// 규칙 엔진 루프 (120초 주기) — 최근 10분 내 새 메일에 규칙 적용
+    /// </summary>
+    private async Task RunRuleEngineLoopAsync(CancellationToken stoppingToken)
+    {
+        Log4.Info("[BackgroundSyncService] 규칙 엔진 루프 시작 - 주기: 120초");
+
+        while (!stoppingToken.IsCancellationRequested)
+        {
+            try
+            {
+                await Task.Delay(TimeSpan.FromSeconds(120), stoppingToken);
+
+                using var scope = _serviceProvider.CreateScope();
+                var dbContext = scope.ServiceProvider.GetRequiredService<mAIxDbContext>();
+
+                var cutoff = DateTime.UtcNow.AddMinutes(-10);
+                var recentEmails = await dbContext.Emails
+                    .Where(e => e.ReceivedDateTime >= cutoff)
+                    .ToListAsync(stoppingToken);
+
+                if (recentEmails.Count > 0)
+                {
+                    var accountGroups = recentEmails.GroupBy(e => e.AccountEmail);
+                    foreach (var group in accountGroups)
+                    {
+                        await _mailRuleService.ApplyRulesAsync(group.ToList(), group.Key);
+                    }
+                    Log4.Info($"[BackgroundSyncService] 규칙 엔진: {recentEmails.Count}건 메일에 규칙 적용");
+                }
+            }
+            catch (OperationCanceledException) { break; }
+            catch (Exception ex)
+            {
+                _logger.Warning(ex, "규칙 엔진 루프 오류");
+            }
+        }
+    }
+
+    /// <summary>
+    /// 팔로업 체크 루프 (3600초 주기) — 팔로업 기한 초과 미응답 메일 알림
+    /// </summary>
+    private async Task RunFollowUpCheckLoopAsync(CancellationToken stoppingToken)
+    {
+        Log4.Info("[BackgroundSyncService] 팔로업 체크 루프 시작 - 주기: 3600초");
+
+        while (!stoppingToken.IsCancellationRequested)
+        {
+            try
+            {
+                await Task.Delay(TimeSpan.FromSeconds(3600), stoppingToken);
+
+                using var scope = _serviceProvider.CreateScope();
+                var dbContext = scope.ServiceProvider.GetRequiredService<mAIxDbContext>();
+
+                var now = DateTime.UtcNow;
+                var overdueEmails = await dbContext.Emails
+                    .Where(e => e.FollowUpDate != null && e.FollowUpDate <= now)
+                    .ToListAsync(stoppingToken);
+
+                foreach (var email in overdueEmails)
+                {
+                    // ConversationId로 답장 메일 존재 여부 확인
+                    var hasReply = !string.IsNullOrEmpty(email.ConversationId) &&
+                        await dbContext.Emails
+                            .AnyAsync(e => e.ConversationId == email.ConversationId &&
+                                          e.ReceivedDateTime > email.ReceivedDateTime, stoppingToken);
+
+                    if (!hasReply)
+                    {
+                        _toastNotificationService.ShowNewMailNotification("팔로업 필요", email.Subject, email.PreviewText ?? string.Empty);
+                        Log4.Debug($"[BackgroundSyncService] 팔로업 알림: {email.Subject}");
+                    }
+
+                    // FollowUpDate 리셋
+                    email.FollowUpDate = null;
+                }
+
+                if (overdueEmails.Count > 0)
+                {
+                    await dbContext.SaveChangesAsync(stoppingToken);
+                    Log4.Info($"[BackgroundSyncService] 팔로업 체크: {overdueEmails.Count}건 처리 완료");
+                }
+            }
+            catch (OperationCanceledException) { break; }
+            catch (Exception ex)
+            {
+                _logger.Warning(ex, "팔로업 체크 루프 오류");
+            }
+        }
+    }
+
+    /// <summary>
+    /// 미팅 브리핑 루프 (300초 주기) — 향후 30분 내 일정의 관련 메일 AI 브리핑
+    /// </summary>
+    private async Task RunMeetingBriefingLoopAsync(CancellationToken stoppingToken)
+    {
+        Log4.Info("[BackgroundSyncService] 미팅 브리핑 루프 시작 - 주기: 300초");
+
+        while (!stoppingToken.IsCancellationRequested)
+        {
+            try
+            {
+                await Task.Delay(TimeSpan.FromSeconds(300), stoppingToken);
+
+                using var scope = _serviceProvider.CreateScope();
+                var calendarService = scope.ServiceProvider.GetService<GraphCalendarService>();
+                var aiMailService = scope.ServiceProvider.GetService<AiMailService>();
+                var dbContext = scope.ServiceProvider.GetRequiredService<mAIxDbContext>();
+
+                if (calendarService == null || aiMailService == null) continue;
+
+                // 향후 30분 내 일정 조회
+                var now = DateTime.Now;
+                var until = now.AddMinutes(30);
+                var events = await calendarService.GetEventsAsync(now, until);
+
+                if (events == null) continue;
+
+                foreach (var evt in events)
+                {
+                    var eventId = evt.Id;
+                    if (string.IsNullOrEmpty(eventId) || _sentMeetingBriefings.Contains(eventId)) continue;
+
+                    // 참석자 이메일 추출
+                    var attendeeEmails = evt.Attendees?
+                        .Where(a => a.EmailAddress?.Address != null)
+                        .Select(a => a.EmailAddress!.Address!)
+                        .ToList() ?? new List<string>();
+
+                    // 관련 메일 검색 (제목 키워드 또는 참석자 이메일)
+                    var subject = evt.Subject ?? string.Empty;
+                    var relatedEmails = await dbContext.Emails
+                        .Where(e => attendeeEmails.Contains(e.From) ||
+                                    (!string.IsNullOrEmpty(subject) && e.Subject.Contains(subject)))
+                        .OrderByDescending(e => e.ReceivedDateTime)
+                        .Take(10)
+                        .ToListAsync(stoppingToken);
+
+                    // AI 브리핑 생성
+                    var briefing = await aiMailService.GenerateMeetingBriefingAsync(subject, relatedEmails, stoppingToken);
+                    if (!string.IsNullOrEmpty(briefing))
+                    {
+                        _toastNotificationService.ShowNewMailNotification($"미팅 브리핑: {subject}", briefing, string.Empty);
+                        _sentMeetingBriefings.Add(eventId);
+                        Log4.Info($"[BackgroundSyncService] 미팅 브리핑 발송: {subject}");
+                    }
+                }
+            }
+            catch (OperationCanceledException) { break; }
+            catch (Exception ex)
+            {
+                _logger.Warning(ex, "미팅 브리핑 루프 오류");
+            }
         }
     }
 

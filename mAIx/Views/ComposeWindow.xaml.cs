@@ -1,3 +1,6 @@
+using System;
+using System.Linq;
+using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Input;
 using System.Windows.Controls;
@@ -27,6 +30,7 @@ public partial class ComposeWindow : FluentWindow
     private bool _webView2Initialized = false;
     private bool _editorReady = false;
     private bool _mailSent = false; // 메일 발송 완료 플래그
+    private int _pendingFollowUpDays = 0; // 발송 후 팔로업 일수 (0=없음)
     private bool _closingConfirmed = false; // 닫기 확인 완료 플래그
 
     // 자동완성용 필드
@@ -441,12 +445,29 @@ public partial class ComposeWindow : FluentWindow
             _countdownTimer?.Stop();
             CountdownText.Text = "발송 중...";
 
+            // 팔로업 날짜 기록 (발송 성공 후 SentItems 동기화 시 적용 대기)
+            var followUpDays = GetFollowUpDays();
+            if (followUpDays > 0)
+            {
+                _pendingFollowUpDays = followUpDays;
+                Log4.Debug2($"[ComposeWindow] 팔로업 예약: +{followUpDays}일");
+            }
+
             var success = await _viewModel.SendMailAsync();
 
             if (success)
             {
                 Log4.Info($"메일 발송 완료: {_viewModel.Subject}");
                 _mailSent = true;
+
+                // 팔로업 날짜 저장 (발송 성공 시)
+                if (_pendingFollowUpDays > 0)
+                {
+                    var followUpDate = DateTime.UtcNow.AddDays(_pendingFollowUpDays);
+                    Log4.Info($"[ComposeWindow] 팔로업 등록: {followUpDate:yyyy-MM-dd} (+{_pendingFollowUpDays}일) — '{_viewModel.Subject}'");
+                    _ = SaveFollowUpAsync(_viewModel.Subject, _viewModel.To, followUpDate);
+                }
+
                 _closingConfirmed = true;
                 DialogResult = true;
                 Close();
@@ -520,6 +541,69 @@ public partial class ComposeWindow : FluentWindow
     {
         _viewModel.IsScheduledSend = false;
         Log4.Debug("예약 발송 취소");
+    }
+
+    /// <summary>
+    /// 팔로업 ComboBox 선택 변경 — 선택만 추적 (실제 설정은 발송 시)
+    /// </summary>
+    private void FollowUpComboBox_SelectionChanged(object sender, System.Windows.Controls.SelectionChangedEventArgs e)
+    {
+        if (FollowUpComboBox?.SelectedItem is System.Windows.Controls.ComboBoxItem item &&
+            item.Tag?.ToString() is string tagStr &&
+            int.TryParse(tagStr, out int days))
+        {
+            Log4.Debug2($"[ComposeWindow] 팔로업 선택: {days}일");
+        }
+    }
+
+    /// <summary>
+    /// 선택된 팔로업 일수를 반환 (0 = 없음)
+    /// </summary>
+    private int GetFollowUpDays()
+    {
+        if (FollowUpComboBox?.SelectedItem is System.Windows.Controls.ComboBoxItem item &&
+            item.Tag?.ToString() is string tagStr &&
+            int.TryParse(tagStr, out int days))
+            return days;
+        return 0;
+    }
+
+    /// <summary>
+    /// 발송된 메일의 팔로업 날짜를 DB에 저장 (SentItems 동기화 후 Subject+To로 매칭)
+    /// </summary>
+    private async Task SaveFollowUpAsync(string subject, string to, DateTime followUpDate)
+    {
+        try
+        {
+            var dbFactory = (App.Current as App)?.GetService<Microsoft.EntityFrameworkCore.IDbContextFactory<Data.mAIxDbContext>>();
+            if (dbFactory == null) return;
+
+            await using var db = await dbFactory.CreateDbContextAsync();
+
+            // 최근 발송된 메일(Sent 폴더) 중 Subject + To 매칭 — 동기화 후 약간 지연 허용
+            await Task.Delay(3000); // 동기화 대기 (3초)
+
+            var since = DateTime.UtcNow.AddMinutes(-5);
+            var mail = await db.Emails
+                .Where(e => e.Subject == subject && e.ReceivedDateTime >= since)
+                .OrderByDescending(e => e.ReceivedDateTime)
+                .FirstOrDefaultAsync();
+
+            if (mail != null)
+            {
+                mail.FollowUpDate = followUpDate;
+                await db.SaveChangesAsync();
+                Log4.Info($"[ComposeWindow] 팔로업 날짜 DB 저장 완료: {mail.Subject} → {followUpDate:yyyy-MM-dd}");
+            }
+            else
+            {
+                Log4.Debug2($"[ComposeWindow] 팔로업 대상 메일 미발견 (동기화 지연 가능): {subject}");
+            }
+        }
+        catch (Exception ex)
+        {
+            Log4.Error($"[ComposeWindow] 팔로업 저장 오류: {ex.Message}");
+        }
     }
 
     /// <summary>

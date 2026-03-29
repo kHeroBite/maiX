@@ -2,6 +2,49 @@
 
 > PROJECT.md 작업 이력 테이블의 상세 보완본
 
+## 2026-03-29: Phase 3 — AI 규칙엔진 + 자동 팔로업 + 회의 전 브리핑
+
+**분류**: Fast Path (k3)
+**수정 파일**: 8개 수정 + 7개 신규
+
+### 변경 내역
+
+#### 1. AI 규칙엔진
+- `MailRule.cs` (신규): 메일 규칙 모델 — 조건 5종 + 액션 5종
+  - 조건 타입: `FromContains`, `SubjectContains`, `HasAttachment`, `AiCategoryEquals`, `ToContains`
+  - 액션 타입: `MoveToFolder`, `SetCategory`, `SetFlag`, `MarkAsRead`, `Delete`
+  - 필드: Name, ConditionType, ConditionValue, ActionType, ActionValue, IsEnabled, Priority, AccountEmail
+- `MailRuleService.cs` (신규): 규칙 엔진 서비스 — DB에서 활성 규칙 로드 + 메일 적용
+- `MailRuleSettingsDialog.xaml/.cs` (신규): 규칙 관리 다이얼로그 — 규칙 추가/편집/삭제/순서
+- `BackgroundSyncService.cs`: 120초 루프 추가 — 신규 메일에 규칙 자동 적용
+- `Migration 20260329000005_AddMailRules`: MailRules 테이블 생성
+
+#### 2. 자동 팔로업
+- `Email.cs`: `FollowUpDate` (DateTime?, nullable) 필드 추가 — 팔로업 예정 날짜 (UTC)
+- `ComposeWindow.xaml/.cs`: 팔로업 ComboBox 추가 — 3일/7일/14일/30일 선택
+- `BackgroundSyncService.cs`: 3600초 루프 추가 — 팔로업 기한 만료 메일 토스트 알림
+- `Migration 20260329000006_AddFollowUpDate`: FollowUpDate 컬럼 + 인덱스 추가
+
+#### 3. 회의 전 브리핑
+- `BackgroundSyncService.cs`: 300초 루프 추가 — 30분 이내 회의 감지 → 참석자 메일 수집 → AI 브리핑 생성
+- `GraphCalendarService` 연동: 다음 회의 이벤트 조회 + 참석자 추출
+- `AiMailService.GenerateMeetingBriefingAsync`: 참석자 관련 최근 메일 → 브리핑 생성 → 토스트 알림
+
+### 빌드/테스트
+- 빌드: 오류 0개 ✅
+- 런타임: 정상 (health 200, Migration 정상 적용) ✅
+- 로그: ERROR 0건 ✅
+- 품질: 3/3 기능 확인 ✅
+
+### 변경 파일
+수정: App.xaml.cs, mAIxDbContext.cs, mAIxDbContextModelSnapshot.cs, Email.cs,
+      BackgroundSyncService.cs, ComposeWindow.xaml, ComposeWindow.xaml.cs, MainWindow.xaml.cs
+신규: MailRule.cs, MailRuleService.cs, MailRuleSettingsDialog.xaml/.cs,
+      20260329000005_AddMailRules.cs, 20260329000005_AddMailRules.Designer.cs,
+      20260329000006_AddFollowUpDate.cs, 20260329000006_AddFollowUpDate.Designer.cs
+
+---
+
 ## 2026-03-29: Phase 2 — AI 기능 + 메일 스누즈 + TTS 읽기 + 일일 브리핑
 
 **분류**: Fast Path (k3)

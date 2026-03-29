@@ -7,7 +7,7 @@
 - **경로**: `%APPDATA%\MaiX\MaiX.db`
 - **ORM**: Entity Framework Core
 - **DbContext**: `MaiX/Data/MaiXDbContext.cs`
-- **전체 테이블 수**: 14개
+- **전체 테이블 수**: 15개
 
 ### 마이그레이션 관리
 ```bash
@@ -41,6 +41,7 @@ dotnet ef migrations script --project MaiX
 | TeamsMessages | Teams 메시지 | - |
 | OneNotePages | OneNote 페이지 | - |
 | ConverterSettings | 문서 변환기 설정 | - |
+| MailRules | 메일 자동 처리 규칙 | - |
 
 ---
 
@@ -87,6 +88,8 @@ dotnet ef migrations script --project MaiX
 | AiSummaryBrief | string(500) | YES | - | NULL | AI 간략 요약 (1-2줄) |
 | **스누즈 필드 (Phase 2 — 2026-03-29)** |
 | SnoozedUntil | datetime | YES | IDX | NULL | 스누즈 해제 예정 시각 (UTC). null=스누즈 미설정 |
+| **팔로업 필드 (Phase 3 — 2026-03-29)** |
+| FollowUpDate | datetime | YES | IDX | NULL | 팔로업 예정 날짜 (UTC). null=팔로업 미설정 |
 
 **인덱스**:
 - `IX_Email_InternetMessageId` (UNIQUE)
@@ -96,6 +99,7 @@ dotnet ef migrations script --project MaiX
 - `IX_Email_ParentFolderId`
 - `IX_Email_AnalysisStatus`
 - `IX_Email_SnoozedUntil` (Phase 2 추가)
+- `IX_Email_FollowUpDate` (Phase 3 추가)
 
 **관계**:
 - **1:N** → Attachments (첨부파일)
@@ -504,6 +508,73 @@ var pendingEmails = await context.Emails
     .Where(e => e.ScheduledSendTime != null
              && e.ScheduledSendTime <= DateTime.UtcNow
              && !e.IsSent)
+    .ToListAsync();
+```
+
+---
+
+## Phase 3 스키마 변경 (2026-03-29)
+
+### Emails 테이블 추가 컬럼
+| 컬럼명 | 타입 | NULL | 설명 |
+|--------|------|------|------|
+| `FollowUpDate` | DATETIME | NULL | 팔로업 예정 날짜 (UTC). NULL이면 팔로업 미설정 |
+
+### MailRules 테이블 (신규)
+
+**설명**: 조건 기반 메일 자동 처리 규칙
+
+**DbSet**: `MaiXDbContext.MailRules`
+
+**컬럼 상세**:
+| 컬럼명 | 타입 | NULL | 키 | 기본값 | 설명 |
+|--------|------|------|-----|--------|------|
+| Id | int | NO | PK | AUTO | 기본 키 |
+| Name | string(200) | NO | - | - | 규칙 이름 |
+| ConditionType | string(50) | NO | - | - | 조건 타입 |
+| ConditionValue | string(500) | YES | - | NULL | 조건 값 |
+| ActionType | string(50) | NO | - | - | 액션 타입 |
+| ActionValue | string(500) | YES | - | NULL | 액션 값 |
+| IsEnabled | bool | NO | - | true | 활성화 여부 |
+| Priority | int | NO | - | 0 | 실행 우선순위 (낮을수록 먼저) |
+| AccountEmail | string(500) | YES | - | NULL | 계정별 규칙 (null=전체) |
+| CreatedAt | datetime | NO | - | UtcNow | 생성 일시 |
+
+**ConditionType 값**:
+- `FromContains`: 발신자 주소 포함
+- `SubjectContains`: 제목 포함
+- `HasAttachment`: 첨부파일 존재
+- `AiCategoryEquals`: AI 분류 일치
+- `ToContains`: 수신자 주소 포함
+
+**ActionType 값**:
+- `MoveToFolder`: 폴더 이동 (ActionValue = 폴더명)
+- `SetCategory`: 카테고리 설정 (ActionValue = 카테고리명)
+- `SetFlag`: 플래그 설정
+- `MarkAsRead`: 읽음 처리
+- `Delete`: 삭제
+
+### Migration 이력 (Phase 3)
+| Migration | 설명 |
+|-----------|------|
+| `20260329000005_AddMailRules` | MailRules 테이블 생성 |
+| `20260329000006_AddFollowUpDate` | Emails.FollowUpDate 컬럼 + IX_Email_FollowUpDate 인덱스 추가 |
+
+### 팔로업 쿼리 패턴
+```csharp
+// BackgroundSyncService 팔로업 루프 (3600초)
+var followUpEmails = await context.Emails
+    .Where(e => e.FollowUpDate.HasValue
+             && e.FollowUpDate <= DateTime.UtcNow)
+    .ToListAsync();
+```
+
+### 규칙엔진 쿼리 패턴
+```csharp
+// MailRuleService — 활성 규칙 우선순위 정렬 로드
+var rules = await context.MailRules
+    .Where(r => r.IsEnabled && (r.AccountEmail == null || r.AccountEmail == accountEmail))
+    .OrderBy(r => r.Priority)
     .ToListAsync();
 ```
 

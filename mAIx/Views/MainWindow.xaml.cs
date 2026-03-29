@@ -16140,7 +16140,7 @@ public partial class MainWindow : FluentWindow
         {
             "sync_ai" => new[] { ("sync_ai_favorite", "즐겨찾기"), ("sync_ai_all", "전체"), ("sync_ai_prompt", "프롬프트 관리") },
             "sync_ms365" => new[] { ("sync_ms365_favorite", "즐겨찾기"), ("sync_ms365_all", "전체") },
-            "mail" => new[] { ("mail_signature", "서명 관리") },
+            "mail" => new[] { ("mail_signature", "서명 관리"), ("mail_rules", "메일 규칙") },
             "api" => new[] { ("api_ai_providers", "AI Provider"), ("api_tinymce", "TinyMCE") },
             "general" => new[] { ("general_theme", "일반"), ("general_account", "계정"), ("general_notification", "알림") },
             "system" => new[] { ("system_microphone", "마이크 설정"), ("system_stt_tts", "STT/TTS 설정") },
@@ -16309,6 +16309,9 @@ public partial class MainWindow : FluentWindow
                 break;
             case "mail_signature":
                 ShowSignatureSettings();
+                break;
+            case "mail_rules":
+                ShowMailRulesSettings();
                 break;
             case "api_ai_providers":
                 ShowAiProviderSettings();
@@ -17282,6 +17285,25 @@ public partial class MainWindow : FluentWindow
     private Dictionary<string, RadioButton>? _providerRadioButtons;
     private Dictionary<string, Wpf.Ui.Controls.TextBox>? _providerApiKeyBoxes;
     private Dictionary<string, ComboBox>? _providerModelCombos;
+    /// <summary>
+    /// 메일 규칙 설정 다이얼로그 열기
+    /// </summary>
+    private void ShowMailRulesSettings()
+    {
+        try
+        {
+            Log4.Info("설정: 메일 규칙 클릭");
+            var dialog = new Views.Dialogs.MailRuleSettingsDialog { Owner = this };
+            dialog.ShowDialog();
+        }
+        catch (Exception ex)
+        {
+            Log4.Error($"메일 규칙 다이얼로그 오류: {ex.Message}");
+            System.Windows.MessageBox.Show($"메일 규칙 다이얼로그를 열 수 없습니다.\n{ex.Message}", "오류",
+                System.Windows.MessageBoxButton.OK, System.Windows.MessageBoxImage.Error);
+        }
+    }
+
     private Dictionary<string, Wpf.Ui.Controls.TextBox>? _providerBaseUrlBoxes;
     private Dictionary<string, System.Windows.Controls.TextBlock>? _providerStatusTexts;
 
