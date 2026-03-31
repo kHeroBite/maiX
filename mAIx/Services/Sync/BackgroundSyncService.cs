@@ -996,8 +996,15 @@ public class BackgroundSyncService : BackgroundService
                     totalChanged += newFromDelta.Count;
                     totalDeleted += deleted;
                     allSavedEmails.AddRange(newFromDelta);
+                }
+                catch (Exception ex)
+                {
+                    _logger.Warning(ex, "즐겨찾기 폴더 Delta 동기화 실패: {FolderName}", folder.DisplayName);
+                }
 
-                    // 3단계: 읽음 상태 동기화 (최근 7일간 메일)
+                // 3단계: 읽음 상태 동기화 — Delta 동기화 성패와 무관하게 항상 실행
+                try
+                {
                     var readStatusUpdated = await SyncReadStatusAsync(
                         dbContext, graphMailService, folder.Id, ct);
                     if (readStatusUpdated > 0)
@@ -1008,7 +1015,7 @@ public class BackgroundSyncService : BackgroundService
                 }
                 catch (Exception ex)
                 {
-                    _logger.Warning(ex, "즐겨찾기 폴더 동기화 실패: {FolderName}", folder.DisplayName);
+                    _logger.Warning(ex, "읽음 상태 동기화 실패: {FolderName}", folder.DisplayName);
                 }
             }
 
@@ -1180,9 +1187,17 @@ public class BackgroundSyncService : BackgroundService
                 totalChanged += changed;
                 totalDeleted += deleted;
                 allSavedEmails.AddRange(savedEmails);
+            }
+            catch (Exception ex)
+            {
+                _logger.Warning(ex, "폴더 Delta 동기화 실패: {FolderName}", folder.DisplayName);
+                // 개별 폴더 실패는 계속 진행
+            }
 
-                // 주요 폴더(받은/보낸편지함)에 대해 읽음 상태 동기화 추가
-                if (priorityFolderNamesForRead.Contains(folder.DisplayName, StringComparer.OrdinalIgnoreCase))
+            // 주요 폴더(받은/보낸편지함)에 대해 읽음 상태 동기화 — Delta 동기화 성패와 무관하게 항상 실행
+            if (priorityFolderNamesForRead.Contains(folder.DisplayName, StringComparer.OrdinalIgnoreCase))
+            {
+                try
                 {
                     var readStatusUpdated = await SyncReadStatusAsync(
                         dbContext, graphMailService, folder.Id, ct);
@@ -1192,11 +1207,10 @@ public class BackgroundSyncService : BackgroundService
                             readStatusUpdated, folder.DisplayName);
                     }
                 }
-            }
-            catch (Exception ex)
-            {
-                _logger.Warning(ex, "폴더 동기화 실패: {FolderName}", folder.DisplayName);
-                // 개별 폴더 실패는 계속 진행
+                catch (Exception ex)
+                {
+                    _logger.Warning(ex, "읽음 상태 동기화 실패: {FolderName}", folder.DisplayName);
+                }
             }
         }
 
@@ -1633,19 +1647,25 @@ public class BackgroundSyncService : BackgroundService
                         : StripHtmlAndTruncate(message.Body?.Content, 100)
                 };
 
-                dbContext.Emails.Add(email);
-                savedEmails.Add(email);
+                // 새 메일 개별 저장 (UNIQUE 오류 격리 — 배치 저장 제거)
+                try
+                {
+                    dbContext.Emails.Add(email);
+                    await dbContext.SaveChangesAsync(ct);  // 개별 저장
+                    savedEmails.Add(email);
+                }
+                catch (Microsoft.EntityFrameworkCore.DbUpdateException uniqueEx)
+                    when (uniqueEx.InnerException is Microsoft.Data.Sqlite.SqliteException sqlEx && sqlEx.SqliteErrorCode == 19)
+                {
+                    // UNIQUE 제약 위반 → 이미 존재하는 메일, EF context 클린 상태 유지
+                    _logger.Debug("UNIQUE 중복 감지 (저장 스킵): {Subject}", message.Subject);
+                    dbContext.Entry(email).State = Microsoft.EntityFrameworkCore.EntityState.Detached;
+                }
             }
             catch (Exception ex)
             {
                 _logger.Error(ex, "메일 저장 실패: {Subject}", message.Subject);
             }
-        }
-
-        // 신규 메일 일괄 저장 (N+1 방지: AddRange 후 한 번의 SaveChanges)
-        if (savedEmails.Count > 0)
-        {
-            await dbContext.SaveChangesAsync(ct);
         }
 
         _logger.Information("메일 저장 완료: {Count}건", savedEmails.Count);

@@ -2,6 +2,25 @@
 
 > PROJECT.md 작업 이력 테이블의 상세 보완본
 
+## 2026-04-01 — 받은편지함 읽음 상태 동기화 실패 근본 수정 (DbContext 오염 방지 + SyncReadStatusAsync 독립 실행)
+
+**분류**: Fast Path (k3)
+**수정 파일**: 1개 (BackgroundSyncService.cs)
+
+### 변경 내역
+
+#### BackgroundSyncService.cs — UNIQUE 위반 DbContext 오염 방지 + 독립 try/catch 분리
+
+- **근본 원인**: `SaveEmailsAsync` 배치 저장 중 `InternetMessageId+ParentFolderId` UNIQUE 제약 위반 → DbContext 오염 → 같은 try 블록의 `SyncReadStatusAsync` 미도달 → 읽음 상태 영구 미동기화
+- **수정 1 — SaveEmailsAsync**: 배치 `SaveChangesAsync` → 개별 저장 + catch 시 `Entry(email).State = EntityState.Detached` (DbContext 오염 상태 즉시 해제)
+- **수정 2 — SyncFavoriteFoldersAsync**: `SyncFolderAsync`와 `SyncReadStatusAsync`를 독립 try/catch 블록으로 분리 (메일 저장 실패가 읽음 동기화를 차단하지 않음)
+- **수정 3 — SyncAccountAsync**: 동일 패턴 적용 — 폴더 동기화와 읽음 동기화 독립 실행 보장
+
+### 교훈 기록
+- L-286: EF Core DbContext 오염 방지 — UNIQUE 위반 시 개별 저장 + Detach 패턴 (Level 1)
+
+---
+
 ## 2026-04-01 — 메일 동기화 읽음 카운트 불일치 근본 수정 + 설정 동기화 대메뉴 통합
 
 **분류**: Fast Path (k3)

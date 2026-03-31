@@ -514,3 +514,15 @@
 - **교훈**: 이벤트 페이로드 설계 시 카운트뿐 아니라 성공/실패 상태를 포함해야 소비자(ViewModel, 로그)가 정확한 분기 처리 가능. `EmailsSyncedEventArgs` 확장: `int NewCount, bool IsSuccess, string? ErrorMessage`
 - **심각도**: 낮음 (디버깅 불편, 기능 오작동 아님)
 - **Level**: 1 (참고)
+
+## L-286: EF Core DbContext 오염 방지 — UNIQUE 위반 시 개별 저장 + Detach 패턴 (2026-04-01)
+
+- **문제**: `BackgroundSyncService.SaveEmailsAsync`에서 배치 `SaveChangesAsync` 중 `InternetMessageId+ParentFolderId` UNIQUE 제약 위반 발생 → DbContext 오염 → 같은 try 블록 내 `SyncReadStatusAsync` 미도달 → 읽음 상태 영구 미동기화
+- **근본 원인**: EF Core는 `SaveChangesAsync` 실패 시 DbContext를 오염 상태로 남김. 배치 저장 중 UNIQUE 위반 1건이 전체 배치를 실패시키고, 같은 try 블록의 후속 로직도 함께 차단
+- **해결**:
+  1. `SaveEmailsAsync`: 배치 저장 → 개별 저장 + catch 시 `Entry(email).State = EntityState.Detached` (DbContext 오염 방지)
+  2. `SyncFavoriteFoldersAsync` / `SyncAccountAsync`: `SyncFolderAsync`와 `SyncReadStatusAsync`를 독립 try/catch 블록으로 분리 (각 작업이 서로 영향 안 받도록)
+- **교훈**: EF Core에서 UNIQUE 위반 가능성이 있는 `SaveChangesAsync`는 개별 저장 + catch 시 Detach 패턴 적용 필수. 독립적인 동기화 작업들은 반드시 개별 try/catch로 분리하여 한 작업 실패가 다른 작업을 차단하지 않도록 설계
+- **패턴**: `foreach (var item in items) { try { ctx.Add(item); await ctx.SaveChangesAsync(); } catch { ctx.Entry(item).State = EntityState.Detached; } }`
+- **심각도**: 높음 (읽음 상태 영구 미동기화 — 사용자 체감 버그)
+- **Level**: 1 (참고)
