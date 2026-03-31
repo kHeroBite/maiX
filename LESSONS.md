@@ -478,3 +478,12 @@
 - **교훈**: 팀에이전트(kdone-1 등) 내부에서 Agent spawn 시 반드시 team_name 지정. team_name 없는 spawn은 hook이 차단 → 메인 직접 처리로 Fallback
 - **심각도**: 낮음 (hook이 정상 차단, Fallback 작동)
 - **Level**: 1 (참고)
+
+## L-282: 빌드 출력 경로 변경 시 관련 문서 동시 업데이트 필수 (2026-04-01)
+
+- **문제**: 빌드 출력 경로가 `bin/Debug/net10.0-windows/`에서 `bin/Debug/net10.0-windows/win-x64/net10.0-windows/`로 변경되었으나 PROJECT.md, restapi.md 등 참조 문서가 구 경로를 유지
+- **원인**: 빌드 설정 변경 시 코드/바이너리만 수정하고 문서 경로 동기화 누락
+- **해결**: PROJECT.md 30행·633행, restapi.md 355행 경로 수정 + PowerShell Start-Process 방식으로 교체
+- **교훈**: 빌드 출력 경로 변경 시 `grep -r "net10.0-windows" .` 로 모든 문서/스킬 경로 참조를 일괄 검색하여 동시 업데이트. PROJECT.md, restapi.md, kinfra 스킬 파일 포함.
+- **심각도**: 중간 (잘못된 경로로 인한 빌드/실행 가이드 오류)
+- **Level**: 2 (주의)

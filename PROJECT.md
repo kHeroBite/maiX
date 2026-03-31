@@ -27,7 +27,7 @@
   "빌드_경로": "C:\\DATA\\Project\\mAIx",
   "솔루션": "mAIx.sln",
   "메인_프로젝트": "mAIx/mAIx.csproj",
-  "실행파일": "mAIx\\bin\\Debug\\net10.0-windows\\mAIx.exe",
+  "실행파일": "mAIx\\bin\\Debug\\net10.0-windows\\win-x64\\net10.0-windows\\mAIx.exe",
   "인코딩": "UTF-8",
   "줄_끝": "CRLF",
   "REST_API_포트": 5858,
@@ -630,7 +630,7 @@ dotnet build "C:\DATA\Project\MaiX\MaiX\MaiX.csproj"
 ### 실행
 
 ```bash
-"C:\DATA\Project\MaiX\MaiX\bin\Debug\net10.0-windows\MaiX.exe"
+"C:\DATA\Project\mAIx\mAIx\bin\Debug\net10.0-windows\win-x64\net10.0-windows\mAIx.exe"
 ```
 
 ### REST API 확인

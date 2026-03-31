@@ -352,7 +352,7 @@ dotnet build "C:\DATA\Project\MaiX\MaiX\MaiX.csproj"
 
 # 0-3. 프로그램 실행
 echo "0-3단계: 프로그램 실행"
-"C:\DATA\Project\MaiX\MaiX\bin\Debug\net10.0-windows\MaiX.exe" &
+powershell.exe -NoProfile -Command "Start-Process 'C:\DATA\Project\mAIx\mAIx\bin\Debug\net10.0-windows\win-x64\net10.0-windows\mAIx.exe'"
 sleep 5
 
 # 1단계: 로그 분석
