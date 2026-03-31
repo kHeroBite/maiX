@@ -487,3 +487,30 @@
 - **교훈**: 빌드 출력 경로 변경 시 `grep -r "net10.0-windows" .` 로 모든 문서/스킬 경로 참조를 일괄 검색하여 동시 업데이트. PROJECT.md, restapi.md, kinfra 스킬 파일 포함.
 - **심각도**: 중간 (잘못된 경로로 인한 빌드/실행 가이드 오류)
 - **Level**: 2 (주의)
+
+## L-283: kplan 증상 수준 계획 — 근본 원인 미포착으로 kdev 추가 투입 (2026-04-01)
+
+- **문제**: 메일 읽음 카운트 불일치 버그 수정 시 kplan이 증상(폴더 카운트 미갱신)만 분석하고 근본 원인(Graph API 동기화 범위 7일 제한, 서버 미읽음 목록 기준 미사용)을 놓쳐 kdev-2 추가 투입 필요
+- **근본 원인**: kplan의 코드 탐색 범위가 표층(ViewModel) 수준에 머물고, 실제 데이터 흐름 전체(GraphMailService → SyncReadStatusAsync → ViewModel)를 추적하지 않음
+- **해결**: SyncReadStatusAsync를 서버 미읽음 목록 기준으로 전면 교체 + GetMessagesReadStatusAsync days 7→30 확장 + GetUnreadMessageIdsAsync 신규 추가
+- **교훈**: 카운트 불일치/상태 불일치 류 버그는 데이터 흐름 전체(API 호출 → 동기화 로직 → ViewModel 반영)를 end-to-end로 추적해야 근본 원인 파악 가능. 증상 레이어(ViewModel)만 수정하면 재발함
+- **심각도**: 중간 (kdev 추가 투입으로 작업 시간 증가)
+- **Level**: 2 (주의)
+
+## L-284: SyncReadStatusAsync 적용 범위 — 받은/보낸편지함 외 폴더 누락 (2026-04-01)
+
+- **문제**: `SyncReadStatusAsync`가 받은편지함(Inbox)과 보낸편지함(SentItems)에만 읽음 상태를 동기화하여, 이동된 메일이나 다른 폴더의 읽음 상태가 동기화되지 않음
+- **근본 원인**: Graph API 호출 시 폴더를 고정 2개(Inbox, SentItems)로 하드코딩 — 사용자 커스텀 폴더 미포함
+- **해결**: 현재는 Inbox+SentItems 범위 유지, 향후 확장 시 동기화 대상 폴더 목록을 설정으로 외부화 권장
+- **교훈**: 동기화 범위를 특정 폴더로 제한할 경우 코드 주석과 문서에 제한 범위를 명시해야 함. 향후 확장 시 폴더 목록을 `UserPreferencesSettings`에 설정 가능 필드로 추가하는 것이 바람직
+- **심각도**: 낮음 (현재 주요 폴더 커버)
+- **Level**: 1 (참고)
+
+## L-285: EmailsSynced 이벤트 0건 — 의미 모호성으로 디버깅 혼란 (2026-04-01)
+
+- **문제**: `EmailsSynced` 이벤트가 `newCount=0`으로 발생할 때 "신규 메일 없음(정상)"과 "동기화 실패(이상)"를 구분할 수 없어 디버깅 혼란 발생
+- **근본 원인**: 이벤트 페이로드에 성공/실패 구분 플래그 없이 카운트만 전달. 0건이 정상 상태(신규 없음)인지 오류 상태(API 실패, 빈 응답)인지 의미적으로 모호
+- **해결**: 이벤트 핸들러에서 0건 시 폴더 카운트 갱신 로직을 추가(방어적 갱신). 근본 해결은 이벤트 페이로드에 `IsSuccess`, `ErrorMessage` 필드 추가 권장
+- **교훈**: 이벤트 페이로드 설계 시 카운트뿐 아니라 성공/실패 상태를 포함해야 소비자(ViewModel, 로그)가 정확한 분기 처리 가능. `EmailsSyncedEventArgs` 확장: `int NewCount, bool IsSuccess, string? ErrorMessage`
+- **심각도**: 낮음 (디버깅 불편, 기능 오작동 아님)
+- **Level**: 1 (참고)

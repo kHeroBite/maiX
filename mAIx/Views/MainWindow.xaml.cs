@@ -15983,8 +15983,8 @@ public partial class MainWindow : FluentWindow
         // 대메뉴 초기화
         InitializeSettingsMainMenu();
 
-        // 기본 선택: AI 동기화
-        SelectSettingsMainMenu("sync_ai");
+        // 기본 선택: 동기화
+        SelectSettingsMainMenu("sync");
     }
 
     /// <summary>
@@ -15997,8 +15997,7 @@ public partial class MainWindow : FluentWindow
 
         var mainMenuItems = new[]
         {
-            ("sync_ai", "Bot24", "AI"),
-            ("sync_ms365", "Cloud24", "MS365"),
+            ("sync", "ArrowSync24", "동기화"),
             ("mail", "Mail24", "메일"),
             ("api", "Key24", "API 관리"),
             ("general", "Settings24", "기타 설정"),
@@ -16138,8 +16137,7 @@ public partial class MainWindow : FluentWindow
     {
         return mainMenuKey switch
         {
-            "sync_ai" => new[] { ("sync_ai_favorite", "즐겨찾기"), ("sync_ai_all", "전체"), ("sync_ai_prompt", "프롬프트 관리") },
-            "sync_ms365" => new[] { ("sync_ms365_favorite", "즐겨찾기"), ("sync_ms365_all", "전체") },
+            "sync" => new[] { ("sync_mail", "메일"), ("sync_calendar", "캘린더"), ("sync_chat", "채팅"), ("sync_ai", "AI 분석") },
             "mail" => new[] { ("mail_signature", "서명 관리"), ("mail_rules", "메일 규칙") },
             "api" => new[] { ("api_ai_providers", "AI Provider"), ("api_tinymce", "TinyMCE") },
             "general" => new[] { ("general_theme", "일반"), ("general_account", "계정"), ("general_notification", "알림") },
@@ -16158,8 +16156,7 @@ public partial class MainWindow : FluentWindow
         SettingsSubMenuPanel.Children.Clear();
         SettingsSubMenuTitle.Text = mainMenuKey switch
         {
-            "sync_ai" => "AI 동기화",
-            "sync_ms365" => "MS365 동기화",
+            "sync" => "동기화",
             "mail" => "메일",
             "api" => "API 관리",
             "general" => "기타 설정",
@@ -16292,20 +16289,17 @@ public partial class MainWindow : FluentWindow
 
         switch (subMenuKey)
         {
-            case "sync_ai_favorite":
-                ShowAiSyncFavoriteSettings();
+            case "sync_mail":
+                ShowSyncMailSettings();
                 break;
-            case "sync_ai_all":
-                ShowAiSyncAllSettings();
+            case "sync_calendar":
+                ShowSyncCalendarSettings();
                 break;
-            case "sync_ai_prompt":
-                ShowAiPromptSettings();
+            case "sync_chat":
+                ShowSyncChatSettings();
                 break;
-            case "sync_ms365_favorite":
-                ShowMs365SyncFavoriteSettings();
-                break;
-            case "sync_ms365_all":
-                ShowMs365SyncAllSettings();
+            case "sync_ai":
+                ShowSyncAiSettings();
                 break;
             case "mail_signature":
                 ShowSignatureSettings();
@@ -16409,6 +16403,266 @@ public partial class MainWindow : FluentWindow
         btn.Click += (s, e) => saveAction();
         return btn;
     }
+
+    #region 동기화 설정 (메일/캘린더/채팅/AI)
+
+    /// <summary>
+    /// 동기화 - 메일 설정 UI 표시
+    /// </summary>
+    private void ShowSyncMailSettings()
+    {
+        if (SettingsContentPanel == null) return;
+        var prefs = App.Settings.UserPreferences;
+
+        SettingsContentPanel.Children.Add(CreateSettingsSectionHeader("동기화 - 메일"));
+
+        var shortIntervalOptions = new[] { (10, "10초"), (30, "30초"), (60, "1분"), (120, "2분") };
+        var longIntervalOptions = new[] { (60, "1분"), (300, "5분"), (600, "10분") };
+        var countOptions = new[] { (50, "50건"), (100, "100건"), (200, "200건") };
+
+        // 즐겨찾기 동기화 주기
+        var favMailGroup = CreateSettingsGroupBorder();
+        var favMailStack = new StackPanel();
+        favMailStack.Children.Add(CreateSettingsLabel("즐겨찾기 메일 동기화 주기"));
+        var mailIntervalSeconds = prefs.MailSyncIntervalSeconds > 0 ? prefs.MailSyncIntervalSeconds : prefs.MailSyncIntervalMinutes * 60;
+        var favMailWrap = new WrapPanel { Margin = new Thickness(0, 0, 0, 12) };
+        foreach (var (seconds, label) in shortIntervalOptions)
+        {
+            var radio = new RadioButton
+            {
+                Content = label,
+                Tag = seconds,
+                IsChecked = mailIntervalSeconds == seconds,
+                Margin = new Thickness(0, 0, 16, 8),
+                GroupName = "SyncMailFavoriteInterval"
+            };
+            radio.Checked += (s, e) =>
+            {
+                prefs.MailSyncIntervalSeconds = seconds;
+                App.Settings.SaveUserPreferences();
+                _viewModel.SetSyncInterval(seconds);
+                Log4.Info($"즐겨찾기 메일 동기화 주기 저장: {seconds}초");
+            };
+            favMailWrap.Children.Add(radio);
+        }
+        favMailStack.Children.Add(favMailWrap);
+        favMailStack.Children.Add(CreateSettingsDescription("즐겨찾기 메일의 동기화 주기입니다."));
+        favMailGroup.Child = favMailStack;
+        SettingsContentPanel.Children.Add(favMailGroup);
+
+        // 전체 동기화 주기
+        var allMailGroup = CreateSettingsGroupBorder();
+        var allMailStack = new StackPanel();
+        allMailStack.Children.Add(CreateSettingsLabel("전체 메일 동기화 주기"));
+        var allMailWrap = new WrapPanel { Margin = new Thickness(0, 0, 0, 12) };
+        foreach (var (seconds, label) in longIntervalOptions)
+        {
+            var radio = new RadioButton
+            {
+                Content = label,
+                Tag = seconds,
+                IsChecked = mailIntervalSeconds == seconds,
+                Margin = new Thickness(0, 0, 16, 8),
+                GroupName = "SyncMailAllInterval"
+            };
+            radio.Checked += (s, e) =>
+            {
+                prefs.MailSyncIntervalSeconds = seconds;
+                App.Settings.SaveUserPreferences();
+                _viewModel.SetSyncInterval(seconds);
+                Log4.Info($"전체 메일 동기화 주기 저장: {seconds}초");
+            };
+            allMailWrap.Children.Add(radio);
+        }
+        allMailStack.Children.Add(allMailWrap);
+        allMailStack.Children.Add(CreateSettingsDescription("전체 메일 동기화 주기입니다."));
+        allMailGroup.Child = allMailStack;
+        SettingsContentPanel.Children.Add(allMailGroup);
+
+        // 초기 동기화 건수
+        var syncCountGroup = CreateSettingsGroupBorder();
+        var syncCountStack = new StackPanel();
+        syncCountStack.Children.Add(CreateSettingsLabel("초기 동기화 건수"));
+        var syncCountWrap = new WrapPanel { Margin = new Thickness(0, 0, 0, 12) };
+        var currentCount = prefs.MailSyncInitialCount > 0 ? prefs.MailSyncInitialCount : 100;
+        foreach (var (count, label) in countOptions)
+        {
+            var radio = new RadioButton
+            {
+                Content = label,
+                Tag = count,
+                IsChecked = currentCount == count,
+                Margin = new Thickness(0, 0, 16, 8),
+                GroupName = "SyncMailInitialCount"
+            };
+            radio.Checked += (s, e) =>
+            {
+                prefs.MailSyncInitialCount = count;
+                App.Settings.SaveUserPreferences();
+                Log4.Info($"초기 동기화 건수 저장: {count}건");
+            };
+            syncCountWrap.Children.Add(radio);
+        }
+        syncCountStack.Children.Add(syncCountWrap);
+        syncCountStack.Children.Add(CreateSettingsDescription("첫 동기화 시 가져올 메일 수입니다."));
+        syncCountGroup.Child = syncCountStack;
+        SettingsContentPanel.Children.Add(syncCountGroup);
+    }
+
+    /// <summary>
+    /// 동기화 - 캘린더 설정 UI 표시
+    /// </summary>
+    private void ShowSyncCalendarSettings()
+    {
+        if (SettingsContentPanel == null) return;
+        var prefs = App.Settings.UserPreferences;
+
+        SettingsContentPanel.Children.Add(CreateSettingsSectionHeader("동기화 - 캘린더"));
+
+        var intervalOptions = new[] { (60, "1분"), (120, "2분"), (300, "5분") };
+
+        var calendarGroup = CreateSettingsGroupBorder();
+        var calendarStack = new StackPanel();
+        calendarStack.Children.Add(CreateSettingsLabel("캘린더 동기화 주기"));
+        var calendarWrap = new WrapPanel { Margin = new Thickness(0, 0, 0, 12) };
+        foreach (var (seconds, label) in intervalOptions)
+        {
+            var radio = new RadioButton
+            {
+                Content = label,
+                Tag = seconds,
+                IsChecked = prefs.CalendarSyncIntervalSeconds == seconds,
+                Margin = new Thickness(0, 0, 16, 8),
+                GroupName = "SyncCalendarInterval"
+            };
+            radio.Checked += (s, e) =>
+            {
+                prefs.CalendarSyncIntervalSeconds = seconds;
+                App.Settings.SaveUserPreferences();
+                _viewModel.SetCalendarSyncInterval(seconds);
+                Log4.Info($"캘린더 동기화 주기 저장: {seconds}초");
+            };
+            calendarWrap.Children.Add(radio);
+        }
+        calendarStack.Children.Add(calendarWrap);
+        calendarStack.Children.Add(CreateSettingsDescription("캘린더 동기화 주기입니다."));
+        calendarGroup.Child = calendarStack;
+        SettingsContentPanel.Children.Add(calendarGroup);
+    }
+
+    /// <summary>
+    /// 동기화 - 채팅 설정 UI 표시
+    /// </summary>
+    private void ShowSyncChatSettings()
+    {
+        if (SettingsContentPanel == null) return;
+        var prefs = App.Settings.UserPreferences;
+
+        SettingsContentPanel.Children.Add(CreateSettingsSectionHeader("동기화 - 채팅"));
+
+        var intervalOptions = new[] { (60, "1분"), (120, "2분"), (300, "5분") };
+
+        var chatGroup = CreateSettingsGroupBorder();
+        var chatStack = new StackPanel();
+        chatStack.Children.Add(CreateSettingsLabel("채팅 동기화 주기"));
+        var chatWrap = new WrapPanel { Margin = new Thickness(0, 0, 0, 12) };
+        foreach (var (seconds, label) in intervalOptions)
+        {
+            var radio = new RadioButton
+            {
+                Content = label,
+                Tag = seconds,
+                IsChecked = prefs.ChatSyncIntervalSeconds == seconds,
+                Margin = new Thickness(0, 0, 16, 8),
+                GroupName = "SyncChatInterval"
+            };
+            radio.Checked += (s, e) =>
+            {
+                prefs.ChatSyncIntervalSeconds = seconds;
+                App.Settings.SaveUserPreferences();
+                _viewModel.SetChatSyncInterval(seconds);
+                Log4.Info($"채팅 동기화 주기 저장: {seconds}초");
+            };
+            chatWrap.Children.Add(radio);
+        }
+        chatStack.Children.Add(chatWrap);
+        chatStack.Children.Add(CreateSettingsDescription("채팅 동기화 주기입니다."));
+        chatGroup.Child = chatStack;
+        SettingsContentPanel.Children.Add(chatGroup);
+    }
+
+    /// <summary>
+    /// 동기화 - AI 분석 설정 UI 표시
+    /// </summary>
+    private void ShowSyncAiSettings()
+    {
+        if (SettingsContentPanel == null) return;
+        var prefs = App.Settings.UserPreferences;
+
+        SettingsContentPanel.Children.Add(CreateSettingsSectionHeader("동기화 - AI 분석"));
+
+        // AI 분석 주기
+        var intervalGroup = CreateSettingsGroupBorder();
+        var intervalStack = new StackPanel();
+        intervalStack.Children.Add(CreateSettingsLabel("AI 분석 주기"));
+        var currentInterval = prefs.AiAnalysisIntervalSeconds > 0 ? prefs.AiAnalysisIntervalSeconds : 300;
+        var intervalOptions = new[] { (300, "5분"), (600, "10분"), (1800, "30분") };
+        var intervalWrap = new WrapPanel { Margin = new Thickness(0, 0, 0, 12) };
+        foreach (var (seconds, label) in intervalOptions)
+        {
+            var radio = new RadioButton
+            {
+                Content = label,
+                Tag = seconds,
+                IsChecked = currentInterval == seconds,
+                Margin = new Thickness(0, 0, 16, 8),
+                GroupName = "SyncAiInterval"
+            };
+            radio.Checked += (s, e) =>
+            {
+                prefs.AiAnalysisIntervalSeconds = seconds;
+                App.Settings.SaveUserPreferences();
+                Log4.Info($"AI 분석 주기 저장: {seconds}초");
+            };
+            intervalWrap.Children.Add(radio);
+        }
+        intervalStack.Children.Add(intervalWrap);
+        intervalStack.Children.Add(CreateSettingsDescription("AI 배치 분석 주기입니다."));
+        intervalGroup.Child = intervalStack;
+        SettingsContentPanel.Children.Add(intervalGroup);
+
+        // 배치 크기
+        var batchGroup = CreateSettingsGroupBorder();
+        var batchStack = new StackPanel();
+        batchStack.Children.Add(CreateSettingsLabel("배치 크기"));
+        var currentBatch = prefs.AiBatchSize > 0 ? prefs.AiBatchSize : 20;
+        var batchOptions = new[] { (10, "10건"), (20, "20건"), (50, "50건") };
+        var batchWrap = new WrapPanel { Margin = new Thickness(0, 0, 0, 12) };
+        foreach (var (count, label) in batchOptions)
+        {
+            var radio = new RadioButton
+            {
+                Content = label,
+                Tag = count,
+                IsChecked = currentBatch == count,
+                Margin = new Thickness(0, 0, 16, 8),
+                GroupName = "SyncAiBatchSize"
+            };
+            radio.Checked += (s, e) =>
+            {
+                prefs.AiBatchSize = count;
+                App.Settings.SaveUserPreferences();
+                Log4.Info($"AI 배치 크기 저장: {count}건");
+            };
+            batchWrap.Children.Add(radio);
+        }
+        batchStack.Children.Add(batchWrap);
+        batchStack.Children.Add(CreateSettingsDescription("한 번에 분석할 메일 수입니다."));
+        batchGroup.Child = batchStack;
+        SettingsContentPanel.Children.Add(batchGroup);
+    }
+
+    #endregion
 
     #region AI 동기화 설정 (즐겨찾기/전체)
 

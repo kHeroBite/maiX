@@ -2,6 +2,51 @@
 
 > PROJECT.md 작업 이력 테이블의 상세 보완본
 
+## 2026-04-01 — 메일 동기화 읽음 카운트 불일치 근본 수정 + 설정 동기화 대메뉴 통합
+
+**분류**: Fast Path (k3)
+**수정 파일**: 4개
+
+### 변경 내역
+
+#### 1. GraphMailService.cs — Graph API 동기화 범위 확장 + 미읽음 목록 조회 신규
+- `GetMessagesReadStatusAsync`: days 파라미터 7→30으로 확장 (7일 이상 된 메일의 읽음 상태 동기화 누락 방지)
+- `GetUnreadMessageIdsAsync` (신규): 특정 폴더의 서버 미읽음 메일 ID 목록 조회 메서드 추가
+  - Graph API `/mailFolders/{folderId}/messages?$filter=isRead eq false&$select=id` 호출
+  - 페이징 지원 (nextLink 추적)
+
+#### 2. BackgroundSyncService.cs — SyncReadStatusAsync 서버 미읽음 목록 기준 교체
+- 기존 로직: 로컬 DB 미읽음 메일을 순회하며 Graph API 개별 조회 (N+1 패턴)
+- 신규 로직: `GetUnreadMessageIdsAsync`로 서버 미읽음 ID 목록을 일괄 조회 후 로컬 DB와 Set 비교
+  - 서버에서 읽음 처리된 메일(로컬만 미읽음) → 로컬 `IsRead = true` 일괄 업데이트
+  - 서버에서 미읽음인 메일(로컬만 읽음) → 로컬 `IsRead = false` 일괄 업데이트 (선택적)
+- 적용 폴더: Inbox, SentItems (L-284 참조: 향후 설정으로 외부화 권장)
+
+#### 3. MainWindow.xaml.cs — 동기화 설정 대메뉴 통합
+- 기존: 동기화 관련 설정이 여러 하위 메뉴로 분산
+- 변경: 동기화 설정을 단일 대메뉴로 통합하여 UX 일관성 향상
+- 관련 UI 항목 재배치 및 이벤트 핸들러 정리
+
+#### 4. UserPreferencesSettings.cs — 설정 필드 2개 추가
+- `AiBatchSize` (int, 기본값 20): AI 분석 배치 처리 건수 설정 — 기존 하드코딩 값을 설정으로 외부화
+- `MailSyncInitialCount` (int, 기본값 100): 초기 메일 동기화 건수 설정 — SyncPeriodSettings.Value 보완용
+
+### 근본 원인 분석 (L-283 기록)
+- 증상 수준 수정(ViewModel 폴더 카운트 갱신)으로는 재발 차단 불가
+- Graph API 동기화 범위(7일)와 SyncReadStatusAsync의 로컬 기준 처리가 실제 근본 원인
+- kdev-2 추가 투입으로 데이터 흐름 전체 추적 후 서버 미읽음 목록 기준 교체로 근본 해결
+
+### 교훈 기록
+- L-283 (medium): kplan 증상 수준 계획 → 근본 원인 미포착 → kdev 추가 투입
+- L-284 (low): SyncReadStatusAsync 받은/보낸편지함만 적용 — 범위 문서화
+- L-285 (low): EmailsSynced 이벤트 0건 패턴 의미 모호성 — 이벤트 페이로드 개선 권장
+
+### 빌드/테스트
+- 빌드: 오류 0개 ✅
+- 런타임: 정상 ✅
+
+---
+
 ## 2026-03-29: Phase 3 — AI 규칙엔진 + 자동 팔로업 + 회의 전 브리핑
 
 **분류**: Fast Path (k3)

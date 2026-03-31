@@ -85,6 +85,8 @@ namespace mAIx.Services.Graph
             var response = await ExecuteWithRetryAsync(() => client.Me.MailFolders.GetAsync(config =>
             {
                 config.QueryParameters.Top = 100; // 한 번에 최대 100개
+                config.QueryParameters.Select = new[] { "id", "displayName", "parentFolderId",
+                    "unreadItemCount", "totalItemCount", "childFolderCount", "isHidden" };
             }), _logger, ct);
 
             // 모든 최상위 폴더 수집 (페이징)
@@ -358,11 +360,11 @@ namespace mAIx.Services.Graph
         /// id와 isRead만 가져와서 API 호출 비용 최소화
         /// </summary>
         /// <param name="folderId">폴더 ID</param>
-        /// <param name="days">조회할 일수 (기본 7일)</param>
+        /// <param name="days">조회할 일수 (기본 30일)</param>
         /// <returns>메일 ID와 읽음 상태 목록</returns>
         public async Task<IEnumerable<(string Id, bool IsRead)>> GetMessagesReadStatusAsync(
             string folderId,
-            int days = 7)
+            int days = 30)
         {
             var client = _authService.GetGraphClient();
             var result = new List<(string Id, bool IsRead)>();
@@ -374,7 +376,7 @@ namespace mAIx.Services.Graph
                 {
                     // 최소한의 필드만 선택 (id, isRead)
                     config.QueryParameters.Select = new[] { "id", "isRead" };
-                    config.QueryParameters.Top = 100;  // 한 번에 최대 100개
+                    config.QueryParameters.Top = 500;  // 한 번에 최대 500개 (30일치 커버)
                     config.QueryParameters.Filter = $"receivedDateTime ge {sinceDate}";
                     config.QueryParameters.Orderby = new[] { "receivedDateTime desc" };
                 });
@@ -399,6 +401,55 @@ namespace mAIx.Services.Graph
                     response = await client.Me.MailFolders[folderId].Messages
                         .WithUrl(response.OdataNextLink)
                         .GetAsync();
+                }
+                else
+                {
+                    break;
+                }
+            }
+
+            return result;
+        }
+
+        /// <summary>
+        /// 폴더의 서버 미읽음 메일 ID 목록 조회 (방안 B — 날짜 제한 없음)
+        /// Graph API에서 isRead eq false인 메일 ID만 가져와 로컬 DB와 비교하는 근본 해결 방식
+        /// </summary>
+        /// <param name="folderId">폴더 ID</param>
+        /// <param name="ct">취소 토큰</param>
+        /// <returns>서버에서 미읽음인 메일 ID(GraphId) 집합</returns>
+        public async Task<HashSet<string>> GetUnreadMessageIdsAsync(
+            string folderId,
+            CancellationToken ct = default)
+        {
+            var client = _authService.GetGraphClient();
+            var result = new HashSet<string>(StringComparer.Ordinal);
+
+            var response = await client.Me.MailFolders[folderId].Messages
+                .GetAsync(config =>
+                {
+                    config.QueryParameters.Select = new[] { "id" };
+                    config.QueryParameters.Filter = "isRead eq false";
+                    config.QueryParameters.Top = 1000;
+                }, ct);
+
+            // 페이징 처리 (@odata.nextLink)
+            while (response != null)
+            {
+                if (response.Value != null)
+                {
+                    foreach (var msg in response.Value)
+                    {
+                        if (!string.IsNullOrEmpty(msg.Id))
+                            result.Add(msg.Id);
+                    }
+                }
+
+                if (!string.IsNullOrEmpty(response.OdataNextLink))
+                {
+                    response = await client.Me.MailFolders[folderId].Messages
+                        .WithUrl(response.OdataNextLink)
+                        .GetAsync(cancellationToken: ct);
                 }
                 else
                 {

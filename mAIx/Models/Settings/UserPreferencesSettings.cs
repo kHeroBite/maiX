@@ -275,4 +275,16 @@ public class UserPreferencesSettings
     [XmlElement("ToastNotificationEnabled")]
     public bool ToastNotificationEnabled { get; set; } = true;
 
+    /// <summary>
+    /// AI 배치 분석 크기 (한 번에 분석할 메일 수, 기본 20건)
+    /// </summary>
+    [XmlElement("AiBatchSize")]
+    public int AiBatchSize { get; set; } = 20;
+
+    /// <summary>
+    /// 초기 동기화 건수 (첫 동기화 시 가져올 메일 수, 기본 100건)
+    /// </summary>
+    [XmlElement("MailSyncInitialCount")]
+    public int MailSyncInitialCount { get; set; } = 100;
+
 }

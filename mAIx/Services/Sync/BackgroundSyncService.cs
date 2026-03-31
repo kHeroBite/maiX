@@ -1167,6 +1167,8 @@ public class BackgroundSyncService : BackgroundService
         int totalDeleted = 0;
         var allSavedEmails = new List<Email>();
 
+        var priorityFolderNamesForRead = new[] { "받은 편지함", "Inbox", "보낸 편지함", "Sent Items" };
+
         // 각 폴더별 동기화 (우선순위 폴더부터)
         foreach (var folder in orderedFolders)
         {
@@ -1178,6 +1180,18 @@ public class BackgroundSyncService : BackgroundService
                 totalChanged += changed;
                 totalDeleted += deleted;
                 allSavedEmails.AddRange(savedEmails);
+
+                // 주요 폴더(받은/보낸편지함)에 대해 읽음 상태 동기화 추가
+                if (priorityFolderNamesForRead.Contains(folder.DisplayName, StringComparer.OrdinalIgnoreCase))
+                {
+                    var readStatusUpdated = await SyncReadStatusAsync(
+                        dbContext, graphMailService, folder.Id, ct);
+                    if (readStatusUpdated > 0)
+                    {
+                        _logger.Information("읽음 상태 동기화: {Count}건 업데이트 (폴더: {FolderName})",
+                            readStatusUpdated, folder.DisplayName);
+                    }
+                }
             }
             catch (Exception ex)
             {
@@ -1189,11 +1203,11 @@ public class BackgroundSyncService : BackgroundService
         // 마지막 동기화 시간 업데이트
         _lastSyncTime = DateTime.UtcNow;
 
-        // 새 메일이 있으면 이벤트 발생
+        // 항상 EmailsSynced 이벤트 발생 (0건이어도 읽음 상태 변경 시 UI 갱신 필요)
+        EmailsSynced?.Invoke(allSavedEmails.Count);
+
         if (allSavedEmails.Count > 0)
         {
-            EmailsSynced?.Invoke(allSavedEmails.Count);
-
             // 분석 파이프라인 실행 (받은편지함 메일만)
             var inboxEmails = allSavedEmails.Where(e =>
                 e.ParentFolderId != null &&
@@ -1655,56 +1669,43 @@ public class BackgroundSyncService : BackgroundService
     {
         try
         {
-            // 서버에서 최근 7일간 메일의 읽음 상태 조회
-            var serverReadStatus = await graphMailService.GetMessagesReadStatusAsync(folderId, days: 7);
-            var serverStatusList = serverReadStatus.ToList();
-            var serverStatusDict = serverStatusList.ToDictionary(x => x.Id, x => x.IsRead);
+            // [방안 B] 서버에서 실제 미읽음 메일 ID 목록 조회 (날짜 제한 없음)
+            // 서버 상태가 ground truth: 서버 미읽음 목록에 없으면 → 읽음으로 간주
+            var serverUnreadIds = await graphMailService.GetUnreadMessageIdsAsync(folderId, ct);
 
-            _logger.Debug("읽음 상태 조회: 서버 {ServerCount}건 (폴더: {FolderId})",
-                serverStatusDict.Count, folderId.Substring(0, Math.Min(folderId.Length, 20)));
+            _logger.Debug("읽음 상태 조회: 서버 미읽음 {ServerCount}건 (폴더: {FolderId})",
+                serverUnreadIds.Count, folderId.Substring(0, Math.Min(folderId.Length, 20)));
 
-            if (serverStatusDict.Count == 0)
-            {
-                return 0;
-            }
-
-            // DB에서 해당 폴더의 메일 조회 (EntryId 기준)
-            var dbEmails = await dbContext.Emails
-                .Where(e => e.ParentFolderId == folderId && e.EntryId != null)
-                .Select(e => new { e.Id, e.EntryId, e.IsRead, e.Subject })
+            // DB에서 해당 폴더의 IsRead=false 메일 조회 (EntryId 기준)
+            var dbUnreadEmails = await dbContext.Emails
+                .Where(e => e.ParentFolderId == folderId && e.EntryId != null && !e.IsRead)
+                .Select(e => new { e.Id, e.EntryId, e.Subject })
                 .ToListAsync(ct);
 
-            _logger.Debug("읽음 상태 비교: DB {DbCount}건 vs 서버 {ServerCount}건",
-                dbEmails.Count, serverStatusDict.Count);
+            _logger.Debug("읽음 상태 비교: DB 미읽음 {DbCount}건 vs 서버 미읽음 {ServerCount}건",
+                dbUnreadEmails.Count, serverUnreadIds.Count);
 
             int updatedCount = 0;
-            int matchedCount = 0;
 
-            foreach (var dbEmail in dbEmails)
+            foreach (var dbEmail in dbUnreadEmails)
             {
                 if (dbEmail.EntryId == null) continue;
 
-                // 서버에서 해당 메일의 읽음 상태 확인
-                if (serverStatusDict.TryGetValue(dbEmail.EntryId, out var serverIsRead))
+                // 서버 미읽음 목록에 없으면 → 서버에서 이미 읽음 처리됨 → 로컬 DB 업데이트
+                if (!serverUnreadIds.Contains(dbEmail.EntryId))
                 {
-                    matchedCount++;
-                    // 읽음 상태가 다르면 업데이트
-                    if (dbEmail.IsRead != serverIsRead)
+                    var email = await dbContext.Emails.FindAsync(new object[] { dbEmail.Id }, ct);
+                    if (email != null)
                     {
-                        var email = await dbContext.Emails.FindAsync(new object[] { dbEmail.Id }, ct);
-                        if (email != null)
-                        {
-                            _logger.Debug("읽음 상태 동기화: {Subject} ({OldValue} -> {NewValue})",
-                                dbEmail.Subject, dbEmail.IsRead, serverIsRead);
-                            email.IsRead = serverIsRead;
-                            updatedCount++;
-                        }
+                        _logger.Debug("읽음 상태 동기화 (서버 기준): {Subject} (false -> true)",
+                            dbEmail.Subject);
+                        email.IsRead = true;
+                        updatedCount++;
                     }
                 }
             }
 
-            _logger.Debug("읽음 상태 매칭: {MatchedCount}건 중 {UpdatedCount}건 변경",
-                matchedCount, updatedCount);
+            _logger.Debug("읽음 상태 동기화 완료: {UpdatedCount}건 읽음 처리", updatedCount);
 
             if (updatedCount > 0)
             {
