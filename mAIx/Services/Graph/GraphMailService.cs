@@ -247,6 +247,39 @@ namespace mAIx.Services.Graph
         }
 
         /// <summary>
+        /// 메일의 인라인 첨부파일(cid: 이미지) 조회 — contentId + base64 데이터 반환
+        /// </summary>
+        public async Task<List<(string ContentId, string ContentType, byte[] ContentBytes)>>
+            GetInlineAttachmentsAsync(string messageId, CancellationToken ct = default)
+        {
+            var result = new List<(string, string, byte[])>();
+            try
+            {
+                var client = _authService.GetGraphClient();
+                var attachments = await ExecuteWithRetryAsync(() =>
+                    client.Me.Messages[messageId].Attachments.GetAsync(config =>
+                    {
+                        config.QueryParameters.Select = new[] { "id", "contentType", "contentId", "isInline", "microsoft.graph.fileAttachment/contentBytes" };
+                    }), _logger, ct);
+
+                if (attachments?.Value == null) return result;
+
+                foreach (var att in attachments.Value)
+                {
+                    if (att is FileAttachment fileAtt && fileAtt.IsInline == true && !string.IsNullOrEmpty(fileAtt.ContentId))
+                    {
+                        result.Add((fileAtt.ContentId, fileAtt.ContentType ?? "image/png", fileAtt.ContentBytes ?? Array.Empty<byte>()));
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.Warning(ex, "인라인 첨부파일 조회 실패: {MessageId}", messageId);
+            }
+            return result;
+        }
+
+        /// <summary>
         /// Delta Query로 변경된 메일만 조회
         /// </summary>
         /// <param name="folderId">폴더 ID</param>

@@ -526,3 +526,12 @@
 - **패턴**: `foreach (var item in items) { try { ctx.Add(item); await ctx.SaveChangesAsync(); } catch { ctx.Entry(item).State = EntityState.Detached; } }`
 - **심각도**: 높음 (읽음 상태 영구 미동기화 — 사용자 체감 버그)
 - **Level**: 1 (참고)
+
+## L-320: kfinish Step 1에서 kfinish_cleanup 스킵 금지 (2026-04-01)
+
+- **문제**: kfinish 실행 시 "팀이 이미 삭제됐고 고아 pane도 없으니 kfinish_cleanup 스킵해도 된다"고 판단하여 `Skill('kfinish_cleanup')` 미호출. 결과적으로 4개의 고아 pane(2.1.89)과 고착 파이프라인이 정리되지 않고 잔류.
+- **근본 원인**: "정리 대상이 없다"는 수동 판단이 실제 상태와 불일치. 수동 확인은 고아 pane/고착 파이프라인을 놓칠 수 있음.
+- **해결**: kfinish SKILL.md Step 1에 L-320 규칙 추가 — 팀/pane이 0개여도 반드시 kfinish_cleanup 실행 또는 team-report.sh + team-cleanup.sh 호출 필수.
+- **재발방지**: 스킬 규칙 강화 (kfinish SKILL.md Step 1 주석). Hook은 불필요 (LLM 의지 의존이지만, 이 수준은 스킬 규칙 + 교훈 참조로 충분).
+- **심각도**: 중간 (고아 pane 잔류 → 리소스 누수 + 다음 세션 혼란)
+- **Level**: 2 (규칙)

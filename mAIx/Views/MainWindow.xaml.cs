@@ -937,6 +937,33 @@ public partial class MainWindow : FluentWindow
             var scrollbarThumbHoverColor = isDark ? "#777777" : "#a0a0a0";
             var scrollbarTrackColor = isDark ? "#2d2d2d" : "#f0f0f0";
 
+            // cid: 인라인 이미지 치환 (HTML 메일 + cid: 참조 존재 시)
+            var bodyContent = email.Body;
+            if (email.IsHtml && bodyContent.Contains("cid:", StringComparison.OrdinalIgnoreCase))
+            {
+                try
+                {
+                    var graphMailService = (App.Current as App)?.GraphMailService;
+                    if (graphMailService != null && !string.IsNullOrEmpty(email.EntryId))
+                    {
+                        var inlineAttachments = await graphMailService.GetInlineAttachmentsAsync(email.EntryId);
+                        foreach (var (contentId, contentType, contentBytes) in inlineAttachments)
+                        {
+                            if (contentBytes.Length > 0)
+                            {
+                                var base64 = Convert.ToBase64String(contentBytes);
+                                var dataUri = $"data:{contentType};base64,{base64}";
+                                bodyContent = bodyContent.Replace($"cid:{contentId}", dataUri, StringComparison.OrdinalIgnoreCase);
+                            }
+                        }
+                    }
+                }
+                catch (Exception cidEx)
+                {
+                    Log4.Warn($"cid: 인라인 이미지 치환 실패: {cidEx.Message}");
+                }
+            }
+
             string htmlContent;
             if (email.IsHtml)
             {
@@ -1008,7 +1035,7 @@ public partial class MainWindow : FluentWindow
     </script>
 </head>
 <body>
-{email.Body}
+{bodyContent}
 </body>
 </html>";
             }
@@ -16486,6 +16513,46 @@ public partial class MainWindow : FluentWindow
         allMailStack.Children.Add(CreateSettingsDescription("전체 메일 동기화 주기입니다."));
         allMailGroup.Child = allMailStack;
         SettingsContentPanel.Children.Add(allMailGroup);
+
+        // 메일 전체 폴더 재동기화 버튼
+        var mailResyncGroup = CreateSettingsGroupBorder();
+        var mailResyncStack = new StackPanel();
+        mailResyncStack.Children.Add(CreateSettingsLabel("메일 전체 폴더 재동기화"));
+        mailResyncStack.Children.Add(CreateSettingsDescription("모든 메일 폴더를 강제로 다시 동기화합니다."));
+
+        var mailResyncButton = new Wpf.Ui.Controls.Button
+        {
+            Content = "메일 재동기화",
+            Appearance = Wpf.Ui.Controls.ControlAppearance.Primary,
+            Margin = new Thickness(0, 8, 0, 0),
+            Padding = new Thickness(24, 8, 24, 8)
+        };
+        mailResyncButton.Click += async (s, e) =>
+        {
+            mailResyncButton.IsEnabled = false;
+            mailResyncButton.Content = "재동기화 중...";
+            try
+            {
+                await _viewModel.ForceResyncAllAsync();
+                mailResyncButton.Content = "✅ 완료";
+                await Task.Delay(2000);
+                mailResyncButton.Content = "메일 재동기화";
+            }
+            catch (Exception ex)
+            {
+                Log4.Error($"메일 재동기화 실패: {ex.Message}");
+                mailResyncButton.Content = "❌ 실패";
+                await Task.Delay(2000);
+                mailResyncButton.Content = "메일 재동기화";
+            }
+            finally
+            {
+                mailResyncButton.IsEnabled = true;
+            }
+        };
+        mailResyncStack.Children.Add(mailResyncButton);
+        mailResyncGroup.Child = mailResyncStack;
+        SettingsContentPanel.Children.Add(mailResyncGroup);
     }
 
     /// <summary>
