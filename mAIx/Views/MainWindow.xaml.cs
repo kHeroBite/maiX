@@ -943,17 +943,22 @@ public partial class MainWindow : FluentWindow
             {
                 try
                 {
-                    var graphMailService = (App.Current as App)?.GraphMailService;
-                    if (graphMailService != null && !string.IsNullOrEmpty(email.EntryId))
+                    var app = App.Current as App;
+                    if (app != null && !string.IsNullOrEmpty(email.EntryId))
                     {
-                        var inlineAttachments = await graphMailService.GetInlineAttachmentsAsync(email.EntryId);
-                        foreach (var (contentId, contentType, contentBytes) in inlineAttachments)
+                        using var scope = app.ServiceProvider.CreateScope();
+                        var graphMailService = scope.ServiceProvider.GetService<Services.Graph.GraphMailService>();
+                        if (graphMailService != null)
                         {
-                            if (contentBytes.Length > 0)
+                            var inlineAttachments = await graphMailService.GetInlineAttachmentsAsync(email.EntryId);
+                            foreach (var (contentId, contentType, contentBytes) in inlineAttachments)
                             {
-                                var base64 = Convert.ToBase64String(contentBytes);
-                                var dataUri = $"data:{contentType};base64,{base64}";
-                                bodyContent = bodyContent.Replace($"cid:{contentId}", dataUri, StringComparison.OrdinalIgnoreCase);
+                                if (contentBytes.Length > 0)
+                                {
+                                    var base64 = Convert.ToBase64String(contentBytes);
+                                    var dataUri = $"data:{contentType};base64,{base64}";
+                                    bodyContent = bodyContent.Replace($"cid:{contentId}", dataUri, StringComparison.OrdinalIgnoreCase);
+                                }
                             }
                         }
                     }

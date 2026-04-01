@@ -257,10 +257,7 @@ namespace mAIx.Services.Graph
             {
                 var client = _authService.GetGraphClient();
                 var attachments = await ExecuteWithRetryAsync(() =>
-                    client.Me.Messages[messageId].Attachments.GetAsync(config =>
-                    {
-                        config.QueryParameters.Select = new[] { "id", "contentType", "contentId", "isInline", "microsoft.graph.fileAttachment/contentBytes" };
-                    }), _logger, ct);
+                    client.Me.Messages[messageId].Attachments.GetAsync(), _logger, ct);
 
                 if (attachments?.Value == null) return result;
 
