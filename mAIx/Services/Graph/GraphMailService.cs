@@ -214,6 +214,39 @@ namespace mAIx.Services.Graph
         }
 
         /// <summary>
+        /// 역방향 동기화용: 특정 날짜 이전 메일 조회 (50건씩)
+        /// </summary>
+        /// <param name="folderId">폴더 ID</param>
+        /// <param name="before">이 시각보다 이전 메일만 조회</param>
+        /// <param name="top">조회할 메일 수 (기본 50)</param>
+        public async Task<IEnumerable<Message>> GetHistoricalMessagesAsync(
+            string folderId,
+            DateTime before,
+            int top = 50,
+            CancellationToken ct = default)
+        {
+            var client = _authService.GetGraphClient();
+            var selectFields = new[] {
+                "id", "internetMessageId", "conversationId", "subject", "body",
+                "from", "toRecipients", "ccRecipients", "bccRecipients", "receivedDateTime",
+                "isRead", "flag", "importance", "hasAttachments", "categories", "parentFolderId",
+                "bodyPreview"
+            };
+            var beforeUtc = before.ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ssZ");
+
+            var response = await ExecuteWithRetryAsync(() =>
+                client.Me.MailFolders[folderId].Messages.GetAsync(config =>
+                {
+                    config.QueryParameters.Select = selectFields;
+                    config.QueryParameters.Top = top;
+                    config.QueryParameters.Orderby = new[] { "receivedDateTime desc" };
+                    config.QueryParameters.Filter = $"receivedDateTime lt {beforeUtc}";
+                }), _logger, ct);
+
+            return response?.Value ?? new List<Message>();
+        }
+
+        /// <summary>
         /// Delta Query로 변경된 메일만 조회
         /// </summary>
         /// <param name="folderId">폴더 ID</param>

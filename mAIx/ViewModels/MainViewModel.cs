@@ -62,6 +62,10 @@ public partial class MainViewModel : ViewModelBase, IDisposable
         _syncService.CalendarSyncProgress += OnCalendarSyncProgress;
         _syncService.CalendarSynced += OnCalendarSynced;
 
+        // 역방향 동기화 이벤트 구독
+        _syncService.HistoricalSyncProgress += OnHistoricalSyncProgress;
+        _syncService.HistoricalSyncCompleted += OnHistoricalSyncCompleted;
+
         // 초기 상태 동기화
         _isSyncPaused = _syncService.IsPaused;
         UpdateSyncStatus();
@@ -122,6 +126,32 @@ public partial class MainViewModel : ViewModelBase, IDisposable
             // (다른 앱에서 메일을 읽은 경우 UI 메일 목록 변경 없어도 카운트 반영 필요)
             await RefreshFolderUnreadCountsAsync();
         });
+    }
+
+    private void OnHistoricalSyncProgress(int fetched)
+    {
+        System.Windows.Application.Current?.Dispatcher.Invoke(() =>
+        {
+            IsHistoricalSyncRunning = true;
+            HistoricalSyncStatusText = $"이전 메일 동기화 중... {fetched}건";
+        });
+    }
+
+    private void OnHistoricalSyncCompleted()
+    {
+        System.Windows.Application.Current?.Dispatcher.Invoke(() =>
+        {
+            IsHistoricalSyncRunning = false;
+            HistoricalSyncStatusText = "";
+        });
+    }
+
+    [RelayCommand]
+    private void TriggerHistoricalSync()
+    {
+        _syncService.TriggerHistoricalSync();
+        IsHistoricalSyncRunning = true;
+        HistoricalSyncStatusText = "이전 메일 동기화 시작...";
     }
 
     /// <summary>
@@ -703,6 +733,14 @@ public partial class MainViewModel : ViewModelBase, IDisposable
     /// </summary>
     [ObservableProperty]
     private string _calendarSyncStatusText = "일정: 대기 중";
+
+    /// <summary>역방향 동기화 진행 중 여부</summary>
+    [ObservableProperty]
+    private bool _isHistoricalSyncRunning;
+
+    /// <summary>역방향 동기화 진행 텍스트</summary>
+    [ObservableProperty]
+    private string _historicalSyncStatusText = "";
 
     /// <summary>
     /// 캘린더 동기화 진행률 (0-100)
@@ -3308,6 +3346,8 @@ public partial class MainViewModel : ViewModelBase, IDisposable
         _syncService.CalendarSyncStarted -= OnCalendarSyncStarted;
         _syncService.CalendarSyncProgress -= OnCalendarSyncProgress;
         _syncService.CalendarSynced -= OnCalendarSynced;
+        _syncService.HistoricalSyncProgress -= OnHistoricalSyncProgress;
+        _syncService.HistoricalSyncCompleted -= OnHistoricalSyncCompleted;
 
         GC.SuppressFinalize(this);
     }

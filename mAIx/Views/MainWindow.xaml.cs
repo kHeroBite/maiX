@@ -2330,6 +2330,16 @@ public partial class MainWindow : FluentWindow
         }
     }
 
+    private void LoadMoreButton_Click(object sender, RoutedEventArgs e)
+    {
+        _viewModel.TriggerHistoricalSyncCommand.Execute(null);
+    }
+
+    private void EmailSyncHistorical_Click(object sender, RoutedEventArgs e)
+    {
+        _viewModel.TriggerHistoricalSyncCommand.Execute(null);
+    }
+
     /// <summary>
     /// 플래그 설정
     /// </summary>
@@ -16418,8 +16428,6 @@ public partial class MainWindow : FluentWindow
 
         var shortIntervalOptions = new[] { (10, "10초"), (30, "30초"), (60, "1분"), (120, "2분") };
         var longIntervalOptions = new[] { (60, "1분"), (300, "5분"), (600, "10분") };
-        var countOptions = new[] { (50, "50건"), (100, "100건"), (200, "200건") };
-
         // 즐겨찾기 동기화 주기
         var favMailGroup = CreateSettingsGroupBorder();
         var favMailStack = new StackPanel();
@@ -16478,35 +16486,6 @@ public partial class MainWindow : FluentWindow
         allMailStack.Children.Add(CreateSettingsDescription("전체 메일 동기화 주기입니다."));
         allMailGroup.Child = allMailStack;
         SettingsContentPanel.Children.Add(allMailGroup);
-
-        // 초기 동기화 건수
-        var syncCountGroup = CreateSettingsGroupBorder();
-        var syncCountStack = new StackPanel();
-        syncCountStack.Children.Add(CreateSettingsLabel("초기 동기화 건수"));
-        var syncCountWrap = new WrapPanel { Margin = new Thickness(0, 0, 0, 12) };
-        var currentCount = prefs.MailSyncInitialCount > 0 ? prefs.MailSyncInitialCount : 100;
-        foreach (var (count, label) in countOptions)
-        {
-            var radio = new RadioButton
-            {
-                Content = label,
-                Tag = count,
-                IsChecked = currentCount == count,
-                Margin = new Thickness(0, 0, 16, 8),
-                GroupName = "SyncMailInitialCount"
-            };
-            radio.Checked += (s, e) =>
-            {
-                prefs.MailSyncInitialCount = count;
-                App.Settings.SaveUserPreferences();
-                Log4.Info($"초기 동기화 건수 저장: {count}건");
-            };
-            syncCountWrap.Children.Add(radio);
-        }
-        syncCountStack.Children.Add(syncCountWrap);
-        syncCountStack.Children.Add(CreateSettingsDescription("첫 동기화 시 가져올 메일 수입니다."));
-        syncCountGroup.Child = syncCountStack;
-        SettingsContentPanel.Children.Add(syncCountGroup);
     }
 
     /// <summary>

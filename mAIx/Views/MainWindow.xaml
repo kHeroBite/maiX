@@ -1380,6 +1380,7 @@
                 <Grid.RowDefinitions>
                     <RowDefinition Height="Auto"/>
                     <RowDefinition Height="*"/>
+                    <RowDefinition Height="Auto"/>
                 </Grid.RowDefinitions>
 
                 <!-- 메일 리스트 헤더 (Row 0) -->
@@ -1797,6 +1798,12 @@
                                 </MenuItem.Template>
                             </MenuItem>
                             <Separator Background="{DynamicResource ControlElevationBorderBrush}" Margin="8,4"/>
+                            <MenuItem Click="EmailSyncHistorical_Click"
+                                      Header="⬆️ 이전 메일 동기화"
+                                      Foreground="{DynamicResource TextFillColorPrimaryBrush}"
+                                      Background="Transparent"
+                                      Padding="12,8"/>
+                            <Separator Background="{DynamicResource ControlElevationBorderBrush}" Margin="8,4"/>
                             <!-- 삭제 메뉴 - 기본 MenuItem 스타일 + Click 이벤트 -->
                             <MenuItem x:Name="DeleteMenuItem"
                                       Header="🗑️ 삭제"
@@ -2111,6 +2118,31 @@
                         </DataTemplate>
                     </ListBox.ItemTemplate>
                 </ListBox>
+
+                <!-- 이전 메일 더 불러오기 버튼 (Row 2) -->
+                <Border Grid.Row="2"
+                        Padding="12,6"
+                        BorderBrush="{DynamicResource ControlElevationBorderBrush}"
+                        BorderThickness="0,1,0,0">
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        <TextBlock Grid.Column="0"
+                                   Text="{Binding HistoricalSyncStatusText}"
+                                   FontSize="11"
+                                   Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                                   VerticalAlignment="Center"
+                                   Visibility="{Binding IsHistoricalSyncRunning, Converter={StaticResource BoolToVisibilityConverter}}"/>
+                        <Button Grid.Column="1"
+                                x:Name="LoadMoreButton"
+                                Content="⬆ 이전 메일 불러오기"
+                                FontSize="11"
+                                Padding="8,4"
+                                Click="LoadMoreButton_Click"/>
+                    </Grid>
+                </Border>
 
                 <!-- 다중 선택 일괄 작업 액션바 (2건+ 선택 시 하단 오버레이) -->
                 <Border x:Name="BulkActionBar"

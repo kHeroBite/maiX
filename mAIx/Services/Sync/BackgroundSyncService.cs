@@ -80,6 +80,14 @@ public class BackgroundSyncService : BackgroundService
     private int _chatSyncCount;
     private int _errorCount;
 
+    // 역방향 동기화 (Historical Sync)
+    private const int HistoricalSyncBatchSize = 50;
+    private const int HistoricalSyncIntervalSeconds = 10;
+    private int _historicalSyncFetched;
+    private CancellationTokenSource? _historicalSyncTriggerCts;
+    private bool _historicalSyncCompleted;
+    private int _isHistoricalSyncing;
+
     /// <summary>
     /// 동기화 일시정지/재개 이벤트
     /// </summary>
@@ -185,6 +193,12 @@ public class BackgroundSyncService : BackgroundService
     /// </summary>
     public event Action<int, int, int>? CalendarEventsSynced;
 
+    /// <summary>역방향 동기화 진행 이벤트 (누적 가져온 건수)</summary>
+    public event Action<int>? HistoricalSyncProgress;
+
+    /// <summary>역방향 동기화 완료 이벤트</summary>
+    public event Action? HistoricalSyncCompleted;
+
     public BackgroundSyncService(IServiceProvider serviceProvider, ToastNotificationService toastNotificationService, MailRuleService mailRuleService)
     {
         _serviceProvider = serviceProvider ?? throw new ArgumentNullException(nameof(serviceProvider));
@@ -283,9 +297,10 @@ public class BackgroundSyncService : BackgroundService
         var ruleEngineTask = RunRuleEngineLoopAsync(stoppingToken);
         var followUpTask = RunFollowUpCheckLoopAsync(stoppingToken);
         var meetingBriefingTask = RunMeetingBriefingLoopAsync(stoppingToken);
+        var historicalSyncTask = RunHistoricalSyncLoopAsync(stoppingToken);
 
         // 모든 Task가 완료될 때까지 대기
-        await Task.WhenAll(favoriteTask, fullTask, calendarTask, chatTask, analysisBatchTask, scheduledSendTask, snoozeCheckTask, ruleEngineTask, followUpTask, meetingBriefingTask);
+        await Task.WhenAll(favoriteTask, fullTask, calendarTask, chatTask, analysisBatchTask, scheduledSendTask, snoozeCheckTask, ruleEngineTask, followUpTask, meetingBriefingTask, historicalSyncTask);
 
         _logger.Information("백그라운드 동기화 서비스 중지됨");
     }
@@ -2843,6 +2858,104 @@ public class BackgroundSyncService : BackgroundService
                 _logger.Warning(ex, "미팅 브리핑 루프 오류");
             }
         }
+    }
+
+    /// <summary>
+    /// 역방향 동기화 루프: 초기 동기화 완료 후 이전 메일을 50건씩 가져옴
+    /// </summary>
+    private async Task RunHistoricalSyncLoopAsync(CancellationToken stoppingToken)
+    {
+        Log4.Info("[BackgroundSyncService] 역방향 동기화 루프 시작");
+        await Task.Delay(TimeSpan.FromSeconds(5), stoppingToken);
+
+        while (!stoppingToken.IsCancellationRequested && !_historicalSyncCompleted)
+        {
+            try
+            {
+                _historicalSyncTriggerCts = CancellationTokenSource.CreateLinkedTokenSource(stoppingToken);
+                using var timer = new PeriodicTimer(TimeSpan.FromSeconds(HistoricalSyncIntervalSeconds));
+                while (await timer.WaitForNextTickAsync(_historicalSyncTriggerCts.Token))
+                {
+                    if (_isPaused) continue;
+                    await ExecuteHistoricalSyncAsync(stoppingToken);
+                    if (_historicalSyncCompleted) break;
+                }
+            }
+            catch (OperationCanceledException) when (!stoppingToken.IsCancellationRequested)
+            {
+                Log4.Info("[BackgroundSyncService] 역방향 동기화 수동 트리거 — 즉시 실행");
+                await ExecuteHistoricalSyncAsync(stoppingToken);
+            }
+        }
+        Log4.Info($"[BackgroundSyncService] 역방향 동기화 루프 종료 (총 {_historicalSyncFetched}건)");
+    }
+
+    /// <summary>
+    /// 역방향 동기화 1회 실행 (Inbox 폴더 기준)
+    /// </summary>
+    private async Task ExecuteHistoricalSyncAsync(CancellationToken ct)
+    {
+        if (Interlocked.CompareExchange(ref _isHistoricalSyncing, 1, 0) != 0) return;
+        try
+        {
+            using var scope = _serviceProvider.CreateScope();
+            var graphAuthService = scope.ServiceProvider.GetRequiredService<GraphAuthService>();
+            if (!graphAuthService.IsLoggedIn) return;
+
+            var dbContext = scope.ServiceProvider.GetRequiredService<mAIxDbContext>();
+            var graphMailService = scope.ServiceProvider.GetRequiredService<GraphMailService>();
+
+            var inboxFolder = await dbContext.Folders
+                .FirstOrDefaultAsync(f => f.AccountEmail == graphAuthService.CurrentUserEmail
+                    && (f.DisplayName == "받은 편지함" || f.DisplayName.ToLower() == "inbox"), ct);
+            if (inboxFolder == null) return;
+
+            var oldestDate = await dbContext.Emails
+                .Where(e => e.ParentFolderId == inboxFolder.Id && e.ReceivedDateTime.HasValue)
+                .MinAsync(e => (DateTime?)e.ReceivedDateTime, ct);
+
+            if (!oldestDate.HasValue)
+            {
+                _historicalSyncCompleted = true;
+                HistoricalSyncCompleted?.Invoke();
+                return;
+            }
+
+            var messages = (await graphMailService.GetHistoricalMessagesAsync(
+                inboxFolder.Id, oldestDate.Value, HistoricalSyncBatchSize, ct)).ToList();
+
+            if (messages.Count == 0)
+            {
+                _historicalSyncCompleted = true;
+                Log4.Info($"[BackgroundSyncService] 역방향 동기화 완료 — 총 {_historicalSyncFetched}건");
+                HistoricalSyncCompleted?.Invoke();
+                return;
+            }
+
+            await SaveEmailsAsync(dbContext, messages, graphAuthService.CurrentUserEmail, inboxFolder.Id, ct);
+            Interlocked.Add(ref _historicalSyncFetched, messages.Count);
+            Log4.Info($"[BackgroundSyncService] 역방향 동기화 {messages.Count}건 저장 (누계: {_historicalSyncFetched}건)");
+            HistoricalSyncProgress?.Invoke(_historicalSyncFetched);
+        }
+        catch (Exception ex)
+        {
+            Log4.Error($"[BackgroundSyncService] 역방향 동기화 실패: {ex.Message}");
+            _logger.Error(ex, "역방향 동기화 실패");
+        }
+        finally
+        {
+            Interlocked.Exchange(ref _isHistoricalSyncing, 0);
+        }
+    }
+
+    /// <summary>
+    /// 역방향 동기화 수동 트리거 (UI에서 호출)
+    /// </summary>
+    public void TriggerHistoricalSync()
+    {
+        _historicalSyncCompleted = false;
+        _historicalSyncTriggerCts?.Cancel();
+        Log4.Info("[BackgroundSyncService] 역방향 동기화 수동 트리거");
     }
 
     /// <summary>
