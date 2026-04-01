@@ -2,6 +2,34 @@
 
 > PROJECT.md 작업 이력 테이블의 상세 보완본
 
+## 2026-04-01 — cid: 인라인 이미지 virtual host 방식 전환 + 빈 본문 메타데이터 카드 표시
+
+**분류**: Fast Path (k3)
+**수정 파일**: 1개 (MainWindow.xaml.cs)
+
+### 변경 내역
+
+#### MainWindow.xaml.cs — WebView2 렌더링 방식 전환 + 빈 본문 처리
+
+- **이슈 1 — cid: 인라인 이미지 미표시**: data URI 방식에서 virtual host 방식으로 전환
+  - 근본 원인: data URI 변환 시 HTML 크기 3.4MB+ → `NavigateToString()` 크기 제한 초과
+  - 해결: `SetVirtualHostNameToFolderMapping("maix.local", tempFolder)` + 임시 파일 서빙 방식 적용
+  - cid: 이미지를 임시 폴더에 파일로 저장 → `<img src="https://maix.local/cid_xxx.jpg">` URL로 대체
+
+- **이슈 2 — 일정 수락 메일 빈 본문**: `BuildEmptyBodyPlaceholder()` 메타데이터 카드 표시
+  - 제목, 발신자, 수신일시 정보를 HTML 카드 형식으로 렌더링
+
+- **이슈 3 — 빈 본문 전환 시 이전 메일 잔류**: `NavigateToString("<html><body></body></html>")` 선행 초기화
+  - 빈 본문 표시 전 WebView2 초기화로 이전 콘텐츠 완전 소거
+
+- **디버그 로그 추가**: LoadMailBodyAsync 진입/분기 로그, SelectedEmail 변경 로그, cid 상세 로그
+
+### 교훈 기록
+- L-287: WebView2 NavigateToString 크기 제한 — cid: 인라인 이미지는 virtual host 방식 필수 (Level 2)
+- L-288: 빈 본문 전환 시 NavigateToString 선행 초기화 필수 (Level 1)
+
+---
+
 ## 2026-04-01 — 받은편지함 읽음 상태 동기화 실패 근본 수정 (DbContext 오염 방지 + SyncReadStatusAsync 독립 실행)
 
 **분류**: Fast Path (k3)

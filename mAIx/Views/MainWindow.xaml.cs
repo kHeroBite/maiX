@@ -39,6 +39,7 @@ public partial class MainWindow : FluentWindow
     private bool _webView2Initialized;
     private bool _draftEditorInitialized;
     private bool _draftEditorReady;
+    private readonly string _cidTempDir = System.IO.Path.Combine(System.IO.Path.GetTempPath(), "mAIx_cid");
 
     // 실행취소용 변수 (삭제/이동 공통)
     private Email? _lastDeletedEmail;
@@ -120,6 +121,7 @@ public partial class MainWindow : FluentWindow
         {
             if (e.PropertyName == nameof(MainViewModel.SelectedEmail))
             {
+                Log4.Debug($"[MainWindow] SelectedEmail 변경: {_viewModel.SelectedEmail?.Subject ?? "null"}");
                 // 편집 중에 다른 메일 선택 시 자동 저장
                 if (_viewModel.IsEditingDraft)
                 {
@@ -347,6 +349,13 @@ public partial class MainWindow : FluentWindow
         {
             await MailBodyWebView.EnsureCoreWebView2Async();
             _webView2Initialized = true;
+
+            // cid: 인라인 이미지 virtual host 매핑 설정
+            System.IO.Directory.CreateDirectory(_cidTempDir);
+            MailBodyWebView.CoreWebView2.SetVirtualHostNameToFolderMapping(
+                "cid.local", _cidTempDir,
+                Microsoft.Web.WebView2.Core.CoreWebView2HostResourceAccessKind.Allow);
+            Log4.Debug($"[cid] virtual host 매핑 설정: cid.local → {_cidTempDir}");
 
             // WebView2 설정
             MailBodyWebView.CoreWebView2.Settings.IsScriptEnabled = true;
@@ -917,12 +926,28 @@ public partial class MainWindow : FluentWindow
     /// </summary>
     private async void LoadMailBodyAsync(Email? email)
     {
+        Log4.Debug($"[LoadMailBody] 진입: email={email?.Subject ?? "null"}, Body.Length={email?.Body?.Length ?? -1}, IsHtml={email?.IsHtml}, webView2Init={_webView2Initialized}");
         if (!_webView2Initialized || MailBodyWebView.CoreWebView2 == null)
             return;
 
-        if (email == null || string.IsNullOrEmpty(email.Body))
+        if (email == null)
         {
             await MailBodyWebView.CoreWebView2.ExecuteScriptAsync("document.body.innerHTML = ''");
+            return;
+        }
+
+        if (string.IsNullOrEmpty(email.Body))
+        {
+            Log4.Debug($"[LoadMailBody] 빈 본문 분기: Subject={email.Subject}, PreviewText={email.PreviewText?.Substring(0, Math.Min(50, email.PreviewText?.Length ?? 0))}");
+            // 빈 본문: 이전 메일 내용 잔류 방지를 위해 먼저 초기화 후 placeholder 표시
+            MailBodyWebView.CoreWebView2.NavigateToString("<html><body></body></html>");
+            // 테마 색상 결정 (빈 본문 대체 표시에도 필요)
+            var theme0 = Wpf.Ui.Appearance.ApplicationThemeManager.GetAppTheme();
+            var isDark0 = theme0 == Wpf.Ui.Appearance.ApplicationTheme.Dark;
+            var bgColor0 = isDark0 ? "#1e1e1e" : "#ffffff";
+            var textColor0 = isDark0 ? "#e0e0e0" : "#1e1e1e";
+            var placeholderHtml = BuildEmptyBodyPlaceholder(email, bgColor0, textColor0);
+            MailBodyWebView.CoreWebView2.NavigateToString(placeholderHtml);
             return;
         }
 
@@ -941,6 +966,22 @@ public partial class MainWindow : FluentWindow
             var bodyContent = email.Body;
             if (email.IsHtml && bodyContent.Contains("cid:", StringComparison.OrdinalIgnoreCase))
             {
+                Log4.Debug($"[cid] 인라인 이미지 치환 시작: entryId={email.EntryId}");
+                // 이전 메일의 cid 임시 파일 정리
+                try
+                {
+                    System.IO.Directory.CreateDirectory(_cidTempDir);
+                    foreach (var oldFile in System.IO.Directory.GetFiles(_cidTempDir))
+                        System.IO.File.Delete(oldFile);
+                }
+                catch (Exception cleanEx)
+                {
+                    Log4.Warn($"[cid] 임시 파일 정리 실패: {cleanEx.Message}");
+                }
+                // HTML body에 존재하는 cid: 참조 패턴 추출 (디버깅용)
+                var cidMatches = System.Text.RegularExpressions.Regex.Matches(bodyContent, @"cid:([^\s""'<>]+)", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+                foreach (System.Text.RegularExpressions.Match m in cidMatches)
+                    Log4.Debug($"[cid] HTML에서 발견된 cid 참조: {m.Groups[1].Value}");
                 try
                 {
                     var app = App.Current as App;
@@ -951,15 +992,37 @@ public partial class MainWindow : FluentWindow
                         if (graphMailService != null)
                         {
                             var inlineAttachments = await graphMailService.GetInlineAttachmentsAsync(email.EntryId);
+                            Log4.Debug($"[cid] 조회 결과: {inlineAttachments.Count}개 첨부파일");
+                            var replacedCount = 0;
                             foreach (var (contentId, contentType, contentBytes) in inlineAttachments)
                             {
-                                if (contentBytes.Length > 0)
+                                if (contentBytes == null || contentBytes.Length == 0)
                                 {
-                                    var base64 = Convert.ToBase64String(contentBytes);
-                                    var dataUri = $"data:{contentType};base64,{base64}";
-                                    bodyContent = bodyContent.Replace($"cid:{contentId}", dataUri, StringComparison.OrdinalIgnoreCase);
+                                    Log4.Warn($"[cid] att 건너뜀(bytes 없음): contentId={contentId}");
+                                    continue;
+                                }
+                                var effectiveContentType = string.IsNullOrEmpty(contentType) ? "application/octet-stream" : contentType;
+                                var cidKey = contentId.Trim('<', '>');
+                                Log4.Debug($"[cid] att: contentId={contentId}, cidKey={cidKey}, type={effectiveContentType}, bytes={contentBytes.Length}");
+                                // 임시 파일로 저장 후 virtual host URL로 치환 (NavigateToString 크기 제한 우회)
+                                var safeFileName = System.Text.RegularExpressions.Regex.Replace(cidKey, @"[^\w\-.]", "_")
+                                    + "." + GetExtFromMime(effectiveContentType);
+                                var filePath = System.IO.Path.Combine(_cidTempDir, safeFileName);
+                                System.IO.File.WriteAllBytes(filePath, contentBytes);
+                                var localUrl = $"https://cid.local/{safeFileName}";
+                                var beforeLen = bodyContent.Length;
+                                bodyContent = bodyContent.Replace($"cid:{cidKey}", localUrl, StringComparison.OrdinalIgnoreCase);
+                                if (bodyContent.Length != beforeLen)
+                                {
+                                    Log4.Debug($"[cid] 치환 성공: cid:{cidKey} → {localUrl} ({contentBytes.Length}bytes)");
+                                    replacedCount++;
+                                }
+                                else
+                                {
+                                    Log4.Warn($"[cid] 치환 미매칭: cid:{cidKey} — HTML에서 해당 패턴 없음");
                                 }
                             }
+                            Log4.Debug($"[cid] 치환 완료: {replacedCount}개 치환됨");
                         }
                     }
                 }
@@ -1088,6 +1151,104 @@ public partial class MainWindow : FluentWindow
         {
             Log4.Error($"메일 본문 로드 실패: {ex.Message}");
         }
+    }
+
+    /// <summary>
+    /// MIME 타입 → 파일 확장자 변환 (cid 임시 파일명 생성용)
+    /// </summary>
+    private static string GetExtFromMime(string mime) => mime.ToLowerInvariant() switch
+    {
+        "image/jpeg" or "image/jpg" => "jpg",
+        "image/png" => "png",
+        "image/gif" => "gif",
+        "image/webp" => "webp",
+        "image/bmp" => "bmp",
+        _ => "bin"
+    };
+
+    /// <summary>
+    /// 빈 본문 메일(일정 수락/거부, 자동 알림 등)에 메타데이터 카드 HTML 생성
+    /// </summary>
+    private static string BuildEmptyBodyPlaceholder(Email email, string bgColor, string textColor)
+    {
+        var subject = System.Net.WebUtility.HtmlEncode(email.Subject ?? "(제목 없음)");
+        var from = System.Net.WebUtility.HtmlEncode(email.From ?? "");
+        var to = System.Net.WebUtility.HtmlEncode(email.To ?? "");
+        var receivedAt = email.ReceivedDateTime.HasValue
+            ? email.ReceivedDateTime.Value.ToLocalTime().ToString("yyyy-MM-dd HH:mm")
+            : "";
+        var preview = System.Net.WebUtility.HtmlEncode(email.PreviewText ?? "");
+
+        var cardBg = bgColor == "#1e1e1e" ? "#2a2a2a" : "#f5f5f5";
+        var borderColor = bgColor == "#1e1e1e" ? "#444444" : "#dddddd";
+        var labelColor = bgColor == "#1e1e1e" ? "#888888" : "#888888";
+
+        return $@"<!DOCTYPE html>
+<html>
+<head>
+    <meta charset=""UTF-8"">
+    <style>
+        body {{
+            margin: 0;
+            padding: 24px;
+            background-color: {bgColor};
+            color: {textColor};
+            font-family: 'Segoe UI', 'Malgun Gothic', sans-serif;
+            font-size: 14px;
+        }}
+        .card {{
+            background-color: {cardBg};
+            border: 1px solid {borderColor};
+            border-radius: 8px;
+            padding: 20px 24px;
+            max-width: 600px;
+        }}
+        .notice {{
+            font-size: 12px;
+            color: {labelColor};
+            margin-bottom: 16px;
+            padding-bottom: 12px;
+            border-bottom: 1px solid {borderColor};
+        }}
+        .row {{
+            display: flex;
+            margin-bottom: 10px;
+        }}
+        .label {{
+            width: 80px;
+            min-width: 80px;
+            color: {labelColor};
+            font-size: 12px;
+        }}
+        .value {{
+            flex: 1;
+            word-break: break-all;
+        }}
+        .subject {{
+            font-size: 16px;
+            font-weight: 600;
+            margin-bottom: 16px;
+        }}
+        .preview {{
+            margin-top: 16px;
+            padding-top: 12px;
+            border-top: 1px solid {borderColor};
+            font-size: 13px;
+            color: {labelColor};
+        }}
+    </style>
+</head>
+<body>
+    <div class=""card"">
+        <div class=""notice"">본문이 없는 메일입니다 (일정 수락/거부, 자동 알림 등)</div>
+        <div class=""subject"">{subject}</div>
+        <div class=""row""><span class=""label"">보낸 사람</span><span class=""value"">{from}</span></div>
+        <div class=""row""><span class=""label"">받은 시간</span><span class=""value"">{receivedAt}</span></div>
+        {(string.IsNullOrEmpty(to) ? "" : $@"<div class=""row""><span class=""label"">받는 사람</span><span class=""value"">{to}</span></div>")}
+        {(string.IsNullOrEmpty(preview) ? "" : $@"<div class=""preview"">{preview}</div>")}
+    </div>
+</body>
+</html>";
     }
 
     private async void MainWindow_Loaded(object sender, RoutedEventArgs e)

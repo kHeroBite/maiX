@@ -535,3 +535,21 @@
 - **재발방지**: 스킬 규칙 강화 (kfinish SKILL.md Step 1 주석). Hook은 불필요 (LLM 의지 의존이지만, 이 수준은 스킬 규칙 + 교훈 참조로 충분).
 - **심각도**: 중간 (고아 pane 잔류 → 리소스 누수 + 다음 세션 혼란)
 - **Level**: 2 (규칙)
+
+## L-287: WebView2 NavigateToString 크기 제한 — cid: 인라인 이미지는 virtual host 방식 필수 (2026-04-01)
+
+- **문제**: cid: 인라인 이미지를 data URI로 변환하여 `NavigateToString()`에 전달하면 3.4MB+ HTML이 렌더링되지 않음 (빈 화면)
+- **근본 원인**: WebView2 `NavigateToString()`은 내부 URL 길이 제한(약 2MB) 존재 — 대용량 data URI 포함 HTML은 크기 초과로 렌더링 실패
+- **해결**: `SetVirtualHostNameToFolderMapping("maix.local", tempFolder, ...)` + 임시 파일 방식으로 전환. cid: 이미지를 tempFolder에 파일로 저장 후 `<img src="https://maix.local/...">` URL 참조
+- **교훈**: WebView2에서 대용량 이미지가 포함된 HTML 렌더링 시 `NavigateToString()` 대신 virtual host 매핑 + 파일 서빙 방식 사용 필수. data URI 방식은 소용량(수십KB)에만 적합
+- **심각도**: 높음 (cid: 인라인 이미지 완전 미표시)
+- **Level**: 2 (주의)
+
+## L-288: 빈 본문 전환 시 NavigateToString 선행 초기화 필수 (2026-04-01)
+
+- **문제**: 이전 메일(이미지 포함 HTML) 표시 후 빈 본문 메일로 전환 시 이전 메일 내용이 잔류
+- **근본 원인**: virtual host 방식으로 렌더링된 이전 페이지가 `NavigateToString()` 호출 전까지 WebView2에 캐시됨
+- **해결**: 빈 본문/메타데이터 카드 표시 전 `mailWebView.NavigateToString("<html><body></body></html>")` 선행 호출로 초기화
+- **교훈**: WebView2에서 콘텐츠 전환 시 항상 빈 HTML로 선행 초기화 후 새 콘텐츠 로드. 특히 virtual host → NavigateToString 전환 시 잔류 문제 발생 가능
+- **심각도**: 낮음 (이전 메일 잔류 — 시각적 혼란)
+- **Level**: 1 (참고)
