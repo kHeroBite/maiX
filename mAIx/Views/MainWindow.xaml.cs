@@ -16636,7 +16636,6 @@ public partial class MainWindow : FluentWindow
         var favMailGroup = CreateSettingsGroupBorder();
         var favMailStack = new StackPanel();
         favMailStack.Children.Add(CreateSettingsLabel("즐겨찾기 메일 동기화 주기"));
-        var mailIntervalSeconds = prefs.MailSyncIntervalSeconds > 0 ? prefs.MailSyncIntervalSeconds : prefs.MailSyncIntervalMinutes * 60;
         var favMailWrap = new WrapPanel { Margin = new Thickness(0, 0, 0, 12) };
         foreach (var (seconds, label) in shortIntervalOptions)
         {
@@ -16644,15 +16643,15 @@ public partial class MainWindow : FluentWindow
             {
                 Content = label,
                 Tag = seconds,
-                IsChecked = mailIntervalSeconds == seconds,
+                IsChecked = prefs.FavoriteSyncIntervalSeconds == seconds,
                 Margin = new Thickness(0, 0, 16, 8),
                 GroupName = "SyncMailFavoriteInterval"
             };
             radio.Checked += (s, e) =>
             {
-                prefs.MailSyncIntervalSeconds = seconds;
+                prefs.FavoriteSyncIntervalSeconds = seconds;
                 App.Settings.SaveUserPreferences();
-                _viewModel.SetSyncInterval(seconds);
+                _viewModel.SetFavoriteSyncInterval(seconds);
                 Log4.Info($"즐겨찾기 메일 동기화 주기 저장: {seconds}초");
             };
             favMailWrap.Children.Add(radio);
@@ -16673,15 +16672,15 @@ public partial class MainWindow : FluentWindow
             {
                 Content = label,
                 Tag = seconds,
-                IsChecked = mailIntervalSeconds == seconds,
+                IsChecked = prefs.FullSyncIntervalSeconds == seconds,
                 Margin = new Thickness(0, 0, 16, 8),
                 GroupName = "SyncMailAllInterval"
             };
             radio.Checked += (s, e) =>
             {
-                prefs.MailSyncIntervalSeconds = seconds;
+                prefs.FullSyncIntervalSeconds = seconds;
                 App.Settings.SaveUserPreferences();
-                _viewModel.SetSyncInterval(seconds);
+                _viewModel.SetFullSyncInterval(seconds);
                 Log4.Info($"전체 메일 동기화 주기 저장: {seconds}초");
             };
             allMailWrap.Children.Add(radio);

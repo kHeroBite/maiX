@@ -372,3 +372,36 @@
 ### 테스트 결과
 - 빌드: 오류 0개 ✅
 - 실행: 정상 ✅
+
+---
+
+## 2026-04-02 — UI 블로킹 Dispatcher.Invoke→InvokeAsync + 동기화 주기 라디오 버튼 버그 수정
+
+**분류**: Normal Path (k3)
+**수정 파일**: 2개 (MainViewModel.cs, MainWindow.xaml.cs)
+
+### 변경 내역
+
+#### 1. Dispatcher.Invoke → InvokeAsync (5곳)
+- `OnMailSyncStarted`, `OnMailSyncProgress`, `OnHistoricalSyncProgress`, `OnHistoricalSyncCompleted`, `_syncProgressHideTimer.Elapsed` 콜백
+- 동기 Invoke → 비동기 InvokeAsync로 전환하여 백그라운드 스레드 블로킹 제거
+
+#### 2. OnEmailsSynced SelectedEmail 보존
+- 동기화 완료 후 LoadEmailsAsync 재호출 시 선택된 메일이 초기화되던 문제 수정
+- `selectedEmailId` 보존 → `Emails.FirstOrDefault(e => e.Id == selectedEmailId)` 로 재복원
+
+#### 3. 동기화 주기 라디오 버튼 버그 수정
+- **버그**: 즐겨찾기/전체 동기화 주기가 공유 필드(`MailSyncIntervalSeconds`) 하나로 처리되어 서로 덮어씀
+- **수정**: `prefs.FavoriteSyncIntervalSeconds`, `prefs.FullSyncIntervalSeconds` 전용 필드 분리
+- **수정**: Checked 콜백도 `SetFavoriteSyncInterval`, `SetFullSyncInterval`으로 분리
+
+#### 4. Debug2.WriteLine → Log4.Error 교체
+- `LoadMoreEmailsAsync` 예외 처리에서 Debug2 → Log4.Error로 로깅 일관성 개선
+
+### 변경 파일
+- `mAIx/ViewModels/MainViewModel.cs` — Dispatcher.InvokeAsync 5곳 + OnEmailsSynced 선택 보존 + Log4.Error
+- `mAIx/Views/MainWindow.xaml.cs` — 라디오 버튼 전용 필드 분리
+
+### 테스트 결과
+- 빌드: 오류 0개 ✅
+- 실행: 정상 ✅

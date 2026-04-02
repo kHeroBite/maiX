@@ -577,3 +577,23 @@
 - **교훈**: EF Core DbUpdateException catch 블록에서 Detach 패턴을 사용해도 EF Core 자체 내부 ERR 로그는 suppress 불가. 이 로그는 정상 동작의 부산물 — 실제 오류 여부는 catch 처리 여부로 판단할 것
 - **심각도**: 낮음 (기능 문제 없음, 로그 노이즈만)
 - **Level**: 1 (참고)
+
+## L-291: WPF Dispatcher.Invoke → InvokeAsync — 백그라운드 스레드 블로킹 방지 (2026-04-02)
+
+- **문제**: 백그라운드 스레드(동기화 루프)에서 `Dispatcher.Invoke()` 사용 시 UI 스레드가 응답하기를 동기 대기 → 두 스레드 상호 블로킹 가능
+- **근본 원인**: `Dispatcher.Invoke()`는 호출 스레드를 UI 스레드 작업 완료까지 블로킹. 백그라운드 스레드가 많거나 빈번히 호출 시 UI 응답성 저하 및 교착(Deadlock) 위험
+- **해결**: `Dispatcher.InvokeAsync()`로 전환 — fire-and-forget으로 UI 큐에 작업을 올리고 즉시 반환
+- **교훈**: 백그라운드 스레드에서 UI 업데이트 시 `Dispatcher.Invoke` 대신 `Dispatcher.InvokeAsync` 사용. 완료 확인이 필요한 경우에만 `await Dispatcher.InvokeAsync().Task` 패턴 사용
+- **패턴**: `Application.Current?.Dispatcher.InvokeAsync(() => { ... });`
+- **심각도**: 중간 (UI 응답성 저하)
+- **Level**: 1 (참고)
+
+## L-292: WPF 설정 라디오 버튼 — 두 그룹이 같은 필드 공유 시 덮어쓰기 버그 (2026-04-02)
+
+- **문제**: 즐겨찾기/전체 동기화 주기 라디오 버튼 2개 그룹이 `prefs.MailSyncIntervalSeconds` 동일 필드를 읽고 씀 → 한 쪽 설정이 다른 쪽을 덮어씀
+- **근본 원인**: 동적 생성 라디오 버튼의 `IsChecked` 비교값과 `Checked` 콜백 모두 동일 공유 필드 참조
+- **해결**: 전용 필드 분리 — `FavoriteSyncIntervalSeconds`, `FullSyncIntervalSeconds` 각각 독립 사용
+- **교훈**: 동적 생성 WPF 라디오 버튼 그룹이 여러 개일 때, 각 그룹의 `IsChecked` 초기값과 `Checked` 콜백은 반드시 전용 필드/메서드로 분리. 공유 필드 사용 시 덮어쓰기 버그 발생
+- **패턴**: `IsChecked = prefs.GroupAIntervalSeconds == seconds`, `Checked += () => prefs.GroupAIntervalSeconds = seconds; vm.SetGroupAInterval(seconds);`
+- **심각도**: 중간 (설정 저장 버그)
+- **Level**: 1 (참고)

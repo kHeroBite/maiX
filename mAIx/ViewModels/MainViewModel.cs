@@ -85,7 +85,7 @@ public partial class MainViewModel : ViewModelBase, IDisposable
     /// </summary>
     private void OnMailSyncStarted(int total)
     {
-        System.Windows.Application.Current?.Dispatcher.Invoke(() =>
+        System.Windows.Application.Current?.Dispatcher.InvokeAsync(() =>
         {
             ShowSyncProgress(total);
         });
@@ -96,7 +96,7 @@ public partial class MainViewModel : ViewModelBase, IDisposable
     /// </summary>
     private void OnMailSyncProgress(int completed)
     {
-        System.Windows.Application.Current?.Dispatcher.Invoke(() =>
+        System.Windows.Application.Current?.Dispatcher.InvokeAsync(() =>
         {
             UpdateSyncProgress(completed);
         });
@@ -133,7 +133,7 @@ public partial class MainViewModel : ViewModelBase, IDisposable
 
     private void OnHistoricalSyncProgress(int fetched)
     {
-        System.Windows.Application.Current?.Dispatcher.Invoke(() =>
+        System.Windows.Application.Current?.Dispatcher.InvokeAsync(() =>
         {
             IsHistoricalSyncRunning = true;
             HistoricalSyncStatusText = $"이전 메일 동기화 중... {fetched}건";
@@ -142,7 +142,7 @@ public partial class MainViewModel : ViewModelBase, IDisposable
 
     private void OnHistoricalSyncCompleted()
     {
-        System.Windows.Application.Current?.Dispatcher.Invoke(() =>
+        System.Windows.Application.Current?.Dispatcher.InvokeAsync(() =>
         {
             IsHistoricalSyncRunning = false;
             HistoricalSyncStatusText = "";
@@ -641,7 +641,7 @@ public partial class MainViewModel : ViewModelBase, IDisposable
         _syncProgressHideTimer.Elapsed += (s, e) =>
         {
             _syncProgressHideTimer?.Stop();
-            System.Windows.Application.Current?.Dispatcher.Invoke(() =>
+            System.Windows.Application.Current?.Dispatcher.InvokeAsync(() =>
             {
                 IsMailSyncProgressVisible = false;
                 MailSyncCompleted = 0;
@@ -916,7 +916,12 @@ public partial class MainViewModel : ViewModelBase, IDisposable
     {
         if (SelectedFolder != null)
         {
+            var selectedEmailId = SelectedEmail?.Id;
             await LoadEmailsAsync();
+            if (selectedEmailId.HasValue && SelectedEmail?.Id != selectedEmailId)
+            {
+                SelectedEmail = Emails?.FirstOrDefault(e => e.Id == selectedEmailId.Value);
+            }
         }
 
         // 새 메일이 있으면 폴더 목록도 갱신 (UnreadItemCount 업데이트)
@@ -1217,7 +1222,7 @@ public partial class MainViewModel : ViewModelBase, IDisposable
         }
         catch (Exception ex)
         {
-            Debug2.WriteLine($"추가 이메일 로드 실패: {ex.Message}", "ERROR");
+            Log4.Error($"[LoadMoreEmailsAsync] 추가 이메일 로드 실패: {ex.Message}");
         }
         finally
         {
