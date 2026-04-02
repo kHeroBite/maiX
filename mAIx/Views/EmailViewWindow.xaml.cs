@@ -96,6 +96,22 @@ public partial class EmailViewWindow : FluentWindow
             // 수신자 (JSON 배열이면 파싱)
             ToText.Text = ParseJsonArrayToString(_email.To);
 
+            // 참조 (CC)
+            var ccStr = ParseJsonArrayToString(_email.Cc);
+            if (!string.IsNullOrWhiteSpace(ccStr))
+            {
+                CcText.Text = ccStr;
+                CcRow.Visibility = Visibility.Visible;
+            }
+
+            // 숨은 참조 (BCC)
+            var bccStr = ParseJsonArrayToString(_email.Bcc);
+            if (!string.IsNullOrWhiteSpace(bccStr))
+            {
+                BccText.Text = bccStr;
+                BccRow.Visibility = Visibility.Visible;
+            }
+
             // 날짜
             DateText.Text = _email.ReceivedDateTime?.ToString("yyyy-MM-dd HH:mm") ?? "";
 

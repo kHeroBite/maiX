@@ -69,6 +69,8 @@
                     <RowDefinition Height="Auto"/>
                     <RowDefinition Height="Auto"/>
                     <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="Auto"/>
                 </Grid.RowDefinitions>
 
                 <!-- 제목 -->
@@ -98,8 +100,32 @@
                                MaxWidth="700"/>
                 </StackPanel>
 
+                <!-- 참조 (CC) -->
+                <StackPanel x:Name="CcRow" Grid.Row="3" Orientation="Horizontal" Margin="0,0,0,8"
+                            Visibility="Collapsed">
+                    <TextBlock Text="참조:"
+                               Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                               Width="70"/>
+                    <TextBlock x:Name="CcText"
+                               Foreground="{DynamicResource TextFillColorPrimaryBrush}"
+                               TextWrapping="Wrap"
+                               MaxWidth="700"/>
+                </StackPanel>
+
+                <!-- 숨은 참조 (BCC) -->
+                <StackPanel x:Name="BccRow" Grid.Row="4" Orientation="Horizontal" Margin="0,0,0,8"
+                            Visibility="Collapsed">
+                    <TextBlock Text="숨은 참조:"
+                               Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                               Width="70"/>
+                    <TextBlock x:Name="BccText"
+                               Foreground="{DynamicResource TextFillColorPrimaryBrush}"
+                               TextWrapping="Wrap"
+                               MaxWidth="700"/>
+                </StackPanel>
+
                 <!-- 날짜 -->
-                <StackPanel Grid.Row="3" Orientation="Horizontal">
+                <StackPanel Grid.Row="5" Orientation="Horizontal">
                     <TextBlock Text="날짜:"
                                Foreground="{DynamicResource TextFillColorSecondaryBrush}"
                                Width="70"/>
