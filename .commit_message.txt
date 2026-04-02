@@ -1,16 +1,11 @@
-🐛 fix: AI 분석 중 UI 블로킹 근본 수정 — Task.Run + ConfigureAwait(false)
+⚡ 메일탭 UI 블로킹 성능 개선 — Dispatcher.Invoke→InvokeAsync + 동기화 주기 설정 버그 수정 by claude-sonnet-4-6
 
-**근본 원인**: async void 이벤트 핸들러에서 AnalyzeFileAsync 직접 await
-→ 모든 await 이후 코드가 UI SynchronizationContext로 복귀
-→ AI 스트리밍 수백 chunk가 매번 UI 스레드 점유
+- Dispatcher.Invoke → InvokeAsync 5곳 전환 (OnMailSyncStarted/Progress/HistoricalSync/Timer)
+- OnEmailsSynced: SelectedEmail ID 보존 후 로드 완료 시 재복원
+- 동기화 주기 라디오 버튼: prefs 전용 필드(FavoriteSyncIntervalSeconds/FullSyncIntervalSeconds) 분리
+- Checked 콜백 분리: SetFavoriteSyncInterval / SetFullSyncInterval
+- Debug2.WriteLine → Log4.Error 교체 (LoadMoreEmailsAsync)
 
-**수정 내용**:
-- MainWindow.xaml.cs: AnalyzeFileAsync/AnalyzeAllFilesAsync 호출을 Task.Run으로 래핑
-- FileAnalysisService.cs: 모든 await에 ConfigureAwait(false) 전면 적용
-- 이전 수정(93817b66)은 Dispatcher.BeginInvoke만 변경 — 표면적 수정이었음
-
-**교훈**: L-050 파이프라인 상태 수동 복구 시 PLAN으로 설정
-
-🤖 Generated with [Claude Code](https://claude.com/claude-code) (claude-opus-4-6)
+🤖 Generated with [Claude Code](https://claude.com/claude-code) (claude-sonnet-4-6)
 
 Co-Authored-By: Claude <noreply@anthropic.com>

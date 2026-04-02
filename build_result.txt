@@ -1,0 +1,18 @@
+  복원할 프로젝트를 확인하는 중...
+C:\DATA\Project\mAIx\mAIx\mAIx.csproj : warning NU1510: PackageReference System.Drawing.Common은(는) 잘리지 않습니다. 이 패키지는 불필요할 수 있으므로 종속성에서 제거하는 것이 좋습니다.
+C:\DATA\Project\mAIx\mAIx\mAIx.csproj : warning NU1902: 'MimeKit' 4.14.0 패키지에 알려진 보통 심각도 취약성인 https://github.com/advisories/GHSA-g7hc-96xr-gvvx이(가) 있습니다.
+  복원할 모든 프로젝트가 최신 상태입니다.
+C:\DATA\Project\mAIx\mAIx\mAIx.csproj : warning NU1510: PackageReference System.Drawing.Common은(는) 잘리지 않습니다. 이 패키지는 불필요할 수 있으므로 종속성에서 제거하는 것이 좋습니다.
+C:\DATA\Project\mAIx\mAIx\mAIx.csproj : warning NU1902: 'MimeKit' 4.14.0 패키지에 알려진 보통 심각도 취약성인 https://github.com/advisories/GHSA-g7hc-96xr-gvvx이(가) 있습니다.
+  mAIx -> C:\DATA\Project\mAIx\mAIx\bin\Debug\net10.0-windows\win-x64\net10.0-windows\mAIx.dll
+
+빌드했습니다.
+
+C:\DATA\Project\mAIx\mAIx\mAIx.csproj : warning NU1510: PackageReference System.Drawing.Common은(는) 잘리지 않습니다. 이 패키지는 불필요할 수 있으므로 종속성에서 제거하는 것이 좋습니다.
+C:\DATA\Project\mAIx\mAIx\mAIx.csproj : warning NU1902: 'MimeKit' 4.14.0 패키지에 알려진 보통 심각도 취약성인 https://github.com/advisories/GHSA-g7hc-96xr-gvvx이(가) 있습니다.
+C:\DATA\Project\mAIx\mAIx\mAIx.csproj : warning NU1510: PackageReference System.Drawing.Common은(는) 잘리지 않습니다. 이 패키지는 불필요할 수 있으므로 종속성에서 제거하는 것이 좋습니다.
+C:\DATA\Project\mAIx\mAIx\mAIx.csproj : warning NU1902: 'MimeKit' 4.14.0 패키지에 알려진 보통 심각도 취약성인 https://github.com/advisories/GHSA-g7hc-96xr-gvvx이(가) 있습니다.
+    경고 4개
+    오류 0개
+
+경과 시간: 00:00:02.06
