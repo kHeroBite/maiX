@@ -159,6 +159,7 @@ ViewModels:
     클래스:
       - ViewModelBase:
           설명: INotifyPropertyChanged 구현, CommunityToolkit.Mvvm 활용
+          변경_2026-04-02: ExecuteAsync에 OperationCanceledException 처리 추가 (취소 = 정상, 에러 표시 안 함)
 
   - 파일명: LoginViewModel.cs
     경로: MaiX/ViewModels/
@@ -179,6 +180,7 @@ ViewModels:
       - MainViewModel:
           설명: 이메일 목록, 폴더 관리
           변경_2026-03-29(Phase2): ShowSnoozedEmails 토글 추가 (스누즈 메일 표시/숨김), 브리핑 명령 추가
+          변경_2026-04-02: _loadEmailsCts CancellationTokenSource 도입(폴더 전환 Race Condition 방지), Bulk 작업(읽음/플래그/삭제) SemaphoreSlim(8)+Task.WhenAll+ExecuteUpdateAsync 적용
 
   - 파일명: TeamsViewModel.cs
     경로: MaiX/ViewModels/

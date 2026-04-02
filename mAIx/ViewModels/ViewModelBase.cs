@@ -41,6 +41,10 @@ public partial class ViewModelBase : ObservableObject
             ErrorMessage = null;
             await action();
         }
+        catch (OperationCanceledException)
+        {
+            // 취소는 정상 동작 — 에러 표시 안 함
+        }
         catch (Exception ex)
         {
             ErrorMessage = string.IsNullOrEmpty(errorPrefix)
@@ -68,6 +72,11 @@ public partial class ViewModelBase : ObservableObject
             IsLoading = true;
             ErrorMessage = null;
             return await action();
+        }
+        catch (OperationCanceledException)
+        {
+            // 취소는 정상 동작 — 에러 표시 안 함
+            return default;
         }
         catch (Exception ex)
         {

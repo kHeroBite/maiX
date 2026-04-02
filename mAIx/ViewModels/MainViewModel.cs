@@ -1,8 +1,10 @@
 using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.ComponentModel;
 using System.Linq;
+using System.Threading;
 using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Data;
@@ -26,6 +28,7 @@ public partial class MainViewModel : ViewModelBase, IDisposable
     private readonly mAIxDbContext _dbContext;
     private readonly BackgroundSyncService _syncService;
     private readonly GraphMailService _graphMailService;
+    private CancellationTokenSource? _loadEmailsCts;
 
     /// <summary>
     /// 캘린더 ViewModel (외부에서 설정, 캘린더 동기화 이벤트 연동용)
@@ -958,9 +961,12 @@ public partial class MainViewModel : ViewModelBase, IDisposable
     /// <param name="value">새로 선택된 폴더</param>
     partial void OnSelectedFolderChanged(Folder? value)
     {
+        _loadEmailsCts?.Cancel();
+        _loadEmailsCts?.Dispose();
+        _loadEmailsCts = new CancellationTokenSource();
         if (value != null)
         {
-            _ = LoadEmailsAsync();
+            _ = LoadEmailsAsync(_loadEmailsCts.Token);
         }
         else
         {
@@ -1075,10 +1081,15 @@ public partial class MainViewModel : ViewModelBase, IDisposable
     }
 
     /// <summary>
-    /// 선택된 폴더의 이메일 목록 로드
+    /// 선택된 폴더의 이메일 목록 로드 ([RelayCommand] 진입점 — CancellationToken 없는 오버로드)
     /// </summary>
     [RelayCommand]
-    private async Task LoadEmailsAsync()
+    private Task LoadEmailsAsync() => LoadEmailsAsync(default);
+
+    /// <summary>
+    /// 선택된 폴더의 이메일 목록 로드 (CancellationToken 지원 — Race Condition 방지)
+    /// </summary>
+    private async Task LoadEmailsAsync(CancellationToken cancellationToken)
     {
         if (SelectedFolder == null)
         {
@@ -1104,7 +1115,9 @@ public partial class MainViewModel : ViewModelBase, IDisposable
 
             var emails = await query
                 .OrderByDescending(e => e.ReceivedDateTime)
-                .ToListAsync();
+                .ToListAsync(cancellationToken);
+
+            cancellationToken.ThrowIfCancellationRequested();
 
             // 임시보관함인 경우 IsDraft 플래그 설정
             bool isDraftsFolder = IsDraftsFolder(SelectedFolder);
@@ -1518,40 +1531,47 @@ public partial class MainViewModel : ViewModelBase, IDisposable
                 .FirstOrDefaultAsync(f => f.DisplayName == "지운 편지함" ||
                                           f.DisplayName.ToLower() == "deleted items" ||
                                           f.DisplayName.ToLower() == "deleteditems");
-            int completed = 0;
 
-            foreach (var email in emails.ToList())
+            // Graph API 병렬 처리 (세마포어 8)
+            var semaphore = new SemaphoreSlim(8, 8);
+            var succeededEmails = new ConcurrentBag<Email>();
+            int apiFailed = 0;
+
+            await Task.WhenAll(emails.Where(e => !string.IsNullOrEmpty(e.EntryId)).Select(async email =>
             {
-                if (string.IsNullOrEmpty(email.EntryId)) continue;
+                await semaphore.WaitAsync();
                 try
                 {
                     if (deletedItemsFolder != null && !string.IsNullOrEmpty(deletedItemsFolder.Id))
                         await _graphMailService.MoveMessageAsync(email.EntryId, deletedItemsFolder.Id);
                     else
                         await _graphMailService.DeleteMessageAsync(email.EntryId);
-
-                    var dbEmail = await _dbContext.Emails.FindAsync(email.Id);
-                    if (dbEmail != null) _dbContext.Emails.Remove(dbEmail);
-
-                    completed++;
-                    StatusMessage = $"메일 삭제 중... ({completed}/{emails.Count})";
+                    succeededEmails.Add(email);
                 }
                 catch (Exception ex)
                 {
+                    Interlocked.Increment(ref apiFailed);
                     Log4.Error($"메일 일괄 삭제 실패 [{email.Subject}]: {ex.Message}");
                 }
-            }
+                finally { semaphore.Release(); }
+            }));
 
+            // 성공한 메일만 DB에서 제거 후 1회 SaveChanges
+            foreach (var email in succeededEmails)
+            {
+                var dbEmail = await _dbContext.Emails.FindAsync(email.Id);
+                if (dbEmail != null) _dbContext.Emails.Remove(dbEmail);
+            }
             await _dbContext.SaveChangesAsync();
 
-            var deletedIds = emails.Select(e => e.Id).ToHashSet();
+            var deletedIds = succeededEmails.Select(e => e.Id).ToHashSet();
             Emails = Emails.Where(e => !deletedIds.Contains(e.Id)).ToList();
 
             if (SelectedEmail != null && deletedIds.Contains(SelectedEmail.Id))
                 SelectedEmail = null;
 
-            StatusMessage = $"메일 {completed}건 삭제 완료";
-            Log4.Info($"일괄 삭제 완료: {completed}건");
+            StatusMessage = $"메일 {succeededEmails.Count}건 삭제 완료";
+            Log4.Info($"일괄 삭제 완료: {succeededEmails.Count}건");
         }, "메일 일괄 삭제 실패");
     }
 
@@ -1679,38 +1699,41 @@ public partial class MainViewModel : ViewModelBase, IDisposable
         await ExecuteAsync(async () =>
         {
             StatusMessage = $"플래그 업데이트 중... (0/{emails.Count})";
-            int completed = 0;
 
-            foreach (var email in emails)
+            var semaphore = new SemaphoreSlim(8, 8);
+            var succeededEmails = new ConcurrentBag<Email>();
+            int failed = 0;
+
+            await Task.WhenAll(emails.Where(e => !string.IsNullOrEmpty(e.EntryId)).Select(async email =>
             {
-                if (string.IsNullOrEmpty(email.EntryId)) continue;
-
+                await semaphore.WaitAsync();
                 try
                 {
-                    // Graph API로 플래그 업데이트
                     await _graphMailService.UpdateMessageFlagAsync(email.EntryId, flagStatus);
-
-                    // 로컬 DB 업데이트
-                    var dbEmail = await _dbContext.Emails.FindAsync(email.Id);
-                    if (dbEmail != null)
-                    {
-                        dbEmail.FlagStatus = flagStatus;
-                        await _dbContext.SaveChangesAsync();
-                    }
-
-                    // 메모리 상 데이터 업데이트
-                    email.FlagStatus = flagStatus;
-
-                    completed++;
-                    StatusMessage = $"플래그 업데이트 중... ({completed}/{emails.Count})";
+                    succeededEmails.Add(email);
                 }
                 catch (Exception ex)
                 {
+                    Interlocked.Increment(ref failed);
                     Log4.Error($"플래그 업데이트 실패 [{email.Subject}]: {ex.Message}");
                 }
+                finally { semaphore.Release(); }
+            }));
+
+            // DB 일괄 업데이트 (ExecuteUpdateAsync — SaveChanges 불필요)
+            var succeededIds = succeededEmails.Select(e => e.Id).ToHashSet();
+            if (succeededIds.Count > 0)
+            {
+                await _dbContext.Emails
+                    .Where(e => succeededIds.Contains(e.Id))
+                    .ExecuteUpdateAsync(s => s.SetProperty(e => e.FlagStatus, flagStatus));
             }
 
-            // UI 갱신을 위해 목록 다시 설정
+            // 메모리 객체 갱신 (INPC가 UI 자동 갱신)
+            foreach (var email in succeededEmails)
+                email.FlagStatus = flagStatus;
+
+            // DataTemplate Trigger가 FlagStatus로 분기하는 경우를 위해 1회 재할당
             Emails = new List<Email>(Emails);
 
             // 선택된 메일의 플래그가 변경된 경우 상세 패널도 갱신
@@ -1719,8 +1742,10 @@ public partial class MainViewModel : ViewModelBase, IDisposable
                 OnPropertyChanged(nameof(SelectedEmail));
             }
 
-            StatusMessage = $"플래그 업데이트 완료 ({completed}/{emails.Count})";
-            Log4.Info($"플래그 '{flagStatus}' 업데이트 완료: {completed}건");
+            StatusMessage = failed > 0
+                ? $"플래그 업데이트 완료 ({succeededEmails.Count}건 성공, {failed}건 실패)"
+                : $"플래그 업데이트 완료 ({succeededEmails.Count}건)";
+            Log4.Info($"플래그 '{flagStatus}' 업데이트 완료: {succeededEmails.Count}건");
         }, "플래그 업데이트 실패");
     }
 
@@ -1737,42 +1762,42 @@ public partial class MainViewModel : ViewModelBase, IDisposable
         {
             string statusText = isRead ? "읽음" : "읽지 않음";
             StatusMessage = $"{statusText} 표시 중... (0/{emails.Count})";
-            int completed = 0;
 
-            foreach (var email in emails)
+            var semaphore = new SemaphoreSlim(8, 8);
+            var succeededEmails = new ConcurrentBag<Email>();
+            int failed = 0;
+
+            await Task.WhenAll(emails.Where(e => !string.IsNullOrEmpty(e.EntryId)).Select(async email =>
             {
-                if (string.IsNullOrEmpty(email.EntryId)) continue;
-
+                await semaphore.WaitAsync();
                 try
                 {
-                    // Graph API로 읽음 상태 업데이트
                     await _graphMailService.UpdateMessageReadStatusAsync(email.EntryId, isRead);
-
-                    // 로컬 DB 업데이트
-                    var dbEmail = await _dbContext.Emails.FindAsync(email.Id);
-                    if (dbEmail != null)
-                    {
-                        dbEmail.IsRead = isRead;
-                        await _dbContext.SaveChangesAsync();
-                    }
-
-                    // 메모리 상 데이터 업데이트
-                    email.IsRead = isRead;
-
-                    completed++;
-                    StatusMessage = $"{statusText} 표시 중... ({completed}/{emails.Count})";
+                    succeededEmails.Add(email);
                 }
                 catch (Exception ex)
                 {
+                    Interlocked.Increment(ref failed);
                     Log4.Error($"{statusText} 표시 실패 [{email.Subject}]: {ex.Message}");
                 }
+                finally { semaphore.Release(); }
+            }));
+
+            // DB 일괄 업데이트 (ExecuteUpdateAsync — SaveChanges 불필요)
+            var succeededIds = succeededEmails.Select(e => e.Id).ToHashSet();
+            if (succeededIds.Count > 0)
+            {
+                await _dbContext.Emails
+                    .Where(e => succeededIds.Contains(e.Id))
+                    .ExecuteUpdateAsync(s => s.SetProperty(e => e.IsRead, isRead));
             }
 
-            // UI 갱신을 위해 목록 다시 설정
-            Emails = new List<Email>(Emails);
+            // 메모리 객체 갱신 (INPC가 UI 자동 갱신)
+            foreach (var email in succeededEmails)
+                email.IsRead = isRead;
 
-            // 폴더별 안읽은 메일 수 업데이트 (빠른 메모리 계산 방식)
-            var folderChanges = emails
+            // 폴더별 안읽은 메일 수 업데이트 (성공한 메일만 카운트)
+            var folderChanges = succeededEmails
                 .Where(e => !string.IsNullOrEmpty(e.ParentFolderId))
                 .GroupBy(e => e.ParentFolderId)
                 .ToList();
@@ -1784,20 +1809,19 @@ public partial class MainViewModel : ViewModelBase, IDisposable
                 {
                     // 읽음으로 표시 → 안읽은 개수 감소, 읽지않음으로 표시 → 안읽은 개수 증가
                     int delta = isRead ? -group.Count() : group.Count();
-                    folder.UnreadItemCount = Math.Max(0, folder.UnreadItemCount + delta);
+                    folder.UnreadItemCount = Math.Max(0, folder.UnreadItemCount + delta); // INPC가 자동으로 UI 갱신
                     Log4.Debug($"폴더 안읽은 메일 수 업데이트: {folder.DisplayName} = {folder.UnreadItemCount} (delta: {delta})");
                 }
             }
 
-            // UI 갱신: 폴더 목록 한 번만 갱신
+            // 즐겨찾기 폴더 목록 갱신 (폴더 카운트 변경 시)
             if (folderChanges.Count > 0)
-            {
-                Folders = new List<Folder>(Folders);
-                LoadFavoriteFolders(); // 즐겨찾기 폴더 목록도 갱신
-            }
+                LoadFavoriteFolders();
 
-            StatusMessage = $"{statusText} 표시 완료 ({completed}/{emails.Count})";
-            Log4.Info($"{statusText} 표시 완료: {completed}건");
+            StatusMessage = failed > 0
+                ? $"{statusText} 표시 완료 ({succeededEmails.Count}건 성공, {failed}건 실패)"
+                : $"{statusText} 표시 완료 ({succeededEmails.Count}건)";
+            Log4.Info($"{statusText} 표시 완료: {succeededEmails.Count}건");
         }, $"{(isRead ? "읽음" : "읽지 않음")} 표시 실패");
     }
 
@@ -1895,11 +1919,8 @@ public partial class MainViewModel : ViewModelBase, IDisposable
                 await _dbContext.SaveChangesAsync();
             }
 
-            // 메모리 상 데이터 업데이트
+            // 메모리 상 데이터 업데이트 (INPC가 자동으로 UI 갱신)
             email.IsRead = true;
-
-            // UI 즉시 갱신: 컬렉션을 새로 설정하여 바인딩 갱신
-            Emails = new List<Email>(Emails);
 
             // 폴더 안읽은 메일 수 즉시 업데이트 (빠른 메모리 계산)
             if (!string.IsNullOrEmpty(email.ParentFolderId))
@@ -1907,8 +1928,7 @@ public partial class MainViewModel : ViewModelBase, IDisposable
                 var folder = Folders.FirstOrDefault(f => f.Id == email.ParentFolderId);
                 if (folder != null)
                 {
-                    folder.UnreadItemCount = Math.Max(0, folder.UnreadItemCount - 1);
-                    Folders = new List<Folder>(Folders);
+                    folder.UnreadItemCount = Math.Max(0, folder.UnreadItemCount - 1); // INPC가 자동으로 UI 갱신
                     LoadFavoriteFolders(); // 즐겨찾기 폴더 목록도 갱신
                     Log4.Debug($"폴더 안읽은 메일 수 업데이트: {folder.DisplayName} = {folder.UnreadItemCount} (delta: -1)");
                 }
@@ -2646,50 +2666,49 @@ public partial class MainViewModel : ViewModelBase, IDisposable
         await ExecuteAsync(async () =>
         {
             StatusMessage = $"메일 이동 중... (0/{emails.Count})";
-            int completed = 0;
+
+            var semaphore = new SemaphoreSlim(8, 8);
+            var succeededMoves = new ConcurrentBag<(Email email, string newEntryId)>();
             int failed = 0;
 
-            foreach (var email in emails)
+            await Task.WhenAll(emails.Where(e => !string.IsNullOrEmpty(e.EntryId)).Select(async email =>
             {
-                if (string.IsNullOrEmpty(email.EntryId)) continue;
-
+                await semaphore.WaitAsync();
                 try
                 {
-                    // Graph API로 메일 이동 (이동 후 새 EntryId 반환됨)
                     var movedMessage = await _graphMailService.MoveMessageAsync(email.EntryId, targetFolder.Id);
-
-                    // 로컬 DB 업데이트 (새 EntryId와 폴더 ID)
-                    var dbEmail = await _dbContext.Emails.FindAsync(email.Id);
-                    if (dbEmail != null)
-                    {
-                        // 이동하면 EntryId가 변경됨 - 새 ID로 업데이트
-                        if (movedMessage != null && !string.IsNullOrEmpty(movedMessage.Id))
-                        {
-                            dbEmail.EntryId = movedMessage.Id;
-                            email.EntryId = movedMessage.Id; // 메모리 상 객체도 업데이트
-                        }
-                        dbEmail.ParentFolderId = targetFolder.Id;
-                        await _dbContext.SaveChangesAsync();
-                    }
-
-                    completed++;
-                    StatusMessage = $"메일 이동 중... ({completed}/{emails.Count})";
+                    var newId = movedMessage?.Id ?? email.EntryId;
+                    succeededMoves.Add((email, newId));
                 }
                 catch (Exception ex)
                 {
-                    failed++;
+                    Interlocked.Increment(ref failed);
                     Log4.Error($"메일 이동 실패 [{email.Subject}]: {ex.Message}");
                 }
-            }
+                finally { semaphore.Release(); }
+            }));
 
-            // 현재 폴더 목록에서 이동된 메일 제거
-            var movedIds = emails.Select(e => e.Id).ToHashSet();
+            // DB 배치 업데이트 (EntryId 각각 다르므로 foreach + 1회 SaveChanges)
+            foreach (var (email, newEntryId) in succeededMoves)
+            {
+                var dbEmail = await _dbContext.Emails.FindAsync(email.Id);
+                if (dbEmail != null)
+                {
+                    dbEmail.EntryId = newEntryId;
+                    dbEmail.ParentFolderId = targetFolder.Id;
+                    email.EntryId = newEntryId; // 메모리 상 객체도 업데이트
+                }
+            }
+            await _dbContext.SaveChangesAsync(); // 루프 밖 1회
+
+            // UI: 이동된 메일 제거
+            var movedIds = succeededMoves.Select(m => m.email.Id).ToHashSet();
             Emails = Emails.Where(e => !movedIds.Contains(e.Id)).ToList();
 
             StatusMessage = failed > 0
-                ? $"메일 이동 완료 ({completed}건 성공, {failed}건 실패)"
-                : $"'{targetFolder.DisplayName}'으로 {completed}건 이동 완료";
-            Log4.Info($"메일 이동 완료: {completed}건 → {targetFolder.DisplayName}");
+                ? $"메일 이동 완료 ({succeededMoves.Count}건 성공, {failed}건 실패)"
+                : $"'{targetFolder.DisplayName}'으로 {succeededMoves.Count}건 이동 완료";
+            Log4.Info($"메일 이동 완료: {succeededMoves.Count}건 → {targetFolder.DisplayName}");
         }, "메일 이동 실패");
     }
 

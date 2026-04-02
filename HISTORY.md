@@ -315,3 +315,23 @@
 - 로그: ERROR 0건 ✅
 - UI: PASS ✅
 - 품질: 8/8 Task 확인 ✅
+
+---
+
+## 2026-04-02 — 메일탭 UI 블로킹 성능 개선
+
+### 작업 내용
+- **Virtualization**: EmailListBox에 VirtualizingPanel 설정 추가 (Recycling 모드, Pixel 단위 스크롤)
+- **CancellationToken**: 폴더 전환 시 이전 LoadEmailsAsync 취소 (Race Condition 방지)
+- **Graph API 병렬화**: Bulk 읽음/플래그/삭제에 SemaphoreSlim(8) + Task.WhenAll 적용
+- **DB 배치**: ExecuteUpdateAsync로 전체 교체 (SaveChanges 불필요)
+- **OperationCanceledException 처리**: ViewModelBase.ExecuteAsync에 취소 정상 처리 추가
+
+### 변경 파일
+- `mAIx/Views/MainWindow.xaml` — EmailListBox VirtualizingPanel 3속성 추가
+- `mAIx/ViewModels/MainViewModel.cs` — CancellationTokenSource 도입 + Bulk 작업 배치처리
+- `mAIx/ViewModels/ViewModelBase.cs` — ExecuteAsync OperationCanceledException 처리
+
+### 테스트 결과
+- 빌드: 오류 0개 ✅
+- 실행: 정상 ✅

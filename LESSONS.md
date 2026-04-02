@@ -478,6 +478,7 @@
 - **교훈**: 팀에이전트(kdone-1 등) 내부에서 Agent spawn 시 반드시 team_name 지정. team_name 없는 spawn은 hook이 차단 → 메인 직접 처리로 Fallback
 - **심각도**: 낮음 (hook이 정상 차단, Fallback 작동)
 - **Level**: 1 (참고)
+- **재발 기록 (2026-04-02)**: kplan 단계에서 codex:codex-rescue + Explore spawn 시도 → hook 정상 차단 확인. hook 작동 이상 없음.
 
 ## L-282: 빌드 출력 경로 변경 시 관련 문서 동시 업데이트 필수 (2026-04-01)
 
@@ -552,4 +553,18 @@
 - **해결**: 빈 본문/메타데이터 카드 표시 전 `mailWebView.NavigateToString("<html><body></body></html>")` 선행 호출로 초기화
 - **교훈**: WebView2에서 콘텐츠 전환 시 항상 빈 HTML로 선행 초기화 후 새 콘텐츠 로드. 특히 virtual host → NavigateToString 전환 시 잔류 문제 발생 가능
 - **심각도**: 낮음 (이전 메일 잔류 — 시각적 혼란)
+- **Level**: 1 (참고)
+
+## L-289: UI 리스트 성능 — WPF VirtualizingPanel + CancellationToken + Graph API 병렬 처리 패턴 (2026-04-02)
+
+- **문제**: 메일탭 폴더 전환 시 UI 블로킹 발생 — 대량 메일 로드 중 스크롤 버벅임, 폴더 빠르게 전환 시 이전 요청과 충돌
+- **원인**: (1) EmailListBox에 Virtualization 미적용으로 전체 아이템 렌더링, (2) LoadEmailsAsync에 CancellationToken 미지원으로 Race Condition 발생, (3) Bulk 작업(읽음/플래그/삭제)에서 Graph API 순차 호출
+- **해결**:
+  1. `MainWindow.xaml`: `VirtualizingPanel.IsVirtualizing=True`, `VirtualizationMode=Recycling`, `ScrollUnit=Pixel` 추가
+  2. `MainViewModel.cs`: `_loadEmailsCts` CancellationTokenSource 도입, 폴더 전환 시 이전 토큰 취소
+  3. `MainViewModel.cs`: Bulk 작업에 `SemaphoreSlim(8)` + `Task.WhenAll` + `ExecuteUpdateAsync` 적용
+  4. `ViewModelBase.cs`: `ExecuteAsync`에 `OperationCanceledException` catch 추가 (취소 = 정상, 에러 표시 안 함)
+- **교훈**: WPF ListBox 대량 아이템 → VirtualizingPanel 필수. 폴더/탭 전환 시 이전 비동기 요청 취소는 CancellationTokenSource 패턴. Graph API 배치 작업은 SemaphoreSlim + Task.WhenAll으로 병렬화. DB 배치 업데이트는 SaveChanges 불필요한 ExecuteUpdateAsync 사용.
+- **패턴**: `_cts?.Cancel(); _cts = new CancellationTokenSource(); await LoadAsync(_cts.Token);`
+- **심각도**: 중간 (UI 블로킹 사용자 체감)
 - **Level**: 1 (참고)
