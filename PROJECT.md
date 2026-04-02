@@ -130,6 +130,7 @@ Views:
       - MainWindow:
           설명: 이메일 목록, 상세보기, 사이드바 네비게이션, 설정탭 시스템 메뉴(마이크 설정 포함)
           변경_2026-03-29(Phase2): "📋 브리핑" 버튼 추가 → DailyBriefingDialog 실행, 스누즈 토글 버튼 추가
+          변경_2026-04-02: EmailListScrollViewer ScrollChanged 이벤트 추가 → 스크롤 하단 도달 시 LoadMoreEmailsAsync 호출 (인피니티 스크롤)
 
   - 파일명: DailyBriefingDialog.xaml / DailyBriefingDialog.xaml.cs (신규 — 2026-03-29 Phase2)
     경로: MaiX/Views/Dialogs/
@@ -146,6 +147,14 @@ Views:
       - MailRuleSettingsDialog (FluentWindow):
           의존성: mAIxDbContext, MailRule 목록
           기능: 조건/액션 ComboBox 선택, 규칙 활성화 토글, 우선순위 순서 변경
+
+  - 파일명: EmailViewWindow.xaml / EmailViewWindow.xaml.cs
+    경로: MaiX/Views/
+    역할: 메일 읽기 창 (별도 창)
+    클래스:
+      - EmailViewWindow (FluentWindow):
+          설명: 이메일 본문 표시 (WebView2), CC/BCC 참조 필드, 첨부파일 패널
+          변경_2026-04-02: AttachmentPanel 추가 — 첨부파일 목록(파일명/크기), 다운로드/열기 버튼 이벤트 핸들러 구현 (GraphMailService.DownloadAttachmentAsync 연동)
 
 ```
 
@@ -180,7 +189,8 @@ ViewModels:
       - MainViewModel:
           설명: 이메일 목록, 폴더 관리
           변경_2026-03-29(Phase2): ShowSnoozedEmails 토글 추가 (스누즈 메일 표시/숨김), 브리핑 명령 추가
-          변경_2026-04-02: _loadEmailsCts CancellationTokenSource 도입(폴더 전환 Race Condition 방지), Bulk 작업(읽음/플래그/삭제) SemaphoreSlim(8)+Task.WhenAll+ExecuteUpdateAsync 적용
+          변경_2026-04-02(성능): _loadEmailsCts CancellationTokenSource 도입(폴더 전환 Race Condition 방지), Bulk 작업(읽음/플래그/삭제) SemaphoreSlim(8)+Task.WhenAll+ExecuteUpdateAsync 적용
+          변경_2026-04-02(인피니티스크롤): PageSize=100 페이징 도입, _emailSkip 오프셋 관리, IsLoadingMore(bool)/HasMoreEmails(bool) 바인딩 속성, LoadMoreEmailsAsync() 스크롤 페이지 로드
 
   - 파일명: TeamsViewModel.cs
     경로: MaiX/ViewModels/
@@ -392,6 +402,7 @@ Graph_Services:
 
   - 파일명: GraphMailService.cs
     역할: 이메일 CRUD 작업
+    변경_2026-04-02: GetMessageAsync Select에 bccRecipients 추가(R1 CC/BCC 버그수정), DownloadAttachmentAsync(messageId, attachmentId) 추가(R2 첨부파일 다운로드), GetAllMessageIdsAsync() 추가(R3 Reconciliation용 ID 목록 조회)
 
   - 파일명: GraphTeamsService.cs
     역할: Teams 채팅/채널 조회
@@ -464,6 +475,7 @@ Other_Services:
     변경_2026-03-29: AI 배치 루프에 PriorityScore 기반 AiCategory 자동 분류 매핑 통합 (긴급/업무/일반)
     변경_2026-03-29(Phase2): 스누즈 해제 루프 추가 — 매 분 SnoozedUntil <= UtcNow 조건으로 자동 해제 처리
     변경_2026-03-29(Phase3): 3개 루프 추가 — 규칙 엔진(120초), 팔로업 알림(3600초), 회의 전 브리핑(300초)
+    변경_2026-04-02: ReconcileDeletedEmailsAsync() 추가 — Graph API GetAllMessageIdsAsync로 실서버 ID 조회, DB 비교 후 삭제된 메일 DB에서 제거 (영업폴더 잔류 메일 정리)
 
   - 파일명: PromptService.cs
     경로: Services/Storage/
@@ -687,3 +699,4 @@ curl -s http://localhost:5858/api/status
 | 2026-03-29 | Phase 0 인프라 정비 — Email AI 분류 필드 + FTS5 검색 + AI 자동 트리거 | mAIx/Models/Email.cs, mAIx/Services/Search/EmailSearchService.cs, mAIx/Services/Sync/BackgroundSyncService.cs, mAIx/Migrations/20260329000001_AddAiClassificationFields.cs, mAIx/Migrations/20260329000002_AddEmailFts5.cs, mAIx/Queries/EmailFtsQueries.cs(신규), mAIx/Migrations/mAIxDbContextModelSnapshot.cs | Email에 AiCategory/AiPriority/AiActionRequired/AiSummaryBrief 4개 AI 분류 필드; FTS5 EmailsFts 가상 테이블+트리거 3종+초기 인덱싱; FTS5 MATCH+LIKE 폴백 검색; PriorityScore 기반 AiCategory 자동 분류 |
 | 2026-03-28 | 메일탭 UX 완성도 마지막 10% — INPC + 다중선택 도구바 + PreviewText | mAIx/Models/Email.cs, mAIx/Models/Folder.cs, mAIx/Services/Graph/GraphMailService.cs, mAIx/Services/Sync/BackgroundSyncService.cs, mAIx/ViewModels/MainViewModel.cs, mAIx/Views/MainWindow.xaml, mAIx/Views/MainWindow.xaml.cs | (1) Email.cs: INotifyPropertyChanged 구현(IsRead/FlagStatus/Categories INPC), PreviewText(NotMapped)+PreviewOrSummary(폴백) 속성 추가; Folder.cs: INotifyPropertyChanged 구현(UnreadItemCount/IsFavorite/FavoriteOrder INPC); (2) BulkActionBar: MainWindow.xaml에 하단 오버레이 액션바(2건+ 선택 시), MainViewModel에 SelectedEmailCount/IsMultipleEmailsSelected/다건삭제·읽음·플래그 커맨드, MainWindow.xaml.cs에 7개 핸들러+SelectionChanged; (3) GraphMailService: bodyPreview selectFields 추가, BackgroundSyncService: PreviewText 매핑 |
 | 2026-04-01 | 메일 동기화 읽음 카운트 불일치 근본 수정 + 설정 동기화 대메뉴 통합 | mAIx/Services/Graph/GraphMailService.cs, mAIx/Services/Sync/BackgroundSyncService.cs, mAIx/Views/MainWindow.xaml.cs, mAIx/Models/Settings/UserPreferencesSettings.cs | GetMessagesReadStatusAsync days 7→30 확장; GetUnreadMessageIdsAsync 신규(서버 미읽음 ID 일괄 조회); SyncReadStatusAsync 서버 미읽음 목록 기준 교체(로컬 N+1→Set 비교 일괄); 동기화 설정 대메뉴 통합; AiBatchSize/MailSyncInitialCount 설정 필드 추가 |
+| 2026-04-02 | R1(CC/BCC 버그수정)+R2(첨부파일 다운로드/열기)+R3(영업폴더 Reconciliation)+R4(인피니티 스크롤) | mAIx/Services/Graph/GraphMailService.cs, mAIx/Services/Sync/BackgroundSyncService.cs, mAIx/ViewModels/MainViewModel.cs, mAIx/Views/EmailViewWindow.xaml, mAIx/Views/EmailViewWindow.xaml.cs, mAIx/Views/MainWindow.xaml, mAIx/Views/MainWindow.xaml.cs | R1: GetMessageAsync Select에 bccRecipients 추가; R2: DownloadAttachmentAsync+GetAllMessageIdsAsync 신규, EmailViewWindow 첨부파일 패널(목록/다운로드/열기); R3: ReconcileDeletedEmailsAsync 신규(Graph ID목록↔DB 비교 삭제 정리); R4: PageSize=100 인피니티 스크롤(IsLoadingMore/HasMoreEmails/LoadMoreEmailsAsync+ScrollChanged) |

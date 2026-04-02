@@ -186,7 +186,7 @@ namespace mAIx.Services.Graph
             // 필요한 필드 명시적 선택 (IsRead, Flag, Importance, bodyPreview 포함)
             var selectFields = new[] {
                 "id", "internetMessageId", "conversationId", "subject", "body",
-                "from", "toRecipients", "ccRecipients", "receivedDateTime",
+                "from", "toRecipients", "ccRecipients", "bccRecipients", "receivedDateTime",
                 "isRead", "flag", "importance", "hasAttachments", "bodyPreview"
             };
 
@@ -896,5 +896,78 @@ namespace mAIx.Services.Graph
         }
 
         #endregion
+
+        /// <summary>
+        /// 첨부파일 콘텐츠 다운로드 (contentBytes 디코딩하여 byte[] 반환)
+        /// </summary>
+        /// <param name="messageId">메일 ID</param>
+        /// <param name="attachmentId">첨부파일 ID</param>
+        /// <returns>첨부파일 바이트 배열</returns>
+        public async Task<byte[]> DownloadAttachmentAsync(string messageId, string attachmentId, CancellationToken ct = default)
+        {
+            if (string.IsNullOrEmpty(messageId))
+                throw new ArgumentNullException(nameof(messageId));
+            if (string.IsNullOrEmpty(attachmentId))
+                throw new ArgumentNullException(nameof(attachmentId));
+
+            var client = _authService.GetGraphClient();
+            var attachment = await ExecuteWithRetryAsync(() =>
+                client.Me.Messages[messageId].Attachments[attachmentId].GetAsync(cancellationToken: ct), _logger, ct);
+
+            if (attachment is FileAttachment fileAttachment)
+            {
+                return fileAttachment.ContentBytes ?? Array.Empty<byte>();
+            }
+
+            _logger.Warning("첨부파일이 FileAttachment가 아님: {MessageId}/{AttachmentId}", messageId, attachmentId);
+            return Array.Empty<byte>();
+        }
+
+        /// <summary>
+        /// 폴더 내 서버 메일 ID 전체 목록 조회 (id만 select하여 경량 조회)
+        /// </summary>
+        /// <param name="folderId">폴더 ID</param>
+        /// <param name="ct">취소 토큰</param>
+        /// <returns>서버 메일 ID 목록</returns>
+        public async Task<List<string>> GetAllMessageIdsAsync(string folderId, CancellationToken ct = default)
+        {
+            if (string.IsNullOrEmpty(folderId))
+                throw new ArgumentNullException(nameof(folderId));
+
+            var client = _authService.GetGraphClient();
+            var result = new List<string>();
+
+            var response = await ExecuteWithRetryAsync(() =>
+                client.Me.MailFolders[folderId].Messages.GetAsync(config =>
+                {
+                    config.QueryParameters.Select = new[] { "id" };
+                    config.QueryParameters.Top = 1000;
+                }, ct), _logger, ct);
+
+            while (response != null)
+            {
+                if (response.Value != null)
+                {
+                    foreach (var msg in response.Value)
+                    {
+                        if (!string.IsNullOrEmpty(msg.Id))
+                            result.Add(msg.Id);
+                    }
+                }
+
+                if (!string.IsNullOrEmpty(response.OdataNextLink))
+                {
+                    response = await client.Me.MailFolders[folderId].Messages
+                        .WithUrl(response.OdataNextLink)
+                        .GetAsync(cancellationToken: ct);
+                }
+                else
+                {
+                    break;
+                }
+            }
+
+            return result;
+        }
     }
 }

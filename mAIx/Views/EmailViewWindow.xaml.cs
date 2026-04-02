@@ -1,3 +1,4 @@
+using System.IO;
 using System.Text.Json;
 using System.Threading;
 using System.Windows;
@@ -5,14 +6,17 @@ using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
 using System.Windows.Input;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Graph.Models;
 using mAIx.Data;
 using mAIx.Models;
 using mAIx.Services.AI;
+using mAIx.Services.Graph;
 using mAIx.Services.Notification;
 using mAIx.Services.Speech;
 using mAIx.Utils;
 using mAIx.ViewModels;
 using Wpf.Ui.Controls;
+using FileAttachment = Microsoft.Graph.Models.FileAttachment;
 
 namespace mAIx.Views;
 
@@ -25,9 +29,29 @@ public partial class EmailViewWindow : FluentWindow
     private readonly AiMailService? _aiMailService;
     private readonly TextToSpeechService? _ttsService;
     private readonly ToastNotificationService? _toastService;
+    private readonly GraphAuthService? _graphAuthService;
     private bool _webView2Initialized = false;
     private CancellationTokenSource? _ttsCts;
     private bool _threadSummaryLoaded = false;
+
+    /// <summary>
+    /// 첨부파일 표시용 DTO
+    /// </summary>
+    private class AttachmentInfo
+    {
+        public string Id { get; set; } = "";
+        public string Name { get; set; } = "";
+        public long Size { get; set; }
+        public string SizeText => FormatSize(Size);
+        public string ContentType { get; set; } = "";
+
+        private static string FormatSize(long bytes)
+        {
+            if (bytes < 1024) return $"({bytes} B)";
+            if (bytes < 1024 * 1024) return $"({bytes / 1024.0:F1} KB)";
+            return $"({bytes / (1024.0 * 1024.0):F1} MB)";
+        }
+    }
 
     public EmailViewWindow(Email email)
     {
@@ -37,6 +61,7 @@ public partial class EmailViewWindow : FluentWindow
         _aiMailService = (App.Current as App)?.GetService<AiMailService>();
         _ttsService = (App.Current as App)?.GetService<TextToSpeechService>();
         _toastService = (App.Current as App)?.GetService<ToastNotificationService>();
+        _graphAuthService = (App.Current as App)?.GetService<GraphAuthService>();
 
         Loaded += EmailViewWindow_Loaded;
         Closing += EmailViewWindow_Closing;
@@ -208,6 +233,12 @@ public partial class EmailViewWindow : FluentWindow
 </html>";
 
             BodyWebView.NavigateToString(htmlContent);
+
+            // 첨부파일이 있으면 첨부파일 목록 로드
+            if (_email.HasAttachments && !string.IsNullOrEmpty(_email.EntryId))
+            {
+                _ = LoadAttachmentsAsync();
+            }
         }
         catch (Exception ex)
         {
@@ -736,6 +767,120 @@ public partial class EmailViewWindow : FluentWindow
         finally
         {
             ThreadSummaryLoading.Visibility = Visibility.Collapsed;
+        }
+    }
+
+    // ─────────────────────────────────────────
+    // Task 5: 첨부파일 목록 + 다운로드/열기
+    // ─────────────────────────────────────────
+
+    /// <summary>Graph API로 첨부파일 목록 로드</summary>
+    private async Task LoadAttachmentsAsync()
+    {
+        if (_graphAuthService == null || string.IsNullOrEmpty(_email.EntryId))
+            return;
+
+        try
+        {
+            AttachmentPanel.Visibility = Visibility.Visible;
+            AttachmentLoading.Visibility = Visibility.Visible;
+
+            var client = _graphAuthService.GetGraphClient();
+            var response = await client.Me.Messages[_email.EntryId].Attachments.GetAsync();
+
+            if (response?.Value == null || response.Value.Count == 0)
+            {
+                AttachmentPanel.Visibility = Visibility.Collapsed;
+                return;
+            }
+
+            var attachments = new List<AttachmentInfo>();
+            foreach (var att in response.Value)
+            {
+                // 인라인 이미지는 제외 (본문에 이미 표시됨)
+                if (att is FileAttachment fileAtt && fileAtt.IsInline == true)
+                    continue;
+
+                attachments.Add(new AttachmentInfo
+                {
+                    Id = att.Id ?? "",
+                    Name = att.Name ?? "첨부파일",
+                    Size = att.Size ?? 0,
+                    ContentType = att.ContentType ?? ""
+                });
+            }
+
+            if (attachments.Count == 0)
+            {
+                AttachmentPanel.Visibility = Visibility.Collapsed;
+                return;
+            }
+
+            AttachmentHeaderText.Text = $"첨부파일 ({attachments.Count})";
+            AttachmentList.ItemsSource = attachments;
+            Log4.Debug2($"[EmailView] 첨부파일 {attachments.Count}개 로드됨");
+        }
+        catch (Exception ex)
+        {
+            Log4.Warn($"[EmailView] 첨부파일 목록 로드 실패: {ex.Message}");
+            AttachmentPanel.Visibility = Visibility.Collapsed;
+        }
+        finally
+        {
+            AttachmentLoading.Visibility = Visibility.Collapsed;
+        }
+    }
+
+    /// <summary>첨부파일 클릭 — 다운로드 후 열기</summary>
+    private async void Attachment_Click(object sender, MouseButtonEventArgs e)
+    {
+        if (sender is not FrameworkElement element || element.DataContext is not AttachmentInfo info)
+            return;
+
+        if (_graphAuthService == null || string.IsNullOrEmpty(_email.EntryId))
+            return;
+
+        try
+        {
+            Log4.Debug($"[EmailView] 첨부파일 다운로드 시작: {info.Name}");
+
+            var client = _graphAuthService.GetGraphClient();
+            var attachment = await client.Me.Messages[_email.EntryId]
+                .Attachments[info.Id].GetAsync();
+
+            if (attachment is not FileAttachment fileAtt || fileAtt.ContentBytes == null)
+            {
+                Log4.Warn($"[EmailView] 첨부파일 콘텐츠를 가져올 수 없음: {info.Name}");
+                return;
+            }
+
+            // 임시 폴더에 저장
+            var tempDir = Path.Combine(Path.GetTempPath(), "MaiX", "attachments");
+            Directory.CreateDirectory(tempDir);
+            var filePath = Path.Combine(tempDir, info.Name);
+
+            // 동일 파일명 충돌 방지
+            if (File.Exists(filePath))
+            {
+                var nameWithoutExt = Path.GetFileNameWithoutExtension(info.Name);
+                var ext = Path.GetExtension(info.Name);
+                filePath = Path.Combine(tempDir, $"{nameWithoutExt}_{DateTime.Now:HHmmss}{ext}");
+            }
+
+            await File.WriteAllBytesAsync(filePath, fileAtt.ContentBytes);
+
+            // 기본 프로그램으로 열기
+            System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
+            {
+                FileName = filePath,
+                UseShellExecute = true
+            });
+
+            Log4.Info($"[EmailView] 첨부파일 열림: {filePath}");
+        }
+        catch (Exception ex)
+        {
+            Log4.Error($"[EmailView] 첨부파일 다운로드/열기 실패: {ex.Message}");
         }
     }
 

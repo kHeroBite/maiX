@@ -27,6 +27,7 @@
             <RowDefinition Height="Auto"/>
             <RowDefinition Height="Auto"/>
             <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
             <RowDefinition Height="*"/>
         </Grid.RowDefinitions>
 
@@ -249,9 +250,66 @@
             </Grid>
         </Border>
 
+        <!-- 첨부파일 영역 -->
+        <Border x:Name="AttachmentPanel"
+                Grid.Row="4"
+                Visibility="Collapsed"
+                Background="{DynamicResource SubtleFillColorTertiaryBrush}"
+                BorderBrush="{DynamicResource ControlElevationBorderBrush}"
+                BorderThickness="0,0,0,1"
+                Padding="16,8">
+            <StackPanel>
+                <StackPanel Orientation="Horizontal" Margin="0,0,0,6">
+                    <ui:SymbolIcon Symbol="Attach24" Margin="0,0,6,0"/>
+                    <TextBlock x:Name="AttachmentHeaderText"
+                               Text="첨부파일"
+                               FontWeight="SemiBold"
+                               VerticalAlignment="Center"
+                               Foreground="{DynamicResource TextFillColorPrimaryBrush}"/>
+                    <ui:ProgressRing x:Name="AttachmentLoading"
+                                     Width="14" Height="14"
+                                     IsIndeterminate="True"
+                                     Visibility="Collapsed"
+                                     Margin="8,0,0,0"/>
+                </StackPanel>
+                <ItemsControl x:Name="AttachmentList">
+                    <ItemsControl.ItemsPanel>
+                        <ItemsPanelTemplate>
+                            <WrapPanel Orientation="Horizontal"/>
+                        </ItemsPanelTemplate>
+                    </ItemsControl.ItemsPanel>
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate>
+                            <Border Background="{DynamicResource ControlFillColorDefaultBrush}"
+                                    BorderBrush="{DynamicResource ControlElevationBorderBrush}"
+                                    BorderThickness="1"
+                                    CornerRadius="4"
+                                    Padding="10,6"
+                                    Margin="0,0,8,4"
+                                    Cursor="Hand"
+                                    MouseLeftButtonDown="Attachment_Click">
+                                <StackPanel Orientation="Horizontal">
+                                    <ui:SymbolIcon Symbol="Document24" Margin="0,0,6,0" FontSize="14"/>
+                                    <TextBlock Text="{Binding Name}"
+                                               VerticalAlignment="Center"
+                                               Foreground="{DynamicResource TextFillColorPrimaryBrush}"
+                                               FontSize="12"/>
+                                    <TextBlock Text="{Binding SizeText}"
+                                               VerticalAlignment="Center"
+                                               Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                                               FontSize="11"
+                                               Margin="8,0,0,0"/>
+                                </StackPanel>
+                            </Border>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+            </StackPanel>
+        </Border>
+
         <!-- 메일 본문 -->
         <wv2:WebView2 x:Name="BodyWebView"
-                      Grid.Row="4"
+                      Grid.Row="5"
                       DefaultBackgroundColor="Transparent"/>
     </Grid>
 </ui:FluentWindow>

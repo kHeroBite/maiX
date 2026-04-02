@@ -2,6 +2,43 @@
 
 > PROJECT.md 작업 이력 테이블의 상세 보완본
 
+## 2026-04-02 — R1(CC/BCC 버그수정) + R2(첨부파일 다운로드/열기) + R3(영업폴더 삭제메일 Reconciliation) + R4(인피니티 스크롤 PageSize=100)
+
+**분류**: Full Path (k4)
+**수정 파일**: 7개 (GraphMailService.cs, BackgroundSyncService.cs, MainViewModel.cs, EmailViewWindow.xaml, EmailViewWindow.xaml.cs, MainWindow.xaml, MainWindow.xaml.cs)
+
+### 변경 내역
+
+#### R1 — CC/BCC 참조 필드 표시 버그 수정 (GraphMailService.cs)
+- **이슈**: 메일 읽기 시 CC(참조), BCC(숨은참조) 필드가 null로 반환되는 버그
+- **원인**: Graph API 응답에서 bccRecipients 필드가 Select 목록에서 누락됨
+- **해결**: `GetMessageAsync()`의 Select 쿼리에 `bccRecipients` 추가
+- **파일**: `GraphMailService.cs`
+
+#### R2 — 첨부파일 다운로드/열기 기능 추가 (GraphMailService.cs, EmailViewWindow.xaml/cs)
+- **이슈**: 메일 읽기 창에 첨부파일 패널이 없어 첨부파일 다운로드/열기 불가
+- **해결**:
+  - `GraphMailService.cs`: `DownloadAttachmentAsync(messageId, attachmentId)` + `GetAllMessageIdsAsync()` 추가
+  - `EmailViewWindow.xaml`: AttachmentPanel 추가 (첨부파일 목록 + 다운로드/열기 버튼)
+  - `EmailViewWindow.xaml.cs`: 첨부파일 패널 로드/다운로드/열기 이벤트 핸들러 구현
+
+#### R3 — 영업폴더 삭제메일 Reconciliation (BackgroundSyncService.cs)
+- **이슈**: 삭제된 메일이 DB에 잔류하여 영업폴더(FavoriteFolder) 목록에 계속 표시됨
+- **해결**: `ReconcileDeletedEmailsAsync()` 추가 — Graph API로 실제 메일 ID 목록 조회 후 DB 비교, 삭제된 항목 DB에서 제거
+- **파일**: `BackgroundSyncService.cs`
+
+#### R4 — 인피니티 스크롤 PageSize=100 (MainViewModel.cs, MainWindow.xaml/cs)
+- **이슈**: 메일 목록이 한 번에 전부 로드되어 대용량 폴더에서 성능 문제 발생
+- **해결**:
+  - `MainViewModel.cs`: PageSize=100, `_emailSkip` 오프셋, `IsLoadingMore`, `HasMoreEmails`, `LoadMoreEmailsAsync()` 추가
+  - `MainWindow.xaml`: ScrollViewer ScrollChanged 이벤트 등록
+  - `MainWindow.xaml.cs`: 스크롤 하단 도달 시 `LoadMoreEmailsAsync()` 호출 핸들러
+
+### 교훈 기록
+- L-290: EF Core UNIQUE 제약 위반 Detach 패턴 이후 ERR 로그는 내부 노이즈 (Level 1)
+
+---
+
 ## 2026-04-01 — cid: 인라인 이미지 virtual host 방식 전환 + 빈 본문 메타데이터 카드 표시
 
 **분류**: Fast Path (k3)

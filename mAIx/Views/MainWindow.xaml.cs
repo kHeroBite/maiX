@@ -3367,6 +3367,17 @@ public partial class MainWindow : FluentWindow
         Log4.Debug($"메일 선택 변경: {count}건");
     }
 
+    /// <summary>
+    /// 메일 목록 스크롤 끝 도달 시 추가 로드 (인피니티 스크롤)
+    /// </summary>
+    private async void EmailListBox_ScrollChanged(object sender, ScrollChangedEventArgs e)
+    {
+        if (e.VerticalOffset + e.ViewportHeight >= e.ExtentHeight - 50 && e.ExtentHeight > 0)
+        {
+            await _viewModel.LoadMoreEmailsAsync();
+        }
+    }
+
     #endregion
 
     #region 다중 선택 일괄 작업 핸들러

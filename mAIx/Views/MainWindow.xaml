@@ -1587,7 +1587,8 @@
                          PreviewMouseRightButtonDown="EmailListBox_PreviewMouseRightButtonDown"
                          PreviewMouseLeftButtonDown="EmailListBox_PreviewMouseLeftButtonDown"
                          PreviewMouseMove="EmailListBox_PreviewMouseMove"
-                         MouseDoubleClick="EmailListBox_MouseDoubleClick">
+                         MouseDoubleClick="EmailListBox_MouseDoubleClick"
+                         ScrollViewer.ScrollChanged="EmailListBox_ScrollChanged">
                     <ListBox.ContextMenu>
                         <ContextMenu Background="{DynamicResource ApplicationBackgroundBrush}"
                                      BorderBrush="{DynamicResource ControlElevationBorderBrush}"
@@ -2122,23 +2123,33 @@
                     </ListBox.ItemTemplate>
                 </ListBox>
 
-                <!-- 이전 메일 더 불러오기 버튼 (Row 2) -->
+                <!-- 이전 메일 더 불러오기 버튼 + 인피니티 스크롤 로딩 (Row 2) -->
                 <Border Grid.Row="2"
                         Padding="12,6"
                         BorderBrush="{DynamicResource ControlElevationBorderBrush}"
                         BorderThickness="0,1,0,0">
                     <Grid>
                         <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto"/>
                             <ColumnDefinition Width="*"/>
                             <ColumnDefinition Width="Auto"/>
                         </Grid.ColumnDefinitions>
-                        <TextBlock Grid.Column="0"
+                        <!-- 인피니티 스크롤 로딩 인디케이터 -->
+                        <StackPanel Grid.Column="0" Orientation="Horizontal"
+                                    Visibility="{Binding IsLoadingMore, Converter={StaticResource BoolToVisibilityConverter}}"
+                                    VerticalAlignment="Center" Margin="0,0,8,0">
+                            <ui:ProgressRing Width="14" Height="14" IsIndeterminate="True"/>
+                            <TextBlock Text="더 불러오는 중..." FontSize="11" Margin="6,0,0,0"
+                                       Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                                       VerticalAlignment="Center"/>
+                        </StackPanel>
+                        <TextBlock Grid.Column="1"
                                    Text="{Binding HistoricalSyncStatusText}"
                                    FontSize="11"
                                    Foreground="{DynamicResource TextFillColorSecondaryBrush}"
                                    VerticalAlignment="Center"
                                    Visibility="{Binding IsHistoricalSyncRunning, Converter={StaticResource BoolToVisibilityConverter}}"/>
-                        <Button Grid.Column="1"
+                        <Button Grid.Column="2"
                                 x:Name="LoadMoreButton"
                                 Content="⬆ 이전 메일 불러오기"
                                 FontSize="11"

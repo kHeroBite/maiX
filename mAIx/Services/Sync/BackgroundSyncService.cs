@@ -1293,8 +1293,16 @@ public class BackgroundSyncService : BackgroundService
         }
 
         // Delta Query로 변경된 메일 조회
+        var previousDeltaLink = syncState.DeltaLink;
         var (changedMessages, deletedIds) = await FetchNewEmailsAsync(
             graphMailService, syncState, folder.Id, ct);
+
+        // DeltaLink 만료로 전체 재동기화가 발생한 경우 Reconciliation 실행
+        // (이전에 deltaLink가 있었는데 FetchNewEmailsAsync에서 리셋된 경우)
+        if (!string.IsNullOrEmpty(previousDeltaLink) && syncState.DeltaLink != previousDeltaLink)
+        {
+            await ReconcileDeletedEmailsAsync(dbContext, graphMailService, folder.Id, accountEmail, ct);
+        }
 
         // 삭제된 메일 처리
         if (deletedIds.Count > 0)
@@ -1853,6 +1861,7 @@ public class BackgroundSyncService : BackgroundService
                         From = GetDisplayName(message.From?.EmailAddress),
                         To = SerializeRecipients(message.ToRecipients),
                         Cc = SerializeRecipients(message.CcRecipients),
+                        Bcc = SerializeRecipients(message.BccRecipients),
                         ReceivedDateTime = message.ReceivedDateTime?.UtcDateTime,
                         IsRead = message.IsRead ?? false,
                         FlagStatus = message.Flag?.FlagStatus?.ToString()?.ToLower(),
@@ -2956,6 +2965,57 @@ public class BackgroundSyncService : BackgroundService
         _historicalSyncCompleted = false;
         _historicalSyncTriggerCts?.Cancel();
         Log4.Info("[BackgroundSyncService] 역방향 동기화 수동 트리거");
+    }
+
+    /// <summary>
+    /// 서버 ID 목록 vs 로컬 DB 비교 → 서버에 없는 메일 로컬 삭제 (Reconciliation)
+    /// Delta Link 만료 시 전체 재동기화에서 호출
+    /// </summary>
+    private async Task ReconcileDeletedEmailsAsync(
+        mAIxDbContext dbContext,
+        GraphMailService graphMailService,
+        string folderId,
+        string accountEmail,
+        CancellationToken ct)
+    {
+        try
+        {
+            // 서버에서 해당 폴더의 모든 메일 ID 조회
+            var serverIds = new HashSet<string>(
+                await graphMailService.GetAllMessageIdsAsync(folderId, ct),
+                StringComparer.Ordinal);
+
+            // 로컬 DB에서 해당 폴더의 모든 메일 EntryId 조회
+            var localEmails = await dbContext.Emails
+                .Where(e => e.ParentFolderId == folderId && e.AccountEmail == accountEmail && e.EntryId != null)
+                .Select(e => new { e.Id, e.EntryId, e.Subject })
+                .ToListAsync(ct);
+
+            var deletedCount = 0;
+            foreach (var local in localEmails)
+            {
+                if (!serverIds.Contains(local.EntryId!))
+                {
+                    var email = await dbContext.Emails.FindAsync(new object[] { local.Id }, ct);
+                    if (email != null)
+                    {
+                        dbContext.Emails.Remove(email);
+                        deletedCount++;
+                        _logger.Debug("Reconciliation 삭제: {Subject}", local.Subject);
+                    }
+                }
+            }
+
+            if (deletedCount > 0)
+            {
+                await dbContext.SaveChangesAsync(ct);
+                _logger.Information("Reconciliation 완료: 서버에서 삭제된 {Count}건 로컬 제거 (폴더: {FolderId})", deletedCount, folderId);
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.Warning(ex, "Reconciliation 실패 (폴더: {FolderId}) — 동기화는 계속 진행", folderId);
+        }
     }
 
     /// <summary>

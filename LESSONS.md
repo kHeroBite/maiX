@@ -568,3 +568,12 @@
 - **패턴**: `_cts?.Cancel(); _cts = new CancellationTokenSource(); await LoadAsync(_cts.Token);`
 - **심각도**: 중간 (UI 블로킹 사용자 체감)
 - **Level**: 1 (참고)
+
+## L-290: EF Core UNIQUE 제약 위반 로그 노이즈 — Detach 패턴 이후 ERR 로그는 정상 (2026-04-02)
+
+- **문제**: BackgroundSyncService.SaveEmailsAsync에서 UNIQUE 제약 위반 시 EF Core 내부 ERR 로그가 런타임 로그에 남음
+- **원인**: EF Core가 DbUpdateException 발생 시 내부적으로 ERR 레벨 로그를 기록 — L-286 Detach 패턴으로 기능적 오류는 없지만 로그 노이즈 잔존
+- **해결**: L-286 Detach 패턴(`dbContext.Entry(email).State = EntityState.Detached`)이 이미 올바르게 처리 중. ERR 로그는 EF Core 내부 노이즈이며 실제 기능 오류 아님
+- **교훈**: EF Core DbUpdateException catch 블록에서 Detach 패턴을 사용해도 EF Core 자체 내부 ERR 로그는 suppress 불가. 이 로그는 정상 동작의 부산물 — 실제 오류 여부는 catch 처리 여부로 판단할 것
+- **심각도**: 낮음 (기능 문제 없음, 로그 노이즈만)
+- **Level**: 1 (참고)
