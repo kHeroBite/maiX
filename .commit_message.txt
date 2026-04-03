@@ -1,10 +1,9 @@
-⚡ 메일탭 UI 블로킹 성능 개선 — Dispatcher.Invoke→InvokeAsync + 동기화 주기 설정 버그 수정 by claude-sonnet-4-6
+✨ 설정>메일 초기메일수(20/50/100) 선택 + 동기화 기본값 버그 수정 by claude-sonnet-4-6
 
-- Dispatcher.Invoke → InvokeAsync 5곳 전환 (OnMailSyncStarted/Progress/HistoricalSync/Timer)
-- OnEmailsSynced: SelectedEmail ID 보존 후 로드 완료 시 재복원
-- 동기화 주기 라디오 버튼: prefs 전용 필드(FavoriteSyncIntervalSeconds/FullSyncIntervalSeconds) 분리
-- Checked 콜백 분리: SetFavoriteSyncInterval / SetFullSyncInterval
-- Debug2.WriteLine → Log4.Error 교체 (LoadMoreEmailsAsync)
+- UserPreferencesSettings에 InitialMailCount 속성 추가 (기본값 50)
+- MainViewModel의 하드코딩된 PageSize=100을 Settings 동적 참조로 전환
+- MainWindow에 "초기 메일 수" 설정 UI 신규 추가 (ShowMailInitialSettings)
+- Show*SyncSettings()의 foreach 클로저 캡처 버그 수정 (RadioButton 기본값 미선택 문제 해결)
 
 🤖 Generated with [Claude Code](https://claude.com/claude-code) (claude-sonnet-4-6)
 
