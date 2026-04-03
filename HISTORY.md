@@ -2,6 +2,35 @@
 
 > PROJECT.md 작업 이력 테이블의 상세 보완본
 
+## 2026-04-03 — 설정>메일 초기 메일수 선택 옵션 추가 + 동기화 기본값 버그 수정
+
+**분류**: Normal Path (k3)
+**수정 파일**: 3개
+
+### 변경 내역
+
+#### 1. UserPreferencesSettings.cs — InitialMailCount 속성 추가
+- `public int InitialMailCount { get; set; } = 50;` ([XmlElement("InitialMailCount")]) 추가
+- 메일함 최초 로드 시 가져올 메일 수 (20/50/100) 설정 저장/로드 지원
+
+#### 2. MainViewModel.cs — PageSize 동적화
+- `private const int PageSize = 100;` 상수 제거
+- `LoadEmailsForFolderAsync`, `LoadMoreEmailsAsync` 양쪽에서 `App.Settings.UserPreferences.InitialMailCount` 직접 참조로 전환
+
+#### 3. MainWindow.xaml.cs — 초기 메일수 설정 UI + 동기화 기본값 버그 수정
+- `GetSubMenuItems("mail")`에 `("mail_initial", "초기 메일 수")` 소메뉴 항목 추가
+- `UpdateSettingsContent`에 `"mail_initial"` case 추가 → `ShowMailInitialSettings()` 호출
+- `ShowMailInitialSettings()` 신규 구현: 20/50/100 RadioButton UI, `App.Settings.UserPreferences.InitialMailCount` 저장/로드
+- `Show*SyncSettings()` 함수군 기본값 선택 버그 수정: foreach 클로저 변수 캡처 문제로 RadioButton이 선택되지 않던 문제 해결
+
+### 테스트 결과
+- 빌드: 오류 0개 ✅
+- 설정>메일>초기 메일 수 소메뉴 표시 ✅
+- 20/50/100 RadioButton 선택 및 저장 ✅
+- 동기화 설정 기본값 라디오 버튼 정상 선택 ✅
+
+---
+
 ## 2026-04-02 — R1(CC/BCC 버그수정) + R2(첨부파일 다운로드/열기) + R3(영업폴더 삭제메일 Reconciliation) + R4(인피니티 스크롤 PageSize=100)
 
 **분류**: Full Path (k4)

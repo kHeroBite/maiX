@@ -281,4 +281,10 @@ public class UserPreferencesSettings
     [XmlElement("AiBatchSize")]
     public int AiBatchSize { get; set; } = 20;
 
+    /// <summary>
+    /// 메일함 최초 로드 시 가져올 메일 수 (20/50/100, 기본값 50)
+    /// </summary>
+    [XmlElement("InitialMailCount")]
+    public int InitialMailCount { get; set; } = 50;
+
 }

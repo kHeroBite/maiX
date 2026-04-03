@@ -16352,7 +16352,7 @@ public partial class MainWindow : FluentWindow
         return mainMenuKey switch
         {
             "sync" => new[] { ("sync_mail", "메일"), ("sync_calendar", "캘린더"), ("sync_chat", "채팅"), ("sync_ai", "AI 분석") },
-            "mail" => new[] { ("mail_signature", "서명 관리"), ("mail_rules", "메일 규칙") },
+            "mail" => new[] { ("mail_initial", "초기 메일 수"), ("mail_signature", "서명 관리"), ("mail_rules", "메일 규칙") },
             "api" => new[] { ("api_ai_providers", "AI Provider"), ("api_tinymce", "TinyMCE") },
             "general" => new[] { ("general_theme", "일반"), ("general_account", "계정"), ("general_notification", "알림") },
             "system" => new[] { ("system_microphone", "마이크 설정"), ("system_stt_tts", "STT/TTS 설정") },
@@ -16515,6 +16515,9 @@ public partial class MainWindow : FluentWindow
             case "sync_ai":
                 ShowSyncAiSettings();
                 break;
+            case "mail_initial":
+                ShowMailInitialSettings();
+                break;
             case "mail_signature":
                 ShowSignatureSettings();
                 break;
@@ -16621,6 +16624,50 @@ public partial class MainWindow : FluentWindow
     #region 동기화 설정 (메일/캘린더/채팅/AI)
 
     /// <summary>
+    /// <summary>
+    /// 메일 - 초기 메일 수 설정 UI 표시
+    /// </summary>
+    private void ShowMailInitialSettings()
+    {
+        if (SettingsContentPanel == null) return;
+
+        SettingsContentPanel.Children.Add(CreateSettingsSectionHeader("메일 - 초기 메일 수"));
+
+        var countGroup = CreateSettingsGroupBorder();
+        var countStack = new StackPanel();
+        countStack.Children.Add(CreateSettingsLabel("초기 메일 수 설정"));
+
+        int currentCount = App.Settings.UserPreferences.InitialMailCount;
+        if (currentCount != 20 && currentCount != 50 && currentCount != 100)
+            currentCount = 50;
+
+        var countOptions = new[] { (20, "20개"), (50, "50개 (기본값)"), (100, "100개") };
+        var countWrap = new WrapPanel { Margin = new Thickness(0, 0, 0, 12) };
+        foreach (var (value, label) in countOptions)
+        {
+            int capturedValue = value;
+            var radio = new RadioButton
+            {
+                Content = label,
+                Tag = capturedValue,
+                IsChecked = currentCount == capturedValue,
+                Margin = new Thickness(0, 0, 16, 8),
+                GroupName = "MailInitialCount"
+            };
+            radio.Checked += (s, e) =>
+            {
+                App.Settings.UserPreferences.InitialMailCount = capturedValue;
+                App.Settings.SaveUserPreferences();
+                Log4.Info($"초기 메일 수 저장: {capturedValue}개");
+            };
+            countWrap.Children.Add(radio);
+        }
+        countStack.Children.Add(countWrap);
+        countStack.Children.Add(CreateSettingsDescription("메일함을 처음 열 때 불러올 메일 수입니다."));
+        countGroup.Child = countStack;
+        SettingsContentPanel.Children.Add(countGroup);
+    }
+
     /// 동기화 - 메일 설정 UI 표시
     /// </summary>
     private void ShowSyncMailSettings()
@@ -17324,7 +17371,9 @@ public partial class MainWindow : FluentWindow
         var mailStack = new StackPanel();
         mailStack.Children.Add(CreateSettingsLabel("메일 동기화 주기"));
 
-        var mailIntervalSeconds = prefs.MailSyncIntervalSeconds > 0 ? prefs.MailSyncIntervalSeconds : prefs.MailSyncIntervalMinutes * 60;
+        var mailIntervalSeconds = prefs.MailSyncIntervalSeconds > 0 ? prefs.MailSyncIntervalSeconds
+            : prefs.MailSyncIntervalMinutes > 0 ? prefs.MailSyncIntervalMinutes * 60
+            : 300;
         var mailWrap = new WrapPanel { Margin = new Thickness(0, 0, 0, 12) };
         foreach (var (seconds, label) in intervalOptions)
         {
@@ -17464,7 +17513,9 @@ public partial class MainWindow : FluentWindow
         var intervalStack = new StackPanel();
         intervalStack.Children.Add(CreateSettingsLabel("메일 동기화 주기"));
 
-        var mailIntervalSeconds = prefs.MailSyncIntervalSeconds > 0 ? prefs.MailSyncIntervalSeconds : prefs.MailSyncIntervalMinutes * 60;
+        var mailIntervalSeconds = prefs.MailSyncIntervalSeconds > 0 ? prefs.MailSyncIntervalSeconds
+            : prefs.MailSyncIntervalMinutes > 0 ? prefs.MailSyncIntervalMinutes * 60
+            : 300;
         var intervalOptions = new[] { (1, "1초"), (5, "5초"), (10, "10초"), (30, "30초"), (60, "1분"), (300, "5분"), (600, "10분"), (1800, "30분"), (3600, "1시간") };
 
         var intervalWrap = new WrapPanel { Margin = new Thickness(0, 0, 0, 12) };

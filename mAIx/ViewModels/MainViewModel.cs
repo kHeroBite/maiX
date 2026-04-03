@@ -396,10 +396,6 @@ public partial class MainViewModel : ViewModelBase, IDisposable
     }
 
     /// <summary>
-    /// 페이지네이션: 한 번에 로드할 이메일 수
-    /// </summary>
-    private const int PageSize = 100;
-
     /// <summary>
     /// 페이지네이션: 현재까지 로드된 이메일 수 (Skip 오프셋)
     /// </summary>
@@ -1142,14 +1138,14 @@ public partial class MainViewModel : ViewModelBase, IDisposable
 
             var emails = await query
                 .OrderByDescending(e => e.ReceivedDateTime)
-                .Take(PageSize)
+                .Take(App.Settings.UserPreferences.InitialMailCount)
                 .ToListAsync(cancellationToken);
 
             cancellationToken.ThrowIfCancellationRequested();
 
             // 페이지네이션 상태 초기화
             _emailSkip = emails.Count;
-            HasMoreEmails = emails.Count >= PageSize;
+            HasMoreEmails = emails.Count >= App.Settings.UserPreferences.InitialMailCount;
 
             // 임시보관함인 경우 IsDraft 플래그 설정
             bool isDraftsFolder = IsDraftsFolder(SelectedFolder);
@@ -1192,7 +1188,7 @@ public partial class MainViewModel : ViewModelBase, IDisposable
             var moreEmails = await query
                 .OrderByDescending(e => e.ReceivedDateTime)
                 .Skip(_emailSkip)
-                .Take(PageSize)
+                .Take(App.Settings.UserPreferences.InitialMailCount)
                 .ToListAsync();
 
             if (moreEmails.Count > 0)
@@ -1209,7 +1205,7 @@ public partial class MainViewModel : ViewModelBase, IDisposable
                 var combined = new List<Email>(Emails);
                 combined.AddRange(moreEmails);
                 _emailSkip += moreEmails.Count;
-                HasMoreEmails = moreEmails.Count >= PageSize;
+                HasMoreEmails = moreEmails.Count >= App.Settings.UserPreferences.InitialMailCount;
                 Emails = combined;
                 StatusMessage = HasMoreEmails
                     ? $"{Emails.Count}개 이메일 로드됨 (더 있음)"
