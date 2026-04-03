@@ -16683,6 +16683,8 @@ public partial class MainWindow : FluentWindow
         var favMailGroup = CreateSettingsGroupBorder();
         var favMailStack = new StackPanel();
         favMailStack.Children.Add(CreateSettingsLabel("즐겨찾기 메일 동기화 주기"));
+        var currentFavIntervalRaw = prefs.FavoriteSyncIntervalSeconds > 0 ? prefs.FavoriteSyncIntervalSeconds : 10;
+        var currentFavInterval = shortIntervalOptions.Any(o => o.Item1 == currentFavIntervalRaw) ? currentFavIntervalRaw : 10;
         var favMailWrap = new WrapPanel { Margin = new Thickness(0, 0, 0, 12) };
         foreach (var (seconds, label) in shortIntervalOptions)
         {
@@ -16690,7 +16692,7 @@ public partial class MainWindow : FluentWindow
             {
                 Content = label,
                 Tag = seconds,
-                IsChecked = prefs.FavoriteSyncIntervalSeconds == seconds,
+                IsChecked = currentFavInterval == seconds,
                 Margin = new Thickness(0, 0, 16, 8),
                 GroupName = "SyncMailFavoriteInterval"
             };
@@ -16712,6 +16714,7 @@ public partial class MainWindow : FluentWindow
         var allMailGroup = CreateSettingsGroupBorder();
         var allMailStack = new StackPanel();
         allMailStack.Children.Add(CreateSettingsLabel("전체 메일 동기화 주기"));
+        var currentFullInterval = prefs.FullSyncIntervalSeconds > 0 ? prefs.FullSyncIntervalSeconds : 300;
         var allMailWrap = new WrapPanel { Margin = new Thickness(0, 0, 0, 12) };
         foreach (var (seconds, label) in longIntervalOptions)
         {
@@ -16719,7 +16722,7 @@ public partial class MainWindow : FluentWindow
             {
                 Content = label,
                 Tag = seconds,
-                IsChecked = prefs.FullSyncIntervalSeconds == seconds,
+                IsChecked = currentFullInterval == seconds,
                 Margin = new Thickness(0, 0, 16, 8),
                 GroupName = "SyncMailAllInterval"
             };
@@ -16793,6 +16796,8 @@ public partial class MainWindow : FluentWindow
         var calendarGroup = CreateSettingsGroupBorder();
         var calendarStack = new StackPanel();
         calendarStack.Children.Add(CreateSettingsLabel("캘린더 동기화 주기"));
+        var currentCalendarIntervalRaw = prefs.CalendarSyncIntervalSeconds > 0 ? prefs.CalendarSyncIntervalSeconds : 60;
+        var currentCalendarInterval = intervalOptions.Any(o => o.Item1 == currentCalendarIntervalRaw) ? currentCalendarIntervalRaw : 60;
         var calendarWrap = new WrapPanel { Margin = new Thickness(0, 0, 0, 12) };
         foreach (var (seconds, label) in intervalOptions)
         {
@@ -16800,7 +16805,7 @@ public partial class MainWindow : FluentWindow
             {
                 Content = label,
                 Tag = seconds,
-                IsChecked = prefs.CalendarSyncIntervalSeconds == seconds,
+                IsChecked = currentCalendarInterval == seconds,
                 Margin = new Thickness(0, 0, 16, 8),
                 GroupName = "SyncCalendarInterval"
             };
@@ -16834,6 +16839,8 @@ public partial class MainWindow : FluentWindow
         var chatGroup = CreateSettingsGroupBorder();
         var chatStack = new StackPanel();
         chatStack.Children.Add(CreateSettingsLabel("채팅 동기화 주기"));
+        var currentChatIntervalRaw = prefs.ChatSyncIntervalSeconds > 0 ? prefs.ChatSyncIntervalSeconds : 120;
+        var currentChatInterval = intervalOptions.Any(o => o.Item1 == currentChatIntervalRaw) ? currentChatIntervalRaw : 120;
         var chatWrap = new WrapPanel { Margin = new Thickness(0, 0, 0, 12) };
         foreach (var (seconds, label) in intervalOptions)
         {
@@ -16841,7 +16848,7 @@ public partial class MainWindow : FluentWindow
             {
                 Content = label,
                 Tag = seconds,
-                IsChecked = prefs.ChatSyncIntervalSeconds == seconds,
+                IsChecked = currentChatInterval == seconds,
                 Margin = new Thickness(0, 0, 16, 8),
                 GroupName = "SyncChatInterval"
             };
@@ -17404,6 +17411,7 @@ public partial class MainWindow : FluentWindow
         var calendarGroup = CreateSettingsGroupBorder();
         var calendarStack = new StackPanel();
         calendarStack.Children.Add(CreateSettingsLabel("캘린더 동기화 주기"));
+        var currentMs365CalendarInterval = prefs.CalendarSyncIntervalSeconds > 0 ? prefs.CalendarSyncIntervalSeconds : 60;
 
         var calendarWrap = new WrapPanel { Margin = new Thickness(0, 0, 0, 12) };
         foreach (var (seconds, label) in intervalOptions)
@@ -17412,7 +17420,7 @@ public partial class MainWindow : FluentWindow
             {
                 Content = label,
                 Tag = seconds,
-                IsChecked = prefs.CalendarSyncIntervalSeconds == seconds,
+                IsChecked = currentMs365CalendarInterval == seconds,
                 Margin = new Thickness(0, 0, 16, 8),
                 GroupName = "Ms365FavoriteCalendarInterval"
             };
@@ -17435,6 +17443,9 @@ public partial class MainWindow : FluentWindow
         var chatGroup = CreateSettingsGroupBorder();
         var chatStack = new StackPanel();
         chatStack.Children.Add(CreateSettingsLabel("채팅 동기화 주기"));
+        var ms365ChatOptions = intervalOptions.Select(o => o.Item1).ToArray();
+        var ms365ChatInterval = prefs.ChatSyncIntervalSeconds > 0 && ms365ChatOptions.Contains(prefs.ChatSyncIntervalSeconds)
+            ? prefs.ChatSyncIntervalSeconds : 60;
 
         var chatWrap = new WrapPanel { Margin = new Thickness(0, 0, 0, 12) };
         foreach (var (seconds, label) in intervalOptions)
@@ -17443,7 +17454,7 @@ public partial class MainWindow : FluentWindow
             {
                 Content = label,
                 Tag = seconds,
-                IsChecked = prefs.ChatSyncIntervalSeconds == seconds,
+                IsChecked = ms365ChatInterval == seconds,
                 Margin = new Thickness(0, 0, 16, 8),
                 GroupName = "Ms365FavoriteChatInterval"
             };
