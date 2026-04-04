@@ -1,27 +1,9 @@
-✨ 메일탭 미리보기 참조/숨은참조/첨부파일 추가 + 새창 타이틀바 수정 by claude-sonnet-4-6
-⚡ 백그라운드 동기화 주기 정상화 + 불필요 이벤트 억제 (번쩍임 해결) by claude-sonnet-4-6
+✨ 설정>메일 초기메일수(20/50/100) 선택 + 동기화 기본값 버그 수정 by claude-sonnet-4-6
 
-### ✨ 메일탭 미리보기 참조/숨은참조/첨부파일 추가
-
-- MainWindow.xaml/xaml.cs: 미리보기 패널에 CC/BCC/첨부파일 목록 섹션 추가
-  - CC/BCC는 값 있을 때만 표시, 첨부파일은 1개 이상일 때만 표시
-  - 첨부파일마다 열기/다운로드 버튼 제공
-- EmailViewWindow.xaml: 타이틀바 제목 TextTrimming="CharacterEllipsis" 적용
-- EmailViewWindow.xaml.cs: 메일 뷰어 창에 첨부파일 열기/다운로드 버튼 추가
-
-### ⚡ 백그라운드 동기화 주기 정상화 + 번쩍임 해결
-
-- BackgroundSyncService.cs:
-  - Set*SyncInterval 하한 1초 → 10초 강화 (위험 저주기 방지)
-  - CalendarSynced 이벤트에 deletedCount 포함
-  - 변경 0건 시 INFO → Debug 로그 축약 (노이즈 감소)
-- MainViewModel.cs:
-  - OnCalendarSynced: eventCount==0이면 CalendarDataUpdated 미발화
-  - OnEmailsSynced: newCount==0이면 LoadEmailsAsync 스킵
-  - view.Refresh() 제거 (번쩍임 방지)
-- MainWindow.xaml.cs:
-  - intervalOptions 위험 저주기(1초/2초/5초) 제거, 최소 10초
-  - RefreshEmailReadStatusAsync 이중 호출 제거
+- UserPreferencesSettings에 InitialMailCount 속성 추가 (기본값 50)
+- MainViewModel의 하드코딩된 PageSize=100을 Settings 동적 참조로 전환
+- MainWindow에 "초기 메일 수" 설정 UI 신규 추가 (ShowMailInitialSettings)
+- Show*SyncSettings()의 foreach 클로저 캡처 버그 수정 (RadioButton 기본값 미선택 문제 해결)
 
 🤖 Generated with [Claude Code](https://claude.com/claude-code) (claude-sonnet-4-6)
 
