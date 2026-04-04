@@ -597,3 +597,23 @@
 - **패턴**: `IsChecked = prefs.GroupAIntervalSeconds == seconds`, `Checked += () => prefs.GroupAIntervalSeconds = seconds; vm.SetGroupAInterval(seconds);`
 - **심각도**: 중간 (설정 저장 버그)
 - **Level**: 1 (참고)
+
+## L-293: 동기화 주기 하한 — UI 옵션 필터 + 서비스 계층 이중 방어 필수 (2026-04-04)
+
+- **문제**: `intervalOptions`에서 위험 저주기(1~5초)를 제거해도 서비스 계층 `Set*SyncInterval` 하한이 1초로 설정되어, 외부 또는 코드 직접 호출 시 우회 가능
+- **근본 원인**: UI에서만 방어하고 서비스 계층의 실제 하한값을 별도로 강화하지 않은 설계
+- **해결**: `SetFavoriteSyncInterval`, `SetFullSyncInterval`, `SetCalendarSyncInterval` 등 모든 `Set*SyncInterval` 하한을 1초 → 10초로 변경
+- **교훈**: 동기화 주기 제한은 UI 옵션(options 배열) + 서비스 계층 하한 두 곳을 모두 방어해야 함. UI만 필터링하면 코드 경로나 API 직접 호출로 우회 가능
+- **패턴**: `if (seconds < 10) seconds = 10; // UI 필터 + 서비스 계층 하한 이중 방어`
+- **심각도**: 낮음 (기능 문제 없음, 잠재적 오용 방지)
+- **Level**: 1 (참고)
+
+## L-294: 0건 동기화 이벤트 발화 억제 — 불필요 UI 갱신/번쩍임 방지 (2026-04-04)
+
+- **문제**: `EmailsSynced(newCount=0)`, `CalendarSynced(eventCount=0)` 발화 시에도 `LoadEmailsAsync`, `CalendarDataUpdated` 이벤트가 실행되어 불필요한 UI 번쩍임 발생
+- **근본 원인**: 이벤트 핸들러에서 카운트 검사 없이 무조건 UI 갱신 로직 실행
+- **해결**: `OnEmailsSynced`에서 `newCount == 0`이면 `LoadEmailsAsync` 스킵. `OnCalendarSynced`에서 `eventCount == 0`이면 `CalendarDataUpdated` 미발화
+- **교훈**: 동기화 완료 이벤트 핸들러에서 변경 0건 시 UI 갱신을 조기 반환으로 억제. 특히 PeriodicTimer 기반 반복 동기화에서 매 틱마다 UI를 갱신하면 번쩍임/성능 저하 발생
+- **패턴**: `if (newCount == 0) return; // 신규 없으면 UI 갱신 스킵`
+- **심각도**: 낮음 (UI 번쩍임, 기능 문제 없음)
+- **Level**: 1 (참고)

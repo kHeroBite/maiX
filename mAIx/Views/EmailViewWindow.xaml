@@ -54,6 +54,8 @@
             </ui:TitleBar.Icon>
             <ui:TitleBar.Header>
                 <TextBlock x:Name="TitleText" VerticalAlignment="Center"
+                           TextTrimming="CharacterEllipsis"
+                           Margin="0,0,140,0"
                            Foreground="{DynamicResource TextFillColorPrimaryBrush}"/>
             </ui:TitleBar.Header>
         </ui:TitleBar>
@@ -299,6 +301,18 @@
                                                Foreground="{DynamicResource TextFillColorSecondaryBrush}"
                                                FontSize="11"
                                                Margin="8,0,0,0"/>
+                                    <ui:Button ToolTip="열기" Padding="2" Margin="6,0,0,0"
+                                               Width="24" Height="24"
+                                               Appearance="Transparent"
+                                               Click="AttachmentOpen_Click">
+                                        <ui:SymbolIcon Symbol="Open24" FontSize="13"/>
+                                    </ui:Button>
+                                    <ui:Button ToolTip="다운로드" Padding="2" Margin="2,0,0,0"
+                                               Width="24" Height="24"
+                                               Appearance="Transparent"
+                                               Click="AttachmentDownload_Click">
+                                        <ui:SymbolIcon Symbol="ArrowDownload24" FontSize="13"/>
+                                    </ui:Button>
                                 </StackPanel>
                             </Border>
                         </DataTemplate>

@@ -319,17 +319,17 @@ public class BackgroundSyncService : BackgroundService
                 _favoriteIntervalChangeCts = CancellationTokenSource.CreateLinkedTokenSource(stoppingToken);
 
                 using var timer = new PeriodicTimer(TimeSpan.FromSeconds(_favoriteSyncIntervalSeconds));
-                Log4.Debug($"[BackgroundSyncService] 즐겨찾기 타이머 생성 - 주기: {_favoriteSyncIntervalSeconds}초");
+                Log4.Debug2($"[BackgroundSyncService] 즐겨찾기 타이머 생성 - 주기: {_favoriteSyncIntervalSeconds}초");
 
                 while (await timer.WaitForNextTickAsync(_favoriteIntervalChangeCts.Token))
                 {
                     if (_isPaused)
                     {
-                        Log4.Debug("[BackgroundSyncService] 즐겨찾기 동기화 일시정지 상태 - 건너뜀");
+                        Log4.Debug2("[BackgroundSyncService] 즐겨찾기 동기화 일시정지 상태 - 건너뜀");
                         continue;
                     }
 
-                    Log4.Debug($"[BackgroundSyncService] 즐겨찾기 동기화 시작 (#{_favoriteSyncCount + 1})");
+                    Log4.Debug2($"[BackgroundSyncService] 즐겨찾기 동기화 시작 (#{_favoriteSyncCount + 1})");
 
                     try
                     {
@@ -343,7 +343,7 @@ public class BackgroundSyncService : BackgroundService
                         _logger.Error(ex, "즐겨찾기 동기화 실패");
                     }
 
-                    Log4.Debug($"[BackgroundSyncService] 즐겨찾기 동기화 완료 (#{_favoriteSyncCount})");
+                    Log4.Debug2($"[BackgroundSyncService] 즐겨찾기 동기화 완료 (#{_favoriteSyncCount})");
                 }
             }
             catch (OperationCanceledException) when (!stoppingToken.IsCancellationRequested)
@@ -373,18 +373,18 @@ public class BackgroundSyncService : BackgroundService
                 var timeSinceLastSync = DateTime.UtcNow - _lastFullSyncTime;
                 if (timeSinceLastSync.TotalSeconds >= _fullSyncIntervalSeconds)
                 {
-                    Log4.Debug($"[BackgroundSyncService] 전체 동기화 주기 경과 ({timeSinceLastSync.TotalSeconds:F0}초) - 즉시 실행");
+                    Log4.Debug2($"[BackgroundSyncService] 전체 동기화 주기 경과 ({timeSinceLastSync.TotalSeconds:F0}초) - 즉시 실행");
                     await ExecuteFullSyncAsync(stoppingToken);
                 }
 
                 using var timer = new PeriodicTimer(TimeSpan.FromSeconds(_fullSyncIntervalSeconds));
-                Log4.Debug($"[BackgroundSyncService] 전체 타이머 생성 - 주기: {_fullSyncIntervalSeconds}초");
+                Log4.Debug2($"[BackgroundSyncService] 전체 타이머 생성 - 주기: {_fullSyncIntervalSeconds}초");
 
                 while (await timer.WaitForNextTickAsync(_fullIntervalChangeCts.Token))
                 {
                     if (_isPaused)
                     {
-                        Log4.Debug("[BackgroundSyncService] 전체 동기화 일시정지 상태 - 건너뜀");
+                        Log4.Debug2("[BackgroundSyncService] 전체 동기화 일시정지 상태 - 건너뜀");
                         continue;
                     }
 
@@ -405,7 +405,7 @@ public class BackgroundSyncService : BackgroundService
     /// </summary>
     private async Task ExecuteFullSyncAsync(CancellationToken stoppingToken)
     {
-        Log4.Debug($"[BackgroundSyncService] 전체 동기화 시작 (#{_fullSyncCount + 1})");
+        Log4.Debug2($"[BackgroundSyncService] 전체 동기화 시작 (#{_fullSyncCount + 1})");
 
         try
         {
@@ -427,7 +427,7 @@ public class BackgroundSyncService : BackgroundService
             Interlocked.Increment(ref _errorCount);
         }
 
-        Log4.Debug($"[BackgroundSyncService] 전체 동기화 완료 (#{_fullSyncCount})");
+        Log4.Debug2($"[BackgroundSyncService] 전체 동기화 완료 (#{_fullSyncCount})");
     }
 
     /// <summary>
@@ -447,18 +447,18 @@ public class BackgroundSyncService : BackgroundService
                 var timeSinceLastSync = DateTime.UtcNow - _lastCalendarSyncTime;
                 if (timeSinceLastSync.TotalSeconds >= _calendarSyncIntervalSeconds)
                 {
-                    Log4.Debug($"[BackgroundSyncService] 캘린더 동기화 주기 경과 ({timeSinceLastSync.TotalSeconds:F0}초) - 즉시 실행");
+                    Log4.Debug2($"[BackgroundSyncService] 캘린더 동기화 주기 경과 ({timeSinceLastSync.TotalSeconds:F0}초) - 즉시 실행");
                     await ExecuteCalendarSyncAsync(stoppingToken);
                 }
 
                 using var timer = new PeriodicTimer(TimeSpan.FromSeconds(_calendarSyncIntervalSeconds));
-                Log4.Debug($"[BackgroundSyncService] 캘린더 타이머 생성 - 주기: {_calendarSyncIntervalSeconds}초");
+                Log4.Debug2($"[BackgroundSyncService] 캘린더 타이머 생성 - 주기: {_calendarSyncIntervalSeconds}초");
 
                 while (await timer.WaitForNextTickAsync(_calendarIntervalChangeCts.Token))
                 {
                     if (_isPaused)
                     {
-                        Log4.Debug("[BackgroundSyncService] 캘린더 동기화 일시정지 상태 - 건너뜀");
+                        Log4.Debug2("[BackgroundSyncService] 캘린더 동기화 일시정지 상태 - 건너뜀");
                         continue;
                     }
 
@@ -481,10 +481,10 @@ public class BackgroundSyncService : BackgroundService
     {
         if (Interlocked.CompareExchange(ref _isCalendarSyncing, 1, 0) != 0)
         {
-            Log4.Debug("[BackgroundSyncService] 이미 캘린더 동기화 진행 중 - 건너뜀");
+            Log4.Debug2("[BackgroundSyncService] 이미 캘린더 동기화 진행 중 - 건너뜀");
             return;
         }
-        Log4.Debug($"[BackgroundSyncService] 캘린더 동기화 시작 (#{_calendarSyncCount + 1})");
+        Log4.Debug2($"[BackgroundSyncService] 캘린더 동기화 시작 (#{_calendarSyncCount + 1})");
 
         try
         {
@@ -508,7 +508,7 @@ public class BackgroundSyncService : BackgroundService
             Interlocked.Exchange(ref _isCalendarSyncing, 0);
         }
 
-        Log4.Debug($"[BackgroundSyncService] 캘린더 동기화 완료 (#{_calendarSyncCount})");
+        Log4.Debug2($"[BackgroundSyncService] 캘린더 동기화 완료 (#{_calendarSyncCount})");
     }
 
     /// <summary>
@@ -528,18 +528,18 @@ public class BackgroundSyncService : BackgroundService
                 var timeSinceLastSync = DateTime.UtcNow - _lastChatSyncTime;
                 if (timeSinceLastSync.TotalSeconds >= _chatSyncIntervalSeconds)
                 {
-                    Log4.Debug($"[BackgroundSyncService] 채팅 동기화 주기 경과 ({timeSinceLastSync.TotalSeconds:F0}초) - 즉시 실행");
+                    Log4.Debug2($"[BackgroundSyncService] 채팅 동기화 주기 경과 ({timeSinceLastSync.TotalSeconds:F0}초) - 즉시 실행");
                     await ExecuteChatSyncAsync(stoppingToken);
                 }
 
                 using var timer = new PeriodicTimer(TimeSpan.FromSeconds(_chatSyncIntervalSeconds));
-                Log4.Debug($"[BackgroundSyncService] 채팅 타이머 생성 - 주기: {_chatSyncIntervalSeconds}초");
+                Log4.Debug2($"[BackgroundSyncService] 채팅 타이머 생성 - 주기: {_chatSyncIntervalSeconds}초");
 
                 while (await timer.WaitForNextTickAsync(_chatIntervalChangeCts.Token))
                 {
                     if (_isPaused)
                     {
-                        Log4.Debug("[BackgroundSyncService] 채팅 동기화 일시정지 상태 - 건너뜀");
+                        Log4.Debug2("[BackgroundSyncService] 채팅 동기화 일시정지 상태 - 건너뜀");
                         continue;
                     }
 
@@ -562,10 +562,10 @@ public class BackgroundSyncService : BackgroundService
     {
         if (Interlocked.CompareExchange(ref _isChatSyncing, 1, 0) != 0)
         {
-            Log4.Debug("[BackgroundSyncService] 이미 채팅 동기화 진행 중 - 건너뜀");
+            Log4.Debug2("[BackgroundSyncService] 이미 채팅 동기화 진행 중 - 건너뜀");
             return;
         }
-        Log4.Debug($"[BackgroundSyncService] 채팅 동기화 시작 (#{_chatSyncCount + 1})");
+        Log4.Debug2($"[BackgroundSyncService] 채팅 동기화 시작 (#{_chatSyncCount + 1})");
 
         try
         {
@@ -585,7 +585,7 @@ public class BackgroundSyncService : BackgroundService
             Interlocked.Exchange(ref _isChatSyncing, 0);
         }
 
-        Log4.Debug($"[BackgroundSyncService] 채팅 동기화 완료 (#{_chatSyncCount})");
+        Log4.Debug2($"[BackgroundSyncService] 채팅 동기화 완료 (#{_chatSyncCount})");
     }
 
     /// <summary>
@@ -1257,8 +1257,15 @@ public class BackgroundSyncService : BackgroundService
             }
         }
 
-        _logger.Information("전체 폴더 동기화 완료: 변경 {Changed}건, 삭제 {Deleted}건",
-            totalChanged, totalDeleted);
+        if (totalChanged > 0 || totalDeleted > 0)
+        {
+            _logger.Information("전체 폴더 동기화 완료: 변경 {Changed}건, 삭제 {Deleted}건",
+                totalChanged, totalDeleted);
+        }
+        else
+        {
+            Log4.Debug("[BackgroundSyncService] 전체 폴더 동기화: 변경 없음");
+        }
 
         // 동기화 완료 이벤트 (UI 갱신용) — Debounce 적용
         RaiseMailSyncCompleted();
@@ -2080,7 +2087,7 @@ public class BackgroundSyncService : BackgroundService
     /// </summary>
     public void SetFavoriteSyncInterval(int seconds)
     {
-        if (seconds < 1) seconds = 1;  // 최소 1초
+        if (seconds < 10) seconds = 10;  // 최소 10초
         if (seconds > 3600) seconds = 3600;  // 최대 1시간
 
         var oldInterval = _favoriteSyncIntervalSeconds;
@@ -2101,7 +2108,7 @@ public class BackgroundSyncService : BackgroundService
     /// </summary>
     public void SetFullSyncInterval(int seconds)
     {
-        if (seconds < 1) seconds = 1;  // 최소 1초
+        if (seconds < 10) seconds = 10;  // 최소 10초
         if (seconds > 3600) seconds = 3600;  // 최대 1시간
 
         var oldInterval = _fullSyncIntervalSeconds;
@@ -2122,7 +2129,7 @@ public class BackgroundSyncService : BackgroundService
     /// </summary>
     public void SetCalendarSyncInterval(int seconds)
     {
-        if (seconds < 1) seconds = 1;  // 최소 1초
+        if (seconds < 10) seconds = 10;  // 최소 10초
         if (seconds > 3600) seconds = 3600;  // 최대 1시간
 
         var oldInterval = _calendarSyncIntervalSeconds;
@@ -2143,7 +2150,7 @@ public class BackgroundSyncService : BackgroundService
     /// </summary>
     public void SetChatSyncInterval(int seconds)
     {
-        if (seconds < 1) seconds = 1;  // 최소 1초
+        if (seconds < 10) seconds = 10;  // 최소 10초
         if (seconds > 3600) seconds = 3600;  // 최대 1시간
 
         var oldInterval = _chatSyncIntervalSeconds;
@@ -2505,9 +2512,16 @@ public class BackgroundSyncService : BackgroundService
             // 진행 상태 알림: 4/4 - 동기화 완료
             CalendarSyncProgress?.Invoke(4, 4, "캘린더 동기화 완료");
 
-            var totalCount = addedCount + updatedCount;
-            _logger.Information("캘린더 동기화 완료: 추가 {Added}건, 수정 {Updated}건, 삭제 {Deleted}건",
-                addedCount, updatedCount, deletedCount);
+            var totalCount = addedCount + updatedCount + deletedCount;
+            if (totalCount > 0)
+            {
+                _logger.Information("캘린더 동기화 완료: 추가 {Added}건, 수정 {Updated}건, 삭제 {Deleted}건",
+                    addedCount, updatedCount, deletedCount);
+            }
+            else
+            {
+                Log4.Debug("[BackgroundSyncService] 캘린더 동기화: 변경 없음");
+            }
 
             // 동기화 완료 이벤트 (기존 호환용)
             CalendarSynced?.Invoke(totalCount);

@@ -244,9 +244,8 @@ public partial class MainViewModel : ViewModelBase, IDisposable
             {
                 Log4.Info($"[RefreshEmailReadStatus] UI 갱신: 읽음상태 변경 {updatedCount}건, 삭제 {deletedCount}건");
 
-                // CollectionView 강제 새로고침으로 UI 갱신
-                var view = System.Windows.Data.CollectionViewSource.GetDefaultView(Emails);
-                view?.Refresh();
+                // 개별 항목의 INPC가 이미 UI를 갱신하므로 view.Refresh() 불필요
+                // view.Refresh()는 전체 리스트를 다시 렌더링하여 번쩍임 유발
 
                 // 폴더의 안읽은 메일 수도 함께 갱신
                 await RefreshFolderUnreadCountsAsync();
@@ -325,13 +324,16 @@ public partial class MainViewModel : ViewModelBase, IDisposable
     {
         IsCalendarSyncing = false;
         LastCalendarEventCount = eventCount;
-        CalendarSyncStatusText = $"일정 {eventCount}건 동기화됨";
+        CalendarSyncStatusText = eventCount > 0
+            ? $"일정 {eventCount}건 동기화됨"
+            : "일정 변경 없음";
         
         // 캘린더 동기화 시간 업데이트
         LastCalendarSyncTime = DateTime.UtcNow;
 
-        // 캘린더 뷰 새로고침 이벤트 발생 (UI에서 구독)
-        CalendarDataUpdated?.Invoke();
+        // 변경 있을 때만 캘린더 뷰 새로고침 이벤트 발생
+        if (eventCount > 0)
+            CalendarDataUpdated?.Invoke();
     }
 
     /// <summary>
@@ -910,7 +912,8 @@ public partial class MainViewModel : ViewModelBase, IDisposable
     /// </summary>
     private async void OnEmailsSynced(int newCount)
     {
-        if (SelectedFolder != null)
+        // 새 메일이 있을 때만 목록 전체 갱신 (번쩍임 방지)
+        if (newCount > 0 && SelectedFolder != null)
         {
             var selectedEmailId = SelectedEmail?.Id;
             await LoadEmailsAsync();
@@ -918,18 +921,13 @@ public partial class MainViewModel : ViewModelBase, IDisposable
             {
                 SelectedEmail = Emails?.FirstOrDefault(e => e.Id == selectedEmailId.Value);
             }
-        }
-
-        // 새 메일이 있으면 폴더 목록도 갱신 (UnreadItemCount 업데이트)
-        if (newCount > 0)
-        {
             await LoadFoldersAsync();
             StatusMessage = $"{newCount}개 새 메일 동기화됨";
         }
         else
         {
-            // 새 메일 없어도 읽음 상태 변경 시 폴더 카운트 갱신
-            // (시작/자동 동기화에서 읽음 상태만 변경된 경우 대응)
+            // 새 메일 없으면 읽음 상태만 갱신 (OnMailSyncCompleted에서 처리)
+            // 폴더 카운�� 갱신
             await RefreshFolderUnreadCountsAsync();
         }
 

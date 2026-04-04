@@ -884,4 +884,85 @@ public partial class EmailViewWindow : FluentWindow
         }
     }
 
+    /// <summary>첨부파일 열기 버튼 클릭 — 다운로드 후 열기 (기존 클릭 동작과 동일)</summary>
+    private async void AttachmentOpen_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is not FrameworkElement element || element.DataContext is not AttachmentInfo info)
+            return;
+
+        if (_graphAuthService == null || string.IsNullOrEmpty(_email.EntryId))
+            return;
+
+        try
+        {
+            var client = _graphAuthService.GetGraphClient();
+            var attachment = await client.Me.Messages[_email.EntryId]
+                .Attachments[info.Id].GetAsync();
+
+            if (attachment is not FileAttachment fileAtt || fileAtt.ContentBytes == null)
+                return;
+
+            var tempDir = Path.Combine(Path.GetTempPath(), "MaiX", "attachments");
+            Directory.CreateDirectory(tempDir);
+            var filePath = Path.Combine(tempDir, info.Name);
+
+            if (File.Exists(filePath))
+            {
+                var nameWithoutExt = Path.GetFileNameWithoutExtension(info.Name);
+                var ext = Path.GetExtension(info.Name);
+                filePath = Path.Combine(tempDir, $"{nameWithoutExt}_{DateTime.Now:HHmmss}{ext}");
+            }
+
+            await File.WriteAllBytesAsync(filePath, fileAtt.ContentBytes);
+            System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
+            {
+                FileName = filePath,
+                UseShellExecute = true
+            });
+            Log4.Info($"[EmailView] 첨부파일 열림: {filePath}");
+        }
+        catch (Exception ex)
+        {
+            Log4.Error($"[EmailView] 첨부파일 열기 실패: {ex.Message}");
+        }
+    }
+
+    /// <summary>첨부파일 다운로드 버튼 클릭 — SaveFileDialog로 저장</summary>
+    private async void AttachmentDownload_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is not FrameworkElement element || element.DataContext is not AttachmentInfo info)
+            return;
+
+        if (_graphAuthService == null || string.IsNullOrEmpty(_email.EntryId))
+            return;
+
+        try
+        {
+            var saveDialog = new Microsoft.Win32.SaveFileDialog
+            {
+                FileName = info.Name,
+                Filter = "모든 파일 (*.*)|*.*"
+            };
+
+            if (saveDialog.ShowDialog() != true) return;
+
+            var client = _graphAuthService.GetGraphClient();
+            var attachment = await client.Me.Messages[_email.EntryId]
+                .Attachments[info.Id].GetAsync();
+
+            if (attachment is not FileAttachment fileAtt || fileAtt.ContentBytes == null)
+            {
+                Log4.Warn($"[EmailView] 첨부파일 콘텐츠 없음: {info.Name}");
+                return;
+            }
+
+            await File.WriteAllBytesAsync(saveDialog.FileName, fileAtt.ContentBytes);
+            Log4.Info($"[EmailView] 첨부파일 저장됨: {saveDialog.FileName}");
+        }
+        catch (Exception ex)
+        {
+            Log4.Error($"[EmailView] 첨부파일 다운로드 실패: {ex.Message}");
+        }
+    }
+
 }

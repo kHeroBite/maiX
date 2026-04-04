@@ -223,12 +223,9 @@ public partial class MainWindow : FluentWindow
     /// </summary>
     private void OnMailSyncCompletedFromWindow()
     {
-        Log4.Info("[MainWindow] OnMailSyncCompletedFromWindow 이벤트 수신");
-        Dispatcher.InvokeAsync(async () =>
-        {
-            Log4.Info("[MainWindow] Dispatcher에서 읽음 상태 갱신 호출");
-            await _viewModel.RefreshEmailReadStatusAsync();
-        });
+        // MainViewModel.OnMailSyncCompleted가 이미 RefreshEmailReadStatusAsync를 호출하므로
+        // 여기서 중복 호출하지 않음 (이중 호출 시 번쩍임 유발)
+        Log4.Debug("[MainWindow] OnMailSyncCompletedFromWindow 이벤트 수신 (MainViewModel에 위임)");
     }
 
     /// <summary>
@@ -933,7 +930,24 @@ public partial class MainWindow : FluentWindow
         if (email == null)
         {
             await MailBodyWebView.CoreWebView2.ExecuteScriptAsync("document.body.innerHTML = ''");
+            // CC/BCC/첨부파일 패널 숨김
+            MailPreviewCcRow.Visibility = Visibility.Collapsed;
+            MailPreviewBccRow.Visibility = Visibility.Collapsed;
+            MailPreviewAttachmentPanel.Visibility = Visibility.Collapsed;
             return;
+        }
+
+        // CC/BCC 표시
+        UpdateMailPreviewCcBcc(email);
+
+        // 첨부파일 목록 로드 (Graph API)
+        if (email.HasAttachments && !string.IsNullOrEmpty(email.EntryId))
+        {
+            _ = LoadMailPreviewAttachmentsAsync(email);
+        }
+        else
+        {
+            MailPreviewAttachmentPanel.Visibility = Visibility.Collapsed;
         }
 
         if (string.IsNullOrEmpty(email.Body))
@@ -17371,7 +17385,7 @@ public partial class MainWindow : FluentWindow
 
         SettingsContentPanel.Children.Add(CreateSettingsSectionHeader("MS365 동기화 - 즐겨찾기"));
 
-        var intervalOptions = new[] { (1, "1초"), (5, "5초"), (10, "10초"), (30, "30초"), (60, "1분"), (300, "5분") };
+        var intervalOptions = new[] { (10, "10초"), (30, "30초"), (60, "1분"), (120, "2분"), (300, "5분") };
 
         // 메일 동기화 주기 (라디오버튼)
         var mailGroup = CreateSettingsGroupBorder();
@@ -17527,7 +17541,7 @@ public partial class MainWindow : FluentWindow
         var mailIntervalSeconds = prefs.MailSyncIntervalSeconds > 0 ? prefs.MailSyncIntervalSeconds
             : prefs.MailSyncIntervalMinutes > 0 ? prefs.MailSyncIntervalMinutes * 60
             : 300;
-        var intervalOptions = new[] { (1, "1초"), (5, "5초"), (10, "10초"), (30, "30초"), (60, "1분"), (300, "5분"), (600, "10분"), (1800, "30분"), (3600, "1시간") };
+        var intervalOptions = new[] { (30, "30초"), (60, "1분"), (300, "5분"), (600, "10분"), (1800, "30분"), (3600, "1시간") };
 
         var intervalWrap = new WrapPanel { Margin = new Thickness(0, 0, 0, 12) };
         foreach (var (seconds, label) in intervalOptions)
@@ -19726,6 +19740,265 @@ public partial class MainWindow : FluentWindow
     private void ShowSettingsSavedMessage()
     {
         _viewModel.StatusMessage = "설정이 저장되었습니다.";
+    }
+
+    #endregion
+
+    #region 메일 미리보기 CC/BCC/첨부파일
+
+    /// <summary>
+    /// 메일 미리보기의 첨부파일 표시용 DTO
+    /// </summary>
+    private class MailPreviewAttachmentInfo
+    {
+        public string Id { get; set; } = "";
+        public string Name { get; set; } = "";
+        public long Size { get; set; }
+        public string SizeText => FormatSize(Size);
+        public string ContentType { get; set; } = "";
+        public string EmailEntryId { get; set; } = "";
+
+        private static string FormatSize(long bytes)
+        {
+            if (bytes < 1024) return $"({bytes} B)";
+            if (bytes < 1024 * 1024) return $"({bytes / 1024.0:F1} KB)";
+            return $"({bytes / (1024.0 * 1024.0):F1} MB)";
+        }
+    }
+
+    /// <summary>
+    /// 메일 미리보기에 CC/BCC 표시 업데이트
+    /// </summary>
+    private void UpdateMailPreviewCcBcc(Email email)
+    {
+        // CC
+        var ccStr = ParseJsonArrayForPreview(email.Cc);
+        if (!string.IsNullOrWhiteSpace(ccStr))
+        {
+            MailPreviewCcText.Text = ccStr;
+            MailPreviewCcRow.Visibility = Visibility.Visible;
+        }
+        else
+        {
+            MailPreviewCcRow.Visibility = Visibility.Collapsed;
+        }
+
+        // BCC
+        var bccStr = ParseJsonArrayForPreview(email.Bcc);
+        if (!string.IsNullOrWhiteSpace(bccStr))
+        {
+            MailPreviewBccText.Text = bccStr;
+            MailPreviewBccRow.Visibility = Visibility.Visible;
+        }
+        else
+        {
+            MailPreviewBccRow.Visibility = Visibility.Collapsed;
+        }
+    }
+
+    /// <summary>
+    /// JSON 배열 문자열을 세미콜론 구분 문자열로 변환
+    /// </summary>
+    private static string ParseJsonArrayForPreview(string? jsonArray)
+    {
+        if (string.IsNullOrWhiteSpace(jsonArray))
+            return "";
+
+        if (!jsonArray.StartsWith("["))
+            return jsonArray;
+
+        try
+        {
+            var items = System.Text.Json.JsonSerializer.Deserialize<string[]>(jsonArray);
+            if (items == null || items.Length == 0)
+                return "";
+            return string.Join("; ", items);
+        }
+        catch
+        {
+            return jsonArray;
+        }
+    }
+
+    /// <summary>
+    /// 메일 미리보기의 첨부파일 목록을 Graph API로 로드
+    /// </summary>
+    private async Task LoadMailPreviewAttachmentsAsync(Email email)
+    {
+        try
+        {
+            MailPreviewAttachmentPanel.Visibility = Visibility.Visible;
+            MailPreviewAttachmentLoading.Visibility = Visibility.Visible;
+            MailPreviewAttachmentList.ItemsSource = null;
+
+            var authService = ((App)Application.Current).GetService<Services.Graph.GraphAuthService>();
+            if (authService == null || string.IsNullOrEmpty(email.EntryId))
+            {
+                MailPreviewAttachmentPanel.Visibility = Visibility.Collapsed;
+                return;
+            }
+
+            var client = authService.GetGraphClient();
+            var response = await client.Me.Messages[email.EntryId].Attachments.GetAsync();
+
+            if (response?.Value == null || response.Value.Count == 0)
+            {
+                MailPreviewAttachmentPanel.Visibility = Visibility.Collapsed;
+                return;
+            }
+
+            var attachments = new List<MailPreviewAttachmentInfo>();
+            foreach (var att in response.Value)
+            {
+                if (att is Microsoft.Graph.Models.FileAttachment fileAtt && fileAtt.IsInline == true)
+                    continue;
+
+                attachments.Add(new MailPreviewAttachmentInfo
+                {
+                    Id = att.Id ?? "",
+                    Name = att.Name ?? "첨부파일",
+                    Size = att.Size ?? 0,
+                    ContentType = att.ContentType ?? "",
+                    EmailEntryId = email.EntryId
+                });
+            }
+
+            if (attachments.Count == 0)
+            {
+                MailPreviewAttachmentPanel.Visibility = Visibility.Collapsed;
+                return;
+            }
+
+            MailPreviewAttachmentHeaderText.Text = $"첨부파일 ({attachments.Count})";
+            MailPreviewAttachmentList.ItemsSource = attachments;
+            Log4.Debug2($"[MailPreview] 첨부파일 {attachments.Count}개 로드됨");
+        }
+        catch (Exception ex)
+        {
+            Log4.Warn($"[MailPreview] 첨부파일 목록 로드 실패: {ex.Message}");
+            MailPreviewAttachmentPanel.Visibility = Visibility.Collapsed;
+        }
+        finally
+        {
+            MailPreviewAttachmentLoading.Visibility = Visibility.Collapsed;
+        }
+    }
+
+    /// <summary>
+    /// 메일 미리보기 첨부파일 클릭 — 다운로드 후 열기
+    /// </summary>
+    private async void MailPreviewAttachment_Click(object sender, MouseButtonEventArgs e)
+    {
+        if (sender is not FrameworkElement element || element.DataContext is not MailPreviewAttachmentInfo info)
+            return;
+        await DownloadAndOpenAttachmentAsync(info);
+    }
+
+    /// <summary>
+    /// 메일 미리보기 첨부파일 열기 버튼 클릭
+    /// </summary>
+    private async void MailPreviewAttachment_Open_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is not FrameworkElement element || element.DataContext is not MailPreviewAttachmentInfo info)
+            return;
+        await DownloadAndOpenAttachmentAsync(info);
+    }
+
+    /// <summary>
+    /// 메일 미리보기 첨부파일 다운로드 버튼 클릭
+    /// </summary>
+    private async void MailPreviewAttachment_Download_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is not FrameworkElement element || element.DataContext is not MailPreviewAttachmentInfo info)
+            return;
+        await DownloadAttachmentToFileAsync(info);
+    }
+
+    /// <summary>
+    /// 첨부파일 다운로드 후 기본 앱으로 열기
+    /// </summary>
+    private async Task DownloadAndOpenAttachmentAsync(MailPreviewAttachmentInfo info)
+    {
+        var authService = ((App)Application.Current).GetService<Services.Graph.GraphAuthService>();
+        if (authService == null || string.IsNullOrEmpty(info.EmailEntryId)) return;
+
+        try
+        {
+            Log4.Debug($"[MailPreview] 첨부파일 열기: {info.Name}");
+            var client = authService.GetGraphClient();
+            var attachment = await client.Me.Messages[info.EmailEntryId]
+                .Attachments[info.Id].GetAsync();
+
+            if (attachment is not Microsoft.Graph.Models.FileAttachment fileAtt || fileAtt.ContentBytes == null)
+            {
+                Log4.Warn($"[MailPreview] 첨부파일 콘텐츠 없음: {info.Name}");
+                return;
+            }
+
+            var tempDir = System.IO.Path.Combine(System.IO.Path.GetTempPath(), "MaiX", "attachments");
+            System.IO.Directory.CreateDirectory(tempDir);
+            var filePath = System.IO.Path.Combine(tempDir, info.Name);
+
+            if (System.IO.File.Exists(filePath))
+            {
+                var nameWithoutExt = System.IO.Path.GetFileNameWithoutExtension(info.Name);
+                var ext = System.IO.Path.GetExtension(info.Name);
+                filePath = System.IO.Path.Combine(tempDir, $"{nameWithoutExt}_{DateTime.Now:HHmmss}{ext}");
+            }
+
+            await System.IO.File.WriteAllBytesAsync(filePath, fileAtt.ContentBytes);
+
+            System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
+            {
+                FileName = filePath,
+                UseShellExecute = true
+            });
+
+            Log4.Info($"[MailPreview] 첨부파일 열림: {filePath}");
+        }
+        catch (Exception ex)
+        {
+            Log4.Error($"[MailPreview] 첨부파일 열기 실패: {ex.Message}");
+        }
+    }
+
+    /// <summary>
+    /// 첨부파일을 사용자가 지정한 위치에 다운로드 (SaveFileDialog)
+    /// </summary>
+    private async Task DownloadAttachmentToFileAsync(MailPreviewAttachmentInfo info)
+    {
+        var authService = ((App)Application.Current).GetService<Services.Graph.GraphAuthService>();
+        if (authService == null || string.IsNullOrEmpty(info.EmailEntryId)) return;
+
+        try
+        {
+            var saveDialog = new Microsoft.Win32.SaveFileDialog
+            {
+                FileName = info.Name,
+                Filter = "모든 파일 (*.*)|*.*"
+            };
+
+            if (saveDialog.ShowDialog() != true) return;
+
+            Log4.Debug($"[MailPreview] 첨부파일 다운로드: {info.Name}");
+            var client = authService.GetGraphClient();
+            var attachment = await client.Me.Messages[info.EmailEntryId]
+                .Attachments[info.Id].GetAsync();
+
+            if (attachment is not Microsoft.Graph.Models.FileAttachment fileAtt || fileAtt.ContentBytes == null)
+            {
+                Log4.Warn($"[MailPreview] 첨부파일 콘텐츠 없음: {info.Name}");
+                return;
+            }
+
+            await System.IO.File.WriteAllBytesAsync(saveDialog.FileName, fileAtt.ContentBytes);
+            Log4.Info($"[MailPreview] 첨부파일 저장됨: {saveDialog.FileName}");
+            _viewModel.StatusMessage = $"첨부파일 저장 완료: {System.IO.Path.GetFileName(saveDialog.FileName)}";
+        }
+        catch (Exception ex)
+        {
+            Log4.Error($"[MailPreview] 첨부파일 다운로드 실패: {ex.Message}");
+        }
     }
 
     #endregion

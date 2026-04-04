@@ -434,3 +434,48 @@
 ### 테스트 결과
 - 빌드: 오류 0개 ✅
 - 실행: 정상 ✅
+
+---
+
+## 2026-04-04 — 메일탭 미리보기 참조/숨은참조/첨부파일 추가 + 동기화 주기 정상화
+
+**분류**: Normal Path (k3)
+**수정 파일**: 7개
+
+### 변경 내역
+
+#### 1. 메일탭 미리보기 패널 — CC/BCC/첨부파일 목록 추가 (MainWindow.xaml/xaml.cs)
+- 메일 목록 오른쪽 미리보기 영역에 참조(CC), 숨은참조(BCC), 첨부파일 목록 섹션 추가
+- 첨부파일마다 열기/다운로드 버튼 제공
+- 섹션별 표시 조건: CC/BCC는 값 있을 때만, 첨부파일은 1개 이상일 때만 표시
+
+#### 2. EmailViewWindow 타이틀바/첨부파일 (xaml/xaml.cs)
+- 타이틀바 제목에 `TextTrimming="CharacterEllipsis"` 적용 (긴 제목 잘림 표시)
+- 메일 뷰어 창에도 첨부파일 열기/다운로드 버튼 추가
+
+#### 3. 백그라운드 동기화 주기 정상화 (BackgroundSyncService.cs)
+- `Set*SyncInterval` 하한 1초 → 10초로 강화 (위험 저주기 방지)
+- `CalendarSynced` 이벤트에 `deletedCount` 포함 (정보 완전성)
+- 변경 0건 시 INFO 로그 → Debug 로그로 축약 (로그 노이즈 감소)
+
+#### 4. 불필요 이벤트 발화 억제 (MainViewModel.cs)
+- `OnCalendarSynced`: eventCount==0이면 `CalendarDataUpdated` 미발화 (불필요 UI 갱신 방지)
+- `OnEmailsSynced`: newCount==0이면 `LoadEmailsAsync` 스킵 (번쩍임 방지)
+- `view.Refresh()` 제거 (번쩍임 방지)
+- `RefreshEmailReadStatusAsync` 이중 호출 제거 (MainWindow.xaml.cs)
+
+#### 5. intervalOptions 위험 저주기 제거 (MainWindow.xaml.cs)
+- MS365 설정의 동기화 주기 선택지에서 1초/2초/5초 제거
+- 최소 선택지 10초로 조정
+
+### 변경 파일
+- `mAIx/Views/MainWindow.xaml` — 미리보기 CC/BCC/첨부파일 섹션 추가
+- `mAIx/Views/MainWindow.xaml.cs` — 미리보기 첨부파일 버튼 + intervalOptions 정리 + 이중 호출 제거
+- `mAIx/Views/EmailViewWindow.xaml` — 타이틀 TextTrimming 추가
+- `mAIx/Views/EmailViewWindow.xaml.cs` — 첨부파일 열기/다운로드 버튼
+- `mAIx/Services/Sync/BackgroundSyncService.cs` — 하한 10초 + deletedCount + 0건 로그 축약
+- `mAIx/ViewModels/MainViewModel.cs` — 0건 이벤트 억제 + Refresh 제거
+
+### 테스트 결과
+- 빌드: 오류 0개 ✅
+- 실행: 정상 ✅
