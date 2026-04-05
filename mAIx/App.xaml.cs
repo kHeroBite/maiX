@@ -341,6 +341,9 @@ public partial class App : Application
         services.AddSingleton<BackgroundSyncService>(sp =>
             sp.GetServices<IHostedService>().OfType<BackgroundSyncService>().First());
 
+        // 메일함 폴더 캐시 서비스 (BackgroundSyncService 이벤트 구독)
+        services.AddSingleton<MailFolderCacheService>();
+
         // Teams/Chat 서비스 등록
         services.AddSingleton<GraphTeamsService>();
 

@@ -419,6 +419,31 @@ Graph_Services:
     의존성: IHttpClientFactory (P2-03 소켓 재사용 패턴 — new HttpClient() 직접 생성 제거)
 ```
 
+#### 5.5.5 Services/Cache (폴더 캐시) — 신규 2026-04-05
+
+```yaml
+Cache_Services:
+  - 파일명: MailFolderCacheService.cs
+    경로: Services/Cache/
+    역할: 메일함 폴더별 LRU 메모리 캐시 (DI Singleton)
+    기능:
+      - TryGet/Set/AppendPage: 캐시 히트/미스/페이지 추가
+      - OnEmailAdded/Deleted/Moved/Updated: CRUD 이벤트 훅
+      - InvalidateFolder/InvalidateAll: 폴더/전체 무효화
+      - SetScrollOffset: 스크롤 오프셋 저장
+      - EmailsSavedToFolder 이벤트 구독: BackgroundSyncService 증분 갱신
+    설계:
+      - 캐시 키: (FolderId, ShowSnoozedEmails)
+      - LRU: maxFolders=10, LastAccessedAt 기준 evict
+      - 스레드 안전: lock(_lock) 진입
+    의존성: BackgroundSyncService (이벤트 구독)
+
+  - 파일명: CachedFolderState.cs
+    경로: Services/Cache/
+    역할: 폴더별 캐시 상태 레코드 (internal sealed)
+    필드: Emails, EmailSkip, HasMoreEmails, ShowSnoozedEmails, LoadedAt, LastAccessedAt, HighWaterMark, ScrollOffset
+```
+
 #### 5.6 Services/기타
 
 ```yaml
@@ -477,6 +502,7 @@ Other_Services:
     변경_2026-03-29(Phase2): 스누즈 해제 루프 추가 — 매 분 SnoozedUntil <= UtcNow 조건으로 자동 해제 처리
     변경_2026-03-29(Phase3): 3개 루프 추가 — 규칙 엔진(120초), 팔로업 알림(3600초), 회의 전 브리핑(300초)
     변경_2026-04-02: ReconcileDeletedEmailsAsync() 추가 — Graph API GetAllMessageIdsAsync로 실서버 ID 조회, DB 비교 후 삭제된 메일 DB에서 제거 (영업폴더 잔류 메일 정리)
+    변경_2026-04-05: EmailsSavedToFolder(string folderId, IReadOnlyList<Email>) 이벤트 추가 — MailFolderCacheService 증분 갱신용; SaveEmailsAsync 말미에서 invoke
 
   - 파일명: PromptService.cs
     경로: Services/Storage/

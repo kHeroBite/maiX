@@ -479,3 +479,63 @@
 ### 테스트 결과
 - 빌드: 오류 0개 ✅
 - 실행: 정상 ✅
+
+---
+
+## 2026-04-05: 메일함 폴더별 캐시 시스템 + 이벤트 증분 동기화 구현 (k4)
+
+### 목표
+폴더 전환 시 DB 재조회 제거 → 즉시 표시(<100ms). 새메일/삭제/이동/읽음 등 이벤트 발생 시 캐시 정합성 자동 유지.
+
+### 구현 내용
+
+#### 1. MailFolderCacheService + CachedFolderState (신규)
+- `MailFolderCacheService`: DI 싱글톤 폴더별 캐시 서비스
+  - LRU 캐시 (maxFolders=10, LastAccessedAt 기준 evict)
+  - 캐시 키: `(FolderId, ShowSnoozedEmails)` — 필터 상태 분리
+  - `TryGet/Set/AppendPage`: 히트/미스/페이지 추가
+  - `OnEmailAdded/Deleted/Moved/Updated`: CRUD 이벤트 훅
+  - `InvalidateFolder/InvalidateAll`: 무효화
+  - `SetScrollOffset`: 스크롤 위치 저장
+  - `BackgroundSyncService.EmailsSavedToFolder` 이벤트 구독 — 증분 갱신
+- `CachedFolderState`: 캐시 상태 레코드 (Emails, EmailSkip, HasMore, ScrollOffset, HighWaterMark, LoadedAt)
+
+#### 2. BackgroundSyncService 이벤트 보강
+- `EmailsSavedToFolder(string folderId, IReadOnlyList<Email> saved)` 이벤트 추가
+- `SaveEmailsAsync` 말미에서 invoke — 폴더별 신규 저장 메일 전달
+
+#### 3. App.xaml.cs — DI 등록
+- `services.AddSingleton<MailFolderCacheService>()` 추가
+
+#### 4. MainViewModel — 캐시 통합 (대규모 수정, +206/-5)
+- 생성자: `MailFolderCacheService cacheService` 파라미터 추가
+- `OnSelectedFolderChanged`: 캐시 히트 → 즉시 스왑 + 백그라운드 증분 sync / 미스 → DB 로드
+- `LoadEmailsAsync` 말미: `cacheService.Set(...)` 호출
+- `LoadMoreEmailsAsync` 말미: `cacheService.AppendPage(...)` 호출
+- 신규 `SyncIncrementalAsync`: HighWaterMark 이후 신규 메일만 DB SELECT
+- 7개 CRUD 훅: Delete/DeleteBatch/Restore/Move/UpdateRead/UpdateFlag/MarkAsRead
+- 수동 새로고침: `InvalidateFolder` 후 DB 재조회
+- `CacheService` 공개 프로퍼티 노출
+
+#### 5. MainWindow.xaml.cs — 스크롤 복원 (+60)
+- `EmailListBox_ScrollChanged`: 폴더별 스크롤 오프셋 저장
+- `RestoreScrollOffsetOnFolderChange`: SelectedFolder 변경 후 ScrollViewer 복원
+- `GetScrollViewer` 헬퍼: VisualTreeHelper 재귀로 ScrollViewer 접근
+
+### 변경 파일
+- `mAIx/Services/Cache/MailFolderCacheService.cs` (신규, ~260줄)
+- `mAIx/Services/Cache/CachedFolderState.cs` (신규, ~35줄)
+- `mAIx/Services/Sync/BackgroundSyncService.cs` (+6줄 — EmailsSavedToFolder 이벤트)
+- `mAIx/App.xaml.cs` (+2줄 — DI 등록)
+- `mAIx/ViewModels/MainViewModel.cs` (+206/-5 — 캐시 통합)
+- `mAIx/Views/MainWindow.xaml.cs` (+60 — 스크롤 복원)
+
+### 테스트 결과 (ktest k4)
+- 빌드: 오류 0개 ✅
+- AC-001~010: 전체 PASS (must 7건 + should 3건 포함)
+- CANARY-001: PASS (expected FAIL 정확 감지)
+- 런타임: `[Cache] miss→set→hit` 사이클 Serilog 로그 확인 ✅
+
+### 발견사항
+- FIND-001 (medium): Serilog vs Log4 로그 파일 경로 불일치 — 캐시 동작 정상, AC auto_scripts 파일명 수정 권고
+- FIND-002 (low): InvalidateAll 로그아웃 핸들러 미연결 — 앱 재시작 효과 동등

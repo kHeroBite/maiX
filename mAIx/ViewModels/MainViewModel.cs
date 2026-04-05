@@ -13,6 +13,7 @@ using CommunityToolkit.Mvvm.Input;
 using Microsoft.EntityFrameworkCore;
 using mAIx.Data;
 using mAIx.Models;
+using mAIx.Services.Cache;
 using mAIx.Services.Graph;
 using mAIx.Services.Search;
 using mAIx.Services.Sync;
@@ -28,14 +29,26 @@ public partial class MainViewModel : ViewModelBase, IDisposable
     private readonly mAIxDbContext _dbContext;
     private readonly BackgroundSyncService _syncService;
     private readonly GraphMailService _graphMailService;
+    private readonly MailFolderCacheService _cacheService;
     private CancellationTokenSource? _loadEmailsCts;
+    private double _pendingScrollOffset;
+
+    /// <summary>메일함 폴더 캐시 서비스 (View/외부에서 접근용).</summary>
+    public MailFolderCacheService CacheService => _cacheService;
+
+    /// <summary>폴더 전환 후 View에서 스크롤 복원에 사용할 대기 오프셋.</summary>
+    public double PendingScrollOffset
+    {
+        get => _pendingScrollOffset;
+        set => _pendingScrollOffset = value;
+    }
 
     /// <summary>
     /// 캘린더 ViewModel (외부에서 설정, 캘린더 동기화 이벤트 연동용)
     /// </summary>
     public CalendarViewModel? CalendarViewModel { get; set; }
 
-    public MainViewModel(mAIxDbContext dbContext, BackgroundSyncService syncService, GraphMailService graphMailService)
+    public MainViewModel(mAIxDbContext dbContext, BackgroundSyncService syncService, GraphMailService graphMailService, MailFolderCacheService cacheService)
     {
         try
         {
@@ -43,6 +56,7 @@ public partial class MainViewModel : ViewModelBase, IDisposable
             _dbContext = dbContext;
             _syncService = syncService;
             _graphMailService = graphMailService;
+            _cacheService = cacheService;
 
             Log4.Info($"[MainViewModel] 생성됨, syncService 해시코드: {syncService.GetHashCode()}");
 
@@ -128,6 +142,16 @@ public partial class MainViewModel : ViewModelBase, IDisposable
             // 읽음 상태 변경 여부와 무관하게 폴더 카운트 항상 갱신
             // (다른 앱에서 메일을 읽은 경우 UI 메일 목록 변경 없어도 카운트 반영 필요)
             await RefreshFolderUnreadCountsAsync();
+
+            // 캐시 정합성: 백그라운드 동기화로 추가된 메일을 캐시 스냅샷에서 UI로 반영
+            if (SelectedFolder != null && _cacheService != null)
+            {
+                var snapshot = _cacheService.GetSnapshot(SelectedFolder.Id, ShowSnoozedEmails);
+                if (snapshot != null)
+                {
+                    Emails = new List<Email>(snapshot);
+                }
+            }
         });
     }
 
@@ -982,16 +1006,38 @@ public partial class MainViewModel : ViewModelBase, IDisposable
     /// <param name="value">새로 선택된 폴더</param>
     partial void OnSelectedFolderChanged(Folder? value)
     {
+        // 이전 폴더의 스크롤 오프셋을 캐시에 저장 (View가 _pendingScrollOffset을 폴링해서 복원)
         _loadEmailsCts?.Cancel();
         _loadEmailsCts?.Dispose();
         _loadEmailsCts = new CancellationTokenSource();
-        if (value != null)
+
+        if (value == null)
         {
-            _ = LoadEmailsAsync(_loadEmailsCts.Token);
+            Emails = new List<Email>();
+            _emailSkip = 0;
+            HasMoreEmails = false;
+            _pendingScrollOffset = 0;
+            return;
+        }
+
+        // 1) 캐시 히트 → 즉시 스왑(O(1)) + 백그라운드 증분 동기화
+        if (_cacheService != null &&
+            _cacheService.TryGet(value.Id, ShowSnoozedEmails, out var cached, out var skip, out var more, out var scrollOffset))
+        {
+            Emails = cached;
+            _emailSkip = skip;
+            HasMoreEmails = more;
+            _pendingScrollOffset = scrollOffset;
+            StatusMessage = more ? $"{cached.Count}개 이메일 (캐시, 더 있음)" : $"{cached.Count}개 이메일 (캐시)";
+            Log4.Debug($"[Cache] hit folder={value.Id} count={cached.Count} snoozed={ShowSnoozedEmails}");
+
+            _ = SyncIncrementalAsync(value.Id, ShowSnoozedEmails, _loadEmailsCts.Token);
         }
         else
         {
-            Emails = new List<Email>();
+            // 2) 캐시 미스 → 기존 DB 로드 경로
+            _pendingScrollOffset = 0;
+            _ = LoadEmailsAsync(_loadEmailsCts.Token);
         }
     }
 
@@ -1103,9 +1149,18 @@ public partial class MainViewModel : ViewModelBase, IDisposable
 
     /// <summary>
     /// 선택된 폴더의 이메일 목록 로드 ([RelayCommand] 진입점 — CancellationToken 없는 오버로드)
+    /// 수동 새로고침 경로 — 현재 폴더 캐시를 무효화한 후 DB에서 재로드.
     /// </summary>
     [RelayCommand]
-    private Task LoadEmailsAsync() => LoadEmailsAsync(default);
+    private Task LoadEmailsAsync()
+    {
+        if (SelectedFolder != null)
+        {
+            _cacheService?.InvalidateFolder(SelectedFolder.Id);
+            Log4.Debug($"[Cache] manual-refresh invalidate folder={SelectedFolder.Id}");
+        }
+        return LoadEmailsAsync(default);
+    }
 
     /// <summary>
     /// 선택된 폴더의 이메일 목록 로드 (CancellationToken 지원 — Race Condition 방지)
@@ -1159,6 +1214,12 @@ public partial class MainViewModel : ViewModelBase, IDisposable
             StatusMessage = HasMoreEmails
                 ? $"{Emails.Count}개 이메일 로드됨 (더 있음)"
                 : $"{Emails.Count}개 이메일 로드됨";
+
+            // 캐시 저장 (현재 폴더 + 현재 필터)
+            if (SelectedFolder != null)
+            {
+                _cacheService?.Set(SelectedFolder.Id, ShowSnoozedEmails, emails, _emailSkip, HasMoreEmails);
+            }
         }, "이메일 로드 실패");
     }
 
@@ -1208,6 +1269,12 @@ public partial class MainViewModel : ViewModelBase, IDisposable
                 StatusMessage = HasMoreEmails
                     ? $"{Emails.Count}개 이메일 로드됨 (더 있음)"
                     : $"{Emails.Count}개 이메일 로드됨";
+
+                // 캐시에 페이지 추가
+                if (SelectedFolder != null)
+                {
+                    _cacheService?.AppendPage(SelectedFolder.Id, ShowSnoozedEmails, moreEmails, _emailSkip, HasMoreEmails);
+                }
             }
             else
             {
@@ -1221,6 +1288,70 @@ public partial class MainViewModel : ViewModelBase, IDisposable
         finally
         {
             IsLoadingMore = false;
+        }
+    }
+
+    /// <summary>
+    /// 캐시 히트 후 백그라운드 증분 동기화 — HighWaterMark 이후 신규 메일만 DB에서 조회하여 캐시에 prepend.
+    /// </summary>
+    private async Task SyncIncrementalAsync(string folderId, bool showSnoozed, CancellationToken cancellationToken)
+    {
+        try
+        {
+            var highWater = _cacheService?.GetHighWaterMark(folderId, showSnoozed);
+            if (highWater == null || highWater.Value == DateTimeOffset.MinValue) return;
+
+            var highDt = highWater.Value.UtcDateTime;
+
+            var query = _dbContext.Emails
+                .AsNoTracking()
+                .Where(e => e.ParentFolderId == folderId && e.ReceivedDateTime > highDt);
+
+            if (!showSnoozed)
+            {
+                var now = DateTime.UtcNow;
+                query = query.Where(e => e.SnoozedUntil == null || e.SnoozedUntil <= now);
+            }
+
+            var newEmails = await query
+                .OrderByDescending(e => e.ReceivedDateTime)
+                .ToListAsync(cancellationToken);
+
+            cancellationToken.ThrowIfCancellationRequested();
+
+            if (newEmails.Count == 0) return;
+
+            bool isDraftsFolder = SelectedFolder != null && IsDraftsFolder(SelectedFolder);
+            if (isDraftsFolder)
+            {
+                foreach (var email in newEmails) email.IsDraft = true;
+            }
+
+            foreach (var email in newEmails)
+            {
+                _cacheService!.OnEmailAdded(folderId, email);
+            }
+
+            // 현재 폴더가 여전히 동일하면 Emails 재바인딩(INPC 트리거)
+            if (SelectedFolder?.Id == folderId && ShowSnoozedEmails == showSnoozed)
+            {
+                var snapshot = _cacheService!.GetSnapshot(folderId, showSnoozed);
+                if (snapshot != null)
+                {
+                    Emails = new List<Email>(snapshot);
+                    StatusMessage = $"{Emails.Count}개 이메일 (캐시 + 신규 {newEmails.Count}건)";
+                }
+            }
+
+            Log4.Debug($"[Cache] incremental sync folder={folderId} added={newEmails.Count}");
+        }
+        catch (OperationCanceledException)
+        {
+            // 폴더 전환 취소 — 정상
+        }
+        catch (Exception ex)
+        {
+            Log4.Error($"[SyncIncrementalAsync] 실패: {ex.Message}");
         }
     }
 
@@ -1596,6 +1727,17 @@ public partial class MainViewModel : ViewModelBase, IDisposable
                     SelectedEmail = null;
                 }
 
+                // 캐시 정합성 갱신 (현재 폴더에서 제거 + 휴지통 폴더 무효화)
+                var sourceFolderId = SelectedFolder?.Id;
+                if (!string.IsNullOrEmpty(sourceFolderId) && !string.IsNullOrEmpty(email.EntryId))
+                {
+                    _cacheService?.OnEmailsDeleted(sourceFolderId, new[] { email.EntryId });
+                }
+                if (deletedItemsFolder != null && !string.IsNullOrEmpty(deletedItemsFolder.Id))
+                {
+                    _cacheService?.InvalidateFolder(deletedItemsFolder.Id);
+                }
+
                 StatusMessage = "메일이 삭제되었습니다.";
             }
             catch (Exception ex)
@@ -1660,6 +1802,21 @@ public partial class MainViewModel : ViewModelBase, IDisposable
             if (SelectedEmail != null && deletedIds.Contains(SelectedEmail.Id))
                 SelectedEmail = null;
 
+            // 캐시 정합성: 현재 폴더에서 제거 + 휴지통 폴더 무효화
+            var sourceFolderId2 = SelectedFolder?.Id;
+            var deletedEntryIds = succeededEmails
+                .Select(e => e.EntryId)
+                .Where(id => !string.IsNullOrEmpty(id))
+                .ToList();
+            if (!string.IsNullOrEmpty(sourceFolderId2) && deletedEntryIds.Count > 0)
+            {
+                _cacheService?.OnEmailsDeleted(sourceFolderId2, deletedEntryIds!);
+            }
+            if (deletedItemsFolder != null && !string.IsNullOrEmpty(deletedItemsFolder.Id))
+            {
+                _cacheService?.InvalidateFolder(deletedItemsFolder.Id);
+            }
+
             StatusMessage = $"메일 {succeededEmails.Count}건 삭제 완료";
             Log4.Info($"일괄 삭제 완료: {succeededEmails.Count}건");
         }, "메일 일괄 삭제 실패");
@@ -1713,6 +1870,13 @@ public partial class MainViewModel : ViewModelBase, IDisposable
                     // 날짜순 정렬 유지
                     updatedList = updatedList.OrderByDescending(e => e.ReceivedDateTime).ToList();
                     Emails = updatedList;
+                }
+
+                // 캐시 정합성: 원래 폴더에 추가 + 현재 폴더(휴지통)가 다르면 무효화
+                _cacheService?.OnEmailAdded(originalFolderId, email);
+                if (SelectedFolder != null && SelectedFolder.Id != originalFolderId)
+                {
+                    _cacheService?.InvalidateFolder(SelectedFolder.Id);
                 }
 
                 StatusMessage = "메일이 복원되었습니다.";
@@ -1823,6 +1987,16 @@ public partial class MainViewModel : ViewModelBase, IDisposable
             foreach (var email in succeededEmails)
                 email.FlagStatus = flagStatus;
 
+            // 캐시 정합성: 플래그 속성 mutate (리스트 재구성 없음)
+            var flagEntryIds = succeededEmails
+                .Select(e => e.EntryId)
+                .Where(id => !string.IsNullOrEmpty(id))
+                .ToList();
+            if (flagEntryIds.Count > 0)
+            {
+                _cacheService?.OnEmailsUpdated(flagEntryIds!, e => e.FlagStatus = flagStatus);
+            }
+
             // DataTemplate Trigger가 FlagStatus로 분기하는 경우를 위해 1회 재할당
             Emails = new List<Email>(Emails);
 
@@ -1885,6 +2059,16 @@ public partial class MainViewModel : ViewModelBase, IDisposable
             // 메모리 객체 갱신 (INPC가 UI 자동 갱신)
             foreach (var email in succeededEmails)
                 email.IsRead = isRead;
+
+            // 캐시 정합성: IsRead 속성 mutate
+            var readEntryIds = succeededEmails
+                .Select(e => e.EntryId)
+                .Where(id => !string.IsNullOrEmpty(id))
+                .ToList();
+            if (readEntryIds.Count > 0)
+            {
+                _cacheService?.OnEmailsUpdated(readEntryIds!, e => e.IsRead = isRead);
+            }
 
             // 폴더별 안읽은 메일 수 업데이트 (성공한 메일만 카운트)
             var folderChanges = succeededEmails
@@ -2011,6 +2195,12 @@ public partial class MainViewModel : ViewModelBase, IDisposable
 
             // 메모리 상 데이터 업데이트 (INPC가 자동으로 UI 갱신)
             email.IsRead = true;
+
+            // 캐시 정합성: IsRead mutate
+            if (!string.IsNullOrEmpty(email.EntryId))
+            {
+                _cacheService?.OnEmailsUpdated(new[] { email.EntryId }, e => e.IsRead = true);
+            }
 
             // 폴더 안읽은 메일 수 즉시 업데이트 (빠른 메모리 계산)
             if (!string.IsNullOrEmpty(email.ParentFolderId))
@@ -2794,6 +2984,17 @@ public partial class MainViewModel : ViewModelBase, IDisposable
             // UI: 이동된 메일 제거
             var movedIds = succeededMoves.Select(m => m.email.Id).ToHashSet();
             Emails = Emails.Where(e => !movedIds.Contains(e.Id)).ToList();
+
+            // 캐시 정합성: source에서 제거 + target 무효화 (다음 진입 시 DB 재조회)
+            var sourceFolderId3 = SelectedFolder?.Id;
+            var movedEntryIds = succeededMoves
+                .Select(m => m.newEntryId)
+                .Where(id => !string.IsNullOrEmpty(id))
+                .ToList();
+            if (!string.IsNullOrEmpty(sourceFolderId3) && movedEntryIds.Count > 0)
+            {
+                _cacheService?.OnEmailsMoved(sourceFolderId3, targetFolder.Id, movedEntryIds!);
+            }
 
             StatusMessage = failed > 0
                 ? $"메일 이동 완료 ({succeededMoves.Count}건 성공, {failed}건 실패)"

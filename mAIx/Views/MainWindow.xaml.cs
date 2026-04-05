@@ -119,6 +119,11 @@ public partial class MainWindow : FluentWindow
         // SelectedEmail 및 IsEditingDraft 변경 감지
         _viewModel.PropertyChanged += async (s, e) =>
         {
+            if (e.PropertyName == nameof(MainViewModel.SelectedFolder))
+            {
+                // 폴더 전환 시 캐시된 스크롤 위치 복원
+                RestoreScrollOffsetOnFolderChange();
+            }
             if (e.PropertyName == nameof(MainViewModel.SelectedEmail))
             {
                 Log4.Debug($"[MainWindow] SelectedEmail 변경: {_viewModel.SelectedEmail?.Subject ?? "null"}");
@@ -3382,13 +3387,66 @@ public partial class MainWindow : FluentWindow
     }
 
     /// <summary>
-    /// 메일 목록 스크롤 끝 도달 시 추가 로드 (인피니티 스크롤)
+    /// 메일 목록 스크롤 끝 도달 시 추가 로드 (인피니티 스크롤) + 스크롤 위치 캐시 저장
     /// </summary>
     private async void EmailListBox_ScrollChanged(object sender, ScrollChangedEventArgs e)
     {
+        // 현재 스크롤 오프셋을 캐시에 저장 (폴더 재진입 시 복원용)
+        if (_viewModel.SelectedFolder != null && e.VerticalChange != 0)
+        {
+            _viewModel.CacheService.SetScrollOffset(
+                _viewModel.SelectedFolder.Id,
+                _viewModel.ShowSnoozedEmails,
+                e.VerticalOffset);
+        }
+
         if (e.VerticalOffset + e.ViewportHeight >= e.ExtentHeight - 50 && e.ExtentHeight > 0)
         {
             await _viewModel.LoadMoreEmailsAsync();
+        }
+    }
+
+    /// <summary>
+    /// ListBox 내부의 ScrollViewer를 VisualTree에서 재귀 탐색하여 반환.
+    /// </summary>
+    private static ScrollViewer? GetScrollViewer(DependencyObject root)
+    {
+        if (root is ScrollViewer sv)
+            return sv;
+
+        int count = VisualTreeHelper.GetChildrenCount(root);
+        for (int i = 0; i < count; i++)
+        {
+            var child = VisualTreeHelper.GetChild(root, i);
+            var found = GetScrollViewer(child);
+            if (found != null)
+                return found;
+        }
+        return null;
+    }
+
+    /// <summary>
+    /// SelectedFolder 변경 시 캐시에서 스크롤 오프셋을 읽어 ScrollViewer 위치 복원.
+    /// 리스트 렌더링 이후 실행되어야 하므로 Dispatcher.BeginInvoke(Loaded) 사용.
+    /// </summary>
+    private void RestoreScrollOffsetOnFolderChange()
+    {
+        var folder = _viewModel.SelectedFolder;
+        if (folder == null) return;
+
+        if (_viewModel.CacheService.TryGet(
+                folder.Id,
+                _viewModel.ShowSnoozedEmails,
+                out _, out _, out _, out var scrollOffset)
+            && scrollOffset > 0)
+        {
+            Dispatcher.BeginInvoke(
+                new Action(() =>
+                {
+                    var sv = GetScrollViewer(EmailListBox);
+                    sv?.ScrollToVerticalOffset(scrollOffset);
+                }),
+                System.Windows.Threading.DispatcherPriority.Loaded);
         }
     }
 

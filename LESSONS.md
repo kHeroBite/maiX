@@ -617,3 +617,32 @@
 - **패턴**: `if (newCount == 0) return; // 신규 없으면 UI 갱신 스킵`
 - **심각도**: 낮음 (UI 번쩍임, 기능 문제 없음)
 - **Level**: 1 (참고)
+
+## L-295: ko_pipeline kdev 진입 전 TeamCreate 완료 순서 미보장 — 팀 미생성 hook 차단 3회 연속 (2026-04-05)
+
+- **문제**: kdev Batch1 에이전트(kdev-1/2/3) spawn 시 팀 'maix-mailcache-k4' 미생성 상태 → hook(HOOK_BLOCK_TEAM_NOT_EXIST) 3회 연속 차단 후 팀 생성 완료 뒤 정상 재시도
+- **근본 원인**: ko_pipeline에서 TeamCreate 완료를 확인하기 전에 kdev 에이전트 spawn 시도. hook이 정상 차단했으나 3회 반복은 파이프라인 진입 타이밍 이슈
+- **해결**: 팀 생성 완료 후 spawn (hook이 차단하므로 실질적 피해 없음, 반복 자체가 비효율)
+- **교훈**: ko_pipeline에서 kdev 진입 전 TeamCreate 완료를 명시적으로 확인 후 spawn. 기존 hook 차단은 정상이나 3회 재시도 반복은 파이프라인 순서 개선 대상
+- **원본 오류**: ERR-1, ERR-2, ERR-3 (errors.md)
+- **심각도**: 중간 (작업 차질 없음, 비효율만)
+- **Level**: 2 (주의)
+
+## L-296: MaiX 신규 서비스 구현 시 Serilog 직접 사용 금지 — Log4(YYYYMMDD.log) 표준 로거 사용 필수 (2026-04-05)
+
+- **문제**: MailFolderCacheService 구현 시 Serilog 직접 사용 → 로그가 `mAIx-YYYYMMDD.log`에 기록됨. 기존 AC auto_scripts는 Log4 표준 경로(`YYYYMMDD.log`) 기준으로 작성되어 캐시 로그 grep 실패 (ktest FIND-001)
+- **근본 원인**: 신규 서비스 작성 시 프로젝트 표준 로거(Log4) 대신 Serilog를 직접 참조. 캐시 동작 자체는 정상이나 AC 자동검증 로그 경로 불일치
+- **해결**: MaiX 프로젝트 신규 서비스는 기존 로거(`_log = LogManager.GetCurrentClassLogger()` 패턴) 사용. Serilog 직접 의존 금지
+- **교훈**: 신규 서비스 구현 시 MaiX 표준 로거(Log4 NLog — `YYYYMMDD.log`) 사용 필수. Serilog 직접 사용 시 AC auto_scripts 경로 불일치 및 로그 파일 분산 발생
+- **패턴**: `private static readonly Logger _log = LogManager.GetCurrentClassLogger();`
+- **심각도**: 중간 (기능 정상, AC 자동화 실패)
+- **Level**: 1 (참고)
+
+## L-297: 캐시 서비스 InvalidateAll 구현 후 모든 무효화 트리거 연결 확인 필수 (2026-04-05)
+
+- **문제**: MailFolderCacheService.InvalidateAll() 구현됐으나 로그아웃 핸들러(MenuLogout_Click)에 미연결 (ktest FIND-002)
+- **근본 원인**: CRUD 훅 체크리스트에 로그아웃/재로그인 연결 지점 누락
+- **해결**: 앱 재시작 시 메모리 캐시 소멸로 기능 동등 — 즉각 수정 불필요
+- **교훈**: 캐시 무효화 메서드 구현 후 모든 연결 지점(로그아웃/재로그인/초기화/앱종료) 체크리스트 확인 필수. 특히 InvalidateAll은 계정 전환/재로그인 경로에 연결되어야 완전한 구현
+- **심각도**: 낮음 (앱 재시작 효과 동등)
+- **Level**: 1 (참고)

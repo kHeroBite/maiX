@@ -158,6 +158,9 @@ public class BackgroundSyncService : BackgroundService
     /// </summary>
     public event Action<int>? EmailsSynced;
 
+    /// <summary>폴더별 새 저장 메일 전달 (캐시 증분 갱신용)</summary>
+    public event Action<string, IReadOnlyList<Email>>? EmailsSavedToFolder;
+
     /// <summary>
     /// 메일 동기화 시작 이벤트 (전체 건수 전달)
     /// </summary>
@@ -1699,6 +1702,12 @@ public class BackgroundSyncService : BackgroundService
         }
 
         _logger.Information("메일 저장 완료: {Count}건", savedEmails.Count);
+
+        if (savedEmails.Count > 0)
+        {
+            EmailsSavedToFolder?.Invoke(folderId, savedEmails);
+        }
+
         return savedEmails;
     }
 
