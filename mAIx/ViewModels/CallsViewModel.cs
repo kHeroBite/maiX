@@ -145,7 +145,7 @@ public partial class CallsViewModel : ObservableObject
                 {
                     Id = contact.Id ?? string.Empty,
                     DisplayName = contact.DisplayName ?? "(이름 없음)",
-                    Email = contact.ScoredEmailAddresses?.FirstOrDefault()?.Address ?? string.Empty,
+                    Email = contact.EmailAddresses?.FirstOrDefault()?.Address ?? string.Empty,
                     JobTitle = contact.JobTitle ?? string.Empty,
                     Department = contact.Department ?? string.Empty,
                     Availability = "Unknown"

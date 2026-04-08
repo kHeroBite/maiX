@@ -549,10 +549,7 @@ public class GraphTeamsService
             Utils.Log4.Info("[GraphTeamsService] GraphClient 획득 완료");
 
             Serilog.Log.Information("[GraphTeamsService] Graph API 호출 중... (Me.JoinedTeams)");
-            var response = await client.Me.JoinedTeams.GetAsync(config =>
-            {
-                config.QueryParameters.Top = 100;
-            });
+            var response = await client.Me.JoinedTeams.GetAsync();
 
             var count = response?.Value?.Count ?? 0;
             Serilog.Log.Information("[GraphTeamsService] Graph API 응답: {Count}개 팀", count);

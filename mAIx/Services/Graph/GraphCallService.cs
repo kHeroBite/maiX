@@ -152,24 +152,24 @@ public class GraphCallService
     /// <summary>
     /// 자주 연락하는 사용자 목록 조회
     /// </summary>
-    public async Task<IEnumerable<Person>> GetFrequentContactsAsync(int top = 20)
+    public async Task<IEnumerable<Contact>> GetFrequentContactsAsync(int top = 20)
     {
         try
         {
             var client = _authService.GetGraphClient();
 
-            var response = await client.Me.People.GetAsync(config =>
+            var response = await client.Me.Contacts.GetAsync(config =>
             {
                 config.QueryParameters.Top = top;
             });
 
             _logger.Debug("자주 연락하는 사용자 {Count}명 조회", response?.Value?.Count ?? 0);
-            return response?.Value ?? new List<Person>();
+            return response?.Value ?? new List<Contact>();
         }
         catch (Exception ex)
         {
             _logger.Error(ex, "자주 연락하는 사용자 조회 실패");
-            return new List<Person>();
+            return new List<Contact>();
         }
     }
 
