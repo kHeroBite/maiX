@@ -22,6 +22,26 @@ public class mAIxDbContext : DbContext
             warnings.Ignore(RelationalEventId.PendingModelChangesWarning));
     }
 
+    /// <summary>
+    /// SQLite WAL 모드 + synchronous=NORMAL 적용 (성능 최적화)
+    /// </summary>
+    public static void ApplyWalMode(DbContext context)
+    {
+        var connection = context.Database.GetDbConnection();
+        var wasOpen = connection.State == System.Data.ConnectionState.Open;
+        if (!wasOpen) connection.Open();
+        try
+        {
+            using var cmd = connection.CreateCommand();
+            cmd.CommandText = "PRAGMA journal_mode=WAL; PRAGMA synchronous=NORMAL;";
+            cmd.ExecuteNonQuery();
+        }
+        finally
+        {
+            if (!wasOpen) connection.Close();
+        }
+    }
+
     // ===== DbSet 정의 (12개) =====
     // Note: Account는 DB에 저장하지 않고 로컬 XML 파일로 관리 (%APPDATA%\mAIx\conf\autologin.xml)
 
@@ -109,6 +129,26 @@ public class mAIxDbContext : DbContext
     /// 메일 규칙 테이블
     /// </summary>
     public DbSet<MailRule> MailRules { get; set; } = null!;
+
+    /// <summary>
+    /// Quick Steps 테이블
+    /// </summary>
+    public DbSet<QuickStep> QuickSteps { get; set; } = null!;
+
+    /// <summary>
+    /// Split Inbox 규칙 테이블
+    /// </summary>
+    public DbSet<SplitInboxRule> SplitInboxRules { get; set; } = null!;
+
+    /// <summary>
+    /// 스크리너 항목 테이블 (발신자 차단/허용)
+    /// </summary>
+    public DbSet<ScreenerEntry> ScreenerEntries { get; set; } = null!;
+
+    /// <summary>
+    /// Reply Later 큐 테이블
+    /// </summary>
+    public DbSet<ReplyLaterItem> ReplyLaterItems { get; set; } = null!;
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -265,6 +305,54 @@ public class mAIxDbContext : DbContext
             // AccountEmail 인덱스 (계정별 규칙 조회)
             entity.HasIndex(r => r.AccountEmail)
                 .HasDatabaseName("IX_MailRule_AccountEmail");
+        });
+
+        // ===== QuickStep 인덱스 =====
+        modelBuilder.Entity<QuickStep>(entity =>
+        {
+            // IsEnabled 인덱스 (활성 QuickStep 조회)
+            entity.HasIndex(q => q.IsEnabled)
+                .HasDatabaseName("IX_QuickStep_IsEnabled");
+
+            // SortOrder 인덱스 (정렬 조회)
+            entity.HasIndex(q => q.SortOrder)
+                .HasDatabaseName("IX_QuickStep_SortOrder");
+        });
+
+        // ===== SplitInboxRule 인덱스 =====
+        modelBuilder.Entity<SplitInboxRule>(entity =>
+        {
+            // IsEnabled 인덱스 (활성 규칙 조회)
+            entity.HasIndex(r => r.IsEnabled)
+                .HasDatabaseName("IX_SplitInboxRule_IsEnabled");
+
+            // SortOrder 인덱스 (정렬 조회)
+            entity.HasIndex(r => r.SortOrder)
+                .HasDatabaseName("IX_SplitInboxRule_SortOrder");
+        });
+
+        // ===== ScreenerEntry 인덱스 =====
+        modelBuilder.Entity<ScreenerEntry>(entity =>
+        {
+            // SenderEmail 인덱스 (발신자 조회)
+            entity.HasIndex(s => s.SenderEmail)
+                .HasDatabaseName("IX_ScreenerEntry_SenderEmail");
+
+            // Action 인덱스 (차단/허용 필터)
+            entity.HasIndex(s => s.Action)
+                .HasDatabaseName("IX_ScreenerEntry_Action");
+        });
+
+        // ===== ReplyLaterItem 인덱스 =====
+        modelBuilder.Entity<ReplyLaterItem>(entity =>
+        {
+            // IsCompleted 인덱스 (미완료 조회)
+            entity.HasIndex(r => r.IsCompleted)
+                .HasDatabaseName("IX_ReplyLaterItem_IsCompleted");
+
+            // RemindAt 인덱스 (알림 시각 조회)
+            entity.HasIndex(r => r.RemindAt)
+                .HasDatabaseName("IX_ReplyLaterItem_RemindAt");
         });
     }
 }

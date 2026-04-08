@@ -83,6 +83,10 @@ mAIx/
 
 ```yaml
 시스템_파일:
+  - 파일명: MentionParser.cs (신규 — 2026-04-09 Phase3)
+    경로: MaiX/Utils/
+    역할: "@멘션 파싱/하이라이트 유틸리티"
+
   - 파일명: App.xaml.cs
     경로: MaiX/App.xaml.cs
     중요도: ★★★★★
@@ -148,6 +152,18 @@ Views:
           의존성: mAIxDbContext, MailRule 목록
           기능: 조건/액션 ComboBox 선택, 규칙 활성화 토글, 우선순위 순서 변경
 
+  - 파일명: CommandPaletteWindow.xaml / CommandPaletteWindow.xaml.cs (신규 — 2026-04-09 Phase4)
+    경로: MaiX/Views/
+    역할: Ctrl+K 커맨드 팔레트 창 (퍼지 검색 기반 명령 실행)
+
+  - 파일명: ShortcutHelpOverlay.xaml / ShortcutHelpOverlay.xaml.cs (신규 — 2026-04-09 Phase2)
+    경로: MaiX/Views/
+    역할: ? 키로 표시되는 단축키 도움말 오버레이
+
+  - 파일명: AutoReplyDialog.xaml / AutoReplyDialog.xaml.cs (신규 — 2026-04-09 Phase2)
+    경로: MaiX/Views/Dialogs/
+    역할: 부재중 자동응답 설정 다이얼로그 (On/Off + 기간 + 메시지)
+
   - 파일명: EmailViewWindow.xaml / EmailViewWindow.xaml.cs
     경로: MaiX/Views/
     역할: 메일 읽기 창 (별도 창)
@@ -200,6 +216,10 @@ ViewModels:
   - 파일명: CalendarViewModel.cs
     경로: MaiX/ViewModels/
     역할: 캘린더 ViewModel
+
+  - 파일명: NewsletterViewModel.cs (신규 — 2026-04-09 Phase3)
+    경로: MaiX/ViewModels/
+    역할: 뉴스레터 피드 뷰모델
 ```
 
 ### 4. Models (데이터 모델)
@@ -262,6 +282,21 @@ Models:
 
   - 파일명: ConverterSetting.cs
     역할: 문서 변환기 설정
+
+  - 파일명: QuickStep.cs (신규 — 2026-04-09 Phase3)
+    역할: QuickStep 모델 (EF Core 엔티티) — 반복 작업 자동화 액션 체인
+
+  - 파일명: SplitInboxRule.cs (신규 — 2026-04-09 Phase4)
+    역할: SplitInboxRule 모델 (EF Core 엔티티) — Split Inbox 조건 기반 규칙
+
+  - 파일명: ScreenerEntry.cs (신규 — 2026-04-09 Phase4)
+    역할: ScreenerEntry 모델 (EF Core 엔티티) — 발신자 화이트/블랙리스트
+
+  - 파일명: ReplyLaterItem.cs (신규 — 2026-04-09 Phase4)
+    역할: ReplyLaterItem 모델 (EF Core 엔티티) — Reply Later 큐 아이템
+
+  - 파일명: CommandPaletteItem.cs (신규 — 2026-04-09 Phase4)
+    역할: 커맨드 팔레트 아이템 (UI 모델)
 ```
 
 ### 5. Services (비즈니스 로직)
@@ -442,6 +477,63 @@ Cache_Services:
     경로: Services/Cache/
     역할: 폴더별 캐시 상태 레코드 (internal sealed)
     필드: Emails, EmailSkip, HasMoreEmails, ShowSnoozedEmails, LoadedAt, LastAccessedAt, HighWaterMark, ScrollOffset
+```
+
+#### 5.5.7 Services/신규 (2026-04-09 Phase 1~4)
+
+```yaml
+New_Services_20260409:
+  - 파일명: KeyboardShortcutService.cs
+    경로: Services/Keyboard/
+    역할: 키보드 단축키 서비스 (J/K/E/R/A/F/D/U/S/? 10개 단축키)
+
+  - 파일명: DelayedSendService.cs
+    경로: Services/
+    역할: 취소전송 서비스 (5~30초 지연 후 발송)
+
+  - 파일명: ExportService.cs
+    경로: Services/
+    역할: EML/PDF 내보내기
+
+  - 파일명: AutoReplyService.cs
+    경로: Services/
+    역할: 부재중 자동응답 (On/Off + 기간 + 메시지)
+
+  - 파일명: QuickStepService.cs
+    경로: Services/
+    역할: 반복 작업 자동화 QuickStep (최대 5개 액션 체인)
+
+  - 파일명: UnsubscribeService.cs
+    경로: Services/
+    역할: 원클릭 구독 취소 (List-Unsubscribe 헤더 파싱)
+
+  - 파일명: TrackingBlockerService.cs
+    경로: Services/
+    역할: 추적 픽셀/링크 차단 (img src 패턴 감지)
+
+  - 파일명: ConversationGrouper.cs
+    경로: Services/
+    역할: 대화 스레딩 (ConversationId 기반 그룹핑)
+
+  - 파일명: CommandPaletteService.cs
+    경로: Services/
+    역할: Ctrl+K 커맨드 팔레트 (퍼지 검색 기반)
+
+  - 파일명: FocusedInboxService.cs
+    경로: Services/
+    역할: Focused/Other 자동 분류 (AI 기반 IsImportant 판단)
+
+  - 파일명: SplitInboxService.cs
+    경로: Services/
+    역할: Split Inbox 규칙 필터 (조건 기반 탭 분류)
+
+  - 파일명: ScreenerService.cs
+    경로: Services/
+    역할: 발신자 차단/허용 (화이트/블랙리스트)
+
+  - 파일명: ReplyLaterService.cs
+    경로: Services/
+    역할: Reply Later 큐 (스누즈 시간 기반 재알림)
 ```
 
 #### 5.6 Services/기타
@@ -728,3 +820,5 @@ curl -s http://localhost:5858/api/status
 | 2026-04-01 | 메일 동기화 읽음 카운트 불일치 근본 수정 + 설정 동기화 대메뉴 통합 | mAIx/Services/Graph/GraphMailService.cs, mAIx/Services/Sync/BackgroundSyncService.cs, mAIx/Views/MainWindow.xaml.cs, mAIx/Models/Settings/UserPreferencesSettings.cs | GetMessagesReadStatusAsync days 7→30 확장; GetUnreadMessageIdsAsync 신규(서버 미읽음 ID 일괄 조회); SyncReadStatusAsync 서버 미읽음 목록 기준 교체(로컬 N+1→Set 비교 일괄); 동기화 설정 대메뉴 통합; AiBatchSize/MailSyncInitialCount 설정 필드 추가 |
 | 2026-04-02 | R1(CC/BCC 버그수정)+R2(첨부파일 다운로드/열기)+R3(영업폴더 Reconciliation)+R4(인피니티 스크롤) | mAIx/Services/Graph/GraphMailService.cs, mAIx/Services/Sync/BackgroundSyncService.cs, mAIx/ViewModels/MainViewModel.cs, mAIx/Views/EmailViewWindow.xaml, mAIx/Views/EmailViewWindow.xaml.cs, mAIx/Views/MainWindow.xaml, mAIx/Views/MainWindow.xaml.cs | R1: GetMessageAsync Select에 bccRecipients 추가; R2: DownloadAttachmentAsync+GetAllMessageIdsAsync 신규, EmailViewWindow 첨부파일 패널(목록/다운로드/열기); R3: ReconcileDeletedEmailsAsync 신규(Graph ID목록↔DB 비교 삭제 정리); R4: PageSize=100 인피니티 스크롤(IsLoadingMore/HasMoreEmails/LoadMoreEmailsAsync+ScrollChanged) |
 | 2026-04-03 | 설정>메일 초기 메일수 선택 옵션(20/50/100) 추가 + 동기화 기본값 버그 수정 | mAIx/Models/Settings/UserPreferencesSettings.cs, mAIx/ViewModels/MainViewModel.cs, mAIx/Views/MainWindow.xaml.cs | UserPreferencesSettings에 InitialMailCount(기본50) 추가; MainViewModel PageSize 상수→InitialMailCount 동적 참조; MainWindow에 mail_initial 소메뉴+ShowMailInitialSettings() 신규(20/50/100 RadioButton); Show*SyncSettings() RadioButton 기본값 선택 버그(foreach 클로저 캡처) 수정 |
+| 2026-04-05 | 메일함 폴더별 캐시 시스템 구현 — 전환 <100ms + 이벤트 증분 sync | mAIx/Services/Cache/MailFolderCacheService.cs(신규), mAIx/Services/Cache/CachedFolderState.cs(신규), mAIx/Services/Sync/BackgroundSyncService.cs, mAIx/App.xaml.cs, mAIx/ViewModels/MainViewModel.cs, mAIx/Views/MainWindow.xaml.cs | LRU 캐시(maxFolders=10), EmailsSavedToFolder 이벤트 증분 갱신, 스크롤 오프셋 복원 |
+| 2026-04-09 | Phase 1~4 기능 확장 (성능최적화+아웃룩기능+Superhuman+혁신기능) | App.xaml.cs, MainViewModel.cs, MainWindow.xaml/cs + 신규 서비스 23개 | k5 파이프라인 |

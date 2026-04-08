@@ -9,6 +9,7 @@ using Serilog;
 using Serilog.Events;
 using mAIx.Data;
 using mAIx.Models.Settings;
+using mAIx.Services;
 using mAIx.Services.AI;
 using mAIx.Services.Speech;
 using mAIx.Services.Analysis;
@@ -336,6 +337,12 @@ public partial class App : Application
         // 메일 규칙 서비스 등록
         services.AddSingleton<MailRuleService>();
 
+        // Quick Step 서비스 등록
+        services.AddSingleton<QuickStepService>();
+
+        // 대화 스레딩 그룹핑 서비스 등록
+        services.AddSingleton<ConversationGrouper>();
+
         // 백그라운드 동기화 서비스 등록 (IHostedService)
         services.AddHostedService<BackgroundSyncService>();
         services.AddSingleton<BackgroundSyncService>(sp =>
@@ -343,6 +350,27 @@ public partial class App : Application
 
         // 메일함 폴더 캐시 서비스 (BackgroundSyncService 이벤트 구독)
         services.AddSingleton<MailFolderCacheService>();
+
+        // 지연 전송 서비스 (취소 전송)
+        services.AddSingleton<DelayedSendService>();
+
+        // 이메일 내보내기 서비스 (EML/PDF)
+        services.AddSingleton<ExportService>();
+
+        // 키보드 단축키 서비스
+        services.AddSingleton<KeyboardShortcutService>();
+
+        // 구독 취소 + 추적 픽셀 차단 서비스 등록
+        services.AddSingleton<UnsubscribeService>();
+        services.AddSingleton<TrackingBlockerService>();
+
+        // 스크리너 + Reply Later 서비스 등록
+        services.AddSingleton<ScreenerService>();
+        services.AddSingleton<ReplyLaterService>();
+
+        // Focused Inbox + Split Inbox 서비스 등록
+        services.AddSingleton<FocusedInboxService>();
+        services.AddSingleton<SplitInboxService>();
 
         // Teams/Chat 서비스 등록
         services.AddSingleton<GraphTeamsService>();
@@ -371,10 +399,14 @@ public partial class App : Application
         services.AddTransient<PlannerViewModel>();
         services.AddTransient<ActivityViewModel>();
         services.AddTransient<CallsViewModel>();
+        services.AddTransient<NewsletterViewModel>();
 
         // Views 등록
         services.AddTransient<MainWindow>();
         services.AddTransient<LoginWindow>();
+        services.AddSingleton<CommandPaletteService>();
+        services.AddTransient<CommandPaletteWindow>();
+        services.AddSingleton<AutoReplyService>();
     }
 
     /// <summary>
@@ -446,8 +478,9 @@ public partial class App : Application
 
             Log.Information("데이터베이스 마이그레이션 시작");
             await dbContext.Database.MigrateAsync();
+            mAIxDbContext.ApplyWalMode(dbContext);
             await DefaultPromptTemplates.SeedDatabaseAsync(dbContext);
-            Log.Information("데이터베이스 마이그레이션 완료");
+            Log.Information("데이터베이스 마이그레이션 완료 (WAL 모드)");
             Log4.Debug("DB 마이그레이션 완료");
 
             // 프롬프트 파일 캐시 초기화

@@ -20,7 +20,7 @@ public class SyncSettings
     /// 동기화당 최대 메시지 수
     /// </summary>
     [XmlElement("MaxMessagesPerSync")]
-    public int MaxMessagesPerSync { get; set; } = 5;
+    public int MaxMessagesPerSync { get; set; } = 50;
 
     /// <summary>
     /// 자동 동기화 활성화

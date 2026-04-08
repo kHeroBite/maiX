@@ -287,4 +287,16 @@ public class UserPreferencesSettings
     [XmlElement("InitialMailCount")]
     public int InitialMailCount { get; set; } = 50;
 
+    /// <summary>
+    /// 읽기 창 위치 (Right, Bottom, Off)
+    /// </summary>
+    [XmlElement("ReadingPanePosition")]
+    public string ReadingPanePosition { get; set; } = "Right";
+
+    /// <summary>
+    /// 밀도 보기 모드 (Compact, Normal, Comfortable)
+    /// </summary>
+    [XmlElement("DensityMode")]
+    public string DensityMode { get; set; } = "Normal";
+
 }

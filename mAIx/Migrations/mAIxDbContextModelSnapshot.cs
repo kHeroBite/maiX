@@ -675,6 +675,9 @@ namespace mAIx.Migrations
                     b.HasIndex("ReceivedDateTime")
                         .HasDatabaseName("IX_Email_ReceivedDateTime");
 
+                    b.HasIndex("ParentFolderId", "ReceivedDateTime")
+                        .HasDatabaseName("IX_Email_ParentFolderId_ReceivedDateTime");
+
                     b.HasIndex("SnoozedUntil")
                         .HasDatabaseName("IX_Email_SnoozedUntil");
 
@@ -1007,6 +1010,167 @@ namespace mAIx.Migrations
             modelBuilder.Entity("mAIx.Models.Prompt", b =>
                 {
                     b.Navigation("TestHistories");
+                });
+
+            modelBuilder.Entity("mAIx.Models.QuickStep", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Description")
+                        .IsRequired()
+                        .HasMaxLength(255)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("ActionsJson")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("SortOrder")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<bool>("IsEnabled")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("IsEnabled")
+                        .HasDatabaseName("IX_QuickStep_IsEnabled");
+
+                    b.HasIndex("SortOrder")
+                        .HasDatabaseName("IX_QuickStep_SortOrder");
+
+                    b.ToTable("QuickSteps");
+                });
+
+            modelBuilder.Entity("mAIx.Models.SplitInboxRule", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("TabName")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Color")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("SortOrder")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<bool>("IsEnabled")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("MatchersJson")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("IsEnabled")
+                        .HasDatabaseName("IX_SplitInboxRule_IsEnabled");
+
+                    b.HasIndex("SortOrder")
+                        .HasDatabaseName("IX_SplitInboxRule_SortOrder");
+
+                    b.ToTable("SplitInboxRules");
+                });
+
+            modelBuilder.Entity("mAIx.Models.ScreenerEntry", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("SenderEmail")
+                        .IsRequired()
+                        .HasMaxLength(255)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("SenderName")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Action")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Notes")
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("SenderEmail")
+                        .HasDatabaseName("IX_ScreenerEntry_SenderEmail");
+
+                    b.HasIndex("Action")
+                        .HasDatabaseName("IX_ScreenerEntry_Action");
+
+                    b.ToTable("ScreenerEntries");
+                });
+
+            modelBuilder.Entity("mAIx.Models.ReplyLaterItem", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("EmailId")
+                        .IsRequired()
+                        .HasMaxLength(255)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Subject")
+                        .IsRequired()
+                        .HasMaxLength(500)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("SenderEmail")
+                        .IsRequired()
+                        .HasMaxLength(255)
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime?>("RemindAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<bool>("IsCompleted")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Notes")
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("IsCompleted")
+                        .HasDatabaseName("IX_ReplyLaterItem_IsCompleted");
+
+                    b.HasIndex("RemindAt")
+                        .HasDatabaseName("IX_ReplyLaterItem_RemindAt");
+
+                    b.ToTable("ReplyLaterItems");
                 });
 #pragma warning restore 612, 618
         }

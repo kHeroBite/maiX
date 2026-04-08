@@ -7,6 +7,7 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Microsoft.Graph.Models;
 using mAIx.Models;
+using mAIx.Services;
 using mAIx.Services.Graph;
 using mAIx.Services.Sync;
 using mAIx.Utils;
@@ -47,6 +48,7 @@ public partial class ComposeViewModel : ViewModelBase
 {
     private readonly GraphMailService _graphMailService;
     private readonly BackgroundSyncService? _syncService;
+    private readonly DelayedSendService? _delayedSendService;
     private readonly ComposeMode _mode;
     private readonly Models.Email? _originalEmail;
 
@@ -100,6 +102,12 @@ public partial class ComposeViewModel : ViewModelBase
     /// </summary>
     [ObservableProperty]
     private string _importance = "normal";
+
+    /// <summary>
+    /// 읽기 확인 요청 여부
+    /// </summary>
+    [ObservableProperty]
+    private bool _isReadReceiptRequested = false;
 
     /// <summary>
     /// 예약 발송 활성화 여부
@@ -158,11 +166,13 @@ public partial class ComposeViewModel : ViewModelBase
     public ComposeViewModel(
         GraphMailService graphMailService,
         BackgroundSyncService? syncService = null,
+        DelayedSendService? delayedSendService = null,
         ComposeMode mode = ComposeMode.New,
         Models.Email? originalEmail = null)
     {
         _graphMailService = graphMailService;
         _syncService = syncService;
+        _delayedSendService = delayedSendService;
         _mode = mode;
         _originalEmail = originalEmail;
 
@@ -368,7 +378,8 @@ public partial class ComposeViewModel : ViewModelBase
                 },
                 ToRecipients = toRecipients,
                 CcRecipients = ccRecipients,
-                BccRecipients = bccRecipients
+                BccRecipients = bccRecipients,
+                IsReadReceiptRequested = IsReadReceiptRequested
             };
 
             // 대용량 파일 여부 판단 (3MB 기준)

@@ -646,3 +646,22 @@
 - **교훈**: 캐시 무효화 메서드 구현 후 모든 연결 지점(로그아웃/재로그인/초기화/앱종료) 체크리스트 확인 필수. 특히 InvalidateAll은 계정 전환/재로그인 경로에 연결되어야 완전한 구현
 - **심각도**: 낮음 (앱 재시작 효과 동등)
 - **Level**: 1 (참고)
+
+## L-298: ktest→kdone 전환 시 기존 팀 잔류로 TeamCreate 중복 차단 (2026-04-09)
+
+- **문제**: ktest 완료 후 kdone spawn 시도 시 기존 팀(maix-k5-fb0f3493, state=DEV)이 잔류하여 HOOK_BLOCK_TEAM_DUPLICATE 차단 발생
+- **근본원인**: ktest 에이전트 종료 후 팀 상태(state=DEV)가 정리되지 않은 채 새 TeamCreate 호출 → hook이 중복 팀 생성 차단
+- **해결**: 기존 TeamDelete 후 TeamCreate 재시도로 해결
+- **교훈**: ktest→kdone 전환 전 기존 팀 상태(team_name 파일) 확인 및 필요 시 TeamDelete 선행 필수. ko SKILL.md의 "이전 팀 정리" 절차를 kdone spawn 전에도 적용
+- **패턴**: `TeamDelete → TeamCreate` (중복 팀 잔류 시)
+- **심각도**: 중간 (작업 지연, 기능 문제 없음)
+- **Level**: 2 (주의)
+
+## L-299: 팀에이전트의 직접 Agent() spawn 시도 — pipeline_order_guard.sh 정상 차단 확인 (2026-04-09)
+
+- **문제**: DEV 상태에서 unnamed 팀에이전트가 subagent_type=general-purpose로 직접 Agent() spawn 시도 → pipeline_order_guard.sh(L-035) 차단
+- **근본원인**: 팀에이전트(kdone-1)가 SPAWN_REQUEST 위임 없이 직접 Agent() 호출 시도
+- **해결**: hook이 정상 차단. SPAWN_REQUEST를 team-lead에 전달하여 메인이 spawn하는 올바른 경로로 처리
+- **교훈**: 팀에이전트는 직접 Agent() 호출 절대 금지. 항상 SendMessage(to:"team-lead", "SPAWN_REQUEST: ...") 형식으로 메인에 위임. pipeline_order_guard.sh가 정상 작동 중임을 확인
+- **심각도**: 낮음 (hook 정상 차단, 기능 문제 없음)
+- **Level**: 1 (참고)

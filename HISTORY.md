@@ -539,3 +539,54 @@
 ### 발견사항
 - FIND-001 (medium): Serilog vs Log4 로그 파일 경로 불일치 — 캐시 동작 정상, AC auto_scripts 파일명 수정 권고
 - FIND-002 (low): InvalidateAll 로그아웃 핸들러 미연결 — 앱 재시작 효과 동등
+
+---
+
+## 2026-04-09 — 아웃룩 대비 기능 대폭 확장 + 성능 최적화 (Phase 1~4, k5)
+
+### Phase 1: 성능 최적화
+- VirtualizingPanel.IsVirtualizing=True + VirtualizationMode=Recycling (ChatListBox, OneNoteFavoritesTreeView)
+- SQLite WAL 모드 적용 (ApplyWalMode in MaiXDbContext)
+- 다수 쿼리에 AsNoTracking 적용 (GraphMailService, EmailSearchService)
+- MaxMessagesPerSync 분리: Initial=50, Incremental=25 (SyncSettings)
+- LRU 캐시 DefaultMaxFolders 10→30 (MailFolderCacheService)
+
+### Phase 2: 아웃룩 기능
+- KeyboardShortcutService: J/K/E/R/A/F/D/U/S/? 10개 단축키
+- ShortcutHelpOverlay: ? 키로 단축키 도움말 오버레이 표시
+- DelayedSendService: 5~30초 취소전송 기능
+- ExportService: EML/PDF 내보내기
+- AutoReplyService + AutoReplyDialog: 부재중 자동응답 (On/Off + 기간 + 메시지)
+- GraphMailService 스팸 관리: MoveToJunk/MarkAsNotJunk
+- 읽기 창 레이아웃(상하/좌우/분리) + 밀도 모드(편안/기본/촘촘)
+
+### Phase 3: Superhuman/Hey 기능
+- QuickStepService + QuickStep 모델: 반복 작업 자동화 (최대 5개 액션 체인)
+- MentionParser: @멘션 파싱/하이라이트 유틸리티
+- UnsubscribeService: 원클릭 구독 취소 (List-Unsubscribe 헤더 파싱)
+- TrackingBlockerService: 추적 픽셀/링크 차단 (img src 패턴 감지)
+- NewsletterViewModel: 구독 메일 피드 뷰모델
+- ConversationGrouper + ConversationThread: 대화 스레딩 (ConversationId 기반)
+
+### Phase 4: 혁신 기능
+- CommandPaletteService + CommandPaletteWindow: Ctrl+K 커맨드 팔레트 (퍼지 검색)
+- FocusedInboxService: Focused/Other 자동 분류 (AI 기반 IsImportant 판단)
+- SplitInboxService + SplitInboxRule: Split Inbox 탭 (조건 기반 규칙 필터링)
+- ScreenerService + ScreenerEntry: 발신자 차단/허용 (화이트/블랙리스트)
+- ReplyLaterService + ReplyLaterItem: Reply Later 큐 (스누즈 시간 기반)
+
+### DB 마이그레이션 추가 (4개)
+- 20260408000008_AddQuickStep: QuickSteps 테이블
+- 20260408000009_AddConversationIndex: ConversationId 인덱스
+- 20260408000010_AddSplitInboxRule: SplitInboxRules 테이블
+- 20260408000011_AddScreenerAndReplyLater: ScreenerEntries + ReplyLaterItems 테이블
+
+### 주요 변경 파일
+**신규**: KeyboardShortcutService.cs, ShortcutHelpOverlay.xaml/.cs, DelayedSendService.cs, ExportService.cs, AutoReplyService.cs, AutoReplyDialog.xaml/.cs, QuickStepService.cs, QuickStep.cs, MentionParser.cs, UnsubscribeService.cs, TrackingBlockerService.cs, NewsletterViewModel.cs, ConversationGrouper.cs, ReplyLaterItem.cs, ReplyLaterService.cs, CommandPaletteItem.cs, CommandPaletteService.cs, CommandPaletteWindow.xaml/.cs, FocusedInboxService.cs, SplitInboxRule.cs, SplitInboxService.cs, ScreenerEntry.cs, ScreenerService.cs
+**수정**: App.xaml.cs, App.xaml, MainViewModel.cs, MainWindow.xaml/.cs, ComposeViewModel.cs, ComposeWindow.xaml, EmailViewWindow.xaml.cs, GraphMailService.cs, BackgroundSyncService.cs, MailFolderCacheService.cs, EmailSearchService.cs, SyncSettings.cs, UserPreferencesSettings.cs, MaiXDbContext.cs, Migrations (4개)
+
+### 테스트 결과 (ktest k5)
+- 빌드: 오류 0개, 경고 4개 (기존 패키지 경고) ✅
+- Phase 1~4 신규 서비스 파일 11개 전체 존재 확인 ✅
+- 헬스체크 PASS (localhost:5858) ✅
+- WAL 모드 확인 ✅

@@ -16,17 +16,18 @@ namespace mAIx.Services.Cache;
 ///   - CRUD 훅(Delete/Move/Update...)으로 UI-DB 정합성 유지
 ///
 /// 캐시 키: (FolderId, ShowSnoozedEmails) — 필터 상태 다르면 별도 저장.
-/// 상한: 10개 엔트리 (LRU evict — LastAccessedAt 기준).
+/// 상한: 30개 엔트리 (LRU evict — LastAccessedAt 기준).
 /// 스레드: 모든 public 메서드 lock(_lock). Email 객체 속성 변경은 호출자(UI 스레드)가 수행.
 /// </summary>
 public sealed class MailFolderCacheService : IDisposable
 {
-    private const int DefaultMaxFolders = 10;
+    private const int DefaultMaxFolders = 30;
     private const string LogPrefix = "[Cache]";
 
     private readonly Dictionary<string, CachedFolderState> _cache = new();
     private readonly object _lock = new();
     private readonly int _maxFolders;
+    private int _maxEmailsPerFolder = 50; // InitialMailCount와 동기화
     private readonly BackgroundSyncService _syncService;
     private readonly ILogger _logger;
     private bool _disposed;
@@ -38,6 +39,12 @@ public sealed class MailFolderCacheService : IDisposable
         _maxFolders = DefaultMaxFolders;
 
         _syncService.EmailsSavedToFolder += OnEmailsSavedToFolder;
+    }
+
+    /// <summary>폴더당 최대 캐시 메일 수 설정 (InitialMailCount와 동기화).</summary>
+    public void SetMaxEmailsPerFolder(int maxEmails)
+    {
+        _maxEmailsPerFolder = Math.Max(10, maxEmails);
     }
 
     // ───────────────────────────── 조회 / 저장 ─────────────────────────────
@@ -94,6 +101,8 @@ public sealed class MailFolderCacheService : IDisposable
         lock (_lock)
         {
             var key = MakeKey(folderId, showSnoozed);
+            var loadedAt = DateTimeOffset.UtcNow;
+            var emailHighWater = ComputeHighWaterMark(emails);
             var state = new CachedFolderState
             {
                 Emails = emails,
@@ -102,7 +111,9 @@ public sealed class MailFolderCacheService : IDisposable
                 ShowSnoozedEmails = showSnoozed,
                 LoadedAt = DateTime.UtcNow,
                 LastAccessedAt = DateTime.UtcNow,
-                HighWaterMark = ComputeHighWaterMark(emails),
+                // 캐시 저장 시각과 메일 최신 수신시각 중 큰 값 사용
+                // → 오래된 메일만 있는 폴더도 저장 시각 이후만 증분 조회 (불필요한 풀스캔 방지)
+                HighWaterMark = emailHighWater > loadedAt ? emailHighWater : loadedAt,
                 ScrollOffset = 0
             };
             _cache[key] = state;
@@ -193,6 +204,9 @@ public sealed class MailFolderCacheService : IDisposable
                     continue;
 
                 state.Emails.Insert(0, email);
+                // 상한 초과 시 오래된 메일 trim (최신 _maxEmailsPerFolder개만 유지)
+                if (state.Emails.Count > _maxEmailsPerFolder)
+                    state.Emails.RemoveRange(_maxEmailsPerFolder, state.Emails.Count - _maxEmailsPerFolder);
                 state.HighWaterMark = ComputeHighWaterMark(state.Emails);
                 state.LastAccessedAt = DateTime.UtcNow;
             }
@@ -400,6 +414,10 @@ public sealed class MailFolderCacheService : IDisposable
 
     private static DateTimeOffset ComputeHighWaterMark(List<Email> emails)
     {
+        // 캐시에 있는 메일 중 가장 최근 수신 시각 반환
+        // ※ 이 값은 SyncIncremental 쿼리 기준점으로 사용됨
+        //   → 메일 수신 시각이 오래됐더라도 캐시 저장 시각(LoadedAt)으로 보정하여 불필요한 풀스캔 방지
+        //   → Set() 호출 시 max(메일 최신시각, 캐시저장시각)으로 덮어씀
         DateTimeOffset high = DateTimeOffset.MinValue;
         foreach (var email in emails)
         {

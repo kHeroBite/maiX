@@ -827,3 +827,69 @@ foreach (var count in options)
 // 이후: App.Settings.UserPreferences.InitialMailCount 직접 참조
 // 적용 위치: LoadEmailsForFolderAsync(), LoadMoreEmailsAsync()
 ```
+
+---
+
+## Phase 1~4 신규 UI 패턴 (2026-04-09, k5)
+
+### CommandPaletteWindow (Ctrl+K)
+
+FluentWindow 기반 오버레이 팔레트 창. `App.xaml.cs`에 Transient 등록.
+
+```csharp
+// 열기
+var palette = App.GetService<CommandPaletteWindow>();
+palette.Show();
+
+// CommandPaletteService — 퍼지 검색 기반 명령 등록
+_commandPaletteService.RegisterCommand(new CommandPaletteItem {
+    Title = "명령 이름",
+    Description = "설명",
+    Action = () => { /* 실행 */ }
+});
+```
+
+키 처리: TextChanged → SearchAsync, ESC → Close(), Enter → Execute(), ↑↓ → 선택 이동
+
+### ShortcutHelpOverlay (? 키)
+
+메인 윈도우 위에 오버레이로 표시되는 단축키 도움말. `MainWindow.xaml.cs`에서 `?` 키 누를 때 표시/숨김.
+
+```csharp
+// 토글
+if (_shortcutOverlay == null) _shortcutOverlay = new ShortcutHelpOverlay();
+_shortcutOverlay.IsOpen = !_shortcutOverlay.IsOpen;
+```
+
+### AutoReplyDialog (부재중 자동응답)
+
+`Views/Dialogs/AutoReplyDialog.xaml` — WPF 다이얼로그. IsEnabled(토글), StartDate/EndDate(기간), ReplyMessage(본문).
+
+```csharp
+var dialog = new AutoReplyDialog(currentSettings);
+if (dialog.ShowDialog() == true)
+{
+    await _autoReplyService.SetAutoReplyAsync(dialog.Settings);
+}
+```
+
+### 키보드 단축키 서비스 (KeyboardShortcutService)
+
+`MainWindow.xaml.cs`에서 등록. 10개 단축키(J/K/E/R/A/F/D/U/S/?).
+
+```csharp
+// MainWindow에서 KeyDown 이벤트 → KeyboardShortcutService.HandleKey(e.Key)
+// J: 다음 메일, K: 이전 메일, E: 보관, R: 답장, A: 전체답장
+// F: 전달, D: 삭제, U: 읽음토글, S: 별표, ?: 도움말 오버레이
+```
+
+### 읽기 창 레이아웃 모드
+
+`MainWindow.xaml`에서 3가지 모드: 상하 분할(기본), 좌우 분할, 분리 창.
+`UserPreferencesSettings.ReadingPaneLayout` 열거형으로 관리.
+
+### 밀도 모드 (Density)
+
+`MainWindow.xaml`에서 3가지 밀도: Comfortable(편안), Default(기본), Compact(촘촘).
+이메일 목록 행 높이와 패딩을 동적으로 조정.
+`UserPreferencesSettings.DisplayDensity` 열거형으로 관리.

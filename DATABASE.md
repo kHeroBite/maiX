@@ -7,7 +7,7 @@
 - **경로**: `%APPDATA%\MaiX\MaiX.db`
 - **ORM**: Entity Framework Core
 - **DbContext**: `MaiX/Data/MaiXDbContext.cs`
-- **전체 테이블 수**: 15개
+- **전체 테이블 수**: 19개
 
 ### 마이그레이션 관리
 ```bash
@@ -42,6 +42,10 @@ dotnet ef migrations script --project MaiX
 | OneNotePages | OneNote 페이지 | - |
 | ConverterSettings | 문서 변환기 설정 | - |
 | MailRules | 메일 자동 처리 규칙 | - |
+| QuickSteps | 퀵스텝 (일괄 액션) | - |
+| SplitInboxRules | 분할 받은편지함 규칙 | - |
+| ScreenerEntries | 발신자 허용/차단 목록 | - |
+| ReplyLaterItems | 나중에 답장 목록 | - |
 
 ---
 
@@ -577,4 +581,100 @@ var rules = await context.MailRules
     .OrderBy(r => r.Priority)
     .ToListAsync();
 ```
+
+---
+
+## k5 파이프라인 스키마 변경 (2026-04-08)
+
+### Migration 이력 (k5 파이프라인)
+| Migration | 설명 |
+|-----------|------|
+| `20260408000007_AddEmailCompositeIndex` | Emails 복합 인덱스 추가 |
+| `20260408000008_AddQuickStep` | QuickSteps 테이블 생성 |
+| `20260408000009_AddConversationIndex` | Emails.ConversationId 인덱스 추가 |
+| `20260408000010_AddSplitInboxRule` | SplitInboxRules 테이블 생성 |
+| `20260408000011_AddScreenerAndReplyLater` | ScreenerEntries, ReplyLaterItems 테이블 생성 |
+
+### Emails 테이블 인덱스 추가 (Migration: 20260408000009)
+
+**인덱스 추가**:
+- `IX_Email_ConversationId` — ConversationId 컬럼 인덱스 (대화 스레드 그룹핑 성능 향상)
+
+---
+
+## 16. QuickSteps 테이블
+
+**설명**: 퀵스텝 — 여러 액션을 묶어 한 번에 실행하는 사용자 정의 자동화
+
+**Migration**: `20260408000008_AddQuickStep`
+
+**DbSet**: `MaiXDbContext.QuickSteps`
+
+**컬럼 상세**:
+| 컬럼명 | 타입 | NULL | 키 | 기본값 | 설명 |
+|--------|------|------|-----|--------|------|
+| Id | int | NO | PK | AUTO | 기본 키 |
+| Name | string | NO | - | - | 퀵스텝 이름 |
+| Actions | string | NO | - | - | 직렬화된 액션 목록 (JSON) |
+| Shortcut | string | YES | - | NULL | 키보드 단축키 |
+| CreatedAt | datetime | NO | - | UtcNow | 생성 일시 |
+
+---
+
+## 17. SplitInboxRules 테이블
+
+**설명**: 분할 받은편지함 규칙 — 조건에 따라 메일을 여러 탭으로 분류
+
+**Migration**: `20260408000010_AddSplitInboxRule`
+
+**DbSet**: `MaiXDbContext.SplitInboxRules`
+
+**컬럼 상세**:
+| 컬럼명 | 타입 | NULL | 키 | 기본값 | 설명 |
+|--------|------|------|-----|--------|------|
+| Id | int | NO | PK | AUTO | 기본 키 |
+| TabName | string | NO | - | - | 탭 이름 |
+| Criteria | string | NO | - | - | 필터 조건 (JSON) |
+| Priority | int | NO | - | 0 | 우선순위 (낮을수록 먼저) |
+| IsEnabled | bool | NO | - | true | 활성화 여부 |
+
+---
+
+## 18. ScreenerEntries 테이블
+
+**설명**: 발신자 허용/차단 목록 — 수신 메일 발신자 필터링
+
+**Migration**: `20260408000011_AddScreenerAndReplyLater`
+
+**DbSet**: `MaiXDbContext.ScreenerEntries`
+
+**컬럼 상세**:
+| 컬럼명 | 타입 | NULL | 키 | 기본값 | 설명 |
+|--------|------|------|-----|--------|------|
+| Id | int | NO | PK | AUTO | 기본 키 |
+| EmailAddress | string | NO | UK | - | 발신자 이메일 주소 |
+| IsAllowed | bool | NO | - | true | true=허용, false=차단 |
+| AddedAt | datetime | NO | - | UtcNow | 추가 일시 |
+
+**인덱스**:
+- `IX_ScreenerEntry_EmailAddress` (UNIQUE)
+
+---
+
+## 19. ReplyLaterItems 테이블
+
+**설명**: 나중에 답장 목록 — 메일을 스누즈하여 지정 시각에 다시 알림
+
+**Migration**: `20260408000011_AddScreenerAndReplyLater`
+
+**DbSet**: `MaiXDbContext.ReplyLaterItems`
+
+**컬럼 상세**:
+| 컬럼명 | 타입 | NULL | 키 | 기본값 | 설명 |
+|--------|------|------|-----|--------|------|
+| Id | int | NO | PK | AUTO | 기본 키 |
+| EmailMessageId | string | NO | - | - | 메일 식별자 |
+| SnoozeUntil | datetime | NO | - | - | 스누즈 해제 시각 (UTC) |
+| Subject | string | YES | - | NULL | 메일 제목 |
+| CreatedAt | datetime | NO | - | UtcNow | 생성 일시 |
 

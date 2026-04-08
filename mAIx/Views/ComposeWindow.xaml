@@ -250,6 +250,14 @@
                         </ui:DropDownButton.Flyout>
                     </ui:DropDownButton>
 
+                    <!-- 읽기 확인 요청 -->
+                    <CheckBox x:Name="ReadReceiptCheckBox"
+                              Content="읽기 확인"
+                              VerticalAlignment="Center"
+                              Margin="0,0,8,0"
+                              ToolTip="수신자가 메일을 읽으면 확인 알림을 받습니다"
+                              IsChecked="{Binding IsReadReceiptRequested, Mode=TwoWay}"/>
+
                     <!-- 첨부 버튼 -->
                     <ui:Button x:Name="AttachButton"
                               AutomationProperties.AutomationId="AttachButton"

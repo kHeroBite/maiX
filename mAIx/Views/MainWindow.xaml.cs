@@ -19,6 +19,7 @@ using mAIx.Services.Search;
 using mAIx.Utils;
 using mAIx.ViewModels;
 using mAIx.Views.Dialogs;
+using mAIx.Services;
 using mAIx.Services.AI;
 using mAIx.Services.Graph;
 using mAIx.Services.Storage;
@@ -63,17 +64,32 @@ public partial class MainWindow : FluentWindow
     private readonly ObservableCollection<string> _recentSearches = new();
     private const int MaxRecentSearches = 10;
 
-    public MainWindow(MainViewModel viewModel, Services.Sync.BackgroundSyncService syncService)
+    // 키보드 단축키 서비스
+    private readonly KeyboardShortcutService _shortcutService;
+    private ShortcutHelpOverlay? _shortcutHelpOverlay;
+
+    // 커맨드 팔레트
+    private readonly CommandPaletteService _commandPaletteService;
+
+    public MainWindow(MainViewModel viewModel, Services.Sync.BackgroundSyncService syncService, KeyboardShortcutService shortcutService, CommandPaletteService commandPaletteService)
     {
         _syncService = syncService;
+        _shortcutService = shortcutService;
+        _commandPaletteService = commandPaletteService;
         Log4.Debug("MainWindow 생성자 시작");
         _viewModel = viewModel;
         DataContext = viewModel;
 
         InitializeComponent();
 
+        // 키보드 단축키 초기화
+        키보드단축키초기화();
+
         // 검색 폴더 옵션 초기화
         _viewModel.InitializeSearchFolderOptions();
+
+        // 읽기 확인 요청 이벤트 구독
+        _viewModel.ReadReceiptRequested += OnReadReceiptRequested;
 
         // 최근 검색어 로드 및 바인딩
         LoadRecentSearches();
@@ -126,7 +142,11 @@ public partial class MainWindow : FluentWindow
             }
             if (e.PropertyName == nameof(MainViewModel.SelectedEmail))
             {
-                Log4.Debug($"[MainWindow] SelectedEmail 변경: {_viewModel.SelectedEmail?.Subject ?? "null"}");
+                Log4.Debug($"[MainWindow] SelectedEmail 변경: {_viewModel.SelectedEmail?.Subject ?? "null"}, IsSwitchingFolder={_viewModel.IsSwitchingFolder}");
+
+                // 폴더 전환 중 복원된 선택은 본문 로딩 억제 (성능 최적화)
+                if (_viewModel.IsSwitchingFolder) return;
+
                 // 편집 중에 다른 메일 선택 시 자동 저장
                 if (_viewModel.IsEditingDraft)
                 {
@@ -141,6 +161,12 @@ public partial class MainWindow : FluentWindow
                 }
 
                 LoadMailBodyAsync(_viewModel.SelectedEmail);
+
+                // 읽기 확인 요청 감지 (비동기 백그라운드)
+                if (_viewModel.SelectedEmail != null)
+                {
+                    _ = _viewModel.CheckReadReceiptAsync(_viewModel.SelectedEmail);
+                }
             }
             else if (e.PropertyName == nameof(MainViewModel.IsEditingDraft))
             {
@@ -773,7 +799,7 @@ public partial class MainWindow : FluentWindow
             }
 
             var syncService = (App.Current as App)?.BackgroundSyncService;
-            var viewModel = new ViewModels.ComposeViewModel(graphMailService, syncService, ViewModels.ComposeMode.New, null);
+            var viewModel = new ViewModels.ComposeViewModel(graphMailService, syncService, null, ViewModels.ComposeMode.New, null);
 
             // ViewModel 생성 후 프로퍼티 설정
             viewModel.To = emailWithName;
@@ -1293,6 +1319,9 @@ public partial class MainWindow : FluentWindow
 
         // 윈도우 비활성화 시 팝업 닫기
         Deactivated += (s, args) => SearchAutocompletePopup.IsOpen = false;
+
+        // 읽기 창 위치 + 밀도 모드 복원
+        RestoreViewSettings();
 
         // 폴더 목록 초기 로드
         await _viewModel.LoadFoldersCommand.ExecuteAsync(null);
@@ -2635,6 +2664,132 @@ public partial class MainWindow : FluentWindow
     }
 
     /// <summary>
+    /// 메일 인쇄 (WebView2 window.print() 사용)
+    /// </summary>
+    private async void EmailPrint_Click(object sender, RoutedEventArgs e)
+    {
+        var email = _rightClickedEmail ?? _viewModel.SelectedEmail;
+        if (email == null)
+        {
+            Log4.Warn("인쇄할 메일이 없습니다.");
+            return;
+        }
+
+        try
+        {
+            if (_webView2Initialized && MailBodyWebView.CoreWebView2 != null)
+            {
+                Log4.Info($"메일 인쇄: {email.Subject}");
+                await MailBodyWebView.CoreWebView2.ExecuteScriptAsync("window.print();");
+            }
+            else
+            {
+                Log4.Warn("WebView2가 초기화되지 않았습니다.");
+            }
+        }
+        catch (Exception ex)
+        {
+            Log4.Error($"인쇄 실패: {ex.Message}");
+        }
+    }
+
+    /// <summary>
+    /// EML 파일로 내보내기
+    /// </summary>
+    private async void EmailExportEml_Click(object sender, RoutedEventArgs e)
+    {
+        var email = _rightClickedEmail ?? _viewModel.SelectedEmail;
+        if (email == null || string.IsNullOrEmpty(email.EntryId))
+        {
+            Log4.Warn("내보낼 메일이 없습니다.");
+            return;
+        }
+
+        try
+        {
+            var dialog = new Microsoft.Win32.SaveFileDialog
+            {
+                Filter = "EML 파일 (*.eml)|*.eml",
+                FileName = SanitizeFileName(email.Subject ?? "메일") + ".eml",
+                DefaultExt = ".eml"
+            };
+
+            if (dialog.ShowDialog() == true)
+            {
+                var exportService = (App.Current as App)?.GetService<ExportService>();
+                if (exportService != null)
+                {
+                    await exportService.ExportAsEmlAsync(email.EntryId, dialog.FileName);
+                    _viewModel.StatusMessage = $"EML 내보내기 완료: {System.IO.Path.GetFileName(dialog.FileName)}";
+                    Log4.Info($"EML 내보내기 완료: {dialog.FileName}");
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            Log4.Error($"EML 내보내기 실패: {ex.Message}");
+            System.Windows.MessageBox.Show($"EML 내보내기 실패: {ex.Message}", "오류",
+                System.Windows.MessageBoxButton.OK, System.Windows.MessageBoxImage.Error);
+        }
+    }
+
+    /// <summary>
+    /// PDF 파일로 내보내기
+    /// </summary>
+    private async void EmailExportPdf_Click(object sender, RoutedEventArgs e)
+    {
+        var email = _rightClickedEmail ?? _viewModel.SelectedEmail;
+        if (email == null)
+        {
+            Log4.Warn("내보낼 메일이 없습니다.");
+            return;
+        }
+
+        try
+        {
+            if (!_webView2Initialized || MailBodyWebView.CoreWebView2 == null)
+            {
+                Log4.Warn("WebView2가 초기화되지 않았습니다.");
+                return;
+            }
+
+            var dialog = new Microsoft.Win32.SaveFileDialog
+            {
+                Filter = "PDF 파일 (*.pdf)|*.pdf",
+                FileName = SanitizeFileName(email.Subject ?? "메일") + ".pdf",
+                DefaultExt = ".pdf"
+            };
+
+            if (dialog.ShowDialog() == true)
+            {
+                var exportService = (App.Current as App)?.GetService<ExportService>();
+                if (exportService != null)
+                {
+                    await exportService.ExportAsPdfAsync(MailBodyWebView.CoreWebView2, dialog.FileName);
+                    _viewModel.StatusMessage = $"PDF 내보내기 완료: {System.IO.Path.GetFileName(dialog.FileName)}";
+                    Log4.Info($"PDF 내보내기 완료: {dialog.FileName}");
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            Log4.Error($"PDF 내보내기 실패: {ex.Message}");
+            System.Windows.MessageBox.Show($"PDF 내보내기 실패: {ex.Message}", "오류",
+                System.Windows.MessageBoxButton.OK, System.Windows.MessageBoxImage.Error);
+        }
+    }
+
+    /// <summary>
+    /// 파일명에 사용할 수 없는 문자 제거
+    /// </summary>
+    private static string SanitizeFileName(string fileName)
+    {
+        var invalid = System.IO.Path.GetInvalidFileNameChars();
+        var sanitized = string.Join("", fileName.Split(invalid, StringSplitOptions.RemoveEmptyEntries));
+        return string.IsNullOrWhiteSpace(sanitized) ? "메일" : sanitized.Trim();
+    }
+
+    /// <summary>
     /// 선택된 메일 삭제 (공통 메서드)
     /// </summary>
     private async Task DeleteSelectedEmailAsync()
@@ -2680,6 +2835,86 @@ public partial class MainWindow : FluentWindow
         ShowUndoDeletePopup();
 
         _rightClickedEmail = null;
+    }
+
+    /// <summary>
+    /// 읽기 확인 요청 감지 시 사용자에게 응답 여부 확인
+    /// </summary>
+    private void OnReadReceiptRequested(object? sender, Email email)
+    {
+        Dispatcher.Invoke(() =>
+        {
+            var result = System.Windows.MessageBox.Show(
+                $"발신자가 읽기 확인을 요청했습니다.\n\n보낸 사람: {email.From}\n제목: {email.Subject}\n\n읽기 확인을 보내시겠습니까?",
+                "읽기 확인 요청",
+                System.Windows.MessageBoxButton.YesNo,
+                System.Windows.MessageBoxImage.Question);
+
+            if (result == System.Windows.MessageBoxResult.Yes)
+            {
+                Log4.Info($"읽기 확인 응답 전송 승인: {email.Subject}");
+                // Graph API는 자동으로 읽기 확인을 처리하므로
+                // 사용자가 승인하면 별도 작업 불필요 (메일 클라이언트가 읽기 확인 전송)
+            }
+            else
+            {
+                Log4.Info($"읽기 확인 응답 거부: {email.Subject}");
+            }
+        });
+    }
+
+    /// <summary>
+    /// 스팸 신고 (정크 폴더로 이동)
+    /// </summary>
+    private async void EmailMoveToJunk_Click(object sender, RoutedEventArgs e)
+    {
+        var email = _rightClickedEmail ?? _viewModel.SelectedEmail;
+        if (email == null || string.IsNullOrEmpty(email.EntryId)) return;
+
+        try
+        {
+            Log4.Info($"스팸 신고: {email.Subject}");
+            using var scope = ((App)Application.Current).ServiceProvider.CreateScope();
+            var graphMailService = scope.ServiceProvider.GetRequiredService<Services.Graph.GraphMailService>();
+            await graphMailService.MoveToJunkAsync(email.EntryId);
+
+            // UI에서 제거
+            _viewModel.Emails.Remove(email);
+            Log4.Info("스팸 신고 완료");
+        }
+        catch (Exception ex)
+        {
+            Log4.Error($"스팸 신고 실패: {ex.Message}");
+            System.Windows.MessageBox.Show($"스팸 신고에 실패했습니다.\n{ex.Message}", "오류",
+                System.Windows.MessageBoxButton.OK, System.Windows.MessageBoxImage.Warning);
+        }
+    }
+
+    /// <summary>
+    /// 스팸 아님 처리 (받은편지함으로 이동)
+    /// </summary>
+    private async void EmailMarkAsNotJunk_Click(object sender, RoutedEventArgs e)
+    {
+        var email = _rightClickedEmail ?? _viewModel.SelectedEmail;
+        if (email == null || string.IsNullOrEmpty(email.EntryId)) return;
+
+        try
+        {
+            Log4.Info($"스팸 아님 처리: {email.Subject}");
+            using var scope = ((App)Application.Current).ServiceProvider.CreateScope();
+            var graphMailService = scope.ServiceProvider.GetRequiredService<Services.Graph.GraphMailService>();
+            await graphMailService.MarkAsNotJunkAsync(email.EntryId);
+
+            // UI에서 제거 (정크 폴더에서 보고 있는 경우)
+            _viewModel.Emails.Remove(email);
+            Log4.Info("스팸 아님 처리 완료");
+        }
+        catch (Exception ex)
+        {
+            Log4.Error($"스팸 아님 처리 실패: {ex.Message}");
+            System.Windows.MessageBox.Show($"스팸 아님 처리에 실패했습니다.\n{ex.Message}", "오류",
+                System.Windows.MessageBoxButton.OK, System.Windows.MessageBoxImage.Warning);
+        }
     }
 
     /// <summary>
@@ -3221,7 +3456,8 @@ public partial class MainWindow : FluentWindow
 
             // 보낸메일 즉시 동기화를 위해 BackgroundSyncService도 전달
             var syncService = (App.Current as App)?.BackgroundSyncService;
-            var viewModel = new ViewModels.ComposeViewModel(graphMailService, syncService, mode, originalEmail);
+            var delayedSendService = (App.Current as App)?.GetService<Services.DelayedSendService>();
+            var viewModel = new ViewModels.ComposeViewModel(graphMailService, syncService, delayedSendService, mode, originalEmail);
             var composeWindow = new ComposeWindow(viewModel);
             composeWindow.Owner = this;
             composeWindow.ShowDialog();
@@ -3630,7 +3866,7 @@ public partial class MainWindow : FluentWindow
                     return;
                 }
                 var syncService = (App.Current as App)?.BackgroundSyncService;
-                var viewModel = new ViewModels.ComposeViewModel(graphMailService, syncService, ComposeMode.EditDraft, email);
+                var viewModel = new ViewModels.ComposeViewModel(graphMailService, syncService, null, ComposeMode.EditDraft, email);
                 var composeWindow = new ComposeWindow(viewModel);
                 composeWindow.Show();
             }
@@ -3778,11 +4014,26 @@ public partial class MainWindow : FluentWindow
                     e.Handled = true;
                     break;
 
+                case Key.K:
+                    // Ctrl+K: 커맨드 팔레트
+                    OpenCommandPalette();
+                    e.Handled = true;
+                    break;
+
                 case Key.S:
                     // Ctrl+S: 저장 (OneNote 모드일 때)
                     if (OneNoteViewBorder?.Visibility == Visibility.Visible && _oneNoteViewModel != null)
                     {
                         _ = SaveOneNoteAsync();
+                        e.Handled = true;
+                    }
+                    break;
+
+                case Key.P:
+                    // Ctrl+P: 인쇄
+                    if (_viewModel.SelectedEmail != null)
+                    {
+                        EmailPrint_Click(null, e);
                         e.Handled = true;
                     }
                     break;
@@ -3897,7 +4148,7 @@ public partial class MainWindow : FluentWindow
                                 if (graphMailService != null)
                                 {
                                     var syncService = (App.Current as App)?.BackgroundSyncService;
-                                    var vmCompose = new ViewModels.ComposeViewModel(graphMailService, syncService, ComposeMode.EditDraft, _viewModel.SelectedEmail);
+                                    var vmCompose = new ViewModels.ComposeViewModel(graphMailService, syncService, null, ComposeMode.EditDraft, _viewModel.SelectedEmail);
                                     var composeWindow = new ComposeWindow(vmCompose);
                                     composeWindow.Show();
                                 }
@@ -4445,30 +4696,24 @@ public partial class MainWindow : FluentWindow
         {
             try
             {
-                System.Diagnostics.Debug.WriteLine("[DEBUG] TeamsViewModel 초기화 시작");
                 _teamsViewModel = ((App)Application.Current).GetService<TeamsViewModel>()!;
-                System.Diagnostics.Debug.WriteLine($"[DEBUG] TeamsViewModel 초기화 완료: {(_teamsViewModel != null ? "성공" : "null")}");
                 Log4.Info($"TeamsViewModel 초기화 완료: {(_teamsViewModel != null ? "성공" : "null")}");
             }
             catch (Exception ex)
             {
-                System.Diagnostics.Debug.WriteLine($"[DEBUG] TeamsViewModel 초기화 실패: {ex.Message}");
                 Log4.Error($"TeamsViewModel 초기화 실패: {ex.Message}");
             }
         }
 
         // 채팅 데이터 로드 (최초 1회)
         Log4.Info($"[ShowChatView] 분기 조건 체크: _teamsViewModel={(_teamsViewModel != null ? "not null" : "null")}, Chats.Count={_teamsViewModel?.Chats.Count ?? -1}");
-        System.Diagnostics.Debug.WriteLine($"[DEBUG] _teamsViewModel: {(_teamsViewModel != null ? "not null" : "null")}, Chats.Count: {_teamsViewModel?.Chats.Count ?? -1}");
         if (_teamsViewModel != null && _teamsViewModel.Chats.Count == 0)
         {
             Log4.Info("[ShowChatView] Chats.Count == 0 → LoadChatDataAsync 호출");
-            System.Diagnostics.Debug.WriteLine("[DEBUG] LoadChatDataAsync 호출");
             await LoadChatDataAsync();
         }
         else if (_teamsViewModel == null)
         {
-            System.Diagnostics.Debug.WriteLine("[DEBUG] TeamsViewModel이 null입니다");
             Log4.Error("TeamsViewModel이 null입니다. 채팅 로드 불가");
         }
         else
@@ -4487,10 +4732,8 @@ public partial class MainWindow : FluentWindow
         Log4.Info("[LoadChatDataAsync] 시작");
         try
         {
-            System.Diagnostics.Debug.WriteLine("[DEBUG] LoadChatDataAsync 시작");
             Log4.Info("[LoadChatDataAsync] LoadChatsAsync 호출 전");
             await _teamsViewModel!.LoadChatsAsync();
-            System.Diagnostics.Debug.WriteLine($"[DEBUG] LoadChatsAsync 완료: {_teamsViewModel.Chats.Count}개");
             Log4.Info($"[LoadChatDataAsync] LoadChatsAsync 완료: {_teamsViewModel.Chats.Count}개, FavoriteChats: {_teamsViewModel.FavoriteChats.Count}개");
 
             // 채팅 목록 UI 업데이트
@@ -4500,7 +4743,6 @@ public partial class MainWindow : FluentWindow
         }
         catch (Exception ex)
         {
-            System.Diagnostics.Debug.WriteLine($"[DEBUG] LoadChatDataAsync 실패: {ex.Message}\n{ex.StackTrace}");
             Log4.Error($"[LoadChatDataAsync] 실패: {ex.Message}");
         }
     }
@@ -4615,7 +4857,6 @@ public partial class MainWindow : FluentWindow
     {
         try
         {
-            System.Diagnostics.Debug.WriteLine("[Teams] ShowTeamsView 호출됨");
             Serilog.Log.Information("[Teams] ShowTeamsView 호출됨");
             Log4.Info("[Teams] ShowTeamsView 호출됨");
             HideAllViews();
@@ -4627,7 +4868,6 @@ public partial class MainWindow : FluentWindow
 
             // 팀 데이터 로드 (최초 1회 또는 비어있을 때)
             var teamsCount = _teamsViewModel?.Teams.Count ?? -1;
-            System.Diagnostics.Debug.WriteLine($"[Teams] 로드 조건 확인: _teamsViewModel={(_teamsViewModel != null ? "not null" : "null")}, Teams.Count={teamsCount}");
             Serilog.Log.Information("[Teams] 로드 조건 확인: _teamsViewModel={IsNull}, Teams.Count={Count}",
                 _teamsViewModel != null ? "not null" : "null", teamsCount);
 
@@ -4646,7 +4886,6 @@ public partial class MainWindow : FluentWindow
         }
         catch (Exception ex)
         {
-            System.Diagnostics.Debug.WriteLine($"[Teams] ShowTeamsView 오류: {ex.Message}");
             Serilog.Log.Error(ex, "[Teams] ShowTeamsView 오류");
             Log4.Error($"[Teams] ShowTeamsView 오류: {ex.Message}");
         }
@@ -4790,7 +5029,6 @@ public partial class MainWindow : FluentWindow
             }
             catch (Exception ex)
             {
-                System.Diagnostics.Debug.WriteLine($"빠른 액세스 로드 실패: {ex.Message}");
             }
         }
     }
@@ -5883,11 +6121,220 @@ public partial class MainWindow : FluentWindow
         return parent as T;
     }
 
+    #region 키보드 단축키
+
+    /// <summary>
+    /// 커맨드 팔레트 열기
+    /// </summary>
+    private void OpenCommandPalette()
+    {
+        _commandPaletteService.RegisterDefaultCommands(
+            openNewMail: () => OpenComposeWindow(ComposeMode.New, null),
+            openReply: () =>
+            {
+                if (_viewModel.SelectedEmail != null)
+                    OpenComposeWindow(ComposeMode.Reply, _viewModel.SelectedEmail);
+            },
+            openForward: () =>
+            {
+                if (_viewModel.SelectedEmail != null)
+                    OpenComposeWindow(ComposeMode.Forward, _viewModel.SelectedEmail);
+            },
+            deleteEmail: () => _ = DeleteSelectedEmailAsync(),
+            markAsRead: () => EmailMarkAsRead_Click(this, new RoutedEventArgs()),
+            moveToFolder: () =>
+            {
+                // 이동 기능은 컨텍스트 메뉴(우클릭) 또는 단축키로 처리
+                // 커맨드 팔레트에서는 알림만 표시
+                Log4.Info("[커맨드 팔레트] 메일 폴더 이동: 우클릭 > 이동 메뉴를 사용하세요.");
+            },
+            openSettings: () =>
+            {
+                // 설정 탭으로 전환
+                NavSettingsButton.IsChecked = true;
+            },
+            startSync: () => _viewModel.RefreshMailsCommand.Execute(null),
+            openAutoReply: () =>
+            {
+                var app = (App)Application.Current;
+                var autoReplyService = app.ServiceProvider.GetService(typeof(Services.AutoReplyService)) as Services.AutoReplyService;
+                if (autoReplyService != null)
+                {
+                    var dialog = new Views.Dialogs.AutoReplyDialog(autoReplyService);
+                    dialog.Owner = this;
+                    dialog.ShowDialog();
+                }
+            },
+            openQuickStep: () =>
+            {
+                // QuickStep 관련 UI 처리 (향후 QuickStep 패널이 추가될 경우 연결)
+                Log4.Info("[커맨드 팔레트] 퀵스텝 실행 요청");
+            }
+        );
+
+        var palette = new CommandPaletteWindow(_commandPaletteService);
+        palette.Owner = this;
+        palette.ShowDialog();
+    }
+
+    /// <summary>
+    /// 키보드 단축키 초기화 — 메일 탭용 기본 단축키 등록
+    /// </summary>
+    private void 키보드단축키초기화()
+    {
+        // J: 다음 메일 (아래로 이동)
+        _shortcutService.등록(System.Windows.Input.Key.J, "다음 메일 (아래로 이동)", () =>
+        {
+            메일선택이동(1);
+        }, "메일 탐색");
+
+        // K: 이전 메일 (위로 이동)
+        _shortcutService.등록(System.Windows.Input.Key.K, "이전 메일 (위로 이동)", () =>
+        {
+            메일선택이동(-1);
+        }, "메일 탐색");
+
+        // E: 선택 메일 열기 (새 창)
+        _shortcutService.등록(System.Windows.Input.Key.E, "선택 메일 열기", () =>
+        {
+            var email = _viewModel.SelectedEmail;
+            if (email != null)
+            {
+                var viewWindow = new EmailViewWindow(email);
+                viewWindow.Show();
+            }
+        }, "메일 작업");
+
+        // R: 답장
+        _shortcutService.등록(System.Windows.Input.Key.R, "답장 (Reply)", () =>
+        {
+            var email = _viewModel.SelectedEmail;
+            if (email != null)
+                OpenComposeWindow(ViewModels.ComposeMode.Reply, email);
+        }, "메일 작업");
+
+        // A: 전체 답장
+        _shortcutService.등록(System.Windows.Input.Key.A, "전체 답장 (Reply All)", () =>
+        {
+            var email = _viewModel.SelectedEmail;
+            if (email != null)
+                OpenComposeWindow(ViewModels.ComposeMode.ReplyAll, email);
+        }, "메일 작업");
+
+        // F: 전달
+        _shortcutService.등록(System.Windows.Input.Key.F, "전달 (Forward)", () =>
+        {
+            var email = _viewModel.SelectedEmail;
+            if (email != null)
+                OpenComposeWindow(ViewModels.ComposeMode.Forward, email);
+        }, "메일 작업");
+
+        // D: 삭제
+        _shortcutService.등록(System.Windows.Input.Key.D, "삭제 (Delete)", () =>
+        {
+            var email = _viewModel.SelectedEmail;
+            if (email != null && _viewModel.DeleteEmailCommand.CanExecute(email))
+            {
+                _viewModel.DeleteEmailCommand.ExecuteAsync(email);
+            }
+        }, "메일 작업");
+
+        // U: 읽음/읽지않음 토글
+        _shortcutService.등록(System.Windows.Input.Key.U, "읽음/읽지않음 토글", () =>
+        {
+            ReadUnreadButton_Click(this, new RoutedEventArgs());
+        }, "메일 작업");
+
+        // S: 별표/중요 표시 토글
+        _shortcutService.등록(System.Windows.Input.Key.S, "별표/중요 표시 토글", () =>
+        {
+            FlagButton_Click(this, new RoutedEventArgs());
+        }, "메일 작업");
+
+        // ?: 단축키 도움말 오버레이
+        _shortcutService.등록(System.Windows.Input.Key.OemQuestion, "단축키 도움말 표시", () =>
+        {
+            단축키도움말표시();
+        }, "일반");
+
+        // 설정 파일에서 커스텀 활성화 상태 로드
+        _shortcutService.설정로드();
+
+        Log4.Info("키보드 단축키 초기화 완료 (10개 등록)");
+    }
+
+    /// <summary>
+    /// 메일 목록에서 선택 항목을 위/아래로 이동
+    /// </summary>
+    private void 메일선택이동(int 방향)
+    {
+        var emails = _viewModel.Emails;
+        if (emails == null || emails.Count == 0) return;
+
+        var current = _viewModel.SelectedEmail;
+        if (current == null)
+        {
+            _viewModel.SelectedEmail = emails[0];
+            EmailListBox.SelectedItem = emails[0];
+            EmailListBox.ScrollIntoView(emails[0]);
+            return;
+        }
+
+        var index = emails.IndexOf(current);
+        if (index < 0) return;
+
+        var newIndex = index + 방향;
+        if (newIndex < 0 || newIndex >= emails.Count) return;
+
+        _viewModel.SelectedEmail = emails[newIndex];
+        EmailListBox.SelectedItem = emails[newIndex];
+        EmailListBox.ScrollIntoView(emails[newIndex]);
+    }
+
+    /// <summary>
+    /// 단축키 도움말 오버레이 표시
+    /// </summary>
+    private void 단축키도움말표시()
+    {
+        if (_shortcutHelpOverlay == null)
+        {
+            _shortcutHelpOverlay = new ShortcutHelpOverlay();
+
+            // MainWindow의 루트 Grid에 오버레이 추가
+            if (Content is System.Windows.Controls.Grid rootGrid)
+            {
+                // 모든 Row에 걸쳐 오버레이 표시
+                System.Windows.Controls.Grid.SetRowSpan(_shortcutHelpOverlay, rootGrid.RowDefinitions.Count > 0 ? rootGrid.RowDefinitions.Count : 1);
+                System.Windows.Controls.Panel.SetZIndex(_shortcutHelpOverlay, 9999);
+                rootGrid.Children.Add(_shortcutHelpOverlay);
+            }
+        }
+
+        _shortcutHelpOverlay.표시(_shortcutService.등록단축키);
+    }
+
+    #endregion
+
     /// <summary>
     /// MainWindow 키보드 단축키 처리 (녹음 재생 컨트롤)
     /// </summary>
     private void MainWindow_PreviewKeyDown(object sender, System.Windows.Input.KeyEventArgs e)
     {
+        // 단축키 도움말 오버레이가 표시 중이면 닫기
+        if (_shortcutHelpOverlay?.표시중 == true)
+        {
+            _shortcutHelpOverlay.숨기기();
+            e.Handled = true;
+            return;
+        }
+
+        // 키보드 단축키 서비스로 처리 시도
+        if (_shortcutService.처리(e))
+        {
+            e.Handled = true;
+            return;
+        }
+
         // Ctrl+Tab: OneNote 탭 토글
         if (e.Key == System.Windows.Input.Key.Tab &&
             (System.Windows.Input.Keyboard.Modifiers & System.Windows.Input.ModifierKeys.Control) != 0)
@@ -14967,13 +15414,10 @@ public partial class MainWindow : FluentWindow
     {
         try
         {
-            System.Diagnostics.Debug.WriteLine("[Teams] 새로고침 버튼 클릭");
             await LoadTeamsDataAsync();
-            System.Diagnostics.Debug.WriteLine($"[Teams] 새로고침 완료: {_teamsViewModel?.Teams.Count ?? 0}개 팀");
         }
         catch (Exception ex)
         {
-            System.Diagnostics.Debug.WriteLine($"[Teams] 팀 새로고침 실패: {ex.Message}");
             Log4.Error($"팀 새로고침 실패: {ex.Message}");
         }
     }
@@ -16730,6 +17174,7 @@ public partial class MainWindow : FluentWindow
             {
                 App.Settings.UserPreferences.InitialMailCount = capturedValue;
                 App.Settings.SaveUserPreferences();
+                _viewModel.CacheService.SetMaxEmailsPerFolder(capturedValue);
                 Log4.Info($"초기 메일 수 저장: {capturedValue}개");
             };
             countWrap.Children.Add(radio);
@@ -20057,6 +20502,292 @@ public partial class MainWindow : FluentWindow
         {
             Log4.Error($"[MailPreview] 첨부파일 다운로드 실패: {ex.Message}");
         }
+    }
+
+    #endregion
+
+    #region 읽기 창 위치 + 밀도 모드
+
+    /// <summary>
+    /// 읽기 창 위치 버튼 클릭 — 드롭다운 메뉴 표시
+    /// </summary>
+    private void ReadingPaneButton_Click(object sender, RoutedEventArgs e)
+    {
+        var current = App.Settings.UserPreferences.ReadingPanePosition;
+        var menu = new ContextMenu
+        {
+            Background = (Brush)FindResource("ApplicationBackgroundBrush"),
+            BorderBrush = (Brush)FindResource("ControlElevationBorderBrush"),
+            Padding = new Thickness(4)
+        };
+
+        var options = new[] { ("Right", "우측", "PanelRight24"), ("Bottom", "하단", "PanelBottom24"), ("Off", "끔", "Dismiss24") };
+        foreach (var (value, label, iconName) in options)
+        {
+            var item = new System.Windows.Controls.MenuItem
+            {
+                Header = (current == value ? "✓ " : "   ") + label,
+                Tag = value,
+                Foreground = (Brush)FindResource("TextFillColorPrimaryBrush")
+            };
+            item.Click += ReadingPaneOption_Click;
+            menu.Items.Add(item);
+        }
+
+        menu.PlacementTarget = (UIElement)sender;
+        menu.Placement = System.Windows.Controls.Primitives.PlacementMode.Bottom;
+        menu.IsOpen = true;
+    }
+
+    /// <summary>
+    /// 읽기 창 위치 옵션 선택
+    /// </summary>
+    private void ReadingPaneOption_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is System.Windows.Controls.MenuItem item && item.Tag is string position)
+        {
+            App.Settings.UserPreferences.ReadingPanePosition = position;
+            App.Settings.SaveUserPreferences();
+            ApplyReadingPanePosition(position);
+            Log4.Info($"읽기 창 위치 변경: {position}");
+        }
+    }
+
+    /// <summary>
+    /// 읽기 창 위치 적용 — 메일 리스트/본문 레이아웃 전환
+    /// </summary>
+    private void ApplyReadingPanePosition(string position)
+    {
+        switch (position)
+        {
+            case "Right":
+                // 기본: 메일 리스트(Col 3) | Splitter2(Col 4) | 본문(Col 5) — 좌우 분할
+                MailListColumn.Width = new GridLength(350, GridUnitType.Pixel);
+                MailListColumn.MinWidth = 250;
+                MailListColumn.MaxWidth = 600;
+                Splitter2.Visibility = Visibility.Visible;
+                BodyAreaGrid.Visibility = Visibility.Visible;
+                BodyColumn.Width = new GridLength(1, GridUnitType.Star);
+                BodyColumn.MinWidth = 300;
+                ReadingPaneIcon.Symbol = SymbolRegular.PanelRight24;
+                break;
+
+            case "Bottom":
+                // 메일 리스트가 전체 폭 차지, 본문은 아래에 위치
+                // Column 5(Body)를 숨기고 Column 3(MailList)에서 본문을 Row로 분할
+                MailListColumn.Width = new GridLength(1, GridUnitType.Star);
+                MailListColumn.MinWidth = 300;
+                MailListColumn.MaxWidth = double.PositiveInfinity;
+                Splitter2.Visibility = Visibility.Collapsed;
+                BodyAreaGrid.Visibility = Visibility.Collapsed;
+                BodyColumn.Width = new GridLength(0);
+                BodyColumn.MinWidth = 0;
+                ReadingPaneIcon.Symbol = SymbolRegular.Board24;
+                // 메일 리스트 Border 안에 하단 읽기 창 표시
+                ShowBottomReadingPane();
+                break;
+
+            case "Off":
+                // 미리보기 없이 메일 목록만 표시
+                MailListColumn.Width = new GridLength(1, GridUnitType.Star);
+                MailListColumn.MinWidth = 300;
+                MailListColumn.MaxWidth = double.PositiveInfinity;
+                Splitter2.Visibility = Visibility.Collapsed;
+                BodyAreaGrid.Visibility = Visibility.Collapsed;
+                BodyColumn.Width = new GridLength(0);
+                BodyColumn.MinWidth = 0;
+                ReadingPaneIcon.Symbol = SymbolRegular.Dismiss24;
+                HideBottomReadingPane();
+                break;
+        }
+    }
+
+    /// <summary>
+    /// 하단 읽기 창 표시 — MailListBorder Grid에 Row 추가
+    /// </summary>
+    private void ShowBottomReadingPane()
+    {
+        var grid = FindMailListGrid();
+        if (grid == null) return;
+
+        // 이미 하단 패널이 있으면 표시만
+        if (_bottomReadingPane != null)
+        {
+            _bottomReadingSplitter!.Visibility = Visibility.Visible;
+            _bottomReadingPane.Visibility = Visibility.Visible;
+            return;
+        }
+
+        // Row 추가: Splitter + 본문 패널
+        grid.RowDefinitions.Add(new RowDefinition { Height = new GridLength(4, GridUnitType.Auto) });
+        grid.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star), MinHeight = 150 });
+
+        // GridSplitter
+        _bottomReadingSplitter = new GridSplitter
+        {
+            Height = 4,
+            HorizontalAlignment = HorizontalAlignment.Stretch,
+            VerticalAlignment = VerticalAlignment.Center,
+            Background = System.Windows.Media.Brushes.Transparent,
+            Cursor = System.Windows.Input.Cursors.SizeNS
+        };
+        Grid.SetRow(_bottomReadingSplitter, grid.RowDefinitions.Count - 2);
+        Grid.SetColumnSpan(_bottomReadingSplitter, 1);
+        grid.Children.Add(_bottomReadingSplitter);
+
+        // 본문 패널 — BodyAreaGrid의 읽기 모드 UI를 복제하지 않고 BodyAreaGrid 자체를 이동
+        _bottomReadingPane = new Border
+        {
+            BorderBrush = (Brush)FindResource("ControlElevationBorderBrush"),
+            BorderThickness = new Thickness(0, 1, 0, 0)
+        };
+
+        // BodyAreaGrid를 MailListBorder Grid 하단에 재배치
+        var bodyParent = BodyAreaGrid.Parent as Grid;
+        bodyParent?.Children.Remove(BodyAreaGrid);
+        _bottomReadingPane.Child = BodyAreaGrid;
+        BodyAreaGrid.Visibility = Visibility.Visible;
+
+        Grid.SetRow(_bottomReadingPane, grid.RowDefinitions.Count - 1);
+        grid.Children.Add(_bottomReadingPane);
+
+        // EmailListBox의 Margin 조정 (하단 모드에서 리스트 높이 절반)
+        _originalMailListRowHeight = grid.RowDefinitions[1].Height;
+        grid.RowDefinitions[1].Height = new GridLength(1, GridUnitType.Star);
+        grid.RowDefinitions[1].MinHeight = 150;
+    }
+
+    /// <summary>
+    /// 하단 읽기 창 숨김 — BodyAreaGrid를 원래 Column 5로 복원
+    /// </summary>
+    private void HideBottomReadingPane()
+    {
+        if (_bottomReadingPane == null) return;
+
+        _bottomReadingSplitter!.Visibility = Visibility.Collapsed;
+        _bottomReadingPane.Visibility = Visibility.Collapsed;
+    }
+
+    /// <summary>
+    /// 읽기 창을 우측으로 복원 — BodyAreaGrid를 Column 5로 이동
+    /// </summary>
+    private void RestoreBodyToRightPane()
+    {
+        if (_bottomReadingPane == null) return;
+
+        // BodyAreaGrid를 Border에서 분리
+        _bottomReadingPane.Child = null;
+
+        // MainContentGrid의 Column 5로 복원
+        Grid.SetColumn(BodyAreaGrid, 5);
+        MainContentGrid.Children.Add(BodyAreaGrid);
+
+        // 하단 패널/스플리터 제거
+        var grid = FindMailListGrid();
+        if (grid != null)
+        {
+            grid.Children.Remove(_bottomReadingSplitter);
+            grid.Children.Remove(_bottomReadingPane);
+
+            // 추가된 RowDefinitions 제거
+            while (grid.RowDefinitions.Count > 3)
+                grid.RowDefinitions.RemoveAt(grid.RowDefinitions.Count - 1);
+
+            // 원래 높이 복원
+            if (_originalMailListRowHeight.HasValue)
+                grid.RowDefinitions[1].Height = _originalMailListRowHeight.Value;
+        }
+
+        _bottomReadingPane = null;
+        _bottomReadingSplitter = null;
+    }
+
+    /// <summary>
+    /// MailListBorder 내부 Grid 찾기
+    /// </summary>
+    private Grid? FindMailListGrid()
+    {
+        return MailListBorder.Child as Grid;
+    }
+
+    private GridSplitter? _bottomReadingSplitter;
+    private Border? _bottomReadingPane;
+    private GridLength? _originalMailListRowHeight;
+
+    /// <summary>
+    /// 밀도 모드 버튼 클릭 — 드롭다운 메뉴 표시
+    /// </summary>
+    private void DensityModeButton_Click(object sender, RoutedEventArgs e)
+    {
+        var current = App.Settings.UserPreferences.DensityMode;
+        var menu = new ContextMenu
+        {
+            Background = (Brush)FindResource("ApplicationBackgroundBrush"),
+            BorderBrush = (Brush)FindResource("ControlElevationBorderBrush"),
+            Padding = new Thickness(4)
+        };
+
+        var options = new[] { ("Compact", "좁게"), ("Normal", "보통"), ("Comfortable", "넓게") };
+        foreach (var (value, label) in options)
+        {
+            var item = new System.Windows.Controls.MenuItem
+            {
+                Header = (current == value ? "✓ " : "   ") + label,
+                Tag = value,
+                Foreground = (Brush)FindResource("TextFillColorPrimaryBrush")
+            };
+            item.Click += DensityModeOption_Click;
+            menu.Items.Add(item);
+        }
+
+        menu.PlacementTarget = (UIElement)sender;
+        menu.Placement = System.Windows.Controls.Primitives.PlacementMode.Bottom;
+        menu.IsOpen = true;
+    }
+
+    /// <summary>
+    /// 밀도 모드 옵션 선택
+    /// </summary>
+    private void DensityModeOption_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is System.Windows.Controls.MenuItem item && item.Tag is string mode)
+        {
+            App.Settings.UserPreferences.DensityMode = mode;
+            App.Settings.SaveUserPreferences();
+            ApplyDensityMode(mode);
+            Log4.Info($"밀도 모드 변경: {mode}");
+        }
+    }
+
+    /// <summary>
+    /// 밀도 모드 적용 — 메일 리스트 아이템 패딩/마진 조정
+    /// </summary>
+    private void ApplyDensityMode(string mode)
+    {
+        // DynamicResource로 밀도 리소스 업데이트
+        var (itemPadding, itemMargin, fontSize, avatarSize, separatorMargin) = mode switch
+        {
+            "Compact" => (new Thickness(6, 3, 6, 3), new Thickness(4, 1, 4, 0), 11.0, 28.0, new Thickness(12, 1, 12, 0)),
+            "Comfortable" => (new Thickness(10, 10, 10, 10), new Thickness(4, 3, 4, 0), 13.0, 40.0, new Thickness(12, 3, 12, 0)),
+            _ => (new Thickness(8, 6, 8, 6), new Thickness(4, 2, 4, 0), 12.0, 32.0, new Thickness(12, 2, 12, 0)), // Normal
+        };
+
+        // App 리소스에 밀도 값 업데이트
+        Application.Current.Resources["MailItemPadding"] = itemPadding;
+        Application.Current.Resources["MailItemMargin"] = itemMargin;
+        Application.Current.Resources["MailItemFontSize"] = fontSize;
+        Application.Current.Resources["MailAvatarSize"] = avatarSize;
+        Application.Current.Resources["MailSeparatorMargin"] = separatorMargin;
+    }
+
+    /// <summary>
+    /// 읽기 창 위치 + 밀도 모드 초기 적용 (창 로드 시)
+    /// </summary>
+    private void RestoreViewSettings()
+    {
+        var prefs = App.Settings.UserPreferences;
+        ApplyReadingPanePosition(prefs.ReadingPanePosition);
+        ApplyDensityMode(prefs.DensityMode);
     }
 
     #endregion

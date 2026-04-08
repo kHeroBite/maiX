@@ -43,7 +43,8 @@ public class BackgroundSyncService : BackgroundService
 
     // 동기화 설정 (기존 - 하위 호환용)
     private int _syncIntervalSeconds = 300;  // 기본값: 5분 (300초)
-    private const int MaxMessagesPerSync = 5;
+    private const int InitialSyncMaxMessages = 50;
+    private const int IncrementalSyncMaxMessages = 25;
     private const int MaxRetryCount = 3;
     private CancellationTokenSource? _intervalChangeCts;  // 주기 변경 시 타이머 재시작용
 
@@ -951,6 +952,7 @@ public class BackgroundSyncService : BackgroundService
 
             // 즐겨찾기 폴더만 조회
             var favoriteFolders = await dbContext.Folders
+                .AsNoTracking()
                 .Where(f => f.AccountEmail == accountEmail && f.IsFavorite)
                 .ToListAsync(ct);
 
@@ -1170,6 +1172,7 @@ public class BackgroundSyncService : BackgroundService
 
         // DB에서 해당 계정의 모든 폴더 조회
         var folders = await dbContext.Folders
+            .AsNoTracking()
             .Where(f => f.AccountEmail == accountEmail)
             .ToListAsync(ct);
 
@@ -2792,6 +2795,7 @@ public class BackgroundSyncService : BackgroundService
 
                 var now = DateTime.UtcNow;
                 var overdueEmails = await dbContext.Emails
+                    .AsNoTracking()
                     .Where(e => e.FollowUpDate != null && e.FollowUpDate <= now)
                     .ToListAsync(stoppingToken);
 

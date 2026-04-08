@@ -13,6 +13,7 @@ using CommunityToolkit.Mvvm.Input;
 using Microsoft.EntityFrameworkCore;
 using mAIx.Data;
 using mAIx.Models;
+using mAIx.Services;
 using mAIx.Services.Cache;
 using mAIx.Services.Graph;
 using mAIx.Services.Search;
@@ -30,11 +31,48 @@ public partial class MainViewModel : ViewModelBase, IDisposable
     private readonly BackgroundSyncService _syncService;
     private readonly GraphMailService _graphMailService;
     private readonly MailFolderCacheService _cacheService;
+    private readonly QuickStepService _quickStepService;
+    private readonly ConversationGrouper _conversationGrouper;
+    private readonly TrackingBlockerService _trackingBlockerService;
+    private readonly UnsubscribeService _unsubscribeService;
+    private readonly FocusedInboxService _focusedInboxService;
+    private readonly SplitInboxService _splitInboxService;
+    private readonly ScreenerService _screenerService;
+    private readonly ReplyLaterService _replyLaterService;
     private CancellationTokenSource? _loadEmailsCts;
     private double _pendingScrollOffset;
 
     /// <summary>메일함 폴더 캐시 서비스 (View/외부에서 접근용).</summary>
     public MailFolderCacheService CacheService => _cacheService;
+
+    /// <summary>Quick Step 목록</summary>
+    public ObservableCollection<QuickStep> QuickSteps { get; } = new();
+
+    /// <summary>Reply Later 항목 목록</summary>
+    public ObservableCollection<ReplyLaterItem> ReplyLaterItems { get; } = new();
+
+    /// <summary>Focused Inbox 활성화 여부</summary>
+    [ObservableProperty]
+    private bool _isFocusedInboxEnabled;
+
+    /// <summary>현재 선택된 받은편지함 탭 (기본값: "전체")</summary>
+    [ObservableProperty]
+    private string _currentInboxTab = "전체";
+
+    /// <summary>받은편지함 탭 목록</summary>
+    public ObservableCollection<string> InboxTabs { get; } = new() { "전체", "Focused", "Other" };
+
+    /// <summary>Focused 메일 목록</summary>
+    public IEnumerable<Email> FocusedEmails =>
+        _focusedInboxService != null && Emails != null
+            ? Emails.Where(e => _focusedInboxService.IsFocused(e, SelectedFolder?.AccountEmail ?? string.Empty))
+            : Enumerable.Empty<Email>();
+
+    /// <summary>Other 메일 목록</summary>
+    public IEnumerable<Email> OtherEmails =>
+        _focusedInboxService != null && Emails != null
+            ? Emails.Where(e => !_focusedInboxService.IsFocused(e, SelectedFolder?.AccountEmail ?? string.Empty))
+            : Enumerable.Empty<Email>();
 
     /// <summary>폴더 전환 후 View에서 스크롤 복원에 사용할 대기 오프셋.</summary>
     public double PendingScrollOffset
@@ -48,15 +86,23 @@ public partial class MainViewModel : ViewModelBase, IDisposable
     /// </summary>
     public CalendarViewModel? CalendarViewModel { get; set; }
 
-    public MainViewModel(mAIxDbContext dbContext, BackgroundSyncService syncService, GraphMailService graphMailService, MailFolderCacheService cacheService)
+    public MainViewModel(mAIxDbContext dbContext, BackgroundSyncService syncService, GraphMailService graphMailService, MailFolderCacheService cacheService, QuickStepService quickStepService, ConversationGrouper conversationGrouper, TrackingBlockerService trackingBlockerService, UnsubscribeService unsubscribeService, FocusedInboxService focusedInboxService, SplitInboxService splitInboxService, ScreenerService screenerService, ReplyLaterService replyLaterService)
     {
         try
         {
-            System.Diagnostics.Debug.WriteLine("[MainViewModel] 생성자 시작");
             _dbContext = dbContext;
             _syncService = syncService;
             _graphMailService = graphMailService;
             _cacheService = cacheService;
+            _quickStepService = quickStepService;
+            _conversationGrouper = conversationGrouper;
+            _trackingBlockerService = trackingBlockerService;
+            _unsubscribeService = unsubscribeService;
+            _focusedInboxService = focusedInboxService;
+            _splitInboxService = splitInboxService;
+            _screenerService = screenerService;
+            _replyLaterService = replyLaterService;
+            _cacheService.SetMaxEmailsPerFolder(App.Settings.UserPreferences.InitialMailCount);
 
             Log4.Info($"[MainViewModel] 생성됨, syncService 해시코드: {syncService.GetHashCode()}");
 
@@ -171,6 +217,17 @@ public partial class MainViewModel : ViewModelBase, IDisposable
             IsHistoricalSyncRunning = false;
             HistoricalSyncStatusText = "";
         });
+    }
+
+    /// <summary>
+    /// Focused Inbox 활성/비활성 토글
+    /// </summary>
+    [RelayCommand]
+    private void ToggleFocusedInbox()
+    {
+        IsFocusedInboxEnabled = !IsFocusedInboxEnabled;
+        OnPropertyChanged(nameof(FocusedEmails));
+        OnPropertyChanged(nameof(OtherEmails));
     }
 
     [RelayCommand]
@@ -421,6 +478,57 @@ public partial class MainViewModel : ViewModelBase, IDisposable
         OnPropertyChanged(nameof(StatusBarCountText));
     }
 
+    #region 대화 스레딩
+
+    /// <summary>
+    /// 스레드 뷰 활성화 여부 (기본값 false)
+    /// </summary>
+    [ObservableProperty]
+    private bool _isThreadedView = false;
+
+    /// <summary>
+    /// 대화 스레드 목록 (IsThreadedView가 true일 때 사용)
+    /// </summary>
+    [ObservableProperty]
+    private ObservableCollection<ConversationThread> _threadedEmails = new();
+
+    /// <summary>
+    /// 스레드 뷰 토글
+    /// </summary>
+    [RelayCommand]
+    private async Task ToggleThreadedViewAsync()
+    {
+        IsThreadedView = !IsThreadedView;
+        if (IsThreadedView)
+            await LoadThreadedEmailsAsync();
+    }
+
+    /// <summary>
+    /// 현재 폴더 이메일을 ConversationId 기준으로 그룹핑하여 ThreadedEmails에 로드
+    /// </summary>
+    public async Task LoadThreadedEmailsAsync()
+    {
+        if (SelectedFolder == null) return;
+
+        try
+        {
+            var emails = await _dbContext.Emails
+                .AsNoTracking()
+                .Where(e => e.ParentFolderId == SelectedFolder.Id)
+                .OrderByDescending(e => e.ReceivedDateTime)
+                .ToListAsync();
+
+            var threads = _conversationGrouper.GroupByConversation(emails);
+            ThreadedEmails = new ObservableCollection<ConversationThread>(threads);
+        }
+        catch (Exception ex)
+        {
+            Log4.Warn($"[MainViewModel] 스레드 로드 실패: {ex.Message}");
+        }
+    }
+
+    #endregion
+
     /// <summary>
     /// <summary>
     /// 페이지네이션: 현재까지 로드된 이메일 수 (Skip 오프셋)
@@ -438,6 +546,26 @@ public partial class MainViewModel : ViewModelBase, IDisposable
     /// </summary>
     [ObservableProperty]
     private bool _hasMoreEmails;
+
+    /// <summary>
+    /// 폴더별 마지막 선택 메일 ID (폴더 전환 후 복귀 시 복원용)
+    /// </summary>
+    private readonly Dictionary<string, int> _folderLastSelectedEmailId = new();
+
+    /// <summary>
+    /// 현재 폴더 전환 중 여부 (OnSelectedEmailChanged 오발 방지 + View에서 본문 로딩 억제)
+    /// </summary>
+    private bool _isSwitchingFolder;
+
+    /// <summary>
+    /// 폴더 전환 중 여부 (View에서 LoadMailBodyAsync 억제용)
+    /// </summary>
+    public bool IsSwitchingFolder => _isSwitchingFolder;
+
+    /// <summary>
+    /// 읽음 처리 대기 중인 메일 (다른 메일로 이탈 시 처리)
+    /// </summary>
+    private Email? _pendingReadEmail;
 
     /// <summary>
     /// 선택된 이메일
@@ -1020,6 +1148,26 @@ public partial class MainViewModel : ViewModelBase, IDisposable
             return;
         }
 
+        var swFolder = System.Diagnostics.Stopwatch.StartNew();
+        Log4.Debug($"[Perf][FolderSwitch] folder={value.Id} ({value.DisplayName}) 시작");
+
+        // 폴더 떠날 때 미읽음 대기 메일 읽음 처리 (아웃룩 동작)
+        if (_pendingReadEmail != null)
+        {
+            _ = MarkAsReadOnSelectAsync(_pendingReadEmail);
+            _pendingReadEmail = null;
+        }
+
+        _isSwitchingFolder = true;
+        try
+        {
+            SelectedEmail = null;
+        }
+        finally
+        {
+            _isSwitchingFolder = false;
+        }
+
         // 1) 캐시 히트 → 즉시 스왑(O(1)) + 백그라운드 증분 동기화
         if (_cacheService != null &&
             _cacheService.TryGet(value.Id, ShowSnoozedEmails, out var cached, out var skip, out var more, out var scrollOffset))
@@ -1029,7 +1177,11 @@ public partial class MainViewModel : ViewModelBase, IDisposable
             HasMoreEmails = more;
             _pendingScrollOffset = scrollOffset;
             StatusMessage = more ? $"{cached.Count}개 이메일 (캐시, 더 있음)" : $"{cached.Count}개 이메일 (캐시)";
-            Log4.Debug($"[Cache] hit folder={value.Id} count={cached.Count} snoozed={ShowSnoozedEmails}");
+            Log4.Debug($"[Perf][FolderSwitch] 캐시히트 folder={value.Id} count={cached.Count} {swFolder.ElapsedMilliseconds}ms");
+
+            // 이전에 선택했던 메일 복원
+            RestoreSelectedEmailForFolder(value.Id, cached);
+            Log4.Debug($"[Perf][FolderSwitch] 선택복원완료 {swFolder.ElapsedMilliseconds}ms");
 
             _ = SyncIncrementalAsync(value.Id, ShowSnoozedEmails, _loadEmailsCts.Token);
         }
@@ -1037,8 +1189,31 @@ public partial class MainViewModel : ViewModelBase, IDisposable
         {
             // 2) 캐시 미스 → 기존 DB 로드 경로
             _pendingScrollOffset = 0;
+            Log4.Debug($"[Perf][FolderSwitch] 캐시미스 → DB로드 {swFolder.ElapsedMilliseconds}ms");
             _ = LoadEmailsAsync(_loadEmailsCts.Token);
         }
+    }
+
+    /// <summary>
+    /// 폴더 복귀 시 이전에 선택했던 메일을 복원
+    /// </summary>
+    private void RestoreSelectedEmailForFolder(string folderId, List<Email> emails)
+    {
+        if (!_folderLastSelectedEmailId.TryGetValue(folderId, out var lastId)) return;
+
+        var email = emails.FirstOrDefault(e => e.Id == lastId);
+        if (email == null) return;
+
+        _isSwitchingFolder = true;
+        try
+        {
+            SelectedEmail = email;
+        }
+        finally
+        {
+            _isSwitchingFolder = false;
+        }
+        Log4.Debug($"[FolderRestore] folder={folderId} emailId={lastId}");
     }
 
     /// <summary>
@@ -1053,11 +1228,13 @@ public partial class MainViewModel : ViewModelBase, IDisposable
 
             // 모든 폴더를 DB에서 로드
             Folders = await _dbContext.Folders
+                .AsNoTracking()
                 .OrderBy(f => f.DisplayName)
                 .ToListAsync();
 
             // 각 폴더의 UnreadItemCount를 Email 테이블에서 실시간 계산
             var unreadCounts = await _dbContext.Emails
+                .AsNoTracking()
                 .Where(e => !e.IsRead)
                 .GroupBy(e => e.ParentFolderId)
                 .Select(g => new { FolderId = g.Key, Count = g.Count() })
@@ -1219,6 +1396,8 @@ public partial class MainViewModel : ViewModelBase, IDisposable
             if (SelectedFolder != null)
             {
                 _cacheService?.Set(SelectedFolder.Id, ShowSnoozedEmails, emails, _emailSkip, HasMoreEmails);
+                // 폴더 복귀 시 이전 선택 메일 복원
+                RestoreSelectedEmailForFolder(SelectedFolder.Id, emails);
             }
         }, "이메일 로드 실패");
     }
@@ -1298,10 +1477,16 @@ public partial class MainViewModel : ViewModelBase, IDisposable
     {
         try
         {
+            var swSync = System.Diagnostics.Stopwatch.StartNew();
             var highWater = _cacheService?.GetHighWaterMark(folderId, showSnoozed);
-            if (highWater == null || highWater.Value == DateTimeOffset.MinValue) return;
+            if (highWater == null || highWater.Value == DateTimeOffset.MinValue)
+            {
+                Log4.Debug($"[Perf][SyncIncremental] folder={folderId} highWater없음 → skip ({swSync.ElapsedMilliseconds}ms)");
+                return;
+            }
 
             var highDt = highWater.Value.UtcDateTime;
+            Log4.Debug($"[Perf][SyncIncremental] folder={folderId} highWater={highDt:HH:mm:ss} 쿼리시작");
 
             var query = _dbContext.Emails
                 .AsNoTracking()
@@ -1315,7 +1500,10 @@ public partial class MainViewModel : ViewModelBase, IDisposable
 
             var newEmails = await query
                 .OrderByDescending(e => e.ReceivedDateTime)
+                .Take(App.Settings.UserPreferences.InitialMailCount)
                 .ToListAsync(cancellationToken);
+
+            Log4.Debug($"[Perf][SyncIncremental] DB쿼리완료 folder={folderId} newCount={newEmails.Count} {swSync.ElapsedMilliseconds}ms");
 
             cancellationToken.ThrowIfCancellationRequested();
 
@@ -1338,12 +1526,14 @@ public partial class MainViewModel : ViewModelBase, IDisposable
                 var snapshot = _cacheService!.GetSnapshot(folderId, showSnoozed);
                 if (snapshot != null)
                 {
+                    Log4.Debug($"[Perf][SyncIncremental] Emails재바인딩 시작 {swSync.ElapsedMilliseconds}ms");
                     Emails = new List<Email>(snapshot);
                     StatusMessage = $"{Emails.Count}개 이메일 (캐시 + 신규 {newEmails.Count}건)";
+                    Log4.Debug($"[Perf][SyncIncremental] Emails재바인딩 완료 {swSync.ElapsedMilliseconds}ms");
                 }
             }
 
-            Log4.Debug($"[Cache] incremental sync folder={folderId} added={newEmails.Count}");
+            Log4.Debug($"[Perf][SyncIncremental] folder={folderId} added={newEmails.Count} 총{swSync.ElapsedMilliseconds}ms");
         }
         catch (OperationCanceledException)
         {
@@ -1685,6 +1875,7 @@ public partial class MainViewModel : ViewModelBase, IDisposable
             {
                 // 휴지통(DeletedItems) 폴더 ID 찾기
                 var deletedItemsFolder = await _dbContext.Folders
+                    .AsNoTracking()
                     .FirstOrDefaultAsync(f => f.DisplayName == "지운 편지함" ||
                                               f.DisplayName.ToLower() == "deleted items" ||
                                               f.DisplayName.ToLower() == "deleteditems");
@@ -1760,6 +1951,7 @@ public partial class MainViewModel : ViewModelBase, IDisposable
             StatusMessage = $"메일 삭제 중... (0/{emails.Count})";
 
             var deletedItemsFolder = await _dbContext.Folders
+                .AsNoTracking()
                 .FirstOrDefaultAsync(f => f.DisplayName == "지운 편지함" ||
                                           f.DisplayName.ToLower() == "deleted items" ||
                                           f.DisplayName.ToLower() == "deleteditems");
@@ -2166,11 +2358,25 @@ public partial class MainViewModel : ViewModelBase, IDisposable
     {
         OnPropertyChanged(nameof(CanDeleteEmail));
 
-        // 메일 선택 시 읽지 않은 메일이면 자동으로 읽음 처리
-        if (value != null && !value.IsRead)
+        // 폴더 전환 중 발생한 초기화/복원은 저장하지 않음
+        if (!_isSwitchingFolder && SelectedFolder != null)
         {
-            _ = MarkAsReadOnSelectAsync(value);
+            if (value != null)
+                _folderLastSelectedEmailId[SelectedFolder.Id] = value.Id;
+            else
+                _folderLastSelectedEmailId.Remove(SelectedFolder.Id);
         }
+
+        // 아웃룩 방식: 이전 메일에서 이탈할 때 읽음 처리 (선택 시 즉시 처리 X)
+        // _pendingReadEmail: 직전에 선택했던 미읽은 메일 → 지금 다른 메일로 넘어가므로 읽음 처리
+        if (_pendingReadEmail != null && _pendingReadEmail != value)
+        {
+            _ = MarkAsReadOnSelectAsync(_pendingReadEmail);
+            _pendingReadEmail = null;
+        }
+
+        // 새로 선택한 메일이 미읽음이면 대기열 등록 (이탈 시 처리)
+        _pendingReadEmail = (value != null && !value.IsRead) ? value : null;
     }
 
     /// <summary>
@@ -2221,6 +2427,38 @@ public partial class MainViewModel : ViewModelBase, IDisposable
             Log4.Error($"자동 읽음 처리 실패: {ex.Message}");
         }
     }
+
+    #region 읽기 확인 (Read Receipt)
+
+    /// <summary>
+    /// 읽기 확인 요청이 감지되었을 때 발생하는 이벤트
+    /// View에서 다이얼로그를 표시하기 위해 사용
+    /// </summary>
+    public event EventHandler<Email>? ReadReceiptRequested;
+
+    /// <summary>
+    /// Graph API에서 메일의 읽기 확인 요청 여부를 확인하고,
+    /// 요청된 경우 이벤트를 발생시킴
+    /// </summary>
+    public async Task CheckReadReceiptAsync(Email email)
+    {
+        if (email == null || string.IsNullOrEmpty(email.EntryId)) return;
+
+        try
+        {
+            var message = await _graphMailService.GetMessageAsync(email.EntryId);
+            if (message?.IsReadReceiptRequested == true)
+            {
+                ReadReceiptRequested?.Invoke(this, email);
+            }
+        }
+        catch (Exception ex)
+        {
+            Log4.Error($"읽기 확인 요청 확인 실패: {ex.Message}");
+        }
+    }
+
+    #endregion
 
     #region 스누즈 메일 필터
 
@@ -2515,6 +2753,7 @@ public partial class MainViewModel : ViewModelBase, IDisposable
                 if (folderDisplayName != null)
                 {
                     var targetFolder = await _dbContext.Folders
+                        .AsNoTracking()
                         .FirstOrDefaultAsync(f => f.DisplayName == folderDisplayName);
                     searchFolderId = targetFolder?.Id;
                 }
@@ -2558,6 +2797,7 @@ public partial class MainViewModel : ViewModelBase, IDisposable
 
             // 플래그 필터 (FlagStatus가 SearchQuery에 없으므로 후처리)
             var results = await _dbContext.Emails
+                .AsNoTracking()
                 .Where(e => string.IsNullOrEmpty(query.FolderId) || e.ParentFolderId == query.FolderId)
                 .Where(e => (string.IsNullOrEmpty(query.Keywords) && fromPrefix == null && toPrefix == null && subjectPrefix == null) ||
                            (fromPrefix != null && EF.Functions.Like(e.From ?? "", $"%{fromPrefix}%")) ||
@@ -3663,6 +3903,130 @@ public partial class MainViewModel : ViewModelBase, IDisposable
     }
 
     #endregion
+
+    // ===== Quick Step =====
+
+    /// <summary>Quick Step 목록 로드</summary>
+    public async Task LoadQuickStepsAsync()
+    {
+        try
+        {
+            var steps = await _quickStepService.GetAllAsync();
+            QuickSteps.Clear();
+            foreach (var step in steps)
+                QuickSteps.Add(step);
+        }
+        catch (Exception ex)
+        {
+            Log4.Error($"[MainViewModel] QuickStep 로드 실패: {ex.Message}");
+        }
+    }
+
+    /// <summary>Quick Step 실행 커맨드</summary>
+    [RelayCommand]
+    private async Task ExecuteQuickStepAsync(QuickStep? step)
+    {
+        if (step == null || SelectedEmail == null) return;
+        try
+        {
+            await _quickStepService.ExecuteAsync(step.Id, SelectedEmail.EntryId ?? "");
+        }
+        catch (Exception ex)
+        {
+            Log4.Error($"[MainViewModel] QuickStep 실행 실패: {ex.Message}");
+        }
+    }
+
+    // ===== 뉴스레터 / 추적 픽셀 =====
+
+    /// <summary>
+    /// 현재 선택된 이메일이 뉴스레터 여부
+    /// </summary>
+    public bool IsNewsletterEmail => SelectedEmail != null && _unsubscribeService.IsNewsletterEmail(SelectedEmail);
+
+    /// <summary>
+    /// 현재 선택된 이메일 구독 취소
+    /// </summary>
+    [RelayCommand]
+    private async Task UnsubscribeSelectedEmailAsync()
+    {
+        if (SelectedEmail?.EntryId == null) return;
+
+        try
+        {
+            var success = await _unsubscribeService.UnsubscribeAsync(SelectedEmail.EntryId, _graphMailService);
+            if (success)
+                Log4.Info($"[MainViewModel] 구독 취소 성공: {SelectedEmail.Subject}");
+            else
+                Log4.Warn($"[MainViewModel] 구독 취소 실패: {SelectedEmail.Subject}");
+        }
+        catch (Exception ex)
+        {
+            Log4.Error($"[MainViewModel] 구독 취소 오류: {ex.Message}");
+        }
+    }
+
+    /// <summary>
+    /// HTML 본문에서 추적 픽셀 제거
+    /// </summary>
+    public string RemoveTrackingPixels(string htmlBody) => _trackingBlockerService.RemoveTrackingPixels(htmlBody);
+
+    // ===== 스크리너 =====
+
+    /// <summary>현재 선택된 이메일 발신자 차단</summary>
+    [RelayCommand]
+    private async Task BlockSenderAsync()
+    {
+        if (SelectedEmail == null) return;
+        try
+        {
+            await _screenerService.BlockSenderAsync(SelectedEmail.From, "");
+            Log4.Info($"[MainViewModel] 발신자 차단: {SelectedEmail.From}");
+        }
+        catch (Exception ex)
+        {
+            Log4.Error($"[MainViewModel] 발신자 차단 오류: {ex.Message}");
+        }
+    }
+
+    // ===== Reply Later =====
+
+    /// <summary>Reply Later 항목 목록 로드</summary>
+    public async Task LoadReplyLaterAsync()
+    {
+        try
+        {
+            var items = await _replyLaterService.GetPendingAsync();
+            ReplyLaterItems.Clear();
+            foreach (var item in items)
+                ReplyLaterItems.Add(item);
+        }
+        catch (Exception ex)
+        {
+            Log4.Error($"[MainViewModel] Reply Later 로드 실패: {ex.Message}");
+        }
+    }
+
+    /// <summary>현재 선택된 이메일을 Reply Later에 추가</summary>
+    [RelayCommand]
+    private async Task AddReplyLaterAsync(DateTime? remindAt = null)
+    {
+        if (SelectedEmail == null) return;
+        try
+        {
+            await _replyLaterService.AddAsync(
+                SelectedEmail.EntryId ?? "",
+                SelectedEmail.Subject,
+                SelectedEmail.From,
+                remindAt);
+            await LoadReplyLaterAsync();
+            Log4.Info($"[MainViewModel] Reply Later 추가: {SelectedEmail.Subject}");
+        }
+        catch (Exception ex)
+        {
+            Log4.Error($"[MainViewModel] Reply Later 추가 오류: {ex.Message}");
+        }
+    }
 }
 
 /// <summary>

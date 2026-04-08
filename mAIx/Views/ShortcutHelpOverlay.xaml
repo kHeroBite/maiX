@@ -1,0 +1,97 @@
+<UserControl x:Class="mAIx.Views.ShortcutHelpOverlay"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             mc:Ignorable="d"
+             Visibility="Collapsed"
+             PreviewKeyDown="Overlay_PreviewKeyDown"
+             MouseDown="Overlay_MouseDown">
+
+    <!-- 반투명 배경 + 단축키 카드 -->
+    <Grid Background="#CC000000">
+        <Border Background="{DynamicResource ApplicationBackgroundBrush}"
+                BorderBrush="{DynamicResource ControlElevationBorderBrush}"
+                BorderThickness="1"
+                CornerRadius="12"
+                Padding="32,24"
+                HorizontalAlignment="Center"
+                VerticalAlignment="Center"
+                MinWidth="500"
+                MaxWidth="700"
+                MaxHeight="600">
+            <Grid>
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="*"/>
+                    <RowDefinition Height="Auto"/>
+                </Grid.RowDefinitions>
+
+                <!-- 제목 -->
+                <TextBlock Grid.Row="0"
+                           Text="⌨️ 키보드 단축키"
+                           FontSize="20"
+                           FontWeight="Bold"
+                           Foreground="{DynamicResource TextFillColorPrimaryBrush}"
+                           Margin="0,0,0,4"/>
+
+                <TextBlock Grid.Row="1"
+                           Text="메일 탭에서 사용 가능한 단축키"
+                           FontSize="12"
+                           Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                           Margin="0,0,0,16"/>
+
+                <!-- 단축키 목록 -->
+                <ScrollViewer Grid.Row="2"
+                              VerticalScrollBarVisibility="Auto"
+                              Margin="0,0,0,16">
+                    <ItemsControl x:Name="ShortcutList">
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate>
+                                <Grid Margin="0,3">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="80"/>
+                                        <ColumnDefinition Width="*"/>
+                                    </Grid.ColumnDefinitions>
+
+                                    <!-- 키 배지 -->
+                                    <Border Grid.Column="0"
+                                            Background="{DynamicResource ControlFillColorDefaultBrush}"
+                                            BorderBrush="{DynamicResource ControlElevationBorderBrush}"
+                                            BorderThickness="1"
+                                            CornerRadius="4"
+                                            Padding="8,4"
+                                            HorizontalAlignment="Left"
+                                            MinWidth="40">
+                                        <TextBlock Text="{Binding 키표시}"
+                                                   FontFamily="Consolas"
+                                                   FontSize="13"
+                                                   FontWeight="SemiBold"
+                                                   Foreground="{DynamicResource TextFillColorPrimaryBrush}"
+                                                   HorizontalAlignment="Center"/>
+                                    </Border>
+
+                                    <!-- 설명 -->
+                                    <TextBlock Grid.Column="1"
+                                               Text="{Binding 설명}"
+                                               FontSize="13"
+                                               Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                                               VerticalAlignment="Center"
+                                               Margin="8,0,0,0"/>
+                                </Grid>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                </ScrollViewer>
+
+                <!-- 하단 안내 -->
+                <TextBlock Grid.Row="3"
+                           Text="아무 키나 누르거나 클릭하면 닫힙니다"
+                           FontSize="11"
+                           Foreground="{DynamicResource TextFillColorTertiaryBrush}"
+                           HorizontalAlignment="Center"/>
+            </Grid>
+        </Border>
+    </Grid>
+</UserControl>

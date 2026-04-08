@@ -86,7 +86,6 @@ public class EmailSearchService
             var items = await dbQuery
                 .Skip((query.Page - 1) * query.PageSize)
                 .Take(query.PageSize)
-                .Include(e => e.Attachments)
                 .ToListAsync(ct);
 
             stopwatch.Stop();
@@ -237,7 +236,7 @@ public class EmailSearchService
     /// </summary>
     private IQueryable<Email> BuildQueryWithIds(SearchQuery query, List<int> emailIds)
     {
-        var dbQuery = _dbContext.Emails.Where(e => emailIds.Contains(e.Id));
+        var dbQuery = _dbContext.Emails.AsNoTracking().Where(e => emailIds.Contains(e.Id));
 
         if (!string.IsNullOrWhiteSpace(query.AccountEmail))
             dbQuery = dbQuery.Where(e => e.AccountEmail == query.AccountEmail);
@@ -308,7 +307,7 @@ public class EmailSearchService
     /// </summary>
     private IQueryable<Email> BuildQuery(SearchQuery query)
     {
-        var dbQuery = _dbContext.Emails.AsQueryable();
+        var dbQuery = _dbContext.Emails.AsNoTracking();
 
         // 계정 필터
         if (!string.IsNullOrWhiteSpace(query.AccountEmail))

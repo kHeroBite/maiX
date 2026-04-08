@@ -73,6 +73,11 @@ namespace mAIx.Services.Graph
         public string? CurrentUserEmail => _authService.CurrentUserEmail;
 
         /// <summary>
+        /// 액세스 토큰 조회 (QuickStep 등 외부 서비스 위임용)
+        /// </summary>
+        public Task<string> GetAccessTokenAsync() => _authService.GetAccessTokenAsync();
+
+        /// <summary>
         /// 메일 폴더 목록 조회 (하위 폴더 포함, 페이징 처리)
         /// </summary>
         /// <returns>모든 폴더 목록 (최상위 + 하위 폴더)</returns>
@@ -802,6 +807,66 @@ namespace mAIx.Services.Graph
             var client = _authService.GetGraphClient();
             await client.Me.Messages[messageId].DeleteAsync();
         }
+
+        #region 스팸/정크 메일 관리
+
+        /// <summary>
+        /// 메일을 정크 폴더로 이동 (스팸 신고)
+        /// </summary>
+        /// <param name="messageId">메시지 ID</param>
+        public async Task<Message> MoveToJunkAsync(string messageId)
+        {
+            if (string.IsNullOrEmpty(messageId))
+                throw new ArgumentNullException(nameof(messageId));
+
+            var client = _authService.GetGraphClient();
+
+            // 정크 메일 폴더로 이동
+            return await client.Me.Messages[messageId].Move.PostAsync(
+                new Microsoft.Graph.Me.Messages.Item.Move.MovePostRequestBody
+                {
+                    DestinationId = "junkemail"
+                });
+        }
+
+        /// <summary>
+        /// 정크 메일을 받은편지함으로 이동 (스팸 아님 처리)
+        /// </summary>
+        /// <param name="messageId">메시지 ID</param>
+        public async Task<Message> MarkAsNotJunkAsync(string messageId)
+        {
+            if (string.IsNullOrEmpty(messageId))
+                throw new ArgumentNullException(nameof(messageId));
+
+            var client = _authService.GetGraphClient();
+
+            // 받은편지함으로 이동
+            return await client.Me.Messages[messageId].Move.PostAsync(
+                new Microsoft.Graph.Me.Messages.Item.Move.MovePostRequestBody
+                {
+                    DestinationId = "inbox"
+                });
+        }
+
+        /// <summary>
+        /// 정크 메일 폴더 정보 조회
+        /// </summary>
+        public async Task<MailFolder?> GetJunkFolderAsync(CancellationToken ct = default)
+        {
+            try
+            {
+                var client = _authService.GetGraphClient();
+                return await ExecuteWithRetryAsync(() =>
+                    client.Me.MailFolders["junkemail"].GetAsync(cancellationToken: ct), _logger, ct);
+            }
+            catch (Exception ex)
+            {
+                _logger.Warning(ex, "정크 폴더 조회 실패");
+                return null;
+            }
+        }
+
+        #endregion
 
         #region Phase 2: 폴더 CRUD
 

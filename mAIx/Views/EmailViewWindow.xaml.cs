@@ -9,6 +9,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Graph.Models;
 using mAIx.Data;
 using mAIx.Models;
+using mAIx.Services;
 using mAIx.Services.AI;
 using mAIx.Services.Graph;
 using mAIx.Services.Notification;
@@ -69,7 +70,7 @@ public partial class EmailViewWindow : FluentWindow
     }
 
     /// <summary>
-    /// ESC 키로 창 닫기 (보기 모드이므로 확인 없이 바로 닫기)
+    /// 키보드 단축키 처리 (ESC: 닫기, Ctrl+P: 인쇄)
     /// </summary>
     private void EmailViewWindow_KeyDown(object sender, KeyEventArgs e)
     {
@@ -78,6 +79,121 @@ public partial class EmailViewWindow : FluentWindow
             e.Handled = true;
             Close();
         }
+        else if (e.Key == Key.P && Keyboard.Modifiers == ModifierKeys.Control)
+        {
+            // Ctrl+P: 인쇄
+            e.Handled = true;
+            _ = PrintEmailAsync();
+        }
+    }
+
+    /// <summary>
+    /// 메일 인쇄 (WebView2 window.print())
+    /// </summary>
+    private async Task PrintEmailAsync()
+    {
+        try
+        {
+            if (_webView2Initialized && BodyWebView.CoreWebView2 != null)
+            {
+                Log4.Info($"메일 인쇄: {_email.Subject}");
+                await BodyWebView.CoreWebView2.ExecuteScriptAsync("window.print();");
+            }
+            else
+            {
+                Log4.Warn("WebView2가 초기화되지 않아 인쇄할 수 없습니다.");
+            }
+        }
+        catch (Exception ex)
+        {
+            Log4.Error($"인쇄 실패: {ex.Message}");
+        }
+    }
+
+    /// <summary>
+    /// EML 내보내기
+    /// </summary>
+    private async Task ExportAsEmlAsync()
+    {
+        if (string.IsNullOrEmpty(_email.EntryId))
+        {
+            Log4.Warn("EntryId가 없어 EML 내보내기 불가");
+            return;
+        }
+
+        try
+        {
+            var dialog = new Microsoft.Win32.SaveFileDialog
+            {
+                Filter = "EML 파일 (*.eml)|*.eml",
+                FileName = SanitizeFileName(_email.Subject ?? "메일") + ".eml",
+                DefaultExt = ".eml"
+            };
+
+            if (dialog.ShowDialog() == true)
+            {
+                var exportService = (App.Current as App)?.GetService<ExportService>();
+                if (exportService != null)
+                {
+                    await exportService.ExportAsEmlAsync(_email.EntryId, dialog.FileName);
+                    Log4.Info($"EML 내보내기 완료: {dialog.FileName}");
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            Log4.Error($"EML 내보내기 실패: {ex.Message}");
+            System.Windows.MessageBox.Show($"EML 내보내기 실패: {ex.Message}", "오류",
+                System.Windows.MessageBoxButton.OK, System.Windows.MessageBoxImage.Error);
+        }
+    }
+
+    /// <summary>
+    /// PDF 내보내기
+    /// </summary>
+    private async Task ExportAsPdfAsync()
+    {
+        try
+        {
+            if (!_webView2Initialized || BodyWebView.CoreWebView2 == null)
+            {
+                Log4.Warn("WebView2가 초기화되지 않아 PDF 내보내기 불가");
+                return;
+            }
+
+            var dialog = new Microsoft.Win32.SaveFileDialog
+            {
+                Filter = "PDF 파일 (*.pdf)|*.pdf",
+                FileName = SanitizeFileName(_email.Subject ?? "메일") + ".pdf",
+                DefaultExt = ".pdf"
+            };
+
+            if (dialog.ShowDialog() == true)
+            {
+                var exportService = (App.Current as App)?.GetService<ExportService>();
+                if (exportService != null)
+                {
+                    await exportService.ExportAsPdfAsync(BodyWebView.CoreWebView2, dialog.FileName);
+                    Log4.Info($"PDF 내보내기 완료: {dialog.FileName}");
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            Log4.Error($"PDF 내보내기 실패: {ex.Message}");
+            System.Windows.MessageBox.Show($"PDF 내보내기 실패: {ex.Message}", "오류",
+                System.Windows.MessageBoxButton.OK, System.Windows.MessageBoxImage.Error);
+        }
+    }
+
+    /// <summary>
+    /// 파일명에 사용할 수 없는 문자 제거
+    /// </summary>
+    private static string SanitizeFileName(string fileName)
+    {
+        var invalid = Path.GetInvalidFileNameChars();
+        var sanitized = string.Join("", fileName.Split(invalid, StringSplitOptions.RemoveEmptyEntries));
+        return string.IsNullOrWhiteSpace(sanitized) ? "메일" : sanitized.Trim();
     }
 
     /// <summary>
@@ -384,7 +500,37 @@ public partial class EmailViewWindow : FluentWindow
                 menuItems.Add(copyLinkItem);
             }
         }
-        // 일반 영역은 기본 메뉴 사용 (복사, 전체 선택 등)
+        // 구분선 + 인쇄/내보내기 메뉴 추가 (모든 컨텍스트에서)
+        var separator = BodyWebView.CoreWebView2.Environment.CreateContextMenuItem(
+            "", null, Microsoft.Web.WebView2.Core.CoreWebView2ContextMenuItemKind.Separator);
+        menuItems.Add(separator);
+
+        // 인쇄 메뉴
+        var printItem = BodyWebView.CoreWebView2.Environment.CreateContextMenuItem(
+            "인쇄 (Ctrl+P)", null, Microsoft.Web.WebView2.Core.CoreWebView2ContextMenuItemKind.Command);
+        printItem.CustomItemSelected += (s, args) =>
+        {
+            Dispatcher.BeginInvoke(new Action(async () => await PrintEmailAsync()));
+        };
+        menuItems.Add(printItem);
+
+        // EML 내보내기 메뉴
+        var emlItem = BodyWebView.CoreWebView2.Environment.CreateContextMenuItem(
+            "EML 파일로 저장", null, Microsoft.Web.WebView2.Core.CoreWebView2ContextMenuItemKind.Command);
+        emlItem.CustomItemSelected += (s, args) =>
+        {
+            Dispatcher.BeginInvoke(new Action(async () => await ExportAsEmlAsync()));
+        };
+        menuItems.Add(emlItem);
+
+        // PDF 내보내기 메뉴
+        var pdfItem = BodyWebView.CoreWebView2.Environment.CreateContextMenuItem(
+            "PDF 파일로 저장", null, Microsoft.Web.WebView2.Core.CoreWebView2ContextMenuItemKind.Command);
+        pdfItem.CustomItemSelected += (s, args) =>
+        {
+            Dispatcher.BeginInvoke(new Action(async () => await ExportAsPdfAsync()));
+        };
+        menuItems.Add(pdfItem);
     }
 
     /// <summary>
@@ -430,7 +576,7 @@ public partial class EmailViewWindow : FluentWindow
             }
 
             var syncService = (App.Current as App)?.BackgroundSyncService;
-            var viewModel = new ComposeViewModel(graphMailService, syncService, ComposeMode.New, null);
+            var viewModel = new ComposeViewModel(graphMailService, syncService, null, ComposeMode.New, null);
 
             viewModel.To = emailWithName;
             if (!string.IsNullOrEmpty(subject)) viewModel.Subject = subject;
@@ -570,7 +716,7 @@ public partial class EmailViewWindow : FluentWindow
             if (graphMailService == null) return;
 
             var syncService = (App.Current as App)?.BackgroundSyncService;
-            var vm = new ComposeViewModel(graphMailService, syncService, ComposeMode.Reply, _email);
+            var vm = new ComposeViewModel(graphMailService, syncService, null, ComposeMode.Reply, _email);
             vm.InitialBody = draft + "\r\n\r\n" + vm.InitialBody;
 
             var composeWindow = new ComposeWindow(vm);
