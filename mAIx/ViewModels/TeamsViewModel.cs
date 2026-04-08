@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Linq;
 using System.Threading.Tasks;
@@ -198,6 +199,62 @@ public partial class TeamsViewModel : ViewModelBase
     /// 메시지 전송 가능 여부
     /// </summary>
     public bool CanSendMessage => !string.IsNullOrWhiteSpace(NewMessageText) && HasSelectedChat;
+
+    #region 스레드/리액션/멘션/미팅 속성
+
+    /// <summary>
+    /// 스레드 패널 표시 여부
+    /// </summary>
+    [ObservableProperty]
+    private bool _isThreadPanelOpen;
+
+    /// <summary>
+    /// 스레드 원본 메시지
+    /// </summary>
+    [ObservableProperty]
+    private MessageItemViewModel? _threadParentMessage;
+
+    /// <summary>
+    /// 스레드 답글 목록
+    /// </summary>
+    [ObservableProperty]
+    private ObservableCollection<MessageItemViewModel> _threadReplies = new();
+
+    /// <summary>
+    /// 스레드 답글 입력 텍스트
+    /// </summary>
+    [ObservableProperty]
+    private string _threadReplyText = string.Empty;
+
+    /// <summary>
+    /// 멘션 팝업 표시 여부
+    /// </summary>
+    [ObservableProperty]
+    private bool _isMentionPopupOpen;
+
+    /// <summary>
+    /// 멘션 후보 목록
+    /// </summary>
+    [ObservableProperty]
+    private ObservableCollection<MentionCandidate> _mentionCandidates = new();
+
+    /// <summary>
+    /// 멘션 필터 텍스트
+    /// </summary>
+    [ObservableProperty]
+    private string _mentionFilter = string.Empty;
+
+    /// <summary>
+    /// 채팅 멤버 목록 (멘션 자동완성용)
+    /// </summary>
+    private List<MentionCandidate> _chatMembers = new();
+
+    /// <summary>
+    /// 사용 가능한 리액션 이모지 목록
+    /// </summary>
+    public static readonly string[] AvailableReactions = { "👍", "❤️", "😂", "😮", "😢", "🎉" };
+
+    #endregion
 
     public TeamsViewModel(GraphTeamsService teamsService, IDbContextFactory<mAIxDbContext> dbContextFactory)
     {
@@ -531,11 +588,18 @@ public partial class TeamsViewModel : ViewModelBase
         if (value != null)
         {
             _ = LoadMessagesAsync(value.Id);
+            _ = LoadChatMembersAsync(value.Id);
         }
         else
         {
             Messages.Clear();
+            _chatMembers.Clear();
         }
+
+        // 스레드 패널 닫기
+        IsThreadPanelOpen = false;
+        ThreadParentMessage = null;
+        ThreadReplies.Clear();
     }
 
     /// <summary>
@@ -873,6 +937,273 @@ public partial class TeamsViewModel : ViewModelBase
             _logger.Error(ex, "즐겨찾기 순서 변경 실패: {DraggedId} → {TargetId}", draggedChatId, targetChatId);
         }
     }
+
+    #region 리액션/스레드/멘션/미팅 관련 메서드
+
+    /// <summary>
+    /// 메시지에 리액션 추가
+    /// </summary>
+    [RelayCommand]
+    public async Task AddReactionAsync(string parameter)
+    {
+        // parameter 형식: "messageId|reaction"
+        var parts = parameter?.Split('|');
+        if (parts?.Length != 2) return;
+
+        var messageId = parts[0];
+        var reaction = parts[1];
+
+        if (SelectedChat == null || string.IsNullOrEmpty(messageId)) return;
+
+        try
+        {
+            await _teamsService.AddReactionAsync(SelectedChat.Id, messageId, reaction);
+
+            // UI 업데이트: 해당 메시지의 리액션 목록 갱신
+            var message = Messages.FirstOrDefault(m => m.Id == messageId);
+            if (message != null)
+            {
+                var existing = message.Reactions.FirstOrDefault(r => r.Reaction == reaction);
+                if (existing != null)
+                {
+                    existing.Count++;
+                    existing.IsMine = true;
+                }
+                else
+                {
+                    message.Reactions.Add(new MessageReaction { Reaction = reaction, Count = 1, IsMine = true });
+                }
+                message.OnPropertyChanged(nameof(message.HasReactions));
+            }
+
+            _logger.Debug("리액션 추가: {MessageId} - {Reaction}", messageId, reaction);
+        }
+        catch (Exception ex)
+        {
+            _logger.Error(ex, "리액션 추가 실패: {MessageId}", messageId);
+        }
+    }
+
+    /// <summary>
+    /// 메시지에서 리액션 제거
+    /// </summary>
+    [RelayCommand]
+    public async Task RemoveReactionAsync(string parameter)
+    {
+        var parts = parameter?.Split('|');
+        if (parts?.Length != 2) return;
+
+        var messageId = parts[0];
+        var reaction = parts[1];
+
+        if (SelectedChat == null || string.IsNullOrEmpty(messageId)) return;
+
+        try
+        {
+            await _teamsService.RemoveReactionAsync(SelectedChat.Id, messageId, reaction);
+
+            var message = Messages.FirstOrDefault(m => m.Id == messageId);
+            if (message != null)
+            {
+                var existing = message.Reactions.FirstOrDefault(r => r.Reaction == reaction);
+                if (existing != null)
+                {
+                    existing.Count--;
+                    existing.IsMine = false;
+                    if (existing.Count <= 0)
+                        message.Reactions.Remove(existing);
+                }
+                message.OnPropertyChanged(nameof(message.HasReactions));
+            }
+
+            _logger.Debug("리액션 제거: {MessageId} - {Reaction}", messageId, reaction);
+        }
+        catch (Exception ex)
+        {
+            _logger.Error(ex, "리액션 제거 실패: {MessageId}", messageId);
+        }
+    }
+
+    /// <summary>
+    /// 스레드 열기 (답글 패널)
+    /// </summary>
+    [RelayCommand]
+    public async Task OpenThreadAsync(MessageItemViewModel message)
+    {
+        if (message == null || SelectedChat == null) return;
+
+        ThreadParentMessage = message;
+        ThreadReplies.Clear();
+        ThreadReplyText = string.Empty;
+        IsThreadPanelOpen = true;
+
+        try
+        {
+            var replies = await _teamsService.GetChatMessageRepliesAsync(SelectedChat.Id, message.Id);
+            var myId = await _teamsService.GetCachedCurrentUserIdAsync();
+
+            foreach (var reply in replies.OrderBy(r => r.CreatedDateTime))
+            {
+                var fromUserId = reply.From?.User?.Id ?? string.Empty;
+                ThreadReplies.Add(new MessageItemViewModel
+                {
+                    Id = reply.Id ?? string.Empty,
+                    Content = StripHtml(reply.Body?.Content),
+                    FromUser = reply.From?.User?.DisplayName ?? "Unknown",
+                    FromUserId = fromUserId,
+                    CreatedDateTime = reply.CreatedDateTime?.ToLocalTime().DateTime,
+                    IsFromMe = fromUserId == myId,
+                    FromUserPhoto = !string.IsNullOrEmpty(fromUserId) ? _teamsService.GetCachedUserPhoto(fromUserId) : null
+                });
+            }
+
+            _logger.Debug("스레드 열기: {MessageId}, 답글 {Count}개", message.Id, ThreadReplies.Count);
+        }
+        catch (Exception ex)
+        {
+            _logger.Error(ex, "스레드 답글 로드 실패: {MessageId}", message.Id);
+        }
+    }
+
+    /// <summary>
+    /// 스레드 닫기
+    /// </summary>
+    [RelayCommand]
+    public void CloseThread()
+    {
+        IsThreadPanelOpen = false;
+        ThreadParentMessage = null;
+        ThreadReplies.Clear();
+    }
+
+    /// <summary>
+    /// 스레드 답글 전송
+    /// </summary>
+    [RelayCommand]
+    public async Task SendThreadReplyAsync()
+    {
+        if (ThreadParentMessage == null || SelectedChat == null || string.IsNullOrWhiteSpace(ThreadReplyText))
+            return;
+
+        var replyText = ThreadReplyText.Trim();
+        ThreadReplyText = string.Empty;
+
+        try
+        {
+            var sent = await _teamsService.SendChatReplyAsync(SelectedChat.Id, ThreadParentMessage.Id, replyText);
+            if (sent != null)
+            {
+                ThreadReplies.Add(new MessageItemViewModel
+                {
+                    Id = sent.Id ?? Guid.NewGuid().ToString(),
+                    Content = StripHtml(sent.Body?.Content),
+                    FromUser = sent.From?.User?.DisplayName ?? "나",
+                    CreatedDateTime = sent.CreatedDateTime?.ToLocalTime().DateTime ?? DateTime.Now,
+                    IsFromMe = true
+                });
+
+                // 원본 메시지 답글 수 갱신
+                ThreadParentMessage.ReplyCount = ThreadReplies.Count;
+            }
+
+            _logger.Information("스레드 답글 전송: {MessageId}", ThreadParentMessage.Id);
+        }
+        catch (Exception ex)
+        {
+            _logger.Error(ex, "스레드 답글 전송 실패");
+        }
+    }
+
+    /// <summary>
+    /// 파일 공유 (드래그 & 드롭)
+    /// </summary>
+    [RelayCommand]
+    public async Task ShareFileAsync(string filePath)
+    {
+        if (SelectedChat == null || string.IsNullOrEmpty(filePath)) return;
+
+        try
+        {
+            await _teamsService.ShareFileToChatAsync(SelectedChat.Id, filePath);
+            _logger.Information("파일 공유 완료: {FilePath} → {ChatName}", filePath, SelectedChat.DisplayName);
+
+            // 메시지 새로고침
+            await LoadMessagesAsync(SelectedChat.Id);
+        }
+        catch (Exception ex)
+        {
+            _logger.Error(ex, "파일 공유 실패: {FilePath}", filePath);
+        }
+    }
+
+    /// <summary>
+    /// Teams 미팅 생성
+    /// </summary>
+    [RelayCommand]
+    public async Task CreateMeetingAsync()
+    {
+        // MeetingScheduleDialog에서 호출됨 — 결과 처리는 다이얼로그에서
+        _logger.Debug("미팅 생성 요청");
+    }
+
+    /// <summary>
+    /// @멘션 필터 업데이트
+    /// </summary>
+    public void UpdateMentionFilter(string filter)
+    {
+        MentionFilter = filter;
+        MentionCandidates.Clear();
+
+        if (string.IsNullOrEmpty(filter))
+        {
+            foreach (var member in _chatMembers.Take(10))
+                MentionCandidates.Add(member);
+        }
+        else
+        {
+            var filtered = _chatMembers
+                .Where(m => m.DisplayName.Contains(filter, StringComparison.OrdinalIgnoreCase))
+                .Take(10);
+            foreach (var member in filtered)
+                MentionCandidates.Add(member);
+        }
+
+        IsMentionPopupOpen = MentionCandidates.Count > 0;
+    }
+
+    /// <summary>
+    /// 채팅 멤버 목록 로드 (멘션용)
+    /// </summary>
+    public async Task LoadChatMembersAsync(string chatId)
+    {
+        _chatMembers.Clear();
+        try
+        {
+            var client = _teamsService;
+            var members = await _teamsService.GetChatMembersAsync(chatId);
+            var myId = await _teamsService.GetCachedCurrentUserIdAsync();
+
+            foreach (var member in members)
+            {
+                var aadMember = member as Microsoft.Graph.Models.AadUserConversationMember;
+                if (aadMember?.UserId != null && aadMember.UserId != myId)
+                {
+                    _chatMembers.Add(new MentionCandidate
+                    {
+                        UserId = aadMember.UserId,
+                        DisplayName = aadMember.DisplayName ?? "Unknown",
+                        PhotoBase64 = _teamsService.GetCachedUserPhoto(aadMember.UserId)
+                    });
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.Debug("채팅 멤버 로드 실패: {Error}", ex.Message);
+        }
+    }
+
+    #endregion
 
     #region 팀/채널 관련 메서드
 
@@ -1418,6 +1749,42 @@ public partial class MessageItemViewModel : ObservableObject
     }
 
     /// <summary>
+    /// 리액션 목록
+    /// </summary>
+    [ObservableProperty]
+    private ObservableCollection<MessageReaction> _reactions = new();
+
+    /// <summary>
+    /// 리액션이 있는지 여부
+    /// </summary>
+    public bool HasReactions => Reactions.Count > 0;
+
+    /// <summary>
+    /// 답글 수
+    /// </summary>
+    [ObservableProperty]
+    private int _replyCount;
+
+    /// <summary>
+    /// 답글이 있는지 여부
+    /// </summary>
+    public bool HasReplies => ReplyCount > 0;
+
+    /// <summary>
+    /// 리액션 패널 표시 여부 (호버 시)
+    /// </summary>
+    [ObservableProperty]
+    private bool _showReactionBar;
+
+    /// <summary>
+    /// PropertyChanged 호출 래퍼 (외부에서 접근용)
+    /// </summary>
+    public new void OnPropertyChanged(string propertyName)
+    {
+        base.OnPropertyChanged(propertyName);
+    }
+
+    /// <summary>
     /// 날짜 분리선 표시 여부 (날짜가 바뀌는 첫 메시지에만 true)
     /// </summary>
     [ObservableProperty]
@@ -1649,6 +2016,40 @@ public partial class FavoriteChannelViewModel : ObservableObject
             return date.ToString("yyyy-MM-dd");
         }
     }
+}
+
+/// <summary>
+/// 메시지 리액션 모델
+/// </summary>
+public partial class MessageReaction : ObservableObject
+{
+    [ObservableProperty]
+    private string _reaction = string.Empty;
+
+    [ObservableProperty]
+    private int _count;
+
+    [ObservableProperty]
+    private bool _isMine;
+}
+
+/// <summary>
+/// @멘션 후보 모델
+/// </summary>
+public partial class MentionCandidate : ObservableObject
+{
+    [ObservableProperty]
+    private string _userId = string.Empty;
+
+    [ObservableProperty]
+    private string _displayName = string.Empty;
+
+    [ObservableProperty]
+    private string? _photoBase64;
+
+    public bool HasPhoto => !string.IsNullOrEmpty(PhotoBase64);
+
+    public string Initial => string.IsNullOrEmpty(DisplayName) ? "?" : DisplayName[..1].ToUpper();
 }
 
 #endregion

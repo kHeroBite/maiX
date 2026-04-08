@@ -665,3 +665,23 @@
 - **교훈**: 팀에이전트는 직접 Agent() 호출 절대 금지. 항상 SendMessage(to:"team-lead", "SPAWN_REQUEST: ...") 형식으로 메인에 위임. pipeline_order_guard.sh가 정상 작동 중임을 확인
 - **심각도**: 낮음 (hook 정상 차단, 기능 문제 없음)
 - **Level**: 1 (참고)
+
+## L-300: MaiX 모든 레이어(Controls/ViewModels 포함)에서 Serilog 직접 사용 금지 (2026-04-09)
+
+- **문제**: 신규 Controls/*.cs, ViewModels/*.cs에서 `using Serilog; Log.ForContext<T>()` 패턴 반복 사용
+- **근본원인**: L-296은 서비스 레이어만 명시했으나 Controls/ViewModels 레이어도 동일 패턴 위반 발생. 레이어 구분 없이 모든 .cs 파일에 동일 제약이 적용되어야 함
+- **해결**: NLog 표준 로거로 전환
+- **올바른 패턴**: `using NLog; private static readonly Logger _log = LogManager.GetCurrentClassLogger();`
+- **금지 패턴**: `using Serilog; private static readonly ILogger _log = Log.ForContext<MyClass>();`
+- **근거**: AC auto_scripts가 NLog 경로(`YYYYMMDD.log`)만 지원. Serilog 사용 시 `mAIx-YYYYMMDD.log`로 분산되어 자동검증 실패 및 로그 누락
+- **심각도**: 중간 (AC 자동화 실패, 로그 추적 불가)
+- **Level**: 2 (주의 — L-296 확장)
+
+## L-301: 외부 서비스 반환값 null 검사 필수 (2026-04-09)
+
+- **문제**: ChunkedUploadService.UploadLargeFileAsync 결과 null 미검사로 업로드 실패 시 UploadCompleted 이벤트 오발화 가능
+- **근본원인**: 비동기 외부 서비스 호출 후 반환값을 null 검사 없이 사용하는 패턴
+- **해결**: 모든 비동기 외부 서비스 호출 후 반환값 null 검사 추가
+- **올바른 패턴**: `var result = await service.CallAsync(...); if (result == null) { /* 실패 처리 */ return; }`
+- **심각도**: 낮음 (잠재적 오동작)
+- **Level**: 1 (참고)

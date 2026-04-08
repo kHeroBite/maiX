@@ -1,0 +1,141 @@
+<UserControl x:Class="mAIx.Controls.FilePreviewPanel"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
+             mc:Ignorable="d"
+             d:DesignHeight="600" d:DesignWidth="350">
+
+    <Grid>
+        <Grid.RowDefinitions>
+            <!-- 헤더 (파일명 + 닫기) -->
+            <RowDefinition Height="Auto"/>
+            <!-- 미리보기 영역 -->
+            <RowDefinition Height="*"/>
+            <!-- 파일 정보 -->
+            <RowDefinition Height="Auto"/>
+            <!-- 액션 버튼 -->
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+
+        <!-- Row 0: 헤더 -->
+        <Border Grid.Row="0" Padding="16,12"
+                BorderBrush="{DynamicResource ControlElevationBorderBrush}"
+                BorderThickness="0,0,0,1">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
+                </Grid.ColumnDefinitions>
+                <TextBlock x:Name="FileNameText" Grid.Column="0"
+                           FontSize="14" FontWeight="SemiBold"
+                           TextTrimming="CharacterEllipsis"
+                           VerticalAlignment="Center"
+                           Foreground="{DynamicResource TextFillColorPrimaryBrush}"/>
+                <ui:Button x:Name="ClosePreviewButton" Grid.Column="1"
+                           Icon="{ui:SymbolIcon Dismiss20}"
+                           Appearance="Transparent" Padding="4"
+                           Click="ClosePreviewButton_Click"/>
+            </Grid>
+        </Border>
+
+        <!-- Row 1: 미리보기 영역 -->
+        <Grid Grid.Row="1">
+            <!-- 이미지 미리보기 -->
+            <Border x:Name="ImagePreviewContainer" Visibility="Collapsed"
+                    Padding="16">
+                <Image x:Name="PreviewImage" Stretch="Uniform"
+                       RenderOptions.BitmapScalingMode="HighQuality"/>
+            </Border>
+
+            <!-- WebBrowser 미리보기 (PDF/Office) -->
+            <Border x:Name="WebPreviewContainer" Visibility="Collapsed">
+                <WebBrowser x:Name="PreviewWebBrowser"/>
+            </Border>
+
+            <!-- 미리보기 불가 -->
+            <StackPanel x:Name="NoPreviewContainer" Visibility="Collapsed"
+                        VerticalAlignment="Center" HorizontalAlignment="Center">
+                <ui:SymbolIcon Symbol="Document48" FontSize="64"
+                               Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                               Margin="0,0,0,16"/>
+                <TextBlock Text="미리보기를 사용할 수 없습니다"
+                           FontSize="14"
+                           Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                           HorizontalAlignment="Center"/>
+            </StackPanel>
+
+            <!-- 로딩 표시 -->
+            <StackPanel x:Name="LoadingContainer" Visibility="Collapsed"
+                        VerticalAlignment="Center" HorizontalAlignment="Center">
+                <ui:ProgressRing IsIndeterminate="True" Width="48" Height="48"/>
+                <TextBlock Text="미리보기 로딩 중..."
+                           FontSize="13" Margin="0,12,0,0"
+                           Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                           HorizontalAlignment="Center"/>
+            </StackPanel>
+        </Grid>
+
+        <!-- Row 2: 파일 정보 -->
+        <Border Grid.Row="2" Padding="16,12"
+                BorderBrush="{DynamicResource ControlElevationBorderBrush}"
+                BorderThickness="0,1,0,0">
+            <StackPanel>
+                <Grid Margin="0,0,0,6">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="80"/>
+                        <ColumnDefinition Width="*"/>
+                    </Grid.ColumnDefinitions>
+                    <TextBlock Grid.Column="0" Text="크기" FontSize="12"
+                               Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
+                    <TextBlock x:Name="FileSizeText" Grid.Column="1" FontSize="12"
+                               Foreground="{DynamicResource TextFillColorPrimaryBrush}"/>
+                </Grid>
+                <Grid Margin="0,0,0,6">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="80"/>
+                        <ColumnDefinition Width="*"/>
+                    </Grid.ColumnDefinitions>
+                    <TextBlock Grid.Column="0" Text="수정일" FontSize="12"
+                               Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
+                    <TextBlock x:Name="FileModifiedText" Grid.Column="1" FontSize="12"
+                               Foreground="{DynamicResource TextFillColorPrimaryBrush}"/>
+                </Grid>
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="80"/>
+                        <ColumnDefinition Width="*"/>
+                    </Grid.ColumnDefinitions>
+                    <TextBlock Grid.Column="0" Text="소유자" FontSize="12"
+                               Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
+                    <TextBlock x:Name="FileOwnerText" Grid.Column="1" FontSize="12"
+                               Foreground="{DynamicResource TextFillColorPrimaryBrush}"/>
+                </Grid>
+            </StackPanel>
+        </Border>
+
+        <!-- Row 3: 액션 버튼 -->
+        <Border Grid.Row="3" Padding="16,12"
+                BorderBrush="{DynamicResource ControlElevationBorderBrush}"
+                BorderThickness="0,1,0,0">
+            <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
+                <ui:Button x:Name="DownloadButton"
+                           Icon="{ui:SymbolIcon ArrowDownload20}"
+                           Content="다운로드" Appearance="Primary"
+                           Padding="16,8" Margin="0,0,8,0"
+                           Click="DownloadButton_Click"/>
+                <ui:Button x:Name="ShareButton"
+                           Icon="{ui:SymbolIcon Share20}"
+                           Content="공유" Appearance="Secondary"
+                           Padding="16,8" Margin="0,0,8,0"
+                           Click="ShareButton_Click"/>
+                <ui:Button x:Name="VersionHistoryButton"
+                           Icon="{ui:SymbolIcon History20}"
+                           Content="버전" Appearance="Transparent"
+                           Padding="16,8"
+                           Click="VersionHistoryButton_Click"/>
+            </StackPanel>
+        </Border>
+    </Grid>
+</UserControl>

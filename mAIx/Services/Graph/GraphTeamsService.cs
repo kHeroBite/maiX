@@ -826,6 +826,245 @@ public class GraphTeamsService
 
     #endregion
 
+    #region 리액션/스레드/파일공유/미팅/멤버
+
+    /// <summary>
+    /// 메시지에 리액션 추가 (채팅)
+    /// </summary>
+    public async Task AddReactionAsync(string chatId, string messageId, string reactionType)
+    {
+        if (string.IsNullOrEmpty(chatId) || string.IsNullOrEmpty(messageId)) return;
+
+        try
+        {
+            var client = _authService.GetGraphClient();
+            var reaction = new ChatMessageReaction
+            {
+                ReactionType = reactionType,
+                CreatedDateTime = DateTimeOffset.UtcNow
+            };
+
+            await client.Me.Chats[chatId].Messages[messageId]
+                .SetReaction.PostAsync(new Microsoft.Graph.Me.Chats.Item.Messages.Item.SetReaction.SetReactionPostRequestBody
+                {
+                    ReactionType = reactionType
+                });
+
+            _logger.Debug("리액션 추가: ChatId={ChatId}, MessageId={MessageId}, Reaction={Reaction}", chatId, messageId, reactionType);
+        }
+        catch (Exception ex)
+        {
+            _logger.Error(ex, "리액션 추가 실패: ChatId={ChatId}, MessageId={MessageId}", chatId, messageId);
+            throw;
+        }
+    }
+
+    /// <summary>
+    /// 메시지에서 리액션 제거 (채팅)
+    /// </summary>
+    public async Task RemoveReactionAsync(string chatId, string messageId, string reactionType)
+    {
+        if (string.IsNullOrEmpty(chatId) || string.IsNullOrEmpty(messageId)) return;
+
+        try
+        {
+            var client = _authService.GetGraphClient();
+            await client.Me.Chats[chatId].Messages[messageId]
+                .UnsetReaction.PostAsync(new Microsoft.Graph.Me.Chats.Item.Messages.Item.UnsetReaction.UnsetReactionPostRequestBody
+                {
+                    ReactionType = reactionType
+                });
+
+            _logger.Debug("리액션 제거: ChatId={ChatId}, MessageId={MessageId}", chatId, messageId);
+        }
+        catch (Exception ex)
+        {
+            _logger.Error(ex, "리액션 제거 실패: ChatId={ChatId}, MessageId={MessageId}", chatId, messageId);
+            throw;
+        }
+    }
+
+    /// <summary>
+    /// 채팅 메시지의 답글 조회
+    /// </summary>
+    public async Task<IEnumerable<ChatMessage>> GetChatMessageRepliesAsync(string chatId, string messageId)
+    {
+        if (string.IsNullOrEmpty(chatId) || string.IsNullOrEmpty(messageId))
+            return new List<ChatMessage>();
+
+        try
+        {
+            var client = _authService.GetGraphClient();
+            var response = await client.Me.Chats[chatId].Messages[messageId].Replies.GetAsync();
+            return response?.Value ?? new List<ChatMessage>();
+        }
+        catch (Exception ex)
+        {
+            _logger.Error(ex, "채팅 답글 조회 실패: ChatId={ChatId}, MessageId={MessageId}", chatId, messageId);
+            return new List<ChatMessage>();
+        }
+    }
+
+    /// <summary>
+    /// 채팅 메시지에 답글 전송
+    /// </summary>
+    public async Task<ChatMessage?> SendChatReplyAsync(string chatId, string messageId, string content)
+    {
+        if (string.IsNullOrEmpty(chatId) || string.IsNullOrEmpty(messageId) || string.IsNullOrEmpty(content))
+            return null;
+
+        try
+        {
+            var client = _authService.GetGraphClient();
+            var reply = new ChatMessage
+            {
+                Body = new ItemBody
+                {
+                    ContentType = BodyType.Html,
+                    Content = content
+                }
+            };
+
+            var response = await client.Me.Chats[chatId].Messages[messageId].Replies.PostAsync(reply);
+            _logger.Information("채팅 답글 전송 성공: ChatId={ChatId}, MessageId={MessageId}", chatId, messageId);
+            return response;
+        }
+        catch (Exception ex)
+        {
+            _logger.Error(ex, "채팅 답글 전송 실패: ChatId={ChatId}, MessageId={MessageId}", chatId, messageId);
+            return null;
+        }
+    }
+
+    /// <summary>
+    /// 채팅방 멤버 목록 조회
+    /// </summary>
+    public async Task<IEnumerable<ConversationMember>> GetChatMembersAsync(string chatId)
+    {
+        if (string.IsNullOrEmpty(chatId))
+            return new List<ConversationMember>();
+
+        try
+        {
+            var client = _authService.GetGraphClient();
+            var response = await client.Me.Chats[chatId].Members.GetAsync();
+            return response?.Value ?? new List<ConversationMember>();
+        }
+        catch (Exception ex)
+        {
+            _logger.Error(ex, "채팅 멤버 조회 실패: ChatId={ChatId}", chatId);
+            return new List<ConversationMember>();
+        }
+    }
+
+    /// <summary>
+    /// 채팅방에 파일 공유 (OneDrive 파일을 채팅으로 공유)
+    /// </summary>
+    public async Task ShareFileToChatAsync(string chatId, string filePath)
+    {
+        if (string.IsNullOrEmpty(chatId) || string.IsNullOrEmpty(filePath)) return;
+
+        try
+        {
+            var client = _authService.GetGraphClient();
+
+            // 드라이브 ID 조회
+            var drive = await client.Me.Drive.GetAsync();
+            var driveId = drive?.Id;
+            if (string.IsNullOrEmpty(driveId))
+            {
+                _logger.Error("OneDrive ID를 가져올 수 없습니다");
+                return;
+            }
+
+            // 파일을 OneDrive에 업로드
+            var fileName = System.IO.Path.GetFileName(filePath);
+            using var fileStream = System.IO.File.OpenRead(filePath);
+
+            var driveItem = await client.Drives[driveId].Items["root"]
+                .ItemWithPath($"MaiX Shared/{fileName}")
+                .Content.PutAsync(fileStream);
+
+            if (driveItem != null)
+            {
+                // 채팅에 파일 참조 메시지 전송
+                var shareMessage = new ChatMessage
+                {
+                    Body = new ItemBody
+                    {
+                        ContentType = BodyType.Html,
+                        Content = $"<attachment id=\"{driveItem.Id}\"></attachment>"
+                    },
+                    Attachments = new List<ChatMessageAttachment>
+                    {
+                        new ChatMessageAttachment
+                        {
+                            Id = driveItem.Id,
+                            ContentType = "reference",
+                            ContentUrl = driveItem.WebUrl,
+                            Name = fileName
+                        }
+                    }
+                };
+
+                await client.Me.Chats[chatId].Messages.PostAsync(shareMessage);
+                _logger.Information("파일 공유 성공: {FileName} → ChatId={ChatId}", fileName, chatId);
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.Error(ex, "파일 공유 실패: ChatId={ChatId}, FilePath={FilePath}", chatId, filePath);
+            throw;
+        }
+    }
+
+    /// <summary>
+    /// 온라인 미팅 생성
+    /// </summary>
+    public async Task<OnlineMeeting?> CreateOnlineMeetingAsync(string subject, DateTime startTime, DateTime endTime, IList<string>? attendeeEmails = null)
+    {
+        try
+        {
+            var client = _authService.GetGraphClient();
+
+            var meeting = new OnlineMeeting
+            {
+                Subject = subject,
+                StartDateTime = new DateTimeOffset(startTime, TimeZoneInfo.Local.GetUtcOffset(startTime)),
+                EndDateTime = new DateTimeOffset(endTime, TimeZoneInfo.Local.GetUtcOffset(endTime)),
+            };
+
+            if (attendeeEmails?.Any() == true)
+            {
+                meeting.Participants = new MeetingParticipants
+                {
+                    Attendees = attendeeEmails.Select(email => new MeetingParticipantInfo
+                    {
+                        Identity = new IdentitySet
+                        {
+                            User = new Identity
+                            {
+                                DisplayName = email
+                            }
+                        },
+                        Upn = email
+                    }).ToList()
+                };
+            }
+
+            var result = await client.Me.OnlineMeetings.PostAsync(meeting);
+            _logger.Information("온라인 미팅 생성 성공: {Subject}", subject);
+            return result;
+        }
+        catch (Exception ex)
+        {
+            _logger.Error(ex, "온라인 미팅 생성 실패: {Subject}", subject);
+            throw;
+        }
+    }
+
+    #endregion
+
     #region 사용자 프로필 사진
 
     /// <summary>

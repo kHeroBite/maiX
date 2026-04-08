@@ -1,0 +1,77 @@
+<UserControl x:Class="mAIx.Controls.MentionPopup"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             mc:Ignorable="d" d:DesignWidth="280" d:DesignHeight="200">
+
+    <Border CornerRadius="8" BorderThickness="1"
+            BorderBrush="{DynamicResource ControlElevationBorderBrush}"
+            Background="{DynamicResource ApplicationBackgroundBrush}"
+            MaxHeight="250">
+        <Border.Effect>
+            <DropShadowEffect BlurRadius="16" Opacity="0.2" ShadowDepth="4" Direction="270"/>
+        </Border.Effect>
+
+        <Grid>
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="*"/>
+            </Grid.RowDefinitions>
+
+            <!-- 헤더 -->
+            <Border Grid.Row="0" Padding="12,8" BorderBrush="{DynamicResource ControlElevationBorderBrush}" BorderThickness="0,0,0,1">
+                <TextBlock Text="멘션할 사람" FontSize="12" FontWeight="SemiBold"
+                           Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
+            </Border>
+
+            <!-- 멤버 목록 -->
+            <ListBox Grid.Row="1" x:Name="MentionListBox"
+                     Background="Transparent" BorderThickness="0"
+                     SelectionChanged="MentionListBox_SelectionChanged"
+                     ScrollViewer.HorizontalScrollBarVisibility="Disabled">
+                <ListBox.ItemContainerStyle>
+                    <Style TargetType="ListBoxItem" BasedOn="{StaticResource {x:Type ListBoxItem}}">
+                        <Setter Property="Padding" Value="12,6"/>
+                        <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
+                    </Style>
+                </ListBox.ItemContainerStyle>
+                <ListBox.ItemTemplate>
+                    <DataTemplate>
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="32"/>
+                                <ColumnDefinition Width="*"/>
+                            </Grid.ColumnDefinitions>
+
+                            <!-- 아바타 -->
+                            <Grid Grid.Column="0" Width="28" Height="28">
+                                <Border CornerRadius="4" ClipToBounds="True"
+                                        Visibility="{Binding HasPhoto, Converter={StaticResource BoolToVisibilityConverter}}">
+                                    <Border.Background>
+                                        <ImageBrush ImageSource="{Binding PhotoBase64, Converter={StaticResource Base64ToImageSourceConverter}}" Stretch="UniformToFill"/>
+                                    </Border.Background>
+                                </Border>
+                                <Border CornerRadius="4" Background="{Binding DisplayName, Converter={StaticResource NameToAvatarColorConverter}}"
+                                        Visibility="{Binding HasPhoto, Converter={StaticResource BoolToVisibilityConverter}, ConverterParameter=Invert}">
+                                    <TextBlock Text="{Binding Initial}" FontSize="11" Foreground="White" FontWeight="SemiBold"
+                                               HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                </Border>
+                            </Grid>
+
+                            <!-- 이름 -->
+                            <TextBlock Grid.Column="1" Text="{Binding DisplayName}" FontSize="13" VerticalAlignment="Center" Margin="4,0,0,0"/>
+                        </Grid>
+                    </DataTemplate>
+                </ListBox.ItemTemplate>
+            </ListBox>
+
+            <!-- 검색결과 없음 -->
+            <TextBlock Grid.Row="1" x:Name="NoResultsText" Text="일치하는 멤버가 없습니다"
+                       HorizontalAlignment="Center" VerticalAlignment="Center"
+                       Foreground="{DynamicResource TextFillColorTertiaryBrush}"
+                       FontSize="12" Visibility="Collapsed"/>
+        </Grid>
+    </Border>
+</UserControl>

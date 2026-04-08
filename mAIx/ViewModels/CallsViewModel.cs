@@ -4,19 +4,20 @@ using System.Linq;
 using System.Threading.Tasks;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
-using Microsoft.Graph.Models;
+using mAIx.Services;
 using mAIx.Services.Graph;
 using Serilog;
 
 namespace mAIx.ViewModels;
 
 /// <summary>
-/// 통화/프레즌스 ViewModel
+/// 통화/프레즌스 ViewModel — 통화 이력, 연락처 연동, 즐겨찾기
 /// </summary>
 public partial class CallsViewModel : ObservableObject
 {
+    private readonly ILogger _log = Log.ForContext<CallsViewModel>();
     private readonly GraphCallService _callService;
-    private readonly ILogger _logger;
+    private CrossTabIntegrationService? _crossTabService;
 
     [ObservableProperty]
     private bool _isLoading;
@@ -56,7 +57,16 @@ public partial class CallsViewModel : ObservableObject
     private ObservableCollection<CallRecordViewModel> _callHistory = new();
 
     [ObservableProperty]
+    private ObservableCollection<CallRecordViewModel> _filteredCallHistory = new();
+
+    [ObservableProperty]
     private string _currentTab = "history"; // history, dialpad, voicemail, contacts
+
+    [ObservableProperty]
+    private string _currentCallFilter = "all"; // all, missed, incoming, outgoing
+
+    [ObservableProperty]
+    private int _missedCallCount;
 
     #endregion
 
@@ -67,6 +77,13 @@ public partial class CallsViewModel : ObservableObject
 
     #endregion
 
+    #region 즐겨찾기
+
+    [ObservableProperty]
+    private ObservableCollection<ContactItemViewModel> _favorites = new();
+
+    #endregion
+
     public bool HasSelectedContact => SelectedContact != null;
     public bool HasSearchResults => SearchResults.Count > 0;
     public bool HasCallHistory => CallHistory.Count > 0;
@@ -74,7 +91,14 @@ public partial class CallsViewModel : ObservableObject
     public CallsViewModel(GraphCallService callService)
     {
         _callService = callService ?? throw new ArgumentNullException(nameof(callService));
-        _logger = Log.ForContext<CallsViewModel>();
+    }
+
+    /// <summary>
+    /// 크로스탭 서비스 설정 (MainWindow에서 주입)
+    /// </summary>
+    public void SetCrossTabService(CrossTabIntegrationService service)
+    {
+        _crossTabService = service;
     }
 
     private async Task ExecuteAsync(Func<Task> action, string errorMessage)
@@ -87,7 +111,7 @@ public partial class CallsViewModel : ObservableObject
         }
         catch (Exception ex)
         {
-            _logger.Error(ex, errorMessage);
+            _log.Error(ex, errorMessage);
             ErrorMessage = $"{errorMessage}: {ex.Message}";
         }
         finally
@@ -146,8 +170,112 @@ public partial class CallsViewModel : ObservableObject
                 }
             }
 
-            _logger.Information("통화 뷰 초기화 완료: 연락처 {Count}명", FrequentContacts.Count);
+            // 통화 이력 로드
+            await LoadCallHistoryAsync();
+
+            _log.Information("통화 뷰 초기화 완료: 연락처 {ContactCount}명, 통화이력 {HistoryCount}건", FrequentContacts.Count, CallHistory.Count);
         }, "통화 뷰 초기화 실패");
+    }
+
+    /// <summary>
+    /// 통화 이력 로드
+    /// </summary>
+    [RelayCommand]
+    public async Task LoadCallHistoryAsync()
+    {
+        try
+        {
+            var records = await _callService.GetCallRecordsAsync(7);
+            CallHistory.Clear();
+            foreach (var record in records)
+            {
+                CallHistory.Add(new CallRecordViewModel
+                {
+                    Id = record.Id,
+                    Type = record.Type,
+                    CallerName = record.CallerName,
+                    CallerEmail = record.CallerEmail,
+                    CallerPhone = record.CallerPhone,
+                    StartTime = record.StartTime,
+                    Duration = record.Duration,
+                    IsMissed = record.IsMissed,
+                    IsVideoCall = record.IsVideoCall
+                });
+            }
+
+            MissedCallCount = CallHistory.Count(r => r.IsMissed);
+            FilterCallHistory();
+            _log.Debug("통화 이력 로드: {Count}건 (부재중: {MissedCount}건)", CallHistory.Count, MissedCallCount);
+        }
+        catch (Exception ex)
+        {
+            _log.Error(ex, "통화 이력 로드 실패");
+        }
+    }
+
+    /// <summary>
+    /// 통화 이력 필터링
+    /// </summary>
+    [RelayCommand]
+    public void FilterCalls(string filterType)
+    {
+        CurrentCallFilter = filterType;
+        FilterCallHistory();
+    }
+
+    private void FilterCallHistory()
+    {
+        IEnumerable<CallRecordViewModel> filtered = CurrentCallFilter switch
+        {
+            "missed" => CallHistory.Where(r => r.IsMissed),
+            "incoming" => CallHistory.Where(r => r.Type == "incoming"),
+            "outgoing" => CallHistory.Where(r => r.Type == "outgoing"),
+            _ => CallHistory
+        };
+
+        FilteredCallHistory = new ObservableCollection<CallRecordViewModel>(
+            filtered.OrderByDescending(r => r.StartTime));
+    }
+
+    /// <summary>
+    /// 연락처에 연결
+    /// </summary>
+    [RelayCommand]
+    public void LinkToContact(CallRecordViewModel record)
+    {
+        if (record == null) return;
+
+        // 통화 기록의 이메일로 연락처 매칭
+        var matched = FrequentContacts.FirstOrDefault(c =>
+            c.Email.Equals(record.CallerEmail, StringComparison.OrdinalIgnoreCase));
+
+        if (matched != null)
+        {
+            SelectedContact = matched;
+            OnPropertyChanged(nameof(HasSelectedContact));
+            _log.Debug("통화 기록 → 연락처 연결: {DisplayName}", matched.DisplayName);
+        }
+    }
+
+    /// <summary>
+    /// 즐겨찾기 추가/제거
+    /// </summary>
+    [RelayCommand]
+    public void ToggleFavorite(ContactItemViewModel contact)
+    {
+        if (contact == null) return;
+
+        var existing = Favorites.FirstOrDefault(f => f.Id == contact.Id);
+        if (existing != null)
+        {
+            Favorites.Remove(existing);
+            _log.Debug("즐겨찾기 제거: {DisplayName}", contact.DisplayName);
+        }
+        else
+        {
+            Favorites.Add(contact);
+            _log.Debug("즐겨찾기 추가: {DisplayName}", contact.DisplayName);
+        }
     }
 
     /// <summary>
@@ -199,7 +327,7 @@ public partial class CallsViewModel : ObservableObject
                 }
             }
 
-            _logger.Debug("사용자 검색 '{Query}': {Count}명", SearchQuery, SearchResults.Count);
+            _log.Debug("사용자 검색 '{Query}': {Count}명", SearchQuery, SearchResults.Count);
         }, "사용자 검색 실패");
     }
 
@@ -254,7 +382,7 @@ public partial class CallsViewModel : ObservableObject
     }
 
     /// <summary>
-    /// 전화 걸기 (실제 통화는 Azure Communication Services 필요)
+    /// 전화 걸기
     /// </summary>
     [RelayCommand]
     public void MakeCall()
@@ -266,10 +394,16 @@ public partial class CallsViewModel : ObservableObject
             return;
         }
 
-        // 실제 통화 기능은 Azure Communication Services 연동 필요
-        // 여기서는 알림만 표시
-        _logger.Information("전화 걸기 시도: {Target}", target);
-        ErrorMessage = $"실제 통화 기능은 Azure Communication Services 연동이 필요합니다. 대상: {target}";
+        _log.Information("전화 걸기 시도: {Target}", target);
+
+        if (_crossTabService != null)
+        {
+            _ = _crossTabService.StartCallWithContactAsync(
+                SelectedContact?.Email ?? string.Empty,
+                SelectedContact?.Phone ?? DialNumber);
+        }
+
+        ErrorMessage = $"통화 기능은 Azure Communication Services 연동이 필요합니다. 대상: {target}";
     }
 
     /// <summary>
@@ -285,8 +419,8 @@ public partial class CallsViewModel : ObservableObject
             return;
         }
 
-        _logger.Information("영상 통화 시도: {Target}", target);
-        ErrorMessage = $"실제 영상 통화 기능은 Azure Communication Services 연동이 필요합니다. 대상: {target}";
+        _log.Information("영상 통화 시도: {Target}", target);
+        ErrorMessage = $"영상 통화 기능은 Azure Communication Services 연동이 필요합니다. 대상: {target}";
     }
 
     /// <summary>
@@ -312,7 +446,7 @@ public partial class CallsViewModel : ObservableObject
             {
                 MyAvailability = availability;
                 MyActivity = activity;
-                _logger.Information("내 상태 변경: {Availability}", availability);
+                _log.Information("내 상태 변경: {Availability}", availability);
             }
         }, "상태 변경 실패");
     }
@@ -324,6 +458,20 @@ public partial class CallsViewModel : ObservableObject
     public async Task RefreshAsync()
     {
         await InitializeAsync();
+    }
+
+    /// <summary>
+    /// 연락처에서 Teams 채팅 시작 (크로스탭)
+    /// </summary>
+    public async Task StartTeamsChatAsync(ContactItemViewModel contact)
+    {
+        if (contact == null || _crossTabService == null) return;
+
+        var chatId = await _crossTabService.StartTeamsChatWithContactAsync(contact.Email, contact.DisplayName);
+        if (string.IsNullOrEmpty(chatId))
+        {
+            ErrorMessage = "Teams 채팅 시작에 실패했습니다.";
+        }
     }
 }
 
@@ -353,22 +501,19 @@ public partial class ContactItemViewModel : ObservableObject
     [ObservableProperty]
     private string _availability = "Unknown";
 
-    /// <summary>
-    /// 프레즌스 상태 색상
-    /// </summary>
+    [ObservableProperty]
+    private bool _isFavorite;
+
     public string AvailabilityColor => Availability switch
     {
-        "Available" => "#107C10",  // 녹색
-        "Busy" or "InACall" or "InAMeeting" => "#D13438",  // 빨강
-        "DoNotDisturb" => "#D13438",  // 빨강
-        "Away" or "BeRightBack" => "#FFAA44",  // 주황
-        "Offline" => "#8A8886",  // 회색
-        _ => "#8A8886"  // 기본 회색
+        "Available" => "#107C10",
+        "Busy" or "InACall" or "InAMeeting" => "#D13438",
+        "DoNotDisturb" => "#D13438",
+        "Away" or "BeRightBack" => "#FFAA44",
+        "Offline" => "#8A8886",
+        _ => "#8A8886"
     };
 
-    /// <summary>
-    /// 프레즌스 상태 텍스트
-    /// </summary>
     public string AvailabilityText => Availability switch
     {
         "Available" => "대화 가능",
@@ -382,9 +527,6 @@ public partial class ContactItemViewModel : ObservableObject
         _ => "알 수 없음"
     };
 
-    /// <summary>
-    /// 표시 이니셜 (아바타용)
-    /// </summary>
     public string Initials
     {
         get
@@ -432,9 +574,6 @@ public partial class CallRecordViewModel : ObservableObject
     [ObservableProperty]
     private bool _isVideoCall;
 
-    /// <summary>
-    /// 통화 유형 아이콘
-    /// </summary>
     public string TypeIcon => Type switch
     {
         "incoming" => IsMissed ? "CallMissed24" : "CallInbound24",
@@ -442,16 +581,10 @@ public partial class CallRecordViewModel : ObservableObject
         _ => "Call24"
     };
 
-    /// <summary>
-    /// 통화 시간 표시 (예: 3:45)
-    /// </summary>
     public string DurationText => Duration.TotalSeconds > 0
         ? $"{(int)Duration.TotalMinutes}:{Duration.Seconds:D2}"
         : "응답 없음";
 
-    /// <summary>
-    /// 통화 시간 표시 (상대적)
-    /// </summary>
     public string TimeText
     {
         get
@@ -464,4 +597,6 @@ public partial class CallRecordViewModel : ObservableObject
             return StartTime.ToString("MM/dd HH:mm");
         }
     }
+
+    public string TypeColor => IsMissed ? "#D13438" : "#808080";
 }

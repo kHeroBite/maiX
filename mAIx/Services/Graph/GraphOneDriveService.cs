@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Graph;
 using Microsoft.Graph.Models;
@@ -1262,6 +1263,254 @@ public class GraphOneDriveService
 
         // 기본적으로 허용 (위 패턴에 해당하지 않으면)
         return true;
+    }
+
+    /// <summary>
+    /// 파일 버전 목록 조회
+    /// </summary>
+    public async Task<List<DriveItemVersion>> GetFileVersionsAsync(string itemId)
+    {
+        try
+        {
+            var client = _authService.GetGraphClient();
+            var driveId = await GetDriveIdAsync();
+            var response = await client.Drives[driveId].Items[itemId].Versions.GetAsync();
+            return response?.Value?.ToList() ?? new List<DriveItemVersion>();
+        }
+        catch (Exception ex)
+        {
+            Log4.Error($"[OneDriveService] 버전 목록 조회 실패: {ex.Message}");
+            return new List<DriveItemVersion>();
+        }
+    }
+
+    /// <summary>
+    /// 버전 복원
+    /// </summary>
+    public async Task<bool> RestoreVersionAsync(string itemId, string versionId)
+    {
+        try
+        {
+            var client = _authService.GetGraphClient();
+            var driveId = await GetDriveIdAsync();
+            await client.Drives[driveId].Items[itemId].Versions[versionId].RestoreVersion.PostAsync();
+            Log4.Info($"[OneDriveService] 버전 복원 완료: {itemId} → {versionId}");
+            return true;
+        }
+        catch (Exception ex)
+        {
+            Log4.Error($"[OneDriveService] 버전 복원 실패: {ex.Message}");
+            return false;
+        }
+    }
+
+    /// <summary>
+    /// 공유 링크 생성 (유형/만료일 지정)
+    /// </summary>
+    public async Task<Permission?> CreateShareLinkWithOptionsAsync(string itemId, string type = "view", DateTimeOffset? expiry = null)
+    {
+        try
+        {
+            var client = _authService.GetGraphClient();
+            var driveId = await GetDriveIdAsync();
+
+            var requestBody = new Microsoft.Graph.Drives.Item.Items.Item.CreateLink.CreateLinkPostRequestBody
+            {
+                Type = type,
+                Scope = "organization",
+                ExpirationDateTime = expiry
+            };
+
+            var permission = await client.Drives[driveId].Items[itemId].CreateLink.PostAsync(requestBody);
+            Log4.Debug($"[OneDriveService] 공유 링크 생성: type={type}, url={permission?.Link?.WebUrl}");
+            return permission;
+        }
+        catch (Exception ex)
+        {
+            Log4.Error($"[OneDriveService] 공유 링크 생성 실패: {ex.Message}");
+            return null;
+        }
+    }
+
+    /// <summary>
+    /// 공유 권한 목록 조회
+    /// </summary>
+    public async Task<List<Permission>> GetSharePermissionsAsync(string itemId)
+    {
+        try
+        {
+            var client = _authService.GetGraphClient();
+            var driveId = await GetDriveIdAsync();
+            var response = await client.Drives[driveId].Items[itemId].Permissions.GetAsync();
+            return response?.Value?.ToList() ?? new List<Permission>();
+        }
+        catch (Exception ex)
+        {
+            Log4.Error($"[OneDriveService] 공유 권한 조회 실패: {ex.Message}");
+            return new List<Permission>();
+        }
+    }
+
+    /// <summary>
+    /// 대용량 파일 청크 업로드
+    /// </summary>
+    public async Task<DriveItem?> UploadLargeFileAsync(Stream content, string? parentId, string fileName, IProgress<double>? progress = null, CancellationToken ct = default)
+    {
+        try
+        {
+            var client = _authService.GetGraphClient();
+            var driveId = await GetDriveIdAsync();
+
+            // 업로드 세션 생성
+            var uploadSessionBody = new Microsoft.Graph.Drives.Item.Items.Item.CreateUploadSession.CreateUploadSessionPostRequestBody
+            {
+                Item = new DriveItemUploadableProperties
+                {
+                    Name = fileName,
+                    AdditionalData = new Dictionary<string, object>
+                    {
+                        { "@microsoft.graph.conflictBehavior", "rename" }
+                    }
+                }
+            };
+
+            string itemPath = string.IsNullOrEmpty(parentId) ? $"root:/{fileName}:" : $"items/{parentId}:/{fileName}:";
+
+            var uploadSession = await client.Drives[driveId]
+                .Items[string.IsNullOrEmpty(parentId) ? "root" : parentId]
+                .ItemWithPath(fileName)
+                .CreateUploadSession
+                .PostAsync(uploadSessionBody, cancellationToken: ct);
+
+            if (uploadSession?.UploadUrl == null)
+            {
+                Log4.Error("[OneDriveService] 업로드 세션 생성 실패");
+                return null;
+            }
+
+            // 5MB 청크로 업로드
+            const int chunkSize = 5 * 1024 * 1024;
+            long totalLength = content.Length;
+            long uploaded = 0;
+            int retryCount = 0;
+            const int maxRetries = 3;
+
+            using var httpClient = new System.Net.Http.HttpClient();
+
+            while (uploaded < totalLength)
+            {
+                ct.ThrowIfCancellationRequested();
+
+                int currentChunkSize = (int)Math.Min(chunkSize, totalLength - uploaded);
+                byte[] buffer = new byte[currentChunkSize];
+                int bytesRead = await content.ReadAsync(buffer, 0, currentChunkSize, ct);
+
+                if (bytesRead == 0) break;
+
+                using var chunkContent = new System.Net.Http.ByteArrayContent(buffer, 0, bytesRead);
+                chunkContent.Headers.ContentRange = new System.Net.Http.Headers.ContentRangeHeaderValue(uploaded, uploaded + bytesRead - 1, totalLength);
+                chunkContent.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue("application/octet-stream");
+
+                try
+                {
+                    var response = await httpClient.PutAsync(uploadSession.UploadUrl, chunkContent, ct);
+
+                    if (response.IsSuccessStatusCode)
+                    {
+                        uploaded += bytesRead;
+                        progress?.Report((double)uploaded / totalLength * 100);
+                        retryCount = 0;
+
+                        // 업로드 완료 (200 또는 201 반환)
+                        if (response.StatusCode == System.Net.HttpStatusCode.OK || response.StatusCode == System.Net.HttpStatusCode.Created)
+                        {
+                            var json = await response.Content.ReadAsStringAsync(ct);
+                            Log4.Info($"[OneDriveService] 대용량 파일 업로드 완료: {fileName}");
+                            // 완료 후 아이템 정보 다시 가져오기
+                            var driveItem = await GetItemAsync(parentId ?? "root");
+                            return driveItem;
+                        }
+                    }
+                    else if (retryCount < maxRetries)
+                    {
+                        retryCount++;
+                        content.Position = uploaded; // 다시 같은 위치에서 시도
+                        Log4.Warn($"[OneDriveService] 청크 업로드 재시도 {retryCount}/{maxRetries}");
+                        await Task.Delay(1000 * retryCount, ct);
+                    }
+                    else
+                    {
+                        Log4.Error($"[OneDriveService] 청크 업로드 최대 재시도 초과");
+                        return null;
+                    }
+                }
+                catch (System.Net.Http.HttpRequestException ex) when (retryCount < maxRetries)
+                {
+                    retryCount++;
+                    content.Position = uploaded;
+                    Log4.Warn($"[OneDriveService] 청크 업로드 네트워크 오류, 재시도 {retryCount}: {ex.Message}");
+                    await Task.Delay(1000 * retryCount, ct);
+                }
+            }
+
+            progress?.Report(100);
+            Log4.Info($"[OneDriveService] 대용량 파일 업로드 완료: {fileName} ({FormatFileSize(totalLength)})");
+            return null; // 세션 완료 응답에서 DriveItem을 이미 반환했어야 함
+        }
+        catch (OperationCanceledException)
+        {
+            Log4.Warn($"[OneDriveService] 파일 업로드 취소: {fileName}");
+            throw;
+        }
+        catch (Exception ex)
+        {
+            Log4.Error($"[OneDriveService] 대용량 파일 업로드 실패: {ex.Message}");
+            return null;
+        }
+    }
+
+    /// <summary>
+    /// 파일 미리보기 URL 가져오기 (Office Online 등)
+    /// </summary>
+    public async Task<string?> GetPreviewUrlAsync(string itemId)
+    {
+        try
+        {
+            var client = _authService.GetGraphClient();
+            var driveId = await GetDriveIdAsync();
+            var preview = await client.Drives[driveId].Items[itemId].Preview.PostAsync(new Microsoft.Graph.Drives.Item.Items.Item.Preview.PreviewPostRequestBody());
+            return preview?.GetUrl;
+        }
+        catch (Exception ex)
+        {
+            Log4.Debug($"[OneDriveService] 미리보기 URL 조회 실패 (미지원 파일일 수 있음): {ex.Message}");
+            return null;
+        }
+    }
+
+    /// <summary>
+    /// 파일 썸네일 URL 가져오기
+    /// </summary>
+    public async Task<string?> GetThumbnailUrlAsync(string itemId, string size = "large")
+    {
+        try
+        {
+            var client = _authService.GetGraphClient();
+            var driveId = await GetDriveIdAsync();
+            var thumbnails = await client.Drives[driveId].Items[itemId].Thumbnails.GetAsync();
+            var thumb = thumbnails?.Value?.FirstOrDefault();
+            return size switch
+            {
+                "small" => thumb?.Small?.Url,
+                "medium" => thumb?.Medium?.Url,
+                _ => thumb?.Large?.Url
+            };
+        }
+        catch (Exception ex)
+        {
+            Log4.Debug($"[OneDriveService] 썸네일 조회 실패: {ex.Message}");
+            return null;
+        }
     }
 
     /// <summary>

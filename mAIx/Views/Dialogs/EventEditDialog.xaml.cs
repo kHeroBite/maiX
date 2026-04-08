@@ -81,6 +81,54 @@ public partial class EventEditDialog : FluentWindow
             GenerateTimeSlots();
             ScrollTo0800();
         };
+
+        // 제목에 자연어 날짜/시간 입력 시 자동 파싱
+        SubjectTextBox.LostFocus += SubjectTextBox_LostFocus;
+    }
+
+    private readonly Utilities.NaturalLanguageDateParser _dateParser = new();
+
+    /// <summary>
+    /// 제목 입력 필드 포커스 해제 시 자연어 파싱 시도
+    /// </summary>
+    private void SubjectTextBox_LostFocus(object sender, RoutedEventArgs e)
+    {
+        TryParseNaturalLanguageDate(SubjectTextBox.Text);
+    }
+
+    /// <summary>
+    /// 자연어 날짜/시간 파싱 시도 및 날짜/시간 필드 자동 설정
+    /// </summary>
+    private void TryParseNaturalLanguageDate(string text)
+    {
+        if (string.IsNullOrWhiteSpace(text)) return;
+        // 이미 수동으로 날짜를 변경한 경우 파싱 스킵
+        if (_isEditMode) return;
+
+        var result = _dateParser.Parse(text);
+        if (!result.Success) return;
+
+        if (result.StartDateTime.HasValue)
+        {
+            StartDatePicker.SelectedDate = result.StartDateTime.Value.Date;
+            if (result.StartDateTime.Value.TimeOfDay != TimeSpan.Zero)
+            {
+                StartTimeTextBox.Text = result.StartDateTime.Value.ToString("HH:mm");
+            }
+        }
+
+        if (result.EndDateTime.HasValue)
+        {
+            EndDatePicker.SelectedDate = result.EndDateTime.Value.Date;
+            if (result.EndDateTime.Value.TimeOfDay != TimeSpan.Zero &&
+                result.EndDateTime.Value.TimeOfDay != TimeSpan.FromDays(1).Subtract(TimeSpan.FromSeconds(1)))
+            {
+                EndTimeTextBox.Text = result.EndDateTime.Value.ToString("HH:mm");
+            }
+        }
+
+        _previewDate = result.StartDateTime?.Date ?? _previewDate;
+        UpdatePreviewDate();
     }
 
     /// <summary>

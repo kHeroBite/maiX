@@ -1,0 +1,177 @@
+<UserControl x:Class="mAIx.Controls.KanbanCardControl"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
+             mc:Ignorable="d"
+             d:DesignWidth="280">
+    <Border x:Name="CardBorder" CornerRadius="8"
+            BorderBrush="{DynamicResource ControlElevationBorderBrush}"
+            BorderThickness="1" Cursor="Hand">
+        <!-- 우클릭 컨텍스트 메뉴 -->
+        <Border.ContextMenu>
+            <ContextMenu>
+                <MenuItem Header="열기" Click="OpenTask_Click"/>
+                <Separator/>
+                <MenuItem Header="완료로 표시" Click="CompleteTask_Click"/>
+                <MenuItem Header="우선순위 변경">
+                    <MenuItem Header="🔴 긴급" Tag="1" Click="SetPriority_Click"/>
+                    <MenuItem Header="🟣 중요" Tag="3" Click="SetPriority_Click"/>
+                    <MenuItem Header="🔵 중간" Tag="5" Click="SetPriority_Click"/>
+                    <MenuItem Header="⚪ 낮음" Tag="9" Click="SetPriority_Click"/>
+                </MenuItem>
+                <Separator/>
+                <MenuItem Header="삭제" Click="DeleteTask_Click" Foreground="#D13438"/>
+            </ContextMenu>
+        </Border.ContextMenu>
+        <Border.Style>
+            <Style TargetType="Border">
+                <Setter Property="Background" Value="{DynamicResource CardBackgroundFillColorDefaultBrush}"/>
+                <Style.Triggers>
+                    <Trigger Property="IsMouseOver" Value="True">
+                        <Setter Property="Background" Value="{DynamicResource ControlFillColorSecondaryBrush}"/>
+                    </Trigger>
+                    <DataTrigger Binding="{Binding IsSelected}" Value="True">
+                        <Setter Property="Background" Value="#2D5016"/>
+                        <Setter Property="BorderBrush" Value="#6BB700"/>
+                        <Setter Property="BorderThickness" Value="2"/>
+                    </DataTrigger>
+                </Style.Triggers>
+            </Style>
+        </Border.Style>
+
+        <Grid Margin="12">
+            <Grid.RowDefinitions>
+                <!-- 우선순위 인디케이터 + 완료 체크 -->
+                <RowDefinition Height="Auto"/>
+                <!-- 라벨 태그 -->
+                <RowDefinition Height="Auto"/>
+                <!-- 제목 -->
+                <RowDefinition Height="Auto"/>
+                <!-- 진행률 바 -->
+                <RowDefinition Height="Auto"/>
+                <!-- 메타: 기한 + 체크리스트 + 담당자 -->
+                <RowDefinition Height="Auto"/>
+            </Grid.RowDefinitions>
+
+            <!-- Row 0: 우선순위 바 + 완료 체크박스 -->
+            <Grid Grid.Row="0" Margin="0,0,0,6">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
+                </Grid.ColumnDefinitions>
+
+                <!-- 우선순위 색상 인디케이터 -->
+                <Border Grid.Column="0" Width="4" Height="16" CornerRadius="2"
+                        Background="{Binding PriorityColor}" Margin="0,0,8,0"
+                        ToolTip="{Binding PriorityDisplay}"/>
+
+                <!-- 우선순위 텍스트 -->
+                <TextBlock Grid.Column="1" Text="{Binding PriorityDisplay}" FontSize="11"
+                           Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                           VerticalAlignment="Center"/>
+
+                <!-- 완료 체크박스 -->
+                <CheckBox Grid.Column="2" IsChecked="{Binding IsComplete, Mode=OneWay}"
+                          VerticalAlignment="Center"
+                          Click="CompleteCheckBox_Click"/>
+            </Grid>
+
+            <!-- Row 1: 라벨(카테고리) 태그들 -->
+            <ItemsControl Grid.Row="1" ItemsSource="{Binding AppliedCategories}"
+                          Visibility="{Binding HasCategories, Converter={StaticResource BoolToVisibilityConverter}}"
+                          Margin="0,0,0,6">
+                <ItemsControl.ItemsPanel>
+                    <ItemsPanelTemplate>
+                        <WrapPanel Orientation="Horizontal"/>
+                    </ItemsPanelTemplate>
+                </ItemsControl.ItemsPanel>
+                <ItemsControl.ItemTemplate>
+                    <DataTemplate>
+                        <Border CornerRadius="4" Padding="8,3"
+                                Background="{Binding ColorBrush}"
+                                Margin="0,0,6,4">
+                            <TextBlock Text="{Binding Name}" FontSize="11" FontWeight="Medium"
+                                       Foreground="White"/>
+                        </Border>
+                    </DataTemplate>
+                </ItemsControl.ItemTemplate>
+            </ItemsControl>
+
+            <!-- Row 2: 작업 제목 -->
+            <TextBlock Grid.Row="2" Text="{Binding Title}"
+                       FontSize="13" TextWrapping="Wrap"
+                       TextDecorations="{Binding IsComplete, Converter={StaticResource BoolToStrikethroughConverter}}"/>
+
+            <!-- Row 3: 진행률 바 (0% 초과 시만 표시) -->
+            <ProgressBar Grid.Row="3" Value="{Binding PercentComplete}"
+                         Maximum="100" Height="4" Margin="0,8,0,0"
+                         Visibility="{Binding PercentComplete, Converter={StaticResource IntToVisibilityConverter}}"/>
+
+            <!-- Row 4: 메타 정보 -->
+            <Grid Grid.Row="4" Margin="0,8,0,0">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
+                </Grid.ColumnDefinitions>
+
+                <!-- 좌측: 기한 + 체크리스트 -->
+                <StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center">
+                    <!-- 기한 -->
+                    <StackPanel Orientation="Horizontal" Margin="0,0,8,0"
+                                Visibility="{Binding DueDateTime, Converter={StaticResource NullToVisibilityConverter}}">
+                        <ui:SymbolIcon Symbol="CalendarLtr24" FontSize="14"
+                                       Foreground="{Binding DueStatus, Converter={StaticResource DueStatusToForegroundConverter}}"
+                                       Margin="0,0,4,0"/>
+                        <TextBlock Text="{Binding DueDateDisplay}" FontSize="11"
+                                   Foreground="{Binding DueStatus, Converter={StaticResource DueStatusToForegroundConverter}}"/>
+                    </StackPanel>
+
+                    <!-- 체크리스트 -->
+                    <StackPanel Orientation="Horizontal"
+                                Visibility="{Binding ChecklistItemCount, Converter={StaticResource IntToVisibilityConverter}}">
+                        <ui:SymbolIcon Symbol="CheckboxChecked24" FontSize="12" Margin="0,0,4,0"/>
+                        <TextBlock Text="{Binding ChecklistDisplay}" FontSize="11"/>
+                    </StackPanel>
+                </StackPanel>
+
+                <!-- 우측: 담당자 아바타 -->
+                <ItemsControl Grid.Column="1" ItemsSource="{Binding Assignees}"
+                              Visibility="{Binding HasAssignees, Converter={StaticResource BoolToVisibilityConverter}}">
+                    <ItemsControl.ItemsPanel>
+                        <ItemsPanelTemplate>
+                            <StackPanel Orientation="Horizontal"/>
+                        </ItemsPanelTemplate>
+                    </ItemsControl.ItemsPanel>
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate>
+                            <Grid Width="24" Height="24" Margin="-6,0,0,0" ToolTip="{Binding DisplayName}">
+                                <!-- 사진 있음 -->
+                                <Border CornerRadius="12"
+                                        BorderBrush="{DynamicResource CardBackgroundFillColorDefaultBrush}"
+                                        BorderThickness="2"
+                                        Visibility="{Binding HasPhoto, Converter={StaticResource BoolToVisibilityConverter}}">
+                                    <Border.Background>
+                                        <ImageBrush ImageSource="{Binding PhotoBase64, Converter={StaticResource Base64ToImageSourceConverter}}" Stretch="UniformToFill"/>
+                                    </Border.Background>
+                                </Border>
+                                <!-- 사진 없음 (이니셜) -->
+                                <Border CornerRadius="12"
+                                        Background="{Binding AvatarColor}"
+                                        BorderBrush="{DynamicResource CardBackgroundFillColorDefaultBrush}"
+                                        BorderThickness="2"
+                                        Visibility="{Binding HasPhoto, Converter={StaticResource BoolToVisibilityConverter}, ConverterParameter=Invert}">
+                                    <TextBlock Text="{Binding Initial}" FontSize="10" FontWeight="SemiBold"
+                                               Foreground="White"
+                                               HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                </Border>
+                            </Grid>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+            </Grid>
+        </Grid>
+    </Border>
+</UserControl>

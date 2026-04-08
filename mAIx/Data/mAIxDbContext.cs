@@ -150,6 +150,11 @@ public class mAIxDbContext : DbContext
     /// </summary>
     public DbSet<ReplyLaterItem> ReplyLaterItems { get; set; } = null!;
 
+    /// <summary>
+    /// Planner 커스텀 필드 테이블
+    /// </summary>
+    public DbSet<PlannerCustomField> PlannerCustomFields { get; set; } = null!;
+
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         base.OnModelCreating(modelBuilder);

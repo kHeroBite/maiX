@@ -1,0 +1,181 @@
+<UserControl x:Class="mAIx.Controls.ContactListControl"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
+             xmlns:vm="clr-namespace:mAIx.ViewModels"
+             mc:Ignorable="d"
+             d:DesignHeight="600" d:DesignWidth="320"
+             d:DataContext="{d:DesignInstance Type=vm:ContactsViewModel, IsDesignTimeCreatable=False}">
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+        </Grid.RowDefinitions>
+
+        <!-- 헤더 -->
+        <Border Grid.Row="0" Padding="16,12" BorderBrush="{DynamicResource ControlElevationBorderBrush}" BorderThickness="0,0,0,1">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
+                </Grid.ColumnDefinitions>
+
+                <StackPanel Grid.Column="0" Orientation="Horizontal">
+                    <ui:SymbolIcon Symbol="People24" FontSize="20" Margin="0,0,8,0" VerticalAlignment="Center"/>
+                    <TextBlock Text="연락처" FontSize="18" FontWeight="SemiBold" VerticalAlignment="Center"/>
+                    <TextBlock Text="{Binding TotalCount, StringFormat=' ({0})'}"
+                               FontSize="13" Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                               VerticalAlignment="Center" Margin="4,0,0,0"/>
+                </StackPanel>
+
+                <StackPanel Grid.Column="1" Orientation="Horizontal">
+                    <ui:Button Icon="{ui:SymbolIcon PersonAdd24}" ToolTip="새 연락처"
+                               Appearance="Transparent" Padding="6"
+                               Command="{Binding CreateContactCommand}"/>
+                    <ui:Button Icon="{ui:SymbolIcon ArrowClockwise24}" ToolTip="새로고침"
+                               Appearance="Transparent" Padding="6"
+                               Command="{Binding RefreshCommand}"/>
+                </StackPanel>
+            </Grid>
+        </Border>
+
+        <!-- 검색창 -->
+        <Border Grid.Row="1" Padding="12,8">
+            <ui:TextBox x:Name="SearchBox"
+                        PlaceholderText="이름, 이메일, 회사 검색..."
+                        Icon="{ui:SymbolIcon Search24}"
+                        Text="{Binding SearchText, UpdateSourceTrigger=PropertyChanged}"
+                        TextChanged="SearchBox_TextChanged"/>
+        </Border>
+
+        <!-- 그룹 필터 -->
+        <Border Grid.Row="2" Padding="12,0,12,8">
+            <ItemsControl ItemsSource="{Binding Groups}">
+                <ItemsControl.ItemsPanel>
+                    <ItemsPanelTemplate>
+                        <WrapPanel/>
+                    </ItemsPanelTemplate>
+                </ItemsControl.ItemsPanel>
+                <ItemsControl.ItemTemplate>
+                    <DataTemplate>
+                        <ui:Button Content="{Binding}"
+                                   Margin="0,0,4,4"
+                                   Padding="8,4"
+                                   FontSize="12"
+                                   Appearance="Secondary"
+                                   Click="GroupButton_Click"/>
+                    </DataTemplate>
+                </ItemsControl.ItemTemplate>
+            </ItemsControl>
+        </Border>
+
+        <!-- 연락처 목록 -->
+        <ListBox Grid.Row="3"
+                 x:Name="ContactListBox"
+                 ItemsSource="{Binding FilteredContacts}"
+                 SelectedItem="{Binding SelectedContact, Mode=TwoWay}"
+                 SelectionChanged="ContactListBox_SelectionChanged"
+                 Background="Transparent"
+                 BorderThickness="0"
+                 VirtualizingPanel.IsVirtualizing="True"
+                 VirtualizingPanel.VirtualizationMode="Recycling"
+                 ScrollViewer.HorizontalScrollBarVisibility="Disabled">
+            <ListBox.ItemContainerStyle>
+                <Style TargetType="ListBoxItem">
+                    <Setter Property="Padding" Value="12,8"/>
+                    <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
+                    <Setter Property="Template">
+                        <Setter.Value>
+                            <ControlTemplate TargetType="ListBoxItem">
+                                <Border x:Name="ItemBorder"
+                                        Padding="{TemplateBinding Padding}"
+                                        Background="Transparent"
+                                        CornerRadius="4"
+                                        Margin="4,1">
+                                    <ContentPresenter/>
+                                </Border>
+                                <ControlTemplate.Triggers>
+                                    <Trigger Property="IsMouseOver" Value="True">
+                                        <Setter TargetName="ItemBorder" Property="Background"
+                                                Value="{DynamicResource SubtleFillColorSecondaryBrush}"/>
+                                    </Trigger>
+                                    <Trigger Property="IsSelected" Value="True">
+                                        <Setter TargetName="ItemBorder" Property="Background"
+                                                Value="{DynamicResource SubtleFillColorTertiaryBrush}"/>
+                                    </Trigger>
+                                </ControlTemplate.Triggers>
+                            </ControlTemplate>
+                        </Setter.Value>
+                    </Setter>
+                </Style>
+            </ListBox.ItemContainerStyle>
+            <ListBox.ItemTemplate>
+                <DataTemplate DataType="{x:Type vm:ContactItemModel}">
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="40"/>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+
+                        <!-- 아바타 -->
+                        <Border Grid.Column="0" Width="36" Height="36"
+                                CornerRadius="18"
+                                VerticalAlignment="Center">
+                            <Border.Background>
+                                <SolidColorBrush Color="{Binding AvatarColor}"/>
+                            </Border.Background>
+                            <TextBlock Text="{Binding Initials}"
+                                       HorizontalAlignment="Center" VerticalAlignment="Center"
+                                       FontSize="14" FontWeight="SemiBold"
+                                       Foreground="White"/>
+                        </Border>
+
+                        <!-- 이름/이메일 -->
+                        <StackPanel Grid.Column="1" Margin="8,0,0,0" VerticalAlignment="Center">
+                            <TextBlock Text="{Binding DisplayName}"
+                                       FontSize="14" FontWeight="Medium"
+                                       TextTrimming="CharacterEllipsis"/>
+                            <TextBlock Text="{Binding Email}"
+                                       FontSize="12"
+                                       Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                                       TextTrimming="CharacterEllipsis"/>
+                        </StackPanel>
+
+                        <!-- VIP 표시 -->
+                        <ui:SymbolIcon Grid.Column="2"
+                                       Symbol="Star24"
+                                       FontSize="14"
+                                       Foreground="#FFB900"
+                                       VerticalAlignment="Center"
+                                       Visibility="{Binding IsVip, Converter={StaticResource BoolToVisibilityConverter}}"/>
+                    </Grid>
+                </DataTemplate>
+            </ListBox.ItemTemplate>
+        </ListBox>
+
+        <!-- 로딩 -->
+        <ui:ProgressRing Grid.Row="3"
+                         Width="40" Height="40"
+                         IsIndeterminate="True"
+                         HorizontalAlignment="Center" VerticalAlignment="Center"
+                         Visibility="{Binding IsLoading, Converter={StaticResource BoolToVisibilityConverter}}"/>
+
+        <!-- 빈 상태 -->
+        <StackPanel Grid.Row="3"
+                    HorizontalAlignment="Center" VerticalAlignment="Center"
+                    Visibility="{Binding FilteredContacts.Count, Converter={StaticResource ZeroToVisibleConverter}}">
+            <ui:SymbolIcon Symbol="PeopleSearch24" FontSize="48"
+                           Foreground="{DynamicResource TextFillColorTertiaryBrush}"
+                           HorizontalAlignment="Center" Margin="0,0,0,12"/>
+            <TextBlock Text="연락처가 없습니다"
+                       FontSize="14"
+                       Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                       HorizontalAlignment="Center"/>
+        </StackPanel>
+    </Grid>
+</UserControl>

@@ -172,6 +172,50 @@ public class GraphActivityService
         return allActivities.OrderByDescending(a => a.Timestamp).Take(count);
     }
 
+    /// <summary>
+    /// 최근 활동 조회 (특정 시점 이후)
+    /// </summary>
+    public async Task<IEnumerable<ActivityItem>> GetRecentActivitiesAsync(DateTime since)
+    {
+        var allActivities = new List<ActivityItem>();
+
+        var mailTask = GetRecentMailActivityAsync(20);
+        var chatTask = GetRecentChatActivityAsync(20);
+        var fileTask = GetRecentFileActivityAsync(20);
+
+        await Task.WhenAll(mailTask, chatTask, fileTask);
+
+        allActivities.AddRange((await mailTask).Where(a => a.Timestamp >= since));
+        allActivities.AddRange((await chatTask).Where(a => a.Timestamp >= since));
+        allActivities.AddRange((await fileTask).Where(a => a.Timestamp >= since));
+
+        return allActivities.OrderByDescending(a => a.Timestamp);
+    }
+
+    /// <summary>
+    /// 활동 읽음 처리 (메일인 경우)
+    /// </summary>
+    public async Task<bool> MarkActivityReadAsync(string activityId, ActivityType type)
+    {
+        try
+        {
+            if (type == ActivityType.Email && !string.IsNullOrEmpty(activityId))
+            {
+                var client = _authService.GetGraphClient();
+                var message = new Message { IsRead = true };
+                await client.Me.Messages[activityId].PatchAsync(message);
+                Log4.Debug($"[ActivityService] 활동 읽음 처리: {activityId}");
+                return true;
+            }
+            return false;
+        }
+        catch (Exception ex)
+        {
+            Log4.Error($"[ActivityService] 활동 읽음 처리 실패: {ex.Message}");
+            return false;
+        }
+    }
+
     private string GetFileActivityDescription(DriveItem item)
     {
         var lastModifiedBy = item.LastModifiedBy?.User?.DisplayName ?? "알 수 없음";

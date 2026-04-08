@@ -1,0 +1,233 @@
+<UserControl x:Class="mAIx.Controls.ContactDetailControl"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
+             xmlns:vm="clr-namespace:mAIx.ViewModels"
+             mc:Ignorable="d"
+             d:DesignHeight="600" d:DesignWidth="500"
+             d:DataContext="{d:DesignInstance Type=vm:ContactItemModel, IsDesignTimeCreatable=False}">
+    <Grid>
+        <!-- 연락처 미선택 시 -->
+        <StackPanel x:Name="EmptyState"
+                    HorizontalAlignment="Center" VerticalAlignment="Center"
+                    Visibility="Visible">
+            <ui:SymbolIcon Symbol="PersonInfo24" FontSize="64"
+                           Foreground="{DynamicResource TextFillColorTertiaryBrush}"
+                           HorizontalAlignment="Center" Margin="0,0,0,16"/>
+            <TextBlock Text="연락처를 선택하세요"
+                       FontSize="16"
+                       Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                       HorizontalAlignment="Center"/>
+        </StackPanel>
+
+        <!-- 연락처 상세 -->
+        <ScrollViewer x:Name="DetailPanel"
+                      VerticalScrollBarVisibility="Auto"
+                      Visibility="Collapsed">
+            <StackPanel Margin="32,24">
+
+                <!-- 프로필 영역 -->
+                <StackPanel HorizontalAlignment="Center" Margin="0,0,0,24">
+                    <!-- 아바타 (이니셜 기반) -->
+                    <Border Width="80" Height="80" CornerRadius="40"
+                            HorizontalAlignment="Center" Margin="0,0,0,12">
+                        <Border.Background>
+                            <SolidColorBrush Color="{Binding AvatarColor}"/>
+                        </Border.Background>
+                        <TextBlock Text="{Binding Initials}"
+                                   HorizontalAlignment="Center" VerticalAlignment="Center"
+                                   FontSize="28" FontWeight="SemiBold"
+                                   Foreground="White"/>
+                    </Border>
+
+                    <!-- 이름 -->
+                    <TextBlock Text="{Binding DisplayName}"
+                               FontSize="22" FontWeight="SemiBold"
+                               HorizontalAlignment="Center"
+                               TextWrapping="Wrap" TextAlignment="Center"/>
+
+                    <!-- 직함 -->
+                    <TextBlock Text="{Binding PositionString}"
+                               FontSize="14"
+                               Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                               HorizontalAlignment="Center"
+                               TextWrapping="Wrap" TextAlignment="Center"
+                               Margin="0,4,0,0"/>
+
+                    <!-- VIP 뱃지 -->
+                    <Border CornerRadius="10" Padding="8,3"
+                            Background="#33FFB900"
+                            HorizontalAlignment="Center" Margin="0,8,0,0"
+                            Visibility="{Binding IsVip, Converter={StaticResource BoolToVisibilityConverter}}">
+                        <StackPanel Orientation="Horizontal">
+                            <ui:SymbolIcon Symbol="Star24" FontSize="12" Foreground="#FFB900" Margin="0,0,4,0"/>
+                            <TextBlock Text="VIP" FontSize="12" FontWeight="Medium" Foreground="#FFB900"/>
+                        </StackPanel>
+                    </Border>
+                </StackPanel>
+
+                <!-- 빠른 액션 버튼 -->
+                <Border Padding="0,0,0,24">
+                    <UniformGrid Columns="3" HorizontalAlignment="Center" MaxWidth="300">
+                        <Button x:Name="SendEmailButton" Click="SendEmailButton_Click"
+                                Margin="4" Padding="12,10"
+                                HorizontalContentAlignment="Center"
+                                Background="{DynamicResource SubtleFillColorSecondaryBrush}"
+                                BorderThickness="0">
+                            <StackPanel>
+                                <ui:SymbolIcon Symbol="Mail24" FontSize="20" HorizontalAlignment="Center"/>
+                                <TextBlock Text="이메일" FontSize="11" HorizontalAlignment="Center" Margin="0,4,0,0"/>
+                            </StackPanel>
+                        </Button>
+                        <Button x:Name="CallButton" Click="CallButton_Click"
+                                Margin="4" Padding="12,10"
+                                HorizontalContentAlignment="Center"
+                                Background="{DynamicResource SubtleFillColorSecondaryBrush}"
+                                BorderThickness="0">
+                            <StackPanel>
+                                <ui:SymbolIcon Symbol="Call24" FontSize="20" HorizontalAlignment="Center"/>
+                                <TextBlock Text="전화" FontSize="11" HorizontalAlignment="Center" Margin="0,4,0,0"/>
+                            </StackPanel>
+                        </Button>
+                        <Button x:Name="CalendarButton" Click="CalendarButton_Click"
+                                Margin="4" Padding="12,10"
+                                HorizontalContentAlignment="Center"
+                                Background="{DynamicResource SubtleFillColorSecondaryBrush}"
+                                BorderThickness="0">
+                            <StackPanel>
+                                <ui:SymbolIcon Symbol="CalendarAdd24" FontSize="20" HorizontalAlignment="Center"/>
+                                <TextBlock Text="일정" FontSize="11" HorizontalAlignment="Center" Margin="0,4,0,0"/>
+                            </StackPanel>
+                        </Button>
+                    </UniformGrid>
+                </Border>
+
+                <!-- 정보 섹션 -->
+                <Border Background="{DynamicResource CardBackgroundFillColorDefaultBrush}"
+                        CornerRadius="8" Padding="16" Margin="0,0,0,16">
+                    <StackPanel>
+                        <TextBlock Text="연락처 정보" FontSize="14" FontWeight="SemiBold" Margin="0,0,0,12"/>
+
+                        <!-- 이메일 -->
+                        <Grid Margin="0,0,0,10" Visibility="{Binding Email, Converter={StaticResource NullToVisibilityConverter}}">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="28"/>
+                                <ColumnDefinition Width="*"/>
+                            </Grid.ColumnDefinitions>
+                            <ui:SymbolIcon Grid.Column="0" Symbol="Mail24" FontSize="16"
+                                           Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                                           VerticalAlignment="Top" Margin="0,2,0,0"/>
+                            <StackPanel Grid.Column="1">
+                                <TextBlock Text="이메일" FontSize="11"
+                                           Foreground="{DynamicResource TextFillColorTertiaryBrush}"/>
+                                <TextBlock Text="{Binding Email}" FontSize="13" TextWrapping="Wrap"
+                                           Cursor="Hand" MouseLeftButtonUp="Email_Click">
+                                    <TextBlock.Style>
+                                        <Style TargetType="TextBlock">
+                                            <Style.Triggers>
+                                                <Trigger Property="IsMouseOver" Value="True">
+                                                    <Setter Property="TextDecorations" Value="Underline"/>
+                                                </Trigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </TextBlock.Style>
+                                </TextBlock>
+                            </StackPanel>
+                        </Grid>
+
+                        <!-- 전화번호 -->
+                        <Grid Margin="0,0,0,10" Visibility="{Binding Phone, Converter={StaticResource NullToVisibilityConverter}}">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="28"/>
+                                <ColumnDefinition Width="*"/>
+                            </Grid.ColumnDefinitions>
+                            <ui:SymbolIcon Grid.Column="0" Symbol="Call24" FontSize="16"
+                                           Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                                           VerticalAlignment="Top" Margin="0,2,0,0"/>
+                            <StackPanel Grid.Column="1">
+                                <TextBlock Text="전화" FontSize="11"
+                                           Foreground="{DynamicResource TextFillColorTertiaryBrush}"/>
+                                <TextBlock Text="{Binding Phone}" FontSize="13"/>
+                            </StackPanel>
+                        </Grid>
+
+                        <!-- 회사 -->
+                        <Grid Margin="0,0,0,10" Visibility="{Binding CompanyName, Converter={StaticResource NullToVisibilityConverter}}">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="28"/>
+                                <ColumnDefinition Width="*"/>
+                            </Grid.ColumnDefinitions>
+                            <ui:SymbolIcon Grid.Column="0" Symbol="Building24" FontSize="16"
+                                           Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                                           VerticalAlignment="Top" Margin="0,2,0,0"/>
+                            <StackPanel Grid.Column="1">
+                                <TextBlock Text="회사" FontSize="11"
+                                           Foreground="{DynamicResource TextFillColorTertiaryBrush}"/>
+                                <TextBlock Text="{Binding CompanyName}" FontSize="13" TextWrapping="Wrap"/>
+                            </StackPanel>
+                        </Grid>
+
+                        <!-- 부서 -->
+                        <Grid Margin="0,0,0,10" Visibility="{Binding Department, Converter={StaticResource NullToVisibilityConverter}}">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="28"/>
+                                <ColumnDefinition Width="*"/>
+                            </Grid.ColumnDefinitions>
+                            <ui:SymbolIcon Grid.Column="0" Symbol="Organization24" FontSize="16"
+                                           Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                                           VerticalAlignment="Top" Margin="0,2,0,0"/>
+                            <StackPanel Grid.Column="1">
+                                <TextBlock Text="부서" FontSize="11"
+                                           Foreground="{DynamicResource TextFillColorTertiaryBrush}"/>
+                                <TextBlock Text="{Binding Department}" FontSize="13"/>
+                            </StackPanel>
+                        </Grid>
+
+                        <!-- 직위 -->
+                        <Grid Margin="0,0,0,0" Visibility="{Binding JobTitle, Converter={StaticResource NullToVisibilityConverter}}">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="28"/>
+                                <ColumnDefinition Width="*"/>
+                            </Grid.ColumnDefinitions>
+                            <ui:SymbolIcon Grid.Column="0" Symbol="PersonBoard24" FontSize="16"
+                                           Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                                           VerticalAlignment="Top" Margin="0,2,0,0"/>
+                            <StackPanel Grid.Column="1">
+                                <TextBlock Text="직위" FontSize="11"
+                                           Foreground="{DynamicResource TextFillColorTertiaryBrush}"/>
+                                <TextBlock Text="{Binding JobTitle}" FontSize="13"/>
+                            </StackPanel>
+                        </Grid>
+                    </StackPanel>
+                </Border>
+
+                <!-- 메모 섹션 -->
+                <Border Background="{DynamicResource CardBackgroundFillColorDefaultBrush}"
+                        CornerRadius="8" Padding="16" Margin="0,0,0,16"
+                        Visibility="{Binding PersonalNotes, Converter={StaticResource NullToVisibilityConverter}}">
+                    <StackPanel>
+                        <TextBlock Text="메모" FontSize="14" FontWeight="SemiBold" Margin="0,0,0,8"/>
+                        <TextBlock Text="{Binding PersonalNotes}" FontSize="13"
+                                   TextWrapping="Wrap"
+                                   Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
+                    </StackPanel>
+                </Border>
+
+                <!-- 삭제 버튼 -->
+                <Button x:Name="DeleteButton" Click="DeleteButton_Click"
+                        HorizontalAlignment="Center" Margin="0,8,0,0"
+                        Padding="16,8"
+                        Foreground="#D13438"
+                        Background="Transparent" BorderThickness="0">
+                    <StackPanel Orientation="Horizontal">
+                        <ui:SymbolIcon Symbol="Delete24" FontSize="16" Margin="0,0,6,0"/>
+                        <TextBlock Text="연락처 삭제" FontSize="13"/>
+                    </StackPanel>
+                </Button>
+
+            </StackPanel>
+        </ScrollViewer>
+    </Grid>
+</UserControl>

@@ -420,6 +420,68 @@ public class GraphContactService
     }
 
     /// <summary>
+    /// 연락처 생성
+    /// </summary>
+    /// <param name="contact">생성할 연락처</param>
+    /// <returns>생성된 연락처</returns>
+    public async Task<Contact?> CreateContactAsync(Contact contact)
+    {
+        try
+        {
+            var client = _authService.GetGraphClient();
+            var created = await client.Me.Contacts.PostAsync(contact);
+            _logger.Information("연락처 생성: {Name}", created?.DisplayName);
+            return created;
+        }
+        catch (Exception ex)
+        {
+            _logger.Error(ex, "연락처 생성 실패");
+            throw;
+        }
+    }
+
+    /// <summary>
+    /// 연락처 수정
+    /// </summary>
+    /// <param name="contactId">연락처 ID</param>
+    /// <param name="contact">수정할 내용</param>
+    /// <returns>수정된 연락처</returns>
+    public async Task<Contact?> UpdateContactAsync(string contactId, Contact contact)
+    {
+        try
+        {
+            var client = _authService.GetGraphClient();
+            var updated = await client.Me.Contacts[contactId].PatchAsync(contact);
+            _logger.Information("연락처 수정: {Id}", contactId);
+            return updated;
+        }
+        catch (Exception ex)
+        {
+            _logger.Error(ex, "연락처 수정 실패: {Id}", contactId);
+            throw;
+        }
+    }
+
+    /// <summary>
+    /// 연락처 삭제
+    /// </summary>
+    /// <param name="contactId">연락처 ID</param>
+    public async Task DeleteContactAsync(string contactId)
+    {
+        try
+        {
+            var client = _authService.GetGraphClient();
+            await client.Me.Contacts[contactId].DeleteAsync();
+            _logger.Information("연락처 삭제: {Id}", contactId);
+        }
+        catch (Exception ex)
+        {
+            _logger.Error(ex, "연락처 삭제 실패: {Id}", contactId);
+            throw;
+        }
+    }
+
+    /// <summary>
     /// OData 문자열 이스케이프
     /// </summary>
     private string EscapeODataString(string value)

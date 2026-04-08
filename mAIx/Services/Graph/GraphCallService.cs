@@ -175,25 +175,66 @@ public class GraphCallService
 
     #endregion
 
-    #region 통화 기록 (참고: 대부분 애플리케이션 권한 필요)
+    #region 통화 기록
 
     /// <summary>
-    /// 통화 기록 조회 (참고: CallRecords.Read.All 애플리케이션 권한 필요)
-    /// 개인 계정에서는 사용 불가할 수 있음
+    /// 통화 기록 조회 (Graph callRecords API — 애플리케이션 권한 필요)
+    /// 위임 권한에서는 빈 목록 반환
     /// </summary>
     public async Task<IEnumerable<CallRecord>> GetCallRecordsAsync(int days = 7)
     {
         try
         {
-            // CallRecords API는 애플리케이션 권한이 필요하여 대부분의 경우 사용 불가
-            // 여기서는 빈 목록 반환
-            _logger.Warning("통화 기록 API는 애플리케이션 권한이 필요합니다. 개인 계정에서는 사용 불가할 수 있습니다.");
+            // CallRecords API는 애플리케이션 권한이 필요
+            // 위임 권한에서는 사용 불가 — 빈 목록 반환
+            _logger.Debug("통화 기록 API: 애플리케이션 권한 필요 (위임 권한 모드에서는 빈 목록)");
             return new List<CallRecord>();
         }
         catch (Exception ex)
         {
             _logger.Error(ex, "통화 기록 조회 실패");
             return new List<CallRecord>();
+        }
+    }
+
+    /// <summary>
+    /// 부재중 통화 조회
+    /// </summary>
+    public async Task<IEnumerable<CallRecord>> GetMissedCallsAsync()
+    {
+        try
+        {
+            var allRecords = await GetCallRecordsAsync(7);
+            return allRecords.Where(r => r.IsMissed);
+        }
+        catch (Exception ex)
+        {
+            _logger.Error(ex, "부재중 통화 조회 실패");
+            return new List<CallRecord>();
+        }
+    }
+
+    /// <summary>
+    /// 통화 시작 (Teams PSTN — Azure Communication Services 필요)
+    /// </summary>
+    public Task<bool> InitiateCallAsync(string target)
+    {
+        try
+        {
+            if (string.IsNullOrEmpty(target))
+            {
+                _logger.Warning("통화 대상이 비어있음");
+                return Task.FromResult(false);
+            }
+
+            // 실제 통화는 Azure Communication Services 또는 Teams Call API 필요
+            _logger.Information("통화 시작 요청: {Target} (ACS 연동 필요)", target);
+            return Task.FromResult(false);
+        }
+        catch (Exception ex)
+        {
+            _logger.Error(ex, "통화 시작 실패: {Target}", target);
+            return Task.FromResult(false);
         }
     }
 

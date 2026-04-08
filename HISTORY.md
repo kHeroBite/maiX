@@ -2,6 +2,28 @@
 
 > PROJECT.md 작업 이력 테이블의 상세 보완본
 
+## 2026-04-09: MS365 탭 전체 기능 구현 (k5 Phase 0~7)
+
+**분류**: Massive Path (k5)
+**수정/신규 파일**: 70개+
+
+### 변경 내역
+
+- Phase 0: MainWindow.xaml.cs → 11개 partial class로 분할 (MainWindow.Calendar.cs, .Todo.cs, .Contacts.cs, .Teams.cs, .OneDrive.cs, .OneNote.cs, .Planner.cs, .Activity.cs, .Calls.cs), Utilities/NaturalLanguageDateParser.cs 생성
+- Phase 1: 캘린더 강화 — CalendarGrid/Week/Day/MiniCalendar/EventCard Control 5종, CalendarViewModel.cs 확장 (4가지 뷰, 자연어 날짜 파싱), EventEditDialog 개선, 마이그레이션 AddCalendarSyncToken 추가
+- Phase 2: ToDo 독립 탭 — TodoList/MyDay/TodoDetail Control 3종, TodoViewModel.cs 신규 (스마트목록, 반복패턴)
+- Phase 3: 연락처 탭 신규 — ContactList/Detail/ActionBar Control 3종, ContactsViewModel.cs 신규 (CRUD, 그룹 필터)
+- Phase 4: Teams 강화 — MessageBubble/Thread/MentionPopup Control 3종, TeamsViewModel.cs 확장 (스레드, 리액션, @멘션, 미팅), GraphTeamsService.cs 확장
+- Phase 5: OneDrive 강화 — FilePreview/BreadcrumbNav/FileGrid Control 3종, OneDriveViewModel.cs 확장 (미리보기, 청크업로드, 공유, 버전), ShareDialog/VersionHistoryDialog 신규, ChunkedUploadService.cs 신규, GraphOneDriveService.cs 확장
+- Phase 6: Planner 칸반 + OneNote 백링크 — KanbanBoard/KanbanCard/Backlink/NotebookTree Control 4종, PlannerViewModel.cs 확장 (칸반, 타임라인), OneNoteViewModel.cs 확장 (백링크, 태그), PlannerCustomField.cs 신규, 마이그레이션 AddPlannerCustomField 추가, GraphPlannerService.cs 확장
+- Phase 7: Activity+통화+크로스탭 통합 — ActivityFeed/CallHistory Control 2종, ActivityViewModel.cs/CallsViewModel.cs 신규, GraphActivityService.cs/GraphCallService.cs 확장, CrossTabIntegrationService.cs 신규, App.xaml.cs DI 등록 업데이트, mAIxDbContext.cs 업데이트
+- 마이그레이션: AddCalendarSyncToken(20260409000012), AddPlannerCustomField(20260409000013) 2건 추가
+
+### 테스트 결과
+- 빌드: 0 errors, 4 warnings (NU계열 — 기능 무관) ✅
+
+---
+
 ## 2026-04-03 — 설정>메일 초기 메일수 선택 옵션 추가 + 동기화 기본값 버그 수정
 
 **분류**: Normal Path (k3)

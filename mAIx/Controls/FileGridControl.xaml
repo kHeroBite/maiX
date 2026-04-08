@@ -1,0 +1,131 @@
+<UserControl x:Class="mAIx.Controls.FileGridControl"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
+             mc:Ignorable="d"
+             d:DesignHeight="600" d:DesignWidth="800">
+
+    <Grid>
+        <!-- 리스트 뷰 -->
+        <ListView x:Name="FileListView" Visibility="Visible"
+                  SelectionMode="Extended"
+                  SelectionChanged="FileListView_SelectionChanged"
+                  MouseDoubleClick="FileListView_MouseDoubleClick"
+                  BorderThickness="0"
+                  Background="Transparent">
+            <ListView.ItemContainerStyle>
+                <Style TargetType="ListViewItem">
+                    <Setter Property="Padding" Value="16,10"/>
+                    <Setter Property="Margin" Value="0"/>
+                    <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
+                    <Setter Property="Foreground" Value="{DynamicResource TextFillColorPrimaryBrush}"/>
+                    <Setter Property="Background" Value="Transparent"/>
+                    <Setter Property="BorderThickness" Value="0,0,0,1"/>
+                    <Setter Property="BorderBrush" Value="{DynamicResource ControlElevationBorderBrush}"/>
+                    <Style.Triggers>
+                        <Trigger Property="IsMouseOver" Value="True">
+                            <Setter Property="Background" Value="{DynamicResource ControlFillColorSecondaryBrush}"/>
+                        </Trigger>
+                        <Trigger Property="IsSelected" Value="True">
+                            <Setter Property="Background" Value="{DynamicResource ControlFillColorDefaultBrush}"/>
+                        </Trigger>
+                    </Style.Triggers>
+                </Style>
+            </ListView.ItemContainerStyle>
+            <ListView.ItemTemplate>
+                <DataTemplate>
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="40"/>
+                            <ColumnDefinition Width="*" MinWidth="200"/>
+                            <ColumnDefinition Width="140"/>
+                            <ColumnDefinition Width="120"/>
+                            <ColumnDefinition Width="100"/>
+                        </Grid.ColumnDefinitions>
+
+                        <!-- 아이콘 -->
+                        <Grid Grid.Column="0" Width="32" Height="32">
+                            <ui:SymbolIcon Symbol="Folder24" FontSize="24"
+                                           Foreground="#FFB900"
+                                           Visibility="{Binding IsFolder, Converter={StaticResource BoolToVisibilityConverter}}"/>
+                            <ui:SymbolIcon Symbol="Document24" FontSize="24"
+                                           Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                                           Visibility="{Binding IsFolder, Converter={StaticResource BoolToVisibilityConverter}, ConverterParameter=Invert}"/>
+                        </Grid>
+
+                        <!-- 이름 -->
+                        <StackPanel Grid.Column="1" VerticalAlignment="Center" Margin="8,0,0,0">
+                            <TextBlock Text="{Binding Name}" FontSize="13"
+                                       Foreground="{DynamicResource TextFillColorPrimaryBrush}"
+                                       TextTrimming="CharacterEllipsis"/>
+                        </StackPanel>
+
+                        <!-- 수정 날짜 -->
+                        <TextBlock Grid.Column="2" Text="{Binding LastModifiedDisplay}"
+                                   FontSize="12" VerticalAlignment="Center"
+                                   Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
+
+                        <!-- 소유자 -->
+                        <TextBlock Grid.Column="3" Text="{Binding OwnerDisplayName, FallbackValue=나}"
+                                   FontSize="12" VerticalAlignment="Center"
+                                   Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
+
+                        <!-- 크기 -->
+                        <TextBlock Grid.Column="4" Text="{Binding SizeDisplay}"
+                                   FontSize="12" VerticalAlignment="Center"
+                                   HorizontalAlignment="Right" Margin="0,0,8,0"
+                                   Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
+                    </Grid>
+                </DataTemplate>
+            </ListView.ItemTemplate>
+        </ListView>
+
+        <!-- 그리드 뷰 -->
+        <ScrollViewer x:Name="FileGridScrollViewer" Visibility="Collapsed"
+                      VerticalScrollBarVisibility="Auto">
+            <ItemsControl x:Name="FileGridItems">
+                <ItemsControl.ItemsPanel>
+                    <ItemsPanelTemplate>
+                        <WrapPanel Orientation="Horizontal"/>
+                    </ItemsPanelTemplate>
+                </ItemsControl.ItemsPanel>
+                <ItemsControl.ItemTemplate>
+                    <DataTemplate>
+                        <Border Width="140" Height="140" Margin="8"
+                                CornerRadius="8" Padding="8"
+                                Background="{DynamicResource ControlFillColorDefaultBrush}"
+                                BorderThickness="1"
+                                BorderBrush="{DynamicResource ControlElevationBorderBrush}"
+                                Cursor="Hand"
+                                MouseLeftButtonDown="GridItem_MouseLeftButtonDown"
+                                MouseLeftButtonUp="GridItem_MouseLeftButtonUp">
+                            <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center">
+                                <!-- 아이콘 -->
+                                <Grid Width="48" Height="48" Margin="0,0,0,8">
+                                    <ui:SymbolIcon Symbol="Folder48" FontSize="48"
+                                                   Foreground="#FFB900"
+                                                   Visibility="{Binding IsFolder, Converter={StaticResource BoolToVisibilityConverter}}"/>
+                                    <ui:SymbolIcon Symbol="Document48" FontSize="48"
+                                                   Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                                                   Visibility="{Binding IsFolder, Converter={StaticResource BoolToVisibilityConverter}, ConverterParameter=Invert}"/>
+                                </Grid>
+                                <!-- 이름 -->
+                                <TextBlock Text="{Binding Name}" FontSize="12"
+                                           TextTrimming="CharacterEllipsis"
+                                           TextAlignment="Center" MaxWidth="120"
+                                           Foreground="{DynamicResource TextFillColorPrimaryBrush}"/>
+                                <!-- 크기 -->
+                                <TextBlock Text="{Binding SizeDisplay}" FontSize="10"
+                                           TextAlignment="Center"
+                                           Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                                           Margin="0,2,0,0"/>
+                            </StackPanel>
+                        </Border>
+                    </DataTemplate>
+                </ItemsControl.ItemTemplate>
+            </ItemsControl>
+        </ScrollViewer>
+    </Grid>
+</UserControl>

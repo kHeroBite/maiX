@@ -25,6 +25,7 @@ using mAIx.Services.Sync;
 using mAIx.ViewModels;
 using mAIx.Services.Api;
 using mAIx.Utils;
+using mAIx.Utilities;
 using mAIx.Views;
 
 namespace mAIx;
@@ -390,6 +391,12 @@ public partial class App : Application
         // Call 서비스 등록
         services.AddScoped<GraphCallService>();
 
+        // ToDo 서비스 등록
+        services.AddSingleton<GraphToDoService>();
+
+        // 공용 유틸리티 등록
+        services.AddSingleton<NaturalLanguageDateParser>();
+
         // ViewModels 등록
         services.AddTransient<MainViewModel>();
         services.AddTransient<LoginViewModel>();
@@ -400,6 +407,7 @@ public partial class App : Application
         services.AddTransient<ActivityViewModel>();
         services.AddTransient<CallsViewModel>();
         services.AddTransient<NewsletterViewModel>();
+        services.AddSingleton<TodoViewModel>();
 
         // Views 등록
         services.AddTransient<MainWindow>();

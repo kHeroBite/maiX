@@ -1,0 +1,75 @@
+<UserControl x:Class="mAIx.Controls.WeekViewControl"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
+             mc:Ignorable="d"
+             d:DesignHeight="700" d:DesignWidth="900">
+    <Grid>
+        <Grid.RowDefinitions>
+            <!-- 종일 이벤트 영역 -->
+            <RowDefinition Height="Auto"/>
+            <!-- 타임라인 -->
+            <RowDefinition Height="*"/>
+        </Grid.RowDefinitions>
+
+        <!-- 종일 이벤트 영역 -->
+        <Border Grid.Row="0"
+                BorderBrush="{DynamicResource ControlElevationBorderBrush}"
+                BorderThickness="0,0,0,1"
+                MinHeight="32">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <!-- 시간 레이블 영역 -->
+                    <ColumnDefinition Width="60"/>
+                    <!-- 7일 -->
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="*"/>
+                </Grid.ColumnDefinitions>
+
+                <!-- 요일 헤더 + 종일 이벤트 -->
+                <TextBlock Grid.Column="0" Text="종일" FontSize="10"
+                           Foreground="{DynamicResource TextFillColorTertiaryBrush}"
+                           HorizontalAlignment="Center" VerticalAlignment="Center"/>
+
+                <!-- 요일 헤더는 코드비하인드에서 동적 생성 -->
+                <StackPanel x:Name="DayHeader0" Grid.Column="1" Margin="2"/>
+                <StackPanel x:Name="DayHeader1" Grid.Column="2" Margin="2"/>
+                <StackPanel x:Name="DayHeader2" Grid.Column="3" Margin="2"/>
+                <StackPanel x:Name="DayHeader3" Grid.Column="4" Margin="2"/>
+                <StackPanel x:Name="DayHeader4" Grid.Column="5" Margin="2"/>
+                <StackPanel x:Name="DayHeader5" Grid.Column="6" Margin="2"/>
+                <StackPanel x:Name="DayHeader6" Grid.Column="7" Margin="2"/>
+            </Grid>
+        </Border>
+
+        <!-- 타임라인 스크롤 영역 -->
+        <ScrollViewer Grid.Row="1"
+                      x:Name="TimelineScrollViewer"
+                      VerticalScrollBarVisibility="Auto"
+                      HorizontalScrollBarVisibility="Disabled">
+            <Grid x:Name="TimelineGrid">
+                <Grid.ColumnDefinitions>
+                    <!-- 시간 레이블 -->
+                    <ColumnDefinition Width="60"/>
+                    <!-- 7일 -->
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="*"/>
+                </Grid.ColumnDefinitions>
+
+                <!-- 시간 레이블 + 가로선은 코드비하인드에서 동적 생성 -->
+            </Grid>
+        </ScrollViewer>
+    </Grid>
+</UserControl>

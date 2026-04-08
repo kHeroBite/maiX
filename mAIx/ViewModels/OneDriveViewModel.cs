@@ -1,11 +1,14 @@
 using System;
 using System.Collections.ObjectModel;
+using System.IO;
 using System.Linq;
+using System.Threading;
 using System.Threading.Tasks;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Microsoft.Graph.Models;
 using mAIx.Models;
+using mAIx.Services;
 using mAIx.Services.Graph;
 using Serilog;
 
@@ -79,6 +82,36 @@ public partial class OneDriveViewModel : ViewModelBase
     /// </summary>
     [ObservableProperty]
     private string _viewMode = "list";
+
+    /// <summary>
+    /// 그리드 뷰 여부
+    /// </summary>
+    [ObservableProperty]
+    private bool _isGridView;
+
+    /// <summary>
+    /// 현재 선택 아이템 즐겨찾기 여부
+    /// </summary>
+    [ObservableProperty]
+    private bool _isFavorite;
+
+    /// <summary>
+    /// 업로드 진행률 (0~100)
+    /// </summary>
+    [ObservableProperty]
+    private double _uploadProgress;
+
+    /// <summary>
+    /// 업로드 중 여부
+    /// </summary>
+    [ObservableProperty]
+    private bool _isUploading;
+
+    /// <summary>
+    /// 미리보기 패널 표시 여부
+    /// </summary>
+    [ObservableProperty]
+    private bool _isPreviewVisible;
 
     /// <summary>
     /// 현재 사이드바 뷰 (home, myfiles, shared, recent)
@@ -519,6 +552,91 @@ public partial class OneDriveViewModel : ViewModelBase
     public void ToggleViewMode()
     {
         ViewMode = ViewMode == "list" ? "grid" : "list";
+        IsGridView = ViewMode == "grid";
+    }
+
+    /// <summary>
+    /// 파일 미리보기 토글
+    /// </summary>
+    [RelayCommand]
+    public void FilePreview()
+    {
+        if (SelectedItem != null && !SelectedItem.IsFolder)
+        {
+            IsPreviewVisible = !IsPreviewVisible;
+        }
+    }
+
+    /// <summary>
+    /// 공유 다이얼로그 열기
+    /// </summary>
+    [RelayCommand]
+    public void Share()
+    {
+        // MainWindow.OneDrive.cs에서 처리 (다이얼로그 생성)
+        _logger.Debug("공유 요청: {Item}", SelectedItem?.Name);
+    }
+
+    /// <summary>
+    /// 버전 히스토리 다이얼로그 열기
+    /// </summary>
+    [RelayCommand]
+    public void VersionHistory()
+    {
+        // MainWindow.OneDrive.cs에서 처리 (다이얼로그 생성)
+        _logger.Debug("버전 히스토리 요청: {Item}", SelectedItem?.Name);
+    }
+
+    /// <summary>
+    /// 즐겨찾기 토글
+    /// </summary>
+    [RelayCommand]
+    public void AddToFavorites()
+    {
+        if (SelectedItem == null) return;
+        IsFavorite = !IsFavorite;
+        _logger.Information("즐겨찾기 {Action}: {Name}",
+            IsFavorite ? "추가" : "제거", SelectedItem.Name);
+    }
+
+    /// <summary>
+    /// 대용량 파일 업로드 (청크)
+    /// </summary>
+    [RelayCommand]
+    public async Task UploadLargeFileAsync(string filePath)
+    {
+        if (string.IsNullOrEmpty(filePath)) return;
+
+        try
+        {
+            IsUploading = true;
+            UploadProgress = 0;
+
+            var fileName = Path.GetFileName(filePath);
+            _logger.Information("대용량 파일 업로드 시작: {FileName}", fileName);
+
+            var progress = new Progress<double>(p =>
+            {
+                UploadProgress = p;
+            });
+
+            await using var stream = File.OpenRead(filePath);
+            await _oneDriveService.UploadLargeFileAsync(stream, CurrentFolderId, fileName, progress);
+
+            _logger.Information("대용량 파일 업로드 완료: {FileName}", fileName);
+
+            // 현재 폴더 새로고침
+            await RefreshAsync();
+        }
+        catch (Exception ex)
+        {
+            _logger.Error(ex, "대용량 파일 업로드 실패");
+        }
+        finally
+        {
+            IsUploading = false;
+            UploadProgress = 0;
+        }
     }
 
     /// <summary>

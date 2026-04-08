@@ -11,6 +11,7 @@ using Microsoft.Graph.Models;
 using mAIx.Data;
 using mAIx.Models;
 using mAIx.Services.Graph;
+using System.Windows.Media;
 using Serilog;
 
 // 모호한 참조 해결을 위한 별칭
@@ -24,6 +25,7 @@ namespace mAIx.ViewModels;
 /// <summary>
 /// Calendar 뷰모델 - 일정 관리 및 마감일 연동
 /// DB 캐싱 및 Graph API 동기화 지원
+/// 다중 캘린더, 자연어 입력, 뷰 모드 전환 지원
 /// </summary>
 public partial class CalendarViewModel : ViewModelBase
 {
@@ -61,6 +63,30 @@ public partial class CalendarViewModel : ViewModelBase
     /// </summary>
     [ObservableProperty]
     private ObservableCollection<EventItemViewModel> _deadlineEvents = new();
+
+    /// <summary>
+    /// 사용 가능한 캘린더 목록 (다중 캘린더)
+    /// </summary>
+    [ObservableProperty]
+    private ObservableCollection<CalendarInfoViewModel> _availableCalendars = new();
+
+    /// <summary>
+    /// 현재 표시 중인 월 (그리드 뷰용)
+    /// </summary>
+    [ObservableProperty]
+    private DateTime _currentMonth = DateTime.Today;
+
+    /// <summary>
+    /// 자연어 이벤트 입력 텍스트
+    /// </summary>
+    [ObservableProperty]
+    private string _naturalLanguageInput = string.Empty;
+
+    /// <summary>
+    /// 이번 달 일정 수
+    /// </summary>
+    [ObservableProperty]
+    private int _currentMonthEventCount;
 
     /// <summary>
     /// 선택된 일정이 있는지 여부
@@ -146,8 +172,9 @@ public partial class CalendarViewModel : ViewModelBase
         switch (ViewMode)
         {
             case CalendarViewMode.Today:
-                startDate = DateTime.Today;
-                endDate = DateTime.Today.AddDays(1);
+            case CalendarViewMode.Day:
+                startDate = SelectedDate.Date;
+                endDate = SelectedDate.Date.AddDays(1);
                 break;
 
             case CalendarViewMode.Week:
@@ -158,6 +185,11 @@ public partial class CalendarViewModel : ViewModelBase
             case CalendarViewMode.Month:
                 startDate = new DateTime(SelectedDate.Year, SelectedDate.Month, 1);
                 endDate = startDate.AddMonths(1);
+                break;
+
+            case CalendarViewMode.Agenda:
+                startDate = SelectedDate.Date;
+                endDate = SelectedDate.Date.AddDays(14);
                 break;
 
             default:
@@ -192,14 +224,23 @@ public partial class CalendarViewModel : ViewModelBase
                 events = await _calendarService.GetTodayEventsAsync();
                 break;
 
+            case CalendarViewMode.Day:
+                events = await _calendarService.GetEventsAsync(SelectedDate.Date, SelectedDate.Date.AddDays(1));
+                break;
+
             case CalendarViewMode.Week:
-                events = await _calendarService.GetThisWeekEventsAsync();
+                var weekStart = SelectedDate.AddDays(-(int)SelectedDate.DayOfWeek);
+                events = await _calendarService.GetEventsAsync(weekStart, weekStart.AddDays(7));
                 break;
 
             case CalendarViewMode.Month:
                 var startOfMonth = new DateTime(SelectedDate.Year, SelectedDate.Month, 1);
                 var endOfMonth = startOfMonth.AddMonths(1);
                 events = await _calendarService.GetEventsAsync(startOfMonth, endOfMonth);
+                break;
+
+            case CalendarViewMode.Agenda:
+                events = await _calendarService.GetEventsAsync(SelectedDate.Date, SelectedDate.Date.AddDays(14));
                 break;
 
             default:
@@ -425,6 +466,7 @@ public partial class CalendarViewModel : ViewModelBase
         switch (ViewMode)
         {
             case CalendarViewMode.Today:
+            case CalendarViewMode.Day:
                 SelectedDate = SelectedDate.AddDays(1);
                 break;
             case CalendarViewMode.Week:
@@ -432,6 +474,9 @@ public partial class CalendarViewModel : ViewModelBase
                 break;
             case CalendarViewMode.Month:
                 SelectedDate = SelectedDate.AddMonths(1);
+                break;
+            case CalendarViewMode.Agenda:
+                SelectedDate = SelectedDate.AddDays(7);
                 break;
         }
     }
@@ -445,6 +490,7 @@ public partial class CalendarViewModel : ViewModelBase
         switch (ViewMode)
         {
             case CalendarViewMode.Today:
+            case CalendarViewMode.Day:
                 SelectedDate = SelectedDate.AddDays(-1);
                 break;
             case CalendarViewMode.Week:
@@ -452,6 +498,9 @@ public partial class CalendarViewModel : ViewModelBase
                 break;
             case CalendarViewMode.Month:
                 SelectedDate = SelectedDate.AddMonths(-1);
+                break;
+            case CalendarViewMode.Agenda:
+                SelectedDate = SelectedDate.AddDays(-7);
                 break;
         }
     }
@@ -463,6 +512,44 @@ public partial class CalendarViewModel : ViewModelBase
     public void NavigateToday()
     {
         SelectedDate = DateTime.Today;
+    }
+
+    /// <summary>
+    /// 캘린더 목록 로드 (다중 캘린더)
+    /// </summary>
+    [RelayCommand]
+    public async Task LoadCalendarsAsync()
+    {
+        await ExecuteAsync(async () =>
+        {
+            var calendars = await _calendarService.GetCalendarsAsync();
+            AvailableCalendars.Clear();
+            foreach (var cal in calendars)
+            {
+                AvailableCalendars.Add(new CalendarInfoViewModel
+                {
+                    Id = cal.Id,
+                    Name = cal.Name,
+                    Color = cal.Color,
+                    IsDefaultCalendar = cal.IsDefaultCalendar,
+                    CanEdit = cal.CanEdit,
+                    IsVisible = true
+                });
+            }
+            _logger.Information("캘린더 {Count}개 로드 완료", AvailableCalendars.Count);
+        }, "캘린더 목록 로드 실패");
+    }
+
+    /// <summary>
+    /// 캘린더 가시성 토글
+    /// </summary>
+    [RelayCommand]
+    public void ToggleCalendarVisibility(CalendarInfoViewModel calendar)
+    {
+        if (calendar == null) return;
+        calendar.IsVisible = !calendar.IsVisible;
+        _logger.Debug("캘린더 가시성 변경: {Name} → {Visible}", calendar.Name, calendar.IsVisible);
+        _ = LoadEventsAsync();
     }
 
     /// <summary>
@@ -511,7 +598,9 @@ public enum CalendarViewMode
 {
     Today,
     Week,
-    Month
+    Month,
+    Day,
+    Agenda
 }
 
 /// <summary>
@@ -749,6 +838,54 @@ public partial class EventItemViewModel : ObservableObject
             var diff = StartDateTime.Value - now;
 
             return diff > TimeSpan.Zero && diff <= TimeSpan.FromHours(1);
+        }
+    }
+}
+
+/// <summary>
+/// 캘린더 정보 뷰모델 (다중 캘린더 토글용)
+/// </summary>
+public partial class CalendarInfoViewModel : ObservableObject
+{
+    [ObservableProperty]
+    private string _id = string.Empty;
+
+    [ObservableProperty]
+    private string _name = string.Empty;
+
+    [ObservableProperty]
+    private string? _color;
+
+    [ObservableProperty]
+    private bool _isDefaultCalendar;
+
+    [ObservableProperty]
+    private bool _canEdit;
+
+    [ObservableProperty]
+    private bool _isVisible = true;
+
+    /// <summary>
+    /// 색상을 Brush로 변환
+    /// </summary>
+    public Brush DisplayBrush
+    {
+        get
+        {
+            return Color switch
+            {
+                "LightBlue" or "lightBlue" => new SolidColorBrush(System.Windows.Media.Color.FromRgb(52, 152, 219)),
+                "LightGreen" or "lightGreen" => new SolidColorBrush(System.Windows.Media.Color.FromRgb(46, 204, 113)),
+                "LightOrange" or "lightOrange" => new SolidColorBrush(System.Windows.Media.Color.FromRgb(243, 156, 18)),
+                "LightGray" or "lightGray" => new SolidColorBrush(System.Windows.Media.Color.FromRgb(149, 165, 166)),
+                "LightYellow" or "lightYellow" => new SolidColorBrush(System.Windows.Media.Color.FromRgb(241, 196, 15)),
+                "LightTeal" or "lightTeal" => new SolidColorBrush(System.Windows.Media.Color.FromRgb(26, 188, 156)),
+                "LightPink" or "lightPink" => new SolidColorBrush(System.Windows.Media.Color.FromRgb(232, 67, 147)),
+                "LightBrown" or "lightBrown" => new SolidColorBrush(System.Windows.Media.Color.FromRgb(160, 106, 66)),
+                "LightRed" or "lightRed" => new SolidColorBrush(System.Windows.Media.Color.FromRgb(231, 76, 60)),
+                "MaxColor" or "auto" or null or "" => new SolidColorBrush(System.Windows.Media.Color.FromRgb(0, 120, 212)),
+                _ => new SolidColorBrush(System.Windows.Media.Color.FromRgb(0, 120, 212))
+            };
         }
     }
 }

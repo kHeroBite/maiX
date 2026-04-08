@@ -161,7 +161,7 @@
                             <ui:TextBox x:Name="SubjectTextBox"
                                        AutomationProperties.AutomationId="SubjectTextBox"
                                        Grid.Column="1"
-                                       PlaceholderText="제목 추가"
+                                       PlaceholderText="제목 추가 (예: 내일 오후 3시 팀 회의)"
                                        FontSize="16"
                                        BorderThickness="0"
                                        Background="Transparent"/>

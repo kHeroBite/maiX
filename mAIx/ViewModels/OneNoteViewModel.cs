@@ -8,6 +8,7 @@ using System.Threading.Tasks;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Microsoft.Graph.Models;
+using mAIx.Controls;
 using mAIx.Models;
 using mAIx.Utils;
 using mAIx.Services.Graph;
@@ -96,6 +97,24 @@ public partial class OneNoteViewModel : ViewModelBase
     /// </summary>
     private static readonly string FavoritesFile = Path.Combine(
         Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "mAIx", "onenote_favorites.json");
+
+    /// <summary>
+    /// 백링크 아이템 목록 (현재 페이지를 참조하는 페이지)
+    /// </summary>
+    [ObservableProperty]
+    private ObservableCollection<Controls.BacklinkItem> _backlinkItems = new();
+
+    /// <summary>
+    /// 태그 목록
+    /// </summary>
+    [ObservableProperty]
+    private ObservableCollection<OneNoteTagViewModel> _tagItems = new();
+
+    /// <summary>
+    /// 선택된 태그 필터
+    /// </summary>
+    [ObservableProperty]
+    private string? _selectedTagFilter;
 
     /// <summary>
     /// 검색어
@@ -3602,6 +3621,122 @@ public partial class OneNoteViewModel : ViewModelBase
     }
 
     /// <summary>
+    /// 현재 페이지의 백링크 로드 — 페이지 콘텐츠에서 현재 페이지 제목을 참조하는 페이지 검색
+    /// </summary>
+    [RelayCommand]
+    public async Task LoadBacklinksAsync()
+    {
+        if (SelectedPage == null) return;
+
+        await ExecuteAsync(async () =>
+        {
+            var currentTitle = SelectedPage.Title;
+            if (string.IsNullOrWhiteSpace(currentTitle)) return;
+
+            BacklinkItems.Clear();
+
+            // 모든 페이지 콘텐츠에서 현재 페이지 제목 참조 검색
+            foreach (var notebook in Notebooks)
+            {
+                foreach (var section in notebook.Sections)
+                {
+                    foreach (var page in section.Pages)
+                    {
+                        if (page.Id == SelectedPage.Id) continue;
+
+                        try
+                        {
+                            var content = await _oneNoteService.GetPageContentAsync(page.Id);
+                            if (!string.IsNullOrEmpty(content) &&
+                                content.Contains(currentTitle, StringComparison.OrdinalIgnoreCase))
+                            {
+                                // 미리보기 텍스트 추출
+                                var idx = content.IndexOf(currentTitle, StringComparison.OrdinalIgnoreCase);
+                                var start = Math.Max(0, idx - 40);
+                                var len = Math.Min(content.Length - start, 100);
+                                var preview = System.Text.RegularExpressions.Regex.Replace(
+                                    content.Substring(start, len), "<[^>]+>", "").Trim();
+
+                                BacklinkItems.Add(new Controls.BacklinkItem
+                                {
+                                    PageId = page.Id,
+                                    Title = page.Title,
+                                    NotebookName = notebook.DisplayName,
+                                    SectionName = section.DisplayName,
+                                    PreviewText = preview
+                                });
+                            }
+                        }
+                        catch
+                        {
+                            // 개별 페이지 읽기 실패 무시
+                        }
+                    }
+                }
+            }
+
+            _logger.Debug("백링크 {Count}개 로드 (페이지: {Title})", BacklinkItems.Count, currentTitle);
+        }, "백링크 로드 실패");
+    }
+
+    /// <summary>
+    /// 태그별 필터
+    /// </summary>
+    [RelayCommand]
+    public void FilterByTag(string? tag)
+    {
+        SelectedTagFilter = tag;
+        _logger.Debug("태그 필터: {Tag}", tag ?? "전체");
+    }
+
+    /// <summary>
+    /// 태그 목록 로드 — 모든 페이지에서 태그 수집
+    /// </summary>
+    [RelayCommand]
+    public async Task LoadTagsAsync()
+    {
+        await ExecuteAsync(async () =>
+        {
+            var tags = new HashSet<string>();
+
+            foreach (var notebook in Notebooks)
+            {
+                foreach (var section in notebook.Sections)
+                {
+                    foreach (var page in section.Pages)
+                    {
+                        try
+                        {
+                            var content = await _oneNoteService.GetPageContentAsync(page.Id);
+                            if (string.IsNullOrEmpty(content)) continue;
+
+                            // data-tag 속성에서 태그 추출
+                            var matches = System.Text.RegularExpressions.Regex.Matches(
+                                content, @"data-tag=""([^""]+)""");
+                            foreach (System.Text.RegularExpressions.Match match in matches)
+                            {
+                                tags.Add(match.Groups[1].Value);
+                            }
+                        }
+                        catch
+                        {
+                            // 개별 페이지 읽기 실패 무시
+                        }
+                    }
+                }
+            }
+
+            TagItems.Clear();
+            foreach (var tag in tags.OrderBy(t => t))
+            {
+                TagItems.Add(new OneNoteTagViewModel { Name = tag });
+            }
+
+            _logger.Debug("태그 {Count}개 로드", TagItems.Count);
+        }, "태그 로드 실패");
+    }
+
+    /// <summary>
     /// 페이지 + 섹션 검색
     /// </summary>
     [RelayCommand]
@@ -4794,4 +4929,19 @@ public partial class PageItemViewModel : ObservableObject
             return string.Empty;
         }
     }
+}
+
+/// <summary>
+/// OneNote 태그 ViewModel
+/// </summary>
+public partial class OneNoteTagViewModel : ObservableObject
+{
+    [ObservableProperty]
+    private string _name = string.Empty;
+
+    [ObservableProperty]
+    private int _count;
+
+    [ObservableProperty]
+    private bool _isSelected;
 }

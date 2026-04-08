@@ -758,6 +758,52 @@ public class GraphPlannerService
         return await UpdateTaskAsync(taskId, etag, task);
     }
 
+    /// <summary>
+    /// 단일 사용자에게 작업 배정 (convenience wrapper)
+    /// </summary>
+    public async Task<PlannerTask?> AssignTaskAsync(string taskId, string etag, string userId)
+    {
+        return await UpdateTaskAssignmentsAsync(taskId, etag, new List<string> { userId });
+    }
+
+    /// <summary>
+    /// 작업 진행률 설정 (convenience wrapper)
+    /// </summary>
+    public async Task<PlannerTask?> SetTaskProgressAsync(string taskId, string etag, int percentComplete)
+    {
+        return await UpdateTaskPercentCompleteAsync(taskId, etag, percentComplete);
+    }
+
+    /// <summary>
+    /// 버킷 이름 변경
+    /// </summary>
+    public async Task<PlannerBucket?> RenameBucketAsync(string bucketId, string etag, string newName)
+    {
+        if (string.IsNullOrEmpty(bucketId))
+            throw new ArgumentNullException(nameof(bucketId));
+        if (string.IsNullOrEmpty(newName))
+            throw new ArgumentNullException(nameof(newName));
+
+        try
+        {
+            var client = _authService.GetGraphClient();
+            var bucket = new PlannerBucket { Name = newName };
+
+            var response = await client.Planner.Buckets[bucketId].PatchAsync(bucket, config =>
+            {
+                config.Headers.Add("If-Match", etag);
+            });
+
+            Log4.Info($"[PlannerService] 버킷 이름 변경 완료: {newName}");
+            return response;
+        }
+        catch (Exception ex)
+        {
+            Log4.Error($"[PlannerService] 버킷 이름 변경 실패: {ex.Message}");
+            throw;
+        }
+    }
+
     // 사용자 이름 캐시 (세션 동안 유지)
     private static readonly Dictionary<string, string> _userNameCache = new();
 

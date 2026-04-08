@@ -6,6 +6,7 @@
         xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
         xmlns:wv2="clr-namespace:Microsoft.Web.WebView2.Wpf;assembly=Microsoft.Web.WebView2.Wpf"
         xmlns:local="clr-namespace:mAIx.Views"
+        xmlns:controls="clr-namespace:mAIx.Controls"
         xmlns:vm="clr-namespace:mAIx.ViewModels"
         mc:Ignorable="d"
         Title="{Binding Title}"
@@ -806,6 +807,26 @@
                                  Checked="NavActivityButton_Checked"
                                  ToolTip="활동">
                         <ui:SymbolIcon Symbol="Alert24" FontSize="20" VerticalAlignment="Center" HorizontalAlignment="Center"/>
+                    </RadioButton>
+
+                    <!-- 할일 아이콘 (#185ABD ToDo Blue) -->
+                    <RadioButton x:Name="NavTodoButton"
+                                 AutomationProperties.AutomationId="NavTodoButton"
+                                 GroupName="NavGroup"
+                                 Style="{StaticResource NavIconRadioButtonStyle}"
+                                 Checked="NavTodoButton_Checked"
+                                 ToolTip="할일">
+                        <ui:SymbolIcon Symbol="CheckmarkSquare24" FontSize="20" VerticalAlignment="Center" HorizontalAlignment="Center"/>
+                    </RadioButton>
+
+                    <!-- 연락처 아이콘 (#0078D4 Contacts Blue) -->
+                    <RadioButton x:Name="NavContactsButton"
+                                 AutomationProperties.AutomationId="NavContactsButton"
+                                 GroupName="NavGroup"
+                                 Style="{StaticResource NavIconRadioButtonStyle}"
+                                 Checked="NavContactsButton_Checked"
+                                 ToolTip="연락처">
+                        <ui:SymbolIcon Symbol="People24" FontSize="20" VerticalAlignment="Center" HorizontalAlignment="Center"/>
                     </RadioButton>
 
                     <!-- 구분선 -->
@@ -2981,6 +3002,9 @@
                                                Foreground="{DynamicResource TextFillColorSecondaryBrush}"
                                                Margin="0,0,0,8"/>
                                     <CheckBox x:Name="CalCheckDefault" IsChecked="True" Content="일정" Margin="0,4"/>
+                                    <StackPanel x:Name="CalendarListPanel" Margin="0,4,0,0">
+                                        <!-- 다중 캘린더 체크박스가 동적으로 추가됨 -->
+                                    </StackPanel>
                                 </StackPanel>
 
                                 <!-- 선택된 날짜의 일정 목록 -->
@@ -3041,13 +3065,13 @@
                               Background="Transparent"
                               Cursor="SizeWE"/>
 
-                <!-- 메인 캘린더: 월간 뷰 -->
+                <!-- 메인 캘린더: 뷰 전환 가능 -->
                 <Border Grid.Column="2">
                     <Grid>
                         <Grid.RowDefinitions>
                             <!-- 툴바 -->
                             <RowDefinition Height="Auto"/>
-                            <!-- 캘린더 그리드 -->
+                            <!-- 캘린더 뷰 (조건부 표시) -->
                             <RowDefinition Height="*"/>
                         </Grid.RowDefinitions>
 
@@ -3066,10 +3090,10 @@
                                 <!-- 네비게이션 -->
                                 <StackPanel Grid.Column="0" Orientation="Horizontal">
                                     <ui:Button x:Name="CalTodayBtn" Content="오늘" Margin="0,0,8,0" Click="CalTodayBtn_Click"/>
-                                    <Button Style="{StaticResource NavIconButtonStyle}" Width="32" Height="32" Click="CalPrevMonthBtn_Click">
+                                    <Button Style="{StaticResource NavIconButtonStyle}" Width="32" Height="32" Click="CalPrevBtn_Click">
                                         <ui:SymbolIcon Symbol="ChevronLeft24" FontSize="14"/>
                                     </Button>
-                                    <Button Style="{StaticResource NavIconButtonStyle}" Width="32" Height="32" Click="CalNextMonthBtn_Click">
+                                    <Button Style="{StaticResource NavIconButtonStyle}" Width="32" Height="32" Click="CalNextBtn_Click">
                                         <ui:SymbolIcon Symbol="ChevronRight24" FontSize="14"/>
                                     </Button>
                                     <TextBlock x:Name="CalMainMonthYearText"
@@ -3085,17 +3109,16 @@
                                     <ui:Button x:Name="CalDayViewBtn" Content="일" Width="40" Margin="0,0,4,0" Click="CalDayViewBtn_Click"/>
                                     <ui:Button x:Name="CalWeekViewBtn" Content="주" Width="40" Margin="0,0,4,0" Click="CalWeekViewBtn_Click"/>
                                     <ui:Button x:Name="CalMonthViewBtn" Content="월" Width="40" Appearance="Primary" Click="CalMonthViewBtn_Click"/>
+                                    <ui:Button x:Name="CalAgendaViewBtn" Content="일정" Width="50" Margin="4,0,0,0" Click="CalAgendaViewBtn_Click"/>
                                 </StackPanel>
                             </Grid>
                         </Border>
 
-                        <!-- 월간 캘린더 그리드 -->
-                        <Border Grid.Row="1" Padding="8">
+                        <!-- 월간 캘린더 그리드 (기본 뷰) -->
+                        <Border Grid.Row="1" Padding="8" x:Name="MonthViewPanel">
                             <Grid x:Name="MonthCalendarGrid">
                                 <Grid.RowDefinitions>
-                                    <!-- 요일 헤더 -->
                                     <RowDefinition Height="32"/>
-                                    <!-- 6주 (최대) -->
                                     <RowDefinition Height="*"/>
                                     <RowDefinition Height="*"/>
                                     <RowDefinition Height="*"/>
@@ -3113,7 +3136,6 @@
                                     <ColumnDefinition Width="*"/>
                                 </Grid.ColumnDefinitions>
 
-                                <!-- 요일 헤더 -->
                                 <TextBlock Grid.Row="0" Grid.Column="0" Text="일요일" HorizontalAlignment="Center" VerticalAlignment="Center" FontWeight="SemiBold" Foreground="#FF6B6B"/>
                                 <TextBlock Grid.Row="0" Grid.Column="1" Text="월요일" HorizontalAlignment="Center" VerticalAlignment="Center" FontWeight="SemiBold"/>
                                 <TextBlock Grid.Row="0" Grid.Column="2" Text="화요일" HorizontalAlignment="Center" VerticalAlignment="Center" FontWeight="SemiBold"/>
@@ -3121,9 +3143,31 @@
                                 <TextBlock Grid.Row="0" Grid.Column="4" Text="목요일" HorizontalAlignment="Center" VerticalAlignment="Center" FontWeight="SemiBold"/>
                                 <TextBlock Grid.Row="0" Grid.Column="5" Text="금요일" HorizontalAlignment="Center" VerticalAlignment="Center" FontWeight="SemiBold"/>
                                 <TextBlock Grid.Row="0" Grid.Column="6" Text="토요일" HorizontalAlignment="Center" VerticalAlignment="Center" FontWeight="SemiBold" Foreground="#6B9DFF"/>
-
-                                <!-- 날짜 셀들은 코드비하인드에서 동적 생성 -->
                             </Grid>
+                        </Border>
+
+                        <!-- 주간 뷰 (숨김) -->
+                        <Border Grid.Row="1" x:Name="WeekViewPanel" Visibility="Collapsed" Padding="4">
+                            <controls:WeekViewControl x:Name="WeekViewCtrl"/>
+                        </Border>
+
+                        <!-- 일간 뷰 (숨김) -->
+                        <Border Grid.Row="1" x:Name="DayViewPanel" Visibility="Collapsed" Padding="4">
+                            <controls:DayViewControl x:Name="DayViewCtrl"/>
+                        </Border>
+
+                        <!-- 일정(Agenda) 뷰 (숨김) -->
+                        <Border Grid.Row="1" x:Name="AgendaViewPanel" Visibility="Collapsed" Padding="16">
+                            <ScrollViewer VerticalScrollBarVisibility="Auto">
+                                <StackPanel x:Name="AgendaEventsPanel">
+                                    <TextBlock x:Name="AgendaNoEventsText"
+                                               Text="예정된 일정이 없습니다."
+                                               FontSize="14"
+                                               Foreground="{DynamicResource TextFillColorTertiaryBrush}"
+                                               HorizontalAlignment="Center"
+                                               Margin="0,48"/>
+                                </StackPanel>
+                            </ScrollViewer>
                         </Border>
                     </Grid>
                 </Border>
@@ -3710,9 +3754,51 @@
                                                     <!-- 메시지 버블 (좌측) -->
                                                     <Border Padding="12,8" CornerRadius="4"
                                                             Background="{DynamicResource ControlFillColorDefaultBrush}"
-                                                            HorizontalAlignment="Left" MaxWidth="500">
+                                                            HorizontalAlignment="Left" MaxWidth="500"
+                                                            x:Name="OtherMessageBubble">
                                                         <TextBlock Text="{Binding Content}" TextWrapping="Wrap" FontSize="14"/>
                                                     </Border>
+
+                                                    <!-- 리액션 표시 바 -->
+                                                    <ItemsControl ItemsSource="{Binding Reactions}" Margin="0,4,0,0"
+                                                                  Visibility="{Binding HasReactions, Converter={StaticResource BoolToVisibilityConverter}}">
+                                                        <ItemsControl.ItemsPanel>
+                                                            <ItemsPanelTemplate>
+                                                                <WrapPanel/>
+                                                            </ItemsPanelTemplate>
+                                                        </ItemsControl.ItemsPanel>
+                                                        <ItemsControl.ItemTemplate>
+                                                            <DataTemplate>
+                                                                <Border CornerRadius="10" Padding="4,2" Margin="0,0,4,0"
+                                                                        Background="{DynamicResource SubtleFillColorSecondaryBrush}"
+                                                                        BorderThickness="1" BorderBrush="{DynamicResource ControlElevationBorderBrush}">
+                                                                    <StackPanel Orientation="Horizontal">
+                                                                        <TextBlock Text="{Binding Reaction}" FontSize="12"/>
+                                                                        <TextBlock Text="{Binding Count}" FontSize="11" Margin="2,0,0,0"
+                                                                                   Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
+                                                                    </StackPanel>
+                                                                </Border>
+                                                            </DataTemplate>
+                                                        </ItemsControl.ItemTemplate>
+                                                    </ItemsControl>
+
+                                                    <!-- 액션 바: 리액션 추가 + 답글 (호버 시 표시) -->
+                                                    <StackPanel Orientation="Horizontal" Margin="0,2,0,0" Opacity="0.6">
+                                                        <ui:Button Appearance="Transparent" Padding="2" ToolTip="👍 리액션"
+                                                                   Click="ReactionButton_Click" Tag="{Binding Id}" FontSize="12" Content="👍"/>
+                                                        <ui:Button Appearance="Transparent" Padding="2" ToolTip="❤️ 리액션"
+                                                                   Click="ReactionButton_Click" Tag="{Binding Id}" FontSize="12" Content="❤️" Margin="2,0,0,0"/>
+                                                        <ui:Button Appearance="Transparent" Padding="2" ToolTip="😂 리액션"
+                                                                   Click="ReactionButton_Click" Tag="{Binding Id}" FontSize="12" Content="😂" Margin="2,0,0,0"/>
+                                                        <ui:Button Appearance="Transparent" Padding="2,0" ToolTip="답글" Margin="8,0,0,0"
+                                                                   Click="ThreadButton_Click" Tag="{Binding}">
+                                                            <StackPanel Orientation="Horizontal">
+                                                                <ui:SymbolIcon Symbol="ChatMultiple24" FontSize="12"/>
+                                                                <TextBlock Text="{Binding ReplyCount}" FontSize="11" Margin="4,0,0,0"
+                                                                           Visibility="{Binding HasReplies, Converter={StaticResource BoolToVisibilityConverter}}"/>
+                                                            </StackPanel>
+                                                        </ui:Button>
+                                                    </StackPanel>
                                                 </StackPanel>
                                             </Grid>
 
@@ -3732,6 +3818,43 @@
                                                         <TextBlock Text="{Binding Content}" TextWrapping="Wrap" FontSize="14"
                                                                    Foreground="White"/>
                                                     </Border>
+
+                                                    <!-- 내 메시지 리액션 표시 -->
+                                                    <ItemsControl ItemsSource="{Binding Reactions}" Margin="0,4,0,0" HorizontalAlignment="Right"
+                                                                  Visibility="{Binding HasReactions, Converter={StaticResource BoolToVisibilityConverter}}">
+                                                        <ItemsControl.ItemsPanel>
+                                                            <ItemsPanelTemplate>
+                                                                <WrapPanel/>
+                                                            </ItemsPanelTemplate>
+                                                        </ItemsControl.ItemsPanel>
+                                                        <ItemsControl.ItemTemplate>
+                                                            <DataTemplate>
+                                                                <Border CornerRadius="10" Padding="4,2" Margin="0,0,4,0"
+                                                                        Background="{DynamicResource SubtleFillColorSecondaryBrush}"
+                                                                        BorderThickness="1" BorderBrush="{DynamicResource ControlElevationBorderBrush}">
+                                                                    <StackPanel Orientation="Horizontal">
+                                                                        <TextBlock Text="{Binding Reaction}" FontSize="12"/>
+                                                                        <TextBlock Text="{Binding Count}" FontSize="11" Margin="2,0,0,0"
+                                                                                   Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
+                                                                    </StackPanel>
+                                                                </Border>
+                                                            </DataTemplate>
+                                                        </ItemsControl.ItemTemplate>
+                                                    </ItemsControl>
+
+                                                    <!-- 내 메시지 액션 바 -->
+                                                    <StackPanel Orientation="Horizontal" Margin="0,2,0,0" Opacity="0.6" HorizontalAlignment="Right">
+                                                        <ui:Button Appearance="Transparent" Padding="2,0" ToolTip="답글" Margin="0,0,4,0"
+                                                                   Click="ThreadButton_Click" Tag="{Binding}">
+                                                            <StackPanel Orientation="Horizontal">
+                                                                <ui:SymbolIcon Symbol="ChatMultiple24" FontSize="12"/>
+                                                                <TextBlock Text="{Binding ReplyCount}" FontSize="11" Margin="4,0,0,0"
+                                                                           Visibility="{Binding HasReplies, Converter={StaticResource BoolToVisibilityConverter}}"/>
+                                                            </StackPanel>
+                                                        </ui:Button>
+                                                        <ui:Button Appearance="Transparent" Padding="2" ToolTip="👍" FontSize="12" Content="👍"
+                                                                   Click="ReactionButton_Click" Tag="{Binding Id}"/>
+                                                    </StackPanel>
                                                 </StackPanel>
                                             </Grid>
                                         </Grid>
@@ -3751,9 +3874,15 @@
                                     <RowDefinition Height="Auto"/>
                                 </Grid.RowDefinitions>
 
+                                <!-- @멘션 팝업 (입력창 위에 표시) -->
+                                <controls:MentionPopup x:Name="ChatMentionPopup" Grid.Row="0"
+                                                        Visibility="Collapsed" Margin="0,0,0,4"
+                                                        MentionSelected="ChatMentionPopup_MentionSelected"/>
+
                                 <!-- 입력창 -->
-                                <Border Grid.Row="0" BorderBrush="{DynamicResource ControlElevationBorderBrush}"
-                                        BorderThickness="1" CornerRadius="4" Padding="8,4">
+                                <Border Grid.Row="1" BorderBrush="{DynamicResource ControlElevationBorderBrush}"
+                                        BorderThickness="1" CornerRadius="4" Padding="8,4"
+                                        AllowDrop="True" Drop="ChatInputBorder_Drop" DragOver="ChatInputBorder_DragOver">
                                     <Grid>
                                         <Grid.RowDefinitions>
                                             <RowDefinition Height="*"/>
@@ -3767,7 +3896,8 @@
                                                  AcceptsReturn="True" TextWrapping="Wrap"
                                                  MinHeight="24" MaxHeight="120"
                                                  VerticalScrollBarVisibility="Auto"
-                                                 KeyDown="ChatMessageInput_KeyDown">
+                                                 KeyDown="ChatMessageInput_KeyDown"
+                                                 TextChanged="ChatMessageInput_TextChanged">
                                             <TextBox.Resources>
                                                 <Style TargetType="TextBox">
                                                     <Setter Property="CaretBrush" Value="{DynamicResource TextFillColorPrimaryBrush}"/>
@@ -3777,7 +3907,7 @@
 
                                         <!-- 플레이스홀더 -->
                                         <TextBlock x:Name="ChatMessagePlaceholder" Grid.Row="0"
-                                                   Text="메시지를 입력하세요."
+                                                   Text="메시지를 입력하세요. @로 멘션"
                                                    Foreground="{DynamicResource TextFillColorTertiaryBrush}"
                                                    IsHitTestVisible="False" Margin="2,4,0,0"
                                                    Visibility="Visible"/>
@@ -3803,10 +3933,12 @@
                                                 <ui:Button Appearance="Transparent" ToolTip="스티커" Padding="4">
                                                     <ui:SymbolIcon Symbol="Sticker24" FontSize="16"/>
                                                 </ui:Button>
-                                                <ui:Button Appearance="Transparent" ToolTip="일정" Padding="4">
-                                                    <ui:SymbolIcon Symbol="CalendarLtr24" FontSize="16"/>
+                                                <ui:Button x:Name="ChatMeetingButton" Appearance="Transparent" ToolTip="Teams 미팅 예약" Padding="4"
+                                                           Click="ChatMeetingButton_Click">
+                                                    <ui:SymbolIcon Symbol="Video24" FontSize="16"/>
                                                 </ui:Button>
-                                                <ui:Button Appearance="Transparent" ToolTip="첨부" Padding="4">
+                                                <ui:Button Appearance="Transparent" ToolTip="첨부" Padding="4"
+                                                           Click="ChatAttachButton_Click">
                                                     <ui:SymbolIcon Symbol="Attach24" FontSize="16"/>
                                                 </ui:Button>
                                                 <ui:Button Appearance="Transparent" ToolTip="더보기" Padding="4">
@@ -3837,6 +3969,17 @@
                             </StackPanel>
                         </Border>
                     </Grid>
+
+                    <!-- 스레드 답글 사이드패널 (Slack 스타일 우측 슬라이드인) -->
+                    <Border x:Name="ChatThreadPanelBorder" Width="360" HorizontalAlignment="Right"
+                            Visibility="Collapsed"
+                            BorderBrush="{DynamicResource ControlElevationBorderBrush}"
+                            BorderThickness="1,0,0,0"
+                            Background="{DynamicResource ApplicationBackgroundBrush}">
+                        <controls:ThreadPanel x:Name="ChatThreadPanel"
+                                               CloseRequested="ChatThreadPanel_CloseRequested"
+                                               ReplySubmitted="ChatThreadPanel_ReplySubmitted"/>
+                    </Border>
                 </Grid>
             </Grid>
         </Border>
@@ -4566,6 +4709,15 @@
 
                             <!-- 툴바 -->
                             <StackPanel Grid.Column="1" Orientation="Horizontal">
+                                <!-- 뷰 전환 -->
+                                <ui:Button x:Name="PlannerKanbanViewButton"
+                                           Icon="{ui:SymbolIcon Board24}" ToolTip="칸반 보드"
+                                           Appearance="Primary" Padding="6" Margin="0,0,4,0"
+                                           Click="PlannerKanbanViewButton_Click"/>
+                                <ui:Button x:Name="PlannerTimelineViewButton"
+                                           Icon="{ui:SymbolIcon Timeline24}" ToolTip="타임라인"
+                                           Appearance="Transparent" Padding="6" Margin="0,0,12,0"
+                                           Click="PlannerTimelineViewButton_Click"/>
                                 <ui:Button x:Name="PlannerAddBucketButton"
                                            Content="버킷 추가" Icon="{ui:SymbolIcon Add24}"
                                            Appearance="Transparent" Margin="0,0,8,0"
@@ -7135,6 +7287,303 @@
                         <TextBlock Text="실제 통화 기능은 Azure Communication Services 연동이 필요합니다" FontSize="12" Foreground="{DynamicResource TextFillColorTertiaryBrush}" HorizontalAlignment="Center" Margin="0,16,0,0"/>
                     </StackPanel>
                 </Grid>
+            </Grid>
+        </Border>
+
+        <!-- ========== 할일(ToDo) 뷰 컨테이너 (Column 1-5 전체 사용, 초기에는 숨김) ========== -->
+        <Border x:Name="TodoViewBorder"
+                Grid.Column="1" Grid.ColumnSpan="5"
+                Visibility="Collapsed"
+                Background="{DynamicResource ApplicationBackgroundBrush}">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="260"/>
+                    <ColumnDefinition Width="*"/>
+                </Grid.ColumnDefinitions>
+
+                <!-- ===== 좌측 패널: 스마트 목록 + 사용자 목록 ===== -->
+                <Border Grid.Column="0"
+                        Background="{DynamicResource CardBackgroundFillColorDefaultBrush}"
+                        BorderBrush="{DynamicResource ControlElevationBorderBrush}"
+                        BorderThickness="0,0,1,0">
+                    <Grid>
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="*"/>
+                        </Grid.RowDefinitions>
+
+                        <!-- 헤더 -->
+                        <Border Grid.Row="0" Padding="16,16,16,12">
+                            <StackPanel Orientation="Horizontal">
+                                <ui:SymbolIcon Symbol="CheckmarkSquare24" FontSize="20" Margin="0,0,10,0"/>
+                                <TextBlock Text="할일" FontSize="20" FontWeight="SemiBold" VerticalAlignment="Center"/>
+                            </StackPanel>
+                        </Border>
+
+                        <!-- 스마트 목록 -->
+                        <StackPanel Grid.Row="1" Margin="8,0,8,8">
+                            <ui:Button x:Name="TodoSmartMyDay" Appearance="Transparent" HorizontalAlignment="Stretch"
+                                       HorizontalContentAlignment="Left" Padding="12,10" Margin="0,2"
+                                       Click="TodoSmartList_Click" Tag="MyDay">
+                                <StackPanel Orientation="Horizontal">
+                                    <ui:SymbolIcon Symbol="WeatherSunny24" FontSize="16" Margin="0,0,10,0"/>
+                                    <TextBlock Text="나의 하루" FontSize="13" VerticalAlignment="Center"/>
+                                </StackPanel>
+                            </ui:Button>
+                            <ui:Button x:Name="TodoSmartImportant" Appearance="Transparent" HorizontalAlignment="Stretch"
+                                       HorizontalContentAlignment="Left" Padding="12,10" Margin="0,2"
+                                       Click="TodoSmartList_Click" Tag="Important">
+                                <StackPanel Orientation="Horizontal">
+                                    <ui:SymbolIcon Symbol="Star24" FontSize="16" Margin="0,0,10,0" Foreground="#FFD700"/>
+                                    <TextBlock Text="중요" FontSize="13" VerticalAlignment="Center"/>
+                                </StackPanel>
+                            </ui:Button>
+                            <ui:Button x:Name="TodoSmartPlanned" Appearance="Transparent" HorizontalAlignment="Stretch"
+                                       HorizontalContentAlignment="Left" Padding="12,10" Margin="0,2"
+                                       Click="TodoSmartList_Click" Tag="Planned">
+                                <StackPanel Orientation="Horizontal">
+                                    <ui:SymbolIcon Symbol="CalendarLtr24" FontSize="16" Margin="0,0,10,0"/>
+                                    <TextBlock Text="계획된 항목" FontSize="13" VerticalAlignment="Center"/>
+                                </StackPanel>
+                            </ui:Button>
+                            <ui:Button x:Name="TodoSmartTasks" Appearance="Transparent" HorizontalAlignment="Stretch"
+                                       HorizontalContentAlignment="Left" Padding="12,10" Margin="0,2"
+                                       Click="TodoSmartList_Click" Tag="Tasks">
+                                <StackPanel Orientation="Horizontal">
+                                    <ui:SymbolIcon Symbol="Home24" FontSize="16" Margin="0,0,10,0"/>
+                                    <TextBlock Text="모든 작업" FontSize="13" VerticalAlignment="Center"/>
+                                </StackPanel>
+                            </ui:Button>
+                        </StackPanel>
+
+                        <!-- 구분선 -->
+                        <Border Grid.Row="2" Height="1" Margin="16,4"
+                                Background="{DynamicResource ControlElevationBorderBrush}"/>
+
+                        <!-- 사용자 목록 -->
+                        <ScrollViewer Grid.Row="3" VerticalScrollBarVisibility="Auto" Margin="8,4,8,8">
+                            <StackPanel>
+                                <ItemsControl x:Name="TodoUserListsControl">
+                                    <ItemsControl.ItemTemplate>
+                                        <DataTemplate>
+                                            <ui:Button Appearance="Transparent" HorizontalAlignment="Stretch"
+                                                       HorizontalContentAlignment="Left" Padding="12,10" Margin="0,2"
+                                                       Click="TodoUserList_Click" Tag="{Binding Id}">
+                                                <StackPanel Orientation="Horizontal">
+                                                    <ui:SymbolIcon Symbol="List24" FontSize="16" Margin="0,0,10,0"/>
+                                                    <TextBlock Text="{Binding DisplayName}" FontSize="13" VerticalAlignment="Center"
+                                                               TextTrimming="CharacterEllipsis" MaxWidth="160"/>
+                                                </StackPanel>
+                                            </ui:Button>
+                                        </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
+                            </StackPanel>
+                        </ScrollViewer>
+                    </Grid>
+                </Border>
+
+                <!-- ===== 우측 패널: 작업 목록 ===== -->
+                <Grid Grid.Column="1">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="*"/>
+                    </Grid.RowDefinitions>
+
+                    <!-- 목록 헤더 -->
+                    <Border Grid.Row="0" Padding="24,16"
+                            Background="{DynamicResource CardBackgroundFillColorDefaultBrush}"
+                            BorderBrush="{DynamicResource ControlElevationBorderBrush}" BorderThickness="0,0,0,1">
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
+
+                            <TextBlock x:Name="TodoListTitle" Grid.Column="0"
+                                       Text="나의 하루" FontSize="22" FontWeight="SemiBold"
+                                       VerticalAlignment="Center"/>
+
+                            <StackPanel Grid.Column="1" Orientation="Horizontal">
+                                <ui:Button x:Name="TodoSyncFlaggedBtn" Appearance="Transparent"
+                                           ToolTip="플래그 이메일 동기화" Margin="0,0,4,0"
+                                           Click="TodoSyncFlagged_Click">
+                                    <ui:SymbolIcon Symbol="Mail24" FontSize="16"/>
+                                </ui:Button>
+                                <ui:Button x:Name="TodoRefreshBtn" Appearance="Transparent"
+                                           ToolTip="새로고침" Click="TodoRefresh_Click">
+                                    <ui:SymbolIcon Symbol="ArrowSync24" FontSize="16"/>
+                                </ui:Button>
+                            </StackPanel>
+                        </Grid>
+                    </Border>
+
+                    <!-- 빠른 입력 -->
+                    <Border Grid.Row="1" Padding="16,12"
+                            Background="{DynamicResource CardBackgroundFillColorSecondaryBrush}">
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
+
+                            <ui:TextBox x:Name="TodoNewTaskInput" Grid.Column="0"
+                                        PlaceholderText="작업 추가 (예: 내일 보고서 작성, 매주 월요일 회의)"
+                                        FontSize="14" VerticalAlignment="Center"
+                                        KeyDown="TodoNewTaskInput_KeyDown"/>
+
+                            <ui:Button Grid.Column="1" Appearance="Primary"
+                                       Margin="8,0,0,0" Padding="12,8"
+                                       Click="TodoAddTask_Click" ToolTip="작업 추가">
+                                <ui:SymbolIcon Symbol="Add24" FontSize="16"/>
+                            </ui:Button>
+                        </Grid>
+                    </Border>
+
+                    <!-- 작업 목록 -->
+                    <Grid Grid.Row="2">
+                        <!-- 로딩 -->
+                        <StackPanel x:Name="TodoMainLoadingPanel" Visibility="Collapsed"
+                                    HorizontalAlignment="Center" VerticalAlignment="Center">
+                            <ui:ProgressRing IsIndeterminate="True" Width="32" Height="32"/>
+                            <TextBlock Text="할일 불러오는 중..." FontSize="13" Margin="0,12,0,0"
+                                       Foreground="{DynamicResource TextFillColorTertiaryBrush}"
+                                       HorizontalAlignment="Center"/>
+                        </StackPanel>
+
+                        <!-- 빈 상태 -->
+                        <StackPanel x:Name="TodoEmptyPanel" Visibility="Collapsed"
+                                    HorizontalAlignment="Center" VerticalAlignment="Center">
+                            <ui:SymbolIcon Symbol="CheckmarkSquare24" FontSize="48"
+                                           Foreground="{DynamicResource TextFillColorTertiaryBrush}"/>
+                            <TextBlock Text="할 일이 없습니다" FontSize="14" Margin="0,12,0,4"
+                                       Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                                       HorizontalAlignment="Center"/>
+                            <TextBlock Text="위 입력란에 새 작업을 추가하세요" FontSize="12"
+                                       Foreground="{DynamicResource TextFillColorTertiaryBrush}"
+                                       HorizontalAlignment="Center"/>
+                        </StackPanel>
+
+                        <!-- 작업 항목 리스트 -->
+                        <ScrollViewer x:Name="TodoTaskScrollViewer" VerticalScrollBarVisibility="Auto" Padding="16">
+                            <ItemsControl x:Name="TodoMainItemsControl">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate>
+                                        <Border Padding="12,10" Margin="0,0,0,6" CornerRadius="8"
+                                                Background="{DynamicResource ControlFillColorDefaultBrush}"
+                                                BorderBrush="{DynamicResource ControlElevationBorderBrush}"
+                                                BorderThickness="1">
+                                            <Grid>
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="Auto"/>
+                                                    <ColumnDefinition Width="*"/>
+                                                    <ColumnDefinition Width="Auto"/>
+                                                    <ColumnDefinition Width="Auto"/>
+                                                    <ColumnDefinition Width="Auto"/>
+                                                </Grid.ColumnDefinitions>
+
+                                                <!-- 체크박스 -->
+                                                <CheckBox Grid.Column="0"
+                                                          IsChecked="{Binding IsCompleted, Mode=TwoWay}"
+                                                          VerticalAlignment="Center"
+                                                          Margin="0,0,10,0"
+                                                          Loaded="TodoMainItemCheckBox_Loaded"/>
+
+                                                <!-- 제목 + 부가 정보 -->
+                                                <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                                                    <TextBlock Text="{Binding Title}"
+                                                               FontSize="14"
+                                                               TextWrapping="NoWrap"
+                                                               TextTrimming="CharacterEllipsis"/>
+                                                    <StackPanel Orientation="Horizontal" Margin="0,3,0,0">
+                                                        <!-- 목록 이름 -->
+                                                        <TextBlock Text="{Binding ListName}"
+                                                                   FontSize="11"
+                                                                   Foreground="{DynamicResource TextFillColorTertiaryBrush}"
+                                                                   Margin="0,0,8,0"
+                                                                   Visibility="{Binding ListName, Converter={StaticResource NullToVisibilityConverter}}"/>
+                                                        <!-- 마감일 -->
+                                                        <TextBlock Text="{Binding DueDateDisplay}"
+                                                                   FontSize="11"
+                                                                   Foreground="{DynamicResource TextFillColorTertiaryBrush}"
+                                                                   Visibility="{Binding DueDate, Converter={StaticResource NullToVisibilityConverter}}"/>
+                                                        <!-- 반복 아이콘 -->
+                                                        <ui:SymbolIcon Symbol="ArrowRepeatAll24" FontSize="11"
+                                                                       Foreground="{DynamicResource TextFillColorTertiaryBrush}"
+                                                                       Margin="6,0,0,0"
+                                                                       Visibility="{Binding IsRecurring, Converter={StaticResource BoolToVisibilityConverter}}"/>
+                                                    </StackPanel>
+                                                </StackPanel>
+
+                                                <!-- My Day 토글 -->
+                                                <ui:Button Grid.Column="2" Appearance="Transparent"
+                                                           Padding="6" Margin="4,0" ToolTip="나의 하루"
+                                                           Click="TodoToggleMyDay_Click">
+                                                    <ui:SymbolIcon Symbol="WeatherSunny24" FontSize="14"
+                                                                   Foreground="{DynamicResource TextFillColorTertiaryBrush}"/>
+                                                </ui:Button>
+
+                                                <!-- 중요도 토글 -->
+                                                <ui:Button Grid.Column="3" Appearance="Transparent"
+                                                           Padding="6" Margin="4,0" ToolTip="중요 표시"
+                                                           Click="TodoToggleImportant_Click">
+                                                    <Grid>
+                                                        <ui:SymbolIcon Symbol="Star24" FontSize="14"
+                                                                       Visibility="{Binding IsImportant, Converter={StaticResource BoolToVisibilityConverter}}"
+                                                                       Foreground="#FFD700"/>
+                                                        <ui:SymbolIcon Symbol="Star24" FontSize="14"
+                                                                       Visibility="{Binding IsImportant, Converter={StaticResource BoolToVisibilityConverter}, ConverterParameter=Invert}"
+                                                                       Foreground="{DynamicResource TextFillColorTertiaryBrush}"/>
+                                                    </Grid>
+                                                </ui:Button>
+
+                                                <!-- 삭제 -->
+                                                <ui:Button Grid.Column="4" Appearance="Transparent"
+                                                           Padding="6" ToolTip="삭제"
+                                                           Click="TodoDeleteTask_Click">
+                                                    <ui:SymbolIcon Symbol="Delete24" FontSize="14"
+                                                                   Foreground="{DynamicResource TextFillColorTertiaryBrush}"/>
+                                                </ui:Button>
+                                            </Grid>
+                                        </Border>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                        </ScrollViewer>
+                    </Grid>
+                </Grid>
+            </Grid>
+        </Border>
+
+        <!-- ========== 연락처 뷰 컨테이너 (Column 1-5 전체 사용, 초기에는 숨김) ========== -->
+        <Border x:Name="ContactsViewBorder"
+                Grid.Column="1" Grid.ColumnSpan="5"
+                Visibility="Collapsed"
+                Background="{DynamicResource ApplicationBackgroundBrush}">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="320" MinWidth="280" MaxWidth="400"/>
+                    <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="*"/>
+                </Grid.ColumnDefinitions>
+
+                <!-- 좌측: 연락처 목록 -->
+                <controls:ContactListControl x:Name="ContactListPanel"
+                                           Grid.Column="0"
+                                           BorderBrush="{DynamicResource ControlElevationBorderBrush}"
+                                           BorderThickness="0,0,1,0"/>
+
+                <!-- GridSplitter -->
+                <GridSplitter Grid.Column="1" Width="4"
+                              HorizontalAlignment="Center" VerticalAlignment="Stretch"
+                              Background="Transparent" Cursor="SizeWE"/>
+
+                <!-- 우측: 연락처 상세 -->
+                <controls:ContactDetailControl x:Name="ContactDetailPanel"
+                                             Grid.Column="2"/>
             </Grid>
         </Border>
 

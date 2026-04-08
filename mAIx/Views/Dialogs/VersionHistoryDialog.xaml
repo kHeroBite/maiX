@@ -1,0 +1,119 @@
+<ui:FluentWindow x:Class="mAIx.Views.Dialogs.VersionHistoryDialog"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
+        mc:Ignorable="d"
+        Title="버전 기록"
+        Height="550" Width="650"
+        MinHeight="350" MinWidth="450"
+        WindowStartupLocation="CenterOwner"
+        ExtendsContentIntoTitleBar="True"
+        WindowBackdropType="Mica"
+        Loaded="Window_Loaded">
+
+    <Grid Margin="16">
+        <Grid.RowDefinitions>
+            <!-- 타이틀바 여백 -->
+            <RowDefinition Height="32"/>
+            <!-- 파일 이름 -->
+            <RowDefinition Height="Auto"/>
+            <!-- 버전 목록 -->
+            <RowDefinition Height="*"/>
+            <!-- 버튼 -->
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+
+        <!-- Row 1: 파일 이름 -->
+        <StackPanel Grid.Row="1" Margin="0,0,0,16">
+            <TextBlock x:Name="FileNameText" FontSize="18" FontWeight="SemiBold"
+                       Foreground="{DynamicResource TextFillColorPrimaryBrush}"/>
+            <TextBlock Text="이전 버전을 확인하고 복원할 수 있습니다" FontSize="13"
+                       Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                       Margin="0,4,0,0"/>
+        </StackPanel>
+
+        <!-- Row 2: 버전 목록 -->
+        <Border Grid.Row="2" CornerRadius="8"
+                Background="{DynamicResource CardBackgroundFillColorDefaultBrush}"
+                BorderThickness="1"
+                BorderBrush="{DynamicResource ControlElevationBorderBrush}">
+            <ListView x:Name="VersionListView" BorderThickness="0"
+                      Background="Transparent"
+                      SelectionMode="Single">
+                <ListView.ItemContainerStyle>
+                    <Style TargetType="ListViewItem">
+                        <Setter Property="Padding" Value="16,12"/>
+                        <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
+                        <Setter Property="Foreground" Value="{DynamicResource TextFillColorPrimaryBrush}"/>
+                        <Setter Property="Background" Value="Transparent"/>
+                        <Setter Property="BorderThickness" Value="0,0,0,1"/>
+                        <Setter Property="BorderBrush" Value="{DynamicResource ControlElevationBorderBrush}"/>
+                        <Style.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter Property="Background" Value="{DynamicResource ControlFillColorSecondaryBrush}"/>
+                            </Trigger>
+                            <Trigger Property="IsSelected" Value="True">
+                                <Setter Property="Background" Value="{DynamicResource ControlFillColorDefaultBrush}"/>
+                            </Trigger>
+                        </Style.Triggers>
+                    </Style>
+                </ListView.ItemContainerStyle>
+                <ListView.ItemTemplate>
+                    <DataTemplate>
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto"/>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
+
+                            <!-- 현재 버전 표시 -->
+                            <Border Grid.Column="0" Visibility="{Binding IsCurrentVisibility}"
+                                    Background="{DynamicResource AccentFillColorDefaultBrush}"
+                                    CornerRadius="4" Padding="8,2" Margin="0,0,12,0"
+                                    VerticalAlignment="Center">
+                                <TextBlock Text="현재" FontSize="11" Foreground="White"/>
+                            </Border>
+
+                            <!-- 버전 정보 -->
+                            <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                                <TextBlock Text="{Binding VersionLabel}" FontSize="14" FontWeight="SemiBold"
+                                           Foreground="{DynamicResource TextFillColorPrimaryBrush}"/>
+                                <StackPanel Orientation="Horizontal">
+                                    <TextBlock Text="{Binding ModifiedDate}" FontSize="12"
+                                               Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
+                                    <TextBlock Text=" · " FontSize="12"
+                                               Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
+                                    <TextBlock Text="{Binding ModifiedBy}" FontSize="12"
+                                               Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
+                                </StackPanel>
+                            </StackPanel>
+
+                            <!-- 크기 -->
+                            <TextBlock Grid.Column="2" Text="{Binding SizeDisplay}" FontSize="12"
+                                       VerticalAlignment="Center" Margin="12,0"
+                                       Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
+
+                            <!-- 복원 버튼 -->
+                            <ui:Button Grid.Column="3"
+                                       Content="복원" Appearance="Transparent"
+                                       Padding="12,4"
+                                       Visibility="{Binding RestoreVisibility}"
+                                       Click="RestoreButton_Click"
+                                       Tag="{Binding VersionId}"/>
+                        </Grid>
+                    </DataTemplate>
+                </ListView.ItemTemplate>
+            </ListView>
+        </Border>
+
+        <!-- Row 3: 닫기 -->
+        <StackPanel Grid.Row="3" Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,12,0,0">
+            <ui:Button Content="닫기" Appearance="Secondary"
+                       Padding="24,8" Click="CloseButton_Click"/>
+        </StackPanel>
+    </Grid>
+</ui:FluentWindow>

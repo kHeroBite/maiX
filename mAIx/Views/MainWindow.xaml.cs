@@ -4277,6 +4277,24 @@ public partial class MainWindow : FluentWindow
     }
 
     /// <summary>
+    /// 할일 버튼 체크 (라디오버튼)
+    /// </summary>
+    private void NavTodoButton_Checked(object sender, RoutedEventArgs e)
+    {
+        Log4.Info("네비게이션: 할일 모드");
+        ShowTodoView();
+    }
+
+    /// <summary>
+    /// 연락처 버튼 체크 (라디오버튼)
+    /// </summary>
+    private void NavContactsButton_Checked(object sender, RoutedEventArgs e)
+    {
+        Log4.Info("네비게이션: 연락처 모드");
+        ShowContactsView();
+    }
+
+    /// <summary>
     /// 설정 버튼 체크 (라디오버튼)
     /// </summary>
     private void NavSettingsButton_Checked(object sender, RoutedEventArgs e)
@@ -4630,8 +4648,11 @@ public partial class MainWindow : FluentWindow
         _viewModel.IsCalendarViewActive = true;
         _viewModel.IsCalendarMode = true;
 
-        // 캘린더 데이터 로드
-        LoadCalendarDataAsync();
+        // 현재 뷰 모드에 맞게 캘린더 데이터 로드
+        RefreshCalendarView();
+
+        // 다중 캘린더 목록 로드
+        _ = LoadCalendarListAsync();
 
         // To Do 목록 로드
         _ = LoadTodoListAsync();
@@ -4663,6 +4684,8 @@ public partial class MainWindow : FluentWindow
         if (OneDriveViewBorder != null) OneDriveViewBorder.Visibility = Visibility.Collapsed;
         if (OneNoteViewBorder != null) OneNoteViewBorder.Visibility = Visibility.Collapsed;
         if (CallsViewBorder != null) CallsViewBorder.Visibility = Visibility.Collapsed;
+        if (TodoViewBorder != null) TodoViewBorder.Visibility = Visibility.Collapsed;
+        if (ContactsViewBorder != null) ContactsViewBorder.Visibility = Visibility.Collapsed;
         if (SettingsViewBorder != null) SettingsViewBorder.Visibility = Visibility.Collapsed;
 
         // 우측 패널 숨김
@@ -8624,6 +8647,14 @@ public partial class MainWindow : FluentWindow
                 NavCallsButton.IsChecked = true;
                 ShowCallsView();
                 break;
+            case "todo":
+                NavTodoButton.IsChecked = true;
+                ShowTodoView();
+                break;
+            case "contacts":
+                NavContactsButton.IsChecked = true;
+                ShowContactsView();
+                break;
             default:
                 Log4.Warn($"[NavigateToTab] 알 수 없는 탭: {tabName}");
                 break;
@@ -8759,40 +8790,7 @@ public partial class MainWindow : FluentWindow
         LoadCalendarDataAsync();
     }
 
-    /// <summary>
-    /// 일간 뷰로 전환
-    /// </summary>
-    private void CalDayViewBtn_Click(object sender, RoutedEventArgs e)
-    {
-        CalDayViewBtn.Appearance = Wpf.Ui.Controls.ControlAppearance.Primary;
-        CalWeekViewBtn.Appearance = Wpf.Ui.Controls.ControlAppearance.Secondary;
-        CalMonthViewBtn.Appearance = Wpf.Ui.Controls.ControlAppearance.Secondary;
-        // TODO: 일간 뷰 구현
-        _viewModel.StatusMessage = "일간 뷰 (구현 예정)";
-    }
-
-    /// <summary>
-    /// 주간 뷰로 전환
-    /// </summary>
-    private void CalWeekViewBtn_Click(object sender, RoutedEventArgs e)
-    {
-        CalDayViewBtn.Appearance = Wpf.Ui.Controls.ControlAppearance.Secondary;
-        CalWeekViewBtn.Appearance = Wpf.Ui.Controls.ControlAppearance.Primary;
-        CalMonthViewBtn.Appearance = Wpf.Ui.Controls.ControlAppearance.Secondary;
-        // TODO: 주간 뷰 구현
-        _viewModel.StatusMessage = "주간 뷰 (구현 예정)";
-    }
-
-    /// <summary>
-    /// 월간 뷰로 전환
-    /// </summary>
-    private void CalMonthViewBtn_Click(object sender, RoutedEventArgs e)
-    {
-        CalDayViewBtn.Appearance = Wpf.Ui.Controls.ControlAppearance.Secondary;
-        CalWeekViewBtn.Appearance = Wpf.Ui.Controls.ControlAppearance.Secondary;
-        CalMonthViewBtn.Appearance = Wpf.Ui.Controls.ControlAppearance.Primary;
-        UpdateCalendarDisplay();
-    }
+    // CalDayViewBtn_Click, CalWeekViewBtn_Click, CalMonthViewBtn_Click → MainWindow.Calendar.cs로 이동
 
     /// <summary>
     /// 새 일정 버튼 클릭
@@ -14288,46 +14286,19 @@ public partial class MainWindow : FluentWindow
     /// </summary>
     private void OneDriveContext_Preview_Click(object sender, RoutedEventArgs e)
     {
-        // 웹에서 미리보기 열기 (WebUrl 사용)
-        OneDriveContext_Open_Click(sender, e);
+        if (_oneDriveViewModel?.SelectedItem != null)
+        {
+            _oneDriveViewModel.IsPreviewVisible = true;
+        }
     }
 
     /// <summary>
-    /// OneDrive 컨텍스트 메뉴: 공유
+    /// OneDrive 컨텍스트 메뉴: 공유 (ShareDialog 사용)
     /// </summary>
-    private async void OneDriveContext_Share_Click(object sender, RoutedEventArgs e)
+    private void OneDriveContext_Share_Click(object sender, RoutedEventArgs e)
     {
-        try
-        {
-            if (_oneDriveViewModel?.SelectedItem == null)
-                return;
-
-            var selectedItem = _oneDriveViewModel.SelectedItem;
-
-            // 공유 링크 생성 및 클립보드 복사
-            var oneDriveService = ((App)Application.Current).GetService<GraphOneDriveService>()!;
-            var shareLink = await oneDriveService.CreateShareLinkAsync(selectedItem.Id);
-            
-            if (!string.IsNullOrEmpty(shareLink))
-            {
-                System.Windows.Clipboard.SetText(shareLink);
-                Log4.Info($"OneDrive 컨텍스트: 공유 링크 복사 - {selectedItem.Name}");
-                
-                // 알림 표시
-                var dialog = new Wpf.Ui.Controls.ContentDialog
-                {
-                    Title = "공유",
-                    Content = "공유 링크가 클립보드에 복사되었습니다.",
-                    CloseButtonText = "확인",
-                    DefaultButton = Wpf.Ui.Controls.ContentDialogButton.Close
-                };
-                await dialog.ShowAsync();
-            }
-        }
-        catch (Exception ex)
-        {
-            Log4.Error($"OneDrive 컨텍스트 공유 실패: {ex.Message}");
-        }
+        if (_oneDriveViewModel?.SelectedItem == null) return;
+        OpenShareDialogFor(_oneDriveViewModel.SelectedItem);
     }
 
     /// <summary>
@@ -14529,34 +14500,12 @@ public partial class MainWindow : FluentWindow
     }
 
     /// <summary>
-    /// OneDrive 컨텍스트 메뉴: 버전 기록
+    /// OneDrive 컨텍스트 메뉴: 버전 기록 (VersionHistoryDialog 사용)
     /// </summary>
     private void OneDriveContext_VersionHistory_Click(object sender, RoutedEventArgs e)
     {
-        try
-        {
-            if (_oneDriveViewModel?.SelectedItem == null)
-                return;
-
-            var selectedItem = _oneDriveViewModel.SelectedItem;
-
-            // OneDrive 웹에서 버전 기록 페이지 열기
-            if (!string.IsNullOrEmpty(selectedItem.WebUrl))
-            {
-                var versionUrl = selectedItem.WebUrl + "?versions=1";
-                var psi = new System.Diagnostics.ProcessStartInfo
-                {
-                    FileName = versionUrl,
-                    UseShellExecute = true
-                };
-                System.Diagnostics.Process.Start(psi);
-                Log4.Info($"OneDrive 컨텍스트: 버전 기록 - {selectedItem.Name}");
-            }
-        }
-        catch (Exception ex)
-        {
-            Log4.Error($"OneDrive 컨텍스트 버전 기록 실패: {ex.Message}");
-        }
+        if (_oneDriveViewModel?.SelectedItem == null) return;
+        OpenVersionHistoryDialogFor(_oneDriveViewModel.SelectedItem);
     }
 
     #endregion

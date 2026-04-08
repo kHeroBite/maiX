@@ -1,0 +1,42 @@
+<UserControl x:Class="mAIx.Controls.CalendarGridControl"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
+             mc:Ignorable="d"
+             d:DesignHeight="600" d:DesignWidth="900">
+    <Grid>
+        <Grid.RowDefinitions>
+            <!-- 요일 헤더 -->
+            <RowDefinition Height="32"/>
+            <!-- 6주 (최대) -->
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="*"/>
+        </Grid.RowDefinitions>
+        <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="*"/>
+            <ColumnDefinition Width="*"/>
+            <ColumnDefinition Width="*"/>
+            <ColumnDefinition Width="*"/>
+            <ColumnDefinition Width="*"/>
+            <ColumnDefinition Width="*"/>
+            <ColumnDefinition Width="*"/>
+        </Grid.ColumnDefinitions>
+
+        <!-- 요일 헤더 -->
+        <TextBlock Grid.Row="0" Grid.Column="0" Text="일요일" HorizontalAlignment="Center" VerticalAlignment="Center" FontWeight="SemiBold" Foreground="#FF6B6B"/>
+        <TextBlock Grid.Row="0" Grid.Column="1" Text="월요일" HorizontalAlignment="Center" VerticalAlignment="Center" FontWeight="SemiBold"/>
+        <TextBlock Grid.Row="0" Grid.Column="2" Text="화요일" HorizontalAlignment="Center" VerticalAlignment="Center" FontWeight="SemiBold"/>
+        <TextBlock Grid.Row="0" Grid.Column="3" Text="수요일" HorizontalAlignment="Center" VerticalAlignment="Center" FontWeight="SemiBold"/>
+        <TextBlock Grid.Row="0" Grid.Column="4" Text="목요일" HorizontalAlignment="Center" VerticalAlignment="Center" FontWeight="SemiBold"/>
+        <TextBlock Grid.Row="0" Grid.Column="5" Text="금요일" HorizontalAlignment="Center" VerticalAlignment="Center" FontWeight="SemiBold"/>
+        <TextBlock Grid.Row="0" Grid.Column="6" Text="토요일" HorizontalAlignment="Center" VerticalAlignment="Center" FontWeight="SemiBold" Foreground="#6B9DFF"/>
+
+        <!-- 날짜 셀들은 코드비하인드에서 동적 생성 -->
+    </Grid>
+</UserControl>

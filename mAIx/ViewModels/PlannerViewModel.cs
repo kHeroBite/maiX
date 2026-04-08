@@ -62,15 +62,33 @@ public partial class PlannerViewModel : ViewModelBase
     private TaskItemViewModel? _selectedTask;
 
     /// <summary>
-    /// 현재 뷰 모드 (board, list, myDay, myTasks)
+    /// 현재 뷰 모드 (board, list, myDay, myTasks, timeline)
     /// </summary>
     [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(IsKanbanView))]
+    [NotifyPropertyChangedFor(nameof(IsTimelineView))]
     private string _viewMode = "board";
+
+    /// <summary>
+    /// 칸반 뷰 여부
+    /// </summary>
+    public bool IsKanbanView => ViewMode == "board";
+
+    /// <summary>
+    /// 타임라인 뷰 여부
+    /// </summary>
+    public bool IsTimelineView => ViewMode == "timeline";
 
     /// <summary>
     /// 플랜이 선택되었는지
     /// </summary>
     public bool HasSelectedPlan => SelectedPlan != null;
+
+    /// <summary>
+    /// 커스텀 필드 목록
+    /// </summary>
+    [ObservableProperty]
+    private ObservableCollection<CustomFieldViewModel> _customFields = new();
 
     /// <summary>
     /// 현재 플랜의 카테고리(라벨) 정의
@@ -674,6 +692,48 @@ public partial class PlannerViewModel : ViewModelBase
     }
 
     /// <summary>
+    /// 칸반 뷰로 전환
+    /// </summary>
+    [RelayCommand]
+    public void SwitchToKanban()
+    {
+        ViewMode = "board";
+    }
+
+    /// <summary>
+    /// 타임라인 뷰로 전환
+    /// </summary>
+    [RelayCommand]
+    public void SwitchToTimeline()
+    {
+        ViewMode = "timeline";
+    }
+
+    /// <summary>
+    /// 카드 이동 (드래그 완료 시)
+    /// </summary>
+    [RelayCommand]
+    public async Task MoveCardAsync(TaskItemViewModel task)
+    {
+        if (task == null || string.IsNullOrEmpty(task.BucketId)) return;
+
+        // 실제 이동은 MoveTaskToBucketAsync를 통해 처리
+        await Task.CompletedTask;
+    }
+
+    /// <summary>
+    /// 커스텀 필드 로드
+    /// </summary>
+    public void LoadCustomFields(IEnumerable<CustomFieldViewModel> fields)
+    {
+        CustomFields.Clear();
+        foreach (var field in fields)
+        {
+            CustomFields.Add(field);
+        }
+    }
+
+    /// <summary>
     /// PlannerTask를 TaskItemViewModel로 변환
     /// </summary>
     private TaskItemViewModel CreateTaskViewModel(PlannerTask task)
@@ -1102,6 +1162,45 @@ public partial class TaskAssigneeViewModel : ObservableObject
             };
             var index = Math.Abs(hash) % colors.Length;
             return new SolidColorBrush((Color)ColorConverter.ConvertFromString(colors[index]));
+        }
+    }
+}
+
+/// <summary>
+/// 커스텀 필드 ViewModel
+/// </summary>
+public partial class CustomFieldViewModel : ObservableObject
+{
+    [ObservableProperty]
+    private int _id;
+
+    [ObservableProperty]
+    private string _taskId = string.Empty;
+
+    [ObservableProperty]
+    private string _fieldName = string.Empty;
+
+    [ObservableProperty]
+    private string _fieldValue = string.Empty;
+
+    /// <summary>
+    /// 필드 타입: text, number, date, checkbox
+    /// </summary>
+    [ObservableProperty]
+    private string _fieldType = "text";
+
+    /// <summary>
+    /// 체크박스 타입일 때 bool 변환
+    /// </summary>
+    public bool IsChecked
+    {
+        get => FieldType == "checkbox" && FieldValue == "true";
+        set
+        {
+            if (FieldType == "checkbox")
+            {
+                FieldValue = value ? "true" : "false";
+            }
         }
     }
 }

@@ -1,0 +1,50 @@
+<UserControl x:Class="mAIx.Controls.DayViewControl"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
+             mc:Ignorable="d"
+             d:DesignHeight="700" d:DesignWidth="500">
+    <Grid>
+        <Grid.RowDefinitions>
+            <!-- 날짜 헤더 -->
+            <RowDefinition Height="Auto"/>
+            <!-- 종일 이벤트 -->
+            <RowDefinition Height="Auto"/>
+            <!-- 타임라인 -->
+            <RowDefinition Height="*"/>
+        </Grid.RowDefinitions>
+
+        <!-- 날짜 헤더 -->
+        <Border Grid.Row="0" Padding="16,8"
+                BorderBrush="{DynamicResource ControlElevationBorderBrush}"
+                BorderThickness="0,0,0,1">
+            <StackPanel x:Name="DateHeaderPanel" Orientation="Horizontal">
+                <!-- 코드비하인드에서 날짜 표시 -->
+            </StackPanel>
+        </Border>
+
+        <!-- 종일 이벤트 영역 -->
+        <Border Grid.Row="1" x:Name="AllDayBorder"
+                Padding="60,4,8,4"
+                BorderBrush="{DynamicResource ControlElevationBorderBrush}"
+                BorderThickness="0,0,0,1"
+                Visibility="Collapsed">
+            <StackPanel x:Name="AllDayEventsPanel"/>
+        </Border>
+
+        <!-- 타임라인 -->
+        <ScrollViewer Grid.Row="2"
+                      x:Name="DayTimelineScrollViewer"
+                      VerticalScrollBarVisibility="Auto">
+            <Grid x:Name="DayTimelineGrid">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="60"/>
+                    <ColumnDefinition Width="*"/>
+                </Grid.ColumnDefinitions>
+                <!-- 시간 레이블 + 이벤트 캔버스는 코드비하인드에서 생성 -->
+            </Grid>
+        </ScrollViewer>
+    </Grid>
+</UserControl>

@@ -1,3 +1,7 @@
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Threading.Tasks;
 using Microsoft.Graph;
 using Microsoft.Graph.Models;
 using Serilog;
@@ -302,6 +306,356 @@ namespace mAIx.Services.Graph
                 return new List<TodoTaskItem>();
             }
         }
+
+        /// <summary>
+        /// 특정 목록에서 작업 조회
+        /// </summary>
+        public async Task<List<TodoTaskItem>> GetTasksFromListAsync(string listId, bool includeCompleted = false)
+        {
+            try
+            {
+                var client = _authService.GetGraphClient();
+
+                var tasksResponse = await client.Me.Todo.Lists[listId].Tasks.GetAsync(config =>
+                {
+                    config.QueryParameters.Orderby = new[] { "createdDateTime desc" };
+                    config.QueryParameters.Top = 100;
+                    if (!includeCompleted)
+                    {
+                        config.QueryParameters.Filter = "status ne 'completed'";
+                    }
+                });
+
+                if (tasksResponse?.Value == null)
+                    return new List<TodoTaskItem>();
+
+                return tasksResponse.Value.Select(t => new TodoTaskItem
+                {
+                    Id = t.Id ?? string.Empty,
+                    Title = t.Title ?? string.Empty,
+                    Body = t.Body?.Content,
+                    IsCompleted = t.Status == Microsoft.Graph.Models.TaskStatus.Completed,
+                    Importance = t.Importance?.ToString() ?? "Normal",
+                    DueDate = t.DueDateTime?.DateTime != null
+                        ? DateTime.TryParse(t.DueDateTime.DateTime, out var dt) ? dt : (DateTime?)null
+                        : null,
+                    CreatedAt = t.CreatedDateTime?.DateTime ?? DateTime.Now,
+                    IsMyDay = t.CreatedDateTime.HasValue
+                        && t.CreatedDateTime.Value.Date == DateTime.Today,
+                    RecurrencePattern = t.Recurrence?.Pattern?.Type?.ToString()
+                }).ToList();
+            }
+            catch (Exception ex)
+            {
+                _logger.Error(ex, "[GraphToDoService] 목록 {ListId}의 작업 조회 실패", listId);
+                return new List<TodoTaskItem>();
+            }
+        }
+
+        /// <summary>
+        /// 특정 목록에 작업 생성
+        /// </summary>
+        public async Task<string?> CreateTaskInListAsync(string listId, string title, DateTime? dueDate = null, string? body = null)
+        {
+            if (string.IsNullOrEmpty(title))
+                throw new ArgumentNullException(nameof(title));
+
+            try
+            {
+                var client = _authService.GetGraphClient();
+
+                var newTask = new TodoTask
+                {
+                    Title = title,
+                    Importance = Importance.Normal
+                };
+
+                if (dueDate.HasValue)
+                {
+                    newTask.DueDateTime = new DateTimeTimeZone
+                    {
+                        DateTime = dueDate.Value.ToString("yyyy-MM-ddT00:00:00"),
+                        TimeZone = "Asia/Seoul"
+                    };
+                }
+
+                if (!string.IsNullOrEmpty(body))
+                {
+                    newTask.Body = new ItemBody
+                    {
+                        Content = body,
+                        ContentType = BodyType.Text
+                    };
+                }
+
+                var createdTask = await client.Me.Todo.Lists[listId].Tasks.PostAsync(newTask);
+
+                if (createdTask != null)
+                {
+                    _logger.Information("[GraphToDoService] 작업 생성: {Title} (목록: {ListId})", title, listId);
+                    return createdTask.Id;
+                }
+
+                return null;
+            }
+            catch (Exception ex)
+            {
+                _logger.Error(ex, "[GraphToDoService] 작업 생성 실패: {Title}", title);
+                throw;
+            }
+        }
+
+        /// <summary>
+        /// 특정 목록에서 작업 완료 상태 업데이트
+        /// </summary>
+        public async Task<bool> UpdateTaskCompletionInListAsync(string listId, string taskId, bool isCompleted)
+        {
+            try
+            {
+                var client = _authService.GetGraphClient();
+
+                var updateTask = new TodoTask
+                {
+                    Status = isCompleted ? Microsoft.Graph.Models.TaskStatus.Completed : Microsoft.Graph.Models.TaskStatus.NotStarted
+                };
+
+                if (isCompleted)
+                {
+                    updateTask.CompletedDateTime = new DateTimeTimeZone
+                    {
+                        DateTime = DateTime.UtcNow.ToString("yyyy-MM-ddTHH:mm:ss"),
+                        TimeZone = "UTC"
+                    };
+                }
+
+                await client.Me.Todo.Lists[listId].Tasks[taskId].PatchAsync(updateTask);
+                return true;
+            }
+            catch (Exception ex)
+            {
+                _logger.Error(ex, "[GraphToDoService] 작업 상태 업데이트 실패: {TaskId}", taskId);
+                return false;
+            }
+        }
+
+        /// <summary>
+        /// 작업 중요도 업데이트
+        /// </summary>
+        public async Task<bool> UpdateTaskImportanceAsync(string listId, string taskId, bool isImportant)
+        {
+            try
+            {
+                var client = _authService.GetGraphClient();
+
+                var updateTask = new TodoTask
+                {
+                    Importance = isImportant ? Importance.High : Importance.Normal
+                };
+
+                await client.Me.Todo.Lists[listId].Tasks[taskId].PatchAsync(updateTask);
+                return true;
+            }
+            catch (Exception ex)
+            {
+                _logger.Error(ex, "[GraphToDoService] 중요도 업데이트 실패: {TaskId}", taskId);
+                return false;
+            }
+        }
+
+        /// <summary>
+        /// 특정 목록에서 작업 삭제
+        /// </summary>
+        public async Task<bool> DeleteTaskFromListAsync(string listId, string taskId)
+        {
+            try
+            {
+                var client = _authService.GetGraphClient();
+                await client.Me.Todo.Lists[listId].Tasks[taskId].DeleteAsync();
+                _logger.Information("[GraphToDoService] 작업 삭제: {TaskId} (목록: {ListId})", taskId, listId);
+                return true;
+            }
+            catch (Microsoft.Graph.Models.ODataErrors.ODataError odataEx)
+                when (odataEx.ResponseStatusCode == 404)
+            {
+                _logger.Warning("[GraphToDoService] 작업이 이미 삭제됨: {TaskId}", taskId);
+                return true;
+            }
+            catch (Exception ex)
+            {
+                _logger.Error(ex, "[GraphToDoService] 작업 삭제 실패: {TaskId}", taskId);
+                return false;
+            }
+        }
+
+        /// <summary>
+        /// 목록 생성
+        /// </summary>
+        public async Task<string?> CreateListAsync(string displayName)
+        {
+            try
+            {
+                var client = _authService.GetGraphClient();
+                var newList = new TodoTaskList { DisplayName = displayName };
+                var created = await client.Me.Todo.Lists.PostAsync(newList);
+                _logger.Information("[GraphToDoService] 목록 생성: {Name}", displayName);
+                return created?.Id;
+            }
+            catch (Exception ex)
+            {
+                _logger.Error(ex, "[GraphToDoService] 목록 생성 실패: {Name}", displayName);
+                return null;
+            }
+        }
+
+        /// <summary>
+        /// 목록 삭제
+        /// </summary>
+        public async Task<bool> DeleteListAsync(string listId)
+        {
+            try
+            {
+                var client = _authService.GetGraphClient();
+                await client.Me.Todo.Lists[listId].DeleteAsync();
+                _logger.Information("[GraphToDoService] 목록 삭제: {ListId}", listId);
+                return true;
+            }
+            catch (Exception ex)
+            {
+                _logger.Error(ex, "[GraphToDoService] 목록 삭제 실패: {ListId}", listId);
+                return false;
+            }
+        }
+
+        /// <summary>
+        /// 반복 패턴 설정
+        /// </summary>
+        public async Task<bool> SetRecurrenceAsync(string listId, string taskId, string pattern)
+        {
+            try
+            {
+                var client = _authService.GetGraphClient();
+
+                var recurrence = new PatternedRecurrence
+                {
+                    Pattern = ParseRecurrencePattern(pattern),
+                    Range = new RecurrenceRange
+                    {
+                        Type = RecurrenceRangeType.NoEnd,
+                        StartDate = new Microsoft.Kiota.Abstractions.Date(DateTime.Today)
+                    }
+                };
+
+                var updateTask = new TodoTask { Recurrence = recurrence };
+                await client.Me.Todo.Lists[listId].Tasks[taskId].PatchAsync(updateTask);
+
+                _logger.Information("[GraphToDoService] 반복 설정: {TaskId} → {Pattern}", taskId, pattern);
+                return true;
+            }
+            catch (Exception ex)
+            {
+                _logger.Error(ex, "[GraphToDoService] 반복 설정 실패: {TaskId}", taskId);
+                return false;
+            }
+        }
+
+        /// <summary>
+        /// 반복 패턴 문자열을 Graph API 패턴으로 변환
+        /// </summary>
+        private RecurrencePattern ParseRecurrencePattern(string pattern)
+        {
+            if (pattern.StartsWith("weekly:"))
+            {
+                var daysPart = pattern.Substring(7);
+                var days = new List<DayOfWeek>();
+                foreach (var d in daysPart.Split(','))
+                {
+                    var day = d.Trim().ToLower() switch
+                    {
+                        "mon" => DayOfWeek.Monday,
+                        "tue" => DayOfWeek.Tuesday,
+                        "wed" => DayOfWeek.Wednesday,
+                        "thu" => DayOfWeek.Thursday,
+                        "fri" => DayOfWeek.Friday,
+                        "sat" => DayOfWeek.Saturday,
+                        "sun" => DayOfWeek.Sunday,
+                        _ => (DayOfWeek?)null
+                    };
+                    if (day.HasValue) days.Add(day.Value);
+                }
+
+                return new RecurrencePattern
+                {
+                    Type = RecurrencePatternType.Weekly,
+                    Interval = 1,
+                    DaysOfWeek = days.Select(d => (Microsoft.Graph.Models.DayOfWeekObject?)(d switch
+                    {
+                        DayOfWeek.Monday => Microsoft.Graph.Models.DayOfWeekObject.Monday,
+                        DayOfWeek.Tuesday => Microsoft.Graph.Models.DayOfWeekObject.Tuesday,
+                        DayOfWeek.Wednesday => Microsoft.Graph.Models.DayOfWeekObject.Wednesday,
+                        DayOfWeek.Thursday => Microsoft.Graph.Models.DayOfWeekObject.Thursday,
+                        DayOfWeek.Friday => Microsoft.Graph.Models.DayOfWeekObject.Friday,
+                        DayOfWeek.Saturday => Microsoft.Graph.Models.DayOfWeekObject.Saturday,
+                        DayOfWeek.Sunday => Microsoft.Graph.Models.DayOfWeekObject.Sunday,
+                        _ => Microsoft.Graph.Models.DayOfWeekObject.Monday
+                    })).ToList()
+                };
+            }
+
+            return pattern switch
+            {
+                "daily" => new RecurrencePattern { Type = RecurrencePatternType.Daily, Interval = 1 },
+                "weekly" => new RecurrencePattern { Type = RecurrencePatternType.Weekly, Interval = 1 },
+                "monthly" => new RecurrencePattern { Type = RecurrencePatternType.AbsoluteMonthly, Interval = 1, DayOfMonth = DateTime.Today.Day },
+                _ => new RecurrencePattern { Type = RecurrencePatternType.Daily, Interval = 1 }
+            };
+        }
+
+        /// <summary>
+        /// 플래그된 이메일을 ToDo와 동기화
+        /// </summary>
+        public async Task SyncFlaggedEmailsAsync()
+        {
+            try
+            {
+                var client = _authService.GetGraphClient();
+
+                // 플래그된 이메일 조회
+                var flaggedEmails = await client.Me.Messages.GetAsync(config =>
+                {
+                    config.QueryParameters.Filter = "flag/flagStatus eq 'flagged'";
+                    config.QueryParameters.Select = new[] { "id", "subject", "receivedDateTime" };
+                    config.QueryParameters.Top = 50;
+                    config.QueryParameters.Orderby = new[] { "receivedDateTime desc" };
+                });
+
+                if (flaggedEmails?.Value == null || !flaggedEmails.Value.Any())
+                {
+                    _logger.Debug("[GraphToDoService] 플래그된 이메일 없음");
+                    return;
+                }
+
+                // 기본 목록에 플래그 이메일을 할일로 생성
+                var listId = await GetDefaultListIdAsync();
+                if (string.IsNullOrEmpty(listId)) return;
+
+                var existingTasks = await GetTasksFromListAsync(listId, true);
+                var existingTitles = new HashSet<string>(existingTasks.Select(t => t.Title));
+
+                foreach (var email in flaggedEmails.Value)
+                {
+                    var title = $"📧 {email.Subject}";
+                    if (existingTitles.Contains(title)) continue;
+
+                    await CreateTaskInListAsync(listId, title, body: $"이메일에서 가져옴 (수신: {email.ReceivedDateTime?.ToString("yyyy-MM-dd HH:mm")})");
+                }
+
+                _logger.Information("[GraphToDoService] 플래그 이메일 동기화 완료: {Count}건 확인", flaggedEmails.Value.Count);
+            }
+            catch (Exception ex)
+            {
+                _logger.Error(ex, "[GraphToDoService] 플래그 이메일 동기화 실패");
+            }
+        }
     }
 
     /// <summary>
@@ -320,6 +674,8 @@ namespace mAIx.Services.Graph
     public class TodoTaskItem : CommunityToolkit.Mvvm.ComponentModel.ObservableObject
     {
         private bool _isCompleted;
+        private bool _isMyDay;
+        private string _importance = "Normal";
 
         public string Id { get; set; } = string.Empty;
         public string Title { get; set; } = string.Empty;
@@ -329,16 +685,68 @@ namespace mAIx.Services.Graph
             get => _isCompleted;
             set => SetProperty(ref _isCompleted, value);
         }
-        public string Importance { get; set; } = "Normal";
+        public string Importance
+        {
+            get => _importance;
+            set
+            {
+                if (SetProperty(ref _importance, value))
+                    OnPropertyChanged(nameof(IsImportant));
+            }
+        }
         public DateTime? DueDate { get; set; }
         public DateTime CreatedAt { get; set; }
 
         /// <summary>
+        /// 소속 목록 ID
+        /// </summary>
+        public string? ListId { get; set; }
+
+        /// <summary>
+        /// 소속 목록 이름
+        /// </summary>
+        public string? ListName { get; set; }
+
+        /// <summary>
+        /// My Day 포함 여부
+        /// </summary>
+        public bool IsMyDay
+        {
+            get => _isMyDay;
+            set => SetProperty(ref _isMyDay, value);
+        }
+
+        /// <summary>
+        /// 반복 패턴
+        /// </summary>
+        public string? RecurrencePattern { get; set; }
+
+        /// <summary>
+        /// 반복 작업 여부
+        /// </summary>
+        public bool IsRecurring => !string.IsNullOrEmpty(RecurrencePattern);
+
+        /// <summary>
         /// 마감일 표시 문자열
         /// </summary>
-        public string DueDateDisplay => DueDate.HasValue
-            ? DueDate.Value.ToString("MM/dd")
-            : string.Empty;
+        public string DueDateDisplay
+        {
+            get
+            {
+                if (!DueDate.HasValue) return string.Empty;
+                var date = DueDate.Value.Date;
+                var today = DateTime.Today;
+                if (date == today) return "오늘";
+                if (date == today.AddDays(1)) return "내일";
+                if (date < today) return $"기한 지남 ({date:MM/dd})";
+                return date.ToString("MM/dd");
+            }
+        }
+
+        /// <summary>
+        /// 마감일 색상 (지난 날짜는 빨간색)
+        /// </summary>
+        public bool IsOverdue => DueDate.HasValue && DueDate.Value.Date < DateTime.Today && !IsCompleted;
 
         /// <summary>
         /// 중요도 아이콘 표시 여부

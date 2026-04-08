@@ -2,36 +2,32 @@ using System;
 using System.Collections.ObjectModel;
 using System.Linq;
 using System.Threading.Tasks;
+using System.Windows.Threading;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using mAIx.Services;
 using mAIx.Services.Graph;
 using Serilog;
 
 namespace mAIx.ViewModels;
 
 /// <summary>
-/// Activity ViewModel - 활동 피드 관리
+/// Activity ViewModel - 활동 피드 관리 + 5분 폴링 + 탭 활성화 새로고침
 /// </summary>
 public partial class ActivityViewModel : ViewModelBase
 {
+    private readonly ILogger _log = Log.ForContext<ActivityViewModel>();
     private readonly GraphActivityService _activityService;
-    private readonly ILogger _logger;
+    private CrossTabIntegrationService? _crossTabService;
+    private DispatcherTimer? _pollingTimer;
+    private bool _isTabActive;
 
-    /// <summary>
-    /// 활동 목록
-    /// </summary>
     [ObservableProperty]
     private ObservableCollection<ActivityItemViewModel> _activities = new();
 
-    /// <summary>
-    /// 필터된 활동 목록
-    /// </summary>
     [ObservableProperty]
     private ObservableCollection<ActivityItemViewModel> _filteredActivities = new();
 
-    /// <summary>
-    /// 현재 필터
-    /// </summary>
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(IsAllFilter))]
     [NotifyPropertyChangedFor(nameof(IsMailFilter))]
@@ -39,11 +35,11 @@ public partial class ActivityViewModel : ViewModelBase
     [NotifyPropertyChangedFor(nameof(IsFileFilter))]
     private string _currentFilter = "all";
 
-    /// <summary>
-    /// 선택된 활동
-    /// </summary>
     [ObservableProperty]
     private ActivityItemViewModel? _selectedActivity;
+
+    [ObservableProperty]
+    private int _unreadCount;
 
     public bool IsAllFilter => CurrentFilter == "all";
     public bool IsMailFilter => CurrentFilter == "mail";
@@ -53,7 +49,14 @@ public partial class ActivityViewModel : ViewModelBase
     public ActivityViewModel(GraphActivityService activityService)
     {
         _activityService = activityService ?? throw new ArgumentNullException(nameof(activityService));
-        _logger = Log.ForContext<ActivityViewModel>();
+    }
+
+    /// <summary>
+    /// 크로스탭 서비스 설정 (MainWindow에서 주입)
+    /// </summary>
+    public void SetCrossTabService(CrossTabIntegrationService service)
+    {
+        _crossTabService = service;
     }
 
     /// <summary>
@@ -84,8 +87,9 @@ public partial class ActivityViewModel : ViewModelBase
                 });
             }
 
+            UnreadCount = Activities.Count(a => !a.IsRead);
             ApplyFilter();
-            _logger.Information("활동 피드 로드 완료: {Count}개", Activities.Count);
+            _log.Information("활동 피드 로드 완료: {Count}개 (미읽음: {UnreadCount})", Activities.Count, UnreadCount);
         }, "활동 피드 로드 실패");
     }
 
@@ -118,12 +122,12 @@ public partial class ActivityViewModel : ViewModelBase
             }
 
             FilteredActivities = new ObservableCollection<ActivityItemViewModel>(Activities);
-            _logger.Information("메일 활동 로드 완료: {Count}개", Activities.Count);
+            _log.Information("메일 활동 로드 완료: {Count}개", Activities.Count);
         }, "메일 활동 로드 실패");
     }
 
     /// <summary>
-    /// 필터 적용
+    /// 필터 설정
     /// </summary>
     [RelayCommand]
     public void SetFilter(string filter)
@@ -145,8 +149,8 @@ public partial class ActivityViewModel : ViewModelBase
         {
             var filtered = Activities.Where(a =>
                 a.Type.Equals(CurrentFilter, StringComparison.OrdinalIgnoreCase) ||
-                (CurrentFilter == "mail" && a.Type == "Email") ||
-                (CurrentFilter == "chat" && a.Type == "Chat") ||
+                (CurrentFilter == "mail" && (a.Type == "Email" || a.Type == "Reply")) ||
+                (CurrentFilter == "chat" && (a.Type == "Chat" || a.Type == "Mention" || a.Type == "Reaction")) ||
                 (CurrentFilter == "file" && a.Type == "File"));
             FilteredActivities = new ObservableCollection<ActivityItemViewModel>(filtered);
         }
@@ -162,15 +166,86 @@ public partial class ActivityViewModel : ViewModelBase
     }
 
     /// <summary>
-    /// 활동 클릭 (해당 소스로 이동)
+    /// 활동 클릭 → 원본 탭 이동
     /// </summary>
     [RelayCommand]
     public void OpenActivity(ActivityItemViewModel activity)
     {
         if (activity == null) return;
+        _log.Debug("활동 열기: {Type} - {Title}", activity.Type, activity.Title);
+    }
 
-        // 활동 타입에 따라 해당 화면으로 이동
-        _logger.Debug("활동 열기: {Type} - {Title}", activity.Type, activity.Title);
+    /// <summary>
+    /// 활동 피드에서 원본 항목으로 이동 (크로스탭)
+    /// </summary>
+    public async Task NavigateToSourceAsync(ActivityItemViewModel activity, Action<string> navigateCallback)
+    {
+        if (activity == null || _crossTabService == null) return;
+
+        var sourceItem = new ActivityItem
+        {
+            Id = activity.Id,
+            Type = Enum.TryParse<ActivityType>(activity.Type, out var t) ? t : ActivityType.Other,
+            Title = activity.Title,
+            SourceId = activity.SourceId
+        };
+
+        await _crossTabService.NavigateToActivitySourceAsync(sourceItem, navigateCallback);
+    }
+
+    /// <summary>
+    /// 탭 활성화 시 호출 — 자동 새로고침
+    /// </summary>
+    public async Task OnTabActivatedAsync()
+    {
+        _isTabActive = true;
+        if (Activities.Count == 0)
+        {
+            await LoadActivitiesAsync();
+        }
+        StartPolling();
+    }
+
+    /// <summary>
+    /// 탭 비활성화 시 호출
+    /// </summary>
+    public void OnTabDeactivated()
+    {
+        _isTabActive = false;
+        StopPolling();
+    }
+
+    /// <summary>
+    /// 5분 폴링 시작
+    /// </summary>
+    private void StartPolling()
+    {
+        if (_pollingTimer != null) return;
+
+        _pollingTimer = new DispatcherTimer
+        {
+            Interval = TimeSpan.FromMinutes(5)
+        };
+        _pollingTimer.Tick += async (_, _) =>
+        {
+            if (_isTabActive)
+            {
+                _log.Debug("활동 피드 폴링 새로고침");
+                await LoadActivitiesAsync();
+            }
+        };
+        _pollingTimer.Start();
+        _log.Debug("활동 피드 폴링 시작 (5분 주기)");
+    }
+
+    /// <summary>
+    /// 폴링 중지
+    /// </summary>
+    private void StopPolling()
+    {
+        _pollingTimer?.Stop();
+        _pollingTimer = null;
+        _log.Debug("활동 피드 폴링 중지");
     }
 }
 
@@ -208,4 +283,19 @@ public partial class ActivityItemViewModel : ObservableObject
 
     [ObservableProperty]
     private string _typeColor = "#808080";
+
+    /// <summary>
+    /// 날짜 그룹 표시 (오늘/어제/이번 주)
+    /// </summary>
+    public string DateGroup
+    {
+        get
+        {
+            var today = DateTime.Today;
+            if (Timestamp.Date == today) return "오늘";
+            if (Timestamp.Date == today.AddDays(-1)) return "어제";
+            if (Timestamp.Date >= today.AddDays(-7)) return "이번 주";
+            return Timestamp.ToString("yyyy년 M월 d일");
+        }
+    }
 }
