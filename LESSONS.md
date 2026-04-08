@@ -677,6 +677,14 @@
 - **심각도**: 중간 (AC 자동화 실패, 로그 추적 불가)
 - **Level**: 2 (주의 — L-296 확장)
 
+## L-302: 검색 고도화 — FTS5 trigram + BigramHelper (2026-04-09)
+
+- SQLite FTS5 trigram: `tokenize='trigram'`으로 content/content_rowid 연동 테이블 생성 시 한국어 부분일치 검색 가능. 1자 이하 쿼리는 LIKE 폴백 필수.
+- NLog 전환 패턴: `using NLog;` + `LogManager.GetCurrentClassLogger()` — Serilog DI 필드 제거 후 static 필드로 교체.
+- FTS5 content 테이블 트리거: Up/Down 양방향 트리거 3개(ai/ad/au) 재생성 필수. Down에서도 롤백용 트리거 재생성해야 함.
+- **심각도**: 낮음 (설계 지침)
+- **Level**: 1 (참고)
+
 ## L-301: 외부 서비스 반환값 null 검사 필수 (2026-04-09)
 
 - **문제**: ChunkedUploadService.UploadLargeFileAsync 결과 null 미검사로 업로드 실패 시 UploadCompleted 이벤트 오발화 가능

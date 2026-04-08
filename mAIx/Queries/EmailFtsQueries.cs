@@ -24,4 +24,15 @@ public static class EmailFtsQueries
         var escaped = keywords.Replace("\"", "\"\"");
         return $"SELECT rowid FROM EmailsFts WHERE EmailsFts MATCH '\"{escaped}\"'";
     }
+
+    /// <summary>
+    /// AttachmentsFts MATCH 쿼리 생성 — 키워드 이스케이프 포함
+    /// </summary>
+    /// <param name="keywords">검색 키워드 (이스케이프 전 원본)</param>
+    /// <returns>완성된 FTS5 MATCH SQL 문자열</returns>
+    public static string BuildAttachmentMatchQuery(string keywords)
+    {
+        var escaped = keywords.Replace("\"", "\"\"");
+        return $"SELECT rowid FROM AttachmentsFts WHERE AttachmentsFts MATCH '\"{escaped}\"'";
+    }
 }

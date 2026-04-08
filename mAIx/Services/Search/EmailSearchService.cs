@@ -6,7 +6,7 @@ using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
-using Serilog;
+using NLog;
 using mAIx.Data;
 using mAIx.Models;
 using mAIx.Queries;
@@ -20,7 +20,7 @@ namespace mAIx.Services.Search;
 public class EmailSearchService
 {
     private readonly mAIxDbContext _dbContext;
-    private readonly ILogger _logger;
+    private static readonly Logger _log = LogManager.GetCurrentClassLogger();
 
     // 검색 결과 캐시 (간단한 메모리 캐시)
     private static readonly Dictionary<string, (DateTime CachedAt, PagedSearchResult<Email> Result)> _cache = new();
@@ -30,7 +30,6 @@ public class EmailSearchService
     public EmailSearchService(mAIxDbContext dbContext)
     {
         _dbContext = dbContext ?? throw new ArgumentNullException(nameof(dbContext));
-        _logger = Log.ForContext<EmailSearchService>();
     }
 
     /// <summary>
@@ -49,7 +48,7 @@ public class EmailSearchService
             var cacheKey = GetCacheKey(query);
             if (TryGetFromCache(cacheKey, out var cachedResult))
             {
-                _logger.Debug("검색 캐시 히트: {Key}", cacheKey);
+                _log.Debug("검색 캐시 히트: {Key}", cacheKey);
                 return cachedResult!;
             }
 
@@ -63,11 +62,11 @@ public class EmailSearchService
                     dbQuery = fts5Ids.Count > 0
                         ? BuildQueryWithIds(query, fts5Ids)
                         : BuildQuery(query);
-                    _logger.Debug("FTS5 검색: {Count}건 매칭", fts5Ids.Count);
+                    _log.Debug("FTS5 검색: {Count}건 매칭", fts5Ids.Count);
                 }
                 catch (Exception ex)
                 {
-                    _logger.Warning(ex, "FTS5 검색 실패 — LIKE 폴백");
+                    _log.Warn(ex, "FTS5 검색 실패 — LIKE 폴백");
                     dbQuery = BuildQuery(query);
                 }
             }
@@ -102,14 +101,14 @@ public class EmailSearchService
             // 캐시 저장
             AddToCache(cacheKey, result);
 
-            _logger.Information("이메일 검색 완료: {Count}건 / {TotalCount}건 ({Time}ms)",
+            _log.Info("이메일 검색 완료: {Count}건 / {TotalCount}건 ({Time}ms)",
                 items.Count, totalCount, stopwatch.ElapsedMilliseconds);
 
             return result;
         }
         catch (Exception ex)
         {
-            _logger.Error(ex, "이메일 검색 실패");
+            _log.Error(ex, "이메일 검색 실패");
             throw;
         }
     }
@@ -218,15 +217,48 @@ public class EmailSearchService
         if (string.IsNullOrWhiteSpace(keywords))
             return ids;
 
+        // 2글자 미만 단독 쿼리는 FTS5 trigram이 지원 불가 → LIKE 폴백
+        var (ftsQuery, needsLikeFallback) = mAIx.Utils.TextPreprocessor.BuildFtsQuery(keywords);
+        if (string.IsNullOrWhiteSpace(ftsQuery))
+            return ids;
+
         var conn = _dbContext.Database.GetDbConnection();
         if (conn.State != System.Data.ConnectionState.Open)
             await conn.OpenAsync(ct);
 
-        using var cmd = conn.CreateCommand();
-        cmd.CommandText = EmailFtsQueries.BuildMatchQuery(keywords);
-        using var reader = await cmd.ExecuteReaderAsync(ct);
-        while (await reader.ReadAsync(ct))
-            ids.Add(reader.GetInt32(0));
+        // EmailsFts 검색
+        using (var cmd = conn.CreateCommand())
+        {
+            cmd.CommandText = EmailFtsQueries.BuildMatchQuery(keywords);
+            using var reader = await cmd.ExecuteReaderAsync(ct);
+            while (await reader.ReadAsync(ct))
+                ids.Add(reader.GetInt32(0));
+        }
+
+        // AttachmentsFts 검색 → 해당 emailId 병합
+        using (var cmd = conn.CreateCommand())
+        {
+            cmd.CommandText = $"SELECT DISTINCT a.EmailId FROM Attachments a " +
+                              $"WHERE a.Id IN ({EmailFtsQueries.BuildAttachmentMatchQuery(keywords).Replace("SELECT rowid FROM AttachmentsFts WHERE AttachmentsFts MATCH", "SELECT rowid FROM AttachmentsFts WHERE AttachmentsFts MATCH")})";
+            // AttachmentsFts rowid → Attachment.Id → EmailId 조인 쿼리로 재작성
+            cmd.CommandText = $"SELECT DISTINCT a.EmailId FROM Attachments a " +
+                              $"INNER JOIN AttachmentsFts af ON af.rowid = a.Id " +
+                              $"WHERE af.AttachmentsFts MATCH '{keywords.Replace("'", "''")}'";
+            try
+            {
+                using var reader = await cmd.ExecuteReaderAsync(ct);
+                while (await reader.ReadAsync(ct))
+                {
+                    var emailId = reader.GetInt32(0);
+                    if (!ids.Contains(emailId))
+                        ids.Add(emailId);
+                }
+            }
+            catch
+            {
+                // AttachmentsFts 미존재 시 무시
+            }
+        }
 
         return ids;
     }
@@ -571,7 +603,7 @@ public class EmailSearchService
     public void InvalidateCache()
     {
         _cache.Clear();
-        _logger.Debug("검색 캐시 무효화됨");
+        _log.Debug("검색 캐시 무효화됨");
     }
 
     /// <summary>
@@ -588,6 +620,6 @@ public class EmailSearchService
             _cache.Remove(key);
         }
 
-        _logger.Debug("계정 검색 캐시 무효화됨: {Account}, {Count}건", accountEmail, keysToRemove.Count);
+        _log.Debug("계정 검색 캐시 무효화됨: {Account}, {Count}건", accountEmail, keysToRemove.Count);
     }
 }

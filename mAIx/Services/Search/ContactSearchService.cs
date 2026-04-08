@@ -11,7 +11,7 @@ using mAIx.Models;
 using mAIx.Services.Cache;
 using mAIx.Services.Graph;
 using mAIx.Utils;
-using Serilog;
+using NLog;
 
 namespace mAIx.Services.Search;
 
@@ -27,7 +27,7 @@ public class ContactSearchService
     private readonly GraphContactService _contactService;
     private readonly GraphAuthService _authService;
     private readonly ProfilePhotoCacheService _photoCacheService;
-    private readonly ILogger _logger;
+    private static readonly Logger _log = LogManager.GetCurrentClassLogger();
 
     // 캐시 (10분 유효)
     private readonly ConcurrentDictionary<string, CacheEntry> _cache = new();
@@ -49,7 +49,6 @@ public class ContactSearchService
         _contactService = contactService ?? throw new ArgumentNullException(nameof(contactService));
         _authService = authService ?? throw new ArgumentNullException(nameof(authService));
         _photoCacheService = photoCacheService ?? throw new ArgumentNullException(nameof(photoCacheService));
-        _logger = Log.ForContext<ContactSearchService>();
     }
 
     /// <summary>
@@ -70,7 +69,7 @@ public class ContactSearchService
         // 캐시 확인
         if (_cache.TryGetValue(normalizedQuery, out var cached) && !cached.IsExpired)
         {
-            _logger.Debug("캐시 히트: {Query}", query);
+            _log.Debug("캐시 히트: {Query}", query);
             return cached.Results;
         }
 
@@ -107,12 +106,12 @@ public class ContactSearchService
             // 캐시에 저장
             _cache[normalizedQuery] = new CacheEntry(sorted);
 
-            _logger.Debug("연락처 검색 완료: Query={Query}, Count={Count}", query, sorted.Count);
+            _log.Debug("연락처 검색 완료: Query={Query}, Count={Count}", query, sorted.Count);
             return sorted;
         }
         catch (Exception ex)
         {
-            _logger.Error(ex, "연락처 검색 실패: {Query}", query);
+            _log.Error(ex, "연락처 검색 실패: {Query}", query);
             return new List<ContactSuggestion>();
         }
     }
@@ -145,7 +144,7 @@ public class ContactSearchService
         }
         catch (Exception ex)
         {
-            _logger.Warning(ex, "디바운스 검색 실패: {Query}", query);
+            _log.Warn(ex, "디바운스 검색 실패: {Query}", query);
             onResult?.Invoke(new List<ContactSuggestion>());
         }
     }
@@ -165,11 +164,16 @@ public class ContactSearchService
                 .Take(100)
                 .ToListAsync();
 
-            // 메모리에서 필터링
+            // 메모리에서 필터링 + BigramHelper 유사도 점수
             var filtered = emails
                 .Where(x => !string.IsNullOrEmpty(x.From) &&
                            (x.From.Contains(query, StringComparison.OrdinalIgnoreCase) ||
-                            ExtractDisplayName(x.From).Contains(query, StringComparison.OrdinalIgnoreCase)))
+                            ExtractDisplayName(x.From).Contains(query, StringComparison.OrdinalIgnoreCase) ||
+                            BigramHelper.Score(query, x.From!) >= 0.3 ||
+                            BigramHelper.Score(query, ExtractDisplayName(x.From!)) >= 0.3))
+                .OrderByDescending(x => Math.Max(
+                    BigramHelper.Score(query, x.From ?? ""),
+                    BigramHelper.Score(query, ExtractDisplayName(x.From ?? ""))))
                 .Take(MaxResults / 2) // 로컬은 최대 10개
                 .ToList();
 
@@ -192,12 +196,12 @@ public class ContactSearchService
                 }
             }
 
-            _logger.Debug("로컬 검색 완료: {Count}건", suggestions.Count);
+            _log.Debug("로컬 검색 완료: {Count}건", suggestions.Count);
             return suggestions;
         }
         catch (Exception ex)
         {
-            _logger.Warning(ex, "로컬 연락처 검색 실패");
+            _log.Warn(ex, "로컬 연락처 검색 실패");
             return new List<ContactSuggestion>();
         }
     }
@@ -232,12 +236,12 @@ public class ContactSearchService
                 .Take(MaxResults / 3) // 연락처는 최대 6개
                 .ToList();
 
-            _logger.Debug("Graph 연락처 검색 완료: {Count}건", suggestions.Count);
+            _log.Debug("Graph 연락처 검색 완료: {Count}건", suggestions.Count);
             return suggestions;
         }
         catch (Exception ex)
         {
-            _logger.Warning(ex, "Graph 연락처 검색 실패");
+            _log.Warn(ex, "Graph 연락처 검색 실패");
             return new List<ContactSuggestion>();
         }
     }
@@ -288,13 +292,13 @@ public class ContactSearchService
                 })
                 .ToList();
 
-            _logger.Debug("조직 사용자 검색 완료: {Count}건", suggestions.Count);
+            _log.Debug("조직 사용자 검색 완료: {Count}건", suggestions.Count);
             return suggestions;
         }
         catch (Exception ex)
         {
             // 권한 없음 등 - 무시
-            _logger.Debug("조직 사용자 검색 실패 (권한 없음 가능): {Error}", ex.Message);
+            _log.Debug("조직 사용자 검색 실패 (권한 없음 가능): {Error}", ex.Message);
             return new List<ContactSuggestion>();
         }
     }
@@ -305,7 +309,7 @@ public class ContactSearchService
     public void ClearCache()
     {
         _cache.Clear();
-        _logger.Debug("연락처 캐시 정리됨");
+        _log.Debug("연락처 캐시 정리됨");
     }
 
     /// <summary>
@@ -325,7 +329,7 @@ public class ContactSearchService
 
         if (expiredKeys.Count > 0)
         {
-            _logger.Debug("만료된 캐시 {Count}건 정리됨", expiredKeys.Count);
+            _log.Debug("만료된 캐시 {Count}건 정리됨", expiredKeys.Count);
         }
     }
 
@@ -342,7 +346,7 @@ public class ContactSearchService
         }
         catch (Exception ex)
         {
-            _logger.Warning(ex, "프로필 사진 로딩 실패");
+            _log.Warn(ex, "프로필 사진 로딩 실패");
         }
     }
 

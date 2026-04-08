@@ -1,4 +1,5 @@
 using mAIx.Models;
+using mAIx.Utils;
 
 namespace mAIx.Services;
 
@@ -174,7 +175,17 @@ public class CommandPaletteService
             else if (titleLower.Contains(term)) total += 6;
             else if (keywordsLower.Contains(term)) total += 4;
             else if (categoryLower.Contains(term)) total += 2;
-            else return 0;
+            else
+            {
+                // bigram 유사도 폴백 — 정확한 부분 문자열 매칭 실패 시
+                var bigramScore = Math.Max(
+                    BigramHelper.Score(term, titleLower),
+                    BigramHelper.Score(term, keywordsLower));
+                if (bigramScore >= 0.3)
+                    total += (int)(bigramScore * 5);
+                else
+                    return 0;
+            }
         }
         return total;
     }
