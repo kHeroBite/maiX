@@ -6,7 +6,7 @@ using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Media;
 using mAIx.ViewModels;
-using Serilog;
+using NLog;
 
 namespace mAIx.Controls
 {
@@ -15,7 +15,20 @@ namespace mAIx.Controls
     /// </summary>
     public partial class KanbanBoardControl : UserControl
     {
-        private static readonly ILogger _log = Log.ForContext<KanbanBoardControl>();
+        private static readonly Logger _log = LogManager.GetCurrentClassLogger();
+
+        // 타임라인 브러시 캐시 (Freeze로 렌더 스레드 공유 가능)
+        private static readonly SolidColorBrush _weekendBrush = CreateFrozen(Color.FromArgb(20, 128, 128, 128));
+        private static readonly SolidColorBrush _dateLabelBrush = CreateFrozen(Colors.Gray);
+        private static readonly SolidColorBrush _todayLineBrush = CreateFrozen((Color)ColorConverter.ConvertFromString("#D13438"));
+        private static readonly SolidColorBrush _barTextBrush = CreateFrozen(Colors.White);
+
+        private static SolidColorBrush CreateFrozen(Color color)
+        {
+            var brush = new SolidColorBrush(color);
+            brush.Freeze();
+            return brush;
+        }
 
         // 드래그 관련
         private Point _dragStartPoint;
@@ -200,7 +213,7 @@ namespace mAIx.Controls
                 var task = (TaskItemViewModel)e.Data.GetData("PlannerTask");
                 if (task.BucketId != targetBucket.Id)
                 {
-                    _log.Information("카드 이동: {Title} → {Bucket}", task.Title, targetBucket.Name);
+                    _log.Info("카드 이동: {0} → {1}", task.Title, targetBucket.Name);
                     CardMoved?.Invoke(task, targetBucket.Id);
                 }
             }
@@ -291,6 +304,9 @@ namespace mAIx.Controls
             TimelineCanvas.Width = totalDays * dayWidth + 200;
             TimelineCanvas.Height = Math.Max(400, allTasks.Count * rowHeight + 60);
 
+            // UIElement 일괄 수집 후 한 번에 Add (레이아웃 패스 최소화)
+            var items = new System.Collections.Generic.List<UIElement>(totalDays * 2 + allTasks.Count * 2 + 1);
+
             // 날짜 헤더 그리기
             for (int d = 0; d < totalDays; d++)
             {
@@ -304,11 +320,11 @@ namespace mAIx.Controls
                     {
                         Width = dayWidth,
                         Height = TimelineCanvas.Height,
-                        Fill = new SolidColorBrush(Color.FromArgb(20, 128, 128, 128))
+                        Fill = _weekendBrush
                     };
                     Canvas.SetLeft(bg, x);
                     Canvas.SetTop(bg, 0);
-                    TimelineCanvas.Children.Add(bg);
+                    items.Add(bg);
                 }
 
                 // 날짜 라벨
@@ -318,11 +334,11 @@ namespace mAIx.Controls
                     {
                         Text = date.ToString("MM/dd"),
                         FontSize = 10,
-                        Foreground = new SolidColorBrush(Colors.Gray)
+                        Foreground = _dateLabelBrush
                     };
                     Canvas.SetLeft(label, x);
                     Canvas.SetTop(label, 2);
-                    TimelineCanvas.Children.Add(label);
+                    items.Add(label);
                 }
             }
 
@@ -334,10 +350,10 @@ namespace mAIx.Controls
                 {
                     X1 = todayX, Y1 = 20,
                     X2 = todayX, Y2 = TimelineCanvas.Height,
-                    Stroke = new SolidColorBrush((Color)ColorConverter.ConvertFromString("#D13438")),
+                    Stroke = _todayLineBrush,
                     StrokeThickness = 2
                 };
-                TimelineCanvas.Children.Add(todayLine);
+                items.Add(todayLine);
             }
 
             // 작업 바 그리기
@@ -357,7 +373,7 @@ namespace mAIx.Controls
                 };
                 Canvas.SetLeft(nameText, 4);
                 Canvas.SetTop(nameText, y + 4);
-                TimelineCanvas.Children.Add(nameText);
+                items.Add(nameText);
 
                 // 바 그리기
                 var start = task.StartDateTime ?? task.DueDateTime ?? DateTime.Today;
@@ -389,7 +405,7 @@ namespace mAIx.Controls
                         {
                             Text = task.Title,
                             FontSize = 10,
-                            Foreground = Brushes.White,
+                            Foreground = _barTextBrush,
                             TextTrimming = TextTrimming.CharacterEllipsis,
                             VerticalAlignment = VerticalAlignment.Center,
                             Margin = new Thickness(6, 0, 6, 0)
@@ -398,9 +414,13 @@ namespace mAIx.Controls
 
                     Canvas.SetLeft(bar, barX);
                     Canvas.SetTop(bar, y + 2);
-                    TimelineCanvas.Children.Add(bar);
+                    items.Add(bar);
                 }
             }
+
+            // 일괄 추가
+            foreach (var item in items)
+                TimelineCanvas.Children.Add(item);
 
             _log.Debug("타임라인 렌더 완료: {Count}개 작업", allTasks.Count);
         }

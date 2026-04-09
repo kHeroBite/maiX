@@ -693,3 +693,41 @@
 - **올바른 패턴**: `var result = await service.CallAsync(...); if (result == null) { /* 실패 처리 */ return; }`
 - **심각도**: 낮음 (잠재적 오동작)
 - **Level**: 1 (참고)
+
+## L-303: kio bash_exec run_in_background=true 무한 블로킹 — 절대 사용 금지 (2026-04-10)
+
+- **문제**: kio bash_exec 호출 시 `run_in_background=true` 파라미터 사용 시 팀에이전트 무한 블로킹 발생
+- **근본원인**: bash_exec.py가 background 모드에서도 프로세스 종료를 내부적으로 대기하는 버그 → 에이전트가 응답 없이 멈춤
+- **증상**: 팀에이전트(kdev/ktest)가 응답 없이 무한 대기 → ki-rescue 에이전트 개입 필요 사태
+- **해결**: bash_exec.py 버그 수정 완료. 하지만 예방 규칙 영구 유지
+- **재발방지**: `run_in_background=true` 파라미터 완전 제거. ko SKILL.md에 `kio_bash_exec_금지규칙(L-303)` 추가
+- **심각도**: 높음 (에이전트 멈춤, 파이프라인 중단)
+- **Level**: 3-skill (ko SKILL.md 규칙 추가 완료)
+
+## L-304: tmux kill-pane이 Claude Code 세션 전체 종료 — ki-rescue 에이전트 위임 필수 (2026-04-10)
+
+- **문제**: 멈춘 팀에이전트 처리 시 tmux kill-pane 명령 실행 시 Claude Code 세션 전체가 종료됨
+- **근본원인**: tmux pane이 Claude Code 실행 세션과 공유되어 있어 pane 종료 = 세션 전체 종료
+- **해결**: hook 차단 여부와 무관하게 tmux kill-pane은 직접 실행 금지. 반드시 ki-rescue 에이전트를 spawn하여 위임
+- **재발방지**: ko SKILL.md `hook_차단_시_대안` 섹션에 L-304 경고 추가. `run_in_background=true` 없이 ki-rescue spawn
+- **심각도**: 높음 (세션 전체 종료 위험)
+- **Level**: 3-skill (ko SKILL.md 규칙 강화 완료)
+
+## L-305: kplan이 요구사항을 임의 변경 가능 — 메인 확인 후 kdev 진입 필수 (2026-04-10)
+
+- **문제**: kplan이 사용자 원래 요구사항보다 더 광범위하거나 다른 방향으로 계획을 수립할 수 있음
+- **근본원인**: kplan은 요구사항 해석 + 설계를 자율적으로 수행하며, 메인의 중간 확인 없이 kdev로 직행하면 의도치 않은 구현 발생
+- **해결**: kplan 완료 수신 후 메인이 계획서를 원래 요구사항과 반드시 대조. 불일치 시 kplan 재수행 또는 수정 지시 후 kdev 진입
+- **재발방지**: ko SKILL.md `kplan_결과_검증(L-305)` 규칙 추가. 파이프라인 순서표 step 4에 주의 표시
+- **심각도**: 중간 (요구사항 왜곡 가능)
+- **Level**: 2 (ko SKILL.md 규칙 추가 완료)
+
+---
+
+## 반영 추적 테이블
+
+| 교훈 ID | 교훈 요약 | 반영 대상 | 반영 위치 | 반영일 | 검증 |
+|---------|-----------|-----------|-----------|--------|------|
+| L-303 | kio run_in_background=true 무한 블로킹 | skill | ko/SKILL.md kio_bash_exec_금지규칙 | 2026-04-10 | ✅ |
+| L-304 | tmux kill-pane Claude Code 세션 종료 | skill | ko/SKILL.md hook_차단_시_대안 | 2026-04-10 | ✅ |
+| L-305 | kplan 요구사항 임의 변경 | skill | ko/SKILL.md kplan_결과_검증 | 2026-04-10 | ✅ |

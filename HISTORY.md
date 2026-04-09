@@ -612,3 +612,26 @@
 - Phase 1~4 신규 서비스 파일 11개 전체 존재 확인 ✅
 - 헬스체크 PASS (localhost:5858) ✅
 - WAL 모드 확인 ✅
+
+---
+
+## 2026-04-10: Planner 탭 성능 최적화 (UI 가상화) + kio bash_exec 버그 수정
+
+### 작업 내용
+- **Planner 칸반 보드 UI 가상화**: MainWindow.xaml의 ItemsControl → ListView 전환, VirtualizingStackPanel 적용으로 대량 카드 렌더링 성능 개선
+- **kio bash_exec.py 버그 수정**: `run_in_background=true` 시 무한 블로킹 버그 수정
+- **ko SKILL.md 규칙 추가**: 멈춘 에이전트 처리 시 tmux kill-pane 금지 + ki-rescue 위임, kplan 결과 검증 필수, run_in_background 금지 규칙
+
+### 주요 변경 파일
+- `mAIx/Views/MainWindow.xaml`: ListView 가상화 (PlannerBucketsItemsControl + 내부 카드 ListView)
+- `/mnt/c/DATA/Project/AI/MCP-Servers/fio-mcp-server/bash_exec.py`: run_in_background 버그 수정
+- `.claude/skills/ko/SKILL.md`: L-303/L-304/L-305 규칙 추가
+
+### 교훈
+- L-303: kio run_in_background=true 무한 블로킹 — 절대 금지
+- L-304: tmux kill-pane Claude Code 세션 종료 위험 — ki-rescue 위임 필수
+- L-305: kplan 결과 메인 확인 후 kdev 진입 필수
+
+### 테스트 결과 (ktest k3)
+- 빌드: 성공 ✅
+- UI 가상화 적용 확인 ✅

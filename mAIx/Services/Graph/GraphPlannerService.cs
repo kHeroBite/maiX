@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text.Json;
+using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Graph;
 using Microsoft.Graph.Models;
@@ -570,20 +571,15 @@ public class GraphPlannerService
         try
         {
             var client = _authService.GetGraphClient();
-            var response = await client.Planner.Plans[planId].Tasks.GetAsync(config =>
-            {
-                // appliedCategories, assignments 포함
-                config.QueryParameters.Expand = new[] { "details" };
-            });
+            var response = await client.Planner.Plans[planId].Tasks.GetAsync();
 
-            Log4.Debug($"[PlannerService] 플랜 {planId} 작업(상세) {response?.Value?.Count ?? 0}개 조회");
+            Log4.Debug($"[PlannerService] 플랜 {planId} 작업 {response?.Value?.Count ?? 0}개 조회");
             return response?.Value ?? new List<PlannerTask>();
         }
         catch (Exception ex)
         {
-            Log4.Warn($"[PlannerService] 작업 상세 조회 실패, 기본 조회로 대체: {ex.Message}");
-            // 상세 조회 실패 시 기본 조회
-            return await GetTasksAsync(planId);
+            Log4.Error($"[PlannerService] 작업 조회 실패: {ex.Message}");
+            throw;
         }
     }
 
@@ -804,6 +800,9 @@ public class GraphPlannerService
         }
     }
 
+    // Graph API 동시 요청 제한 (최대 3개)
+    private static readonly SemaphoreSlim _graphSemaphore = new(3, 3);
+
     // 사용자 이름 캐시 (세션 동안 유지)
     private static readonly Dictionary<string, string> _userNameCache = new();
 
@@ -861,10 +860,24 @@ public class GraphPlannerService
             }
         }
 
-        // 캐시에 없는 사용자들 조회
-        foreach (var userId in uncachedIds)
+        // 캐시에 없는 사용자들 병렬 조회 (최대 3개 동시)
+        var tasks = uncachedIds.Select(async userId =>
         {
-            var displayName = await GetUserDisplayNameAsync(userId);
+            await _graphSemaphore.WaitAsync();
+            try
+            {
+                var displayName = await GetUserDisplayNameAsync(userId);
+                return (userId, displayName);
+            }
+            finally
+            {
+                _graphSemaphore.Release();
+            }
+        });
+
+        var fetchResults = await Task.WhenAll(tasks);
+        foreach (var (userId, displayName) in fetchResults)
+        {
             result[userId] = displayName;
         }
 
@@ -931,11 +944,19 @@ public class GraphPlannerService
             }
         }
 
-        // 캐시에 없는 사용자들 조회 (병렬로 최대 5개씩)
+        // 캐시에 없는 사용자들 병렬 조회 (최대 3개 동시)
         var tasks = uncachedIds.Select(async userId =>
         {
-            var photo = await GetUserPhotoAsync(userId);
-            return (userId, photo);
+            await _graphSemaphore.WaitAsync();
+            try
+            {
+                var photo = await GetUserPhotoAsync(userId);
+                return (userId, photo);
+            }
+            finally
+            {
+                _graphSemaphore.Release();
+            }
         });
 
         var results = await Task.WhenAll(tasks);

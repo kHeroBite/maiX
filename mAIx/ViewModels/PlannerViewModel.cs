@@ -11,7 +11,7 @@ using CommunityToolkit.Mvvm.Input;
 using Microsoft.Graph.Models;
 using mAIx.Services.Graph;
 using mAIx.Utils;
-using Serilog;
+using NLog;
 
 namespace mAIx.ViewModels;
 
@@ -21,7 +21,7 @@ namespace mAIx.ViewModels;
 public partial class PlannerViewModel : ViewModelBase
 {
     private readonly GraphPlannerService _plannerService;
-    private readonly ILogger _logger;
+    private static readonly Logger _logger = LogManager.GetCurrentClassLogger();
 
     /// <summary>
     /// 핀 고정 상태 저장 파일 경로
@@ -111,7 +111,6 @@ public partial class PlannerViewModel : ViewModelBase
     public PlannerViewModel(GraphPlannerService plannerService)
     {
         _plannerService = plannerService ?? throw new ArgumentNullException(nameof(plannerService));
-        _logger = Log.ForContext<PlannerViewModel>();
     }
 
     /// <summary>
@@ -127,8 +126,8 @@ public partial class PlannerViewModel : ViewModelBase
             // 저장된 핀 목록 로드
             var pinnedPlanIds = LoadPinnedPlanIds();
 
-            Plans.Clear();
-            PinnedPlans.Clear();
+            var newPlans = new List<PlanItemViewModel>();
+            var newPinnedPlans = new List<PlanItemViewModel>();
 
             foreach (var plan in plans.OrderBy(p => p.Title))
             {
@@ -142,16 +141,18 @@ public partial class PlannerViewModel : ViewModelBase
                     IsPinned = isPinned
                 };
 
-                Plans.Add(planVm);
+                newPlans.Add(planVm);
 
-                // 핀 고정된 플랜은 PinnedPlans에도 추가
                 if (isPinned)
                 {
-                    PinnedPlans.Add(planVm);
+                    newPinnedPlans.Add(planVm);
                 }
             }
 
-            _logger.Information("플랜 목록 로드 완료: {Count}개, 핀 고정: {PinnedCount}개", Plans.Count, PinnedPlans.Count);
+            Plans = new ObservableCollection<PlanItemViewModel>(newPlans);
+            PinnedPlans = new ObservableCollection<PlanItemViewModel>(newPinnedPlans);
+
+            _logger.Info("플랜 목록 로드 완료: {Count}개, 핀 고정: {PinnedCount}개", Plans.Count, PinnedPlans.Count);
         }, "플랜 목록 로드 실패");
     }
 
@@ -171,7 +172,7 @@ public partial class PlannerViewModel : ViewModelBase
         }
         catch (Exception ex)
         {
-            _logger.Warning(ex, "핀 고정 목록 로드 실패");
+            _logger.Warn(ex, "핀 고정 목록 로드 실패");
         }
         return new HashSet<string>();
     }
@@ -196,7 +197,7 @@ public partial class PlannerViewModel : ViewModelBase
         }
         catch (Exception ex)
         {
-            _logger.Warning(ex, "핀 고정 목록 저장 실패");
+            _logger.Warn(ex, "핀 고정 목록 저장 실패");
         }
     }
 
@@ -210,13 +211,11 @@ public partial class PlannerViewModel : ViewModelBase
         {
             var tasks = await _plannerService.GetMyTasksAsync();
 
-            MyTasks.Clear();
-            foreach (var task in tasks.OrderBy(t => t.DueDateTime).ThenBy(t => t.Title))
-            {
-                MyTasks.Add(CreateTaskViewModel(task));
-            }
+            MyTasks = new ObservableCollection<TaskItemViewModel>(
+                tasks.OrderBy(t => t.DueDateTime).ThenBy(t => t.Title)
+                     .Select(CreateTaskViewModel));
 
-            _logger.Information("내 작업 로드 완료: {Count}개", MyTasks.Count);
+            _logger.Info("내 작업 로드 완료: {Count}개", MyTasks.Count);
         }, "내 작업 로드 실패");
     }
 
@@ -239,18 +238,18 @@ public partial class PlannerViewModel : ViewModelBase
     {
         await ExecuteAsync(async () =>
         {
-            // 플랜 카테고리(라벨) 로드
-            var categories = await _plannerService.GetPlanCategoriesAsync(planId);
-            PlanCategories.Clear();
-            foreach (var category in categories)
-            {
-                PlanCategories.Add(category);
-            }
+            // 카테고리·버킷·작업 병렬 로드
+            var categoriesTask = _plannerService.GetPlanCategoriesAsync(planId);
+            var bucketsTask = _plannerService.GetBucketsAsync(planId);
+            var tasksTask = _plannerService.GetTasksAsync(planId);
 
-            // 버킷 로드
-            var buckets = await _plannerService.GetBucketsAsync(planId);
-            // 작업 로드 (라벨, 담당자 포함)
-            var taskList = (await _plannerService.GetTasksWithDetailsAsync(planId)).ToList();
+            await Task.WhenAll(categoriesTask, bucketsTask, tasksTask);
+
+            var categories = categoriesTask.Result.ToList();
+            var buckets = bucketsTask.Result.ToList();
+            var taskList = tasksTask.Result.ToList();
+
+            PlanCategories = new ObservableCollection<PlanCategoryViewModel>(categories);
 
             // 모든 작업에서 담당자 userId 수집
             var allUserIds = taskList
@@ -266,9 +265,9 @@ public partial class PlannerViewModel : ViewModelBase
             // 모든 담당자 ViewModel 목록 (사진 로드용)
             var allAssigneeVms = new List<TaskAssigneeViewModel>();
 
-            Buckets.Clear();
-
             // 버킷별로 작업 그룹화
+            var newBuckets = new List<BucketViewModel>();
+
             foreach (var bucket in buckets.OrderBy(b => b.OrderHint))
             {
                 var bucketVm = new BucketViewModel
@@ -296,19 +295,13 @@ public partial class PlannerViewModel : ViewModelBase
                     bucketVm.Tasks.Add(taskVm);
                 }
 
-                Buckets.Add(bucketVm);
+                newBuckets.Add(bucketVm);
             }
 
-            // 기한이 있는 작업 수 로깅
-            var tasksWithDueDate = taskList.Where(t => t.DueDateTime != null).ToList();
-            Log4.Debug($"[PlannerViewModel] 플랜 로드: {Buckets.Count}개 버킷, {taskList.Count}개 작업, {userNames.Count}명 담당자, 기한설정 {tasksWithDueDate.Count}개");
+            Buckets = new ObservableCollection<BucketViewModel>(newBuckets);
 
-            // 기한이 있는 작업 상세 로깅
-            foreach (var task in tasksWithDueDate)
-            {
-                var bucketName = buckets.FirstOrDefault(b => b.Id == task.BucketId)?.Name ?? "Unknown";
-                Log4.Debug($"[PlannerViewModel] 기한 있는 작업: '{task.Title}' (버킷: {bucketName}, 기한: {task.DueDateTime?.DateTime:yyyy-MM-dd})");
-            }
+            var tasksWithDueDateCount = taskList.Count(t => t.DueDateTime != null);
+            _logger.Debug($"[PlannerViewModel] 플랜 로드: {Buckets.Count}개 버킷, {taskList.Count}개 작업, {userNames.Count}명 담당자, 기한설정 {tasksWithDueDateCount}개");
 
             // 백그라운드에서 프로필 사진 로드
             if (allUserIds.Count > 0)
@@ -355,7 +348,7 @@ public partial class PlannerViewModel : ViewModelBase
                 }
                 catch (Exception innerEx)
                 {
-                    _logger.Warning(innerEx, "UI 스레드에서 사진 업데이트 실패");
+                    _logger.Warn(innerEx, "UI 스레드에서 사진 업데이트 실패");
                 }
             });
 
@@ -363,7 +356,7 @@ public partial class PlannerViewModel : ViewModelBase
         }
         catch (Exception ex)
         {
-            _logger.Warning(ex, "담당자 프로필 사진 로드 실패");
+            _logger.Warn(ex, "담당자 프로필 사진 로드 실패");
         }
     }
 
@@ -491,7 +484,7 @@ public partial class PlannerViewModel : ViewModelBase
             {
                 task.BucketId = targetBucketId;
                 task.ETag = updated.AdditionalData?.TryGetValue("@odata.etag", out var etag) == true ? etag?.ToString() : task.ETag;
-                _logger.Information("작업 버킷 이동 완료: {Title} -> {BucketId}", task.Title, targetBucketId);
+                _logger.Info("작업 버킷 이동 완료: {Title} -> {BucketId}", task.Title, targetBucketId);
                 return true;
             }
         }
@@ -539,16 +532,13 @@ public partial class PlannerViewModel : ViewModelBase
             var today = DateTime.Today;
             var tasks = await _plannerService.GetMyTasksAsync();
 
-            MyDayTasks.Clear();
-            foreach (var task in tasks
-                .Where(t => t.DueDateTime?.DateTime.Date == today || t.StartDateTime?.DateTime.Date == today)
-                .OrderBy(t => t.DueDateTime))
-            {
-                MyDayTasks.Add(CreateTaskViewModel(task));
-            }
+            MyDayTasks = new ObservableCollection<TaskItemViewModel>(
+                tasks.Where(t => t.DueDateTime?.DateTime.Date == today || t.StartDateTime?.DateTime.Date == today)
+                     .OrderBy(t => t.DueDateTime)
+                     .Select(CreateTaskViewModel));
 
             ViewMode = "myDay";
-            _logger.Information("나의 하루 작업 로드 완료: {Count}개", MyDayTasks.Count);
+            _logger.Info("나의 하루 작업 로드 완료: {Count}개", MyDayTasks.Count);
         }, "나의 하루 작업 로드 실패");
     }
 
@@ -572,7 +562,7 @@ public partial class PlannerViewModel : ViewModelBase
                     Name = bucket.Name ?? name,
                     PlanId = bucket.PlanId ?? string.Empty
                 });
-                _logger.Information("버킷 생성 완료: {Name}", name);
+                _logger.Info("버킷 생성 완료: {Name}", name);
             }
         }, "버킷 생성 실패");
     }
@@ -597,7 +587,7 @@ public partial class PlannerViewModel : ViewModelBase
             if (task != null)
             {
                 firstBucket.Tasks.Insert(0, CreateTaskViewModel(task));
-                _logger.Information("작업 생성 완료: {Title}", title);
+                _logger.Info("작업 생성 완료: {Title}", title);
             }
         }, "작업 생성 실패");
     }
@@ -640,7 +630,7 @@ public partial class PlannerViewModel : ViewModelBase
             {
                 task.PercentComplete = 100;
                 task.ETag = updated.AdditionalData?.TryGetValue("@odata.etag", out var etag) == true ? etag?.ToString() : task.ETag;
-                _logger.Information("작업 완료 처리: {Title}", task.Title);
+                _logger.Info("작업 완료 처리: {Title}", task.Title);
             }
         }, "작업 완료 처리 실패");
     }
@@ -664,7 +654,7 @@ public partial class PlannerViewModel : ViewModelBase
                     if (bucket.Tasks.Remove(task))
                         break;
                 }
-                _logger.Information("작업 삭제 완료: {Title}", task.Title);
+                _logger.Info("작업 삭제 완료: {Title}", task.Title);
             }
         }, "작업 삭제 실패");
     }
@@ -898,16 +888,30 @@ public partial class TaskItemViewModel : ObservableObject
     /// </summary>
     public string PriorityDisplay => GraphPlannerService.GetPriorityDisplay(Priority);
 
+    private static readonly Dictionary<Color, SolidColorBrush> _brushCache = new();
+
+    private static SolidColorBrush GetCachedBrush(string hex)
+    {
+        var color = (Color)ColorConverter.ConvertFromString(hex);
+        if (!_brushCache.TryGetValue(color, out var brush))
+        {
+            brush = new SolidColorBrush(color);
+            brush.Freeze();
+            _brushCache[color] = brush;
+        }
+        return brush;
+    }
+
     /// <summary>
     /// 우선순위 색상 (Brush)
     /// </summary>
     public SolidColorBrush PriorityColor => Priority switch
     {
-        1 => new SolidColorBrush((Color)ColorConverter.ConvertFromString("#D13438")), // 긴급
-        3 => new SolidColorBrush((Color)ColorConverter.ConvertFromString("#C239B3")), // 중요
-        5 => new SolidColorBrush((Color)ColorConverter.ConvertFromString("#0078D4")), // 중간
-        9 => new SolidColorBrush((Color)ColorConverter.ConvertFromString("#808080")), // 낮음
-        _ => new SolidColorBrush((Color)ColorConverter.ConvertFromString("#0078D4"))
+        1 => GetCachedBrush("#D13438"), // 긴급
+        3 => GetCachedBrush("#C239B3"), // 중요
+        5 => GetCachedBrush("#0078D4"), // 중간
+        9 => GetCachedBrush("#808080"), // 낮음
+        _ => GetCachedBrush("#0078D4")
     };
 
     /// <summary>
@@ -1093,6 +1097,19 @@ public partial class AppliedCategoryViewModel : ObservableObject
     [ObservableProperty]
     private string _color = string.Empty;
 
+    private static readonly Dictionary<Color, SolidColorBrush> _brushCache = new();
+
+    private static SolidColorBrush GetCachedBrush(Color color)
+    {
+        if (!_brushCache.TryGetValue(color, out var brush))
+        {
+            brush = new SolidColorBrush(color);
+            brush.Freeze();
+            _brushCache[color] = brush;
+        }
+        return brush;
+    }
+
     /// <summary>
     /// 브러시로 변환
     /// </summary>
@@ -1102,11 +1119,11 @@ public partial class AppliedCategoryViewModel : ObservableObject
         {
             try
             {
-                return new SolidColorBrush((Color)ColorConverter.ConvertFromString(Color));
+                return GetCachedBrush((Color)ColorConverter.ConvertFromString(Color));
             }
             catch
             {
-                return new SolidColorBrush(Colors.Gray);
+                return GetCachedBrush(Colors.Gray);
             }
         }
     }
@@ -1146,6 +1163,20 @@ public partial class TaskAssigneeViewModel : ObservableObject
     /// </summary>
     public string Initial => DisplayName.Length > 0 ? DisplayName[..1].ToUpper() : "?";
 
+    private static readonly Dictionary<Color, SolidColorBrush> _brushCache = new();
+
+    private static SolidColorBrush GetCachedBrush(string hex)
+    {
+        var color = (Color)ColorConverter.ConvertFromString(hex);
+        if (!_brushCache.TryGetValue(color, out var brush))
+        {
+            brush = new SolidColorBrush(color);
+            brush.Freeze();
+            _brushCache[color] = brush;
+        }
+        return brush;
+    }
+
     /// <summary>
     /// 아바타 배경색 (이름 기반)
     /// </summary>
@@ -1161,7 +1192,7 @@ public partial class TaskAssigneeViewModel : ObservableObject
                 "#FF8C00", "#008575", "#D83B01", "#5C2D91"
             };
             var index = Math.Abs(hash) % colors.Length;
-            return new SolidColorBrush((Color)ColorConverter.ConvertFromString(colors[index]));
+            return GetCachedBrush(colors[index]);
         }
     }
 }

@@ -4736,13 +4736,29 @@
                     <ScrollViewer Grid.Row="1" x:Name="PlannerBoardScrollViewer"
                                   HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Disabled"
                                   PreviewMouseWheel="PlannerBoardScrollViewer_PreviewMouseWheel">
-                        <ItemsControl x:Name="PlannerBucketsItemsControl">
-                            <ItemsControl.ItemsPanel>
+                        <ListView x:Name="PlannerBucketsItemsControl"
+                                  VirtualizingPanel.IsVirtualizing="True"
+                                  VirtualizingPanel.VirtualizationMode="Recycling"
+                                  ScrollViewer.HorizontalScrollBarVisibility="Disabled"
+                                  ScrollViewer.VerticalScrollBarVisibility="Disabled"
+                                  BorderThickness="0" Background="Transparent"
+                                  SelectionMode="Single">
+                            <ListView.ItemContainerStyle>
+                                <Style TargetType="ListViewItem">
+                                    <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
+                                    <Setter Property="VerticalContentAlignment" Value="Stretch"/>
+                                    <Setter Property="Padding" Value="0"/>
+                                    <Setter Property="Background" Value="Transparent"/>
+                                    <Setter Property="BorderThickness" Value="0"/>
+                                    <Setter Property="FocusVisualStyle" Value="{x:Null}"/>
+                                </Style>
+                            </ListView.ItemContainerStyle>
+                            <ListView.ItemsPanel>
                                 <ItemsPanelTemplate>
-                                    <StackPanel Orientation="Horizontal" Margin="16"/>
+                                    <VirtualizingStackPanel Orientation="Horizontal" Margin="16"/>
                                 </ItemsPanelTemplate>
-                            </ItemsControl.ItemsPanel>
-                            <ItemsControl.ItemTemplate>
+                            </ListView.ItemsPanel>
+                            <ListView.ItemTemplate>
                                 <DataTemplate>
                                     <!-- 버킷 컬럼 -->
                                     <Border Width="300" Margin="0,0,16,0"
@@ -4784,9 +4800,25 @@
                                             </Border>
 
                                             <!-- 작업 목록 (스크롤 가능, 전체 높이 사용) -->
-                                            <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto" Padding="0,0,8,0">
-                                                <ItemsControl ItemsSource="{Binding Tasks}">
-                                                    <ItemsControl.ItemTemplate>
+                                            <ListView Grid.Row="1"
+                                                      ItemsSource="{Binding Tasks}"
+                                                      VirtualizingPanel.IsVirtualizing="True"
+                                                      VirtualizingPanel.VirtualizationMode="Recycling"
+                                                      ScrollViewer.VerticalScrollBarVisibility="Auto"
+                                                      ScrollViewer.HorizontalScrollBarVisibility="Disabled"
+                                                      BorderThickness="0" Background="Transparent"
+                                                      SelectionMode="Single"
+                                                      Padding="0,0,8,0">
+                                                <ListView.ItemContainerStyle>
+                                                    <Style TargetType="ListViewItem">
+                                                        <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
+                                                        <Setter Property="Padding" Value="0"/>
+                                                        <Setter Property="Background" Value="Transparent"/>
+                                                        <Setter Property="BorderThickness" Value="0"/>
+                                                        <Setter Property="FocusVisualStyle" Value="{x:Null}"/>
+                                                    </Style>
+                                                </ListView.ItemContainerStyle>
+                                                <ListView.ItemTemplate>
                                                         <DataTemplate>
                                                             <!-- 작업 카드 -->
                                                             <Border x:Name="TaskCardBorder"
@@ -4934,9 +4966,8 @@
                                                                 </Grid>
                                                             </Border>
                                                         </DataTemplate>
-                                                    </ItemsControl.ItemTemplate>
-                                                </ItemsControl>
-                                            </ScrollViewer>
+                                                </ListView.ItemTemplate>
+                                            </ListView>
 
                                             <!-- 작업 추가 버튼 -->
                                             <ui:Button Grid.Row="2"
@@ -4954,8 +4985,8 @@
                                         </Grid>
                                     </Border>
                                 </DataTemplate>
-                            </ItemsControl.ItemTemplate>
-                        </ItemsControl>
+                            </ListView.ItemTemplate>
+                        </ListView>
                     </ScrollViewer>
 
                     <!-- 플랜 미선택 안내 -->

@@ -2,7 +2,7 @@ using System;
 using System.Windows;
 using System.Windows.Controls;
 using mAIx.ViewModels;
-using Serilog;
+using NLog;
 
 namespace mAIx.Controls
 {
@@ -11,7 +11,7 @@ namespace mAIx.Controls
     /// </summary>
     public partial class KanbanCardControl : UserControl
     {
-        private static readonly ILogger _log = Log.ForContext<KanbanCardControl>();
+        private static readonly Logger _log = LogManager.GetCurrentClassLogger();
 
         /// <summary>
         /// 작업 열기 요청

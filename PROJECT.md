@@ -822,3 +822,191 @@ curl -s http://localhost:5858/api/status
 | 2026-04-03 | 설정>메일 초기 메일수 선택 옵션(20/50/100) 추가 + 동기화 기본값 버그 수정 | mAIx/Models/Settings/UserPreferencesSettings.cs, mAIx/ViewModels/MainViewModel.cs, mAIx/Views/MainWindow.xaml.cs | UserPreferencesSettings에 InitialMailCount(기본50) 추가; MainViewModel PageSize 상수→InitialMailCount 동적 참조; MainWindow에 mail_initial 소메뉴+ShowMailInitialSettings() 신규(20/50/100 RadioButton); Show*SyncSettings() RadioButton 기본값 선택 버그(foreach 클로저 캡처) 수정 |
 | 2026-04-05 | 메일함 폴더별 캐시 시스템 구현 — 전환 <100ms + 이벤트 증분 sync | mAIx/Services/Cache/MailFolderCacheService.cs(신규), mAIx/Services/Cache/CachedFolderState.cs(신규), mAIx/Services/Sync/BackgroundSyncService.cs, mAIx/App.xaml.cs, mAIx/ViewModels/MainViewModel.cs, mAIx/Views/MainWindow.xaml.cs | LRU 캐시(maxFolders=10), EmailsSavedToFolder 이벤트 증분 갱신, 스크롤 오프셋 복원 |
 | 2026-04-09 | Phase 1~4 기능 확장 (성능최적화+아웃룩기능+Superhuman+혁신기능) | App.xaml.cs, MainViewModel.cs, MainWindow.xaml/cs + 신규 서비스 23개 | k5 파이프라인 |
+| 2026-04-10 | Planner 탭 UI 가상화 (ItemsControl→ListView) + kio bash_exec 버그 수정 | mAIx/Views/MainWindow.xaml, AI/MCP-Servers/fio-mcp-server/bash_exec.py, .claude/skills/ko/SKILL.md | L-303/304/305 교훈 반영 |
+
+---
+
+## 코딩 규칙
+
+### WPF MVVM 패턴 규칙
+
+**절대 원칙**: MVVM 패턴 준수. View(XAML) ↔ ViewModel(바인딩) ↔ Model(데이터) 분리.
+
+```yaml
+필수:
+  - ViewModel은 ViewModelBase 상속 (CommunityToolkit.Mvvm)
+  - [ObservableProperty], [RelayCommand] 어트리뷰트 사용
+  - View에서 ViewModel 직접 참조 금지 (DataContext 바인딩만)
+  - 코드비하인드(.xaml.cs)에 비즈니스 로직 최소화
+
+금지:
+  - View에서 직접 서비스 호출
+  - ViewModel에서 View 컨트롤 직접 접근
+  - 코드비하인드에 DB 쿼리/API 호출
+```
+
+### DI (의존성 주입) 규칙
+
+```yaml
+필수:
+  - 모든 서비스는 App.xaml.cs의 ConfigureServices()에 등록
+  - 생성자 주입 사용 (서비스 로케이터 패턴 금지)
+  - Scoped 서비스는 CreateScope() 사용
+  - IHttpClientFactory 사용 시: services.AddHttpClient() 등록 + MaiX.csproj에 Microsoft.Extensions.Http 패키지 추가 필수
+
+금지:
+  - new Service() 직접 생성 (DI 컨테이너 경유 필수)
+  - 서비스 간 순환 참조
+  - 싱글톤에서 Scoped 서비스 직접 주입
+  - new HttpClient() 직접 생성 (IHttpClientFactory.CreateClient() 사용)
+
+NuGet_패키지_의존성_체크리스트:
+  - IHttpClientFactory → Microsoft.Extensions.Http
+  - IMemoryCache → Microsoft.Extensions.Caching.Memory
+  - IOptions<T> → Microsoft.Extensions.Options
+  - 새 타입 사용 시: 해당 어셈블리가 .csproj에 PackageReference로 있는지 먼저 확인
+```
+
+### XAML 바인딩 규칙
+
+```yaml
+필수:
+  - Binding Path 명시 (축약 금지)
+  - Converter는 Converters/ 폴더에 별도 파일로 분리
+  - ResourceDictionary로 스타일 재사용
+  - WPF UI (Fluent Design) 컨트롤 우선 사용
+
+네이밍:
+  - Converter: {용도}Converter.cs (예: BoolToVisibilityConverter)
+  - View: {기능}Window.xaml 또는 {기능}Page.xaml
+  - ViewModel: {기능}ViewModel.cs
+  - Model: {엔티티명}.cs
+```
+
+### 네임스페이스 규칙
+
+```yaml
+루트: MaiX
+구조:
+  - MaiX.Views: WPF Window/Page
+  - MaiX.Views.Dialogs: 다이얼로그 창
+  - MaiX.ViewModels: MVVM ViewModel
+  - MaiX.Models: 데이터 모델
+  - MaiX.Models.Settings: 설정 모델
+  - MaiX.Services.{카테고리}: 비즈니스 로직
+  - MaiX.Data: EF Core DbContext
+  - MaiX.Converters: XAML 값 변환기
+  - MaiX.Controls: 커스텀 컨트롤
+  - MaiX.Utils: 유틸리티
+```
+
+### SQLite / EF Core 규칙
+
+```yaml
+필수:
+  - DbContext는 MaiXDbContext 사용
+  - 마이그레이션: dotnet ef migrations add {Name}
+  - 스키마 변경 시 DATABASE.md 업데이트
+  - using 블록으로 DbContext 관리
+
+금지:
+  - 직접 SQL 실행 (EF Core LINQ 사용)
+  - Migration 파일 수동 편집
+  - DbContext를 싱글톤으로 등록
+```
+
+### Microsoft Graph API 규칙
+
+```yaml
+필수:
+  - GraphAuthService를 통한 인증만 사용
+  - TokenCacheHelper로 토큰 캐시 관리
+  - 권한 변경 시: GraphAuthService.cs + appsettings.json + Azure Portal 동시 수정
+  - Delta Query 사용 (전체 동기화 금지)
+
+금지:
+  - 직접 HTTP 호출 (Microsoft.Graph SDK 사용)
+  - 토큰을 코드에 하드코딩
+  - Rate Limit 무시 (재시도 로직 필수)
+```
+
+### 로깅 규칙 (L-296 — 절대 규칙)
+
+```yaml
+필수:
+  - NLog 표준 로거 사용 (모든 레이어 — Services/ViewModels/Controls 전부)
+  - 패턴: private static readonly Logger _log = LogManager.GetCurrentClassLogger();
+  - 네임스페이스: using NLog;
+  - 적절한 레벨: Debug/Info/Warn/Error/Fatal
+  - 예외 처리 블록에 Error 로그
+  - 클래스명/메서드명 포함
+
+금지:
+  - Serilog 직접 사용 (using Serilog; / Log.ForContext<T>() 패턴) — AC auto_scripts 경로 불일치
+  - Console.WriteLine (NLog 사용)
+  - 민감 정보 로그 출력 (토큰, 비밀번호)
+```
+
+### AI 분석 규칙
+
+```yaml
+필수:
+  - IAIProvider 인터페이스 구현
+  - AIService를 통한 프로바이더 선택
+  - 비동기 호출 (async/await)
+
+금지:
+  - AI API 키를 코드에 하드코딩 (설정 파일 사용)
+  - 동기 API 호출 (UI 블로킹)
+```
+
+### 프롬프트 관리 규칙 (L-044 — 절대 규칙)
+
+```yaml
+원칙: 프롬프트는 반드시 외부 파일로 관리. 코드 내 하드코딩/DB 조회 절대 금지.
+
+필수:
+  - 프롬프트 템플릿은 Resources/Prompts/*.txt 외부 파일로 관리
+  - .csproj에 Content + CopyToOutputDirectory=PreserveNewest 설정
+  - 변수 치환은 {{변수명}} 플레이스홀더 + string.Replace() 사용
+  - 프롬프트 수정 시 .txt 파일만 수정 (C# 코드 변경 불필요)
+
+금지:
+  - C# 코드에 프롬프트 문자열 하드코딩 (raw string literal, $\"\"\" 등 포함)
+  - PromptService/DB를 통한 프롬프트 조회 (DB 우선 시 외부 파일 무력화)
+  - Fallback 하드코딩 ("보험"이라는 명목도 금지)
+  - 프롬프트 내용을 코드 변경 없이 수정 불가능한 구조
+```
+
+### 설정 필드 추가 규칙 (L-002 — 절대 규칙)
+
+```yaml
+적용_범위: UserPreferencesSettings.cs 연동 모든 설정 필드
+
+체크리스트 (설정 필드 추가/수정 시 반드시 확인):
+  1. UserPreferencesSettings.cs에 해당 프로퍼티가 선언되었는가?
+  2. 프로퍼티에 기본값이 설정되었는가? (null 허용 여부 명시)
+  3. SettingsViewModel 또는 관련 ViewModel에서 바인딩 경로가 정확한가?
+  4. XAML Binding Path가 UserPreferencesSettings의 실제 프로퍼티명과 일치하는가?
+  5. 설정 저장/로드 로직(직렬화/역직렬화)에서 새 필드가 포함되는가?
+
+금지_패턴:
+  - ViewModel/XAML에 바인딩 추가 후 UserPreferencesSettings에 프로퍼티 추가 누락
+  - 임시 하드코딩으로 바인딩 오류를 우회하고 UserPreferencesSettings 수정 지연
+  - 새 설정 섹션을 별도 클래스로 분리 후 UserPreferencesSettings 연결 누락
+```
+
+### REST API 서버 규칙
+
+```yaml
+포트: 5858 (고정)
+필수:
+  - RestApiServer.cs에서 엔드포인트 관리
+  - JSON 응답 형식
+  - 에러 시 적절한 HTTP 상태 코드 반환
+  - restapi.md 문서 업데이트
+
+금지:
+  - 5858 포트 변경 (자동화 스크립트 의존)
+  - 인증 없는 위험한 엔드포인트 추가
+```

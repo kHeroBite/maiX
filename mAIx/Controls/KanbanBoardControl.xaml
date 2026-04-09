@@ -66,13 +66,32 @@
                       HorizontalScrollBarVisibility="Auto"
                       VerticalScrollBarVisibility="Disabled"
                       PreviewMouseWheel="BoardScrollViewer_PreviewMouseWheel">
-            <ItemsControl x:Name="BucketsItemsControl">
-                <ItemsControl.ItemsPanel>
+            <!-- 버킷 목록 (수평 가상화 — VirtualizingStackPanel Recycling) -->
+            <ListView x:Name="BucketsItemsControl"
+                      VirtualizingPanel.IsVirtualizing="True"
+                      VirtualizingPanel.VirtualizationMode="Recycling"
+                      VirtualizingPanel.ScrollUnit="Item"
+                      ScrollViewer.HorizontalScrollBarVisibility="Disabled"
+                      ScrollViewer.VerticalScrollBarVisibility="Disabled"
+                      BorderThickness="0"
+                      Background="Transparent"
+                      SelectionMode="Single">
+                <ListView.ItemContainerStyle>
+                    <Style TargetType="ListViewItem">
+                        <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
+                        <Setter Property="VerticalContentAlignment" Value="Stretch"/>
+                        <Setter Property="Padding" Value="0"/>
+                        <Setter Property="Background" Value="Transparent"/>
+                        <Setter Property="BorderThickness" Value="0"/>
+                        <Setter Property="FocusVisualStyle" Value="{x:Null}"/>
+                    </Style>
+                </ListView.ItemContainerStyle>
+                <ListView.ItemsPanel>
                     <ItemsPanelTemplate>
-                        <StackPanel Orientation="Horizontal" Margin="16"/>
+                        <VirtualizingStackPanel Orientation="Horizontal" Margin="16"/>
                     </ItemsPanelTemplate>
-                </ItemsControl.ItemsPanel>
-                <ItemsControl.ItemTemplate>
+                </ListView.ItemsPanel>
+                <ListView.ItemTemplate>
                     <DataTemplate>
                         <!-- 버킷 컬럼 -->
                         <Border Width="300" Margin="0,0,16,0"
@@ -118,20 +137,37 @@
                                     </Grid>
                                 </Border>
 
-                                <!-- 카드 목록 -->
-                                <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto" Padding="0,0,4,0">
-                                    <ItemsControl ItemsSource="{Binding Tasks}">
-                                        <ItemsControl.ItemTemplate>
-                                            <DataTemplate>
-                                                <local:KanbanCardControl Margin="0,0,0,8"
-                                                    DataContext="{Binding}"
-                                                    PreviewMouseLeftButtonDown="Card_PreviewMouseLeftButtonDown"
-                                                    PreviewMouseMove="Card_PreviewMouseMove"
-                                                    MouseLeftButtonUp="Card_MouseLeftButtonUp"/>
-                                            </DataTemplate>
-                                        </ItemsControl.ItemTemplate>
-                                    </ItemsControl>
-                                </ScrollViewer>
+                                <!-- 카드 목록 (VirtualizingStackPanel Recycling) -->
+                                <ListView Grid.Row="1"
+                                          ItemsSource="{Binding Tasks}"
+                                          VirtualizingPanel.IsVirtualizing="True"
+                                          VirtualizingPanel.VirtualizationMode="Recycling"
+                                          VirtualizingPanel.ScrollUnit="Item"
+                                          ScrollViewer.VerticalScrollBarVisibility="Auto"
+                                          ScrollViewer.HorizontalScrollBarVisibility="Disabled"
+                                          BorderThickness="0"
+                                          Background="Transparent"
+                                          Padding="0,0,4,0"
+                                          SelectionMode="Single">
+                                    <ListView.ItemContainerStyle>
+                                        <Style TargetType="ListViewItem">
+                                            <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
+                                            <Setter Property="Padding" Value="0"/>
+                                            <Setter Property="Background" Value="Transparent"/>
+                                            <Setter Property="BorderThickness" Value="0"/>
+                                            <Setter Property="FocusVisualStyle" Value="{x:Null}"/>
+                                        </Style>
+                                    </ListView.ItemContainerStyle>
+                                    <ListView.ItemTemplate>
+                                        <DataTemplate>
+                                            <local:KanbanCardControl Margin="0,0,0,8"
+                                                DataContext="{Binding}"
+                                                PreviewMouseLeftButtonDown="Card_PreviewMouseLeftButtonDown"
+                                                PreviewMouseMove="Card_PreviewMouseMove"
+                                                MouseLeftButtonUp="Card_MouseLeftButtonUp"/>
+                                        </DataTemplate>
+                                    </ListView.ItemTemplate>
+                                </ListView>
 
                                 <!-- 하단 작업 추가 버튼 -->
                                 <ui:Button Grid.Row="2"
@@ -149,8 +185,8 @@
                             </Grid>
                         </Border>
                     </DataTemplate>
-                </ItemsControl.ItemTemplate>
-            </ItemsControl>
+                </ListView.ItemTemplate>
+            </ListView>
         </ScrollViewer>
 
         <!-- 타임라인 뷰 (칸반 보드와 전환) -->
