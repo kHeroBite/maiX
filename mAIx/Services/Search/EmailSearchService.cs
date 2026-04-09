@@ -54,15 +54,23 @@ public class EmailSearchService
 
             // FTS5 우선 시도 → 실패 시 LIKE 폴백
             IQueryable<Email> dbQuery;
+            List<int>? fts5OrderedIds = null;
             if (!string.IsNullOrWhiteSpace(query.Keywords))
             {
                 try
                 {
-                    var fts5Ids = await SearchWithFts5Async(query.Keywords, ct);
-                    dbQuery = fts5Ids.Count > 0
-                        ? BuildQueryWithIds(query, fts5Ids)
-                        : BuildQuery(query);
-                    _log.Debug("FTS5 검색: {Count}건 매칭", fts5Ids.Count);
+                    var 가중치결과 = await SearchWithFts5Async(query.Keywords, ct);
+                    if (가중치결과.Count > 0)
+                    {
+                        // score ASC 정렬된 ID 순서 보존
+                        fts5OrderedIds = 가중치결과.Select(r => r.Id).ToList();
+                        dbQuery = BuildQueryWithIds(query, fts5OrderedIds);
+                    }
+                    else
+                    {
+                        dbQuery = BuildQuery(query);
+                    }
+                    _log.Debug("FTS5 가중치 검색: {Count}건 매칭", 가중치결과.Count);
                 }
                 catch (Exception ex)
                 {
@@ -78,14 +86,31 @@ public class EmailSearchService
             // 전체 개수 조회
             var totalCount = await dbQuery.CountAsync(ct);
 
-            // 정렬 적용
-            dbQuery = ApplyOrdering(dbQuery, query);
-
-            // 페이징 적용
-            var items = await dbQuery
-                .Skip((query.Page - 1) * query.PageSize)
-                .Take(query.PageSize)
-                .ToListAsync(ct);
+            // 정렬 적용 (FTS5 가중치 결과가 있으면 score 순서 우선, 없으면 기본 정렬)
+            List<Email> items;
+            if (fts5OrderedIds != null && fts5OrderedIds.Count > 0)
+            {
+                // FTS5 score 순서 보존: 메모리에서 정렬 (LIMIT 500 이내)
+                var 페이지시작 = (query.Page - 1) * query.PageSize;
+                var 페이지아이디 = fts5OrderedIds.Skip(페이지시작).Take(query.PageSize).ToList();
+                var 페이지이메일맵 = await _dbContext.Emails.AsNoTracking()
+                    .Where(e => 페이지아이디.Contains(e.Id))
+                    .ToListAsync(ct);
+                // score 순서에 맞게 재정렬
+                items = 페이지아이디
+                    .Select(id => 페이지이메일맵.FirstOrDefault(e => e.Id == id))
+                    .Where(e => e != null)
+                    .Select(e => e!)
+                    .ToList();
+            }
+            else
+            {
+                dbQuery = ApplyOrdering(dbQuery, query);
+                items = await dbQuery
+                    .Skip((query.Page - 1) * query.PageSize)
+                    .Take(query.PageSize)
+                    .ToListAsync(ct);
+            }
 
             stopwatch.Stop();
 
@@ -205,42 +230,48 @@ public class EmailSearchService
     }
 
     /// <summary>
-    /// FTS5 MATCH 검색 — Email ID 목록 반환 (EmailsFts 가상 테이블 사용)
-    /// EF Core LINQ로 표현 불가능한 FTS5 전용 Raw SQL (EmailFtsQueries.BuildMatchQuery 참조)
+    /// FTS5 가중치 검색 — (Email ID, score) 목록 반환 (EmailsFts 가상 테이블 사용)
+    /// bm25 가중치: 제목(10) > 발신자이름(5) > 발신자이메일(3) > 본문(1) + 날짜 boost
+    /// score ASC 정렬 = 관련도 높은 순 (bm25는 음수 반환)
+    /// AttachmentsFts 매칭 결과는 score = +999.0 (후순위)으로 병합
     /// </summary>
     /// <param name="keywords">검색 키워드</param>
     /// <param name="ct">취소 토큰</param>
-    /// <returns>매칭된 Email ID 목록</returns>
-    public async Task<List<int>> SearchWithFts5Async(string keywords, CancellationToken ct = default)
+    /// <returns>score ASC 정렬된 (Id, Score) 목록</returns>
+    public async Task<List<(int Id, double Score)>> SearchWithFts5Async(string keywords, CancellationToken ct = default)
     {
-        var ids = new List<int>();
+        var 결과 = new List<(int Id, double Score)>();
         if (string.IsNullOrWhiteSpace(keywords))
-            return ids;
+            return 결과;
 
         // 2글자 미만 단독 쿼리는 FTS5 trigram이 지원 불가 → LIKE 폴백
         var (ftsQuery, needsLikeFallback) = mAIx.Utils.TextPreprocessor.BuildFtsQuery(keywords);
         if (string.IsNullOrWhiteSpace(ftsQuery))
-            return ids;
+            return 결과;
 
         var conn = _dbContext.Database.GetDbConnection();
         if (conn.State != System.Data.ConnectionState.Open)
             await conn.OpenAsync(ct);
 
-        // EmailsFts 검색
+        // EmailsFts 가중치 검색 (bm25 + 날짜 boost)
         using (var cmd = conn.CreateCommand())
         {
-            cmd.CommandText = EmailFtsQueries.BuildMatchQuery(keywords);
+            cmd.CommandText = EmailFtsQueries.BuildWeightedMatchQuery(keywords);
             using var reader = await cmd.ExecuteReaderAsync(ct);
             while (await reader.ReadAsync(ct))
-                ids.Add(reader.GetInt32(0));
+            {
+                var id = reader.GetInt32(0);
+                var score = reader.GetDouble(1);
+                결과.Add((id, score));
+            }
         }
 
-        // AttachmentsFts 검색 → 해당 emailId 병합
+        // 이미 매칭된 ID 집합
+        var 이미매칭 = new HashSet<int>(결과.Select(r => r.Id));
+
+        // AttachmentsFts 검색 → score = +999.0 (후순위) 으로 병합
         using (var cmd = conn.CreateCommand())
         {
-            cmd.CommandText = $"SELECT DISTINCT a.EmailId FROM Attachments a " +
-                              $"WHERE a.Id IN ({EmailFtsQueries.BuildAttachmentMatchQuery(keywords).Replace("SELECT rowid FROM AttachmentsFts WHERE AttachmentsFts MATCH", "SELECT rowid FROM AttachmentsFts WHERE AttachmentsFts MATCH")})";
-            // AttachmentsFts rowid → Attachment.Id → EmailId 조인 쿼리로 재작성
             cmd.CommandText = $"SELECT DISTINCT a.EmailId FROM Attachments a " +
                               $"INNER JOIN AttachmentsFts af ON af.rowid = a.Id " +
                               $"WHERE af.AttachmentsFts MATCH '{keywords.Replace("'", "''")}'";
@@ -250,8 +281,11 @@ public class EmailSearchService
                 while (await reader.ReadAsync(ct))
                 {
                     var emailId = reader.GetInt32(0);
-                    if (!ids.Contains(emailId))
-                        ids.Add(emailId);
+                    if (!이미매칭.Contains(emailId))
+                    {
+                        결과.Add((emailId, 999.0));
+                        이미매칭.Add(emailId);
+                    }
                 }
             }
             catch
@@ -260,7 +294,9 @@ public class EmailSearchService
             }
         }
 
-        return ids;
+        // score ASC 정렬 (관련도 높은 순)
+        결과.Sort((a, b) => a.Score.CompareTo(b.Score));
+        return 결과;
     }
 
     /// <summary>

@@ -35,4 +35,26 @@ public static class EmailFtsQueries
         var escaped = keywords.Replace("\"", "\"\"");
         return $"SELECT rowid FROM AttachmentsFts WHERE AttachmentsFts MATCH '\"{escaped}\"'";
     }
+
+    /// <summary>
+    /// 가중치 기반 FTS5 MATCH 검색 쿼리 생성
+    /// bm25 가중치: 제목(10) > 발신자이름(5) > 발신자이메일(3) > 본문(1)
+    /// 날짜 boost: 2020-01-01 기준 경과 일수 비례로 최신 메일 상위 노출
+    /// bm25 반환값은 음수이므로 ORDER BY ASC = 관련도 높은 순
+    /// </summary>
+    /// <param name="keywords">검색 키워드 (이스케이프 전 원본)</param>
+    /// <returns>완성된 가중치 정렬 SQL 문자열</returns>
+    public static string BuildWeightedMatchQuery(string keywords)
+    {
+        var escaped = keywords.Replace("\"", "\"\"");
+        var ftsQuery = $"\"{escaped}\"";
+        return $@"SELECT f.rowid,
+    (bm25(EmailsFts, 10.0, 1.0, 5.0, 3.0)
+     - (JULIANDAY(e.ReceivedDateTime) - JULIANDAY('2020-01-01')) / 2000.0 * 2.0) AS score
+FROM EmailsFts f
+INNER JOIN Emails e ON e.Id = f.rowid
+WHERE EmailsFts MATCH '{ftsQuery}'
+ORDER BY score ASC
+LIMIT 500";
+    }
 }
