@@ -32,18 +32,6 @@ public class UserPreferencesSettings
     public bool UseGpuMode { get; set; } = false;
 
     /// <summary>
-    /// 메일 동기화 기간 타입 (Count, Days, Weeks, Months, Years, All)
-    /// </summary>
-    [XmlElement("MailSyncPeriodType")]
-    public string MailSyncPeriodType { get; set; } = "Count";
-
-    /// <summary>
-    /// 메일 동기화 기간 값
-    /// </summary>
-    [XmlElement("MailSyncPeriodValue")]
-    public int MailSyncPeriodValue { get; set; } = 5;
-
-    /// <summary>
     /// 메일 동기화 주기 (분 단위) - 하위 호환용, MailSyncIntervalSeconds 우선
     /// </summary>
     [XmlElement("MailSyncIntervalMinutes")]
@@ -62,18 +50,6 @@ public class UserPreferencesSettings
     public bool IsMailSyncPaused { get; set; } = false;
 
     /// <summary>
-    /// AI 분석 기간 타입 (Count, Days, Weeks, Months, Years, All)
-    /// </summary>
-    [XmlElement("AiAnalysisPeriodType")]
-    public string AiAnalysisPeriodType { get; set; } = "Count";
-
-    /// <summary>
-    /// AI 분석 기간 값
-    /// </summary>
-    [XmlElement("AiAnalysisPeriodValue")]
-    public int AiAnalysisPeriodValue { get; set; } = 5;
-
-    /// <summary>
     /// AI 분석 주기 (초 단위) - 1초~1시간(3600초) 지원
     /// </summary>
     [XmlElement("AiAnalysisIntervalSeconds")]
@@ -86,18 +62,6 @@ public class UserPreferencesSettings
     public bool IsAiAnalysisPaused { get; set; } = false;
 
     /// <summary>
-    /// 즐겨찾기 메일 동기화 기간 타입 (Count, Days, Weeks, Months, Years, All)
-    /// </summary>
-    [XmlElement("FavoriteSyncPeriodType")]
-    public string FavoriteSyncPeriodType { get; set; } = "Count";
-
-    /// <summary>
-    /// 즐겨찾기 메일 동기화 기간 값
-    /// </summary>
-    [XmlElement("FavoriteSyncPeriodValue")]
-    public int FavoriteSyncPeriodValue { get; set; } = 5;
-
-    /// <summary>
     /// 즐겨찾기 메일 동기화 주기 (초 단위) - 기본 10초
     /// </summary>
     [XmlElement("FavoriteSyncIntervalSeconds")]
@@ -108,18 +72,6 @@ public class UserPreferencesSettings
     /// </summary>
     [XmlElement("FullSyncIntervalSeconds")]
     public int FullSyncIntervalSeconds { get; set; } = 300;
-
-    /// <summary>
-    /// 즐겨찾기 AI 분석 기간 타입 (Count, Days, Weeks, Months, Years, All)
-    /// </summary>
-    [XmlElement("FavoriteAiPeriodType")]
-    public string FavoriteAiPeriodType { get; set; } = "Count";
-
-    /// <summary>
-    /// 즐겨찾기 AI 분석 기간 값
-    /// </summary>
-    [XmlElement("FavoriteAiPeriodValue")]
-    public int FavoriteAiPeriodValue { get; set; } = 5;
 
     /// <summary>
     /// 즐겨찾기 AI 분석 주기 (초 단위) - 기본 30초

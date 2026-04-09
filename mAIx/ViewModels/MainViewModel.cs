@@ -990,57 +990,11 @@ public partial class MainViewModel : ViewModelBase, IDisposable
 
     #endregion
 
-    #region 동기화 기간 설정
-
-    /// <summary>
-    /// 메일 동기화 기간 설정
-    /// </summary>
-    [ObservableProperty]
-    private Models.Settings.SyncPeriodSettings _mailSyncPeriodSettings = Models.Settings.SyncPeriodSettings.Default;
-
-    /// <summary>
-    /// AI 분석 기간 설정
-    /// </summary>
-    [ObservableProperty]
-    private Models.Settings.SyncPeriodSettings _aiAnalysisPeriodSettings = Models.Settings.SyncPeriodSettings.Default;
-
-    /// <summary>
-    /// 메일 동기화 기간 표시 텍스트
-    /// </summary>
-    public string MailSyncPeriodText => MailSyncPeriodSettings?.ToDisplayString() ?? "설정 없음";
-
-    /// <summary>
-    /// AI 분석 기간 표시 텍스트
-    /// </summary>
-    public string AiAnalysisPeriodText => AiAnalysisPeriodSettings?.ToDisplayString() ?? "설정 없음";
-
-    partial void OnMailSyncPeriodSettingsChanged(Models.Settings.SyncPeriodSettings value)
-    {
-        OnPropertyChanged(nameof(MailSyncPeriodText));
-    }
-
-    partial void OnAiAnalysisPeriodSettingsChanged(Models.Settings.SyncPeriodSettings value)
-    {
-        OnPropertyChanged(nameof(AiAnalysisPeriodText));
-    }
-
     /// <summary>
     /// 서명 설정
     /// </summary>
     [ObservableProperty]
     private Models.Settings.SignatureSettings? _signatureSettings = new();
-
-    /// <summary>
-    /// 동기화 기간 설정 업데이트
-    /// </summary>
-    public void UpdateSyncPeriodSettings(Models.Settings.SyncPeriodSettings mailSettings, Models.Settings.SyncPeriodSettings aiSettings)
-    {
-        MailSyncPeriodSettings = mailSettings;
-        AiAnalysisPeriodSettings = aiSettings;
-        Log4.Info($"동기화 기간 설정 업데이트 - 메일: {mailSettings.ToDisplayString()}, AI: {aiSettings.ToDisplayString()}");
-    }
-
-    #endregion
 
     /// <summary>
     /// 동기화 상태 변경 이벤트 핸들러

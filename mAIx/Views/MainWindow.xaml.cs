@@ -2247,22 +2247,6 @@ public partial class MainWindow : FluentWindow
     {
         var prefs = App.Settings.UserPreferences;
 
-        // 메일 동기화 기간 설정 로드
-        if (Enum.TryParse<SyncPeriodType>(prefs.MailSyncPeriodType, out var mailPeriodType))
-        {
-            var mailSettings = new SyncPeriodSettings { PeriodType = mailPeriodType, Value = prefs.MailSyncPeriodValue };
-            _viewModel.MailSyncPeriodSettings = mailSettings;
-            Log4.Debug($"메일 동기화 기간 로드: {mailSettings.ToDisplayString()}");
-        }
-
-        // AI 분석 기간 설정 로드
-        if (Enum.TryParse<SyncPeriodType>(prefs.AiAnalysisPeriodType, out var aiPeriodType))
-        {
-            var aiSettings = new SyncPeriodSettings { PeriodType = aiPeriodType, Value = prefs.AiAnalysisPeriodValue };
-            _viewModel.AiAnalysisPeriodSettings = aiSettings;
-            Log4.Debug($"AI 분석 기간 로드: {aiSettings.ToDisplayString()}");
-        }
-
         // 동기화 주기 로드 (초 단위 우선, 없으면 분 단위 사용) - 하위 호환용
         if (prefs.MailSyncIntervalSeconds > 0)
         {
@@ -17462,41 +17446,6 @@ public partial class MainWindow : FluentWindow
 
         SettingsContentPanel.Children.Add(CreateSettingsSectionHeader("AI 동기화 - 전체"));
 
-        // AI 분석 기간 (라디오버튼 선택)
-        var periodGroup = CreateSettingsGroupBorder();
-        var periodStack = new StackPanel();
-        periodStack.Children.Add(CreateSettingsLabel("분석 대상 기간"));
-
-        var currentPeriod = $"{prefs.AiAnalysisPeriodType}:{prefs.AiAnalysisPeriodValue}";
-        var periodOptions = new[] { ("Count:5", "최근 5건"), ("Days:1", "하루"), ("Weeks:1", "1주일"), ("Months:1", "1달"), ("Years:1", "1년"), ("All:0", "전체") };
-
-        var periodWrap = new WrapPanel { Margin = new Thickness(0, 0, 0, 12) };
-        foreach (var (value, label) in periodOptions)
-        {
-            var parts = value.Split(':');
-            var radio = new RadioButton
-            {
-                Content = label,
-                Tag = value,
-                IsChecked = currentPeriod == value,
-                Margin = new Thickness(0, 0, 16, 8),
-                GroupName = "AiAllPeriod"
-            };
-            radio.Checked += (s, e) =>
-            {
-                prefs.AiAnalysisPeriodType = parts[0];
-                prefs.AiAnalysisPeriodValue = int.Parse(parts[1]);
-                App.Settings.SaveUserPreferences();
-                Log4.Info($"AI 분석 기간 저장: {parts[0]}:{parts[1]}");
-            };
-            periodWrap.Children.Add(radio);
-        }
-        periodStack.Children.Add(periodWrap);
-        periodStack.Children.Add(CreateSettingsDescription("AI 분석 대상 메일 범위입니다."));
-
-        periodGroup.Child = periodStack;
-        SettingsContentPanel.Children.Add(periodGroup);
-
         // AI 분석 주기 (라디오버튼 선택)
         var intervalGroup = CreateSettingsGroupBorder();
         var intervalStack = new StackPanel();
@@ -17949,41 +17898,6 @@ public partial class MainWindow : FluentWindow
         var prefs = App.Settings.UserPreferences;
 
         SettingsContentPanel.Children.Add(CreateSettingsSectionHeader("MS365 동기화 - 전체"));
-
-        // 메일 동기화 기간 (라디오버튼 선택)
-        var periodGroup = CreateSettingsGroupBorder();
-        var periodStack = new StackPanel();
-        periodStack.Children.Add(CreateSettingsLabel("메일 동기화 대상 기간"));
-
-        var currentPeriod = $"{prefs.MailSyncPeriodType}:{prefs.MailSyncPeriodValue}";
-        var periodOptions = new[] { ("Count:5", "최근 5건"), ("Days:1", "하루"), ("Weeks:1", "1주일"), ("Months:1", "1달"), ("Years:1", "1년"), ("All:0", "전체") };
-
-        var periodWrap = new WrapPanel { Margin = new Thickness(0, 0, 0, 12) };
-        foreach (var (value, label) in periodOptions)
-        {
-            var parts = value.Split(':');
-            var radio = new RadioButton
-            {
-                Content = label,
-                Tag = value,
-                IsChecked = currentPeriod == value,
-                Margin = new Thickness(0, 0, 16, 8),
-                GroupName = "Ms365AllPeriod"
-            };
-            radio.Checked += (s, e) =>
-            {
-                prefs.MailSyncPeriodType = parts[0];
-                prefs.MailSyncPeriodValue = int.Parse(parts[1]);
-                App.Settings.SaveUserPreferences();
-                Log4.Info($"메일 동기화 기간 저장: {parts[0]}:{parts[1]}");
-            };
-            periodWrap.Children.Add(radio);
-        }
-        periodStack.Children.Add(periodWrap);
-        periodStack.Children.Add(CreateSettingsDescription("동기화할 메일 범위입니다."));
-
-        periodGroup.Child = periodStack;
-        SettingsContentPanel.Children.Add(periodGroup);
 
         // 메일 동기화 주기 (라디오버튼 선택)
         var intervalGroup = CreateSettingsGroupBorder();
