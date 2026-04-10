@@ -7,6 +7,7 @@
         xmlns:wv2="clr-namespace:Microsoft.Web.WebView2.Wpf;assembly=Microsoft.Web.WebView2.Wpf"
         xmlns:local="clr-namespace:mAIx.Views"
         xmlns:controls="clr-namespace:mAIx.Controls"
+        xmlns:teamsControls="clr-namespace:mAIx.Controls.Teams"
         xmlns:vm="clr-namespace:mAIx.ViewModels"
         mc:Ignorable="d"
         Title="{Binding Title}"
@@ -4222,110 +4223,76 @@
                                     <ui:Button x:Name="TeamsPostsTabButton" Content="게시물" Padding="12,6" Margin="0,0,8,0"
                                                Appearance="{Binding CurrentChannelTab, Converter={StaticResource SortByToAppearanceConverter}, ConverterParameter=posts}"
                                                Click="TeamsPostsTab_Click"/>
-                                    <ui:Button x:Name="TeamsFilesTabButton" Content="파일" Padding="12,6"
+                                    <ui:Button x:Name="TeamsFilesTabButton" Content="파일" Padding="12,6" Margin="0,0,8,0"
                                                Appearance="{Binding CurrentChannelTab, Converter={StaticResource SortByToAppearanceConverter}, ConverterParameter=files}"
                                                Click="TeamsFilesTab_Click"/>
+                                    <ui:Button x:Name="TeamsWikiTabButton" Content="Wiki" Padding="12,6" Margin="0,0,8,0"
+                                               Appearance="{Binding CurrentChannelTab, Converter={StaticResource SortByToAppearanceConverter}, ConverterParameter=wiki}"
+                                               Click="TeamsWikiTab_Click"/>
+                                    <ui:Button x:Name="TeamsCalendarTabButton" Content="일정" Padding="12,6" Margin="0,0,8,0"
+                                               Appearance="{Binding CurrentChannelTab, Converter={StaticResource SortByToAppearanceConverter}, ConverterParameter=calendar}"
+                                               Click="TeamsCalendarTab_Click"/>
+                                    <ui:Button x:Name="TeamsPlannerTabButton" Content="작업" Padding="12,6" Margin="0,0,8,0"
+                                               Appearance="{Binding CurrentChannelTab, Converter={StaticResource SortByToAppearanceConverter}, ConverterParameter=planner}"
+                                               Click="TeamsPlannerTab_Click"/>
+                                    <ui:Button x:Name="TeamsSettingsTabButton" Content="설정" Padding="12,6"
+                                               Appearance="{Binding CurrentChannelTab, Converter={StaticResource SortByToAppearanceConverter}, ConverterParameter=settings}"
+                                               Click="TeamsSettingsTab_Click"/>
                                 </StackPanel>
                             </Border>
 
-                            <!-- 게시물 탭 -->
-                            <ScrollViewer Grid.Row="2" VerticalScrollBarVisibility="Auto"
-                                          Visibility="{Binding CurrentChannelTab, Converter={StaticResource StringEqualsToVisibilityConverter}, ConverterParameter=posts}">
-                                <ItemsControl ItemsSource="{Binding ChannelMessages}" Margin="16">
-                                    <ItemsControl.ItemTemplate>
-                                        <DataTemplate>
-                                            <Border Margin="0,0,0,12" Padding="14"
-                                                    Background="{DynamicResource CardBackgroundFillColorDefaultBrush}"
-                                                    BorderBrush="{DynamicResource ControlElevationBorderBrush}"
-                                                    BorderThickness="1"
-                                                    CornerRadius="8">
-                                                <Grid>
-                                                    <Grid.ColumnDefinitions>
-                                                        <ColumnDefinition Width="44"/>
-                                                        <ColumnDefinition Width="*"/>
-                                                    </Grid.ColumnDefinitions>
-                                                    <!-- 아바타 (사용자별 색상) -->
-                                                    <Border Grid.Column="0" Width="40" Height="40" CornerRadius="20"
-                                                            Background="{Binding FromUser, Converter={StaticResource NameToAvatarColorConverter}}" VerticalAlignment="Top">
-                                                        <TextBlock Text="{Binding FromUser, Converter={StaticResource StringToInitialConverter}}"
-                                                                   Foreground="White" FontWeight="SemiBold" FontSize="15"
-                                                                   HorizontalAlignment="Center" VerticalAlignment="Center"/>
-                                                    </Border>
-                                                    <!-- 메시지 내용 -->
-                                                    <StackPanel Grid.Column="1" Margin="12,0,0,0">
-                                                        <StackPanel Orientation="Horizontal" Margin="0,0,0,6">
-                                                            <!-- 온라인 상태 표시 -->
-                                                            <Ellipse Width="8" Height="8" Fill="#10B981" Margin="0,0,6,0" VerticalAlignment="Center"/>
-                                                            <TextBlock Text="{Binding FromUser}" FontWeight="SemiBold" FontSize="14"/>
-                                                            <TextBlock Text="{Binding ChannelTimeDisplay}" Foreground="{DynamicResource TextFillColorTertiaryBrush}" Margin="10,0,0,0" FontSize="12" VerticalAlignment="Center"/>
-                                                        </StackPanel>
-                                                        <!-- 메시지 본문 -->
-                                                        <TextBlock Text="{Binding Content}" TextWrapping="Wrap" FontSize="14" Margin="0,0,0,8"/>
-                                                        <!-- 스레드에서 회신 버튼 -->
-                                                        <ui:Button Appearance="Transparent" Padding="6,4" Margin="0,4,0,0"
-                                                                   Click="ReplyToThread_Click" Tag="{Binding}"
-                                                                   HorizontalAlignment="Left">
-                                                            <StackPanel Orientation="Horizontal">
-                                                                <ui:SymbolIcon Symbol="ChatMultiple24" FontSize="14" Margin="0,0,6,0" Foreground="{StaticResource TeamsAccentBrush}"/>
-                                                                <TextBlock Text="스레드에서 회신" FontSize="12" Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
-                                                            </StackPanel>
-                                                        </ui:Button>
-                                                    </StackPanel>
-                                                </Grid>
-                                            </Border>
-                                        </DataTemplate>
-                                    </ItemsControl.ItemTemplate>
-                                </ItemsControl>
-                            </ScrollViewer>
+                            <!-- 게시물 탭 (UserControl) -->
+                            <teamsControls:ChannelPostsControl Grid.Row="2"
+                                x:Name="ChannelPostsCtrl"
+                                DataContext="{Binding ChannelPostsVm}"
+                                Visibility="{Binding CurrentChannelTab, Converter={StaticResource StringEqualsToVisibilityConverter}, ConverterParameter=posts}"
+                                ReplyToThread="ChannelPostsCtrl_ReplyToThread"/>
 
-                            <!-- 파일 탭 -->
-                            <ScrollViewer Grid.Row="2" VerticalScrollBarVisibility="Auto"
-                                          Visibility="{Binding CurrentChannelTab, Converter={StaticResource StringEqualsToVisibilityConverter}, ConverterParameter=files}">
-                                <ItemsControl ItemsSource="{Binding ChannelFiles}" Margin="16">
-                                    <ItemsControl.ItemTemplate>
-                                        <DataTemplate>
-                                            <ui:Button Appearance="Transparent" HorizontalAlignment="Stretch"
-                                                       HorizontalContentAlignment="Left" Padding="12,8" Margin="0,0,0,4"
-                                                       Click="ChannelFile_Click" Tag="{Binding}">
-                                                <Grid>
-                                                    <Grid.ColumnDefinitions>
-                                                        <ColumnDefinition Width="36"/>
-                                                        <ColumnDefinition Width="*"/>
-                                                        <ColumnDefinition Width="80"/>
-                                                        <ColumnDefinition Width="100"/>
-                                                    </Grid.ColumnDefinitions>
-                                                    <ui:SymbolIcon Grid.Column="0" Symbol="{Binding FileIcon}" FontSize="20"/>
-                                                    <TextBlock Grid.Column="1" Text="{Binding Name}" VerticalAlignment="Center" Margin="8,0,0,0"/>
-                                                    <TextBlock Grid.Column="2" Text="{Binding SizeDisplay}" VerticalAlignment="Center" Foreground="{DynamicResource TextFillColorSecondaryBrush}" FontSize="12"/>
-                                                    <TextBlock Grid.Column="3" Text="{Binding LastModified, StringFormat='{}{0:MM/dd HH:mm}'}" VerticalAlignment="Center" Foreground="{DynamicResource TextFillColorTertiaryBrush}" FontSize="12"/>
-                                                </Grid>
-                                            </ui:Button>
-                                        </DataTemplate>
-                                    </ItemsControl.ItemTemplate>
-                                </ItemsControl>
-                            </ScrollViewer>
+                            <!-- 파일 탭 (UserControl) -->
+                            <teamsControls:ChannelFilesControl Grid.Row="2"
+                                x:Name="ChannelFilesCtrl"
+                                DataContext="{Binding ChannelFilesVm}"
+                                Visibility="{Binding CurrentChannelTab, Converter={StaticResource StringEqualsToVisibilityConverter}, ConverterParameter=files}"/>
 
-                            <!-- 메시지 입력 영역 -->
-                            <Border Grid.Row="3" Padding="16,12"
-                                    BorderBrush="{DynamicResource ControlElevationBorderBrush}"
-                                    BorderThickness="0,1,0,0"
-                                    Visibility="{Binding CurrentChannelTab, Converter={StaticResource StringEqualsToVisibilityConverter}, ConverterParameter=posts}">
-                                <Grid>
-                                    <Grid.ColumnDefinitions>
-                                        <ColumnDefinition Width="*"/>
-                                        <ColumnDefinition Width="Auto"/>
-                                    </Grid.ColumnDefinitions>
-                                    <ui:TextBox x:Name="TeamsChannelMessageInput" Grid.Column="0"
-                                                PlaceholderText="메시지를 입력하세요..."
-                                                Margin="0,0,8,0"
-                                                KeyDown="TeamsChannelMessageInput_KeyDown"/>
-                                    <ui:Button Grid.Column="1" x:Name="TeamsChannelSendButton"
-                                               Icon="{ui:SymbolIcon Send24}"
-                                               Appearance="Primary"
-                                               Click="TeamsChannelSendButton_Click"
-                                               ToolTip="전송"/>
-                                </Grid>
-                            </Border>
+                            <!-- Wiki 탭 (Phase 4에서 구현 — 임시 플레이스홀더) -->
+                            <StackPanel Grid.Row="2" VerticalAlignment="Center" HorizontalAlignment="Center"
+                                        Visibility="{Binding CurrentChannelTab, Converter={StaticResource StringEqualsToVisibilityConverter}, ConverterParameter=wiki}">
+                                <ui:SymbolIcon Symbol="Notepad24" FontSize="48" Foreground="{DynamicResource TextFillColorTertiaryBrush}" Margin="0,0,0,12"/>
+                                <TextBlock Text="Wiki" FontSize="20" FontWeight="SemiBold" HorizontalAlignment="Center"/>
+                                <TextBlock Text="노트 및 Wiki 기능은 곧 지원됩니다" FontSize="14"
+                                           Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                                           HorizontalAlignment="Center" Margin="0,6,0,0"/>
+                            </StackPanel>
+
+                            <!-- 일정 탭 (Phase 3에서 구현 — 임시 플레이스홀더) -->
+                            <StackPanel Grid.Row="2" VerticalAlignment="Center" HorizontalAlignment="Center"
+                                        Visibility="{Binding CurrentChannelTab, Converter={StaticResource StringEqualsToVisibilityConverter}, ConverterParameter=calendar}">
+                                <ui:SymbolIcon Symbol="CalendarLtr24" FontSize="48" Foreground="{DynamicResource TextFillColorTertiaryBrush}" Margin="0,0,0,12"/>
+                                <TextBlock Text="일정" FontSize="20" FontWeight="SemiBold" HorizontalAlignment="Center"/>
+                                <TextBlock Text="채널 일정 기능은 곧 지원됩니다" FontSize="14"
+                                           Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                                           HorizontalAlignment="Center" Margin="0,6,0,0"/>
+                            </StackPanel>
+
+                            <!-- 작업 탭 (Phase 3에서 구현 — 임시 플레이스홀더) -->
+                            <StackPanel Grid.Row="2" VerticalAlignment="Center" HorizontalAlignment="Center"
+                                        Visibility="{Binding CurrentChannelTab, Converter={StaticResource StringEqualsToVisibilityConverter}, ConverterParameter=planner}">
+                                <ui:SymbolIcon Symbol="TaskListLtr24" FontSize="48" Foreground="{DynamicResource TextFillColorTertiaryBrush}" Margin="0,0,0,12"/>
+                                <TextBlock Text="작업" FontSize="20" FontWeight="SemiBold" HorizontalAlignment="Center"/>
+                                <TextBlock Text="Planner 칸반 기능은 곧 지원됩니다" FontSize="14"
+                                           Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                                           HorizontalAlignment="Center" Margin="0,6,0,0"/>
+                            </StackPanel>
+
+                            <!-- 설정 탭 (Phase 2에서 구현 — 임시 플레이스홀더) -->
+                            <StackPanel Grid.Row="2" VerticalAlignment="Center" HorizontalAlignment="Center"
+                                        Visibility="{Binding CurrentChannelTab, Converter={StaticResource StringEqualsToVisibilityConverter}, ConverterParameter=settings}">
+                                <ui:SymbolIcon Symbol="Settings24" FontSize="48" Foreground="{DynamicResource TextFillColorTertiaryBrush}" Margin="0,0,0,12"/>
+                                <TextBlock Text="설정" FontSize="20" FontWeight="SemiBold" HorizontalAlignment="Center"/>
+                                <TextBlock Text="채널 설정 기능은 곧 지원됩니다" FontSize="14"
+                                           Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                                           HorizontalAlignment="Center" Margin="0,6,0,0"/>
+                            </StackPanel>
                         </Grid>
                     </Grid>
                 </Border>

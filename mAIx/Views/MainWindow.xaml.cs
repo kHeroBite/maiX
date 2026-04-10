@@ -15439,10 +15439,9 @@ public partial class MainWindow : FluentWindow
         {
             if (sender is Wpf.Ui.Controls.Button btn && btn.Tag is ChannelMessageViewModel message)
             {
-                // 입력창에 포커스를 주고 회신 준비
-                // 추후 스레드 회신 기능 구현 시 확장
-                TeamsChannelMessageInput?.Focus();
+                // 입력창 포커스 — ChannelPostsControl 내부에서 처리
                 Log4.Info($"스레드 회신 준비: 메시지 ID={message.Id}, 작성자={message.FromUser}");
+                ChannelPostsCtrl?.Focus();
             }
         }
         catch (Exception ex)
@@ -15452,7 +15451,23 @@ public partial class MainWindow : FluentWindow
     }
 
     /// <summary>
-    /// 채널 파일 클릭
+    /// ChannelPostsControl에서 버블링된 스레드 회신 이벤트
+    /// </summary>
+    private void ChannelPostsCtrl_ReplyToThread(object sender, RoutedEventArgs e)
+    {
+        try
+        {
+            if (e.OriginalSource is ChannelMessageViewModel message)
+                Log4.Info($"스레드 회신 준비(Control): 메시지 ID={message.Id}, 작성자={message.FromUser}");
+        }
+        catch (Exception ex)
+        {
+            Log4.Error($"스레드 회신 이벤트 처리 실패: {ex.Message}");
+        }
+    }
+
+    /// <summary>
+    /// 채널 파일 클릭 (레거시 — ChannelFilesControl 이전 후 미사용, 하위 호환 유지)
     /// </summary>
     private void ChannelFile_Click(object sender, RoutedEventArgs e)
     {
@@ -15477,7 +15492,7 @@ public partial class MainWindow : FluentWindow
     }
 
     /// <summary>
-    /// 채널 메시지 입력 KeyDown
+    /// 채널 메시지 입력 KeyDown (레거시 — ChannelPostsControl 이전 후 미사용, 하위 호환 유지)
     /// </summary>
     private async void TeamsChannelMessageInput_KeyDown(object sender, KeyEventArgs e)
     {
@@ -15489,7 +15504,7 @@ public partial class MainWindow : FluentWindow
     }
 
     /// <summary>
-    /// 채널 메시지 전송 버튼 클릭
+    /// 채널 메시지 전송 버튼 클릭 (레거시 — 하위 호환 유지)
     /// </summary>
     private async void TeamsChannelSendButton_Click(object sender, RoutedEventArgs e)
     {
@@ -15497,23 +15512,44 @@ public partial class MainWindow : FluentWindow
     }
 
     /// <summary>
-    /// 채널 메시지 전송
+    /// 채널 메시지 전송 (레거시 — ChannelPostsControl 이전 후 ViewModel 직접 호출)
     /// </summary>
     private async Task SendTeamsChannelMessageAsync()
     {
         try
         {
-            var content = TeamsChannelMessageInput.Text.Trim();
-            if (string.IsNullOrEmpty(content) || _teamsViewModel == null)
-                return;
-
-            TeamsChannelMessageInput.Text = string.Empty;
-            await _teamsViewModel.SendChannelMessageAsync(content);
+            if (_teamsViewModel == null) return;
+            // 입력 내용은 ChannelPostsViewModel에서 관리
+            await _teamsViewModel.SendChannelMessageAsync(string.Empty);
         }
         catch (Exception ex)
         {
             Log4.Error($"채널 메시지 전송 실패: {ex.Message}");
         }
+    }
+
+    /// <summary>Teams Wiki 탭 클릭</summary>
+    private void TeamsWikiTab_Click(object sender, RoutedEventArgs e)
+    {
+        _teamsViewModel?.SwitchChannelTabCommand.Execute("wiki");
+    }
+
+    /// <summary>Teams 일정 탭 클릭</summary>
+    private void TeamsCalendarTab_Click(object sender, RoutedEventArgs e)
+    {
+        _teamsViewModel?.SwitchChannelTabCommand.Execute("calendar");
+    }
+
+    /// <summary>Teams 작업 탭 클릭</summary>
+    private void TeamsPlannerTab_Click(object sender, RoutedEventArgs e)
+    {
+        _teamsViewModel?.SwitchChannelTabCommand.Execute("planner");
+    }
+
+    /// <summary>Teams 설정 탭 클릭</summary>
+    private void TeamsSettingsTab_Click(object sender, RoutedEventArgs e)
+    {
+        _teamsViewModel?.SwitchChannelTabCommand.Execute("settings");
     }
 
     #endregion

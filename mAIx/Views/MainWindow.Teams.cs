@@ -1,11 +1,13 @@
 using System;
 using System.Linq;
+using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Controls;
 using mAIx.Controls;
 using mAIx.Dialogs;
 using mAIx.Services.Graph;
 using mAIx.ViewModels;
+using NLog;
 using Serilog;
 
 namespace mAIx.Views
@@ -227,6 +229,50 @@ namespace mAIx.Views
 
                 Log.Information("[Teams] 미팅 생성 완료: {Subject}", subject);
             }
+        }
+
+        #endregion
+
+        #region 채널 탭 전환
+
+        /// <summary>
+        /// 채널 탭 전환 핸들러 — NLog Logger
+        /// </summary>
+        private static readonly Logger _teamsLog = LogManager.GetCurrentClassLogger();
+
+        /// <summary>
+        /// 채널 탭 버튼 클릭 시 호출 — tabName: "posts" 또는 "files"
+        /// </summary>
+        private async void OnChannelTabChanged(string tabName)
+        {
+            if (_teamsViewModel == null) return;
+
+            _teamsViewModel.CurrentChannelTab = tabName;
+            _teamsLog.Debug("채널 탭 전환: {Tab}", tabName);
+
+            // 선택된 채널이 있을 때만 Sub-VM 초기화
+            var ch = _teamsViewModel.SelectedChannel;
+            if (ch == null || string.IsNullOrEmpty(ch.TeamId) || string.IsNullOrEmpty(ch.Id))
+                return;
+
+            var key = $"{ch.TeamId}_{ch.Id}";
+            await _teamsViewModel.InitializeCurrentTabVmAsync(key, ch.TeamId, ch.Id);
+        }
+
+        /// <summary>
+        /// 게시물 탭 버튼 클릭
+        /// </summary>
+        private async void ChannelPostsTabButton_Click(object sender, RoutedEventArgs e)
+        {
+            await Task.Run(() => Dispatcher.InvokeAsync(() => OnChannelTabChanged("posts")));
+        }
+
+        /// <summary>
+        /// 파일 탭 버튼 클릭
+        /// </summary>
+        private async void ChannelFilesTabButton_Click(object sender, RoutedEventArgs e)
+        {
+            await Task.Run(() => Dispatcher.InvokeAsync(() => OnChannelTabChanged("files")));
         }
 
         #endregion

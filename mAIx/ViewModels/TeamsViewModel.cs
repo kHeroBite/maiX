@@ -10,6 +10,7 @@ using Microsoft.Graph.Models;
 using mAIx.Data;
 using mAIx.Models;
 using mAIx.Services.Graph;
+using NLog;
 using Serilog;
 
 namespace mAIx.ViewModels;
@@ -19,9 +20,10 @@ namespace mAIx.ViewModels;
 /// </summary>
 public partial class TeamsViewModel : ViewModelBase
 {
+    private static readonly Logger _log = LogManager.GetCurrentClassLogger();
     private readonly GraphTeamsService _teamsService;
     private readonly IDbContextFactory<mAIxDbContext> _dbContextFactory;
-    private readonly ILogger _logger;
+    private readonly Serilog.ILogger _logger;
 
     /// <summary>
     /// 채팅방 목록
@@ -187,6 +189,32 @@ public partial class TeamsViewModel : ViewModelBase
     /// 채널이 선택되어 있는지 여부
     /// </summary>
     public bool HasSelectedChannel => SelectedChannel != null;
+
+    #region Hub 패턴 — 채널 탭 Sub-ViewModel
+
+    /// <summary>
+    /// 채널별 게시물 ViewModel 캐시 (탭 전환 시 상태 유지)
+    /// </summary>
+    private readonly Dictionary<string, ChannelPostsViewModel> _postsVmCache = new();
+
+    /// <summary>
+    /// 채널별 파일 ViewModel 캐시
+    /// </summary>
+    private readonly Dictionary<string, ChannelFilesViewModel> _filesVmCache = new();
+
+    /// <summary>
+    /// 현재 채널의 게시물 Sub-ViewModel
+    /// </summary>
+    [ObservableProperty]
+    private ChannelPostsViewModel? _channelPostsVm;
+
+    /// <summary>
+    /// 현재 채널의 파일 Sub-ViewModel
+    /// </summary>
+    [ObservableProperty]
+    private ChannelFilesViewModel? _channelFilesVm;
+
+    #endregion
 
     #endregion
 
@@ -1303,6 +1331,48 @@ public partial class TeamsViewModel : ViewModelBase
     {
         SelectedChannel = channel;
         await LoadChannelContentAsync();
+
+        // Hub 패턴: 현재 탭의 Sub-VM 초기화
+        if (!string.IsNullOrEmpty(channel.TeamId) && !string.IsNullOrEmpty(channel.Id))
+        {
+            var key = $"{channel.TeamId}_{channel.Id}";
+            await InitializeCurrentTabVmAsync(key, channel.TeamId, channel.Id);
+        }
+    }
+
+    /// <summary>
+    /// 현재 활성 탭의 Sub-ViewModel을 초기화 (Lazy 캐시 패턴)
+    /// </summary>
+    public async Task InitializeCurrentTabVmAsync(string key, string teamId, string channelId)
+    {
+        switch (CurrentChannelTab)
+        {
+            case "posts":
+                if (!_postsVmCache.TryGetValue(key, out var postsVm))
+                {
+                    postsVm = new ChannelPostsViewModel(_teamsService, teamId, channelId);
+                    _postsVmCache[key] = postsVm;
+                    _log.Debug("ChannelPostsViewModel 신규 생성: {Key}", key);
+                }
+                ChannelPostsVm = postsVm;
+                await postsVm.LoadAsync();
+                break;
+
+            case "files":
+                if (!_filesVmCache.TryGetValue(key, out var filesVm))
+                {
+                    filesVm = new ChannelFilesViewModel(_teamsService, teamId, channelId);
+                    _filesVmCache[key] = filesVm;
+                    _log.Debug("ChannelFilesViewModel 신규 생성: {Key}", key);
+                }
+                ChannelFilesVm = filesVm;
+                await filesVm.LoadAsync();
+                break;
+
+            default:
+                _log.Debug("알 수 없는 탭: {Tab}", CurrentChannelTab);
+                break;
+        }
     }
 
     /// <summary>

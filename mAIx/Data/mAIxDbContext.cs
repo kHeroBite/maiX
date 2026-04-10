@@ -155,6 +155,16 @@ public class mAIxDbContext : DbContext
     /// </summary>
     public DbSet<PlannerCustomField> PlannerCustomFields { get; set; } = null!;
 
+    /// <summary>
+    /// 채널 노트 테이블 (Teams 채널별 메모/위키)
+    /// </summary>
+    public DbSet<ChannelNote> ChannelNotes { get; set; } = null!;
+
+    /// <summary>
+    /// 채널 알림 설정 테이블 (채널별 알림 구성)
+    /// </summary>
+    public DbSet<ChannelNotificationSetting> ChannelNotificationSettings { get; set; } = null!;
+
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         base.OnModelCreating(modelBuilder);
@@ -358,6 +368,23 @@ public class mAIxDbContext : DbContext
             // RemindAt 인덱스 (알림 시각 조회)
             entity.HasIndex(r => r.RemindAt)
                 .HasDatabaseName("IX_ReplyLaterItem_RemindAt");
+        });
+
+        // ===== ChannelNote 인덱스 =====
+        modelBuilder.Entity<ChannelNote>(entity =>
+        {
+            // ChannelId + TeamId 복합 인덱스 (채널별 노트 조회)
+            entity.HasIndex(e => new { e.ChannelId, e.TeamId })
+                .HasDatabaseName("IX_ChannelNote_ChannelId_TeamId");
+        });
+
+        // ===== ChannelNotificationSetting 인덱스 =====
+        modelBuilder.Entity<ChannelNotificationSetting>(entity =>
+        {
+            // ChannelId + TeamId 복합 유니크 인덱스 (채널당 설정 1개)
+            entity.HasIndex(e => new { e.ChannelId, e.TeamId })
+                .IsUnique()
+                .HasDatabaseName("IX_ChannelNotificationSetting_ChannelId_TeamId");
         });
     }
 }

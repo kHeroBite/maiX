@@ -409,6 +409,14 @@ public partial class App : Application
         services.AddTransient<NewsletterViewModel>();
         services.AddSingleton<TodoViewModel>();
 
+        // Teams 채널 탭 ViewModels 등록 (Transient — 채널마다 새 인스턴스)
+        // ChannelPostsViewModel/ChannelFilesViewModel은 teamId/channelId를 생성자에서 받으므로
+        // TeamsViewModel에서 직접 new로 생성 (DI 등록 불필요)
+        services.AddTransient<ChannelWikiViewModel>();
+        services.AddTransient<ChannelCalendarViewModel>();
+        services.AddTransient<ChannelPlannerViewModel>();
+        services.AddTransient<ChannelSettingsViewModel>();
+
         // Views 등록
         services.AddTransient<MainWindow>();
         services.AddTransient<LoginWindow>();
