@@ -226,6 +226,11 @@ public partial class TeamsViewModel : ViewModelBase
     private readonly Dictionary<string, ChannelPlannerViewModel> _plannerVmCache = new();
 
     /// <summary>
+    /// 채널별 Wiki ViewModel 캐시
+    /// </summary>
+    private readonly Dictionary<string, ChannelWikiViewModel> _wikiVmCache = new();
+
+    /// <summary>
     /// 현재 채널의 파일 Sub-ViewModel
     /// </summary>
     [ObservableProperty]
@@ -248,6 +253,12 @@ public partial class TeamsViewModel : ViewModelBase
     /// </summary>
     [ObservableProperty]
     private ChannelPlannerViewModel? _channelPlannerVm;
+
+    /// <summary>
+    /// 현재 채널의 Wiki Sub-ViewModel
+    /// </summary>
+    [ObservableProperty]
+    private ChannelWikiViewModel? _channelWikiVm;
 
     #endregion
 
@@ -1437,6 +1448,17 @@ public partial class TeamsViewModel : ViewModelBase
                 }
                 ChannelPlannerVm = plannerVm;
                 await plannerVm.InitializeAsync(teamId, channelId);
+                break;
+
+            case "wiki":
+                if (!_wikiVmCache.TryGetValue(key, out var wikiVm))
+                {
+                    wikiVm = new ChannelWikiViewModel(_teamsService);
+                    _wikiVmCache[key] = wikiVm;
+                    _log.Debug("ChannelWikiViewModel 신규 생성: {Key}", key);
+                }
+                ChannelWikiVm = wikiVm;
+                await wikiVm.InitializeAsync(teamId, channelId);
                 break;
 
             default:

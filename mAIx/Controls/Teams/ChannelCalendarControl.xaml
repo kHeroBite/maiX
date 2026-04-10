@@ -1,0 +1,378 @@
+<UserControl x:Class="mAIx.Controls.Teams.ChannelCalendarControl"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
+             mc:Ignorable="d"
+             d:DesignHeight="600" d:DesignWidth="900">
+    <Grid>
+        <Grid.ColumnDefinitions>
+            <!-- 캘린더 본문 -->
+            <ColumnDefinition Width="*"/>
+            <!-- 우측 상세 패널 -->
+            <ColumnDefinition Width="280"/>
+        </Grid.ColumnDefinitions>
+
+        <!-- ========== 좌측: 월간 캘린더 ========== -->
+        <Grid Grid.Column="0" Margin="0,0,8,0">
+            <Grid.RowDefinitions>
+                <!-- 상단 네비게이션 바 -->
+                <RowDefinition Height="Auto"/>
+                <!-- 요일 헤더 -->
+                <RowDefinition Height="Auto"/>
+                <!-- 달력 그리드 -->
+                <RowDefinition Height="*"/>
+            </Grid.RowDefinitions>
+
+            <!-- 네비게이션 바 -->
+            <Grid Grid.Row="0" Margin="0,0,0,8">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
+                </Grid.ColumnDefinitions>
+
+                <!-- 이전 달 버튼 -->
+                <ui:Button Grid.Column="0"
+                           Icon="{ui:SymbolIcon ChevronLeft24}"
+                           Appearance="Transparent"
+                           Padding="8"
+                           Command="{Binding PreviousMonthCommand}"
+                           ToolTip="이전 달"/>
+
+                <!-- 현재 월 제목 -->
+                <TextBlock Grid.Column="1"
+                           Text="{Binding MonthTitle}"
+                           FontSize="18" FontWeight="SemiBold"
+                           VerticalAlignment="Center"
+                           Margin="8,0"/>
+
+                <!-- 다음 달 버튼 -->
+                <ui:Button Grid.Column="2"
+                           Icon="{ui:SymbolIcon ChevronRight24}"
+                           Appearance="Transparent"
+                           Padding="8"
+                           Command="{Binding NextMonthCommand}"
+                           ToolTip="다음 달"/>
+
+                <!-- 로딩 인디케이터 -->
+                <ui:ProgressRing Grid.Column="3"
+                                 Width="20" Height="20"
+                                 HorizontalAlignment="Left"
+                                 Margin="12,0,0,0"
+                                 IsIndeterminate="True"
+                                 Visibility="{Binding IsLoading, Converter={StaticResource BoolToVisibilityConverter}}"/>
+
+                <!-- 새 이벤트 버튼 -->
+                <ui:Button Grid.Column="4"
+                           Content="새 이벤트"
+                           Icon="{ui:SymbolIcon Add24}"
+                           Appearance="Primary"
+                           Padding="12,6"
+                           x:Name="NewEventButton"
+                           Click="NewEventButton_Click"/>
+            </Grid>
+
+            <!-- 요일 헤더 (일~토) -->
+            <Grid Grid.Row="1" Margin="0,0,0,4">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="*"/>
+                </Grid.ColumnDefinitions>
+                <TextBlock Grid.Column="0" Text="일" FontSize="12" FontWeight="SemiBold"
+                           HorizontalAlignment="Center" Foreground="#C42B1C"/>
+                <TextBlock Grid.Column="1" Text="월" FontSize="12" FontWeight="SemiBold"
+                           HorizontalAlignment="Center" Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
+                <TextBlock Grid.Column="2" Text="화" FontSize="12" FontWeight="SemiBold"
+                           HorizontalAlignment="Center" Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
+                <TextBlock Grid.Column="3" Text="수" FontSize="12" FontWeight="SemiBold"
+                           HorizontalAlignment="Center" Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
+                <TextBlock Grid.Column="4" Text="목" FontSize="12" FontWeight="SemiBold"
+                           HorizontalAlignment="Center" Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
+                <TextBlock Grid.Column="5" Text="금" FontSize="12" FontWeight="SemiBold"
+                           HorizontalAlignment="Center" Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
+                <TextBlock Grid.Column="6" Text="토" FontSize="12" FontWeight="SemiBold"
+                           HorizontalAlignment="Center" Foreground="#0078D4"/>
+            </Grid>
+
+            <!-- 달력 날짜 그리드 (42칸 — 6행×7열) -->
+            <ItemsControl Grid.Row="2"
+                          ItemsSource="{Binding CalendarDays}"
+                          x:Name="CalendarItemsControl">
+                <ItemsControl.ItemsPanel>
+                    <ItemsPanelTemplate>
+                        <UniformGrid Columns="7"/>
+                    </ItemsPanelTemplate>
+                </ItemsControl.ItemsPanel>
+                <ItemsControl.ItemTemplate>
+                    <DataTemplate>
+                        <!-- 날짜 셀 -->
+                        <Border Margin="2"
+                                BorderThickness="1"
+                                CornerRadius="6"
+                                Cursor="Hand"
+                                x:Name="DayCellBorder">
+                            <Border.Style>
+                                <Style TargetType="Border">
+                                    <Setter Property="Background" Value="{DynamicResource CardBackgroundFillColorDefaultBrush}"/>
+                                    <Setter Property="BorderBrush" Value="{DynamicResource ControlElevationBorderBrush}"/>
+                                    <Style.Triggers>
+                                        <DataTrigger Binding="{Binding IsToday}" Value="True">
+                                            <Setter Property="BorderBrush" Value="#0078D4"/>
+                                            <Setter Property="BorderThickness" Value="2"/>
+                                        </DataTrigger>
+                                        <DataTrigger Binding="{Binding IsCurrentMonth}" Value="False">
+                                            <Setter Property="Opacity" Value="0.45"/>
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </Border.Style>
+                            <Border.InputBindings>
+                                <MouseBinding MouseAction="LeftClick"
+                                              Command="{Binding DataContext.SelectDayCommand, RelativeSource={RelativeSource AncestorType=ItemsControl}}"
+                                              CommandParameter="{Binding}"/>
+                            </Border.InputBindings>
+                            <StackPanel Margin="6,4">
+                                <!-- 날짜 숫자 -->
+                                <Border HorizontalAlignment="Left"
+                                        Width="26" Height="26"
+                                        CornerRadius="13">
+                                    <Border.Style>
+                                        <Style TargetType="Border">
+                                            <Setter Property="Background" Value="Transparent"/>
+                                            <Style.Triggers>
+                                                <DataTrigger Binding="{Binding IsToday}" Value="True">
+                                                    <Setter Property="Background" Value="#0078D4"/>
+                                                </DataTrigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </Border.Style>
+                                    <TextBlock Text="{Binding DayNumber}"
+                                               FontSize="13" FontWeight="SemiBold"
+                                               HorizontalAlignment="Center"
+                                               VerticalAlignment="Center">
+                                        <TextBlock.Style>
+                                            <Style TargetType="TextBlock">
+                                                <Setter Property="Foreground" Value="{DynamicResource TextFillColorPrimaryBrush}"/>
+                                                <Style.Triggers>
+                                                    <DataTrigger Binding="{Binding IsToday}" Value="True">
+                                                        <Setter Property="Foreground" Value="White"/>
+                                                    </DataTrigger>
+                                                </Style.Triggers>
+                                            </Style>
+                                        </TextBlock.Style>
+                                    </TextBlock>
+                                </Border>
+
+                                <!-- 이벤트 목록 (최대 3개 — TopEvents 바인딩) -->
+                                <ItemsControl ItemsSource="{Binding TopEvents}"
+                                              Margin="0,2,0,0">
+                                    <ItemsControl.ItemTemplate>
+                                        <DataTemplate>
+                                            <Border CornerRadius="3" Margin="0,1"
+                                                    Padding="4,2">
+                                                <Border.Background>
+                                                    <SolidColorBrush Color="#0078D4" Opacity="0.15"/>
+                                                </Border.Background>
+                                                <StackPanel Orientation="Horizontal">
+                                                    <!-- 색상 점 -->
+                                                    <Ellipse Width="6" Height="6"
+                                                             VerticalAlignment="Center"
+                                                             Margin="0,0,4,0">
+                                                        <Ellipse.Fill>
+                                                            <SolidColorBrush Color="#0078D4"/>
+                                                        </Ellipse.Fill>
+                                                    </Ellipse>
+                                                    <TextBlock Text="{Binding Subject}"
+                                                               FontSize="11"
+                                                               TextTrimming="CharacterEllipsis"
+                                                               Foreground="{DynamicResource TextFillColorPrimaryBrush}"/>
+                                                </StackPanel>
+                                            </Border>
+                                        </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
+
+                                <!-- +N개 더 표시 -->
+                                <TextBlock Margin="0,1,0,0"
+                                           FontSize="11"
+                                           Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                                           Visibility="{Binding HasMoreEvents, Converter={StaticResource BoolToVisibilityConverter}}">
+                                    <TextBlock.Text>
+                                        <Binding Path="ExtraEventCount" StringFormat="+{0}개 더"/>
+                                    </TextBlock.Text>
+                                </TextBlock>
+                            </StackPanel>
+                        </Border>
+                    </DataTemplate>
+                </ItemsControl.ItemTemplate>
+            </ItemsControl>
+        </Grid>
+
+        <!-- ========== 우측: 선택된 날짜 상세 패널 ========== -->
+        <Border Grid.Column="1"
+                BorderBrush="{DynamicResource ControlElevationBorderBrush}"
+                BorderThickness="1,0,0,0"
+                Padding="12,0,0,0">
+            <Grid>
+                <Grid.RowDefinitions>
+                    <!-- 선택된 날짜 헤더 -->
+                    <RowDefinition Height="Auto"/>
+                    <!-- 이벤트 목록 -->
+                    <RowDefinition Height="*"/>
+                    <!-- 빈 상태 안내 -->
+                    <RowDefinition Height="Auto"/>
+                </Grid.RowDefinitions>
+
+                <!-- 선택된 날짜 헤더 -->
+                <StackPanel Grid.Row="0" Margin="0,0,0,12">
+                    <TextBlock FontSize="15" FontWeight="SemiBold" Margin="0,0,0,4">
+                        <TextBlock.Style>
+                            <Style TargetType="TextBlock">
+                                <Setter Property="Text" Value="날짜를 선택하세요"/>
+                                <Style.Triggers>
+                                    <DataTrigger Binding="{Binding SelectedDay}" Value="{x:Null}">
+                                        <Setter Property="Text" Value="날짜를 선택하세요"/>
+                                    </DataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </TextBlock.Style>
+                    </TextBlock>
+                    <TextBlock Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                               FontSize="13"
+                               Text="{Binding SelectedDay.Date, StringFormat={}{0:yyyy년 M월 d일 (ddd)}}"/>
+                </StackPanel>
+
+                <!-- 이벤트 상세 목록 -->
+                <ScrollViewer Grid.Row="1"
+                              VerticalScrollBarVisibility="Auto">
+                    <ItemsControl ItemsSource="{Binding SelectedDayEvents}">
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate>
+                                <!-- 이벤트 카드 -->
+                                <Border Margin="0,0,0,8"
+                                        Padding="12"
+                                        Background="{DynamicResource CardBackgroundFillColorDefaultBrush}"
+                                        BorderBrush="{DynamicResource ControlElevationBorderBrush}"
+                                        BorderThickness="1"
+                                        CornerRadius="8">
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="4"/>
+                                            <ColumnDefinition Width="*"/>
+                                        </Grid.ColumnDefinitions>
+
+                                        <!-- 색상 바 -->
+                                        <Border Grid.Column="0"
+                                                CornerRadius="2"
+                                                Background="#0078D4"
+                                                Margin="0,0,10,0"/>
+
+                                        <StackPanel Grid.Column="1">
+                                            <!-- 제목 -->
+                                            <TextBlock Text="{Binding Subject}"
+                                                       FontSize="14" FontWeight="SemiBold"
+                                                       TextWrapping="Wrap"
+                                                       Margin="0,0,0,6"/>
+
+                                            <!-- 시간 -->
+                                            <StackPanel Orientation="Horizontal" Margin="0,0,0,4">
+                                                <ui:SymbolIcon Symbol="Clock24" FontSize="13"
+                                                               Margin="0,0,6,0"
+                                                               Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
+                                                <TextBlock Text="{Binding TimeDisplay}"
+                                                           FontSize="12"
+                                                           Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
+                                            </StackPanel>
+
+                                            <!-- 장소 (비어있으면 숨김) -->
+                                            <StackPanel Orientation="Horizontal" Margin="0,0,0,4"
+                                                        Visibility="{Binding Location, Converter={StaticResource NullToVisibilityConverter}}">
+                                                <ui:SymbolIcon Symbol="Location24" FontSize="13"
+                                                               Margin="0,0,6,0"
+                                                               Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
+                                                <TextBlock Text="{Binding Location}"
+                                                           FontSize="12"
+                                                           TextTrimming="CharacterEllipsis"
+                                                           Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
+                                            </StackPanel>
+
+                                            <!-- 주최자 -->
+                                            <StackPanel Orientation="Horizontal" Margin="0,0,0,8"
+                                                        Visibility="{Binding OrganizerName, Converter={StaticResource NullToVisibilityConverter}}">
+                                                <ui:SymbolIcon Symbol="Person24" FontSize="13"
+                                                               Margin="0,0,6,0"
+                                                               Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
+                                                <TextBlock Text="{Binding OrganizerName}"
+                                                           FontSize="12"
+                                                           Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
+                                            </StackPanel>
+
+                                            <!-- 참석/거절/미정 버튼 -->
+                                            <StackPanel Orientation="Horizontal">
+                                                <ui:Button Content="참석"
+                                                           Appearance="Primary"
+                                                           Padding="10,4"
+                                                           FontSize="12"
+                                                           Margin="0,0,4,0"
+                                                           Tag="accepted"
+                                                           x:Name="AcceptButton"
+                                                           Click="ResponseButton_Click"/>
+                                                <ui:Button Content="거절"
+                                                           Appearance="Secondary"
+                                                           Padding="10,4"
+                                                           FontSize="12"
+                                                           Margin="0,0,4,0"
+                                                           Tag="declined"
+                                                           Click="ResponseButton_Click"/>
+                                                <ui:Button Content="미정"
+                                                           Appearance="Transparent"
+                                                           Padding="10,4"
+                                                           FontSize="12"
+                                                           Tag="tentative"
+                                                           Click="ResponseButton_Click"/>
+                                            </StackPanel>
+                                        </StackPanel>
+                                    </Grid>
+                                </Border>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                </ScrollViewer>
+
+                <!-- 빈 상태 안내 -->
+                <StackPanel Grid.Row="2"
+                            VerticalAlignment="Center"
+                            HorizontalAlignment="Center"
+                            Margin="0,16">
+                    <StackPanel.Style>
+                        <Style TargetType="StackPanel">
+                            <Setter Property="Visibility" Value="Collapsed"/>
+                            <Style.Triggers>
+                                <DataTrigger Binding="{Binding SelectedDayEvents.Count}" Value="0">
+                                    <Setter Property="Visibility" Value="Visible"/>
+                                </DataTrigger>
+                            </Style.Triggers>
+                        </Style>
+                    </StackPanel.Style>
+                    <ui:SymbolIcon Symbol="CalendarEmpty24" FontSize="32"
+                                   Foreground="{DynamicResource TextFillColorTertiaryBrush}"
+                                   HorizontalAlignment="Center"
+                                   Margin="0,0,0,8"/>
+                    <TextBlock Text="이 날의 이벤트가 없습니다"
+                               FontSize="13"
+                               HorizontalAlignment="Center"
+                               Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
+                </StackPanel>
+            </Grid>
+        </Border>
+    </Grid>
+</UserControl>

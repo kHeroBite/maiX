@@ -4254,15 +4254,11 @@
                                 DataContext="{Binding ChannelFilesVm}"
                                 Visibility="{Binding CurrentChannelTab, Converter={StaticResource StringEqualsToVisibilityConverter}, ConverterParameter=files}"/>
 
-                            <!-- Wiki 탭 (Phase 4에서 구현 — 임시 플레이스홀더) -->
-                            <StackPanel Grid.Row="2" VerticalAlignment="Center" HorizontalAlignment="Center"
-                                        Visibility="{Binding CurrentChannelTab, Converter={StaticResource StringEqualsToVisibilityConverter}, ConverterParameter=wiki}">
-                                <ui:SymbolIcon Symbol="Notepad24" FontSize="48" Foreground="{DynamicResource TextFillColorTertiaryBrush}" Margin="0,0,0,12"/>
-                                <TextBlock Text="Wiki" FontSize="20" FontWeight="SemiBold" HorizontalAlignment="Center"/>
-                                <TextBlock Text="노트 및 Wiki 기능은 곧 지원됩니다" FontSize="14"
-                                           Foreground="{DynamicResource TextFillColorSecondaryBrush}"
-                                           HorizontalAlignment="Center" Margin="0,6,0,0"/>
-                            </StackPanel>
+                            <!-- Wiki 탭 (ChannelWikiControl) -->
+                            <teamsControls:ChannelWikiControl Grid.Row="2"
+                                x:Name="ChannelWikiCtrl"
+                                DataContext="{Binding ChannelWikiVm}"
+                                Visibility="{Binding CurrentChannelTab, Converter={StaticResource StringEqualsToVisibilityConverter}, ConverterParameter=wiki}"/>
 
                             <!-- 일정 탭 (ChannelCalendarControl) -->
                             <teamsControls:ChannelCalendarControl Grid.Row="2"
