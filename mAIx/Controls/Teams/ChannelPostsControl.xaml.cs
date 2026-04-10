@@ -1,12 +1,14 @@
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
+using mAIx.ViewModels;
+using mAIx.ViewModels.Teams;
 using NLog;
 
 namespace mAIx.Controls.Teams;
 
 /// <summary>
-/// 채널 게시물 탭 UserControl — 메시지 목록 + 입력 영역
+/// 채널 게시물 탭 UserControl — 메시지 목록 + 리치텍스트 입력 + 컨텍스트 메뉴
 /// </summary>
 public partial class ChannelPostsControl : UserControl
 {
@@ -17,49 +19,113 @@ public partial class ChannelPostsControl : UserControl
         InitializeComponent();
     }
 
-    /// <summary>스레드에서 회신 버튼 클릭 — MainWindow 이벤트로 라우팅</summary>
-    private void ReplyToThread_Click(object sender, RoutedEventArgs e)
-    {
-        // 부모 윈도우로 이벤트 버블링 (MainWindow에서 처리)
-        if (sender is FrameworkElement { Tag: { } tag })
-        {
-            _log.Debug("스레드 회신 클릭: {Tag}", tag);
-            RaiseEvent(new RoutedEventArgs(ReplyToThreadEvent, tag));
-        }
-    }
+    private ChannelPostsViewModel? VM => DataContext as ChannelPostsViewModel;
 
-    /// <summary>메시지 입력 KeyDown — Enter 전송</summary>
+    // ── 입력 영역 ──────────────────────────────────────────────────────────
+
+    /// <summary>메시지 입력 KeyDown — Enter 전송 (Shift+Enter는 줄바꿈)</summary>
     private void TeamsChannelMessageInput_KeyDown(object sender, KeyEventArgs e)
     {
         if (e.Key == Key.Enter && (Keyboard.Modifiers & ModifierKeys.Shift) == 0)
         {
             e.Handled = true;
-            SendMessage();
+            VM?.SendMessageCommand.Execute(null);
         }
     }
 
-    /// <summary>전송 버튼 클릭</summary>
-    private void TeamsChannelSendButton_Click(object sender, RoutedEventArgs e)
+    /// <summary>텍스트 변경 시 @멘션 감지</summary>
+    private void TeamsChannelMessageInput_TextChanged(object sender, TextChangedEventArgs e)
     {
-        SendMessage();
+        if (VM == null) return;
+        var text = TeamsChannelMessageInput.Text;
+        var atIndex = text.LastIndexOf('@');
+        if (atIndex >= 0)
+        {
+            var query = text.Substring(atIndex + 1);
+            _ = VM.TriggerMentionAsync(query);
+        }
+        else
+        {
+            VM.IsMentionPopupOpen = false;
+        }
     }
 
-    private void SendMessage()
+    /// <summary>@멘션 버튼 클릭 — 입력창에 '@' 삽입</summary>
+    private void MentionButton_Click(object sender, RoutedEventArgs e)
     {
-        var text = TeamsChannelMessageInput.Text?.Trim();
-        if (string.IsNullOrEmpty(text)) return;
+        TeamsChannelMessageInput.Text += "@";
+        TeamsChannelMessageInput.CaretIndex = TeamsChannelMessageInput.Text.Length;
+        TeamsChannelMessageInput.Focus();
+    }
 
-        // ChannelPostsViewModel이 kdev-3 Phase에서 구현됨
-        // DataContext에 SendMessageCommand가 있으면 실행
-        if (DataContext is { } vm)
+    /// <summary>@멘션 목록 선택</summary>
+    private void MentionList_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (sender is ListBox lb && lb.SelectedItem is string name)
         {
-            var cmdProp = vm.GetType().GetProperty("SendMessageCommand");
-            if (cmdProp?.GetValue(vm) is ICommand cmd && cmd.CanExecute(text))
-            {
-                _log.Debug("채널 메시지 전송 요청: {Length}자", text.Length);
-                cmd.Execute(text);
-                TeamsChannelMessageInput.Text = string.Empty;
-            }
+            VM?.SelectMentionCommand.Execute(name);
+            lb.SelectedItem = null;
+        }
+    }
+
+    // ── 컨텍스트 메뉴 ──────────────────────────────────────────────────────
+
+    /// <summary>컨텍스트 메뉴 — 편집</summary>
+    private void ContextMenu_Edit_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is MenuItem { Tag: ChannelMessageViewModel msg })
+        {
+            _log.Debug("메시지 편집 클릭: {Id}", msg.Id);
+            VM?.StartEditCommand.Execute(msg);
+        }
+    }
+
+    /// <summary>컨텍스트 메뉴 — 삭제</summary>
+    private void ContextMenu_Delete_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is MenuItem { Tag: ChannelMessageViewModel msg })
+        {
+            _log.Debug("메시지 삭제 클릭: {Id}", msg.Id);
+            _ = VM?.DeleteMessageCommand.ExecuteAsync(msg);
+        }
+    }
+
+    /// <summary>컨텍스트 메뉴 — 고정</summary>
+    private void ContextMenu_Pin_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is MenuItem { Tag: ChannelMessageViewModel msg })
+        {
+            _log.Debug("메시지 고정 클릭: {Id}", msg.Id);
+            VM?.PinMessageCommand.Execute(msg);
+        }
+    }
+
+    // ── 리액션 ────────────────────────────────────────────────────────────
+
+    /// <summary>리액션 버튼 클릭 — Tag에 리액션 타입 저장</summary>
+    private void Reaction_Click(object sender, RoutedEventArgs e)
+    {
+        if (VM == null) return;
+        if (sender is not Button { Tag: string reactionType }) return;
+
+        // 부모 DataContext에서 ChannelMessageViewModel 찾기
+        var btn = (Button)sender;
+        if (btn.DataContext is ChannelMessageViewModel msg)
+        {
+            _log.Debug("리액션 클릭: {Reaction}, messageId={Id}", reactionType, msg.Id);
+            _ = VM.AddReactionCommand.ExecuteAsync(new object[] { msg, reactionType });
+        }
+    }
+
+    // ── 스레드 회신 ───────────────────────────────────────────────────────
+
+    /// <summary>스레드에서 회신 버튼 클릭 — 부모 윈도우로 이벤트 버블링</summary>
+    private void ReplyToThread_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is FrameworkElement { Tag: { } tag })
+        {
+            _log.Debug("스레드 회신 클릭: {Tag}", tag);
+            RaiseEvent(new RoutedEventArgs(ReplyToThreadEvent, tag));
         }
     }
 

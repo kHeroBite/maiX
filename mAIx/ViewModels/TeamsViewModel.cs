@@ -10,6 +10,7 @@ using Microsoft.Graph.Models;
 using mAIx.Data;
 using mAIx.Models;
 using mAIx.Services.Graph;
+using mAIx.ViewModels.Teams;
 using NLog;
 using Serilog;
 
@@ -209,10 +210,21 @@ public partial class TeamsViewModel : ViewModelBase
     private ChannelPostsViewModel? _channelPostsVm;
 
     /// <summary>
+    /// 채널별 설정 ViewModel 캐시
+    /// </summary>
+    private readonly Dictionary<string, ChannelSettingsViewModel> _settingsVmCache = new();
+
+    /// <summary>
     /// 현재 채널의 파일 Sub-ViewModel
     /// </summary>
     [ObservableProperty]
     private ChannelFilesViewModel? _channelFilesVm;
+
+    /// <summary>
+    /// 현재 채널의 설정 Sub-ViewModel
+    /// </summary>
+    [ObservableProperty]
+    private ChannelSettingsViewModel? _channelSettingsVm;
 
     #endregion
 
@@ -1369,6 +1381,18 @@ public partial class TeamsViewModel : ViewModelBase
                 await filesVm.LoadAsync();
                 break;
 
+            case "settings":
+                if (!_settingsVmCache.TryGetValue(key, out var settingsVm))
+                {
+                    settingsVm = new ChannelSettingsViewModel(_teamsService, _dbContextFactory);
+                    _settingsVmCache[key] = settingsVm;
+                    _log.Debug("ChannelSettingsViewModel 신규 생성: {Key}", key);
+                }
+                ChannelSettingsVm = settingsVm;
+                if (SelectedChannel != null)
+                    await settingsVm.LoadSettingsAsync(SelectedChannel);
+                break;
+
             default:
                 _log.Debug("알 수 없는 탭: {Tab}", CurrentChannelTab);
                 break;
@@ -1961,6 +1985,12 @@ public partial class ChannelMessageViewModel : ObservableObject
     [ObservableProperty]
     private int _replyCount;
 
+    [ObservableProperty]
+    private bool _isPinned;
+
+    [ObservableProperty]
+    private string _reactions = string.Empty;
+
     /// <summary>
     /// 시간 표시
     /// </summary>
@@ -2005,6 +2035,12 @@ public partial class ChannelFileViewModel : ObservableObject
 
     [ObservableProperty]
     private bool _isFolder;
+
+    [ObservableProperty]
+    private string _createdBy = string.Empty;
+
+    [ObservableProperty]
+    private string _driveId = string.Empty;
 
     /// <summary>
     /// 파일 크기 표시

@@ -34,4 +34,9 @@ public class ChannelNotificationSetting
     /// 채널 음소거 여부 (기본값: false)
     /// </summary>
     public bool IsMuted { get; set; } = false;
+
+    /// <summary>
+    /// 채널 즐겨찾기 여부 (기본값: false)
+    /// </summary>
+    public bool IsFavorite { get; set; } = false;
 }

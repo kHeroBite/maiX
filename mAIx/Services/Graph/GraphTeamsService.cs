@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
@@ -7,7 +8,7 @@ using Microsoft.Graph;
 using Microsoft.Graph.Models;
 using mAIx.Data;
 using mAIx.Models;
-using Serilog;
+using NLog;
 
 namespace mAIx.Services.Graph;
 
@@ -16,9 +17,9 @@ namespace mAIx.Services.Graph;
 /// </summary>
 public class GraphTeamsService
 {
+    private static readonly Logger _logger = LogManager.GetCurrentClassLogger();
     private readonly GraphAuthService _authService;
     private readonly IDbContextFactory<mAIxDbContext> _dbContextFactory;
-    private readonly ILogger _logger;
     private string? _cachedCurrentUserId;
 
     // 사용자 사진 메모리 캐시 (userId -> Base64 photo, null이면 사진 없음)
@@ -32,7 +33,6 @@ public class GraphTeamsService
     {
         _authService = authService ?? throw new ArgumentNullException(nameof(authService));
         _dbContextFactory = dbContextFactory ?? throw new ArgumentNullException(nameof(dbContextFactory));
-        _logger = Log.ForContext<GraphTeamsService>();
 
         // 사진 캐시 디렉토리 초기화
         _photoCacheDir = System.IO.Path.Combine(
@@ -143,7 +143,7 @@ public class GraphTeamsService
 
             if (realMessage == null || !realMessage.CreatedDateTime.HasValue)
             {
-                _logger.Warning("채팅방 {ChatId}: 유효한 메시지를 찾지 못함", chatId);
+                _logger.Warn("채팅방 {ChatId}: 유효한 메시지를 찾지 못함", chatId);
                 return (null, null);
             }
 
@@ -317,7 +317,7 @@ public class GraphTeamsService
                 syncedCount++;
             }
 
-            _logger.Information("채팅방 {ChatId} 메시지 {Count}개 동기화", chatId, syncedCount);
+            _logger.Info("채팅방 {ChatId} 메시지 {Count}개 동기화", chatId, syncedCount);
             return syncedCount;
         }
         catch (Exception ex)
@@ -369,7 +369,7 @@ public class GraphTeamsService
 
             var response = await client.Me.Chats[chatId].Messages.PostAsync(chatMessage);
 
-            _logger.Information("채팅 메시지 전송 성공: ChatId={ChatId}", chatId);
+            _logger.Info("채팅 메시지 전송 성공: ChatId={ChatId}", chatId);
             return response;
         }
         catch (Exception ex)
@@ -685,13 +685,127 @@ public class GraphTeamsService
 
             var response = await client.Teams[teamId].Channels[channelId].Messages.PostAsync(chatMessage);
 
-            _logger.Information("채널 메시지 전송 성공: TeamId={TeamId}, ChannelId={ChannelId}", teamId, channelId);
+            _logger.Info("채널 메시지 전송 성공: TeamId={TeamId}, ChannelId={ChannelId}", teamId, channelId);
             return response;
         }
         catch (Exception ex)
         {
             _logger.Error(ex, "채널 메시지 전송 실패: TeamId={TeamId}, ChannelId={ChannelId}", teamId, channelId);
             return null;
+        }
+    }
+
+    /// <summary>
+    /// 채널 메시지 수정
+    /// </summary>
+    /// <param name="teamId">팀 ID</param>
+    /// <param name="channelId">채널 ID</param>
+    /// <param name="messageId">메시지 ID</param>
+    /// <param name="newContent">수정할 내용 (HTML)</param>
+    /// <returns>성공 여부</returns>
+    public async Task<bool> EditChannelMessageAsync(string teamId, string channelId, string messageId, string newContent)
+    {
+        if (string.IsNullOrEmpty(teamId) || string.IsNullOrEmpty(channelId) ||
+            string.IsNullOrEmpty(messageId) || string.IsNullOrEmpty(newContent))
+            return false;
+
+        try
+        {
+            var client = _authService.GetGraphClient();
+            var updatedMessage = new ChatMessage
+            {
+                Body = new ItemBody
+                {
+                    ContentType = BodyType.Html,
+                    Content = newContent
+                }
+            };
+
+            await client.Teams[teamId].Channels[channelId].Messages[messageId]
+                .PatchAsync(updatedMessage);
+
+            _logger.Info("채널 메시지 수정 성공: TeamId={TeamId}, ChannelId={ChannelId}, MessageId={MessageId}",
+                teamId, channelId, messageId);
+            return true;
+        }
+        catch (Exception ex)
+        {
+            _logger.Error(ex, "채널 메시지 수정 실패: TeamId={TeamId}, ChannelId={ChannelId}, MessageId={MessageId}",
+                teamId, channelId, messageId);
+            return false;
+        }
+    }
+
+    /// <summary>
+    /// 채널 메시지 삭제 (소프트 삭제 — Graph API는 delete를 "deleted" 처리)
+    /// </summary>
+    /// <param name="teamId">팀 ID</param>
+    /// <param name="channelId">채널 ID</param>
+    /// <param name="messageId">메시지 ID</param>
+    /// <returns>성공 여부</returns>
+    public async Task<bool> DeleteChannelMessageAsync(string teamId, string channelId, string messageId)
+    {
+        if (string.IsNullOrEmpty(teamId) || string.IsNullOrEmpty(channelId) || string.IsNullOrEmpty(messageId))
+            return false;
+
+        try
+        {
+            var client = _authService.GetGraphClient();
+            // Graph API: PATCH with body = "<deleted/>" or use SoftDelete action
+            var deletedMessage = new ChatMessage
+            {
+                Body = new ItemBody
+                {
+                    ContentType = BodyType.Html,
+                    Content = "<p> </p>"
+                }
+            };
+
+            // Graph API는 채널 메시지 직접 삭제를 지원하지 않음 — SoftDelete 사용
+            await client.Teams[teamId].Channels[channelId].Messages[messageId]
+                .SoftDelete.PostAsync();
+
+            _logger.Info("채널 메시지 삭제 성공: TeamId={TeamId}, ChannelId={ChannelId}, MessageId={MessageId}",
+                teamId, channelId, messageId);
+            return true;
+        }
+        catch (Exception ex)
+        {
+            _logger.Error(ex, "채널 메시지 삭제 실패: TeamId={TeamId}, ChannelId={ChannelId}, MessageId={MessageId}",
+                teamId, channelId, messageId);
+            return false;
+        }
+    }
+
+    /// <summary>
+    /// 채널 메시지에 리액션 추가
+    /// </summary>
+    /// <param name="teamId">팀 ID</param>
+    /// <param name="channelId">채널 ID</param>
+    /// <param name="messageId">메시지 ID</param>
+    /// <param name="reactionType">리액션 타입 (like/heart/laugh/wow/sad/angry)</param>
+    public async Task AddChannelReactionAsync(string teamId, string channelId, string messageId, string reactionType)
+    {
+        if (string.IsNullOrEmpty(teamId) || string.IsNullOrEmpty(channelId) ||
+            string.IsNullOrEmpty(messageId) || string.IsNullOrEmpty(reactionType))
+            return;
+
+        try
+        {
+            var client = _authService.GetGraphClient();
+            await client.Teams[teamId].Channels[channelId].Messages[messageId]
+                .SetReaction.PostAsync(new Microsoft.Graph.Teams.Item.Channels.Item.Messages.Item.SetReaction.SetReactionPostRequestBody
+                {
+                    ReactionType = reactionType
+                });
+
+            _logger.Debug("채널 리액션 추가: TeamId={TeamId}, ChannelId={ChannelId}, MessageId={MessageId}, Reaction={Reaction}",
+                teamId, channelId, messageId, reactionType);
+        }
+        catch (Exception ex)
+        {
+            _logger.Error(ex, "채널 리액션 추가 실패: TeamId={TeamId}, ChannelId={ChannelId}, MessageId={MessageId}",
+                teamId, channelId, messageId);
         }
     }
 
@@ -811,7 +925,7 @@ public class GraphTeamsService
 
             var response = await client.Teams[teamId].Channels[channelId].Messages[messageId].Replies.PostAsync(reply);
 
-            _logger.Information("답글 작성 성공: MessageId={MessageId}", messageId);
+            _logger.Info("답글 작성 성공: MessageId={MessageId}", messageId);
             return response;
         }
         catch (Exception ex)
@@ -923,7 +1037,7 @@ public class GraphTeamsService
             };
 
             var response = await client.Me.Chats[chatId].Messages[messageId].Replies.PostAsync(reply);
-            _logger.Information("채팅 답글 전송 성공: ChatId={ChatId}, MessageId={MessageId}", chatId, messageId);
+            _logger.Info("채팅 답글 전송 성공: ChatId={ChatId}, MessageId={MessageId}", chatId, messageId);
             return response;
         }
         catch (Exception ex)
@@ -1005,7 +1119,7 @@ public class GraphTeamsService
                 };
 
                 await client.Me.Chats[chatId].Messages.PostAsync(shareMessage);
-                _logger.Information("파일 공유 성공: {FileName} → ChatId={ChatId}", fileName, chatId);
+                _logger.Info("파일 공유 성공: {FileName} → ChatId={ChatId}", fileName, chatId);
             }
         }
         catch (Exception ex)
@@ -1050,7 +1164,7 @@ public class GraphTeamsService
             }
 
             var result = await client.Me.OnlineMeetings.PostAsync(meeting);
-            _logger.Information("온라인 미팅 생성 성공: {Subject}", subject);
+            _logger.Info("온라인 미팅 생성 성공: {Subject}", subject);
             return result;
         }
         catch (Exception ex)
@@ -1383,6 +1497,71 @@ public class GraphTeamsService
         {
             _logger.Error(ex, "현재 사용자 ID 조회 실패");
             return null;
+        }
+    }
+
+
+    /// <summary>
+    /// 채널 파일 업로드 (4MB 이하 단순 PUT 업로드)
+    /// </summary>
+    /// <param name="teamId">팀 ID</param>
+    /// <param name="channelId">채널 ID</param>
+    /// <param name="fileName">파일 이름</param>
+    /// <param name="stream">파일 스트림</param>
+    /// <returns>업로드된 DriveItem, 실패 시 null</returns>
+    public async Task<DriveItem?> UploadChannelFileAsync(string teamId, string channelId, string fileName, Stream stream)
+    {
+        if (string.IsNullOrEmpty(teamId) || string.IsNullOrEmpty(channelId) || string.IsNullOrEmpty(fileName) || stream == null)
+            return null;
+
+        try
+        {
+            var client = _authService.GetGraphClient();
+            // 채널 파일 폴더의 driveId/itemId 획득
+            var folder = await client.Teams[teamId].Channels[channelId].FilesFolder.GetAsync();
+            if (folder?.ParentReference?.DriveId == null || folder.Id == null)
+            {
+                _logger.Error("채널 파일 폴더 정보를 가져올 수 없습니다: TeamId={TeamId}, ChannelId={ChannelId}", teamId, channelId);
+                return null;
+            }
+
+            var driveId = folder.ParentReference.DriveId;
+            var folderId = folder.Id;
+
+            // 폴더 하위에 파일 업로드 (4MB 이하 PUT)
+            var result = await client.Drives[driveId].Items[folderId].ItemWithPath(fileName).Content.PutAsync(stream);
+            _logger.Info("채널 파일 업로드 성공: {FileName}, TeamId={TeamId}", fileName, teamId);
+            return result;
+        }
+        catch (Exception ex)
+        {
+            _logger.Error(ex, "채널 파일 업로드 실패: TeamId={TeamId}, ChannelId={ChannelId}, File={FileName}", teamId, channelId, fileName);
+            return null;
+        }
+    }
+
+    /// <summary>
+    /// 파일 버전 기록 조회
+    /// </summary>
+    /// <param name="driveId">드라이브 ID</param>
+    /// <param name="itemId">파일 아이템 ID</param>
+    /// <returns>버전 목록</returns>
+    public async Task<IEnumerable<DriveItemVersion>> GetFileVersionsAsync(string driveId, string itemId)
+    {
+        if (string.IsNullOrEmpty(driveId) || string.IsNullOrEmpty(itemId))
+            return new List<DriveItemVersion>();
+
+        try
+        {
+            var client = _authService.GetGraphClient();
+            var response = await client.Drives[driveId].Items[itemId].Versions.GetAsync();
+            _logger.Debug("파일 버전 조회: DriveId={DriveId}, ItemId={ItemId}, Count={Count}", driveId, itemId, response?.Value?.Count ?? 0);
+            return response?.Value ?? new List<DriveItemVersion>();
+        }
+        catch (Exception ex)
+        {
+            _logger.Error(ex, "파일 버전 조회 실패: DriveId={DriveId}, ItemId={ItemId}", driveId, itemId);
+            return new List<DriveItemVersion>();
         }
     }
 

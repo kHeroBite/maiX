@@ -402,6 +402,9 @@ namespace mAIx.Migrations
                         .IsRequired()
                         .HasColumnType("TEXT");
 
+                    b.Property<bool>("IsFavorite")
+                        .HasColumnType("INTEGER");
+
                     b.Property<bool>("IsMuted")
                         .HasColumnType("INTEGER");
 

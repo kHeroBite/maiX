@@ -23,37 +23,66 @@
                        HorizontalAlignment="Center" Margin="0,6,0,0"/>
         </StackPanel>
 
-        <!-- 파일 툴바 (업로드 + 새 폴더) -->
+        <!-- 파일 툴바 -->
         <Border Grid.Row="0" Padding="16,8"
                 BorderBrush="{DynamicResource ControlElevationBorderBrush}"
                 BorderThickness="0,0,0,1"
                 Visibility="{Binding IsOffline, Converter={StaticResource BoolToVisibilityConverter}, ConverterParameter=Invert}">
-            <StackPanel Orientation="Horizontal">
-                <ui:Button x:Name="UploadFileButton"
-                           Icon="{ui:SymbolIcon ArrowUpload24}"
-                           Content="업로드" Padding="12,6" Margin="0,0,8,0"
-                           Appearance="Primary"
-                           Click="UploadFileButton_Click"
-                           ToolTip="파일 업로드"/>
-                <ui:Button x:Name="NewFolderButton"
-                           Icon="{ui:SymbolIcon FolderAdd24}"
-                           Content="새 폴더" Padding="12,6"
-                           Appearance="Secondary"
-                           Click="NewFolderButton_Click"
-                           ToolTip="새 폴더 만들기"/>
-            </StackPanel>
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
+                </Grid.ColumnDefinitions>
+
+                <!-- 왼쪽: 업로드/다운로드/버전 버튼 -->
+                <StackPanel Grid.Column="0" Orientation="Horizontal">
+                    <ui:Button x:Name="UploadFileButton"
+                               Icon="{ui:SymbolIcon ArrowUpload24}"
+                               Content="업로드" Padding="12,6" Margin="0,0,8,0"
+                               Appearance="Primary"
+                               Click="UploadFileButton_Click"
+                               ToolTip="파일 업로드"/>
+                    <ui:Button x:Name="DownloadFileButton"
+                               Icon="{ui:SymbolIcon ArrowDownload24}"
+                               Content="다운로드" Padding="12,6" Margin="0,0,8,0"
+                               Appearance="Secondary"
+                               Click="DownloadFileButton_Click"
+                               ToolTip="선택된 파일 다운로드"/>
+                    <ui:Button x:Name="VersionHistoryButton"
+                               Icon="{ui:SymbolIcon History24}"
+                               Content="버전 기록" Padding="12,6"
+                               Appearance="Secondary"
+                               Click="VersionHistoryButton_Click"
+                               ToolTip="선택된 파일의 버전 기록"/>
+                </StackPanel>
+
+                <!-- 오른쪽: 새로고침 -->
+                <ui:Button Grid.Column="1"
+                           x:Name="RefreshButton"
+                           Icon="{ui:SymbolIcon ArrowSync24}"
+                           Padding="8,6"
+                           Appearance="Transparent"
+                           Click="RefreshButton_Click"
+                           ToolTip="새로고침"/>
+            </Grid>
         </Border>
 
-        <!-- 파일 목록 DataGrid (드래그앤드롭 지원) -->
+        <!-- 업로드 진행 표시줄 -->
+        <ProgressBar Grid.Row="0" VerticalAlignment="Bottom" Height="3"
+                     IsIndeterminate="True"
+                     Visibility="{Binding IsUploading, Converter={StaticResource BoolToVisibilityConverter}}"/>
+
+        <!-- 파일 목록 영역 (드래그앤드롭 지원) -->
         <Grid Grid.Row="1"
               Visibility="{Binding IsOffline, Converter={StaticResource BoolToVisibilityConverter}, ConverterParameter=Invert}"
               AllowDrop="True"
               DragOver="FilesGrid_DragOver"
-              Drop="FilesGrid_Drop">
+              Drop="FilesGrid_Drop"
+              DragLeave="FilesGrid_DragLeave">
 
-            <!-- 파일 없을 때 빈 화면 -->
+            <!-- 파일 없을 때 빈 화면 (Files.Count == 0) -->
             <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center"
-                        Visibility="{Binding HasChannelFiles, Converter={StaticResource BoolToVisibilityConverter}, ConverterParameter=Invert}">
+                        Visibility="{Binding Files.Count, Converter={StaticResource ZeroToVisibleConverter}}">
                 <ui:SymbolIcon Symbol="FolderOpen24" FontSize="48" Foreground="{DynamicResource TextFillColorTertiaryBrush}" Margin="0,0,0,12"/>
                 <TextBlock Text="파일이 없습니다" FontSize="16" FontWeight="SemiBold" HorizontalAlignment="Center"/>
                 <TextBlock Text="파일을 업로드하거나 드래그하여 추가하세요" FontSize="13"
@@ -61,53 +90,39 @@
                            HorizontalAlignment="Center" Margin="0,6,0,0"/>
             </StackPanel>
 
-            <!-- 파일 목록 -->
-            <ScrollViewer VerticalScrollBarVisibility="Auto"
-                          Visibility="{Binding HasChannelFiles, Converter={StaticResource BoolToVisibilityConverter}}">
-                <ItemsControl ItemsSource="{Binding ChannelFiles}" Margin="16">
-                    <ItemsControl.ItemsPanel>
-                        <ItemsPanelTemplate>
-                            <VirtualizingStackPanel IsVirtualizing="True" VirtualizationMode="Recycling"/>
-                        </ItemsPanelTemplate>
-                    </ItemsControl.ItemsPanel>
-                    <ItemsControl.ItemTemplate>
-                        <DataTemplate>
-                            <ui:Button Appearance="Transparent" HorizontalAlignment="Stretch"
-                                       HorizontalContentAlignment="Left" Padding="12,8" Margin="0,0,0,4"
-                                       Click="ChannelFile_Click" Tag="{Binding}">
-                                <Grid>
-                                    <Grid.ColumnDefinitions>
-                                        <ColumnDefinition Width="36"/>
-                                        <ColumnDefinition Width="*"/>
-                                        <ColumnDefinition Width="80"/>
-                                        <ColumnDefinition Width="120"/>
-                                        <ColumnDefinition Width="100"/>
-                                    </Grid.ColumnDefinitions>
-                                    <!-- 파일 아이콘 -->
-                                    <ui:SymbolIcon Grid.Column="0" Symbol="{Binding FileIcon}" FontSize="20"/>
-                                    <!-- 파일 이름 -->
-                                    <TextBlock Grid.Column="1" Text="{Binding Name}"
-                                               VerticalAlignment="Center" Margin="8,0,0,0" TextTrimming="CharacterEllipsis"/>
-                                    <!-- 파일 크기 -->
-                                    <TextBlock Grid.Column="2" Text="{Binding SizeDisplay}"
-                                               VerticalAlignment="Center"
-                                               Foreground="{DynamicResource TextFillColorSecondaryBrush}" FontSize="12"/>
-                                    <!-- 업로드한 사람 -->
-                                    <TextBlock Grid.Column="3" Text="{Binding CreatedBy}"
-                                               VerticalAlignment="Center"
-                                               Foreground="{DynamicResource TextFillColorSecondaryBrush}" FontSize="12"
-                                               TextTrimming="CharacterEllipsis"/>
-                                    <!-- 수정 날짜 -->
-                                    <TextBlock Grid.Column="4"
-                                               Text="{Binding LastModified, StringFormat='{}{0:MM/dd HH:mm}'}"
-                                               VerticalAlignment="Center"
-                                               Foreground="{DynamicResource TextFillColorTertiaryBrush}" FontSize="12"/>
-                                </Grid>
-                            </ui:Button>
-                        </DataTemplate>
-                    </ItemsControl.ItemTemplate>
-                </ItemsControl>
-            </ScrollViewer>
+            <!-- 파일 목록 DataGrid (Files.Count > 0) -->
+            <DataGrid x:Name="FilesDataGrid"
+                      ItemsSource="{Binding Files}"
+                      SelectedItem="{Binding SelectedFile, Mode=TwoWay}"
+                      AutoGenerateColumns="False"
+                      CanUserAddRows="False"
+                      CanUserDeleteRows="False"
+                      IsReadOnly="True"
+                      SelectionMode="Single"
+                      GridLinesVisibility="Horizontal"
+                      HeadersVisibility="Column"
+                      Margin="0"
+                      MouseDoubleClick="FilesDataGrid_MouseDoubleClick"
+                      Visibility="{Binding Files.Count, Converter={StaticResource ZeroToVisibleConverter}, ConverterParameter=Invert}">
+                <DataGrid.Columns>
+                    <!-- 아이콘 -->
+                    <DataGridTemplateColumn Header="" Width="40" CanUserSort="False">
+                        <DataGridTemplateColumn.CellTemplate>
+                            <DataTemplate>
+                                <ui:SymbolIcon Symbol="{Binding FileIcon}" FontSize="18" Margin="8,0,0,0"/>
+                            </DataTemplate>
+                        </DataGridTemplateColumn.CellTemplate>
+                    </DataGridTemplateColumn>
+                    <!-- 파일 이름 -->
+                    <DataGridTextColumn Header="이름" Binding="{Binding Name}" Width="*" MinWidth="150"/>
+                    <!-- 수정일 -->
+                    <DataGridTextColumn Header="수정일" Binding="{Binding LastModified, StringFormat='{}{0:yyyy-MM-dd HH:mm}'}" Width="140"/>
+                    <!-- 크기 -->
+                    <DataGridTextColumn Header="크기" Binding="{Binding SizeDisplay}" Width="80"/>
+                    <!-- 수정자 -->
+                    <DataGridTextColumn Header="수정자" Binding="{Binding CreatedBy}" Width="120"/>
+                </DataGrid.Columns>
+            </DataGrid>
 
             <!-- 드래그앤드롭 오버레이 -->
             <Border x:Name="DragDropOverlay"
@@ -123,5 +138,67 @@
                 </StackPanel>
             </Border>
         </Grid>
+
+        <!-- 버전 기록 팝업 -->
+        <Popup x:Name="VersionFlyout"
+               PlacementTarget="{Binding ElementName=VersionHistoryButton}"
+               Placement="Bottom"
+               StaysOpen="False"
+               IsOpen="{Binding IsVersionFlyoutOpen, Mode=TwoWay}">
+            <Border Background="{DynamicResource ApplicationBackgroundBrush}"
+                    BorderBrush="{DynamicResource ControlElevationBorderBrush}"
+                    BorderThickness="1"
+                    CornerRadius="8"
+                    Padding="0"
+                    MinWidth="380"
+                    MaxHeight="320">
+                <Grid>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="*"/>
+                    </Grid.RowDefinitions>
+
+                    <!-- 헤더 -->
+                    <Border Grid.Row="0" Padding="16,10"
+                            BorderBrush="{DynamicResource ControlElevationBorderBrush}"
+                            BorderThickness="0,0,0,1">
+                        <TextBlock FontWeight="SemiBold" FontSize="14">
+                            <Run Text="버전 기록 — "/>
+                            <Run Text="{Binding SelectedFile.Name}"/>
+                        </TextBlock>
+                    </Border>
+
+                    <!-- 버전 목록 -->
+                    <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto" MaxHeight="260">
+                        <ItemsControl ItemsSource="{Binding FileVersions}" Margin="8">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate>
+                                    <Border Padding="8,6" Margin="0,2">
+                                        <Grid>
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="*"/>
+                                                <ColumnDefinition Width="80"/>
+                                                <ColumnDefinition Width="70"/>
+                                            </Grid.ColumnDefinitions>
+                                            <StackPanel Grid.Column="0">
+                                                <TextBlock Text="{Binding ModifiedBy}" FontWeight="Medium" FontSize="13"/>
+                                                <TextBlock Text="{Binding ModifiedAt, StringFormat='{}{0:yyyy-MM-dd HH:mm}'}"
+                                                           FontSize="11" Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
+                                            </StackPanel>
+                                            <TextBlock Grid.Column="1" Text="{Binding SizeDisplay}"
+                                                       VerticalAlignment="Center"
+                                                       Foreground="{DynamicResource TextFillColorSecondaryBrush}" FontSize="12"/>
+                                            <TextBlock Grid.Column="2" Text="{Binding VersionId}"
+                                                       VerticalAlignment="Center"
+                                                       Foreground="{DynamicResource TextFillColorTertiaryBrush}" FontSize="11"/>
+                                        </Grid>
+                                    </Border>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                    </ScrollViewer>
+                </Grid>
+            </Border>
+        </Popup>
     </Grid>
 </UserControl>
