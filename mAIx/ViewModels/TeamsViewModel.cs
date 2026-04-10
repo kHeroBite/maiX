@@ -12,8 +12,6 @@ using mAIx.Models;
 using mAIx.Services.Graph;
 using mAIx.ViewModels.Teams;
 using NLog;
-using Serilog;
-
 namespace mAIx.ViewModels;
 
 /// <summary>
@@ -25,7 +23,7 @@ public partial class TeamsViewModel : ViewModelBase
     private readonly GraphTeamsService _teamsService;
     private readonly GraphCalendarService _calendarService;
     private readonly IDbContextFactory<mAIxDbContext> _dbContextFactory;
-    private readonly Serilog.ILogger _logger;
+
 
     /// <summary>
     /// 채팅방 목록
@@ -335,7 +333,6 @@ public partial class TeamsViewModel : ViewModelBase
         _teamsService = teamsService ?? throw new ArgumentNullException(nameof(teamsService));
         _calendarService = calendarService ?? throw new ArgumentNullException(nameof(calendarService));
         _dbContextFactory = dbContextFactory ?? throw new ArgumentNullException(nameof(dbContextFactory));
-        _logger = Log.ForContext<TeamsViewModel>();
     }
 
     /// <summary>
@@ -347,7 +344,7 @@ public partial class TeamsViewModel : ViewModelBase
         // 동시성 보호: 이미 로딩 중이면 무시
         if (_isLoadingChats)
         {
-            _logger.Debug("채팅 목록 로딩 중 - 중복 호출 무시");
+            _log.Debug("채팅 목록 로딩 중 - 중복 호출 무시");
             return;
         }
 
@@ -422,7 +419,7 @@ public partial class TeamsViewModel : ViewModelBase
             // 읽지 않은 메시지 수 업데이트
             UnreadCount = await _teamsService.GetUnreadCountAsync();
 
-            _logger.Information("채팅방 {Count}개 로드 완료 (최신순), 즐겨찾기: {Fav}개, 읽지 않은 메시지: {Unread}개",
+            _log.Info("채팅방 {Count}개 로드 완료 (최신순), 즐겨찾기: {Fav}개, 읽지 않은 메시지: {Unread}개",
                 Chats.Count, FavoriteChats.Count, UnreadCount);
 
             // 백그라운드에서 사진 로드 (UI 차단 방지)
@@ -444,14 +441,14 @@ public partial class TeamsViewModel : ViewModelBase
         {
             // 1단계: 캐시된 사진 먼저 즉시 표시
             await LoadCachedPhotosAsync(chats);
-            _logger.Debug("채팅방 캐시 사진 로드 완료");
+            _log.Debug("채팅방 캐시 사진 로드 완료");
 
             // 2단계: 백그라운드에서 API로 새로고침
             _ = RefreshPhotosInBackgroundAsync(chats);
         }
         catch (Exception ex)
         {
-            _logger.Debug("채팅방 사진 로드 중 오류: {Error}", ex.Message);
+            _log.Debug("채팅방 사진 로드 중 오류: {Error}", ex.Message);
         }
     }
 
@@ -587,11 +584,11 @@ public partial class TeamsViewModel : ViewModelBase
                     }
                 }
             }
-            _logger.Debug("채팅방 사진 백그라운드 새로고침 완료");
+            _log.Debug("채팅방 사진 백그라운드 새로고침 완료");
         }
         catch (Exception ex)
         {
-            _logger.Debug("채팅방 사진 백그라운드 새로고침 중 오류: {Error}", ex.Message);
+            _log.Debug("채팅방 사진 백그라운드 새로고침 중 오류: {Error}", ex.Message);
         }
     }
 
@@ -624,7 +621,7 @@ public partial class TeamsViewModel : ViewModelBase
         }
         catch (Exception ex)
         {
-            _logger.Debug("메시지 발신자 사진 로드 중 오류: {Error}", ex.Message);
+            _log.Debug("메시지 발신자 사진 로드 중 오류: {Error}", ex.Message);
         }
     }
 
@@ -732,7 +729,7 @@ public partial class TeamsViewModel : ViewModelBase
             // 백그라운드에서 사진 새로고침
             _ = LoadMessagePhotosInBackgroundAsync();
 
-            _logger.Debug("채팅방 {ChatId} 메시지 {Count}개 로드", chatId, Messages.Count);
+            _log.Debug("채팅방 {ChatId} 메시지 {Count}개 로드", chatId, Messages.Count);
         }, "메시지 로드 실패");
     }
 
@@ -764,7 +761,7 @@ public partial class TeamsViewModel : ViewModelBase
                 Messages.Add(messageItem);
             }
 
-            _logger.Information("검색 '{Query}': {Count}개 결과", SearchQuery, Messages.Count);
+            _log.Info("검색 '{Query}': {Count}개 결과", SearchQuery, Messages.Count);
         }, "메시지 검색 실패");
     }
 
@@ -792,7 +789,7 @@ public partial class TeamsViewModel : ViewModelBase
         await ExecuteAsync(async () =>
         {
             var syncedCount = await _teamsService.SyncMessagesAsync(SelectedChat.Id);
-            _logger.Information("채팅방 {ChatName} 메시지 {Count}개 동기화 완료",
+            _log.Info("채팅방 {ChatName} 메시지 {Count}개 동기화 완료",
                 SelectedChat.DisplayName, syncedCount);
 
             // 메시지 목록 새로고침
@@ -833,7 +830,7 @@ public partial class TeamsViewModel : ViewModelBase
                 // 목록 맨 위에 추가 (최신 메시지가 위로)
                 Messages.Insert(0, messageItem);
 
-                _logger.Information("메시지 전송 완료: {ChatName}", SelectedChat.DisplayName);
+                _log.Info("메시지 전송 완료: {ChatName}", SelectedChat.DisplayName);
             }
         }, "메시지 전송 실패");
     }
@@ -877,7 +874,7 @@ public partial class TeamsViewModel : ViewModelBase
         }
         catch (Exception ex)
         {
-            _logger.Error(ex, "새 메시지 확인 실패");
+            _log.Error(ex, "새 메시지 확인 실패");
         }
     }
 
@@ -889,7 +886,7 @@ public partial class TeamsViewModel : ViewModelBase
     {
         ChatFilterMode = filter;
         // 추후 필터링 로직 구현
-        _logger.Debug("채팅 필터 변경: {Filter}", filter);
+        _log.Debug("채팅 필터 변경: {Filter}", filter);
     }
 
     /// <summary>
@@ -919,7 +916,7 @@ public partial class TeamsViewModel : ViewModelBase
                 chatItem.IsFavorite = false;
                 FavoriteChats.Remove(chatItem);
 
-                _logger.Information("채팅 즐겨찾기 해제: {Name}", chatItem.DisplayName);
+                _log.Info("채팅 즐겨찾기 해제: {Name}", chatItem.DisplayName);
             }
             else
             {
@@ -939,12 +936,12 @@ public partial class TeamsViewModel : ViewModelBase
                 chatItem.IsFavorite = true;
                 FavoriteChats.Add(chatItem);
 
-                _logger.Information("채팅 즐겨찾기 추가: {Name}", chatItem.DisplayName);
+                _log.Info("채팅 즐겨찾기 추가: {Name}", chatItem.DisplayName);
             }
         }
         catch (Exception ex)
         {
-            _logger.Error(ex, "채팅 즐겨찾기 토글 실패: {ChatId}", chatItem.Id);
+            _log.Error(ex, "채팅 즐겨찾기 토글 실패: {ChatId}", chatItem.Id);
         }
     }
 
@@ -969,7 +966,7 @@ public partial class TeamsViewModel : ViewModelBase
 
             if (draggedFav == null || targetFav == null)
             {
-                _logger.Warning("즐겨찾기 순서 변경 실패: 아이템을 찾을 수 없음 (dragged: {DraggedId}, target: {TargetId})",
+                _log.Warn("즐겨찾기 순서 변경 실패: 아이템을 찾을 수 없음 (dragged: {DraggedId}, target: {TargetId})",
                     draggedChatId, targetChatId);
                 return;
             }
@@ -992,7 +989,7 @@ public partial class TeamsViewModel : ViewModelBase
 
             await dbContext.SaveChangesAsync();
 
-            _logger.Information("즐겨찾기 순서 변경: {Name} ({OldIndex} → {NewIndex})",
+            _log.Info("즐겨찾기 순서 변경: {Name} ({OldIndex} → {NewIndex})",
                 draggedFav.DisplayName, oldIndex, newIndex);
 
             // UI 컬렉션 업데이트
@@ -1009,7 +1006,7 @@ public partial class TeamsViewModel : ViewModelBase
         }
         catch (Exception ex)
         {
-            _logger.Error(ex, "즐겨찾기 순서 변경 실패: {DraggedId} → {TargetId}", draggedChatId, targetChatId);
+            _log.Error(ex, "즐겨찾기 순서 변경 실패: {DraggedId} → {TargetId}", draggedChatId, targetChatId);
         }
     }
 
@@ -1051,11 +1048,11 @@ public partial class TeamsViewModel : ViewModelBase
                 message.OnPropertyChanged(nameof(message.HasReactions));
             }
 
-            _logger.Debug("리액션 추가: {MessageId} - {Reaction}", messageId, reaction);
+            _log.Debug("리액션 추가: {MessageId} - {Reaction}", messageId, reaction);
         }
         catch (Exception ex)
         {
-            _logger.Error(ex, "리액션 추가 실패: {MessageId}", messageId);
+            _log.Error(ex, "리액션 추가 실패: {MessageId}", messageId);
         }
     }
 
@@ -1091,11 +1088,11 @@ public partial class TeamsViewModel : ViewModelBase
                 message.OnPropertyChanged(nameof(message.HasReactions));
             }
 
-            _logger.Debug("리액션 제거: {MessageId} - {Reaction}", messageId, reaction);
+            _log.Debug("리액션 제거: {MessageId} - {Reaction}", messageId, reaction);
         }
         catch (Exception ex)
         {
-            _logger.Error(ex, "리액션 제거 실패: {MessageId}", messageId);
+            _log.Error(ex, "리액션 제거 실패: {MessageId}", messageId);
         }
     }
 
@@ -1132,11 +1129,11 @@ public partial class TeamsViewModel : ViewModelBase
                 });
             }
 
-            _logger.Debug("스레드 열기: {MessageId}, 답글 {Count}개", message.Id, ThreadReplies.Count);
+            _log.Debug("스레드 열기: {MessageId}, 답글 {Count}개", message.Id, ThreadReplies.Count);
         }
         catch (Exception ex)
         {
-            _logger.Error(ex, "스레드 답글 로드 실패: {MessageId}", message.Id);
+            _log.Error(ex, "스레드 답글 로드 실패: {MessageId}", message.Id);
         }
     }
 
@@ -1181,11 +1178,11 @@ public partial class TeamsViewModel : ViewModelBase
                 ThreadParentMessage.ReplyCount = ThreadReplies.Count;
             }
 
-            _logger.Information("스레드 답글 전송: {MessageId}", ThreadParentMessage.Id);
+            _log.Info("스레드 답글 전송: {MessageId}", ThreadParentMessage.Id);
         }
         catch (Exception ex)
         {
-            _logger.Error(ex, "스레드 답글 전송 실패");
+            _log.Error(ex, "스레드 답글 전송 실패");
         }
     }
 
@@ -1200,14 +1197,14 @@ public partial class TeamsViewModel : ViewModelBase
         try
         {
             await _teamsService.ShareFileToChatAsync(SelectedChat.Id, filePath);
-            _logger.Information("파일 공유 완료: {FilePath} → {ChatName}", filePath, SelectedChat.DisplayName);
+            _log.Info("파일 공유 완료: {FilePath} → {ChatName}", filePath, SelectedChat.DisplayName);
 
             // 메시지 새로고침
             await LoadMessagesAsync(SelectedChat.Id);
         }
         catch (Exception ex)
         {
-            _logger.Error(ex, "파일 공유 실패: {FilePath}", filePath);
+            _log.Error(ex, "파일 공유 실패: {FilePath}", filePath);
         }
     }
 
@@ -1218,7 +1215,7 @@ public partial class TeamsViewModel : ViewModelBase
     public async Task CreateMeetingAsync()
     {
         // MeetingScheduleDialog에서 호출됨 — 결과 처리는 다이얼로그에서
-        _logger.Debug("미팅 생성 요청");
+        _log.Debug("미팅 생성 요청");
     }
 
     /// <summary>
@@ -1274,7 +1271,7 @@ public partial class TeamsViewModel : ViewModelBase
         }
         catch (Exception ex)
         {
-            _logger.Debug("채팅 멤버 로드 실패: {Error}", ex.Message);
+            _log.Debug("채팅 멤버 로드 실패: {Error}", ex.Message);
         }
     }
 
@@ -1364,7 +1361,11 @@ public partial class TeamsViewModel : ViewModelBase
     [RelayCommand]
     public void SelectTeam(TeamItemViewModel team)
     {
+        if (SelectedTeam != null) SelectedTeam.IsSelected = false;
+        if (SelectedChannel != null) SelectedChannel.IsSelected = false;
+
         SelectedTeam = team;
+        team.IsSelected = true;
         SelectedChannel = null;
         ChannelMessages.Clear();
         ChannelFiles.Clear();
@@ -1376,7 +1377,20 @@ public partial class TeamsViewModel : ViewModelBase
     [RelayCommand]
     public async Task SelectChannelAsync(ChannelItemViewModel channel)
     {
+        if (SelectedChannel != null) SelectedChannel.IsSelected = false;
+
         SelectedChannel = channel;
+        channel.IsSelected = true;
+
+        // 채널 소속 팀도 자동 선택
+        var team = Teams.FirstOrDefault(t => t.Id == channel.TeamId);
+        if (team != null && SelectedTeam != team)
+        {
+            if (SelectedTeam != null) SelectedTeam.IsSelected = false;
+            SelectedTeam = team;
+            team.IsSelected = true;
+        }
+
         await LoadChannelContentAsync();
 
         // Hub 패턴: 현재 탭의 Sub-VM 초기화
@@ -1519,7 +1533,7 @@ public partial class TeamsViewModel : ViewModelBase
                 });
             }
 
-            _logger.Information("채널 콘텐츠 로드 완료: 메시지 {MsgCount}개, 파일 {FileCount}개",
+            _log.Info("채널 콘텐츠 로드 완료: 메시지 {MsgCount}개, 파일 {FileCount}개",
                 ChannelMessages.Count, ChannelFiles.Count);
         }, "채널 콘텐츠 로드 실패");
     }
@@ -1553,7 +1567,7 @@ public partial class TeamsViewModel : ViewModelBase
                     ReplyCount = 0
                 });
 
-                _logger.Information("채널 메시지 전송 성공");
+                _log.Info("채널 메시지 전송 성공");
             }
         }, "채널 메시지 전송 실패");
     }
@@ -2000,6 +2014,9 @@ public partial class TeamItemViewModel : ObservableObject
     private bool _isExpanded = true;
 
     [ObservableProperty]
+    private bool _isSelected;
+
+    [ObservableProperty]
     private ObservableCollection<ChannelItemViewModel> _channels = new();
 }
 
@@ -2022,6 +2039,9 @@ public partial class ChannelItemViewModel : ObservableObject
 
     [ObservableProperty]
     private string _membershipType = "standard";
+
+    [ObservableProperty]
+    private bool _isSelected;
 
     /// <summary>
     /// 일반 채널인지 여부

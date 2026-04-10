@@ -4119,6 +4119,7 @@
                                                                HorizontalAlignment="Stretch"
                                                                HorizontalContentAlignment="Left"
                                                                Padding="8,6"
+                                                               Background="{Binding IsSelected, Converter={StaticResource IsSelectedToBackgroundConverter}}"
                                                                Click="TeamItem_Click"
                                                                Tag="{Binding}">
                                                         <StackPanel Orientation="Horizontal">
@@ -4145,6 +4146,7 @@
                                                                            HorizontalAlignment="Stretch"
                                                                            HorizontalContentAlignment="Left"
                                                                            Padding="8,5"
+                                                                           Background="{Binding IsSelected, Converter={StaticResource IsSelectedToBackgroundConverter}}"
                                                                            Click="ChannelItem_Click"
                                                                            Tag="{Binding}">
                                                                     <StackPanel Orientation="Horizontal">

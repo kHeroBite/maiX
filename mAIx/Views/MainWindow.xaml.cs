@@ -15356,12 +15356,13 @@ public partial class MainWindow : FluentWindow
     }
 
     /// <summary>
-    /// 팀 아이템 클릭 (확장/축소)
+    /// 팀 아이템 클릭 (선택 + 확장/축소)
     /// </summary>
     private void TeamItem_Click(object sender, RoutedEventArgs e)
     {
         if (sender is Wpf.Ui.Controls.Button btn && btn.Tag is TeamItemViewModel team)
         {
+            _teamsViewModel?.SelectTeamCommand.Execute(team);
             team.IsExpanded = !team.IsExpanded;
         }
     }
