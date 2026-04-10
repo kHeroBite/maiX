@@ -23,6 +23,7 @@ using mAIx.Services.Storage;
 using mAIx.Services.Rules;
 using mAIx.Services.Sync;
 using mAIx.ViewModels;
+using mAIx.ViewModels.Teams;
 using mAIx.Services.Api;
 using mAIx.Utils;
 using mAIx.Utilities;
@@ -217,7 +218,7 @@ public partial class App : Application
         // Graph 서비스 등록
         services.AddSingleton<GraphAuthService>();
         services.AddScoped<GraphMailService>();
-        services.AddScoped<GraphCalendarService>();
+        services.AddSingleton<GraphCalendarService>();
         services.AddScoped<GraphContactService>();
 
         // 프로필 사진 캐시 서비스 등록

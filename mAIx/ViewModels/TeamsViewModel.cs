@@ -23,6 +23,7 @@ public partial class TeamsViewModel : ViewModelBase
 {
     private static readonly Logger _log = LogManager.GetCurrentClassLogger();
     private readonly GraphTeamsService _teamsService;
+    private readonly GraphCalendarService _calendarService;
     private readonly IDbContextFactory<mAIxDbContext> _dbContextFactory;
     private readonly Serilog.ILogger _logger;
 
@@ -215,6 +216,16 @@ public partial class TeamsViewModel : ViewModelBase
     private readonly Dictionary<string, ChannelSettingsViewModel> _settingsVmCache = new();
 
     /// <summary>
+    /// 채널별 일정 ViewModel 캐시
+    /// </summary>
+    private readonly Dictionary<string, ChannelCalendarViewModel> _calendarVmCache = new();
+
+    /// <summary>
+    /// 채널별 Planner ViewModel 캐시
+    /// </summary>
+    private readonly Dictionary<string, ChannelPlannerViewModel> _plannerVmCache = new();
+
+    /// <summary>
     /// 현재 채널의 파일 Sub-ViewModel
     /// </summary>
     [ObservableProperty]
@@ -225,6 +236,18 @@ public partial class TeamsViewModel : ViewModelBase
     /// </summary>
     [ObservableProperty]
     private ChannelSettingsViewModel? _channelSettingsVm;
+
+    /// <summary>
+    /// 현재 채널의 일정 Sub-ViewModel
+    /// </summary>
+    [ObservableProperty]
+    private ChannelCalendarViewModel? _channelCalendarVm;
+
+    /// <summary>
+    /// 현재 채널의 Planner Sub-ViewModel
+    /// </summary>
+    [ObservableProperty]
+    private ChannelPlannerViewModel? _channelPlannerVm;
 
     #endregion
 
@@ -296,9 +319,10 @@ public partial class TeamsViewModel : ViewModelBase
 
     #endregion
 
-    public TeamsViewModel(GraphTeamsService teamsService, IDbContextFactory<mAIxDbContext> dbContextFactory)
+    public TeamsViewModel(GraphTeamsService teamsService, GraphCalendarService calendarService, IDbContextFactory<mAIxDbContext> dbContextFactory)
     {
         _teamsService = teamsService ?? throw new ArgumentNullException(nameof(teamsService));
+        _calendarService = calendarService ?? throw new ArgumentNullException(nameof(calendarService));
         _dbContextFactory = dbContextFactory ?? throw new ArgumentNullException(nameof(dbContextFactory));
         _logger = Log.ForContext<TeamsViewModel>();
     }
@@ -1391,6 +1415,28 @@ public partial class TeamsViewModel : ViewModelBase
                 ChannelSettingsVm = settingsVm;
                 if (SelectedChannel != null)
                     await settingsVm.LoadSettingsAsync(SelectedChannel);
+                break;
+
+            case "calendar":
+                if (!_calendarVmCache.TryGetValue(key, out var calendarVm))
+                {
+                    calendarVm = new ChannelCalendarViewModel(_calendarService);
+                    _calendarVmCache[key] = calendarVm;
+                    _log.Debug("ChannelCalendarViewModel 신규 생성: {Key}", key);
+                }
+                ChannelCalendarVm = calendarVm;
+                await calendarVm.InitializeAsync(teamId, channelId);
+                break;
+
+            case "planner":
+                if (!_plannerVmCache.TryGetValue(key, out var plannerVm))
+                {
+                    plannerVm = new ChannelPlannerViewModel(_teamsService);
+                    _plannerVmCache[key] = plannerVm;
+                    _log.Debug("ChannelPlannerViewModel 신규 생성: {Key}", key);
+                }
+                ChannelPlannerVm = plannerVm;
+                await plannerVm.InitializeAsync(teamId, channelId);
                 break;
 
             default:

@@ -4264,25 +4264,17 @@
                                            HorizontalAlignment="Center" Margin="0,6,0,0"/>
                             </StackPanel>
 
-                            <!-- 일정 탭 (Phase 3에서 구현 — 임시 플레이스홀더) -->
-                            <StackPanel Grid.Row="2" VerticalAlignment="Center" HorizontalAlignment="Center"
-                                        Visibility="{Binding CurrentChannelTab, Converter={StaticResource StringEqualsToVisibilityConverter}, ConverterParameter=calendar}">
-                                <ui:SymbolIcon Symbol="CalendarLtr24" FontSize="48" Foreground="{DynamicResource TextFillColorTertiaryBrush}" Margin="0,0,0,12"/>
-                                <TextBlock Text="일정" FontSize="20" FontWeight="SemiBold" HorizontalAlignment="Center"/>
-                                <TextBlock Text="채널 일정 기능은 곧 지원됩니다" FontSize="14"
-                                           Foreground="{DynamicResource TextFillColorSecondaryBrush}"
-                                           HorizontalAlignment="Center" Margin="0,6,0,0"/>
-                            </StackPanel>
+                            <!-- 일정 탭 (ChannelCalendarControl) -->
+                            <teamsControls:ChannelCalendarControl Grid.Row="2"
+                                x:Name="ChannelCalendarCtrl"
+                                DataContext="{Binding ChannelCalendarVm}"
+                                Visibility="{Binding CurrentChannelTab, Converter={StaticResource StringEqualsToVisibilityConverter}, ConverterParameter=calendar}"/>
 
-                            <!-- 작업 탭 (Phase 3에서 구현 — 임시 플레이스홀더) -->
-                            <StackPanel Grid.Row="2" VerticalAlignment="Center" HorizontalAlignment="Center"
-                                        Visibility="{Binding CurrentChannelTab, Converter={StaticResource StringEqualsToVisibilityConverter}, ConverterParameter=planner}">
-                                <ui:SymbolIcon Symbol="TaskListLtr24" FontSize="48" Foreground="{DynamicResource TextFillColorTertiaryBrush}" Margin="0,0,0,12"/>
-                                <TextBlock Text="작업" FontSize="20" FontWeight="SemiBold" HorizontalAlignment="Center"/>
-                                <TextBlock Text="Planner 칸반 기능은 곧 지원됩니다" FontSize="14"
-                                           Foreground="{DynamicResource TextFillColorSecondaryBrush}"
-                                           HorizontalAlignment="Center" Margin="0,6,0,0"/>
-                            </StackPanel>
+                            <!-- 작업 탭 (ChannelPlannerControl) -->
+                            <teamsControls:ChannelPlannerControl Grid.Row="2"
+                                x:Name="ChannelPlannerCtrl"
+                                DataContext="{Binding ChannelPlannerVm}"
+                                Visibility="{Binding CurrentChannelTab, Converter={StaticResource StringEqualsToVisibilityConverter}, ConverterParameter=planner}"/>
 
                             <!-- 설정 탭 (UserControl) -->
                             <teamsControls:ChannelSettingsControl Grid.Row="2"
