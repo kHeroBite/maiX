@@ -384,6 +384,121 @@ namespace mAIx.Services.Graph
         }
 
         /// <summary>
+        /// Delta Query 페이지별 콜백 방식 (Progressive UI 로딩용)
+        /// 페이지 단위로 onPageReady 콜백을 호출하여 즉시 UI 반영 가능
+        /// </summary>
+        /// <param name="folderId">폴더 ID</param>
+        /// <param name="deltaLink">이전 동기화의 deltaLink (null이면 초기 동기화)</param>
+        /// <param name="isInitialSync">초기 동기화 여부 ($top 10 vs 50)</param>
+        /// <param name="onPageReady">각 페이지 도착 시 호출되는 콜백 (변경분만)</param>
+        /// <param name="ct">취소 토큰</param>
+        /// <returns>최종 deltaLink, 삭제된 메일 ID 목록</returns>
+        public async Task<(string? DeltaLink, IEnumerable<string> DeletedIds)>
+            GetMessagesDeltaPagedAsync(
+                string folderId,
+                string? deltaLink,
+                bool isInitialSync,
+                Func<IReadOnlyList<Message>, Task> onPageReady,
+                CancellationToken ct = default)
+        {
+            var client = _authService.GetGraphClient();
+            var deletedIds = new List<string>();
+            string? newDeltaLink = null;
+
+            try
+            {
+                var selectFields = new[] {
+                    "id", "internetMessageId", "conversationId", "subject", "body",
+                    "from", "toRecipients", "ccRecipients", "bccRecipients", "receivedDateTime",
+                    "isRead", "flag", "importance", "hasAttachments", "categories", "parentFolderId",
+                    "bodyPreview"
+                };
+
+                Microsoft.Graph.Me.MailFolders.Item.Messages.Delta.DeltaGetResponse? response;
+
+                if (string.IsNullOrEmpty(deltaLink))
+                {
+                    var top = isInitialSync ? 10 : 50;
+                    _logger.Debug("GetMessagesDeltaPagedAsync folderId={FolderId} hasDeltaLink={HasDelta} isInitialSync={IsInitial} top={Top}",
+                        folderId, false, isInitialSync, top);
+                    response = await ExecuteWithRetryAsync(() =>
+                        client.Me.MailFolders[folderId].Messages.Delta.GetAsDeltaGetResponseAsync(config =>
+                        {
+                            config.QueryParameters.Select = selectFields;
+                            config.QueryParameters.Top = top;
+                        }), _logger, ct);
+                }
+                else
+                {
+                    response = await ExecuteWithRetryAsync(() =>
+                        client.Me.MailFolders[folderId].Messages.Delta
+                            .WithUrl(deltaLink)
+                            .GetAsDeltaGetResponseAsync(), _logger, ct);
+                }
+
+                while (response != null)
+                {
+                    ct.ThrowIfCancellationRequested();
+
+                    var pageMessages = new List<Message>();
+                    if (response.Value != null)
+                    {
+                        foreach (var message in response.Value)
+                        {
+                            if (message.AdditionalData?.ContainsKey("@removed") == true)
+                            {
+                                if (!string.IsNullOrEmpty(message.Id))
+                                    deletedIds.Add(message.Id);
+                            }
+                            else
+                            {
+                                pageMessages.Add(message);
+                            }
+                        }
+                    }
+
+                    // 페이지 단위 즉시 전달 (Progressive UI)
+                    if (pageMessages.Count > 0)
+                    {
+                        await onPageReady(pageMessages);
+                    }
+
+                    if (!string.IsNullOrEmpty(response.OdataDeltaLink))
+                    {
+                        newDeltaLink = response.OdataDeltaLink;
+                        break;
+                    }
+
+                    if (!string.IsNullOrEmpty(response.OdataNextLink))
+                    {
+                        response = await client.Me.MailFolders[folderId].Messages.Delta
+                            .WithUrl(response.OdataNextLink)
+                            .GetAsDeltaGetResponseAsync();
+                    }
+                    else
+                    {
+                        break;
+                    }
+                }
+            }
+            catch (OperationCanceledException)
+            {
+                throw;
+            }
+            catch (Exception ex)
+            {
+                if (ex.Message.Contains("resync", StringComparison.OrdinalIgnoreCase) ||
+                    ex.Message.Contains("syncStateNotFound", StringComparison.OrdinalIgnoreCase))
+                {
+                    return await GetMessagesDeltaPagedAsync(folderId, null, isInitialSync, onPageReady, ct);
+                }
+                throw;
+            }
+
+            return (newDeltaLink, deletedIds);
+        }
+
+        /// <summary>
         /// 최신 메일 직접 조회 (Delta API 지연 보완용)
         /// receivedDateTime 내림차순으로 최근 N개 메일 조회
         /// </summary>

@@ -1330,8 +1330,50 @@ public class BackgroundSyncService : BackgroundService
             && !syncState.LastSyncedAt.HasValue;
 
         var previousDeltaLink = syncState.DeltaLink;
-        var (changedMessages, deletedIds) = await FetchNewEmailsAsync(
-            graphMailService, syncState, folder.Id, ct, isInitialSync);
+
+        List<Message> changedMessages;
+        List<string> deletedIds;
+        var savedEmails = new List<Email>();
+        var usedPagedApi = false;
+
+        // Phase 2: Inbox 첫 동기화는 페이지별 즉시 저장 + 이벤트 발행 (Progressive UI)
+        if (isInitialSync && IsInboxFolder(folder))
+        {
+            usedPagedApi = true;
+            var accumulatedMessages = new List<Message>();
+
+            _logger.Information("Inbox 첫 동기화 Progressive 로딩 시작 folder={FolderId}", folder.Id);
+
+            var (pagedDeltaLink, pagedDeletedIds) = await graphMailService.GetMessagesDeltaPagedAsync(
+                folder.Id,
+                syncState.DeltaLink,
+                isInitialSync: true,
+                onPageReady: async pageMessages =>
+                {
+                    accumulatedMessages.AddRange(pageMessages);
+                    // 페이지 단위 즉시 저장 → SaveEmailsAsync 내부에서 EmailsSavedToFolder 이벤트 발행
+                    var pageSaved = await SaveEmailsAsync(
+                        dbContext, pageMessages.ToList(), accountEmail, folder.Id, ct);
+                    savedEmails.AddRange(pageSaved);
+                    _logger.Debug("Inbox Progressive 페이지 저장: {Count}건 (누적 {Total}건)",
+                        pageMessages.Count, accumulatedMessages.Count);
+                },
+                ct);
+
+            if (!string.IsNullOrEmpty(pagedDeltaLink))
+            {
+                syncState.DeltaLink = pagedDeltaLink;
+            }
+            changedMessages = accumulatedMessages;
+            deletedIds = pagedDeletedIds.ToList();
+        }
+        else
+        {
+            var (msgs, delIds) = await FetchNewEmailsAsync(
+                graphMailService, syncState, folder.Id, ct, isInitialSync);
+            changedMessages = msgs;
+            deletedIds = delIds;
+        }
 
         // DeltaLink 만료로 전체 재동기화가 발생한 경우 Reconciliation 실행
         // (이전에 deltaLink가 있었는데 FetchNewEmailsAsync에서 리셋된 경우)
@@ -1346,15 +1388,19 @@ public class BackgroundSyncService : BackgroundService
             await ProcessDeletedEmailsAsync(dbContext, deletedIds, ct);
         }
 
-        var savedEmails = new List<Email>();
-
-        if (changedMessages.Count > 0)
+        // Paged API 경로는 콜백에서 이미 저장 완료 — else 경로만 여기서 저장
+        if (!usedPagedApi && changedMessages.Count > 0)
         {
             _logger.Debug("폴더 '{FolderName}' 변경 감지: {Count}건",
                 folder.DisplayName, changedMessages.Count);
 
             savedEmails = await SaveEmailsAsync(
                 dbContext, changedMessages, accountEmail, folder.Id, ct);
+        }
+        else if (usedPagedApi && changedMessages.Count > 0)
+        {
+            _logger.Debug("폴더 '{FolderName}' Progressive 저장 완료: {Count}건",
+                folder.DisplayName, changedMessages.Count);
         }
 
         // 동기화 상태 업데이트

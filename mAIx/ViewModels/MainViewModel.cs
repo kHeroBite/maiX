@@ -106,12 +106,16 @@ public partial class MainViewModel : ViewModelBase, IDisposable
 
             Log4.Info($"[MainViewModel] 생성됨, syncService 해시코드: {syncService.GetHashCode()}");
 
+        // Phase 2: ObservableCollection을 UI 스레드 외부에서 수정 가능하게 등록
+        BindingOperations.EnableCollectionSynchronization(_emails, _emailsLock);
+
         // 동기화 상태 변경 이벤트 구독
         _syncService.PausedChanged += OnSyncPausedChanged;
 
         // 폴더/메일 동기화 완료 이벤트 구독
         _syncService.FoldersSynced += OnFoldersSynced;
         _syncService.EmailsSynced += OnEmailsSynced;
+        _syncService.EmailsSavedToFolder += OnEmailsSavedToFolder;
 
         // 메일 동기화 진행률 이벤트 구독
         _syncService.MailSyncStarted += OnMailSyncStarted;
@@ -195,7 +199,7 @@ public partial class MainViewModel : ViewModelBase, IDisposable
                 var snapshot = _cacheService.GetSnapshot(SelectedFolder.Id, ShowSnoozedEmails);
                 if (snapshot != null)
                 {
-                    Emails = new List<Email>(snapshot);
+                    ReplaceEmails(snapshot);
                 }
             }
         });
@@ -277,7 +281,7 @@ public partial class MainViewModel : ViewModelBase, IDisposable
                 {
                     Log4.Debug($"[RefreshEmailReadStatus] 삭제된 메일 UI에서 제거: {deleted.Subject}");
                 }
-                Emails = Emails.Where(e => string.IsNullOrEmpty(e.EntryId) || dbEntryIds.Contains(e.EntryId)).ToList();
+                RemoveEmailsByIds(deletedEmails.Select(e => e.Id));
                 deletedCount = deletedEmails.Count;
                 Log4.Info($"[RefreshEmailReadStatus] UI에서 삭제된 메일 {deletedCount}건 제거됨");
             }
@@ -459,24 +463,145 @@ public partial class MainViewModel : ViewModelBase, IDisposable
     private Folder? _selectedFolder;
 
     /// <summary>
-    /// 이메일 목록
+    /// 이메일 목록 (Phase 2: ObservableCollection 전환, EnableCollectionSynchronization 사용).
+    /// 단일 인스턴스를 유지하며 ReplaceEmails/MergeEmailsIncremental로 내부를 갱신한다.
     /// </summary>
-    [ObservableProperty]
-    private List<Email> _emails = new();
+    private ObservableCollection<Email> _emails = new();
+
+    /// <summary>
+    /// 이메일 목록 읽기 전용 노출 (XAML 바인딩용).
+    /// </summary>
+    public ObservableCollection<Email> Emails => _emails;
+
+    /// <summary>
+    /// _emails 접근 동기화용 락 (BindingOperations.EnableCollectionSynchronization과 공유)
+    /// </summary>
+    private readonly object _emailsLock = new();
 
     /// <summary>
     /// 이메일 수 (상태바 표시용)
     /// </summary>
     public int EmailCount => Emails?.Count ?? 0;
 
+    #region 컬렉션 헬퍼 (Phase 2: ObservableCollection 전용)
+
     /// <summary>
-    /// Emails 변경 시 EmailCount와 StatusBarCountText도 갱신
+    /// 이메일 목록 전체 교체. 단일 OC 인스턴스를 유지하면서 Clear+Add로 재구성한다.
     /// </summary>
-    partial void OnEmailsChanged(List<Email> value)
+    private void ReplaceEmails(IEnumerable<Email> newEmails)
     {
+        lock (_emailsLock)
+        {
+            _emails.Clear();
+            if (newEmails != null)
+            {
+                foreach (var e in newEmails) _emails.Add(e);
+            }
+        }
         OnPropertyChanged(nameof(EmailCount));
         OnPropertyChanged(nameof(StatusBarCountText));
     }
+
+    /// <summary>
+    /// 점진적 upsert: EntryId 기준으로 기존 항목은 속성 업데이트, 신규 항목은 날짜순 삽입.
+    /// </summary>
+    private void MergeEmailsIncremental(IReadOnlyList<Email> savedEmails)
+    {
+        if (savedEmails == null || savedEmails.Count == 0) return;
+        lock (_emailsLock)
+        {
+            var byEntryId = _emails
+                .Where(e => !string.IsNullOrEmpty(e.EntryId))
+                .ToDictionary(e => e.EntryId!, e => e);
+            foreach (var saved in savedEmails)
+            {
+                if (string.IsNullOrEmpty(saved.EntryId)) continue;
+                if (byEntryId.TryGetValue(saved.EntryId, out var existing))
+                {
+                    existing.IsRead = saved.IsRead;
+                    existing.FlagStatus = saved.FlagStatus;
+                    existing.SnoozedUntil = saved.SnoozedUntil;
+                    existing.FollowUpDate = saved.FollowUpDate;
+                }
+                else
+                {
+                    var insertAt = 0;
+                    for (; insertAt < _emails.Count; insertAt++)
+                    {
+                        if (_emails[insertAt].ReceivedDateTime < saved.ReceivedDateTime) break;
+                    }
+                    _emails.Insert(insertAt, saved);
+                }
+            }
+        }
+        OnPropertyChanged(nameof(EmailCount));
+        OnPropertyChanged(nameof(StatusBarCountText));
+    }
+
+    /// <summary>
+    /// 뒤에 추가(무한 스크롤 전용). EntryId 중복은 스킵.
+    /// </summary>
+    private void AppendEmails(IEnumerable<Email> moreEmails)
+    {
+        if (moreEmails == null) return;
+        var existingEntryIds = _emails
+            .Where(e => !string.IsNullOrEmpty(e.EntryId))
+            .Select(e => e.EntryId!)
+            .ToHashSet();
+        lock (_emailsLock)
+        {
+            foreach (var e in moreEmails)
+            {
+                if (!string.IsNullOrEmpty(e.EntryId) && existingEntryIds.Contains(e.EntryId)) continue;
+                _emails.Add(e);
+            }
+        }
+        OnPropertyChanged(nameof(EmailCount));
+        OnPropertyChanged(nameof(StatusBarCountText));
+    }
+
+    /// <summary>
+    /// ID로 단일 이메일 제거.
+    /// </summary>
+    private void RemoveEmailById(int id)
+    {
+        lock (_emailsLock)
+        {
+            var target = _emails.FirstOrDefault(e => e.Id == id);
+            if (target != null) _emails.Remove(target);
+        }
+        OnPropertyChanged(nameof(EmailCount));
+        OnPropertyChanged(nameof(StatusBarCountText));
+    }
+
+    /// <summary>
+    /// 다수 ID로 일괄 제거.
+    /// </summary>
+    private void RemoveEmailsByIds(IEnumerable<int> ids)
+    {
+        if (ids == null) return;
+        var idSet = ids.ToHashSet();
+        if (idSet.Count == 0) return;
+        lock (_emailsLock)
+        {
+            var toRemove = _emails.Where(e => idSet.Contains(e.Id)).ToList();
+            foreach (var e in toRemove) _emails.Remove(e);
+        }
+        OnPropertyChanged(nameof(EmailCount));
+        OnPropertyChanged(nameof(StatusBarCountText));
+    }
+
+    /// <summary>
+    /// BackgroundSyncService.EmailsSavedToFolder 이벤트 핸들러.
+    /// 현재 선택된 폴더와 일치할 때만 점진적 upsert로 반영한다.
+    /// </summary>
+    private void OnEmailsSavedToFolder(string folderId, IReadOnlyList<Email> savedEmails)
+    {
+        if (SelectedFolder == null || SelectedFolder.Id != folderId) return;
+        MergeEmailsIncremental(savedEmails);
+    }
+
+    #endregion
 
     #region 대화 스레딩
 
@@ -1018,22 +1143,15 @@ public partial class MainViewModel : ViewModelBase, IDisposable
     /// </summary>
     private async void OnEmailsSynced(int newCount)
     {
-        // 새 메일이 있을 때만 목록 전체 갱신 (번쩍임 방지)
+        // Phase 2: 점진적 업데이트는 OnEmailsSavedToFolder에서 처리.
+        // 여기서는 폴더 카운트/상태만 갱신 (전체 재쿼리 제거).
         if (newCount > 0 && SelectedFolder != null)
         {
-            var selectedEmailId = SelectedEmail?.Id;
-            await LoadEmailsAsync();
-            if (selectedEmailId.HasValue && SelectedEmail?.Id != selectedEmailId)
-            {
-                SelectedEmail = Emails?.FirstOrDefault(e => e.Id == selectedEmailId.Value);
-            }
             await LoadFoldersAsync();
             StatusMessage = $"{newCount}개 새 메일 동기화됨";
         }
         else
         {
-            // 새 메일 없으면 읽음 상태만 갱신 (OnMailSyncCompleted에서 처리)
-            // 폴더 카운�� 갱신
             await RefreshFolderUnreadCountsAsync();
         }
 
@@ -1095,7 +1213,7 @@ public partial class MainViewModel : ViewModelBase, IDisposable
 
         if (value == null)
         {
-            Emails = new List<Email>();
+            ReplaceEmails(Array.Empty<Email>());
             _emailSkip = 0;
             HasMoreEmails = false;
             _pendingScrollOffset = 0;
@@ -1126,7 +1244,7 @@ public partial class MainViewModel : ViewModelBase, IDisposable
         if (_cacheService != null &&
             _cacheService.TryGet(value.Id, ShowSnoozedEmails, out var cached, out var skip, out var more, out var scrollOffset))
         {
-            Emails = cached;
+            ReplaceEmails(cached);
             _emailSkip = skip;
             HasMoreEmails = more;
             _pendingScrollOffset = scrollOffset;
@@ -1320,7 +1438,7 @@ public partial class MainViewModel : ViewModelBase, IDisposable
     {
         if (SelectedFolder == null)
         {
-            Emails = new List<Email>();
+            ReplaceEmails(Array.Empty<Email>());
             return;
         }
 
@@ -1364,7 +1482,7 @@ public partial class MainViewModel : ViewModelBase, IDisposable
             // PreviewText 복원: [NotMapped]라 DB에 저장 안 됨 → Body에서 재구성
             RestorePreviewText(emails);
 
-            Emails = emails;
+            ReplaceEmails(emails);
             StatusMessage = HasMoreEmails
                 ? $"{Emails.Count}개 이메일 로드됨 (더 있음)"
                 : $"{Emails.Count}개 이메일 로드됨";
@@ -1420,11 +1538,9 @@ public partial class MainViewModel : ViewModelBase, IDisposable
                 // PreviewText 복원: [NotMapped]라 DB에 저장 안 됨 → Body에서 재구성
                 RestorePreviewText(moreEmails);
 
-                var combined = new List<Email>(Emails);
-                combined.AddRange(moreEmails);
                 _emailSkip += moreEmails.Count;
                 HasMoreEmails = moreEmails.Count >= App.Settings.UserPreferences.InitialMailCount;
-                Emails = combined;
+                AppendEmails(moreEmails);
                 StatusMessage = HasMoreEmails
                     ? $"{Emails.Count}개 이메일 로드됨 (더 있음)"
                     : $"{Emails.Count}개 이메일 로드됨";
@@ -1507,7 +1623,7 @@ public partial class MainViewModel : ViewModelBase, IDisposable
                 if (snapshot != null)
                 {
                     Log4.Debug($"[Perf][SyncIncremental] Emails재바인딩 시작 {swSync.ElapsedMilliseconds}ms");
-                    Emails = new List<Email>(snapshot);
+                    ReplaceEmails(snapshot);
                     StatusMessage = $"{Emails.Count}개 이메일 (캐시 + 신규 {newEmails.Count}건)";
                     Log4.Debug($"[Perf][SyncIncremental] Emails재바인딩 완료 {swSync.ElapsedMilliseconds}ms");
                 }
@@ -1890,7 +2006,7 @@ public partial class MainViewModel : ViewModelBase, IDisposable
                 }
 
                 // 메일 목록 갱신
-                Emails = Emails.Where(e => e.Id != email.Id).ToList();
+                RemoveEmailById(email.Id);
 
                 // 선택 해제
                 if (SelectedEmail?.Id == email.Id)
@@ -1969,7 +2085,7 @@ public partial class MainViewModel : ViewModelBase, IDisposable
             await _dbContext.SaveChangesAsync();
 
             var deletedIds = succeededEmails.Select(e => e.Id).ToHashSet();
-            Emails = Emails.Where(e => !deletedIds.Contains(e.Id)).ToList();
+            RemoveEmailsByIds(deletedIds);
 
             if (SelectedEmail != null && deletedIds.Contains(SelectedEmail.Id))
                 SelectedEmail = null;
@@ -2038,10 +2154,10 @@ public partial class MainViewModel : ViewModelBase, IDisposable
                 // 현재 선택된 폴더가 원래 폴더면 메일 목록에 추가
                 if (SelectedFolder?.Id == originalFolderId)
                 {
-                    var updatedList = new List<Email>(Emails) { email };
+                    var updatedList = new List<Email>(_emails) { email };
                     // 날짜순 정렬 유지
                     updatedList = updatedList.OrderByDescending(e => e.ReceivedDateTime).ToList();
-                    Emails = updatedList;
+                    ReplaceEmails(updatedList);
                 }
 
                 // 캐시 정합성: 원래 폴더에 추가 + 현재 폴더(휴지통)가 다르면 무효화
@@ -2169,8 +2285,7 @@ public partial class MainViewModel : ViewModelBase, IDisposable
                 _cacheService?.OnEmailsUpdated(flagEntryIds!, e => e.FlagStatus = flagStatus);
             }
 
-            // DataTemplate Trigger가 FlagStatus로 분기하는 경우를 위해 1회 재할당
-            Emails = new List<Email>(Emails);
+            // Phase 2: OC + Email INPC가 자동으로 UI 갱신하므로 refresh trick 불필요
 
             // 선택된 메일의 플래그가 변경된 경우 상세 패널도 갱신
             if (SelectedEmail != null && emails.Any(e => e.Id == SelectedEmail.Id))
@@ -2318,8 +2433,7 @@ public partial class MainViewModel : ViewModelBase, IDisposable
                 }
             }
 
-            // UI 갱신을 위해 목록 다시 설정
-            Emails = new List<Email>(Emails);
+            // Phase 2: OC + Email INPC가 자동으로 UI 갱신하므로 refresh trick 불필요
 
             StatusMessage = $"카테고리 업데이트 완료 ({completed}/{emails.Count})";
             Log4.Info($"카테고리 업데이트 완료: {completed}건");
@@ -2820,7 +2934,7 @@ public partial class MainViewModel : ViewModelBase, IDisposable
                 results = results.Where(e => e.SnoozedUntil == null || e.SnoozedUntil <= now).ToList();
             }
 
-            Emails = results;
+            ReplaceEmails(results);
             SearchResultCount = Emails.Count;
             StatusMessage = $"검색 결과: {Emails.Count}건";
             IsSearching = false;
@@ -3069,7 +3183,7 @@ public partial class MainViewModel : ViewModelBase, IDisposable
                 : Emails.OrderBy(e => e.ReceivedDateTime).ToList()
         };
 
-        Emails = sorted;
+        ReplaceEmails(sorted);
 
         // 스레드 뷰 모드면 다시 그룹핑
         if (IsThreadViewMode)
@@ -3203,7 +3317,7 @@ public partial class MainViewModel : ViewModelBase, IDisposable
 
             // UI: 이동된 메일 제거
             var movedIds = succeededMoves.Select(m => m.email.Id).ToHashSet();
-            Emails = Emails.Where(e => !movedIds.Contains(e.Id)).ToList();
+            RemoveEmailsByIds(movedIds);
 
             // 캐시 정합성: source에서 제거 + target 무효화 (다음 진입 시 DB 재조회)
             var sourceFolderId3 = SelectedFolder?.Id;
@@ -3450,8 +3564,8 @@ public partial class MainViewModel : ViewModelBase, IDisposable
                 : unpinned.OrderBy(e => e.ReceivedDateTime)
         };
 
-        // 고정 메일 + 정렬된 일반 메일 (새 리스트 할당으로 UI 업데이트)
-        Emails = pinned.Concat(sortedUnpinned).ToList();
+        // 고정 메일 + 정렬된 일반 메일 (ReplaceEmails로 OC 교체)
+        ReplaceEmails(pinned.Concat(sortedUnpinned));
 
         Log4.Debug($"[ApplySortingWithPin] 정렬 완료: 고정 {pinned.Count}건, 일반 {unpinned.Count()}건");
     }
@@ -3870,6 +3984,7 @@ public partial class MainViewModel : ViewModelBase, IDisposable
         _syncService.PausedChanged -= OnSyncPausedChanged;
         _syncService.FoldersSynced -= OnFoldersSynced;
         _syncService.EmailsSynced -= OnEmailsSynced;
+        _syncService.EmailsSavedToFolder -= OnEmailsSavedToFolder;
         _syncService.MailSyncStarted -= OnMailSyncStarted;
         _syncService.MailSyncProgress -= OnMailSyncProgress;
         _syncService.MailSyncCompleted -= OnMailSyncCompleted;
