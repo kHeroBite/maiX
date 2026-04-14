@@ -1396,6 +1396,9 @@ public class BackgroundSyncService : BackgroundService
                     }
 
                     _logger.Information("폴더 {FolderId} 백그라운드 동기화 완료. 총 {Count}건", folder.Id, bgAccumulated.Count);
+
+                    // 백그라운드 동기화 완료 후 UI 미읽음 뱃지 갱신
+                    RaiseMailSyncCompleted();
                 }
                 catch (Exception ex)
                 {
