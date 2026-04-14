@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text.Encodings.Web;
@@ -34,6 +35,9 @@ public class BackgroundSyncService : BackgroundService
 
     // 미팅 브리핑 중복 방지 HashSet
     private readonly HashSet<string> _sentMeetingBriefings = new();
+
+    // Inbox 첫 동기화 백그라운드 진행 중 여부 (동일 폴더 중복 실행 방지)
+    private readonly ConcurrentDictionary<string, bool> _inboxBackgroundSyncInProgress = new();
 
     // JSON 직렬화 옵션 (한글/특수문자 이스케이프 방지)
     private static readonly JsonSerializerOptions _jsonOptions = new()
@@ -1336,36 +1340,79 @@ public class BackgroundSyncService : BackgroundService
         var savedEmails = new List<Email>();
         var usedPagedApi = false;
 
-        // Phase 2: Inbox 첫 동기화는 페이지별 즉시 저장 + 이벤트 발행 (Progressive UI)
+        // Phase 2: Inbox 첫 동기화는 첫 페이지만 즉시 반환 + 나머지는 백그라운드 처리 (Lazy Loading)
         if (isInitialSync && IsInboxFolder(folder))
         {
             usedPagedApi = true;
-            var accumulatedMessages = new List<Message>();
 
-            _logger.Information("Inbox 첫 동기화 Progressive 로딩 시작 folder={FolderId}", folder.Id);
-
-            var (pagedDeltaLink, pagedDeletedIds) = await graphMailService.GetMessagesDeltaPagedAsync(
-                folder.Id,
-                syncState.DeltaLink,
-                isInitialSync: true,
-                onPageReady: async pageMessages =>
-                {
-                    accumulatedMessages.AddRange(pageMessages);
-                    // 페이지 단위 즉시 저장 → SaveEmailsAsync 내부에서 EmailsSavedToFolder 이벤트 발행
-                    var pageSaved = await SaveEmailsAsync(
-                        dbContext, pageMessages.ToList(), accountEmail, folder.Id, ct);
-                    savedEmails.AddRange(pageSaved);
-                    _logger.Debug("Inbox Progressive 페이지 저장: {Count}건 (누적 {Total}건)",
-                        pageMessages.Count, accumulatedMessages.Count);
-                },
-                ct);
-
-            if (!string.IsNullOrEmpty(pagedDeltaLink))
+            // 동일 폴더 중복 백그라운드 실행 방지
+            if (_inboxBackgroundSyncInProgress.TryGetValue(folder.Id, out var inProgress) && inProgress)
             {
-                syncState.DeltaLink = pagedDeltaLink;
+                _logger.Warning("폴더 {FolderId} 백그라운드 동기화 진행 중, 스킵", folder.Id);
+                return (0, 0, new List<Email>());
             }
-            changedMessages = accumulatedMessages;
-            deletedIds = pagedDeletedIds.ToList();
+            _inboxBackgroundSyncInProgress[folder.Id] = true;
+
+            var tcs = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+            var firstPageCompleted = false;
+            var firstPageSaved = new List<Email>();
+
+            _logger.Information("Inbox 첫 동기화 백그라운드 시작 folder={FolderId}", folder.Id);
+
+            var capturedDeltaLink = syncState.DeltaLink;
+            var _ = Task.Run(async () =>
+            {
+                try
+                {
+                    using var bgScope = _serviceProvider.CreateScope();
+                    var bgGraphMailService = bgScope.ServiceProvider.GetRequiredService<GraphMailService>();
+
+                    var bgAccumulated = new List<Message>();
+                    var (bgDeltaLink, bgDeletedIds) = await bgGraphMailService.GetMessagesDeltaPagedAsync(
+                        folder.Id, capturedDeltaLink, isInitialSync: true,
+                        onPageReady: async pageMessages =>
+                        {
+                            using var pageScope = _serviceProvider.CreateScope();
+                            var bgDb = pageScope.ServiceProvider.GetRequiredService<mAIxDbContext>();
+                            var pageSaved = await SaveEmailsAsync(bgDb, pageMessages.ToList(), accountEmail, folder.Id, CancellationToken.None);
+                            bgAccumulated.AddRange(pageMessages);
+                            if (!firstPageCompleted)
+                            {
+                                firstPageCompleted = true;
+                                firstPageSaved.AddRange(pageSaved);
+                                tcs.TrySetResult(true);
+                            }
+                        }, CancellationToken.None);
+
+                    // deltaLink + LastSyncedAt 저장
+                    var finalDb = bgScope.ServiceProvider.GetRequiredService<mAIxDbContext>();
+                    var finalSyncState = await finalDb.SyncStates
+                        .FirstOrDefaultAsync(s => s.AccountEmail == accountEmail && s.FolderId == folder.Id, CancellationToken.None);
+                    if (finalSyncState != null)
+                    {
+                        finalSyncState.DeltaLink = bgDeltaLink;
+                        finalSyncState.LastSyncedAt = DateTime.UtcNow;
+                        await finalDb.SaveChangesAsync(CancellationToken.None);
+                    }
+
+                    _logger.Information("폴더 {FolderId} 백그라운드 동기화 완료. 총 {Count}건", folder.Id, bgAccumulated.Count);
+                }
+                catch (Exception ex)
+                {
+                    _logger.Error(ex, "폴더 {FolderId} 백그라운드 동기화 실패", folder.Id);
+                    tcs.TrySetResult(false);
+                }
+                finally
+                {
+                    _inboxBackgroundSyncInProgress[folder.Id] = false;
+                }
+            });
+
+            // 첫 페이지 완료까지 대기 후 즉시 반환
+            await tcs.Task;
+            savedEmails.AddRange(firstPageSaved);
+            changedMessages = new List<Message>();
+            deletedIds = new List<string>();
         }
         else
         {
