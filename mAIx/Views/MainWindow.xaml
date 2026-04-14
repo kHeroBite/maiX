@@ -2170,6 +2170,7 @@
                                                        Text="{Binding PreviewOrSummary}"
                                                        Foreground="{DynamicResource TextFillColorTertiaryBrush}"
                                                        FontSize="11"
+                                                       MaxHeight="18"
                                                        TextTrimming="CharacterEllipsis"
                                                        Visibility="{Binding PreviewOrSummary, Converter={StaticResource NullToVisibilityConverter}}"/>
 

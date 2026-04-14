@@ -93,9 +93,9 @@
 
                             <!-- 미리보기 텍스트 -->
                             <TextBlock Grid.Row="2" Text="{Binding PreviewText}" FontSize="11"
-                                       Margin="20,2,0,0" MaxHeight="32"
+                                       Margin="20,2,0,0" MaxHeight="18"
                                        Foreground="{DynamicResource TextFillColorTertiaryBrush}"
-                                       TextTrimming="CharacterEllipsis" TextWrapping="Wrap"
+                                       TextTrimming="CharacterEllipsis"
                                        Visibility="{Binding PreviewText, Converter={StaticResource NullToVisibilityConverter}}"/>
                         </Grid>
                     </DataTemplate>
