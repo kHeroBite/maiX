@@ -288,7 +288,7 @@ namespace mAIx.Services.Graph
         /// <param name="deltaLink">이전 동기화의 deltaLink (null이면 초기 동기화)</param>
         /// <returns>변경된 메일 목록, 새 deltaLink, 삭제된 메일 ID 목록</returns>
         public async Task<(IEnumerable<Message> Messages, string? DeltaLink, IEnumerable<string> DeletedIds)>
-            GetMessagesDeltaAsync(string folderId, string? deltaLink = null)
+            GetMessagesDeltaAsync(string folderId, string? deltaLink = null, bool isInitialSync = false)
         {
             var client = _authService.GetGraphClient();
             var messages = new List<Message>();
@@ -309,12 +309,15 @@ namespace mAIx.Services.Graph
 
                 if (string.IsNullOrEmpty(deltaLink))
                 {
-                    // 초기 동기화: 최근 50개 메일부터 시작 (429 재시도 포함)
+                    var top = isInitialSync ? 10 : 50;
+                    _logger.Debug("GetMessagesDeltaAsync folderId={FolderId} hasDeltaLink={HasDelta} isInitialSync={IsInitial} top={Top}",
+                        folderId, false, isInitialSync, top);
+                    // 초기 동기화: isInitialSync=true 시 $top=10, 증분 동기화: $top=50 (429 재시도 포함)
                     response = await ExecuteWithRetryAsync(() =>
                         client.Me.MailFolders[folderId].Messages.Delta.GetAsDeltaGetResponseAsync(config =>
                         {
                             config.QueryParameters.Select = selectFields;
-                            config.QueryParameters.Top = 50;
+                            config.QueryParameters.Top = top;
                         }), _logger);
                 }
                 else

@@ -744,6 +744,16 @@
 - **심각도**: 낮음
 - **Level**: 1-code (코드에서 직접 수정 완료)
 
+## L-364 (2026-04-14) — GraphMailService/BackgroundSyncService Serilog 기존 사용 중 (NLog 미준수)
+
+- **증상**: Phase 1 lazy sync 구현 시, 수정 대상인 GraphMailService.cs + BackgroundSyncService.cs 모두 `using Serilog; Log.ForContext<T>()` 패턴 사용 중 확인
+- **배경**: L-296/L-300에서 NLog 표준 로거 사용이 규칙화되었으나, 이 두 파일은 규칙 제정 이전부터 Serilog를 사용 중이었고 변환 작업이 수행되지 않은 채 방치됨
+- **결정**: Phase 1 수정 범위(파일 2개 제한)를 초과하므로 즉시 수정 불가. 기존 패턴(`_logger.Debug/Information`) 유지하고 별도 NLog 마이그레이션 작업으로 분리
+- **조치**: 이번 사이클에서는 기존 Serilog 패턴 유지. NLog 미전환 파일: `GraphMailService.cs`, `BackgroundSyncService.cs`
+- **후속 필요**: 두 파일의 NLog 마이그레이션 작업 별도 수행 필요 (`_logger` → `_log = LogManager.GetCurrentClassLogger()`, `using Serilog` → `using NLog`)
+- **심각도**: 낮음 (기능 정상, 로그 파일 분산 이슈만)
+- **Level**: 1 (참고)
+
 ## 반영 추적 테이블
 
 | 교훈 ID | 교훈 요약 | 반영 대상 | 반영 위치 | 반영일 | 검증 |
@@ -753,3 +763,4 @@
 | L-305 | kplan 요구사항 임의 변경 | skill | ko/SKILL.md kplan_결과_검증 | 2026-04-10 | ✅ |
 | L-362 | kdev 완료 후 pane 잔류 문제 | skill | ko_pipeline/SKILL.md, kstatus/SKILL.md | 2026-04-11 | ✅ |
 | L-363 | Serilog 잔류 패턴 | code | TeamsViewModel.cs, MainWindow.Teams.cs | 2026-04-11 | ✅ |
+| L-364 | GraphMailService/BackgroundSyncService Serilog 기존 사용 — NLog 마이그레이션 미완 | docs | LESSONS.md | 2026-04-14 | ✅ |

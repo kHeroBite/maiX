@@ -471,6 +471,7 @@ Graph_Services:
   - 파일명: GraphMailService.cs
     역할: 이메일 CRUD 작업
     변경_2026-04-02: GetMessageAsync Select에 bccRecipients 추가(R1 CC/BCC 버그수정), DownloadAttachmentAsync(messageId, attachmentId) 추가(R2 첨부파일 다운로드), GetAllMessageIdsAsync() 추가(R3 Reconciliation용 ID 목록 조회)
+    변경_2026-04-14: GetMessagesDeltaAsync에 isInitialSync 파라미터 추가 — isInitialSync=true 시 $top=10, false 시 $top=50 분기 (Inbox TTFB 최적화)
 
   - 파일명: GraphTeamsService.cs
     역할: Teams 채팅/채널 조회
@@ -627,6 +628,7 @@ Other_Services:
     변경_2026-03-29(Phase3): 3개 루프 추가 — 규칙 엔진(120초), 팔로업 알림(3600초), 회의 전 브리핑(300초)
     변경_2026-04-02: ReconcileDeletedEmailsAsync() 추가 — Graph API GetAllMessageIdsAsync로 실서버 ID 조회, DB 비교 후 삭제된 메일 DB에서 제거 (영업폴더 잔류 메일 정리)
     변경_2026-04-05: EmailsSavedToFolder(string folderId, IReadOnlyList<Email>) 이벤트 추가 — MailFolderCacheService 증분 갱신용; SaveEmailsAsync 말미에서 invoke
+    변경_2026-04-14: Inbox 우선 2단계 정렬 (Inbox 1순위 → 기타 우선폴더 2순위); IsInboxFolder 정적 헬퍼 + InboxFolderNames 배열 추가; FetchNewEmailsAsync에 isInitialSync 파라미터 추가 → GetMessagesDeltaAsync 전달
 
   - 파일명: PromptService.cs
     경로: Services/Storage/
@@ -856,6 +858,7 @@ curl -s http://localhost:5858/api/status
 | 2026-04-09 | Phase 1~4 기능 확장 (성능최적화+아웃룩기능+Superhuman+혁신기능) | App.xaml.cs, MainViewModel.cs, MainWindow.xaml/cs + 신규 서비스 23개 | k5 파이프라인 |
 | 2026-04-10 | Planner 탭 UI 가상화 (ItemsControl→ListView) + kio bash_exec 버그 수정 | mAIx/Views/MainWindow.xaml, AI/MCP-Servers/fio-mcp-server/bash_exec.py, .claude/skills/ko/SKILL.md | L-303/304/305 교훈 반영 |
 | 2026-04-11 | Teams Phase 1~4 전체 구현 — 게시물/파일/설정/칸반/Wiki/일정 탭 완성 | mAIx/Controls/Teams/ChannelCalendarControl.xaml/.cs(신규), mAIx/Controls/Teams/ChannelPlannerControl.xaml/.cs(신규), mAIx/Controls/Teams/ChannelWikiControl.xaml/.cs(신규), mAIx/ViewModels/Teams/ChannelCalendarViewModel.cs(신규), mAIx/ViewModels/Teams/ChannelPlannerViewModel.cs(신규), mAIx/ViewModels/Teams/ChannelWikiViewModel.cs(신규), mAIx/ViewModels/TeamsViewModel.cs, mAIx/Views/MainWindow.Teams.cs | NLog 전환(L-363) 포함 |
+| 2026-04-14 | 이메일 동기화 Inbox 우선 정렬 + Inbox 첫 로드 $top=10 분기 (Phase 1, o5) | mAIx/Services/Graph/GraphMailService.cs, mAIx/Services/Sync/BackgroundSyncService.cs | GetMessagesDeltaAsync isInitialSync 파라미터; Inbox 2단계 우선 정렬; IsInboxFolder 헬퍼; Phase 2(점진 UI/Upsert) 보류 |
 
 ---
 

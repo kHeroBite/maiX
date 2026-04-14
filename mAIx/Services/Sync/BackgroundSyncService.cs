@@ -1196,14 +1196,18 @@ public class BackgroundSyncService : BackgroundService
             return;
         }
 
-        // 우선순위 폴더: 받은 편지함, 보낸 편지함을 먼저 동기화
+        // 우선순위 폴더: 받은 편지함 1순위, 기타 우선 폴더 2순위
+        var inboxNames = new[] { "받은 편지함", "Inbox" };
         var priorityFolderNames = new[] { "받은 편지함", "Inbox", "보낸 편지함", "Sent Items" };
         var orderedFolders = folders
-            .OrderByDescending(f => priorityFolderNames.Contains(f.DisplayName, StringComparer.OrdinalIgnoreCase))
+            .OrderByDescending(f => inboxNames.Contains(f.DisplayName, StringComparer.OrdinalIgnoreCase))     // Inbox 1순위
+            .ThenByDescending(f => priorityFolderNames.Contains(f.DisplayName, StringComparer.OrdinalIgnoreCase))  // 기타 우선 폴더 2순위
             .ThenBy(f => f.DisplayName)
             .ToList();
 
-        _logger.Information("전체 폴더 동기화: {Count}개 폴더 (받은 편지함 우선)", orderedFolders.Count);
+        _logger.Information("전체 폴더 동기화: {Count}개 폴더, 순서: {Order}",
+            orderedFolders.Count,
+            string.Join(" > ", orderedFolders.Take(5).Select(f => f.DisplayName)));
 
         int totalChanged = 0;
         int totalDeleted = 0;
@@ -1320,9 +1324,14 @@ public class BackgroundSyncService : BackgroundService
         }
 
         // Delta Query로 변경된 메일 조회
+        // Inbox 첫 동기화 판정: Inbox이고 DeltaLink/LastSyncedAt 모두 없는 경우
+        var isInitialSync = IsInboxFolder(folder)
+            && string.IsNullOrEmpty(syncState.DeltaLink)
+            && !syncState.LastSyncedAt.HasValue;
+
         var previousDeltaLink = syncState.DeltaLink;
         var (changedMessages, deletedIds) = await FetchNewEmailsAsync(
-            graphMailService, syncState, folder.Id, ct);
+            graphMailService, syncState, folder.Id, ct, isInitialSync);
 
         // DeltaLink 만료로 전체 재동기화가 발생한 경우 Reconciliation 실행
         // (이전에 deltaLink가 있었는데 FetchNewEmailsAsync에서 리셋된 경우)
@@ -1362,7 +1371,8 @@ public class BackgroundSyncService : BackgroundService
         GraphMailService mailService,
         SyncState syncState,
         string folderId,
-        CancellationToken ct)
+        CancellationToken ct,
+        bool isInitialSync = false)
     {
         try
         {
@@ -1378,10 +1388,16 @@ public class BackgroundSyncService : BackgroundService
                 syncState.DeltaLink = null;  // DB에서도 리셋
             }
 
+            if (isInitialSync)
+            {
+                _logger.Information("FetchNewEmailsAsync Inbox 첫 동기화 감지 → $top=10 적용 folder={FolderId}", folderId);
+            }
+
             // Delta Query로 변경분만 조회
             var (messages, newDeltaLink, deletedIds) = await mailService.GetMessagesDeltaAsync(
                 folderId,
-                deltaLinkToUse);
+                deltaLinkToUse,
+                isInitialSync);
 
             // 새 deltaLink 저장
             if (!string.IsNullOrEmpty(newDeltaLink))
@@ -3094,6 +3110,17 @@ public class BackgroundSyncService : BackgroundService
             return true;
 
         return false;
+    }
+
+    private static readonly string[] InboxFolderNames = { "받은 편지함", "Inbox" };
+
+    /// <summary>
+    /// 폴더가 받은 편지함(Inbox)인지 확인
+    /// </summary>
+    private static bool IsInboxFolder(Models.Folder folder)
+    {
+        return !string.IsNullOrEmpty(folder?.DisplayName)
+            && InboxFolderNames.Contains(folder.DisplayName, StringComparer.OrdinalIgnoreCase);
     }
 }
 

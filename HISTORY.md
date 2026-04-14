@@ -638,6 +638,40 @@
 
 ---
 
+## 2026-04-14: 이메일 동기화 Inbox 우선 + 첫 로드 $top=10 분기 (Phase 1)
+
+**분류**: Massive Path (o5, oplan_debate)
+**수정 파일**: 2개 + LESSONS.md
+
+### 변경 내역
+
+#### 1. GraphMailService.cs — isInitialSync 파라미터 추가
+- `GetMessagesDeltaAsync(folderId, deltaLink, isInitialSync=false)` 시그니처 변경
+- `isInitialSync=true` 시 `$top=10`, `false` 시 `$top=50` 분기 적용
+- Debug 로그 추가: `folderId`, `isInitialSync`, `top` 값 기록
+
+#### 2. BackgroundSyncService.cs — Inbox 우선 정렬 + isInitialSync 전달
+- **2단계 정렬**: `OrderByDescending(Inbox)` → `ThenByDescending(우선폴더)` → `ThenBy(이름순)`
+  - 기존: 받은편지함+보낸편지함 동일 우선순위 → 변경: 받은편지함 단독 1순위
+- **IsInboxFolder 헬퍼**: `InboxFolderNames = {"받은 편지함", "Inbox"}` 정적 배열 + 메서드
+- **isInitialSync 판정**: Inbox 폴더 && DeltaLink 없음 && LastSyncedAt 없음 → 첫 동기화
+- **FetchNewEmailsAsync**: `isInitialSync` 파라미터 추가 → `GetMessagesDeltaAsync`로 전달
+- 로그 강화: 폴더 순서 상위 5개 출력, Inbox 첫 동기화 감지 로그
+
+#### 3. LESSONS.md — L-364 추가
+- GraphMailService/BackgroundSyncService Serilog 기존 사용 중 (NLog 미준수)
+- Phase 1 수정 범위 제한으로 Serilog 패턴 유지, 별도 마이그레이션 작업 필요
+
+### Phase 2 보류 사항
+- 점진 UI 피드백 (IProgress), Upsert 최적화, EnableCollectionSynchronization
+- 조건: TTFB 측정 결과 + 사용자 재승인 후 착수
+
+### 테스트 결과 (otest AC-1~6 전부 PASS)
+- 빌드: 성공 (오류 0개, 경고 증가 없음) ✅
+- 변경 금지 파일 미수정 ✅
+
+---
+
 ## 2026-04-14: BackgroundSyncService 동기화 Lazy 초기화 적용
 
 ### 작업 내용
