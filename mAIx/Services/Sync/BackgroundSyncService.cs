@@ -256,41 +256,7 @@ public class BackgroundSyncService : BackgroundService
         _logger.Information("백그라운드 동기화 서비스 시작 - 즐겨찾기: {Favorite}초, 전체: {Full}초, 캘린더: {Calendar}초, 채팅: {Chat}초",
             _favoriteSyncIntervalSeconds, _fullSyncIntervalSeconds, _calendarSyncIntervalSeconds, _chatSyncIntervalSeconds);
 
-        try
-        {
-            // 시작 시 폴더 먼저 동기화
-            Log4.Debug("[BackgroundSyncService] 초기 폴더 동기화 시작");
-            await SyncFoldersAsync(stoppingToken);
-            Log4.Debug("[BackgroundSyncService] 초기 폴더 동기화 완료");
-
-            // 시작 시 즉시 1회 동기화
-            Log4.Debug("[BackgroundSyncService] 초기 메일 동기화 시작");
-            await SyncAllAccountsAsync(stoppingToken);
-            Log4.Debug("[BackgroundSyncService] 초기 메일 동기화 완료");
-
-            // 시작 시 캘린더 동기화
-            Log4.Debug("[BackgroundSyncService] 초기 캘린더 동기화 시작");
-            await SyncCalendarAsync(stoppingToken);
-            Log4.Debug("[BackgroundSyncService] 초기 캘린더 동기화 완료");
-
-            // 시작 시 채팅 동기화
-            Log4.Debug("[BackgroundSyncService] 초기 채팅 동기화 시작");
-            await SyncChatsAsync(stoppingToken);
-            Log4.Debug("[BackgroundSyncService] 초기 채팅 동기화 완료");
-
-            // 초기 동기화 시간 기록 (주기적 동기화 루프에서 중복 실행 방지)
-            _lastFullSyncTime = DateTime.UtcNow;
-            _lastFavoriteSyncTime = DateTime.UtcNow;
-            _lastCalendarSyncTime = DateTime.UtcNow;
-            _lastChatSyncTime = DateTime.UtcNow;
-        }
-        catch (Exception ex)
-        {
-            Log4.Error($"[BackgroundSyncService] 초기 동기화 실패: {ex.Message}");
-            _logger.Error(ex, "초기 동기화 실패");
-        }
-
-        // 10개의 독립적인 동기화/분석/예약발송/스누즈/규칙/팔로업/미팅브리핑 루프 실행
+        // 주기적 루프 즉시 시작 (초기 동기화와 무관하게)
         var favoriteTask = RunFavoriteSyncLoopAsync(stoppingToken);
         var fullTask = RunFullSyncLoopAsync(stoppingToken);
         var calendarTask = RunCalendarSyncLoopAsync(stoppingToken);
@@ -302,6 +268,54 @@ public class BackgroundSyncService : BackgroundService
         var followUpTask = RunFollowUpCheckLoopAsync(stoppingToken);
         var meetingBriefingTask = RunMeetingBriefingLoopAsync(stoppingToken);
         var historicalSyncTask = RunHistoricalSyncLoopAsync(stoppingToken);
+
+        // 초기 동기화 시간을 현재 시각으로 설정 → 루프가 "아직 주기 미경과"로 인식해 즉시 재실행 방지
+        // lazy 초기 동기화 완료 후 실제 시간으로 업데이트되면 그 후부터 정상 주기 적용
+        _lastFavoriteSyncTime = DateTime.UtcNow;
+        _lastFullSyncTime = DateTime.UtcNow;
+        _lastCalendarSyncTime = DateTime.UtcNow;
+        _lastChatSyncTime = DateTime.UtcNow;
+
+        // Lazy 초기 동기화 (백그라운드, 비블로킹)
+        // - 폴더 동기화: App.xaml.cs에서 이미 수행하므로 생략
+        // - 메일: 2초 후 (폴더가 DB에 이미 있음)
+        // - 캘린더: 메일 완료 후 6초 후 (~8초)
+        // - 채팅: 캘린더 완료 후 7초 후 (~15초)
+        _ = Task.Run(async () =>
+        {
+            try
+            {
+                // 메일 초기 동기화 (2초 지연)
+                await Task.Delay(TimeSpan.FromSeconds(2), stoppingToken);
+                Log4.Info("[BackgroundSyncService] 초기 메일 동기화 시작 (lazy)");
+                await SyncAllAccountsAsync(stoppingToken);
+                _lastFullSyncTime = DateTime.UtcNow;
+                _lastFavoriteSyncTime = DateTime.UtcNow;
+                Log4.Info("[BackgroundSyncService] 초기 메일 동기화 완료 (lazy)");
+
+                // 캘린더 초기 동기화 (메일 완료 후 추가 6초 지연)
+                await Task.Delay(TimeSpan.FromSeconds(6), stoppingToken);
+                Log4.Info("[BackgroundSyncService] 초기 캘린더 동기화 시작 (lazy)");
+                await SyncCalendarAsync(stoppingToken);
+                _lastCalendarSyncTime = DateTime.UtcNow;
+                Log4.Info("[BackgroundSyncService] 초기 캘린더 동기화 완료 (lazy)");
+
+                // 채팅 초기 동기화 (캘린더 완료 후 추가 7초 지연)
+                await Task.Delay(TimeSpan.FromSeconds(7), stoppingToken);
+                Log4.Info("[BackgroundSyncService] 초기 채팅 동기화 시작 (lazy)");
+                await SyncChatsAsync(stoppingToken);
+                _lastChatSyncTime = DateTime.UtcNow;
+                Log4.Info("[BackgroundSyncService] 초기 채팅 동기화 완료 (lazy)");
+            }
+            catch (OperationCanceledException)
+            {
+                // 앱 종료 시 정상 취소
+            }
+            catch (Exception ex)
+            {
+                Log4.Error($"[BackgroundSyncService] 초기 동기화 실패: {ex.Message}");
+            }
+        }, stoppingToken);
 
         // 모든 Task가 완료될 때까지 대기
         await Task.WhenAll(favoriteTask, fullTask, calendarTask, chatTask, analysisBatchTask, scheduledSendTask, snoozeCheckTask, ruleEngineTask, followUpTask, meetingBriefingTask, historicalSyncTask);

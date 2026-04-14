@@ -35,7 +35,11 @@ namespace mAIx.Services.Graph
             "Mail.Send",
             "Mail.ReadWrite",
             "Files.Read.All",
-            "Sites.Read.All"
+            "Sites.Read.All",
+            // Teams 채널 조회 (로그인 시 동의 필요)
+            "Channel.ReadBasic.All",
+            "Team.ReadBasic.All",
+            "Group.Read.All"
         };
 
         /// <summary>

@@ -213,6 +213,18 @@ ViewModels:
     경로: MaiX/ViewModels/
     역할: Teams 채팅 ViewModel
 
+  - 파일명: ChannelCalendarViewModel.cs (신규 — 2026-04-11 Teams Phase 4)
+    경로: MaiX/ViewModels/Teams/
+    역할: 캘린더 VM (CalendarEvent, CalendarDay 모델 포함)
+
+  - 파일명: ChannelPlannerViewModel.cs (신규 — 2026-04-11 Teams Phase 3)
+    경로: MaiX/ViewModels/Teams/
+    역할: Planner VM (PlannerTask, PlannerBucket 모델 포함)
+
+  - 파일명: ChannelWikiViewModel.cs (신규 — 2026-04-11 Teams Phase 4)
+    경로: MaiX/ViewModels/Teams/
+    역할: Wiki VM (WikiSection 모델 포함)
+
   - 파일명: CalendarViewModel.cs
     경로: MaiX/ViewModels/
     역할: 캘린더 ViewModel
@@ -220,6 +232,26 @@ ViewModels:
   - 파일명: NewsletterViewModel.cs (신규 — 2026-04-09 Phase3)
     경로: MaiX/ViewModels/
     역할: 뉴스레터 피드 뷰모델
+```
+
+### 3.5. Controls (커스텀 컨트롤)
+
+```yaml
+Controls_Teams:
+  - 파일명: ChannelCalendarControl.xaml / ChannelCalendarControl.xaml.cs (신규 — 2026-04-11 Teams Phase 4)
+    경로: MaiX/Controls/Teams/
+    역할: 일정 탭 (월간 캘린더 뷰)
+    의존성: ChannelCalendarViewModel
+
+  - 파일명: ChannelPlannerControl.xaml / ChannelPlannerControl.xaml.cs (신규 — 2026-04-11 Teams Phase 3)
+    경로: MaiX/Controls/Teams/
+    역할: 작업 탭 (칸반 보드)
+    의존성: ChannelPlannerViewModel
+
+  - 파일명: ChannelWikiControl.xaml / ChannelWikiControl.xaml.cs (신규 — 2026-04-11 Teams Phase 4)
+    경로: MaiX/Controls/Teams/
+    역할: Wiki 탭 (섹션 편집기)
+    의존성: ChannelWikiViewModel
 ```
 
 ### 4. Models (데이터 모델)
@@ -588,7 +620,7 @@ Other_Services:
   - 파일명: BackgroundSyncService.cs
     경로: Services/Sync/
     역할: 백그라운드 메일 동기화 (5개 독립 루프: 즐겨찾기/전체/캘린더/채팅/AI분석)
-    참고: Interlocked.CompareExchange 레이스컨디션 방지 + MailSyncCompleted 500ms Debounce + ODataError 410 처리
+    참고: Interlocked.CompareExchange 레이스컨디션 방지 + MailSyncCompleted 500ms Debounce + ODataError 410 처리 + Lazy 초기화(Task.Run 비블로킹, 메일2s/캘린더8s/채팅15s 지연)
     변경_2026-03-28: 즐겨찾기 주기 30→10초; AI 분석 배치 루프(10분, 최대20건) 신규; ToastNotificationService DI 주입
     변경_2026-03-29: AI 배치 루프에 PriorityScore 기반 AiCategory 자동 분류 매핑 통합 (긴급/업무/일반)
     변경_2026-03-29(Phase2): 스누즈 해제 루프 추가 — 매 분 SnoozedUntil <= UtcNow 조건으로 자동 해제 처리
@@ -823,6 +855,7 @@ curl -s http://localhost:5858/api/status
 | 2026-04-05 | 메일함 폴더별 캐시 시스템 구현 — 전환 <100ms + 이벤트 증분 sync | mAIx/Services/Cache/MailFolderCacheService.cs(신규), mAIx/Services/Cache/CachedFolderState.cs(신규), mAIx/Services/Sync/BackgroundSyncService.cs, mAIx/App.xaml.cs, mAIx/ViewModels/MainViewModel.cs, mAIx/Views/MainWindow.xaml.cs | LRU 캐시(maxFolders=10), EmailsSavedToFolder 이벤트 증분 갱신, 스크롤 오프셋 복원 |
 | 2026-04-09 | Phase 1~4 기능 확장 (성능최적화+아웃룩기능+Superhuman+혁신기능) | App.xaml.cs, MainViewModel.cs, MainWindow.xaml/cs + 신규 서비스 23개 | k5 파이프라인 |
 | 2026-04-10 | Planner 탭 UI 가상화 (ItemsControl→ListView) + kio bash_exec 버그 수정 | mAIx/Views/MainWindow.xaml, AI/MCP-Servers/fio-mcp-server/bash_exec.py, .claude/skills/ko/SKILL.md | L-303/304/305 교훈 반영 |
+| 2026-04-11 | Teams Phase 1~4 전체 구현 — 게시물/파일/설정/칸반/Wiki/일정 탭 완성 | mAIx/Controls/Teams/ChannelCalendarControl.xaml/.cs(신규), mAIx/Controls/Teams/ChannelPlannerControl.xaml/.cs(신규), mAIx/Controls/Teams/ChannelWikiControl.xaml/.cs(신규), mAIx/ViewModels/Teams/ChannelCalendarViewModel.cs(신규), mAIx/ViewModels/Teams/ChannelPlannerViewModel.cs(신규), mAIx/ViewModels/Teams/ChannelWikiViewModel.cs(신규), mAIx/ViewModels/TeamsViewModel.cs, mAIx/Views/MainWindow.Teams.cs | NLog 전환(L-363) 포함 |
 
 ---
 

@@ -615,15 +615,38 @@ public class GraphTeamsService
 
         try
         {
-            var client = _authService.GetGraphClient();
-            var response = await client.Teams[teamId].Channels.GetAsync();
+            Serilog.Log.Information("[GraphTeamsService] GetChannelsAsync 시작: TeamId={TeamId}", teamId);
+            Utils.Log4.Info($"[GraphTeamsService] GetChannelsAsync 시작: TeamId={teamId}");
 
-            _logger.Debug("팀 {TeamId} 채널 {Count}개 조회", teamId, response?.Value?.Count ?? 0);
-            return response?.Value ?? new List<Channel>();
+            var client = _authService.GetGraphClient();
+
+            // 1차 시도: Teams API (Channel.ReadBasic.All 필요)
+            try
+            {
+                var response = await client.Teams[teamId].Channels.GetAsync();
+                var count = response?.Value?.Count ?? 0;
+                Serilog.Log.Information("[GraphTeamsService] 채널 조회 완료 (Teams API): TeamId={TeamId}, Count={Count}", teamId, count);
+                Utils.Log4.Info($"[GraphTeamsService] 채널 조회 완료 (Teams API): TeamId={teamId}, Count={count}");
+                return response?.Value ?? new List<Channel>();
+            }
+            catch (Microsoft.Graph.Models.ODataErrors.ODataError odataEx) when (odataEx.Message?.Contains("Missing scope") == true || odataEx.Error?.Code == "Forbidden" || odataEx.Error?.Code == "Authorization_RequestDenied")
+            {
+                Serilog.Log.Warning("[GraphTeamsService] Teams API 권한 부족, Groups API로 재시도: TeamId={TeamId}", teamId);
+                Utils.Log4.Info($"[GraphTeamsService] Teams API 권한 부족, Groups API로 재시도: TeamId={teamId}");
+            }
+
+            // 2차 시도: Groups API (Group.Read.All 권한으로 접근)
+            var groupResponse = await client.Groups[teamId].Team.Channels.GetAsync();
+            var groupCount = groupResponse?.Value?.Count ?? 0;
+            Serilog.Log.Information("[GraphTeamsService] 채널 조회 완료 (Groups API): TeamId={TeamId}, Count={Count}", teamId, groupCount);
+            Utils.Log4.Info($"[GraphTeamsService] 채널 조회 완료 (Groups API): TeamId={teamId}, Count={groupCount}");
+            return groupResponse?.Value ?? new List<Channel>();
         }
         catch (Exception ex)
         {
-            _logger.Error(ex, "채널 목록 조회 실패: TeamId={TeamId}", teamId);
+            Serilog.Log.Error(ex, "[GraphTeamsService] 채널 목록 조회 실패: TeamId={TeamId}, Error={Error}", teamId, ex.Message);
+            Utils.Log4.Error($"[GraphTeamsService] 채널 목록 조회 실패: TeamId={teamId}, Error={ex.Message}");
+            Utils.Log4.Error($"[GraphTeamsService] StackTrace: {ex.StackTrace}");
             return new List<Channel>();
         }
     }

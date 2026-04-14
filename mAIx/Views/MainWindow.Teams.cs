@@ -8,7 +8,6 @@ using mAIx.Dialogs;
 using mAIx.Services.Graph;
 using mAIx.ViewModels;
 using NLog;
-using Serilog;
 
 namespace mAIx.Views
 {
@@ -171,11 +170,11 @@ namespace mAIx.Views
                 try
                 {
                     await _teamsViewModel.ShareFileCommand.ExecuteAsync(file);
-                    Log.Information("[Teams] 파일 드롭 공유: {File}", file);
+                    _teamsLog.Info("[Teams] 파일 드롭 공유: {0}", file);
                 }
                 catch (Exception ex)
                 {
-                    Log.Error(ex, "[Teams] 파일 드롭 공유 실패: {File}", file);
+                    _teamsLog.Error(ex, "[Teams] 파일 드롭 공유 실패: {0}", file);
                 }
             }
         }
@@ -227,7 +226,7 @@ namespace mAIx.Views
                     await _teamsViewModel.SendMessageCommand.ExecuteAsync(null);
                 }
 
-                Log.Information("[Teams] 미팅 생성 완료: {Subject}", subject);
+                _teamsLog.Info("[Teams] 미팅 생성 완료: {0}", subject);
             }
         }
 

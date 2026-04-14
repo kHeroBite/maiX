@@ -724,6 +724,26 @@
 
 ---
 
+## L-362 (2026-04-11) — kdev 완료 후 pane 잔류 문제
+
+- **증상**: kdev 에이전트가 완료 보고 후에도 tmux pane이 살아있는 채로 방치됨
+- **근본원인**: shutdown_with_verify 절차에서 pane 소멸 확인 단계 누락
+- **조치**:
+  - ko_pipeline/SKILL.md: 2.7단계 pane 소멸 확인 + kill escalation 추가
+  - kstatus/SKILL.md: --force 후 pane 잔류 재확인 절차 추가
+  - team-cleanup.sh: shutdown_sent=true 에이전트 L-328 예외 허용
+- **재발방지**: 메인 오케스트레이터가 shutdown 후 반드시 pane 소멸을 확인하고, 잔류 시 kill escalation 실행
+- **심각도**: 중간
+
+## L-363 (2026-04-11) — Serilog 잔류 패턴
+
+- **증상**: TeamsViewModel.cs, MainWindow.Teams.cs에 Serilog 코드 잔류
+- **근본원인**: 초기 구현 시 NLog 전환 규칙 미적용
+- **조치**: ktest-1이 감지 후 NLog으로 전환 완료
+- **재발방지**: 모든 레이어(Services/Controls/ViewModels) NLog 전용 원칙 준수. Serilog 사용 금지(MEMORY.md 기록됨)
+- **심각도**: 낮음
+- **Level**: 1-code (코드에서 직접 수정 완료)
+
 ## 반영 추적 테이블
 
 | 교훈 ID | 교훈 요약 | 반영 대상 | 반영 위치 | 반영일 | 검증 |
@@ -731,3 +751,5 @@
 | L-303 | kio run_in_background=true 무한 블로킹 | skill | ko/SKILL.md kio_bash_exec_금지규칙 | 2026-04-10 | ✅ |
 | L-304 | tmux kill-pane Claude Code 세션 종료 | skill | ko/SKILL.md hook_차단_시_대안 | 2026-04-10 | ✅ |
 | L-305 | kplan 요구사항 임의 변경 | skill | ko/SKILL.md kplan_결과_검증 | 2026-04-10 | ✅ |
+| L-362 | kdev 완료 후 pane 잔류 문제 | skill | ko_pipeline/SKILL.md, kstatus/SKILL.md | 2026-04-11 | ✅ |
+| L-363 | Serilog 잔류 패턴 | code | TeamsViewModel.cs, MainWindow.Teams.cs | 2026-04-11 | ✅ |

@@ -635,3 +635,23 @@
 ### 테스트 결과 (ktest k3)
 - 빌드: 성공 ✅
 - UI 가상화 적용 확인 ✅
+
+---
+
+## 2026-04-14: BackgroundSyncService 동기화 Lazy 초기화 적용
+
+### 작업 내용
+- **ExecuteAsync에서 SyncFoldersAsync 호출 제거**: App.xaml.cs에서 이미 호출되는 중복 제거
+- **11개 주기적 루프 즉시 시작**: 앱 기동과 동시에 루프 진입
+- **Task.Run 비블로킹 Lazy 초기화**: 메일(2초), 캘린더(~8초), 채팅(~15초) 순차 지연 초기화로 UI 블로킹 방지
+
+### 주요 변경 파일
+- `mAIx/Services/Sync/BackgroundSyncService.cs`: ExecuteAsync Lazy 초기화 패턴 적용
+
+### 테스트 결과 (otest Fast Path o3)
+- 빌드: 성공 (오류 0개) ✅
+- 앱 정상 기동 (헬스체크 healthy) ✅
+- Lazy 초기화 로그 확인 ✅
+  - "초기 메일 동기화 시작 (lazy)" → "완료 (lazy)"
+  - "초기 캘린더 동기화 시작 (lazy)" → "완료 (lazy)"
+  - "초기 채팅 동기화 시작 (lazy)" → "완료 (lazy)"

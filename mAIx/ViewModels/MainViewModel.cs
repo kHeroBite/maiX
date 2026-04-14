@@ -1294,6 +1294,26 @@ public partial class MainViewModel : ViewModelBase, IDisposable
     }
 
     /// <summary>
+    /// DB 로드 후 PreviewText 복원.
+    /// PreviewText는 [NotMapped]라 DB에 저장되지 않으므로 Body에서 재구성한다.
+    /// 동기화 타이밍과 무관하게 목록에 미리보기 텍스트만 표시되도록 보장.
+    /// </summary>
+    private static void RestorePreviewText(IEnumerable<Email> emails)
+    {
+        foreach (var email in emails)
+        {
+            if (!string.IsNullOrEmpty(email.PreviewText))
+                continue;
+            if (string.IsNullOrEmpty(email.Body))
+                continue;
+
+            var text = System.Text.RegularExpressions.Regex.Replace(email.Body, "<[^>]+>", " ");
+            text = System.Text.RegularExpressions.Regex.Replace(text, @"\s+", " ").Trim();
+            email.PreviewText = text.Length <= 100 ? text : text[..100];
+        }
+    }
+
+    /// <summary>
     /// 선택된 폴더의 이메일 목록 로드 (CancellationToken 지원 — Race Condition 방지)
     /// </summary>
     private async Task LoadEmailsAsync(CancellationToken cancellationToken)
@@ -1340,6 +1360,9 @@ public partial class MainViewModel : ViewModelBase, IDisposable
                     email.IsDraft = true;
                 }
             }
+
+            // PreviewText 복원: [NotMapped]라 DB에 저장 안 됨 → Body에서 재구성
+            RestorePreviewText(emails);
 
             Emails = emails;
             StatusMessage = HasMoreEmails
@@ -1393,6 +1416,9 @@ public partial class MainViewModel : ViewModelBase, IDisposable
                         email.IsDraft = true;
                     }
                 }
+
+                // PreviewText 복원: [NotMapped]라 DB에 저장 안 됨 → Body에서 재구성
+                RestorePreviewText(moreEmails);
 
                 var combined = new List<Email>(Emails);
                 combined.AddRange(moreEmails);
