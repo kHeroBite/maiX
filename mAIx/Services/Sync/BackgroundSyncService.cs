@@ -1044,7 +1044,7 @@ public class BackgroundSyncService : BackgroundService
                 try
                 {
                     var readStatusUpdated = await SyncReadStatusAsync(
-                        dbContext, graphMailService, folder.Id, ct);
+                        dbContext, graphMailService, folder.Id, ct, accountEmail);
                     if (readStatusUpdated > 0)
                     {
                         _logger.Information("읽음 상태 동기화: {Count}건 업데이트 (폴더: {FolderName})",
@@ -1209,9 +1209,9 @@ public class BackgroundSyncService : BackgroundService
             .ThenBy(f => f.DisplayName)
             .ToList();
 
-        _logger.Information("전체 폴더 동기화: {Count}개 폴더, 순서: {Order}",
+        _logger.Information("★전체 폴더 동기화: {Count}개 폴더, 순서: [{Order}]",
             orderedFolders.Count,
-            string.Join(" > ", orderedFolders.Take(5).Select(f => f.DisplayName)));
+            string.Join(", ", orderedFolders.Take(5).Select(f => $"'{f.DisplayName}'")));
 
         int totalChanged = 0;
         int totalDeleted = 0;
@@ -1243,7 +1243,7 @@ public class BackgroundSyncService : BackgroundService
                 try
                 {
                     var readStatusUpdated = await SyncReadStatusAsync(
-                        dbContext, graphMailService, folder.Id, ct);
+                        dbContext, graphMailService, folder.Id, ct, accountEmail);
                     if (readStatusUpdated > 0)
                     {
                         _logger.Information("읽음 상태 동기화: {Count}건 업데이트 (폴더: {FolderName})",
@@ -1799,9 +1799,7 @@ public class BackgroundSyncService : BackgroundService
                     Categories = message.Categories?.Count > 0
                         ? System.Text.Json.JsonSerializer.Serialize(message.Categories)
                         : null,
-                    ParentFolderId = !string.IsNullOrEmpty(message.ParentFolderId)
-                        ? message.ParentFolderId
-                        : folderId,  // 서버에서 받은 폴더 ID 사용, 없으면 현재 동기화 중인 폴더 ID
+                    ParentFolderId = folderId,  // 항상 동기화 중인 폴더 ID 사용 (message.ParentFolderId는 서버 형식이라 DB Folders 테이블 ID와 불일치)
                     AccountEmail = accountEmail,
                     AnalysisStatus = "pending",
                     PreviewText = !string.IsNullOrEmpty(message.BodyPreview)
@@ -1819,18 +1817,36 @@ public class BackgroundSyncService : BackgroundService
                 catch (Microsoft.EntityFrameworkCore.DbUpdateException uniqueEx)
                     when (uniqueEx.InnerException is Microsoft.Data.Sqlite.SqliteException sqlEx && sqlEx.SqliteErrorCode == 19)
                 {
-                    // UNIQUE 제약 위반 → 이미 존재하는 메일, EF context 클린 상태 유지
-                    _logger.Debug("UNIQUE 중복 감지 (저장 스킵): {Subject}", message.Subject);
-                    dbContext.Entry(email).State = Microsoft.EntityFrameworkCore.EntityState.Detached;
+                    dbContext.ChangeTracker.Clear();
+                    // 이미 존재 — IsRead 불일치 시 업데이트
+                    if (!string.IsNullOrEmpty(email.EntryId))
+                    {
+                        var existing = await dbContext.Emails
+                            .FirstOrDefaultAsync(e => e.EntryId == email.EntryId, ct);
+                        if (existing != null && existing.IsRead != email.IsRead)
+                        {
+                            existing.IsRead = email.IsRead;
+                            await dbContext.SaveChangesAsync(ct);
+                            _logger.Debug("★UNIQUE 중복 — IsRead 업데이트: {Subject} IsRead={IsRead}", message.Subject, email.IsRead);
+                            Log4.Info($"[SaveEmails] ★UNIQUE 중복 — IsRead 업데이트: {message.Subject} IsRead={email.IsRead}");
+                        }
+                        else
+                        {
+                            _logger.Debug("★UNIQUE 중복 감지(저장 스킵): {Subject}", message.Subject);
+                            Log4.Info($"[SaveEmails] ★UNIQUE 중복 감지(저장 스킵): {message.Subject}");
+                        }
+                    }
                 }
             }
             catch (Exception ex)
             {
                 _logger.Error(ex, "메일 저장 실패: {Subject}", message.Subject);
+                Log4.Error($"[SaveEmails] ★저장 예외: {message.Subject} — {ex.GetType().Name}: {ex.Message}");
             }
         }
 
         _logger.Information("메일 저장 완료: {Count}건", savedEmails.Count);
+        Log4.Info($"[SaveEmails] ★저장 완료: {savedEmails.Count}건");
 
         if (savedEmails.Count > 0)
         {
@@ -1853,7 +1869,8 @@ public class BackgroundSyncService : BackgroundService
         mAIxDbContext dbContext,
         GraphMailService graphMailService,
         string folderId,
-        CancellationToken ct)
+        CancellationToken ct,
+        string accountEmail = "")
     {
         try
         {
@@ -1861,8 +1878,21 @@ public class BackgroundSyncService : BackgroundService
             // 서버 상태가 ground truth: 서버 미읽음 목록에 없으면 → 읽음으로 간주
             var serverUnreadIds = await graphMailService.GetUnreadMessageIdsAsync(folderId, ct);
 
-            _logger.Debug("읽음 상태 조회: 서버 미읽음 {ServerCount}건 (폴더: {FolderId})",
-                serverUnreadIds.Count, folderId.Substring(0, Math.Min(folderId.Length, 20)));
+            Log4.Info($"[SyncReadStatus] ★서버 미읽음 {serverUnreadIds.Count}건 (폴더: {folderId.Substring(0, Math.Min(folderId.Length, 20))})");
+
+            // 서버 미읽음 ID 중 첫 번째 것이 DB에 있는지 확인 (진단용)
+            if (serverUnreadIds.Count > 0)
+            {
+                var firstUnreadId = serverUnreadIds.First();
+                var dbEmail = await dbContext.Emails
+                    .Where(e => e.EntryId == firstUnreadId)
+                    .Select(e => new { e.Subject, e.IsRead, e.ParentFolderId })
+                    .FirstOrDefaultAsync(ct);
+                if (dbEmail != null)
+                    Log4.Info($"[SyncReadStatus] ★서버미읽음 메일 DB확인: Subject={dbEmail.Subject}, IsRead={dbEmail.IsRead}, FolderId={dbEmail.ParentFolderId?.Substring(0,20)}");
+                else
+                    Log4.Info($"[SyncReadStatus] ★서버미읽음 메일 DB에 없음 (EntryId={firstUnreadId.Substring(0,20)})");
+            }
 
             // DB에서 해당 폴더의 IsRead=false 메일 조회 (EntryId 기준)
             var dbUnreadEmails = await dbContext.Emails
@@ -1870,11 +1900,75 @@ public class BackgroundSyncService : BackgroundService
                 .Select(e => new { e.Id, e.EntryId, e.Subject })
                 .ToListAsync(ct);
 
-            _logger.Debug("읽음 상태 비교: DB 미읽음 {DbCount}건 vs 서버 미읽음 {ServerCount}건",
-                dbUnreadEmails.Count, serverUnreadIds.Count);
+            Log4.Info($"[SyncReadStatus] ★DB 미읽음 {dbUnreadEmails.Count}건 vs 서버 미읽음 {serverUnreadIds.Count}건");
 
             int updatedCount = 0;
 
+            // [역방향] 서버 미읽음 메일 처리 — DB에 없거나 IsRead가 잘못된 경우 교정
+            if (serverUnreadIds.Count > 0)
+            {
+                foreach (var msgId in serverUnreadIds)
+                {
+                    try
+                    {
+                        // DB에서 EntryId로 조회 (ParentFolderId 무관)
+                        var existingEmail = await dbContext.Emails
+                            .Where(e => e.EntryId == msgId)
+                            .FirstOrDefaultAsync(ct);
+
+                        if (existingEmail != null)
+                        {
+                            // DB에 있지만 IsRead=true → 서버는 미읽음이므로 false로 교정
+                            if (existingEmail.IsRead)
+                            {
+                                Log4.Info($"[SyncReadStatus] ★IsRead 교정: Subject={existingEmail.Subject} (true→false, 서버 기준)");
+                                existingEmail.IsRead = false;
+                                updatedCount++;
+                            }
+                        }
+                        else if (!string.IsNullOrEmpty(accountEmail))
+                        {
+                            // 먼저 EntryId로 DB 재조회 (FolderId 조건 없이) — 이미 존재하지만 IsRead 불일치일 수 있음
+                            var existingByEntryId = await dbContext.Emails
+                                .FirstOrDefaultAsync(e => e.EntryId == msgId, ct);
+                            if (existingByEntryId != null)
+                            {
+                                // 이미 DB에 있고 IsRead=true → 서버는 미읽음 → 업데이트
+                                if (existingByEntryId.IsRead)
+                                {
+                                    existingByEntryId.IsRead = false;
+                                    updatedCount++;
+                                    _logger.Debug("★EntryId로 재조회 후 IsRead 수정: {Subject}", existingByEntryId.Subject);
+                                    Log4.Info($"[SyncReadStatus] ★EntryId 재조회 IsRead 수정: {existingByEntryId.Subject}");
+                                }
+                            }
+                            else
+                            {
+                                // 진짜로 DB에 없는 경우 — fetch 후 저장
+                                var message = await graphMailService.GetMessageAsync(msgId);
+                                if (message != null)
+                                {
+                                    message.ParentFolderId = folderId;
+                                    using var saveScope = _serviceProvider.CreateScope();
+                                    var saveDb = saveScope.ServiceProvider.GetRequiredService<mAIxDbContext>();
+                                    await SaveEmailsAsync(saveDb, new List<Microsoft.Graph.Models.Message> { message }, accountEmail, folderId, ct);
+                                    updatedCount++;
+                                }
+                            }
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.Warning(ex, "서버 미읽음 메일 처리 실패: {MsgId}", msgId.Substring(0, Math.Min(msgId.Length, 20)));
+                    }
+                }
+            }
+
+            // [비활성화] ID 형식 불일치(EWS vs OData)로 인해 항상 잘못 동작 — 재설계 필요
+            // GetUnreadMessageIdsAsync가 반환하는 ID(EWS 형식)와 DB의 EntryId(OData 형식)가 달라
+            // serverUnreadIds.Contains(dbEmail.EntryId)가 항상 false → 모든 미읽음을 읽음으로 덮어씀
+            // TODO: 동일 형식 ID 비교 방식으로 재설계 필요
+            /*
             foreach (var dbEmail in dbUnreadEmails)
             {
                 if (dbEmail.EntryId == null) continue;
@@ -1892,6 +1986,7 @@ public class BackgroundSyncService : BackgroundService
                     }
                 }
             }
+            */
 
             _logger.Debug("읽음 상태 동기화 완료: {UpdatedCount}건 읽음 처리", updatedCount);
 
