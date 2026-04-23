@@ -672,6 +672,29 @@
 
 ---
 
+## 2026-04-23: IsRead 동기화 불일치 버그 3종 수정
+
+### 작업 배경
+- Outlook 기준 읽음 처리된 메일이 MaiX에서 미읽음으로 표시되는 불일치 현상 수정
+
+### 수정 내용 (Bug 3종)
+- **Bug 1 — 순방향 동기화 블록 활성화**: `SyncReadStatusAsync`의 순방향 블록(서버 미읽음 목록 기준 DB 교정)이 주석 처리된 상태였음 → 주석 해제 + 안전 가드(`serverUnreadIds.Count == 0` 시 조기 리턴) 추가
+- **Bug 2 — TCS 백그라운드에서 읽음 동기화 누락**: `Task.Run` 내부의 나머지 메일 처리 완료 후 `RaiseMailSyncCompleted` 호출 전에 `SyncReadStatusAsync` 호출이 없었음 → 추가
+- **Bug 3 — 이중 EntryId 조회 제거**: 역방향 동기화 블록에서 `existingEmail null` 체크 후 동일 조건 `existingByEntryId` 중복 조회 → 제거
+
+### 주요 변경 파일
+- `mAIx/Services/Sync/BackgroundSyncService.cs`: SyncReadStatusAsync 순방향 활성화, TCS Task.Run 내 호출 추가, 이중 조회 제거
+
+### 테스트 결과 (otest o3)
+- 빌드: 성공 (오류 0개) ✅
+- AC-001 순방향 블록 활성화 ✅
+- AC-002 TCS 백그라운드 SyncReadStatusAsync 호출 ✅
+- AC-003 안전 가드(serverUnreadIds.Count==0) ✅
+- AC-004 이중 EntryId 조회 제거 ✅
+- 커밋: 78b8002f
+
+---
+
 ## 2026-04-14: BackgroundSyncService 동기화 Lazy 초기화 적용
 
 ### 작업 내용

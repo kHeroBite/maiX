@@ -1,9 +1,9 @@
-✨ 설정>메일 초기메일수(20/50/100) 선택 + 동기화 기본값 버그 수정 by claude-sonnet-4-6
+🐛 IsRead 동기화 불일치 3종 수정 — 순방향 블록 활성화·TCS 백그라운드 교정·이중조회 제거 by claude-sonnet-4-6
 
-- UserPreferencesSettings에 InitialMailCount 속성 추가 (기본값 50)
-- MainViewModel의 하드코딩된 PageSize=100을 Settings 동적 참조로 전환
-- MainWindow에 "초기 메일 수" 설정 UI 신규 추가 (ShowMailInitialSettings)
-- Show*SyncSettings()의 foreach 클로저 캡처 버그 수정 (RadioButton 기본값 미선택 문제 해결)
+- Bug 1: SyncReadStatusAsync 순방향 블록 주석 해제 + serverUnreadIds.Count==0 안전 가드 추가
+- Bug 2: TCS 백그라운드 Task.Run 완료 후 SyncReadStatusAsync 호출 추가
+- Bug 3: 역방향 동기화 existingByEntryId 이중 조회 제거
+- HISTORY.md/LESSONS.md(L-365) 업데이트
 
 🤖 Generated with [Claude Code](https://claude.com/claude-code) (claude-sonnet-4-6)
 

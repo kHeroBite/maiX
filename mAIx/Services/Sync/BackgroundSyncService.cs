@@ -1397,6 +1397,21 @@ public class BackgroundSyncService : BackgroundService
 
                     _logger.Information("폴더 {FolderId} 백그라운드 동기화 완료. 총 {Count}건", folder.Id, bgAccumulated.Count);
 
+                    // 백그라운드 동기화 완료 후 읽음 상태 동기화 (TCS 경로 누락 보완)
+                    try
+                    {
+                        using var readScope = _serviceProvider.CreateScope();
+                        var readDb = readScope.ServiceProvider.GetRequiredService<mAIxDbContext>();
+                        var readGraphService = readScope.ServiceProvider.GetRequiredService<GraphMailService>();
+                        var readUpdated = await SyncReadStatusAsync(readDb, readGraphService, folder.Id, CancellationToken.None, accountEmail);
+                        if (readUpdated > 0)
+                            Log4.Info($"[TCS] 백그라운드 완료 후 읽음 상태 동기화: {readUpdated}건");
+                    }
+                    catch (Exception syncEx)
+                    {
+                        _logger.Warning(syncEx, "TCS 백그라운드 완료 후 읽음 상태 동기화 실패");
+                    }
+
                     // 백그라운드 동기화 완료 후 UI 미읽음 뱃지 갱신
                     RaiseMailSyncCompleted();
                 }
@@ -1928,32 +1943,15 @@ public class BackgroundSyncService : BackgroundService
                         }
                         else if (!string.IsNullOrEmpty(accountEmail))
                         {
-                            // 먼저 EntryId로 DB 재조회 (FolderId 조건 없이) — 이미 존재하지만 IsRead 불일치일 수 있음
-                            var existingByEntryId = await dbContext.Emails
-                                .FirstOrDefaultAsync(e => e.EntryId == msgId, ct);
-                            if (existingByEntryId != null)
+                            // existingEmail이 null → DB에 없는 메일 → 서버에서 fetch 후 저장
+                            var message = await graphMailService.GetMessageAsync(msgId);
+                            if (message != null)
                             {
-                                // 이미 DB에 있고 IsRead=true → 서버는 미읽음 → 업데이트
-                                if (existingByEntryId.IsRead)
-                                {
-                                    existingByEntryId.IsRead = false;
-                                    updatedCount++;
-                                    _logger.Debug("★EntryId로 재조회 후 IsRead 수정: {Subject}", existingByEntryId.Subject);
-                                    Log4.Info($"[SyncReadStatus] ★EntryId 재조회 IsRead 수정: {existingByEntryId.Subject}");
-                                }
-                            }
-                            else
-                            {
-                                // 진짜로 DB에 없는 경우 — fetch 후 저장
-                                var message = await graphMailService.GetMessageAsync(msgId);
-                                if (message != null)
-                                {
-                                    message.ParentFolderId = folderId;
-                                    using var saveScope = _serviceProvider.CreateScope();
-                                    var saveDb = saveScope.ServiceProvider.GetRequiredService<mAIxDbContext>();
-                                    await SaveEmailsAsync(saveDb, new List<Microsoft.Graph.Models.Message> { message }, accountEmail, folderId, ct);
-                                    updatedCount++;
-                                }
+                                message.ParentFolderId = folderId;
+                                using var saveScope = _serviceProvider.CreateScope();
+                                var saveDb = saveScope.ServiceProvider.GetRequiredService<mAIxDbContext>();
+                                await SaveEmailsAsync(saveDb, new List<Microsoft.Graph.Models.Message> { message }, accountEmail, folderId, ct);
+                                updatedCount++;
                             }
                         }
                     }
@@ -1964,29 +1962,32 @@ public class BackgroundSyncService : BackgroundService
                 }
             }
 
-            // [비활성화] ID 형식 불일치(EWS vs OData)로 인해 항상 잘못 동작 — 재설계 필요
-            // GetUnreadMessageIdsAsync가 반환하는 ID(EWS 형식)와 DB의 EntryId(OData 형식)가 달라
-            // serverUnreadIds.Contains(dbEmail.EntryId)가 항상 false → 모든 미읽음을 읽음으로 덮어씀
-            // TODO: 동일 형식 ID 비교 방식으로 재설계 필요
-            /*
-            foreach (var dbEmail in dbUnreadEmails)
+            // [순방향] DB 미읽음이지만 서버 미읽음 목록에 없으면 → 서버에서 읽음 처리됨 → DB 읽음으로 교정
+            // GetUnreadMessageIdsAsync와 SaveEmailsAsync 모두 Graph SDK OData ID(msg.Id) 사용 → ID 형식 일치
+            // 안전 가드: 서버 미읽음 0건인데 DB 미읽음 >5건이면 API 오류 의심 → 스킵
+            if (serverUnreadIds.Count == 0 && dbUnreadEmails.Count > 5)
             {
-                if (dbEmail.EntryId == null) continue;
-
-                // 서버 미읽음 목록에 없으면 → 서버에서 이미 읽음 처리됨 → 로컬 DB 업데이트
-                if (!serverUnreadIds.Contains(dbEmail.EntryId))
+                Log4.Warn($"[SyncReadStatus] ★서버 미읽음 0건이지만 DB 미읽음 {dbUnreadEmails.Count}건 — API 오류 의심, 순방향 동기화 스킵");
+            }
+            else
+            {
+                foreach (var dbEmail in dbUnreadEmails)
                 {
-                    var email = await dbContext.Emails.FindAsync(new object[] { dbEmail.Id }, ct);
-                    if (email != null)
+                    if (dbEmail.EntryId == null) continue;
+
+                    // 서버 미읽음 목록에 없으면 → 서버에서 이미 읽음 처리됨 → 로컬 DB 업데이트
+                    if (!serverUnreadIds.Contains(dbEmail.EntryId))
                     {
-                        _logger.Debug("읽음 상태 동기화 (서버 기준): {Subject} (false -> true)",
-                            dbEmail.Subject);
-                        email.IsRead = true;
-                        updatedCount++;
+                        var email = await dbContext.Emails.FindAsync(new object[] { dbEmail.Id }, ct);
+                        if (email != null)
+                        {
+                            Log4.Info($"[SyncReadStatus] ★순방향 읽음 교정: {dbEmail.Subject} (false→true, 서버 기준)");
+                            email.IsRead = true;
+                            updatedCount++;
+                        }
                     }
                 }
             }
-            */
 
             _logger.Debug("읽음 상태 동기화 완료: {UpdatedCount}건 읽음 처리", updatedCount);
 

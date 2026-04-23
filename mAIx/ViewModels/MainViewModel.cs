@@ -373,7 +373,8 @@ public partial class MainViewModel : ViewModelBase, IDisposable
             Folders = new List<Folder>(Folders);
             FavoriteFolders = new ObservableCollection<Folder>(FavoriteFolders);
 
-            Log4.Debug("[RefreshFolderUnreadCounts] 폴더 안읽은 메일 수 갱신 완료");
+            var totalUnread = unreadCounts.Values.Sum();
+            Log4.Debug($"[RefreshFolderUnreadCounts] 폴더 안읽은 메일 수 갱신 완료 — DB 미읽음 합계: {totalUnread}건, 폴더수: {Folders.Count}");
         }
         catch (Exception ex)
         {
