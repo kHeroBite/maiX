@@ -598,6 +598,16 @@ public partial class MainViewModel : ViewModelBase, IDisposable
     /// </summary>
     private void OnEmailsSavedToFolder(string folderId, IReadOnlyList<Email> savedEmails)
     {
+        // 캐시 업데이트: SelectedFolder 무관하게 항상 수행 (OnMailSyncCompleted의 snapshot이 최신 상태여야 함)
+        if (_cacheService != null)
+        {
+            foreach (var email in savedEmails)
+            {
+                _cacheService.OnEmailAdded(folderId, email);
+            }
+        }
+
+        // UI 반영: 현재 선택된 폴더가 일치할 때만 점진적 merge
         if (SelectedFolder == null || SelectedFolder.Id != folderId) return;
         MergeEmailsIncremental(savedEmails);
     }
