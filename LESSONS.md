@@ -763,6 +763,22 @@
 - **조치**: 순방향 블록 활성화 + 안전 가드 추가, TCS 백그라운드 SyncReadStatusAsync 호출 추가, 이중 조회 제거
 - **Level**: 1 (참고 — 코드 재활성화로 해결됨)
 
+## L-366 (2026-04-24) — ParentFolderId 드리프트: 메일 이동 후 DB 컬럼 미갱신으로 미읽음 카운트 오류
+
+- **증상**: 서버에서 메일이 다른 폴더로 이동된 후 DB의 ParentFolderId가 갱신되지 않아, 미읽음 카운트 GROUP BY 집계 시 잘못된 폴더에 카운트가 누적됨
+- **근본 원인**: delta sync에서 메일 이동(move) 이벤트 수신 시 IsRead만 교정하고 ParentFolderId는 업데이트하지 않는 드리프트 발생
+- **교훈**: delta sync에서 상태 교정 시 IsRead뿐 아니라 ParentFolderId 등 관련 필드도 함께 동기화 필수. 이동된 메일의 폴더 귀속 정보는 서버 응답 기준으로 항상 최신화해야 함
+- **조치**: SyncReadStatusAsync에서 ParentFolderId 드리프트 감지 + DB 교정 로직 추가
+- **Level**: 2 (MEMORY 기록 권고)
+
+## L-367 (2026-04-24) — 동기화 서비스 상태 교정 후 UI 캐시 갱신 누락
+
+- **증상**: BackgroundSyncService에서 IsRead/ParentFolderId 교정이 완료되었음에도 MainViewModel 캐시가 갱신되지 않아 배지(미읽음 카운트)가 UI에 반영되지 않음
+- **근본 원인**: 동기화 서비스가 DB를 직접 교정하지만 UI 캐시를 통지하는 이벤트가 없었음
+- **교훈**: 동기화 서비스에서 DB 상태를 교정한 후에는 반드시 UI 캐시 갱신 이벤트(ReadStatusCorrected 등)를 발행해야 함. Service ↔ ViewModel 간 상태 일관성을 이벤트로 명시적으로 연결할 것
+- **조치**: ReadStatusCorrected 이벤트 신설 → MainViewModel.OnReadStatusCorrected 핸들러에서 캐시 패치 + 배지 갱신
+- **Level**: 2 (MEMORY 기록 권고)
+
 ## 반영 추적 테이블
 
 | 교훈 ID | 교훈 요약 | 반영 대상 | 반영 위치 | 반영일 | 검증 |
@@ -773,3 +789,5 @@
 | L-362 | kdev 완료 후 pane 잔류 문제 | skill | ko_pipeline/SKILL.md, kstatus/SKILL.md | 2026-04-11 | ✅ |
 | L-363 | Serilog 잔류 패턴 | code | TeamsViewModel.cs, MainWindow.Teams.cs | 2026-04-11 | ✅ |
 | L-364 | GraphMailService/BackgroundSyncService Serilog 기존 사용 — NLog 마이그레이션 미완 | docs | LESSONS.md | 2026-04-14 | ✅ |
+| L-366 | ParentFolderId 드리프트 — delta sync에서 메일 이동 시 DB 컬럼 미갱신 | code | BackgroundSyncService.cs | 2026-04-24 | ✅ |
+| L-367 | 동기화 서비스 상태 교정 후 UI 캐시 갱신 누락 — ReadStatusCorrected 이벤트 필요 | code | BackgroundSyncService.cs, MainViewModel.cs | 2026-04-24 | ✅ |

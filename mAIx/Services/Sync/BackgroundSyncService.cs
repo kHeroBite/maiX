@@ -207,6 +207,9 @@ public class BackgroundSyncService : BackgroundService
     /// <summary>역방향 동기화 완료 이벤트</summary>
     public event Action? HistoricalSyncCompleted;
 
+    /// <summary>읽음 상태/ParentFolderId 교정 완료 이벤트 — 교정된 EntryId 목록 전달</summary>
+    public event Action<IReadOnlyList<string>>? ReadStatusCorrected;
+
     public BackgroundSyncService(IServiceProvider serviceProvider, ToastNotificationService toastNotificationService, MailRuleService mailRuleService)
     {
         _serviceProvider = serviceProvider ?? throw new ArgumentNullException(nameof(serviceProvider));
@@ -1043,13 +1046,15 @@ public class BackgroundSyncService : BackgroundService
                 // 3단계: 읽음 상태 동기화 — Delta 동기화 성패와 무관하게 항상 실행
                 try
                 {
-                    var readStatusUpdated = await SyncReadStatusAsync(
+                    var (readStatusUpdated, readCorrected) = await SyncReadStatusAsync(
                         dbContext, graphMailService, folder.Id, ct, accountEmail);
                     if (readStatusUpdated > 0)
                     {
                         _logger.Information("읽음 상태 동기화: {Count}건 업데이트 (폴더: {FolderName})",
                             readStatusUpdated, folder.DisplayName);
                     }
+                    if (readCorrected.Count > 0)
+                        ReadStatusCorrected?.Invoke(readCorrected);
                 }
                 catch (Exception ex)
                 {
@@ -1242,13 +1247,15 @@ public class BackgroundSyncService : BackgroundService
             {
                 try
                 {
-                    var readStatusUpdated = await SyncReadStatusAsync(
+                    var (readStatusUpdated, readCorrected) = await SyncReadStatusAsync(
                         dbContext, graphMailService, folder.Id, ct, accountEmail);
                     if (readStatusUpdated > 0)
                     {
                         _logger.Information("읽음 상태 동기화: {Count}건 업데이트 (폴더: {FolderName})",
                             readStatusUpdated, folder.DisplayName);
                     }
+                    if (readCorrected.Count > 0)
+                        ReadStatusCorrected?.Invoke(readCorrected);
                 }
                 catch (Exception ex)
                 {
@@ -1403,9 +1410,11 @@ public class BackgroundSyncService : BackgroundService
                         using var readScope = _serviceProvider.CreateScope();
                         var readDb = readScope.ServiceProvider.GetRequiredService<mAIxDbContext>();
                         var readGraphService = readScope.ServiceProvider.GetRequiredService<GraphMailService>();
-                        var readUpdated = await SyncReadStatusAsync(readDb, readGraphService, folder.Id, CancellationToken.None, accountEmail);
+                        var (readUpdated, readCorrected) = await SyncReadStatusAsync(readDb, readGraphService, folder.Id, CancellationToken.None, accountEmail);
                         if (readUpdated > 0)
                             Log4.Info($"[TCS] 백그라운드 완료 후 읽음 상태 동기화: {readUpdated}건");
+                        if (readCorrected.Count > 0)
+                            ReadStatusCorrected?.Invoke(readCorrected);
                     }
                     catch (Exception syncEx)
                     {
@@ -1880,7 +1889,7 @@ public class BackgroundSyncService : BackgroundService
     /// <param name="folderId">폴더 ID</param>
     /// <param name="ct">취소 토큰</param>
     /// <returns>업데이트된 메일 수</returns>
-    private async Task<int> SyncReadStatusAsync(
+    private async Task<(int updated, List<string> correctedEntryIds)> SyncReadStatusAsync(
         mAIxDbContext dbContext,
         GraphMailService graphMailService,
         string folderId,
@@ -1918,8 +1927,9 @@ public class BackgroundSyncService : BackgroundService
             Log4.Info($"[SyncReadStatus] ★DB 미읽음 {dbUnreadEmails.Count}건 vs 서버 미읽음 {serverUnreadIds.Count}건");
 
             int updatedCount = 0;
+            var correctedEntryIds = new List<string>();
 
-            // [역방향] 서버 미읽음 메일 처리 — DB에 없거나 IsRead가 잘못된 경우 교정
+            // [역방향] 서버 미읽음 메일 처리 — DB에 없거나 IsRead/ParentFolderId가 잘못된 경우 교정
             if (serverUnreadIds.Count > 0)
             {
                 foreach (var msgId in serverUnreadIds)
@@ -1933,11 +1943,28 @@ public class BackgroundSyncService : BackgroundService
 
                         if (existingEmail != null)
                         {
+                            bool corrected = false;
+
                             // DB에 있지만 IsRead=true → 서버는 미읽음이므로 false로 교정
                             if (existingEmail.IsRead)
                             {
                                 Log4.Info($"[SyncReadStatus] ★IsRead 교정: Subject={existingEmail.Subject} (true→false, 서버 기준)");
                                 existingEmail.IsRead = false;
+                                corrected = true;
+                            }
+
+                            // ParentFolderId 드리프트 교정: 메일이 서버에서 이동됐지만 DB ParentFolderId가 구 폴더 가리키는 경우
+                            if (existingEmail.ParentFolderId != folderId)
+                            {
+                                var oldFolder = existingEmail.ParentFolderId;
+                                Log4.Info($"[SyncReadStatus] ★ParentFolderId 드리프트 교정: EntryId={msgId.Substring(0, Math.Min(msgId.Length, 20))} {oldFolder?.Substring(0, Math.Min(oldFolder?.Length ?? 0, 20))} → {folderId.Substring(0, Math.Min(folderId.Length, 20))}");
+                                existingEmail.ParentFolderId = folderId;
+                                corrected = true;
+                            }
+
+                            if (corrected)
+                            {
+                                correctedEntryIds.Add(msgId);
                                 updatedCount++;
                             }
                         }
@@ -1951,6 +1978,7 @@ public class BackgroundSyncService : BackgroundService
                                 using var saveScope = _serviceProvider.CreateScope();
                                 var saveDb = saveScope.ServiceProvider.GetRequiredService<mAIxDbContext>();
                                 await SaveEmailsAsync(saveDb, new List<Microsoft.Graph.Models.Message> { message }, accountEmail, folderId, ct);
+                                correctedEntryIds.Add(msgId);
                                 updatedCount++;
                             }
                         }
@@ -1996,12 +2024,12 @@ public class BackgroundSyncService : BackgroundService
                 await dbContext.SaveChangesAsync(ct);
             }
 
-            return updatedCount;
+            return (updatedCount, correctedEntryIds);
         }
         catch (Exception ex)
         {
             _logger.Warning(ex, "읽음 상태 동기화 실패 (폴더: {FolderId})", folderId);
-            return 0;
+            return (0, new List<string>());
         }
     }
 

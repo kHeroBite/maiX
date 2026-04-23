@@ -133,6 +133,9 @@ public partial class MainViewModel : ViewModelBase, IDisposable
         _syncService.HistoricalSyncProgress += OnHistoricalSyncProgress;
         _syncService.HistoricalSyncCompleted += OnHistoricalSyncCompleted;
 
+        // 읽음 상태/ParentFolderId 교정 이벤트 구독
+        _syncService.ReadStatusCorrected += OnReadStatusCorrected;
+
         // 초기 상태 동기화
         _isSyncPaused = _syncService.IsPaused;
         UpdateSyncStatus();
@@ -220,6 +223,39 @@ public partial class MainViewModel : ViewModelBase, IDisposable
         {
             IsHistoricalSyncRunning = false;
             HistoricalSyncStatusText = "";
+        });
+    }
+
+    /// <summary>
+    /// 읽음 상태/ParentFolderId 교정 이벤트 핸들러
+    /// — 인메모리 캐시(_emails)의 해당 항목 IsRead 패치 후 폴더 미읽음 카운트 갱신
+    /// </summary>
+    private void OnReadStatusCorrected(IReadOnlyList<string> correctedEntryIds)
+    {
+        if (correctedEntryIds == null || correctedEntryIds.Count == 0) return;
+
+        Log4.Info($"[MainViewModel] OnReadStatusCorrected: {correctedEntryIds.Count}건 교정 수신");
+
+        var app = System.Windows.Application.Current;
+        if (app == null) return;
+
+        app.Dispatcher.InvokeAsync(async () =>
+        {
+            // _emails 컬렉션에서 교정된 EntryId 항목의 IsRead를 false로 패치
+            lock (_emailsLock)
+            {
+                foreach (var email in _emails)
+                {
+                    if (email.EntryId != null && correctedEntryIds.Contains(email.EntryId))
+                    {
+                        Log4.Info($"[MainViewModel] 캐시 패치: EntryId={email.EntryId.Substring(0, Math.Min(email.EntryId.Length, 20))}, IsRead=false");
+                        email.IsRead = false;
+                    }
+                }
+            }
+
+            // 폴더 미읽음 카운트 갱신 (배지 업데이트)
+            await RefreshFolderUnreadCountsAsync();
         });
     }
 
@@ -4004,6 +4040,7 @@ public partial class MainViewModel : ViewModelBase, IDisposable
         _syncService.CalendarSynced -= OnCalendarSynced;
         _syncService.HistoricalSyncProgress -= OnHistoricalSyncProgress;
         _syncService.HistoricalSyncCompleted -= OnHistoricalSyncCompleted;
+        _syncService.ReadStatusCorrected -= OnReadStatusCorrected;
 
         GC.SuppressFinalize(this);
     }
