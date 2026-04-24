@@ -1,9 +1,14 @@
+using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Migrations;
+using mAIx.Data;
 
 #nullable disable
 
 namespace mAIx.Migrations
 {
+    [DbContext(typeof(mAIxDbContext))]
+    [Migration("20260409000013_AddPlannerCustomField")]
     public partial class AddPlannerCustomField : Migration
     {
         protected override void Up(MigrationBuilder migrationBuilder)

@@ -1,9 +1,14 @@
+using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Migrations;
+using mAIx.Data;
 
 #nullable disable
 
 namespace mAIx.Migrations
 {
+    [DbContext(typeof(mAIxDbContext))]
+    [Migration("20260409000014_UpgradeEmailFts5Trigram")]
     public partial class UpgradeEmailFts5Trigram : Migration
     {
         protected override void Up(MigrationBuilder migrationBuilder)

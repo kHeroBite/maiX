@@ -1,9 +1,14 @@
+using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Migrations;
+using mAIx.Data;
 
 #nullable disable
 
 namespace mAIx.Migrations
 {
+    [DbContext(typeof(mAIxDbContext))]
+    [Migration("20260408000007_AddEmailCompositeIndex")]
     public partial class AddEmailCompositeIndex : Migration
     {
         protected override void Up(MigrationBuilder migrationBuilder)

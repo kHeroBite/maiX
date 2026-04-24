@@ -1,10 +1,15 @@
 using System;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Migrations;
+using mAIx.Data;
 
 #nullable disable
 
 namespace mAIx.Migrations
 {
+    [DbContext(typeof(mAIxDbContext))]
+    [Migration("20260408000011_AddScreenerAndReplyLater")]
     public partial class AddScreenerAndReplyLater : Migration
     {
         protected override void Up(MigrationBuilder migrationBuilder)

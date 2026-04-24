@@ -1,9 +1,14 @@
+using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Migrations;
+using mAIx.Data;
 
 #nullable disable
 
 namespace mAIx.Migrations
 {
+    [DbContext(typeof(mAIxDbContext))]
+    [Migration("20260409000015_AddAttachmentsFts")]
     public partial class AddAttachmentsFts : Migration
     {
         protected override void Up(MigrationBuilder migrationBuilder)

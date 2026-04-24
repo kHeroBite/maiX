@@ -1214,7 +1214,7 @@ public class BackgroundSyncService : BackgroundService
             .ThenBy(f => f.DisplayName)
             .ToList();
 
-        _logger.Information("★전체 폴더 동기화: {Count}개 폴더, 순서: [{Order}]",
+        _logger.Information("전체 폴더 동기화: {Count}개 폴더, 순서: [{Order}]",
             orderedFolders.Count,
             string.Join(", ", orderedFolders.Take(5).Select(f => $"'{f.DisplayName}'")));
 
@@ -1608,12 +1608,12 @@ public class BackgroundSyncService : BackgroundService
 
                 // 2. EntryId로 못 찾으면 InternetMessageId + ParentFolderId로 검색
                 //    (같은 메일이 다른 폴더에 있을 수 있음: 보낸편지함/받은편지함)
+                //    INSERT 시 ParentFolderId = folderId(DB 로컬 ID)로 저장하므로, 조회도 동일하게 folderId 사용
                 if (existingEmail == null && !string.IsNullOrEmpty(message.InternetMessageId))
                 {
-                    var parentFolderId = message.ParentFolderId ?? folderId;
                     existingEmail = await dbContext.Emails
                         .FirstOrDefaultAsync(e => e.InternetMessageId == message.InternetMessageId
-                            && e.ParentFolderId == parentFolderId, ct);
+                            && e.ParentFolderId == folderId, ct);
                     if (existingEmail != null) foundBy = "InternetMessageId+FolderId";
                 }
 
@@ -1858,29 +1858,34 @@ public class BackgroundSyncService : BackgroundService
                             .FirstOrDefaultAsync(e => e.InternetMessageId == email.InternetMessageId
                                 && e.ParentFolderId == email.ParentFolderId, ct);
                     }
-                    if (existing != null && existing.IsRead != email.IsRead)
+                    if (existing != null)
                     {
-                        existing.IsRead = email.IsRead;
-                        await dbContext.SaveChangesAsync(ct);
-                        _logger.Debug("★UNIQUE 중복 — IsRead 업데이트: {Subject} IsRead={IsRead}", message.Subject, email.IsRead);
-                        Log4.Info($"[SaveEmails] ★UNIQUE 중복 — IsRead 업데이트: {message.Subject} IsRead={email.IsRead}");
-                    }
-                    else
-                    {
-                        _logger.Debug("★UNIQUE 중복 감지(저장 스킵): {Subject}", message.Subject);
-                        Log4.Info($"[SaveEmails] ★UNIQUE 중복 감지(저장 스킵): {message.Subject}");
+                        if (existing.IsRead != email.IsRead)
+                        {
+                            existing.IsRead = email.IsRead;
+                            await dbContext.SaveChangesAsync(ct);
+                            _logger.Debug("UNIQUE 중복 — IsRead 업데이트: {Subject} IsRead={IsRead}", message.Subject, email.IsRead);
+                        }
+                        else
+                        {
+                            _logger.Debug("UNIQUE 중복 감지(저장 스킵): {Subject}", message.Subject);
+                        }
+                        // UNIQUE 충돌로 새 저장은 실패했지만, DB에 이미 존재하는 이메일이므로
+                        // savedEmails에 추가하여 EmailsSavedToFolder 이벤트가 발생하도록 함
+                        // (자기발송 메일: 보낸편지함 저장 후 받은편지함 저장 시 UNIQUE 충돌 발생 가능)
+                        savedEmails.Add(existing);
+                        _logger.Information("UNIQUE 중복 — savedEmails에 기존 메일 추가 (EmailsSavedToFolder 발생 보장): {Subject} FolderId={FolderId}", message.Subject, folderId);
                     }
                 }
             }
             catch (Exception ex)
             {
                 _logger.Error(ex, "메일 저장 실패: {Subject}", message.Subject);
-                Log4.Error($"[SaveEmails] ★저장 예외: {message.Subject} — {ex.GetType().Name}: {ex.Message}");
+
             }
         }
 
         _logger.Information("메일 저장 완료: {Count}건", savedEmails.Count);
-        Log4.Info($"[SaveEmails] ★저장 완료: {savedEmails.Count}건");
 
         if (savedEmails.Count > 0)
         {
@@ -1912,21 +1917,7 @@ public class BackgroundSyncService : BackgroundService
             // 서버 상태가 ground truth: 서버 미읽음 목록에 없으면 → 읽음으로 간주
             var serverUnreadIds = await graphMailService.GetUnreadMessageIdsAsync(folderId, ct);
 
-            Log4.Info($"[SyncReadStatus] ★서버 미읽음 {serverUnreadIds.Count}건 (폴더: {folderId.Substring(0, Math.Min(folderId.Length, 20))})");
-
-            // 서버 미읽음 ID 중 첫 번째 것이 DB에 있는지 확인 (진단용)
-            if (serverUnreadIds.Count > 0)
-            {
-                var firstUnreadId = serverUnreadIds.First();
-                var dbEmail = await dbContext.Emails
-                    .Where(e => e.EntryId == firstUnreadId)
-                    .Select(e => new { e.Subject, e.IsRead, e.ParentFolderId })
-                    .FirstOrDefaultAsync(ct);
-                if (dbEmail != null)
-                    Log4.Info($"[SyncReadStatus] ★서버미읽음 메일 DB확인: Subject={dbEmail.Subject}, IsRead={dbEmail.IsRead}, FolderId={dbEmail.ParentFolderId?.Substring(0,20)}");
-                else
-                    Log4.Info($"[SyncReadStatus] ★서버미읽음 메일 DB에 없음 (EntryId={firstUnreadId.Substring(0,20)})");
-            }
+            _logger.Debug("서버 미읽음: {Count}건 (폴더: {FolderId})", serverUnreadIds.Count, folderId.Substring(0, Math.Min(folderId.Length, 20)));
 
             // DB에서 해당 폴더의 IsRead=false 메일 조회 (EntryId 기준)
             var dbUnreadEmails = await dbContext.Emails
@@ -1934,7 +1925,7 @@ public class BackgroundSyncService : BackgroundService
                 .Select(e => new { e.Id, e.EntryId, e.Subject })
                 .ToListAsync(ct);
 
-            Log4.Info($"[SyncReadStatus] ★DB 미읽음 {dbUnreadEmails.Count}건 vs 서버 미읽음 {serverUnreadIds.Count}건");
+            _logger.Debug("DB 미읽음: {DbCount}건 vs 서버 미읽음: {ServerCount}건 (폴더: {FolderId})", dbUnreadEmails.Count, serverUnreadIds.Count, folderId.Substring(0, Math.Min(folderId.Length, 20)));
 
             int updatedCount = 0;
             var correctedEntries = new List<(string EntryId, bool IsRead)>();
@@ -1958,7 +1949,6 @@ public class BackgroundSyncService : BackgroundService
                             // DB에 있지만 IsRead=true → 서버는 미읽음이므로 false로 교정
                             if (existingEmail.IsRead)
                             {
-                                Log4.Info($"[SyncReadStatus] ★IsRead 교정: Subject={existingEmail.Subject} (true→false, 서버 기준)");
                                 existingEmail.IsRead = false;
                                 corrected = true;
                             }
@@ -1966,8 +1956,6 @@ public class BackgroundSyncService : BackgroundService
                             // ParentFolderId 드리프트 교정: 메일이 서버에서 이동됐지만 DB ParentFolderId가 구 폴더 가리키는 경우
                             if (existingEmail.ParentFolderId != folderId)
                             {
-                                var oldFolder = existingEmail.ParentFolderId;
-                                Log4.Info($"[SyncReadStatus] ★ParentFolderId 드리프트 교정: EntryId={msgId.Substring(0, Math.Min(msgId.Length, 20))} {oldFolder?.Substring(0, Math.Min(oldFolder?.Length ?? 0, 20))} → {folderId.Substring(0, Math.Min(folderId.Length, 20))}");
                                 existingEmail.ParentFolderId = folderId;
                                 corrected = true;
                             }
@@ -2005,7 +1993,7 @@ public class BackgroundSyncService : BackgroundService
             // 안전 가드: 서버 미읽음 0건인데 DB 미읽음 >5건이면 API 오류 의심 → 스킵
             if (serverUnreadIds.Count == 0 && dbUnreadEmails.Count > 5)
             {
-                Log4.Warn($"[SyncReadStatus] ★서버 미읽음 0건이지만 DB 미읽음 {dbUnreadEmails.Count}건 — API 오류 의심, 순방향 동기화 스킵");
+                _logger.Warning("서버 미읽음 0건이지만 DB 미읽음 {Count}건 — API 오류 의심, 순방향 동기화 스킵", dbUnreadEmails.Count);
             }
             else
             {
@@ -2019,7 +2007,6 @@ public class BackgroundSyncService : BackgroundService
                         var email = await dbContext.Emails.FindAsync(new object[] { dbEmail.Id }, ct);
                         if (email != null)
                         {
-                            Log4.Info($"[SyncReadStatus] ★순방향 읽음 교정: {dbEmail.Subject} (false→true, 서버 기준)");
                             email.IsRead = true;
                             correctedEntries.Add((dbEmail.EntryId, true)); // Bug 1 수정: 순방향 교정도 이벤트 발화 대상에 추가
                             updatedCount++;

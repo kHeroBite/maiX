@@ -1,10 +1,15 @@
+using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Migrations;
+using mAIx.Data;
 
 #nullable disable
 
 namespace mAIx.Migrations
 {
     /// <inheritdoc />
+    [DbContext(typeof(mAIxDbContext))]
+    [Migration("20260410060000_AddChannelNotificationIsFavorite")]
     public partial class AddChannelNotificationIsFavorite : Migration
     {
         /// <inheritdoc />

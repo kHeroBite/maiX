@@ -676,7 +676,8 @@ public partial class MainViewModel : ViewModelBase, IDisposable
         }
 
         // UI 반영: 현재 선택된 폴더가 일치할 때만 점진적 merge
-        if (SelectedFolder == null || SelectedFolder.Id != folderId) return;
+        // 대소문자 무관 비교 (Graph API가 폴더 ID를 다른 케이스로 반환할 수 있음)
+        if (SelectedFolder == null || !string.Equals(SelectedFolder.Id, folderId, StringComparison.OrdinalIgnoreCase)) return;
         MergeEmailsIncremental(savedEmails);
     }
 
