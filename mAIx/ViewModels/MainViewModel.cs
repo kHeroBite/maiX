@@ -228,30 +228,45 @@ public partial class MainViewModel : ViewModelBase, IDisposable
 
     /// <summary>
     /// 읽음 상태/ParentFolderId 교정 이벤트 핸들러
-    /// — 인메모리 캐시(_emails)의 해당 항목 IsRead 패치 후 폴더 미읽음 카운트 갱신
+    /// — 인메모리 캐시(_emails) + MailFolderCache 모두 패치 후 폴더 미읽음 카운트 갱신
     /// </summary>
-    private void OnReadStatusCorrected(IReadOnlyList<string> correctedEntryIds)
+    private void OnReadStatusCorrected(IReadOnlyList<(string EntryId, bool IsRead)> correctedEntries)
     {
-        if (correctedEntryIds == null || correctedEntryIds.Count == 0) return;
+        if (correctedEntries == null || correctedEntries.Count == 0) return;
 
-        Log4.Info($"[MainViewModel] OnReadStatusCorrected: {correctedEntryIds.Count}건 교정 수신");
+        Log4.Info($"[MainViewModel] OnReadStatusCorrected: {correctedEntries.Count}건 교정 수신");
 
         var app = System.Windows.Application.Current;
         if (app == null) return;
 
         app.Dispatcher.InvokeAsync(async () =>
         {
-            // _emails 컬렉션에서 교정된 EntryId 항목의 IsRead를 false로 패치
+            // _emails 컬렉션에서 교정된 EntryId 항목의 IsRead를 실제 교정값으로 패치 (Bug 2 수정)
+            var entryIdToIsRead = correctedEntries.ToDictionary(e => e.EntryId, e => e.IsRead);
             lock (_emailsLock)
             {
                 foreach (var email in _emails)
                 {
-                    if (email.EntryId != null && correctedEntryIds.Contains(email.EntryId))
+                    if (email.EntryId != null && entryIdToIsRead.TryGetValue(email.EntryId, out var isRead))
                     {
-                        Log4.Info($"[MainViewModel] 캐시 패치: EntryId={email.EntryId.Substring(0, Math.Min(email.EntryId.Length, 20))}, IsRead=false");
-                        email.IsRead = false;
+                        Log4.Info($"[MainViewModel] 캐시 패치: EntryId={email.EntryId.Substring(0, Math.Min(email.EntryId.Length, 20))}, IsRead={isRead}");
+                        email.IsRead = isRead;
                     }
                 }
+            }
+
+            // Bug 3 수정: MailFolderCache도 갱신 — 다른 폴더에 캐시된 경우도 정합성 유지
+            if (_cacheService != null)
+            {
+                // true 그룹 (읽음으로 교정)
+                var readIds = correctedEntries.Where(e => e.IsRead).Select(e => e.EntryId).ToList();
+                if (readIds.Count > 0)
+                    _cacheService.OnEmailsUpdated(readIds, e => e.IsRead = true);
+
+                // false 그룹 (미읽음으로 교정)
+                var unreadIds = correctedEntries.Where(e => !e.IsRead).Select(e => e.EntryId).ToList();
+                if (unreadIds.Count > 0)
+                    _cacheService.OnEmailsUpdated(unreadIds, e => e.IsRead = false);
             }
 
             // 폴더 미읽음 카운트 갱신 (배지 업데이트)
