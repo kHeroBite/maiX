@@ -658,6 +658,23 @@ public partial class MainViewModel : ViewModelBase, IDisposable
             }
         }
 
+        // [버그 1 수정] 신규 미읽음 메일 수만큼 폴더 배지 증가 (Dispatcher.InvokeAsync로 UI 스레드에서 실행)
+        var newUnreadCount = savedEmails.Count(e => !e.IsRead);
+        if (newUnreadCount > 0)
+        {
+            var app = System.Windows.Application.Current;
+            app?.Dispatcher.InvokeAsync(() =>
+            {
+                var folder = Folders.FirstOrDefault(f => f.Id == folderId);
+                if (folder != null)
+                {
+                    folder.UnreadItemCount += newUnreadCount;
+                    Log4.Debug($"[OnEmailsSavedToFolder] 폴더 배지 갱신: {folder.DisplayName} +{newUnreadCount} = {folder.UnreadItemCount}");
+                }
+                LoadFavoriteFolders();
+            });
+        }
+
         // UI 반영: 현재 선택된 폴더가 일치할 때만 점진적 merge
         if (SelectedFolder == null || SelectedFolder.Id != folderId) return;
         MergeEmailsIncremental(savedEmails);
@@ -2405,6 +2422,11 @@ public partial class MainViewModel : ViewModelBase, IDisposable
                     .ExecuteUpdateAsync(s => s.SetProperty(e => e.IsRead, isRead));
             }
 
+            // [버그 2 수정] email.IsRead 갱신 전에 실제로 상태가 바뀌는 메일만 캡처
+            var actuallyChanged = succeededEmails
+                .Where(e => e.IsRead != isRead)
+                .ToList();
+
             // 메모리 객체 갱신 (INPC가 UI 자동 갱신)
             foreach (var email in succeededEmails)
                 email.IsRead = isRead;
@@ -2419,8 +2441,8 @@ public partial class MainViewModel : ViewModelBase, IDisposable
                 _cacheService?.OnEmailsUpdated(readEntryIds!, e => e.IsRead = isRead);
             }
 
-            // 폴더별 안읽은 메일 수 업데이트 (성공한 메일만 카운트)
-            var folderChanges = succeededEmails
+            // 폴더별 안읽은 메일 수 업데이트 (실제로 상태가 변경된 메일만 카운트)
+            var folderChanges = actuallyChanged
                 .Where(e => !string.IsNullOrEmpty(e.ParentFolderId))
                 .GroupBy(e => e.ParentFolderId)
                 .ToList();
@@ -2433,7 +2455,7 @@ public partial class MainViewModel : ViewModelBase, IDisposable
                     // 읽음으로 표시 → 안읽은 개수 감소, 읽지않음으로 표시 → 안읽은 개수 증가
                     int delta = isRead ? -group.Count() : group.Count();
                     folder.UnreadItemCount = Math.Max(0, folder.UnreadItemCount + delta); // INPC가 자동으로 UI 갱신
-                    Log4.Debug($"폴더 안읽은 메일 수 업데이트: {folder.DisplayName} = {folder.UnreadItemCount} (delta: {delta})");
+                    Log4.Debug($"폴더 안읽은 메일 수 업데이트: {folder.DisplayName} = {folder.UnreadItemCount} (delta: {delta}, 실제변경: {group.Count()}건)");
                 }
             }
 

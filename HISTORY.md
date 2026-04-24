@@ -2,6 +2,42 @@
 
 > PROJECT.md 작업 이력 테이블의 상세 보완본
 
+## 2026-04-24: 폴더 미읽음 배지 불일치 2종 수정
+
+**분류**: Normal Path (o3)
+**수정 파일**: 1개 (`MainViewModel.cs`)
+**커밋**: 350d8fa1
+
+### 배경
+
+신규 메일 수신 시 폴더 배지(UnreadItemCount)가 갱신되지 않는 버그와,
+읽음/미읽음 상태 변경 시 delta 계산이 이미 동일 상태인 메일까지 포함하는 버그.
+
+### 변경 내역
+
+1. **버그 1 수정**: `OnEmailsSavedToFolder` — 신규 메일 수신 시 폴더 UnreadItemCount 배지 갱신 누락
+   - `savedEmails.Count(e => !e.IsRead)`로 신규 미읽음 수 계산
+   - `Dispatcher.InvokeAsync` 블록 내에서 `folder.UnreadItemCount += newUnreadCount` 실행
+   - `LoadFavoriteFolders()` 호출 추가로 즐겨찾기 폴더 배지도 갱신
+
+2. **버그 2 수정**: `UpdateReadStatusAsync` — `actuallyChanged` 캡처 순서 교정
+   - `email.IsRead` 변경 **이전**에 `actuallyChanged` 캡처하도록 순서 교정
+   - `.Where(e => e.IsRead != isRead)` 필터로 실제 변경 메일만 delta 반영
+   - `folderChanges` 계산도 `succeededEmails` 대신 `actuallyChanged` 기준 적용
+
+### 주요 변경 파일
+- `mAIx/ViewModels/MainViewModel.cs`: OnEmailsSavedToFolder 배지 갱신 + UpdateReadStatusAsync delta 정확화
+
+### 테스트 결과 (otest o3)
+- 빌드: 성공 (오류 0개) ✅
+- SC-1 OnEmailsSavedToFolder Dispatcher + UnreadItemCount 갱신 ✅
+- SC-2 OnEmailsSavedToFolder LoadFavoriteFolders() 호출 ✅
+- SC-3 UpdateReadStatusAsync actuallyChanged 캡처 순서 ✅
+- SC-4 UpdateReadStatusAsync folderChanges actuallyChanged 기준 ✅
+- 커밋: 350d8fa1
+
+---
+
 ## 2026-04-24: InternetMessageId 단독 UNIQUE 인덱스 버그 수정
 
 **분류**: Normal Path (o3)
