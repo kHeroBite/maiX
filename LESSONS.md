@@ -779,6 +779,14 @@
 - **조치**: ReadStatusCorrected 이벤트 신설 → MainViewModel.OnReadStatusCorrected 핸들러에서 캐시 패치 + 배지 갱신
 - **Level**: 2 (MEMORY 기록 권고)
 
+## L-368 (2026-04-24) — InternetMessageId 단독 UNIQUE 인덱스로 자기 자신에게 보낸 메일 누락
+
+- **증상**: 자기 자신에게 보낸 메일이 받은편지함에 표시되지 않음. Sent에만 존재.
+- **근본 원인**: `IX_Email_InternetMessageId` 단독 UNIQUE 인덱스로 인해 보낸편지함 저장 후 받은편지함 INSERT 시 UNIQUE 위반으로 스킵됨
+- **교훈**: 동일 메일이 여러 폴더에 동시 존재할 수 있는 경우 단독 컬럼 UNIQUE 대신 (컬럼 + ParentFolderId) 복합 UNIQUE 사용 필수. DbContext 코드와 실제 DB 인덱스가 불일치하는 경우 수동 마이그레이션 필요.
+- **조치**: 마이그레이션 20260424000016 — 단독 UNIQUE 폐기 + 복합 UNIQUE 추가. BackgroundSyncService UNIQUE catch 폴백 검색 로직 추가.
+- **Level**: 1 (설계 결정 기록)
+
 ## 반영 추적 테이블
 
 | 교훈 ID | 교훈 요약 | 반영 대상 | 반영 위치 | 반영일 | 검증 |
@@ -791,3 +799,4 @@
 | L-364 | GraphMailService/BackgroundSyncService Serilog 기존 사용 — NLog 마이그레이션 미완 | docs | LESSONS.md | 2026-04-14 | ✅ |
 | L-366 | ParentFolderId 드리프트 — delta sync에서 메일 이동 시 DB 컬럼 미갱신 | code | BackgroundSyncService.cs | 2026-04-24 | ✅ |
 | L-367 | 동기화 서비스 상태 교정 후 UI 캐시 갱신 누락 — ReadStatusCorrected 이벤트 필요 | code | BackgroundSyncService.cs, MainViewModel.cs | 2026-04-24 | ✅ |
+| L-368 | InternetMessageId 단독 UNIQUE → 자기 자신에게 보낸 메일 받은편지함 누락 | code | Migrations/20260424000016, BackgroundSyncService.cs | 2026-04-24 | ✅ |

@@ -1843,22 +1843,32 @@ public class BackgroundSyncService : BackgroundService
                 {
                     dbContext.ChangeTracker.Clear();
                     // 이미 존재 — IsRead 불일치 시 업데이트
+                    // 1. EntryId로 먼저 검색
+                    Email? existing = null;
                     if (!string.IsNullOrEmpty(email.EntryId))
                     {
-                        var existing = await dbContext.Emails
+                        existing = await dbContext.Emails
                             .FirstOrDefaultAsync(e => e.EntryId == email.EntryId, ct);
-                        if (existing != null && existing.IsRead != email.IsRead)
-                        {
-                            existing.IsRead = email.IsRead;
-                            await dbContext.SaveChangesAsync(ct);
-                            _logger.Debug("★UNIQUE 중복 — IsRead 업데이트: {Subject} IsRead={IsRead}", message.Subject, email.IsRead);
-                            Log4.Info($"[SaveEmails] ★UNIQUE 중복 — IsRead 업데이트: {message.Subject} IsRead={email.IsRead}");
-                        }
-                        else
-                        {
-                            _logger.Debug("★UNIQUE 중복 감지(저장 스킵): {Subject}", message.Subject);
-                            Log4.Info($"[SaveEmails] ★UNIQUE 중복 감지(저장 스킵): {message.Subject}");
-                        }
+                    }
+                    // 2. EntryId로 못 찾으면 InternetMessageId + ParentFolderId로 검색
+                    //    (보낸편지함 먼저 저장 후 받은편지함 저장 시 EntryId가 다를 수 있음)
+                    if (existing == null && !string.IsNullOrEmpty(email.InternetMessageId))
+                    {
+                        existing = await dbContext.Emails
+                            .FirstOrDefaultAsync(e => e.InternetMessageId == email.InternetMessageId
+                                && e.ParentFolderId == email.ParentFolderId, ct);
+                    }
+                    if (existing != null && existing.IsRead != email.IsRead)
+                    {
+                        existing.IsRead = email.IsRead;
+                        await dbContext.SaveChangesAsync(ct);
+                        _logger.Debug("★UNIQUE 중복 — IsRead 업데이트: {Subject} IsRead={IsRead}", message.Subject, email.IsRead);
+                        Log4.Info($"[SaveEmails] ★UNIQUE 중복 — IsRead 업데이트: {message.Subject} IsRead={email.IsRead}");
+                    }
+                    else
+                    {
+                        _logger.Debug("★UNIQUE 중복 감지(저장 스킵): {Subject}", message.Subject);
+                        Log4.Info($"[SaveEmails] ★UNIQUE 중복 감지(저장 스킵): {message.Subject}");
                     }
                 }
             }

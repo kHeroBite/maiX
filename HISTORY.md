@@ -2,6 +2,36 @@
 
 > PROJECT.md 작업 이력 테이블의 상세 보완본
 
+## 2026-04-24: InternetMessageId 단독 UNIQUE 인덱스 버그 수정
+
+**분류**: Normal Path (o3)
+**수정/신규 파일**: 2개
+
+### 배경
+
+자기 자신에게 보낸 메일이 받은편지함에 표시되지 않는 버그 수정.
+`InternetMessageId` 단독 UNIQUE 인덱스로 인해 보낸편지함에 이미 저장된 메일이
+받은편지함에 INSERT 시 UNIQUE 위반으로 스킵되는 현상.
+
+### 변경 내역
+
+1. **신규**: `mAIx/Migrations/20260424000016_FixInternetMessageIdUniqueIndex.cs`
+   - `IX_Email_InternetMessageId` 단독 UNIQUE 인덱스 → non-UNIQUE로 변경
+   - `IX_Email_InternetMessageId_ParentFolderId` 복합 UNIQUE 인덱스 신규 추가
+   - 같은 InternetMessageId라도 다른 폴더(보낸편지함/받은편지함)에 중복 허용
+
+2. **수정**: `mAIx/Services/Sync/BackgroundSyncService.cs`
+   - UNIQUE catch 블록 기존 행 검색 로직 개선:
+     - 기존: EntryId로만 검색 → 보낸/받은 메일에서 EntryId 불일치 시 실패
+     - 수정: EntryId 검색 실패 시 InternetMessageId + ParentFolderId 복합 폴백 검색 추가
+
+### 테스트 결과 (otest o3)
+- 빌드: 성공 (오류 0개, 경고 4개 기존) ✅
+- 마이그레이션 파일 검증 PASS ✅
+- catch 블록 수정 PASS ✅
+
+---
+
 ## 2026-04-09: MS365 탭 전체 기능 구현 (k5 Phase 0~7)
 
 **분류**: Massive Path (k5)

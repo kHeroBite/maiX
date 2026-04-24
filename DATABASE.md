@@ -96,7 +96,8 @@ dotnet ef migrations script --project MaiX
 | FollowUpDate | datetime | YES | IDX | NULL | 팔로업 예정 날짜 (UTC). null=팔로업 미설정 |
 
 **인덱스**:
-- `IX_Email_InternetMessageId` (UNIQUE)
+- `IX_Email_InternetMessageId` (non-UNIQUE — 2026-04-24 단독 UNIQUE 폐기)
+- `IX_Email_InternetMessageId_ParentFolderId` (UNIQUE 복합 — 2026-04-24 추가, 같은 메일이 보낸편지함/받은편지함에 동시 존재 허용)
 - `IX_Email_ConversationId`
 - `IX_Email_AccountEmail`
 - `IX_Email_ReceivedDateTime`

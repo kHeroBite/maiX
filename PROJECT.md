@@ -859,6 +859,7 @@ curl -s http://localhost:5858/api/status
 | 2026-04-10 | Planner 탭 UI 가상화 (ItemsControl→ListView) + kio bash_exec 버그 수정 | mAIx/Views/MainWindow.xaml, AI/MCP-Servers/fio-mcp-server/bash_exec.py, .claude/skills/ko/SKILL.md | L-303/304/305 교훈 반영 |
 | 2026-04-11 | Teams Phase 1~4 전체 구현 — 게시물/파일/설정/칸반/Wiki/일정 탭 완성 | mAIx/Controls/Teams/ChannelCalendarControl.xaml/.cs(신규), mAIx/Controls/Teams/ChannelPlannerControl.xaml/.cs(신규), mAIx/Controls/Teams/ChannelWikiControl.xaml/.cs(신규), mAIx/ViewModels/Teams/ChannelCalendarViewModel.cs(신규), mAIx/ViewModels/Teams/ChannelPlannerViewModel.cs(신규), mAIx/ViewModels/Teams/ChannelWikiViewModel.cs(신규), mAIx/ViewModels/TeamsViewModel.cs, mAIx/Views/MainWindow.Teams.cs | NLog 전환(L-363) 포함 |
 | 2026-04-14 | 이메일 동기화 Inbox 우선 정렬 + Inbox 첫 로드 $top=10 분기 (Phase 1, o5) | mAIx/Services/Graph/GraphMailService.cs, mAIx/Services/Sync/BackgroundSyncService.cs | GetMessagesDeltaAsync isInitialSync 파라미터; Inbox 2단계 우선 정렬; IsInboxFolder 헬퍼; Phase 2(점진 UI/Upsert) 보류 |
+| 2026-04-24 | InternetMessageId 단독 UNIQUE → 복합 UNIQUE 마이그레이션 (자기 자신에게 보낸 메일 누락 수정) | mAIx/Migrations/20260424000016_FixInternetMessageIdUniqueIndex.cs(신규), mAIx/Services/Sync/BackgroundSyncService.cs | 단독 UNIQUE 폐기+복합 UNIQUE 추가; SaveEmailsAsync UNIQUE catch 폴백 검색 추가 |
 
 ---
 
