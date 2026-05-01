@@ -254,7 +254,7 @@ public partial class OneDriveViewModel : ViewModelBase
                     {
                         treeItem.HasChildren = true;
                         // 더미 아이템 추가 (확장 아이콘 표시용)
-                        System.Windows.Application.Current.Dispatcher.Invoke(() =>
+                        await System.Windows.Application.Current.Dispatcher.InvokeAsync(() =>
                         {
                             treeItem.Children.Add(new FolderTreeItemViewModel { Name = "로딩 중...", Id = "__dummy__" });
                         });

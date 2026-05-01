@@ -787,6 +787,15 @@
 - **조치**: 마이그레이션 20260424000016 — 단독 UNIQUE 폐기 + 복합 UNIQUE 추가. BackgroundSyncService UNIQUE catch 폴백 검색 로직 추가.
 - **Level**: 1 (설계 결정 기록)
 
+## L-369 (2026-05-02) — Dispatcher.Invoke(async 람다) 패턴: async void 처리로 예외 미전파 + UI 블로킹
+
+- **증상**: `Dispatcher.Invoke(async () => { ... })` 패턴 사용 시 async 람다가 `async void`로 처리되어 예외가 전파되지 않으며, 동기 블로킹 발생
+- **근본 원인**: `Dispatcher.Invoke`는 동기 메서드이므로 async 람다를 전달하면 `Task`를 반환하는 `Action`이 아닌 `Func<Task>`가 `async void`로 처리됨. 호출 스레드가 블로킹되고 예외는 소실됨
+- **전수조사 결과**: 6개 파일에서 47건 발견 (MainWindow.xaml.cs 23건, OneNoteViewModel.cs 19건, TeamsViewModel.cs 4건, OneDriveViewModel.cs 1건, MainWindow.Activity.cs 1건, TaskEditDialog.xaml.cs 1건). 정상 패턴 9건은 유지
+- **교훈**: `Dispatcher.Invoke(async ...)` 패턴은 코드 리뷰 시 반드시 검출해야 할 안티패턴. 대안: `await Dispatcher.InvokeAsync(() => { ... })` 사용 + 메서드 시그니처를 `async void` 또는 `async Task`로 변경
+- **조치**: 47건 일괄 InvokeAsync 전환. domain-csharp/SKILL.md에 금지 패턴 및 자동 검증 grep 추가
+- **Level**: 2 (MEMORY 기록 권고)
+
 ## 반영 추적 테이블
 
 | 교훈 ID | 교훈 요약 | 반영 대상 | 반영 위치 | 반영일 | 검증 |
@@ -800,3 +809,4 @@
 | L-366 | ParentFolderId 드리프트 — delta sync에서 메일 이동 시 DB 컬럼 미갱신 | code | BackgroundSyncService.cs | 2026-04-24 | ✅ |
 | L-367 | 동기화 서비스 상태 교정 후 UI 캐시 갱신 누락 — ReadStatusCorrected 이벤트 필요 | code | BackgroundSyncService.cs, MainViewModel.cs | 2026-04-24 | ✅ |
 | L-368 | InternetMessageId 단독 UNIQUE → 자기 자신에게 보낸 메일 받은편지함 누락 | code | Migrations/20260424000016, BackgroundSyncService.cs | 2026-04-24 | ✅ |
+| L-369 | Dispatcher.Invoke(async 람다) — async void 처리로 예외 미전파 + UI 블로킹 | skill | domain-csharp/SKILL.md 금지패턴/체크리스트 | 2026-05-02 | ✅ |

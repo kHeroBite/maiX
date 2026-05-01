@@ -4813,7 +4813,7 @@ public partial class MainWindow : FluentWindow
         // UI 스레드에서 실행 보장
         if (!Dispatcher.CheckAccess())
         {
-            Dispatcher.Invoke(UpdateChatListUI);
+            Dispatcher.InvokeAsync(UpdateChatListUI);
             return;
         }
 
@@ -5925,11 +5925,11 @@ public partial class MainWindow : FluentWindow
     /// <summary>
     /// ViewModel 속성 변경 시 UI 업데이트
     /// </summary>
-    private void OneNoteViewModel_PropertyChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
+    private async void OneNoteViewModel_PropertyChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
     {
         if (_oneNoteViewModel == null) return;
 
-        Dispatcher.Invoke(() =>
+        await Dispatcher.InvokeAsync(() =>
         {
             switch (e.PropertyName)
             {
@@ -7520,11 +7520,11 @@ public partial class MainWindow : FluentWindow
         }
 
         // 진행률 변경 감지를 위한 PropertyChanged 구독
-        void OnPropertyChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
+        async void OnPropertyChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
         {
             if (_oneNoteViewModel == null) return;
 
-            Dispatcher.Invoke(() =>
+            await Dispatcher.InvokeAsync(() =>
             {
                 switch (e.PropertyName)
                 {
@@ -7757,9 +7757,9 @@ public partial class MainWindow : FluentWindow
         }
 
         // 진행 상태 텍스트 업데이트 이벤트 핸들러
-        void OnPropertyChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
+        async void OnPropertyChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
         {
-            Dispatcher.Invoke(() =>
+            await Dispatcher.InvokeAsync(() =>
             {
                 if (e.PropertyName == nameof(_oneNoteViewModel.SummaryProgressText))
                 {
@@ -8487,9 +8487,9 @@ public partial class MainWindow : FluentWindow
     /// <summary>
     /// 녹음 UI 상태 업데이트
     /// </summary>
-    private void UpdateRecordingUI(bool isRecording)
+    private async void UpdateRecordingUI(bool isRecording)
     {
-        Dispatcher.Invoke(() =>
+        await Dispatcher.InvokeAsync(() =>
         {
             if (OneNoteRecordStartButton != null)
             {
@@ -8528,9 +8528,9 @@ public partial class MainWindow : FluentWindow
     /// <summary>
     /// 일시정지 버튼 UI 업데이트
     /// </summary>
-    private void UpdatePauseButtonUI(bool isPaused)
+    private async void UpdatePauseButtonUI(bool isPaused)
     {
-        Dispatcher.Invoke(() =>
+        await Dispatcher.InvokeAsync(() =>
         {
             if (OneNoteRecordPauseButton != null)
             {
@@ -13308,9 +13308,9 @@ public partial class MainWindow : FluentWindow
                     _oneNoteViewModel = new OneNoteViewModel(oneNoteService);
 
                     // 녹음 완료 후 새 파일 선택 이벤트 핸들러
-                    _oneNoteViewModel.NewRecordingSelected += (newRecording) =>
+                    _oneNoteViewModel.NewRecordingSelected += async (newRecording) =>
                     {
-                        Dispatcher.Invoke(() =>
+                        await Dispatcher.InvokeAsync(() =>
                         {
                             if (OneNoteRecordingsList != null && newRecording != null)
                             {
@@ -13351,11 +13351,11 @@ public partial class MainWindow : FluentWindow
                     };
 
                     // HasUnsavedChanges 변경 시 ● 표시 업데이트 및 SelectedPage 변경 시 녹음 목록 업데이트
-                    _oneNoteViewModel.PropertyChanged += (s, e) =>
+                    _oneNoteViewModel.PropertyChanged += async (s, e) =>
                     {
                         if (e.PropertyName == nameof(OneNoteViewModel.HasUnsavedChanges))
                         {
-                            Dispatcher.Invoke(() =>
+                            await Dispatcher.InvokeAsync(() =>
                             {
                                 if (OneNoteUnsavedIndicator != null)
                                 {
@@ -13374,7 +13374,7 @@ public partial class MainWindow : FluentWindow
                         else if (e.PropertyName == nameof(OneNoteViewModel.SelectedPage))
                         {
                             Log4.Info($"[MainWindow] SelectedPage PropertyChanged 감지 - 페이지: {_oneNoteViewModel?.SelectedPage?.Title ?? "null"}");
-                            Dispatcher.Invoke(() =>
+                            await Dispatcher.InvokeAsync(() =>
                             {
                                 // 노트 선택 시 우측 AI 패널은 항상 표시 (기본 UI 유지)
                                 if (OneNoteMainAIPanel != null)
@@ -13393,7 +13393,7 @@ public partial class MainWindow : FluentWindow
                                             break;
                                     }
 
-                                    Dispatcher.Invoke(() =>
+                                    await Dispatcher.InvokeAsync(() =>
                                     {
                                         if (OneNoteRecordingsList != null && _oneNoteViewModel != null)
                                         {
@@ -13450,7 +13450,7 @@ public partial class MainWindow : FluentWindow
                         // SelectedRecording 변경 시 ListBox 선택 동기화
                         else if (e.PropertyName == nameof(OneNoteViewModel.SelectedRecording))
                         {
-                            Dispatcher.Invoke(() =>
+                            await Dispatcher.InvokeAsync(() =>
                             {
                                 if (OneNoteRecordingsList != null && _oneNoteViewModel?.SelectedRecording != null)
                                 {
@@ -13466,12 +13466,12 @@ public partial class MainWindow : FluentWindow
                     };
 
                     // 실시간 STT 세그먼트 추가 시 UI 업데이트
-                    _oneNoteViewModel.LiveSTTSegments.CollectionChanged += (s, e) =>
+                    _oneNoteViewModel.LiveSTTSegments.CollectionChanged += async (s, e) =>
                     {
                         if (e.Action == System.Collections.Specialized.NotifyCollectionChangedAction.Add ||
                             e.Action == System.Collections.Specialized.NotifyCollectionChangedAction.Reset)
                         {
-                            Dispatcher.Invoke(() =>
+                            await Dispatcher.InvokeAsync(() =>
                             {
                                 Log4.Info($"[MainWindow] LiveSTTSegments 변경 - 실시간 UI 업데이트 ({_oneNoteViewModel.LiveSTTSegments.Count}개)");
                                 UpdateRecordingContentPanel();
@@ -13480,9 +13480,9 @@ public partial class MainWindow : FluentWindow
                     };
 
                     // STT 세그먼트 변경 시 UI 업데이트 (녹음 파일 선택 시)
-                    _oneNoteViewModel.STTSegments.CollectionChanged += (s, e) =>
+                    _oneNoteViewModel.STTSegments.CollectionChanged += async (s, e) =>
                     {
-                        Dispatcher.Invoke(() =>
+                        await Dispatcher.InvokeAsync(() =>
                         {
                             Log4.Debug($"[MainWindow] STTSegments 변경 - UI 업데이트 ({_oneNoteViewModel.STTSegments.Count}개)");
                             UpdateRecordingContentPanel();
@@ -13490,11 +13490,11 @@ public partial class MainWindow : FluentWindow
                     };
 
                     // CurrentSummary 변경 시 UI 업데이트
-                    _oneNoteViewModel.PropertyChanged += (s, e) =>
+                    _oneNoteViewModel.PropertyChanged += async (s, e) =>
                     {
                         if (e.PropertyName == nameof(OneNoteViewModel.CurrentSummary))
                         {
-                            Dispatcher.Invoke(() =>
+                            await Dispatcher.InvokeAsync(() =>
                             {
                                 Log4.Debug($"[MainWindow] CurrentSummary 변경 - UI 업데이트");
                                 UpdateSummaryContentPanel();
@@ -13503,7 +13503,7 @@ public partial class MainWindow : FluentWindow
                         // 화자분리 전/후 비교 데이터 변경 시 토글 버튼 가시성 업데이트
                         else if (e.PropertyName == nameof(OneNoteViewModel.HasDiarizationComparison))
                         {
-                            Dispatcher.Invoke(() =>
+                            await Dispatcher.InvokeAsync(() =>
                             {
                                 Log4.Debug($"[MainWindow] HasDiarizationComparison 변경 - 토글 버튼 업데이트");
                                 UpdateDiarizationToggleVisibility();

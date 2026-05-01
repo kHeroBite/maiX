@@ -163,7 +163,7 @@ public partial class TaskEditDialog : FluentWindow
                         var type = typeElement.GetString();
                         if (type == "content-changed" && _isInitialized)
                         {
-                            Dispatcher.Invoke(() => MarkAsChanged());
+                            await Dispatcher.InvokeAsync(() => MarkAsChanged());
                         }
                         else if (type == "nonImageFileDrop")
                         {

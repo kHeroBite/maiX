@@ -626,7 +626,7 @@ public partial class OneNoteViewModel : ViewModelBase
                 }
 
                 // UI에 노트북 목록만 먼저 표시
-                System.Windows.Application.Current?.Dispatcher.Invoke(() =>
+                await System.Windows.Application.Current?.Dispatcher.InvokeAsync(() =>
                 {
                     Notebooks.Clear();
                     foreach (var nb in notebookOnlyList)
@@ -639,7 +639,7 @@ public partial class OneNoteViewModel : ViewModelBase
                 Log4.Info($"[OneNote] 노트북 {notebookOnlyList.Count}개 처리 완료");
 
                 // 즐겨찾기 상태 동기화
-                System.Windows.Application.Current?.Dispatcher.Invoke(() =>
+                await System.Windows.Application.Current?.Dispatcher.InvokeAsync(() =>
                 {
                     SyncFavoriteStatus();
                     Log4.Info($"[OneNote] UI 업데이트 완료: {Notebooks.Count}개 노트북");
@@ -891,7 +891,7 @@ public partial class OneNoteViewModel : ViewModelBase
                     Log4.Debug($"[OneNote] 섹션 '{sectionItem.DisplayName}' 페이지 {pageList.Count}개 조회됨");
 
                     // UI 스레드에서 페이지 추가 (빈 제목 페이지 필터링)
-                    System.Windows.Application.Current?.Dispatcher.Invoke(() =>
+                    await System.Windows.Application.Current?.Dispatcher.InvokeAsync(() =>
                     {
                         foreach (var page in pageList)
                         {
@@ -929,7 +929,7 @@ public partial class OneNoteViewModel : ViewModelBase
             Log4.Info($"[OneNote] 노트북 '{notebook.DisplayName}' 섹션 {notebook.Sections.Count}개 로드 완료");
 
             // 즐겨찾기 상태 동기화 (섹션/페이지 로드 후)
-            System.Windows.Application.Current?.Dispatcher.Invoke(() =>
+            await System.Windows.Application.Current?.Dispatcher.InvokeAsync(() =>
             {
                 SyncFavoriteStatusForNotebook(notebook);
             });
@@ -1086,7 +1086,7 @@ public partial class OneNoteViewModel : ViewModelBase
                         IsDummyItem = true
                     });
 
-                    System.Windows.Application.Current?.Dispatcher.Invoke(() =>
+                    await System.Windows.Application.Current?.Dispatcher.InvokeAsync(() =>
                     {
                         Notebooks.Add(nbViewModel);
                     });
@@ -1101,7 +1101,7 @@ public partial class OneNoteViewModel : ViewModelBase
         }
 
         // 즐겨찾기 상태 동기화
-        System.Windows.Application.Current?.Dispatcher.Invoke(() =>
+        await System.Windows.Application.Current?.Dispatcher.InvokeAsync(() =>
         {
             SyncFavoriteStatus();
         });
@@ -1427,7 +1427,7 @@ public partial class OneNoteViewModel : ViewModelBase
     /// </summary>
     private void OnAudioPositionChanged(TimeSpan position)
     {
-        System.Windows.Application.Current?.Dispatcher.Invoke(() =>
+        _ = System.Windows.Application.Current?.Dispatcher.InvokeAsync(() =>
         {
             if (CurrentPlayingRecording != null)
             {
@@ -1442,7 +1442,7 @@ public partial class OneNoteViewModel : ViewModelBase
     /// </summary>
     private void OnAudioPlaybackStopped()
     {
-        System.Windows.Application.Current?.Dispatcher.Invoke(() =>
+        _ = System.Windows.Application.Current?.Dispatcher.InvokeAsync(() =>
         {
             if (CurrentPlayingRecording != null)
             {
@@ -1459,7 +1459,7 @@ public partial class OneNoteViewModel : ViewModelBase
     /// </summary>
     private void OnAudioStateChanged(NAudio.Wave.PlaybackState state)
     {
-        System.Windows.Application.Current?.Dispatcher.Invoke(() =>
+        _ = System.Windows.Application.Current?.Dispatcher.InvokeAsync(() =>
         {
             if (CurrentPlayingRecording != null)
             {
@@ -2392,15 +2392,15 @@ public partial class OneNoteViewModel : ViewModelBase
             // 이벤트 핸들러 생성
             _volumeChangedHandler = volume =>
             {
-                System.Windows.Application.Current?.Dispatcher.Invoke(() => RecordingVolume = volume);
+                _ = System.Windows.Application.Current?.Dispatcher.InvokeAsync(() => RecordingVolume = volume);
             };
             _durationChangedHandler = duration =>
             {
-                System.Windows.Application.Current?.Dispatcher.Invoke(() => RecordingDuration = duration);
+                _ = System.Windows.Application.Current?.Dispatcher.InvokeAsync(() => RecordingDuration = duration);
             };
             _recordingErrorHandler = error =>
             {
-                System.Windows.Application.Current?.Dispatcher.Invoke(() =>
+                _ = System.Windows.Application.Current?.Dispatcher.InvokeAsync(() =>
                 {
                     IsRecording = false;
                     IsRecordingPaused = false;
@@ -2456,7 +2456,7 @@ public partial class OneNoteViewModel : ViewModelBase
     {
         Log4.Info($"[녹음] ★ 녹음 완료 이벤트 수신: {filePath}");
 
-        System.Windows.Application.Current?.Dispatcher.Invoke(() =>
+        _ = System.Windows.Application.Current?.Dispatcher.InvokeAsync(() =>
         {
             Log4.Info("[녹음] ★ 녹음 완료 처리 시작");
 
@@ -2803,7 +2803,7 @@ public partial class OneNoteViewModel : ViewModelBase
         if (string.IsNullOrWhiteSpace(chunk.Text))
             return;
 
-        System.Windows.Application.Current?.Dispatcher.Invoke(() =>
+        _ = System.Windows.Application.Current?.Dispatcher.InvokeAsync(() =>
         {
             var segment = new Models.TranscriptSegment
             {
@@ -2837,7 +2837,7 @@ public partial class OneNoteViewModel : ViewModelBase
     /// </summary>
     private void OnDiarizeChunkReceived(Services.Speech.DiarizeChunkResult result)
     {
-        System.Windows.Application.Current?.Dispatcher.Invoke(() =>
+        _ = System.Windows.Application.Current?.Dispatcher.InvokeAsync(() =>
         {
             // chunk_id가 일치하는 STT 세그먼트에 화자 정보 업데이트
             var matchingSegment = LiveSTTSegments.LastOrDefault(s => s.ChunkId == result.ChunkId);
@@ -2872,13 +2872,14 @@ public partial class OneNoteViewModel : ViewModelBase
         try
         {
             // 실시간 요약 진행 중 표시
-            System.Windows.Application.Current?.Dispatcher.Invoke(() =>
+            await System.Windows.Application.Current?.Dispatcher.InvokeAsync(() =>
             {
                 IsRealtimeSummaryInProgress = true;
             });
 
-            var segmentsCopy = System.Windows.Application.Current?.Dispatcher.Invoke(() =>
-                LiveSTTSegments.ToList());
+            var segmentsCopy = System.Windows.Application.Current != null
+                ? await System.Windows.Application.Current.Dispatcher.InvokeAsync(() => LiveSTTSegments.ToList())
+                : new List<Models.TranscriptSegment>();
 
             if (segmentsCopy == null || segmentsCopy.Count == 0)
             {
@@ -2959,7 +2960,7 @@ public partial class OneNoteViewModel : ViewModelBase
                 SourceSTTPath = ""
             };
 
-            System.Windows.Application.Current?.Dispatcher.Invoke(() =>
+            await System.Windows.Application.Current?.Dispatcher.InvokeAsync(() =>
             {
                 LiveSummaryText = summaryTextParsed;
                 CurrentSummary = realtimeSummary;  // UI에 구조화된 요약 표시
@@ -2975,7 +2976,7 @@ public partial class OneNoteViewModel : ViewModelBase
         finally
         {
             // 실시간 요약 진행 완료
-            System.Windows.Application.Current?.Dispatcher.Invoke(() =>
+            await System.Windows.Application.Current?.Dispatcher.InvokeAsync(() =>
             {
                 IsRealtimeSummaryInProgress = false;
             });

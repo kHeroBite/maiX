@@ -62,7 +62,7 @@ namespace mAIx.Views
 
             await _activityViewModel.NavigateToSourceAsync(activity, tabName =>
             {
-                Dispatcher.Invoke(() => NavigateToTab(tabName));
+                _ = Dispatcher.InvokeAsync(() => NavigateToTab(tabName));
             });
         }
     }

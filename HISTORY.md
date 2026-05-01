@@ -761,6 +761,41 @@
 
 ---
 
+## 2026-05-02: 동기화/UI블로킹 전수조사 — Dispatcher.Invoke→InvokeAsync 47건 일괄 수정
+
+**분류**: Full Path (o4)
+**수정 파일**: 6개
+**커밋**: (미커밋 — odone_git 진행 예정)
+
+### 배경
+
+전날 BUG-4(MainWindow.xaml.cs Dispatcher.Invoke 5건 수정) 이후, 동일 패턴이 코드베이스 전체에 존재할 가능성을 전수조사함. 총 56건 발견 중 47건 수정(정상 패턴 9건 유지).
+
+### 변경 내역
+
+`Dispatcher.Invoke(async 람다)` → `await Dispatcher.InvokeAsync(람다)` 패턴 전환:
+
+| 파일 | 수정 건수 | 주요 변경 |
+|------|-----------|-----------|
+| `mAIx/Views/MainWindow.xaml.cs` | 23건 | PropertyChanged 핸들러, UpdateRecordingUI, UpdatePauseButtonUI 등 async void 변환 |
+| `mAIx/ViewModels/OneNoteViewModel.cs` | 19건 | RecordingStatusChanged, TranscriptionCompleted 등 이벤트 핸들러 |
+| `mAIx/ViewModels/TeamsViewModel.cs` | 4건 | 메시지/채널 업데이트 핸들러 |
+| `mAIx/ViewModels/OneDriveViewModel.cs` | 1건 | 파일 목록 업데이트 |
+| `mAIx/Views/MainWindow.Activity.cs` | 1건 | 활동 피드 업데이트 |
+| `mAIx/Views/Dialogs/TaskEditDialog.xaml.cs` | 1건 | 태스크 저장 완료 핸들러 |
+
+- **정상 패턴 유지** (수정 제외 9건): 동기 람다만 사용하는 `Dispatcher.Invoke`, CheckAccess 분기의 단순 동기 경로 등
+
+### 교훈
+
+- **L-369**: `Dispatcher.Invoke(async ...)` 패턴은 async void 처리로 예외 미전파 + UI 블로킹 안티패턴
+- domain-csharp/SKILL.md에 금지 패턴 및 자동 검증 grep 추가
+
+### 테스트 결과
+- 빌드: 성공 (CS 오류 0건) ✅
+
+---
+
 ## 2026-05-01: UI 버그 3종 수정 — 초안삭제 닫기 / 인라인 컴포즈 / Dispatcher 블로킹
 
 ### 작업 내용 (BUG-2/BUG-3/BUG-4)

@@ -482,7 +482,7 @@ public partial class TeamsViewModel : ViewModelBase
                     if (!string.IsNullOrEmpty(cachedPhoto))
                     {
                         // UI 스레드에서 속성 변경 (PropertyChanged가 UI에 반영되도록)
-                        System.Windows.Application.Current?.Dispatcher.Invoke(() =>
+                        await System.Windows.Application.Current?.Dispatcher.InvokeAsync(() =>
                         {
                             chatItem.PhotoBase64 = cachedPhoto;
                         });
@@ -512,7 +512,7 @@ public partial class TeamsViewModel : ViewModelBase
                     };
 
                     // UI 스레드에서 컬렉션 변경 (PropertyChanged가 UI에 반영되도록)
-                    System.Windows.Application.Current?.Dispatcher.Invoke(() =>
+                    await System.Windows.Application.Current?.Dispatcher.InvokeAsync(() =>
                     {
                         chatItem.MemberPhotos.Add(memberPhoto);
                     });
@@ -549,7 +549,7 @@ public partial class TeamsViewModel : ViewModelBase
                         if (!string.IsNullOrEmpty(newPhoto) && chatItem.PhotoBase64 != newPhoto)
                         {
                             // UI 스레드에서 속성 업데이트 (PropertyChanged가 UI에 반영되도록)
-                            System.Windows.Application.Current?.Dispatcher.Invoke(() =>
+                            await System.Windows.Application.Current?.Dispatcher.InvokeAsync(() =>
                             {
                                 chatItem.PhotoBase64 = newPhoto;
                             });
@@ -576,7 +576,7 @@ public partial class TeamsViewModel : ViewModelBase
                         {
                             // UI 스레드에서 속성 업데이트
                             var index = i;
-                            System.Windows.Application.Current?.Dispatcher.Invoke(() =>
+                            await System.Windows.Application.Current?.Dispatcher.InvokeAsync(() =>
                             {
                                 chatItem.MemberPhotos[index].PhotoBase64 = newPhoto;
                             });
