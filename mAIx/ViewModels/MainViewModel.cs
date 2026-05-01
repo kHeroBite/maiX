@@ -1258,8 +1258,15 @@ public partial class MainViewModel : ViewModelBase, IDisposable
     /// </summary>
     private async void OnFoldersSynced()
     {
-        await LoadFoldersAsync();
-        UpdateSyncStatus();
+        try
+        {
+            await LoadFoldersAsync();
+            UpdateSyncStatus();
+        }
+        catch (Exception ex)
+        {
+            Log4.Error($"[MainViewModel] OnFoldersSynced 실패: {ex.Message}");
+        }
     }
 
     /// <summary>
@@ -1267,19 +1274,26 @@ public partial class MainViewModel : ViewModelBase, IDisposable
     /// </summary>
     private async void OnEmailsSynced(int newCount)
     {
-        // Phase 2: 점진적 업데이트는 OnEmailsSavedToFolder에서 처리.
-        // 여기서는 폴더 카운트/상태만 갱신 (전체 재쿼리 제거).
-        if (newCount > 0 && SelectedFolder != null)
+        try
         {
-            await LoadFoldersAsync();
-            StatusMessage = $"{newCount}개 새 메일 동기화됨";
-        }
-        else
-        {
-            await RefreshFolderUnreadCountsAsync();
-        }
+            // Phase 2: 점진적 업데이트는 OnEmailsSavedToFolder에서 처리.
+            // 여기서는 폴더 카운트/상태만 갱신 (전체 재쿼리 제거).
+            if (newCount > 0 && SelectedFolder != null)
+            {
+                await LoadFoldersAsync();
+                StatusMessage = $"{newCount}개 새 메일 동기화됨";
+            }
+            else
+            {
+                await RefreshFolderUnreadCountsAsync();
+            }
 
-        UpdateSyncStatus();
+            UpdateSyncStatus();
+        }
+        catch (Exception ex)
+        {
+            Log4.Error($"[MainViewModel] OnEmailsSynced 실패: {ex.Message}");
+        }
     }
 
     /// <summary>
@@ -2043,7 +2057,7 @@ public partial class MainViewModel : ViewModelBase, IDisposable
     /// </summary>
     /// <param name="sourceFolder">이동할 폴더</param>
     /// <param name="targetFolder">드롭 위치의 폴더</param>
-    public async void MoveFavoriteOrder(Folder sourceFolder, Folder targetFolder)
+    public async Task MoveFavoriteOrder(Folder sourceFolder, Folder targetFolder)
     {
         var favorites = FavoriteFolders.ToList();
         var sourceIndex = favorites.IndexOf(sourceFolder);

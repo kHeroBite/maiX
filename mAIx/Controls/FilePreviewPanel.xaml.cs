@@ -1,5 +1,6 @@
 using System;
 using System.IO;
+using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media.Imaging;
@@ -55,7 +56,7 @@ namespace mAIx.Controls
         /// <summary>
         /// 파일 미리보기 로드
         /// </summary>
-        public async void LoadPreview(DriveItemViewModel item)
+        public async Task LoadPreview(DriveItemViewModel item)
         {
             if (item == null) return;
 

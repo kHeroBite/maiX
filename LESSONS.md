@@ -796,6 +796,24 @@
 - **조치**: 47건 일괄 InvokeAsync 전환. domain-csharp/SKILL.md에 금지 패턴 및 자동 검증 grep 추가
 - **Level**: 2 (MEMORY 기록 권고)
 
+## L-370 (2026-05-02) — async void 이벤트 핸들러: 예외 소실 + 비동기 흐름 단절
+
+- **증상**: WPF 이벤트 핸들러가 `async void`로 선언된 경우, 내부에서 발생하는 예외가 unhandled exception으로 처리되어 앱이 비정상 종료되거나 예외가 조용히 소실됨
+- **근본 원인**: `async void` 메서드는 Task를 반환하지 않아 호출자가 예외를 catch할 수 없음. 이벤트 핸들러 시그니처 제약으로 인해 습관적으로 `async void`를 사용하는 경향이 있으나, 이벤트 핸들러 외의 코드에서는 절대 사용 금지
+- **전수조사 결과 (2차)**: 6개 파일에서 15건 발견 (MainWindow.xaml.cs 위주). try-catch 미적용 async 핸들러 4건 추가 수정
+- **교훈**: 이벤트 핸들러가 아닌 모든 async 메서드는 반드시 `async Task` 반환. 이벤트 핸들러 내부에서 async 작업이 필요하면 별도 `async Task` 메서드로 분리 후 호출
+- **조치**: 15건 `async void → async Task` 변환. 4건 try-catch 추가
+- **Level**: 2 (MEMORY 기록 권고)
+
+## L-371 (2026-05-02) — Dispatcher.BeginInvoke: 구식 API, 결과/예외 추적 불가
+
+- **증상**: `Dispatcher.BeginInvoke(DispatcherPriority.Normal, ...)` 패턴 사용 시 반환된 DispatcherOperation이 무시되어 예외 추적 불가, 완료 여부 확인 불가
+- **근본 원인**: `BeginInvoke`는 .NET Framework 시절 API로 비동기 패턴 미지원. `InvokeAsync`로 전환 시 `await`를 통한 예외 전파 + 완료 추적 가능
+- **전수조사 결과 (2차)**: 6개 파일에서 16건 발견 (MainWindow.xaml.cs 14건, ComposeWindow.xaml.cs 2건)
+- **교훈**: 신규 코드에서 `Dispatcher.BeginInvoke` 사용 금지. 반드시 `await Dispatcher.InvokeAsync(...)` 사용
+- **조치**: 16건 `BeginInvoke → InvokeAsync + await` 전환
+- **Level**: 1 (코드 규칙 강화)
+
 ## 반영 추적 테이블
 
 | 교훈 ID | 교훈 요약 | 반영 대상 | 반영 위치 | 반영일 | 검증 |
@@ -810,3 +828,5 @@
 | L-367 | 동기화 서비스 상태 교정 후 UI 캐시 갱신 누락 — ReadStatusCorrected 이벤트 필요 | code | BackgroundSyncService.cs, MainViewModel.cs | 2026-04-24 | ✅ |
 | L-368 | InternetMessageId 단독 UNIQUE → 자기 자신에게 보낸 메일 받은편지함 누락 | code | Migrations/20260424000016, BackgroundSyncService.cs | 2026-04-24 | ✅ |
 | L-369 | Dispatcher.Invoke(async 람다) — async void 처리로 예외 미전파 + UI 블로킹 | skill | domain-csharp/SKILL.md 금지패턴/체크리스트 | 2026-05-02 | ✅ |
+| L-370 | async void 이벤트 핸들러 — 예외 소실 + 비동기 흐름 단절 | code | MainWindow.xaml.cs 외 5개 파일 (15건 변환) | 2026-05-02 | ✅ |
+| L-371 | Dispatcher.BeginInvoke 구식 API — 결과/예외 추적 불가 | code | MainWindow.xaml.cs, ComposeWindow.xaml.cs (16건 변환) | 2026-05-02 | ✅ |

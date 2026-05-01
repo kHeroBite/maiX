@@ -1529,7 +1529,7 @@ public partial class OneNoteViewModel : ViewModelBase
     /// <summary>
     /// 특정 시간으로 이동 (STT 세그먼트 클릭 시 호출)
     /// </summary>
-    public async void SeekToTime(TimeSpan time)
+    public async Task SeekToTime(TimeSpan time)
     {
         try
         {
@@ -1703,7 +1703,7 @@ public partial class OneNoteViewModel : ViewModelBase
             {
                 Utils.Log4.Info($"[OneNote] STT/요약 로드 시작: {value.FileName}");
                 _ = LoadSTTResultAsync(value);
-                LoadSummaryResultAsync(value);
+                _ = LoadSummaryResultAsync(value);
             }
             else
             {
@@ -1735,8 +1735,8 @@ public partial class OneNoteViewModel : ViewModelBase
             }
 
             _logger.Information("[OneNote] LoadSelectedRecordingResults 호출: {FileName}", SelectedRecording.FileName);
-            LoadSTTResultAsync(SelectedRecording);
-            LoadSummaryResultAsync(SelectedRecording);
+            _ = LoadSTTResultAsync(SelectedRecording);
+            _ = LoadSummaryResultAsync(SelectedRecording);
         }
     }
 
@@ -1839,7 +1839,7 @@ public partial class OneNoteViewModel : ViewModelBase
     /// <summary>
     /// 선택된 녹음의 요약 결과 로드
     /// </summary>
-    private async void LoadSummaryResultAsync(Models.RecordingInfo recording)
+    private async Task LoadSummaryResultAsync(Models.RecordingInfo recording)
     {
         try
         {
@@ -2405,7 +2405,7 @@ public partial class OneNoteViewModel : ViewModelBase
                     IsRecording = false;
                     IsRecordingPaused = false;
                     Log4.Error($"[녹음] ★ 녹음 오류: {error}");
-                    StopRealtimeSTT();
+                    _ = StopRealtimeSTT();
                 });
             };
 
@@ -2429,7 +2429,7 @@ public partial class OneNoteViewModel : ViewModelBase
             Log4.Info($"[녹음] ★ IsAIAnalysisEnabled: {IsAIAnalysisEnabled}");
             if (IsAIAnalysisEnabled)
             {
-                StartRealtimeSTT();
+                await StartRealtimeSTT();
             }
 
             // 현재 선택된 페이지 ID와 연결 (있으면)
@@ -2444,7 +2444,7 @@ public partial class OneNoteViewModel : ViewModelBase
         {
             Log4.Error($"[녹음] ★ 녹음 시작 실패: {ex.Message}");
             IsRecording = false;
-            StopRealtimeSTT();
+            await StopRealtimeSTT();
             throw;  // MainWindow catch 블록으로 전파 → UpdateRecordingUI(false) 실행
         }
     }
@@ -2466,7 +2466,7 @@ public partial class OneNoteViewModel : ViewModelBase
             RecordingVolume = 0;
 
             // 실시간 STT 정리
-            StopRealtimeSTT();
+            _ = StopRealtimeSTT();
 
             // 실시간 STT 결과를 STTSegments로 복사 (중복 방지를 위해 먼저 클리어)
             STTSegments.Clear();
@@ -2645,7 +2645,7 @@ public partial class OneNoteViewModel : ViewModelBase
     /// <summary>
     /// 실시간 STT 시작
     /// </summary>
-    private async void StartRealtimeSTT()
+    private async Task StartRealtimeSTT()
     {
         if (_recordingService == null) return;
 
@@ -2716,7 +2716,7 @@ public partial class OneNoteViewModel : ViewModelBase
     /// <summary>
     /// 실시간 STT 중지
     /// </summary>
-    private async void StopRealtimeSTT()
+    private async Task StopRealtimeSTT()
     {
         try
         {
@@ -3161,7 +3161,7 @@ public partial class OneNoteViewModel : ViewModelBase
             RecordingVolume = 0;
 
             // 실시간 STT 정리
-            StopRealtimeSTT();
+            _ = StopRealtimeSTT();
 
             // 실시간 STT 결과를 STTSegments로 복사
             STTSegments.Clear();

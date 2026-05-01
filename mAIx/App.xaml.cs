@@ -580,11 +580,11 @@ public partial class App : Application
                         // OneDrive 뷰 전환 이벤트 연결
                         _restApiServer.OneDriveNavigateRequested += (sender, view) =>
                         {
-                            Dispatcher.Invoke(() =>
+                            _ = Dispatcher.InvokeAsync(() =>
                             {
                                 if (mainWindow is Views.MainWindow mw)
                                 {
-                                    mw.NavigateToOneDriveView(view);
+                                    _ = mw.NavigateToOneDriveView(view);
                                 }
                             });
                         };

@@ -121,7 +121,7 @@ public partial class MainWindow : FluentWindow
                 // WebView2 테마 업데이트
                 if (_viewModel.SelectedEmail != null)
                 {
-                    LoadMailBodyAsync(_viewModel.SelectedEmail);
+                    _ = LoadMailBodyAsync(_viewModel.SelectedEmail);
                 }
 
                 // OneNote TinyMCE 에디터 테마 갱신
@@ -160,7 +160,7 @@ public partial class MainWindow : FluentWindow
                     return;
                 }
 
-                LoadMailBodyAsync(_viewModel.SelectedEmail);
+                _ = LoadMailBodyAsync(_viewModel.SelectedEmail);
 
                 // 읽기 확인 요청 감지 (비동기 백그라운드)
                 if (_viewModel.SelectedEmail != null)
@@ -213,7 +213,7 @@ public partial class MainWindow : FluentWindow
         };
 
         // WebView2 초기화
-        InitializeWebView2Async();
+        _ = InitializeWebView2Async();
 
         // MailSyncCompleted 이벤트 직접 구독 (MainViewModel 우회)
         // MainViewModel의 이벤트 핸들러가 호출되지 않는 문제 해결
@@ -385,7 +385,7 @@ public partial class MainWindow : FluentWindow
     /// <summary>
     /// WebView2 초기화
     /// </summary>
-    private async void InitializeWebView2Async()
+    private async Task InitializeWebView2Async()
     {
         try
         {
@@ -422,7 +422,7 @@ public partial class MainWindow : FluentWindow
             // 이미 선택된 메일이 있으면 로드
             if (_viewModel.SelectedEmail != null)
             {
-                LoadMailBodyAsync(_viewModel.SelectedEmail);
+                _ = LoadMailBodyAsync(_viewModel.SelectedEmail);
             }
         }
         catch (System.Exception ex)
@@ -747,7 +747,7 @@ public partial class MainWindow : FluentWindow
             e.Handled = true;
             var mailtoUri = e.Uri;
             // UI 스레드에서 비동기로 실행
-            Dispatcher.BeginInvoke(new Action(() => OpenComposeWindowWithMailto(mailtoUri)));
+            _ = Dispatcher.InvokeAsync(() => OpenComposeWindowWithMailto(mailtoUri));
             return;
         }
 
@@ -912,7 +912,7 @@ public partial class MainWindow : FluentWindow
                 var capturedLinkUri = linkUri; // 클로저를 위한 캡처
                 composeItem.CustomItemSelected += (s, args) =>
                 {
-                    Dispatcher.BeginInvoke(new Action(() => OpenComposeWindowWithMailto(capturedLinkUri)));
+                    _ = Dispatcher.InvokeAsync(() => OpenComposeWindowWithMailto(capturedLinkUri));
                 };
                 menuItems.Add(composeItem);
 
@@ -966,7 +966,7 @@ public partial class MainWindow : FluentWindow
     /// <summary>
     /// 메일 본문을 WebView2에 로드
     /// </summary>
-    private async void LoadMailBodyAsync(Email? email)
+    private async Task LoadMailBodyAsync(Email? email)
     {
         Log4.Debug($"[LoadMailBody] 진입: email={email?.Subject ?? "null"}, Body.Length={email?.Body?.Length ?? -1}, IsHtml={email?.IsHtml}, webView2Init={_webView2Initialized}");
         if (!_webView2Initialized || MailBodyWebView.CoreWebView2 == null)
@@ -2109,7 +2109,7 @@ public partial class MainWindow : FluentWindow
         }
 
         // ViewModel에 순서 변경 요청
-        _viewModel.MoveFavoriteOrder(droppedFolder, targetFolderForOrder);
+        _ = _viewModel.MoveFavoriteOrder(droppedFolder, targetFolderForOrder);
 
         _draggedFolder = null;
     }
@@ -3698,7 +3698,7 @@ public partial class MainWindow : FluentWindow
 
     /// <summary>
     /// SelectedFolder 변경 시 캐시에서 스크롤 오프셋을 읽어 ScrollViewer 위치 복원.
-    /// 리스트 렌더링 이후 실행되어야 하므로 Dispatcher.BeginInvoke(Loaded) 사용.
+    /// 리스트 렌더링 이후 실행되어야 하므로 Dispatcher.InvokeAsync(Loaded) 사용.
     /// </summary>
     private void RestoreScrollOffsetOnFolderChange()
     {
@@ -3711,13 +3711,11 @@ public partial class MainWindow : FluentWindow
                 out _, out _, out _, out var scrollOffset)
             && scrollOffset > 0)
         {
-            Dispatcher.BeginInvoke(
-                new Action(() =>
-                {
-                    var sv = GetScrollViewer(EmailListBox);
-                    sv?.ScrollToVerticalOffset(scrollOffset);
-                }),
-                System.Windows.Threading.DispatcherPriority.Loaded);
+            _ = Dispatcher.InvokeAsync(() =>
+            {
+                var sv = GetScrollViewer(EmailListBox);
+                sv?.ScrollToVerticalOffset(scrollOffset);
+            }, System.Windows.Threading.DispatcherPriority.Loaded);
         }
     }
 
@@ -4110,7 +4108,7 @@ public partial class MainWindow : FluentWindow
                 case Key.D2:
                     // Ctrl+2: Teams 탭
                     NavTeamsButton.IsChecked = true;
-                    ShowTeamsView();
+                    _ = ShowTeamsView();
                     e.Handled = true;
                     break;
 
@@ -4124,7 +4122,7 @@ public partial class MainWindow : FluentWindow
                 case Key.D4:
                     // Ctrl+4: OneNote 탭
                     NavOneNoteButton.IsChecked = true;
-                    ShowOneNoteView();
+                    _ = ShowOneNoteView();
                     e.Handled = true;
                     break;
 
@@ -4254,7 +4252,7 @@ public partial class MainWindow : FluentWindow
     private void NavChatButton_Checked(object sender, RoutedEventArgs e)
     {
         Log4.Info("네비게이션: 채팅 모드");
-        ShowChatView();
+        _ = ShowChatView();
     }
 
     /// <summary>
@@ -4263,7 +4261,7 @@ public partial class MainWindow : FluentWindow
     private void NavTeamsButton_Checked(object sender, RoutedEventArgs e)
     {
         Log4.Info("네비게이션: 팀 모드");
-        ShowTeamsView();
+        _ = ShowTeamsView();
     }
 
     /// <summary>
@@ -4272,7 +4270,7 @@ public partial class MainWindow : FluentWindow
     private void NavActivityButton_Checked(object sender, RoutedEventArgs e)
     {
         Log4.Info("네비게이션: 활동 모드");
-        ShowActivityView();
+        _ = ShowActivityView();
     }
 
     /// <summary>
@@ -4281,7 +4279,7 @@ public partial class MainWindow : FluentWindow
     private void NavPlannerButton_Checked(object sender, RoutedEventArgs e)
     {
         Log4.Info("네비게이션: 플래너 모드");
-        ShowPlannerView();
+        _ = ShowPlannerView();
     }
 
     /// <summary>
@@ -4290,7 +4288,7 @@ public partial class MainWindow : FluentWindow
     private void NavOneDriveButton_Checked(object sender, RoutedEventArgs e)
     {
         Log4.Info("네비게이션: OneDrive 모드");
-        ShowOneDriveView();
+        _ = ShowOneDriveView();
     }
 
     /// <summary>
@@ -4299,7 +4297,7 @@ public partial class MainWindow : FluentWindow
     private void NavOneNoteButton_Checked(object sender, RoutedEventArgs e)
     {
         Log4.Info("네비게이션: OneNote 모드");
-        ShowOneNoteView();
+        _ = ShowOneNoteView();
     }
 
     /// <summary>
@@ -4308,7 +4306,7 @@ public partial class MainWindow : FluentWindow
     private void NavCallsButton_Checked(object sender, RoutedEventArgs e)
     {
         Log4.Info("네비게이션: 통화 모드");
-        ShowCallsView();
+        _ = ShowCallsView();
     }
 
     /// <summary>
@@ -4443,7 +4441,7 @@ public partial class MainWindow : FluentWindow
     private void TitleBarSearchBox_LostFocus(object sender, RoutedEventArgs e)
     {
         // 포커스가 팝업 내부로 이동한 경우는 닫지 않음
-        Dispatcher.BeginInvoke(new Action(() =>
+        _ = Dispatcher.InvokeAsync(() =>
         {
             var focusedElement = Keyboard.FocusedElement as DependencyObject;
             if (focusedElement != null)
@@ -4463,7 +4461,7 @@ public partial class MainWindow : FluentWindow
                 return;
 
             SearchAutocompletePopup.IsOpen = false;
-        }), System.Windows.Threading.DispatcherPriority.Background);
+        }, System.Windows.Threading.DispatcherPriority.Background);
     }
 
     /// <summary>
@@ -4740,7 +4738,7 @@ public partial class MainWindow : FluentWindow
     /// <summary>
     /// 채팅 뷰 표시
     /// </summary>
-    private async void ShowChatView()
+    private async Task ShowChatView()
     {
         HideAllViews();
 
@@ -4911,7 +4909,7 @@ public partial class MainWindow : FluentWindow
     /// <summary>
     /// 팀 뷰 표시
     /// </summary>
-    private async void ShowTeamsView()
+    private async Task ShowTeamsView()
     {
         try
         {
@@ -5003,7 +5001,7 @@ public partial class MainWindow : FluentWindow
     /// <summary>
     /// 활동 뷰 표시
     /// </summary>
-    private async void ShowActivityView()
+    private async Task ShowActivityView()
     {
         HideAllViews();
 
@@ -5022,7 +5020,7 @@ public partial class MainWindow : FluentWindow
     /// <summary>
     /// 플래너 뷰 표시
     /// </summary>
-    private async void ShowPlannerView()
+    private async Task ShowPlannerView()
     {
         HideAllViews();
 
@@ -5041,7 +5039,7 @@ public partial class MainWindow : FluentWindow
     /// <summary>
     /// OneDrive 뷰 표시
     /// </summary>
-    private async void ShowOneDriveView()
+    private async Task ShowOneDriveView()
     {
         HideAllViews();
 
@@ -5094,7 +5092,7 @@ public partial class MainWindow : FluentWindow
     /// <summary>
     /// OneNote 뷰 표시
     /// </summary>
-    private async void ShowOneNoteView()
+    private async Task ShowOneNoteView()
     {
         HideAllViews();
 
@@ -5136,7 +5134,7 @@ public partial class MainWindow : FluentWindow
         // PropertyChanged 이벤트에서도 SelectedPage 변경 시 로드하므로 여기서는 이미 선택된 경우에만 로드
         if (_oneNoteViewModel?.SelectedPage != null)
         {
-            LoadOneNoteRecordings();
+            await LoadOneNoteRecordings();
         }
     }
 
@@ -5170,7 +5168,7 @@ public partial class MainWindow : FluentWindow
             case "record":
                 SetAITabActive(OneNoteAITabRecord);
                 if (OneNoteAIRecordPanel != null) OneNoteAIRecordPanel.Visibility = Visibility.Visible;
-                LoadOneNoteRecordings();
+                _ = LoadOneNoteRecordings();
                 break;
             case "file":
                 SetAITabActive(OneNoteAITabFile);
@@ -5233,7 +5231,7 @@ public partial class MainWindow : FluentWindow
     /// <summary>
     /// 녹음 목록 로드 (현재 페이지에 연결된 녹음 + OneNote 녹음)
     /// </summary>
-    private async void LoadOneNoteRecordings()
+    private async Task LoadOneNoteRecordings()
     {
         Log4.Info("[MainWindow] LoadOneNoteRecordings 호출됨");
 
@@ -5657,7 +5655,7 @@ public partial class MainWindow : FluentWindow
             if (args.PropertyName == nameof(Models.OneNoteAttachment.AnalysisResult) ||
                 args.PropertyName == nameof(Models.OneNoteAttachment.AnalysisStatus))
             {
-                Dispatcher.BeginInvoke(() => UpdateFileAnalysisResult(attachment));
+                _ = Dispatcher.InvokeAsync(() => UpdateFileAnalysisResult(attachment));
             }
             // 분석 완료 시 캐시에 자동 저장
             if (args.PropertyName == nameof(Models.OneNoteAttachment.AnalysisStatus) &&
@@ -5668,7 +5666,7 @@ public partial class MainWindow : FluentWindow
             // 분석 완료/취소 시 버튼 복구
             if (args.PropertyName == nameof(Models.OneNoteAttachment.IsAnalyzing) && !attachment.IsAnalyzing)
             {
-                Dispatcher.BeginInvoke(() =>
+                _ = Dispatcher.InvokeAsync(() =>
                 {
                     attachment.Cts = null;
                     btn.Content = new Wpf.Ui.Controls.SymbolIcon { Symbol = Wpf.Ui.Controls.SymbolRegular.Sparkle24, FontSize = 12 };
@@ -5733,7 +5731,7 @@ public partial class MainWindow : FluentWindow
             {
                 if (args.PropertyName == nameof(Models.OneNoteAttachment.AnalysisResult))
                 {
-                    Dispatcher.BeginInvoke(() =>
+                    _ = Dispatcher.InvokeAsync(() =>
                     {
                         if (OneNoteFileListBox?.SelectedItem == att)
                             UpdateFileAnalysisResult(att);
@@ -5748,7 +5746,7 @@ public partial class MainWindow : FluentWindow
                 // 분석 완료/취소 시 Cts 정리
                 if (args.PropertyName == nameof(Models.OneNoteAttachment.IsAnalyzing) && !att.IsAnalyzing)
                 {
-                    Dispatcher.BeginInvoke(() => att.Cts = null);
+                    _ = Dispatcher.InvokeAsync(() => att.Cts = null);
                 }
             };
         }
@@ -5866,7 +5864,7 @@ public partial class MainWindow : FluentWindow
         {
             // 녹음 중지
             _oneNoteViewModel.StopRecording();
-            UpdateRecordingUI(false);
+            await UpdateRecordingUI(false);
 
             // 녹음 중지 시 노트내용 탭으로 전환 (녹음 선택된 게 없으면)
             if (_oneNoteViewModel.SelectedRecording == null)
@@ -5896,7 +5894,7 @@ public partial class MainWindow : FluentWindow
             try
             {
                 await _oneNoteViewModel.StartRecordingAsync();
-                UpdateRecordingUI(true);
+                await UpdateRecordingUI(true);
 
                 // 녹음 시작 시 녹음내용 탭으로 전환 (탭 바는 항상 표시)
                 SwitchToRecordingContentTab();
@@ -5911,7 +5909,7 @@ public partial class MainWindow : FluentWindow
             catch (Exception ex)
             {
                 Log4.Error($"[OneNote] 녹음 시작 실패: {ex.Message}");
-                UpdateRecordingUI(false);
+                await UpdateRecordingUI(false);
                 if (OneNoteRecordingStatus != null)
                 {
                     OneNoteRecordingStatus.Text = "⚠️ 마이크를 사용할 수 없습니다. 마이크 설정을 확인해주세요.";
@@ -5927,43 +5925,50 @@ public partial class MainWindow : FluentWindow
     /// </summary>
     private async void OneNoteViewModel_PropertyChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
     {
-        if (_oneNoteViewModel == null) return;
-
-        await Dispatcher.InvokeAsync(() =>
+        try
         {
-            switch (e.PropertyName)
+            if (_oneNoteViewModel == null) return;
+
+            await Dispatcher.InvokeAsync(() =>
             {
-                case nameof(ViewModels.OneNoteViewModel.RecordingDuration):
-                    if (OneNoteRecordingTime != null)
-                    {
-                        OneNoteRecordingTime.Text = _oneNoteViewModel.RecordingDuration.ToString(@"mm\:ss");
-                    }
-                    break;
-                case nameof(ViewModels.OneNoteViewModel.RecordingVolume):
-                    if (OneNoteVolumeLevel != null)
-                    {
-                        OneNoteVolumeLevel.Value = _oneNoteViewModel.RecordingVolume;
-                    }
-                    break;
-                case nameof(ViewModels.OneNoteViewModel.RecordingStatusText):
-                    if (OneNoteRecordingStatus != null)
-                    {
-                        OneNoteRecordingStatus.Text = _oneNoteViewModel.RecordingStatusText;
-                    }
-                    break;
-                case nameof(ViewModels.OneNoteViewModel.IsRecording):
-                    UpdateRecordingUI(_oneNoteViewModel.IsRecording);
-                    if (!_oneNoteViewModel.IsRecording)
-                    {
-                        // 녹음 완료 시 목록 새로고침
-                        LoadOneNoteRecordings();
-                    }
-                    break;
-                case nameof(ViewModels.OneNoteViewModel.IsRecordingPaused):
-                    UpdatePauseButtonUI(_oneNoteViewModel.IsRecordingPaused);
-                    break;
-            }
-        });
+                switch (e.PropertyName)
+                {
+                    case nameof(ViewModels.OneNoteViewModel.RecordingDuration):
+                        if (OneNoteRecordingTime != null)
+                        {
+                            OneNoteRecordingTime.Text = _oneNoteViewModel.RecordingDuration.ToString(@"mm\:ss");
+                        }
+                        break;
+                    case nameof(ViewModels.OneNoteViewModel.RecordingVolume):
+                        if (OneNoteVolumeLevel != null)
+                        {
+                            OneNoteVolumeLevel.Value = _oneNoteViewModel.RecordingVolume;
+                        }
+                        break;
+                    case nameof(ViewModels.OneNoteViewModel.RecordingStatusText):
+                        if (OneNoteRecordingStatus != null)
+                        {
+                            OneNoteRecordingStatus.Text = _oneNoteViewModel.RecordingStatusText;
+                        }
+                        break;
+                    case nameof(ViewModels.OneNoteViewModel.IsRecording):
+                        _ = UpdateRecordingUI(_oneNoteViewModel.IsRecording);
+                        if (!_oneNoteViewModel.IsRecording)
+                        {
+                            // 녹음 완료 시 목록 새로고침
+                            _ = LoadOneNoteRecordings();
+                        }
+                        break;
+                    case nameof(ViewModels.OneNoteViewModel.IsRecordingPaused):
+                        _ = UpdatePauseButtonUI(_oneNoteViewModel.IsRecordingPaused);
+                        break;
+                }
+            });
+        }
+        catch (Exception ex)
+        {
+            Log4.Error($"[OneNoteViewModel_PropertyChanged] UI 갱신 실패: {ex.Message}");
+        }
     }
 
     /// <summary>
@@ -5980,7 +5985,7 @@ public partial class MainWindow : FluentWindow
     private void OneNoteRecordCancel_Click(object sender, RoutedEventArgs e)
     {
         _oneNoteViewModel?.CancelRecording();
-        UpdateRecordingUI(false);
+        _ = UpdateRecordingUI(false);
     }
 
     /// <summary>
@@ -5988,7 +5993,7 @@ public partial class MainWindow : FluentWindow
     /// </summary>
     private void OneNoteRecordingsRefresh_Click(object sender, RoutedEventArgs e)
     {
-        LoadOneNoteRecordings();
+        _ = LoadOneNoteRecordings();
     }
 
     /// <summary>
@@ -6084,7 +6089,7 @@ public partial class MainWindow : FluentWindow
         if (sender is Wpf.Ui.Controls.Button button && button.Tag is Models.RecordingInfo recording)
         {
             _oneNoteViewModel?.DeleteRecording(recording);
-            LoadOneNoteRecordings(); // 목록 새로고침
+            _ = LoadOneNoteRecordings(); // 목록 새로고침
         }
     }
 
@@ -7093,7 +7098,7 @@ public partial class MainWindow : FluentWindow
             // 실시간 STT 중일 때 자동 스크롤
             if (_oneNoteViewModel.IsRecording && _oneNoteViewModel.IsAIAnalysisEnabled)
             {
-                OneNoteSTTSegmentsList.Dispatcher.BeginInvoke(new Action(() =>
+                _ = OneNoteSTTSegmentsList.Dispatcher.InvokeAsync(() =>
                 {
                     // ItemsControl의 부모 ScrollViewer를 찾아 맨 아래로 스크롤
                     var scrollViewer = FindVisualChild<ScrollViewer>(OneNoteSTTSegmentsList);
@@ -7103,7 +7108,7 @@ public partial class MainWindow : FluentWindow
                         scrollViewer = FindVisualParent<ScrollViewer>(OneNoteSTTSegmentsList);
                     }
                     scrollViewer?.ScrollToEnd();
-                }), System.Windows.Threading.DispatcherPriority.Background);
+                }, System.Windows.Threading.DispatcherPriority.Background);
             }
         }
         else
@@ -7254,10 +7259,10 @@ public partial class MainWindow : FluentWindow
                     OneNoteActionItemsList.ItemsSource = summary.ActionItems;
 
                     // ItemsControl 로드 완료 후 체크박스 이벤트 연결
-                    OneNoteActionItemsList.Dispatcher.BeginInvoke(new Action(() =>
+                    _ = OneNoteActionItemsList.Dispatcher.InvokeAsync(() =>
                     {
                         AttachCheckBoxEvents(OneNoteActionItemsList);
-                    }), System.Windows.Threading.DispatcherPriority.Loaded);
+                    }, System.Windows.Threading.DispatcherPriority.Loaded);
 
                     Log4.Info($"[OneNote] UpdateRecordingContentPanel: 액션아이템 {summary.ActionItems.Count}개 로드됨");
                 }
@@ -7295,7 +7300,7 @@ public partial class MainWindow : FluentWindow
         if (border.DataContext is not Models.TranscriptSegment segment) return;
 
         // 해당 녹음 재생 및 위치 이동
-        _oneNoteViewModel?.SeekToTime(segment.StartTime);
+        _ = _oneNoteViewModel?.SeekToTime(segment.StartTime);
     }
 
     /// <summary>
@@ -8159,11 +8164,11 @@ public partial class MainWindow : FluentWindow
                     Log4.Info($"[OneNote] UpdateSummaryContentPanel: 액션아이템 {summary.ActionItems.Count}개 로드됨");
 
                     // UI 렌더링 후 체크박스 이벤트 연결
-                    OneNoteActionItemsList.Dispatcher.BeginInvoke(new Action(() =>
+                    _ = OneNoteActionItemsList.Dispatcher.InvokeAsync(() =>
                     {
-                        Log4.Info("[OneNote] Dispatcher.BeginInvoke - 체크박스 이벤트 연결 시작");
+                        Log4.Info("[OneNote] Dispatcher.InvokeAsync - 체크박스 이벤트 연결 시작");
                         AttachCheckBoxEvents(OneNoteActionItemsList);
-                    }), System.Windows.Threading.DispatcherPriority.Loaded);
+                    }, System.Windows.Threading.DispatcherPriority.Loaded);
                 }
                 else
                 {
@@ -8487,7 +8492,7 @@ public partial class MainWindow : FluentWindow
     /// <summary>
     /// 녹음 UI 상태 업데이트
     /// </summary>
-    private async void UpdateRecordingUI(bool isRecording)
+    private async Task UpdateRecordingUI(bool isRecording)
     {
         await Dispatcher.InvokeAsync(() =>
         {
@@ -8528,7 +8533,7 @@ public partial class MainWindow : FluentWindow
     /// <summary>
     /// 일시정지 버튼 UI 업데이트
     /// </summary>
-    private async void UpdatePauseButtonUI(bool isPaused)
+    private async Task UpdatePauseButtonUI(bool isPaused)
     {
         await Dispatcher.InvokeAsync(() =>
         {
@@ -8552,7 +8557,7 @@ public partial class MainWindow : FluentWindow
     /// <summary>
     /// 통화 뷰 표시
     /// </summary>
-    private async void ShowCallsView()
+    private async Task ShowCallsView()
     {
         HideAllViews();
 
@@ -8656,31 +8661,31 @@ public partial class MainWindow : FluentWindow
                 break;
             case "chat":
                 NavChatButton.IsChecked = true;
-                ShowChatView();
+                _ = ShowChatView();
                 break;
             case "teams":
                 NavTeamsButton.IsChecked = true;
-                ShowTeamsView();
+                _ = ShowTeamsView();
                 break;
             case "activity":
                 NavActivityButton.IsChecked = true;
-                ShowActivityView();
+                _ = ShowActivityView();
                 break;
             case "planner":
                 NavPlannerButton.IsChecked = true;
-                ShowPlannerView();
+                _ = ShowPlannerView();
                 break;
             case "onedrive":
                 NavOneDriveButton.IsChecked = true;
-                ShowOneDriveView();
+                _ = ShowOneDriveView();
                 break;
             case "onenote":
                 NavOneNoteButton.IsChecked = true;
-                ShowOneNoteView();
+                _ = ShowOneNoteView();
                 break;
             case "calls":
                 NavCallsButton.IsChecked = true;
-                ShowCallsView();
+                _ = ShowCallsView();
                 break;
             case "todo":
                 NavTodoButton.IsChecked = true;
@@ -8699,13 +8704,13 @@ public partial class MainWindow : FluentWindow
     /// <summary>
     /// REST API로 OneDrive 뷰 전환 처리
     /// </summary>
-    public async void NavigateToOneDriveView(string viewName)
+    public async Task NavigateToOneDriveView(string viewName)
     {
         Log4.Info($"[NavigateToOneDriveView] OneDrive 뷰 전환 요청: {viewName}");
 
         // 먼저 OneDrive 탭으로 전환
         NavOneDriveButton.IsChecked = true;
-        ShowOneDriveView();
+        await ShowOneDriveView();
 
         // OneDriveViewModel 초기화
         if (_oneDriveViewModel == null)
@@ -8776,7 +8781,7 @@ public partial class MainWindow : FluentWindow
     /// <summary>
     /// 캘린더 데이터 비동기 로드
     /// </summary>
-    private async void LoadCalendarDataAsync()
+    private async Task LoadCalendarDataAsync()
     {
         try
         {
@@ -8804,7 +8809,7 @@ public partial class MainWindow : FluentWindow
     private void CalPrevMonthBtn_Click(object sender, RoutedEventArgs e)
     {
         _currentCalendarDate = _currentCalendarDate.AddMonths(-1);
-        LoadCalendarDataAsync();
+        _ = LoadCalendarDataAsync();
     }
 
     /// <summary>
@@ -8813,7 +8818,7 @@ public partial class MainWindow : FluentWindow
     private void CalNextMonthBtn_Click(object sender, RoutedEventArgs e)
     {
         _currentCalendarDate = _currentCalendarDate.AddMonths(1);
-        LoadCalendarDataAsync();
+        _ = LoadCalendarDataAsync();
     }
 
     /// <summary>
@@ -8822,7 +8827,7 @@ public partial class MainWindow : FluentWindow
     private void CalTodayBtn_Click(object sender, RoutedEventArgs e)
     {
         _currentCalendarDate = DateTime.Today;
-        LoadCalendarDataAsync();
+        _ = LoadCalendarDataAsync();
     }
 
     // CalDayViewBtn_Click, CalWeekViewBtn_Click, CalMonthViewBtn_Click → MainWindow.Calendar.cs로 이동
@@ -12331,7 +12336,7 @@ public partial class MainWindow : FluentWindow
     /// <summary>
     /// 섹션에 새 노트 추가
     /// </summary>
-    private void SectionAddPage_Click(object sender, RoutedEventArgs e)
+    private async void SectionAddPage_Click(object sender, RoutedEventArgs e)
     {
         if (_oneNoteViewModel == null) return;
 
@@ -12341,7 +12346,7 @@ public partial class MainWindow : FluentWindow
             if (section != null)
             {
                 Log4.Info($"[OneNote] 새 노트 추가 요청: 섹션={section.DisplayName}");
-                CreateNewPage(section);
+                await CreateNewPage(section);
             }
         }
     }
@@ -12349,7 +12354,7 @@ public partial class MainWindow : FluentWindow
     /// <summary>
     /// 새 노트 생성 (저장 전 상태)
     /// </summary>
-    private async void CreateNewPage(SectionItemViewModel section)
+    private async Task CreateNewPage(SectionItemViewModel section)
     {
         // 새 노트 생성 모드 설정
         _isNewPage = true;
@@ -12857,7 +12862,7 @@ public partial class MainWindow : FluentWindow
     /// <summary>
     /// 즐겨찾기 섹션에 새 노트 추가
     /// </summary>
-    private void FavoriteSectionAddPage_Click(object sender, RoutedEventArgs e)
+    private async void FavoriteSectionAddPage_Click(object sender, RoutedEventArgs e)
     {
         Log4.Info($"[OneNote] FavoriteSectionAddPage_Click 호출됨");
 
@@ -12879,7 +12884,7 @@ public partial class MainWindow : FluentWindow
                 if (page.ItemType == FavoriteItemType.Section)
                 {
                     Log4.Info($"[OneNote] 즐겨찾기 섹션에 새 노트 추가 요청: {page.Title}");
-                    CreateNewPageFromFavoriteSection(page);
+                    await CreateNewPageFromFavoriteSection(page);
                 }
                 else
                 {
@@ -13087,7 +13092,7 @@ public partial class MainWindow : FluentWindow
     /// <summary>
     /// 즐겨찾기 섹션에서 새 노트 생성
     /// </summary>
-    private async void CreateNewPageFromFavoriteSection(PageItemViewModel favoriteSection)
+    private async Task CreateNewPageFromFavoriteSection(PageItemViewModel favoriteSection)
     {
         // 새 노트 생성 모드 설정
         _isNewPage = true;
@@ -13415,7 +13420,7 @@ public partial class MainWindow : FluentWindow
                                                     _oneNoteViewModel.SelectedRecording = firstRecording;
 
                                                     // ListBox가 아이템을 렌더링한 후 선택 (다음 렌더링 사이클에서 실행)
-                                                    Dispatcher.BeginInvoke(System.Windows.Threading.DispatcherPriority.Loaded, new Action(() =>
+                                                    _ = Dispatcher.InvokeAsync(() =>
                                                     {
                                                         OneNoteRecordingsList.SelectedItem = firstRecording;
                                                         Log4.Info($"[MainWindow] 첫 번째 녹음 파일 자동 선택: {firstRecording.FileName}");
@@ -13435,7 +13440,7 @@ public partial class MainWindow : FluentWindow
 
                                                         UpdateRecordingContentPanel();
                                                         UpdateSummaryContentPanel();
-                                                    }));
+                                                    }, System.Windows.Threading.DispatcherPriority.Loaded);
                                                 }
                                                 else
                                                 {

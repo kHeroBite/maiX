@@ -2,6 +2,54 @@
 
 > PROJECT.md 작업 이력 테이블의 상세 보완본
 
+## 2026-05-02: UI블로킹 2차 전수조사 — async void→Task / BeginInvoke→InvokeAsync / try-catch 35건 수정
+
+**분류**: Heavy Path (o4)
+**수정 파일**: 6개
+
+### 배경
+
+1차 전수조사(L-369, 2026-05-02)에서 `Dispatcher.Invoke(async 람다)` 47건을 수정한 이후,
+동일 UI 블로킹 카테고리의 잔여 패턴(`async void 이벤트 핸들러`, `BeginInvoke`, `try-catch 미적용`)을
+HIGH/MEDIUM/LOW 3단계로 분류하여 2차 전수조사를 실시.
+
+### 발견 및 수정 현황
+
+| 심각도 | 패턴 | 건수 | 설명 |
+|--------|------|------|------|
+| HIGH | `async void` → `async Task` 변환 | 15건 | 이벤트 핸들러 외 async void — 예외 소실 위험 |
+| LOW | `Dispatcher.BeginInvoke` → `InvokeAsync` | 16건 | 구식 API, 결과/예외 추적 불가 |
+| MEDIUM | `try-catch` 미적용 async 핸들러 | 4건 | 예외 무시 패턴 |
+| **합계** | | **35건** | |
+
+### 0건 확인 (추가 조사 항목)
+
+| 패턴 | 결과 |
+|------|------|
+| `.Result` / `.Wait()` 동기 블로킹 | 0건 — 없음 ✅ |
+| `lock { await }` 패턴 | 0건 — 없음 ✅ |
+| `Thread.Sleep` UI 스레드 | 0건 — 없음 ✅ |
+| `ObservableCollection` 비UI 스레드 직접 수정 | 0건 — 없음 ✅ |
+
+### 수정 파일별 변경 내역
+
+| 파일 | 변경 내용 |
+|------|-----------|
+| `mAIx/Views/MainWindow.xaml.cs` | BeginInvoke→InvokeAsync 14건 + async void→Task 15건 + 호출부 수정 |
+| `mAIx/Views/ComposeWindow.xaml.cs` | BeginInvoke→InvokeAsync 2건 |
+| `mAIx/ViewModels/MainViewModel.cs` | async void→Task 3건 + try-catch 추가 |
+| `mAIx/ViewModels/OneNoteViewModel.cs` | async void→Task 5건 |
+| `mAIx/Controls/FilePreviewPanel.xaml.cs` | async void→Task 1건 |
+| `mAIx/App.xaml.cs` | InvokeAsync 1건 |
+
+### 테스트 결과 (otest o4)
+- 빌드: 성공 (CS 컴파일 에러 0건) ✅
+- async void→Task 변환 전체 ✅
+- BeginInvoke→InvokeAsync 전환 ✅
+- try-catch 추가 ✅
+
+---
+
 ## 2026-04-24: 폴더 미읽음 배지 불일치 2종 수정
 
 **분류**: Normal Path (o3)
