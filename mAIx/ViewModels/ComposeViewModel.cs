@@ -470,10 +470,12 @@ public partial class ComposeViewModel : ViewModelBase
                     {
                         await Task.Delay(1000); // 서버 반영 대기
                         await _syncService.SyncSentItemsAsync(accountEmail);
+                        // BUG-1 수정: 자기발송 메일 즉시 받은편지함 반영
+                        await _syncService.SyncInboxAsync(accountEmail);
                     }
                     catch (Exception ex)
                     {
-                        Log4.Warn($"보낸편지함 동기화 실패: {ex.Message}");
+                        Log4.Warn($"발송 후 동기화 실패: {ex.Message}");
                     }
                 });
             }

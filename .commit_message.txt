@@ -1,8 +1,14 @@
-📝 HISTORY.md 폴더 미읽음 배지 수정 이력 추가 by claude-sonnet-4-6
+🐛 폴더 미읽음 배지 불일치 2종 수정 + HISTORY 이력 추가 by claude-sonnet-4-6
 
-- OnEmailsSavedToFolder 배지 갱신 + LoadFavoriteFolders 호출 내역
-- UpdateReadStatusAsync actuallyChanged 캡처 순서 교정 내역
-- 테스트 결과 SC-1~4 전항목 PASS 기록
+[버그 1] OnEmailsSavedToFolder — 신규 메일 수신 시 폴더 UnreadItemCount 배지 갱신 추가
+- savedEmails.Count(e => !e.IsRead)로 신규 미읽음 수 계산
+- Dispatcher.InvokeAsync 블록 내에서 folder.UnreadItemCount += newUnreadCount 실행
+- LoadFavoriteFolders() 호출 추가
+
+[버그 2] UpdateReadStatusAsync — actuallyChanged 캡처 순서 교정
+- email.IsRead 변경 이전에 actuallyChanged 캡처하도록 순서 교정
+- .Where(e => e.IsRead != isRead) 필터로 실제 변경 메일만 delta 반영
+- folderChanges 계산도 succeededEmails 대신 actuallyChanged 기준 적용
 
 🤖 Generated with [Claude Code](https://claude.com/claude-code) (claude-sonnet-4-6)
 

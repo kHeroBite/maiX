@@ -2489,6 +2489,48 @@ public class BackgroundSyncService : BackgroundService
     }
 
     /// <summary>
+    /// 받은편지함 즉시 동기화 (메일 발송 후 자기발송 메일 즉시 반영용 — BUG-1)
+    /// </summary>
+    public async Task SyncInboxAsync(string accountEmail, CancellationToken ct = default)
+    {
+        _logger.Information("받은편지함 동기화 요청: {Email}", accountEmail);
+
+        using var scope = _serviceProvider.CreateScope();
+        var dbContext = scope.ServiceProvider.GetRequiredService<mAIxDbContext>();
+        var graphMailService = scope.ServiceProvider.GetRequiredService<GraphMailService>();
+
+        // 받은편지함 폴더 찾기
+        var inboxFolder = await dbContext.Folders
+            .FirstOrDefaultAsync(f => f.AccountEmail == accountEmail &&
+                (f.DisplayName == "받은 편지함" ||
+                 f.DisplayName.Equals("Inbox", StringComparison.OrdinalIgnoreCase)), ct);
+
+        if (inboxFolder == null)
+        {
+            _logger.Warning("받은편지함 폴더를 찾을 수 없음: {Email}", accountEmail);
+            return;
+        }
+
+        try
+        {
+            var (changed, deleted, savedEmails) = await SyncFolderAsync(
+                dbContext, graphMailService, accountEmail, inboxFolder, ct);
+
+            if (changed > 0 || deleted > 0)
+            {
+                EmailsSynced?.Invoke(savedEmails.Count);
+                RaiseMailSyncCompleted();
+            }
+
+            _logger.Information("받은편지함 동기화 완료: 변경 {Changed}건, 삭제 {Deleted}건", changed, deleted);
+        }
+        catch (Exception ex)
+        {
+            _logger.Error(ex, "받은편지함 동기화 실패");
+        }
+    }
+
+    /// <summary>
     /// 특정 폴더 강제 새로고침 (deltaLink 초기화 후 전체 조회)
     /// </summary>
     public async Task ForceRefreshFolderAsync(string accountEmail, string folderId, CancellationToken ct = default)
