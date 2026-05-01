@@ -678,7 +678,8 @@ public partial class ComposeWindow : FluentWindow
                     // 저장 없이 닫기
                     Log4.Debug("메일 작성 취소 - 삭제");
                     _closingConfirmed = true;
-                    Close();
+                    // e.Cancel = true로 취소된 Closing 이벤트 사이클 탈출 후 닫기
+                    Dispatcher.BeginInvoke(new Action(Close));
                     break;
 
                 case ComposeCloseResult.SaveDraft:
@@ -690,7 +691,8 @@ public partial class ComposeWindow : FluentWindow
                         {
                             Log4.Info("메일 임시보관 완료");
                             _closingConfirmed = true;
-                            Close();
+                            // e.Cancel = true로 취소된 Closing 이벤트 사이클 탈출 후 닫기
+                            Dispatcher.BeginInvoke(new Action(Close));
                         }
                     }
                     catch (Exception ex)

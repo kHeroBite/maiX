@@ -835,6 +835,50 @@ public partial class MainViewModel : ViewModelBase, IDisposable
 
     #endregion
 
+    #region 인라인 컴포즈 모드 프로퍼티
+
+    /// <summary>
+    /// 아웃룩 스타일 인라인 메일 작성 패널 표시 여부
+    /// </summary>
+    [ObservableProperty]
+    private bool _isInlineComposing;
+
+    /// <summary>
+    /// 인라인 컴포즈 - 받는 사람
+    /// </summary>
+    [ObservableProperty]
+    private string _inlineComposeTo = "";
+
+    /// <summary>
+    /// 인라인 컴포즈 - 참조
+    /// </summary>
+    [ObservableProperty]
+    private string _inlineComposeCc = "";
+
+    /// <summary>
+    /// 인라인 컴포즈 - 제목
+    /// </summary>
+    [ObservableProperty]
+    private string _inlineComposeSubject = "";
+
+    /// <summary>
+    /// 인라인 컴포즈 - 본문 (일반 텍스트)
+    /// </summary>
+    [ObservableProperty]
+    private string _inlineComposeBody = "";
+
+    /// <summary>
+    /// 인라인 컴포즈 시작 모드 (회신/전달/새 메일 등)
+    /// </summary>
+    private ComposeMode _inlineComposeMode = ComposeMode.New;
+
+    /// <summary>
+    /// 인라인 컴포즈 대상 원본 메일 (회신/전달 시)
+    /// </summary>
+    private Email? _inlineComposeOriginalEmail;
+
+    #endregion
+
     /// <summary>
     /// 동기화 일시정지 상태
     /// </summary>
@@ -4052,6 +4096,139 @@ public partial class MainViewModel : ViewModelBase, IDisposable
         }
 
         return result;
+    }
+
+    #endregion
+
+    #region 인라인 컴포즈 메서드
+
+    /// <summary>
+    /// 인라인 컴포즈 패널 열기 (새 메일)
+    /// </summary>
+    [RelayCommand]
+    public void StartInlineCompose()
+    {
+        _inlineComposeMode = ComposeMode.New;
+        _inlineComposeOriginalEmail = null;
+        InlineComposeTo = "";
+        InlineComposeCc = "";
+        InlineComposeSubject = "";
+        InlineComposeBody = "";
+        IsInlineComposing = true;
+        Log4.Debug("[StartInlineCompose] 인라인 컴포즈 패널 열기");
+    }
+
+    /// <summary>
+    /// 인라인 컴포즈 패널 열기 (회신 모드)
+    /// </summary>
+    public void StartInlineComposeReply(Email originalEmail, bool replyAll = false)
+    {
+        if (originalEmail == null) return;
+
+        _inlineComposeMode = replyAll ? ComposeMode.ReplyAll : ComposeMode.Reply;
+        _inlineComposeOriginalEmail = originalEmail;
+
+        // 받는 사람 설정
+        InlineComposeTo = originalEmail.From ?? "";
+        if (replyAll)
+        {
+            InlineComposeCc = ParseJsonArrayToString(originalEmail.To);
+        }
+        else
+        {
+            InlineComposeCc = "";
+        }
+        InlineComposeSubject = $"RE: {originalEmail.Subject ?? ""}";
+        InlineComposeBody = "";
+        IsInlineComposing = true;
+        Log4.Debug($"[StartInlineComposeReply] 인라인 회신 패널 열기: {originalEmail.Subject}");
+    }
+
+    /// <summary>
+    /// 인라인 컴포즈 패널 닫기 (취소)
+    /// </summary>
+    [RelayCommand]
+    public void CancelInlineCompose()
+    {
+        IsInlineComposing = false;
+        InlineComposeTo = "";
+        InlineComposeCc = "";
+        InlineComposeSubject = "";
+        InlineComposeBody = "";
+        _inlineComposeOriginalEmail = null;
+        Log4.Debug("[CancelInlineCompose] 인라인 컴포즈 패널 닫기");
+    }
+
+    /// <summary>
+    /// 인라인 컴포즈 내용을 ComposeWindow 팝업으로 이전
+    /// </summary>
+    [RelayCommand]
+    public void PopupInlineCompose()
+    {
+        // 현재 입력 내용을 ComposeWindow로 이전하기 위해 이벤트 발생
+        InlineComposePopupRequested?.Invoke(this, EventArgs.Empty);
+        IsInlineComposing = false;
+    }
+
+    /// <summary>
+    /// 인라인 컴포즈 팝업 요청 이벤트 (MainWindow에서 구독)
+    /// </summary>
+    public event EventHandler? InlineComposePopupRequested;
+
+    /// <summary>
+    /// 인라인 컴포즈 메일 발송
+    /// </summary>
+    [RelayCommand]
+    public async Task SendInlineComposeAsync()
+    {
+        try
+        {
+            Log4.Info($"[SendInlineComposeAsync] 인라인 발송 시작: {InlineComposeSubject}");
+
+            var toRecipients = ParseEmailAddresses(InlineComposeTo);
+            if (toRecipients.Count == 0)
+            {
+                Log4.Warn("[SendInlineComposeAsync] 받는 사람이 없습니다.");
+                MessageBox.Show("받는 사람을 입력해주세요.", "알림", MessageBoxButton.OK, MessageBoxImage.Warning);
+                return;
+            }
+
+            var ccRecipients = ParseEmailAddresses(InlineComposeCc);
+
+            // 본문을 HTML로 변환 (줄바꿈 → <br>)
+            var htmlBody = string.IsNullOrWhiteSpace(InlineComposeBody)
+                ? ""
+                : System.Net.WebUtility.HtmlEncode(InlineComposeBody)
+                    .Replace("\r\n", "<br>")
+                    .Replace("\n", "<br>");
+
+            var message = new Microsoft.Graph.Models.Message
+            {
+                Subject = InlineComposeSubject,
+                Body = new Microsoft.Graph.Models.ItemBody
+                {
+                    ContentType = Microsoft.Graph.Models.BodyType.Html,
+                    Content = htmlBody
+                },
+                ToRecipients = toRecipients,
+                CcRecipients = ccRecipients
+            };
+
+            await _graphMailService.SendMessageAsync(message);
+            Log4.Info($"[SendInlineComposeAsync] 발송 성공: To={InlineComposeTo}, Subject={InlineComposeSubject}");
+
+            CancelInlineCompose();
+
+            // 메일 목록 새로고침
+            await LoadEmailsAsync();
+
+            MessageBox.Show("메일이 발송되었습니다.", "알림", MessageBoxButton.OK, MessageBoxImage.Information);
+        }
+        catch (Exception ex)
+        {
+            Log4.Error($"[SendInlineComposeAsync] 발송 실패: {ex.Message}");
+            MessageBox.Show($"메일 발송 실패: {ex.Message}", "오류", MessageBoxButton.OK, MessageBoxImage.Error);
+        }
     }
 
     #endregion

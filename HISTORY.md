@@ -761,6 +761,43 @@
 
 ---
 
+## 2026-05-01: UI 버그 3종 수정 — 초안삭제 닫기 / 인라인 컴포즈 / Dispatcher 블로킹
+
+### 작업 내용 (BUG-2/BUG-3/BUG-4)
+
+#### BUG-2: ComposeWindow 초안삭제 확인 후 창 미닫힘
+- **증상**: 초안 삭제 확인 다이얼로그 후 ComposeWindow가 닫히지 않음
+- **원인**: `MessageBox.Show` 내부에서 `Close()` 호출 → WPF 디스패처 재진입 문제
+- **수정**: `Dispatcher.BeginInvoke(() => Close())` 로 지연 실행으로 변경
+- **파일**: `mAIx/Views/ComposeWindow.xaml.cs`
+
+#### BUG-3: 인라인 메일 작성 패널 추가 (아웃룩 스타일)
+- **증상**: 메인 창에서 빠른 메일 작성 시 별도 창 팝업 필요 — UX 불편
+- **수정**: 메인 창 하단에 아웃룩 스타일 인라인 컴포즈 패널 추가
+  - `MainViewModel.cs`: `IsInlineComposeVisible`, `InlineComposeTo`, `InlineComposeSubject`, `InlineComposeBody` 프로퍼티 + `ShowInlineComposeCommand`, `SendInlineComposeCommand`, `CloseInlineComposeCommand` 커맨드 추가
+  - `MainWindow.xaml`: 하단 인라인 컴포즈 패널 UI (Grid 레이아웃, Visibility 바인딩)
+- **파일**: `mAIx/ViewModels/MainViewModel.cs`, `mAIx/Views/MainWindow.xaml`
+
+#### BUG-4: Dispatcher.Invoke → InvokeAsync 일괄 변환으로 UI 블로킹 해결
+- **증상**: 메일 목록 로딩/동기화 중 UI 프리즈 발생
+- **원인**: `MainWindow.xaml.cs`에서 `Dispatcher.Invoke` 동기 호출이 UI 스레드를 블로킹
+- **수정**: `Dispatcher.Invoke` → `Dispatcher.InvokeAsync` + `await` 일괄 변환
+- **파일**: `mAIx/Views/MainWindow.xaml.cs`
+
+### 주요 변경 파일
+- `mAIx/Views/ComposeWindow.xaml.cs`: Dispatcher.BeginInvoke 닫기 버그 수정
+- `mAIx/ViewModels/MainViewModel.cs`: 인라인 컴포즈 프로퍼티/커맨드 추가
+- `mAIx/Views/MainWindow.xaml`: 인라인 컴포즈 패널 UI 추가
+- `mAIx/Views/MainWindow.xaml.cs`: Dispatcher.Invoke → InvokeAsync 변환
+
+### 테스트 결과 (otest Fast Path o3)
+- 빌드: 성공 (오류 0개) ✅
+- BUG-2 ComposeWindow 닫기 정상 동작 ✅
+- BUG-3 인라인 컴포즈 패널 표시/숨김 동작 ✅
+- BUG-4 UI 블로킹 해소 (InvokeAsync 비동기 전환) ✅
+
+---
+
 ## 2026-04-14: BackgroundSyncService 동기화 Lazy 초기화 적용
 
 ### 작업 내용

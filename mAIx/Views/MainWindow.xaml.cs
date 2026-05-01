@@ -103,9 +103,9 @@ public partial class MainWindow : FluentWindow
         };
 
         // 테마 변경 시 메일 목록 새로고침 (글자색 업데이트) + WebView2 테마 갱신 + Mica 백드롭 재적용
-        Services.Theme.ThemeService.Instance.ThemeChanged += (_, _) =>
+        Services.Theme.ThemeService.Instance.ThemeChanged += async (_, _) =>
         {
-            Dispatcher.Invoke(async () =>
+            await Dispatcher.InvokeAsync(async () =>
             {
                 // Mica 백드롭 재적용 (테마 전환 시 유지되도록)
                 WindowBackdrop.RemoveBackground(this);
@@ -181,12 +181,26 @@ public partial class MainWindow : FluentWindow
                     _draftEditorReady = false;
                 }
             }
+            else if (e.PropertyName == nameof(MainViewModel.IsInlineComposing))
+            {
+                if (_viewModel.IsInlineComposing)
+                {
+                    // 인라인 컴포즈 패널 열릴 때 받는 사람 필드 포커스
+                    await Dispatcher.InvokeAsync(() =>
+                    {
+                        InlineComposeToBox?.Focus();
+                    }, System.Windows.Threading.DispatcherPriority.Loaded);
+                }
+            }
         };
 
+        // 인라인 컴포즈 팝업 이벤트 구독
+        _viewModel.InlineComposePopupRequested += OnInlineComposePopupRequested;
+
         // 캘린더 데이터 업데이트 시 뷰 새로고침
-        _viewModel.CalendarDataUpdated += () =>
+        _viewModel.CalendarDataUpdated += async () =>
         {
-            Dispatcher.Invoke(async () =>
+            await Dispatcher.InvokeAsync(async () =>
             {
                 // 캘린더 모드일 때만 새로고침
                 if (CalendarViewBorder?.Visibility == Visibility.Visible)
@@ -905,9 +919,9 @@ public partial class MainWindow : FluentWindow
                 // 메일 주소 복사 메뉴
                 var copyEmailItem = MailBodyWebView.CoreWebView2.Environment.CreateContextMenuItem(
                     "메일 주소 복사", null, Microsoft.Web.WebView2.Core.CoreWebView2ContextMenuItemKind.Command);
-                copyEmailItem.CustomItemSelected += (s, args) =>
+                copyEmailItem.CustomItemSelected += async (s, args) =>
                 {
-                    Dispatcher.Invoke(() => System.Windows.Clipboard.SetText(emailAddress));
+                    await Dispatcher.InvokeAsync(() => System.Windows.Clipboard.SetText(emailAddress));
                     Log4.Debug($"메일 주소 복사됨: {emailAddress}");
                 };
                 menuItems.Add(copyEmailItem);
@@ -938,9 +952,9 @@ public partial class MainWindow : FluentWindow
                 // 링크 복사 메뉴
                 var copyLinkItem = MailBodyWebView.CoreWebView2.Environment.CreateContextMenuItem(
                     "링크 복사", null, Microsoft.Web.WebView2.Core.CoreWebView2ContextMenuItemKind.Command);
-                copyLinkItem.CustomItemSelected += (s, args) =>
+                copyLinkItem.CustomItemSelected += async (s, args) =>
                 {
-                    Dispatcher.Invoke(() => System.Windows.Clipboard.SetText(linkUri));
+                    await Dispatcher.InvokeAsync(() => System.Windows.Clipboard.SetText(linkUri));
                     Log4.Debug($"링크 복사됨: {linkUri}");
                 };
                 menuItems.Add(copyLinkItem);
@@ -2824,9 +2838,9 @@ public partial class MainWindow : FluentWindow
     /// <summary>
     /// 읽기 확인 요청 감지 시 사용자에게 응답 여부 확인
     /// </summary>
-    private void OnReadReceiptRequested(object? sender, Email email)
+    private async void OnReadReceiptRequested(object? sender, Email email)
     {
-        Dispatcher.Invoke(() =>
+        await Dispatcher.InvokeAsync(() =>
         {
             var result = System.Windows.MessageBox.Show(
                 $"발신자가 읽기 확인을 요청했습니다.\n\n보낸 사람: {email.From}\n제목: {email.Subject}\n\n읽기 확인을 보내시겠습니까?",
@@ -3501,6 +3515,43 @@ public partial class MainWindow : FluentWindow
         catch (Exception ex)
         {
             Log4.Error($"임시보관함 메일 편집 실패: {ex.Message}");
+        }
+    }
+
+    /// <summary>
+    /// 인라인 컴포즈 패널을 팝업 ComposeWindow로 이전
+    /// </summary>
+    private void OnInlineComposePopupRequested(object? sender, EventArgs e)
+    {
+        try
+        {
+            var graphMailService = (App.Current as App)?.GraphMailService;
+            if (graphMailService == null)
+            {
+                Log4.Error("[InlineComposePopup] GraphMailService를 찾을 수 없습니다.");
+                return;
+            }
+
+            var syncService = (App.Current as App)?.BackgroundSyncService;
+            var delayedSendService = (App.Current as App)?.GetService<Services.DelayedSendService>();
+
+            var viewModel = new ViewModels.ComposeViewModel(graphMailService, syncService, delayedSendService,
+                ViewModels.ComposeMode.New, null);
+
+            // 인라인 컴포즈 필드 값 이전
+            viewModel.To = _viewModel.InlineComposeTo;
+            viewModel.Cc = _viewModel.InlineComposeCc;
+            viewModel.Subject = _viewModel.InlineComposeSubject;
+            viewModel.Body = _viewModel.InlineComposeBody;
+
+            var composeWindow = new ComposeWindow(viewModel);
+            composeWindow.Owner = this;
+            Log4.Info("[InlineComposePopup] 인라인 컴포즈 내용을 팝업 창으로 이전");
+            composeWindow.ShowDialog();
+        }
+        catch (Exception ex)
+        {
+            Log4.Error($"[InlineComposePopup] 팝업 창 열기 실패: {ex.Message}");
         }
     }
 

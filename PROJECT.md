@@ -860,6 +860,7 @@ curl -s http://localhost:5858/api/status
 | 2026-04-11 | Teams Phase 1~4 전체 구현 — 게시물/파일/설정/칸반/Wiki/일정 탭 완성 | mAIx/Controls/Teams/ChannelCalendarControl.xaml/.cs(신규), mAIx/Controls/Teams/ChannelPlannerControl.xaml/.cs(신규), mAIx/Controls/Teams/ChannelWikiControl.xaml/.cs(신규), mAIx/ViewModels/Teams/ChannelCalendarViewModel.cs(신규), mAIx/ViewModels/Teams/ChannelPlannerViewModel.cs(신규), mAIx/ViewModels/Teams/ChannelWikiViewModel.cs(신규), mAIx/ViewModels/TeamsViewModel.cs, mAIx/Views/MainWindow.Teams.cs | NLog 전환(L-363) 포함 |
 | 2026-04-14 | 이메일 동기화 Inbox 우선 정렬 + Inbox 첫 로드 $top=10 분기 (Phase 1, o5) | mAIx/Services/Graph/GraphMailService.cs, mAIx/Services/Sync/BackgroundSyncService.cs | GetMessagesDeltaAsync isInitialSync 파라미터; Inbox 2단계 우선 정렬; IsInboxFolder 헬퍼; Phase 2(점진 UI/Upsert) 보류 |
 | 2026-04-24 | InternetMessageId 단독 UNIQUE → 복합 UNIQUE 마이그레이션 (자기 자신에게 보낸 메일 누락 수정) | mAIx/Migrations/20260424000016_FixInternetMessageIdUniqueIndex.cs(신규), mAIx/Services/Sync/BackgroundSyncService.cs | 단독 UNIQUE 폐기+복합 UNIQUE 추가; SaveEmailsAsync UNIQUE catch 폴백 검색 추가 |
+| 2026-05-01 | UI 버그 3종 수정 — BUG-2(ComposeWindow 닫기), BUG-3(인라인 컴포즈 패널), BUG-4(Dispatcher 블로킹) | mAIx/Views/ComposeWindow.xaml.cs, mAIx/ViewModels/MainViewModel.cs, mAIx/Views/MainWindow.xaml, mAIx/Views/MainWindow.xaml.cs | BUG-2: Dispatcher.BeginInvoke 지연 닫기; BUG-3: MainViewModel 인라인컴포즈 프로퍼티/커맨드+MainWindow 패널 UI; BUG-4: Dispatcher.Invoke→InvokeAsync 비동기 전환 |
 
 ---
 
