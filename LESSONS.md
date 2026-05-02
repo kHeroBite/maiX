@@ -1028,6 +1028,38 @@
 - **연관**: L-369 (Dispatcher.Invoke async 람다), L-374 (DispatcherOperation 자체는 Task 아님), L-379 (InvokeAsync async 람다 try-catch 또는 Unwrap)
 - **Level**: 2 (반복 재현 위험 — 외관상 안전해 보이는 함정 패턴)
 
+### L-386: preserveSelection 가드 범위 오류 — Clear 시점 ~ 복원 완료 시점 전체를 guardScope로 감싸야 함 (2026-05-03)
+
+- **문제**: `preserveSelection=true` 로직에서 `_isSwitchingFolder` 가드를 복원 직전에만 ON 하여 Clear 시점에 `LoadMailBody(null)` 호출 → 복원 시점엔 가드 ON으로 `LoadMailBody` 미호출 → 본문 빈 채로 잔류
+- **원인**:
+  - `ObservableCollection.Clear()` 호출 시 `SelectionChanged` → `SelectedEmail=null` write-back → `LoadMailBodyAsync(null)` 실행
+  - 이 시점에 `_isSwitchingFolder`가 OFF이므로 가드가 막지 못함
+  - 복원(`SelectedEmail = saved`) 시점에 가드가 ON이면 `PropertyChanged` 핸들러 내 `LoadMailBodyAsync` 호출이 차단
+  - 결과: 본문이 null-load로 비워진 후 정상 로드 없이 잔류
+- **해결 (guardScope 패턴)**:
+  ```csharp
+  var guardScope = preserveSelection;
+  if (guardScope) _isSwitchingFolder = true;   // Clear 직전 ON
+  try {
+      Emails.Clear();
+      foreach (var e in emails) Emails.Add(e);
+      if (guardScope) {
+          _isSwitchingFolder = false;            // 복원 직전 OFF
+          guardScope = false;
+          if (restored != null) SelectedEmail = restored;
+          else SelectedEmail = null;             // 명시적 null 처리
+      }
+  } finally {
+      if (guardScope) _isSwitchingFolder = false; // 안전망
+  }
+  ```
+- **재발방지**:
+  - `preserveSelection` 패턴 구현 시 **가드 ON/OFF는 Clear 시점을 기준으로 결정** — Clear 이후 복원 완료까지 전체 구간이 가드 범위
+  - 또는 `Clear` 자체를 회피하는 **incremental update(ID 기반 Add/Update/Remove)** 패턴 채용
+  - 코드 리뷰 시: `preserveSelection` 관련 가드가 Clear 이전에 설정되는지 확인
+- **연관**: L-385(ObservableCollection.Clear selection write-back 시리즈)
+- **Level**: 2 (selection 보존 패턴 구현 시 반복 발생 위험)
+
 ### L-385: WPF ListBox + ObservableCollection.Clear+Add — SelectedItem=null write-back으로 리딩 페인 Collapsed (2026-05-03)
 
 - **문제**: 메일을 읽고 있는 도중 백그라운드 동기화가 실행되면 리딩 페인이 갑자기 닫힘
@@ -1094,3 +1126,4 @@
 | L-383 | `InvokeAsync(async lambda).Task.ConfigureAwait(false)` 외관상 안전 함정 — inner async 예외 소실, .Task.Unwrap() 또는 try-catch 필수 | docs+code | LESSONS.md + MEMORY.md + MainWindow.xaml.cs L135/L230 | 2026-05-02 | ✅ |
 | L-384 | SESSION_DIR 이중 경로 — `$HOME/.claude/session-env` vs `/tmp/cc-{프로젝트UUID}/session-env`, evidence 마커는 hook이 참조하는 CLAUDE_CONFIG_DIR 경로에 정확히 생성 필수 | docs | LESSONS.md | 2026-05-02 | ✅ |
 | L-385 | WPF ListBox + ObservableCollection.Clear+Add + 2-way 바인딩 패턴 — SelectedItem=null write-back으로 리딩 페인 Collapsed (사용자 관점: 메일 닫힘) | docs+code | LESSONS.md + MEMORY.md + MainViewModel.cs ReplaceEmails preserveSelection | 2026-05-03 | ✅ |
+| L-386 | preserveSelection 가드 범위 오류 — Clear 시점부터 복원 완료까지 전체 guardScope 감싸기 필수, 복원 시점만 가드 ON하면 본문 빈 채 잔류 | docs+code | LESSONS.md + MEMORY.md + MainViewModel.cs ReplaceEmails guardScope 패턴 | 2026-05-03 | ✅ |

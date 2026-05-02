@@ -2,6 +2,33 @@
 
 > PROJECT.md 작업 이력 테이블의 상세 보완본
 
+## 2026-05-03: 메일 본문 사라짐 회귀 수정 — c1fe1264 보강: ReplaceEmails 가드 범위 확장 + finally 안전망
+
+**분류**: O3 Normal (Fast mode)
+**범위**: 1개 파일 (mAIx/ViewModels/MainViewModel.cs)
+**수정 건수**: ~15줄 변경 (guardScope 패턴 적용)
+
+### 배경
+- c1fe1264(메일 자동 닫힘 회귀 수정)에서 도입한 `preserveSelection=true` 로직의 회귀
+- 사용자 보고: "메일 헤더는 정상인데 본문이 빈 화면으로 나온다"
+- 근본 원인: `_isSwitchingFolder` 가드가 Clear 시점에 OFF → `SelectedEmail=null` write-back → `LoadMailBodyAsync(null)` 실행 → WebView2 본문 명시적 소거
+  → 복원 시점에 가드를 ON했으나 이미 본문이 비워진 상태이고, `LoadMailBodyAsync`가 가드에 막혀 재호출 불가 → 본문 빈 채 잔류
+
+### 수정 내역 (guardScope 패턴)
+1. **`preserveSelection=true` 진입 즉시 가드 ON** (`_isSwitchingFolder = true`) — Clear 이전 설정
+2. **복원 직전 가드 OFF** (`_isSwitchingFolder = false`) — 재선택 이전 해제
+3. **`finally` 안전망** — 예외 발생 시에도 가드가 영구 ON 상태로 잔류하지 않도록 보장
+4. **`restored=null` 분기 명시** — 복원 대상 없을 때 `SelectedEmail = null` 명시적 처리
+
+### 테스트 결과
+- otest: 7/7 AC PASS (AC-007 no_double_load 포함)
+- 빌드 정상, 구동 정상
+
+### 신규 교훈
+- **L-386**: preserveSelection 가드 범위 — Clear 시점부터 복원 완료까지 guardScope 전체 감싸기 필수
+
+---
+
 ## 2026-05-03: 메일 자동 닫힘 회귀 수정 — ReplaceEmails Clear+Add 패턴이 ListBox SelectedEmail=null 유발
 
 **분류**: O3 Normal

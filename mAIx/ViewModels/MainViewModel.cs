@@ -561,47 +561,58 @@ public partial class MainViewModel : ViewModelBase, IDisposable
         int? lastSelectedId = preserveSelection ? SelectedEmail?.Id : null;
         string? lastSelectedEntryId = preserveSelection ? SelectedEmail?.EntryId : null;
 
-        lock (_emailsLock)
-        {
-            _emails.Clear();
-            if (newEmails != null)
-            {
-                foreach (var e in newEmails) _emails.Add(e);
-            }
-        }
-        OnPropertyChanged(nameof(EmailCount));
-        OnPropertyChanged(nameof(StatusBarCountText));
+        // [가드 범위 확장] preserveSelection=true일 때 Clear 직전에 _isSwitchingFolder ON
+        // → Clear → ListBox SelectionChanged → SelectedEmail=null write-back 시 LoadMailBodyAsync 차단
+        bool guardScope = preserveSelection;
+        if (guardScope) _isSwitchingFolder = true;
 
-        // selection 복원 (preserveSelection=true이고 이전 선택 ID/EntryId가 유효한 경우만)
-        if (preserveSelection && (lastSelectedId is > 0 || !string.IsNullOrEmpty(lastSelectedEntryId)))
+        try
         {
-            Email? restored = null;
-            if (lastSelectedId is > 0)
+            lock (_emailsLock)
             {
-                restored = _emails.FirstOrDefault(e => e.Id == lastSelectedId.Value);
-            }
-            if (restored == null && !string.IsNullOrEmpty(lastSelectedEntryId))
-            {
-                restored = _emails.FirstOrDefault(e => e.EntryId == lastSelectedEntryId);
-            }
-
-            if (restored != null && !ReferenceEquals(restored, SelectedEmail))
-            {
-                // OnSelectedEmailChanged 부수효과 억제 (기존 _isSwitchingFolder 패턴 활용)
-                _isSwitchingFolder = true;
-                try
+                _emails.Clear();
+                if (newEmails != null)
                 {
+                    foreach (var e in newEmails) _emails.Add(e);
+                }
+            }
+            OnPropertyChanged(nameof(EmailCount));
+            OnPropertyChanged(nameof(StatusBarCountText));
+
+            // selection 복원 (preserveSelection=true이고 이전 선택 ID/EntryId가 유효한 경우만)
+            if (preserveSelection && (lastSelectedId is > 0 || !string.IsNullOrEmpty(lastSelectedEntryId)))
+            {
+                Email? restored = null;
+                if (lastSelectedId is > 0)
+                {
+                    restored = _emails.FirstOrDefault(e => e.Id == lastSelectedId.Value);
+                }
+                if (restored == null && !string.IsNullOrEmpty(lastSelectedEntryId))
+                {
+                    restored = _emails.FirstOrDefault(e => e.EntryId == lastSelectedEntryId);
+                }
+
+                if (restored != null && !ReferenceEquals(restored, SelectedEmail))
+                {
+                    // 복원 직전 가드 OFF → SelectedEmail = restored → OnSelectedEmailChanged → LoadMailBodyAsync 정상 호출
+                    _isSwitchingFolder = false;
+                    guardScope = false; // finally 재설정 방지
                     SelectedEmail = restored;
                 }
-                finally
+                else if (restored == null)
                 {
+                    Log4.Debug($"[ReplaceEmails] preserveSelection=true이지만 이전 선택 메일이 새 스냅샷에 없음 (Id={lastSelectedId}, EntryId={lastSelectedEntryId})");
+                    // 메일 삭제 시 placeholder 표시: 가드 OFF 후 명시적 null 할당
                     _isSwitchingFolder = false;
+                    guardScope = false; // finally 재설정 방지
+                    SelectedEmail = null;
                 }
             }
-            else if (restored == null)
-            {
-                Log4.Debug($"[ReplaceEmails] preserveSelection=true이지만 이전 선택 메일이 새 스냅샷에 없음 (Id={lastSelectedId}, EntryId={lastSelectedEntryId})");
-            }
+        }
+        finally
+        {
+            // [안전망] 예외/early return 시에도 가드 반드시 OFF
+            if (guardScope) _isSwitchingFolder = false;
         }
     }
 
