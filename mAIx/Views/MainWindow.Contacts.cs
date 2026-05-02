@@ -47,9 +47,16 @@ namespace mAIx.Views
                 ContactDetailPanel.SendEmailRequested += (s, email) => OnContactComposeEmail(s, email);
                 ContactDetailPanel.DeleteRequested += async (s, contact) =>
                 {
-                    if (_contactsViewModel != null)
+                    try
                     {
-                        await _contactsViewModel.DeleteContactCommand.ExecuteAsync(contact);
+                        if (_contactsViewModel != null)
+                        {
+                            await _contactsViewModel.DeleteContactCommand.ExecuteAsync(contact);
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        Log4.Error($"[Contacts] 연락처 삭제 요청 핸들러 실패: {ex}");
                     }
                 };
 

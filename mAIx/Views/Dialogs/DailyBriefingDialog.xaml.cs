@@ -25,7 +25,11 @@ public partial class DailyBriefingDialog : FluentWindow
         _aiMailService = aiMailService;
         _todayEmails = todayEmails;
 
-        Loaded += async (s, e) => await GenerateBriefingAsync();
+        Loaded += async (s, e) =>
+        {
+            try { await GenerateBriefingAsync(); }
+            catch (Exception ex) { Log4.Error($"[DailyBriefingDialog] Loaded 핸들러 실패: {ex}"); }
+        };
         Closed += (s, e) => _cts?.Cancel();
 
         KeyDown += (s, e) =>

@@ -79,7 +79,11 @@ public partial class MailRuleSettingsDialog : FluentWindow
             if (e.Key == Key.Escape) Close();
         };
 
-        Loaded += async (s, e) => await LoadRulesAsync();
+        Loaded += async (s, e) =>
+        {
+            try { await LoadRulesAsync(); }
+            catch (Exception ex) { Log4.Error($"[MailRuleSettingsDialog] Loaded 핸들러 실패: {ex}"); }
+        };
     }
 
     /// <summary>

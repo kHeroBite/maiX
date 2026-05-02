@@ -2702,7 +2702,17 @@ public partial class OneNoteViewModel : ViewModelBase
         _realtimeSummaryTimer?.Stop();
         _realtimeSummaryTimer?.Dispose();
         _realtimeSummaryTimer = new System.Timers.Timer(_summaryIntervalSeconds * 1000);
-        _realtimeSummaryTimer.Elapsed += async (s, e) => await UpdateRealtimeSummaryAsync();
+        _realtimeSummaryTimer.Elapsed += async (s, e) =>
+        {
+            try
+            {
+                await UpdateRealtimeSummaryAsync();
+            }
+            catch (Exception ex)
+            {
+                Log4.Error($"[녹음] 실시간 요약 타이머 처리 중 오류: {ex.Message}\n{ex.StackTrace}");
+            }
+        };
         _realtimeSummaryTimer.Start();
 
         Log4.Info($"[녹음] ★ 실시간 STT 모드 활성화 (STT: {_sttChunkIntervalSeconds}초, 요약: {_summaryIntervalSeconds}초)");
@@ -3227,10 +3237,10 @@ public partial class OneNoteViewModel : ViewModelBase
                         }
 
                         // 자동 후처리 실행 (UI 스레드에서 실행 — IsPostProcessing 등 UI 바인딩 프로퍼티 사용)
-                        await System.Windows.Application.Current.Dispatcher.InvokeAsync(async () =>
-                        {
-                            await RunPostProcessingAsync(filePath);
-                        });
+                        // InvokeAsync(async lambda)는 inner async 예외를 소실시키므로 Task 경유로 수정
+                        await System.Windows.Application.Current.Dispatcher.InvokeAsync(() =>
+                            RunPostProcessingAsync(filePath)
+                        ).Task.Unwrap().ConfigureAwait(false);
                     }
                     catch (Exception ex)
                     {
@@ -3912,10 +3922,17 @@ public partial class OneNoteViewModel : ViewModelBase
             _autoSaveTimer.Elapsed += async (s, e) =>
             {
                 _autoSaveTimer?.Stop();
-                await System.Windows.Application.Current?.Dispatcher.InvokeAsync(async () =>
+                try
                 {
-                    await SaveAsync();
-                });
+                    // InvokeAsync(async lambda)는 inner async 예외를 소실시키므로 Task 경유로 수정
+                    await (System.Windows.Application.Current?.Dispatcher.InvokeAsync(() =>
+                        SaveAsync()
+                    ).Task.Unwrap() ?? Task.CompletedTask).ConfigureAwait(false);
+                }
+                catch (Exception ex)
+                {
+                    _logger.Error(ex, "[OneNote] 자동저장 Dispatcher 처리 중 오류");
+                }
             };
             _autoSaveTimer.AutoReset = false;
         }

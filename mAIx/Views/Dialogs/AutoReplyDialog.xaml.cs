@@ -23,7 +23,11 @@ public partial class AutoReplyDialog : Wpf.Ui.Controls.FluentWindow
         EndDatePicker.SelectedDate = DateTime.Now.AddDays(1);
         StartDatePicker.SelectedDate = DateTime.Now;
 
-        Loaded += async (s, e) => await LoadCurrentSettingsAsync();
+        Loaded += async (s, e) =>
+        {
+            try { await LoadCurrentSettingsAsync(); }
+            catch (Exception ex) { Log4.Error($"[AutoReplyDialog] Loaded 핸들러 실패: {ex}"); }
+        };
     }
 
     /// <summary>

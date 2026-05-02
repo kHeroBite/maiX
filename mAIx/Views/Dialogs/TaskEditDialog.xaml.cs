@@ -171,19 +171,19 @@ public partial class TaskEditDialog : FluentWindow
                                 ? fnElement.GetString() ?? "" : "";
                             var dropFilePath = message.RootElement.TryGetProperty("filePath", out var fpElement)
                                 ? fpElement.GetString() ?? "" : "";
-                            await Dispatcher.InvokeAsync(async () =>
-                            {
-                                await Services.Editor.TinyMCEEditorService.비이미지파일드롭처리Async(NotesWebView, dropFileName, dropFilePath);
-                            });
+                            // InvokeAsync(async lambda)는 inner async 예외를 소실시키므로 Task 경유로 수정
+                            await Dispatcher.InvokeAsync(() =>
+                                Services.Editor.TinyMCEEditorService.비이미지파일드롭처리Async(NotesWebView, dropFileName, dropFilePath)
+                            ).Task.Unwrap();
                         }
                         else if (type == "filePicker")
                         {
                             var pickerType = message.RootElement.TryGetProperty("pickerType", out var ptElement)
                                 ? ptElement.GetString() ?? "file" : "file";
-                            await Dispatcher.InvokeAsync(async () =>
-                            {
-                                await Services.Editor.TinyMCEEditorService.HandleFilePickerAsync(NotesWebView, pickerType);
-                            });
+                            // InvokeAsync(async lambda)는 inner async 예외를 소실시키므로 Task 경유로 수정
+                            await Dispatcher.InvokeAsync(() =>
+                                Services.Editor.TinyMCEEditorService.HandleFilePickerAsync(NotesWebView, pickerType)
+                            ).Task.Unwrap();
                         }
                     }
                 }
@@ -197,13 +197,20 @@ public partial class TaskEditDialog : FluentWindow
             // 메모 내용 설정은 WebView2 로드 완료 후
             NotesWebView.NavigationCompleted += async (s, args) =>
             {
-                if (args.IsSuccess && !string.IsNullOrEmpty(_task.Notes))
+                try
                 {
-                    // 마크다운 테이블을 HTML 테이블로 변환
-                    var htmlContent = ConvertMarkdownTableToHtml(_task.Notes);
-                    var escapedNotes = htmlContent.Replace("\\", "\\\\").Replace("'", "\\'").Replace("\n", "\\n").Replace("\r", "");
-                    await NotesWebView.CoreWebView2.ExecuteScriptAsync(
-                        $"if (typeof tinymce !== 'undefined' && tinymce.activeEditor) tinymce.activeEditor.setContent('{escapedNotes}');");
+                    if (args.IsSuccess && !string.IsNullOrEmpty(_task.Notes))
+                    {
+                        // 마크다운 테이블을 HTML 테이블로 변환
+                        var htmlContent = ConvertMarkdownTableToHtml(_task.Notes);
+                        var escapedNotes = htmlContent.Replace("\\", "\\\\").Replace("'", "\\'").Replace("\n", "\\n").Replace("\r", "");
+                        await NotesWebView.CoreWebView2.ExecuteScriptAsync(
+                            $"if (typeof tinymce !== 'undefined' && tinymce.activeEditor) tinymce.activeEditor.setContent('{escapedNotes}');");
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Log4.Error($"[TaskEditDialog] NavigationCompleted 핸들러 실패: {ex}");
                 }
             };
         }

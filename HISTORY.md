@@ -2,6 +2,60 @@
 
 > PROJECT.md 작업 이력 테이블의 상세 보완본
 
+## 2026-05-02: oralph 5-iteration 수렴 — async 람다 try-catch/Task.Unwrap 37건 일괄 수정
+
+**분류**: oralph 자동 반복 검증
+**수정 파일**: 13개
+
+### 배경
+
+동기화/UI블로킹 수동 검증(5차) 완료 후 oralph 자동 반복 검증을 실행하여 연관 패턴 전수 확인.
+수동 검증으로 놓쳤던 async 람다 관련 추가 패턴을 5회 이터레이션으로 완전 수렴.
+
+### 이터레이션별 수정 내역
+
+| Iteration | 발견 건수 | 수정 패턴 |
+|-----------|-----------|-----------|
+| iter1 | 5건 | InvokeAsync(async lambda) fire-and-forget try-catch 누락 |
+| iter2 | 8건 | InvokeAsync(async lambda) Task.Unwrap 미적용 + try-catch 누락 |
+| iter3 | 4건 | BeginInvoke(async lambda) + Timer.Elapsed async lambda |
+| iter4 | 20건 | async lambda 이벤트 핸들러 외부 try-catch 누락 |
+| iter5 | 0건 | **수렴 ✅** |
+| **합계** | **37건** | |
+
+### 주요 수정 파일
+
+- `mAIx/Utils/WebView2DropHelper.cs`: Drop 핸들러 try-catch 추가
+- `mAIx/ViewModels/ActivityViewModel.cs`: 이벤트 핸들러 외부 try-catch 래핑
+- `mAIx/ViewModels/CalendarViewModel.cs`: InvokeAsync async lambda try-catch
+- `mAIx/ViewModels/MainViewModel.cs`: OnMailSyncCompleted/OnReadStatusCorrected try-catch
+- `mAIx/ViewModels/OneNoteViewModel.cs`: Timer.Elapsed async lambda + InvokeAsync Task.Unwrap
+- `mAIx/Views/Dialogs/AutoReplyDialog.xaml.cs`: 이벤트 핸들러 외부 try-catch
+- `mAIx/Views/Dialogs/DailyBriefingDialog.xaml.cs`: 이벤트 핸들러 외부 try-catch
+- `mAIx/Views/Dialogs/MailRuleSettingsDialog.xaml.cs`: 이벤트 핸들러 외부 try-catch
+- `mAIx/Views/Dialogs/TaskEditDialog.xaml.cs`: InvokeAsync Task.Unwrap + 핸들러 try-catch
+- `mAIx/Views/EmailViewWindow.xaml.cs`: BeginInvoke → InvokeAsync 변환 3건
+- `mAIx/Views/MainWindow.Calendar.cs`: 이벤트 핸들러 외부 try-catch
+- `mAIx/Views/MainWindow.Contacts.cs`: 이벤트 핸들러 외부 try-catch
+- `mAIx/Views/MainWindow.xaml.cs`: ThemeChanged/CalendarDataUpdated Task.Unwrap + try-catch
+
+### 테스트 결과 (빌드 검증)
+
+- 빌드: 성공 (CS 컴파일 에러 0건) ✅
+- 경고: 212건 (기존 수준 유지)
+
+### 교훈
+
+- L-378: oralph 자동 반복 검증 — 수동 1회 검증 후에도 37건 추가 발견
+- L-379: InvokeAsync(async lambda) 예외 소실 — `.Task.Unwrap()` 또는 try-catch 필수
+- L-380: Timer.Elapsed 등 비WPF 이벤트 핸들러도 async lambda try-catch 필수
+
+### 커밋
+
+- (커밋 예정 — odone_git 단계)
+
+---
+
 ## 2026-05-02: 동기화/UI블로킹 5차 마무리 — Lock/EF/WebView2 6건 수정
 
 **분류**: Normal Path (o3)

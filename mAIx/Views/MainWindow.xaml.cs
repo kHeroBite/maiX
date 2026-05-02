@@ -105,36 +105,46 @@ public partial class MainWindow : FluentWindow
         // 테마 변경 시 메일 목록 새로고침 (글자색 업데이트) + WebView2 테마 갱신 + Mica 백드롭 재적용
         Services.Theme.ThemeService.Instance.ThemeChanged += async (_, _) =>
         {
-            await Dispatcher.InvokeAsync(async () =>
+            try
             {
-                // Mica 백드롭 재적용 (테마 전환 시 유지되도록)
-                WindowBackdrop.RemoveBackground(this);
-                WindowBackdrop.ApplyBackdrop(this, WindowBackdropType.Mica);
-
-                // CollectionView 새로고침으로 컨버터 재평가
-                if (EmailListBox.ItemsSource != null)
+                // InvokeAsync(async lambda)는 inner async 예외를 소실시키므로 Task 경유로 수정
+                await Dispatcher.InvokeAsync(async () =>
                 {
-                    var view = System.Windows.Data.CollectionViewSource.GetDefaultView(EmailListBox.ItemsSource);
-                    view?.Refresh();
-                }
+                    // Mica 백드롭 재적용 (테마 전환 시 유지되도록)
+                    WindowBackdrop.RemoveBackground(this);
+                    WindowBackdrop.ApplyBackdrop(this, WindowBackdropType.Mica);
 
-                // WebView2 테마 업데이트
-                if (_viewModel.SelectedEmail != null)
-                {
-                    _ = LoadMailBodyAsync(_viewModel.SelectedEmail);
-                }
+                    // CollectionView 새로고침으로 컨버터 재평가
+                    if (EmailListBox.ItemsSource != null)
+                    {
+                        var view = System.Windows.Data.CollectionViewSource.GetDefaultView(EmailListBox.ItemsSource);
+                        view?.Refresh();
+                    }
 
-                // OneNote TinyMCE 에디터 테마 갱신
-                if (OneNoteViewBorder?.Visibility == Visibility.Visible && _oneNoteEditorInitialized)
-                {
-                    await RefreshOneNoteTinyMCEThemeAsync();
-                }
-            });
+                    // WebView2 테마 업데이트
+                    if (_viewModel.SelectedEmail != null)
+                    {
+                        _ = LoadMailBodyAsync(_viewModel.SelectedEmail);
+                    }
+
+                    // OneNote TinyMCE 에디터 테마 갱신
+                    if (OneNoteViewBorder?.Visibility == Visibility.Visible && _oneNoteEditorInitialized)
+                    {
+                        await RefreshOneNoteTinyMCEThemeAsync();
+                    }
+                }).Task.ConfigureAwait(false);
+            }
+            catch (Exception ex)
+            {
+                Log4.Error($"[MainWindow] ThemeChanged Dispatcher 처리 중 오류: {ex.Message}");
+            }
         };
 
         // SelectedEmail 및 IsEditingDraft 변경 감지
         _viewModel.PropertyChanged += async (s, e) =>
         {
+            try
+            {
             if (e.PropertyName == nameof(MainViewModel.SelectedFolder))
             {
                 // 폴더 전환 시 캐시된 스크롤 위치 복원
@@ -192,6 +202,11 @@ public partial class MainWindow : FluentWindow
                     }, System.Windows.Threading.DispatcherPriority.Loaded);
                 }
             }
+            }
+            catch (Exception ex)
+            {
+                Log4.Error($"[MainWindow] PropertyChanged 이벤트 핸들러 실패: {ex}");
+            }
         };
 
         // 인라인 컴포즈 팝업 이벤트 구독
@@ -200,16 +215,24 @@ public partial class MainWindow : FluentWindow
         // 캘린더 데이터 업데이트 시 뷰 새로고침
         _viewModel.CalendarDataUpdated += async () =>
         {
-            await Dispatcher.InvokeAsync(async () =>
+            try
             {
-                // 캘린더 모드일 때만 새로고침
-                if (CalendarViewBorder?.Visibility == Visibility.Visible)
+                // InvokeAsync(async lambda)는 inner async 예외를 소실시키므로 Task 경유로 수정
+                await Dispatcher.InvokeAsync(async () =>
                 {
-                    Log4.Info("캘린더 동기화 완료 - 뷰 새로고침");
-                    await LoadMonthEventsAsync(_currentCalendarDate);
-                    UpdateCalendarDisplay();
-                }
-            });
+                    // 캘린더 모드일 때만 새로고침
+                    if (CalendarViewBorder?.Visibility == Visibility.Visible)
+                    {
+                        Log4.Info("캘린더 동기화 완료 - 뷰 새로고침");
+                        await LoadMonthEventsAsync(_currentCalendarDate);
+                        UpdateCalendarDisplay();
+                    }
+                }).Task.ConfigureAwait(false);
+            }
+            catch (Exception ex)
+            {
+                Log4.Error($"[MainWindow] CalendarDataUpdated Dispatcher 처리 중 오류: {ex.Message}");
+            }
         };
 
         // WebView2 초기화
@@ -287,18 +310,26 @@ public partial class MainWindow : FluentWindow
             return;
         }
 
-        Dispatcher.InvokeAsync(async () =>
+        // fire-and-forget 명시적 표시 (inner async 예외는 catch에서 처리됨)
+        _ = Dispatcher.InvokeAsync(async () =>
         {
-            // 캘린더 뷰가 표시 중일 때만 새로고침
-            if (CalendarViewBorder?.Visibility == Visibility.Visible)
+            try
             {
-                Log4.Info("[MainWindow] 캘린더 동기화 완료 - DB에서 뷰 새로고침");
-                await LoadMonthEventsFromDbAsync(_currentCalendarDate);
-                UpdateCalendarDisplay();
-            }
+                // 캘린더 뷰가 표시 중일 때만 새로고침
+                if (CalendarViewBorder?.Visibility == Visibility.Visible)
+                {
+                    Log4.Info("[MainWindow] 캘린더 동기화 완료 - DB에서 뷰 새로고침");
+                    await LoadMonthEventsFromDbAsync(_currentCalendarDate);
+                    UpdateCalendarDisplay();
+                }
 
-            // CalendarViewModel이 있으면 새로고침 (추후 사용을 위해 유지)
-            _viewModel.CalendarViewModel?.OnCalendarEventsSynced(added, updated, deleted);
+                // CalendarViewModel이 있으면 새로고침 (추후 사용을 위해 유지)
+                _viewModel.CalendarViewModel?.OnCalendarEventsSynced(added, updated, deleted);
+            }
+            catch (Exception ex)
+            {
+                Log4.Error($"[MainWindow] OnCalendarEventsSyncedFromWindow Dispatcher 처리 중 오류: {ex.Message}");
+            }
         });
     }
 
@@ -310,39 +341,47 @@ public partial class MainWindow : FluentWindow
     {
         Log4.Info($"[MainWindow] OnChatSyncedFromWindow 이벤트 수신: {chatCount}개 채팅방");
 
-        Dispatcher.InvokeAsync(async () =>
+        // fire-and-forget 명시적 표시 (inner async 예외는 내부 catch에서 처리됨)
+        _ = Dispatcher.InvokeAsync(async () =>
         {
-            // TeamsViewModel 초기화 (필요 시)
-            if (_teamsViewModel == null)
+            try
             {
-                try
+                // TeamsViewModel 초기화 (필요 시)
+                if (_teamsViewModel == null)
                 {
-                    _teamsViewModel = ((App)Application.Current).GetService<TeamsViewModel>()!;
+                    try
+                    {
+                        _teamsViewModel = ((App)Application.Current).GetService<TeamsViewModel>()!;
+                    }
+                    catch (Exception ex)
+                    {
+                        Log4.Error($"[OnChatSyncedFromWindow] TeamsViewModel 초기화 실패: {ex.Message}");
+                        return;
+                    }
                 }
-                catch (Exception ex)
-                {
-                    Log4.Error($"[OnChatSyncedFromWindow] TeamsViewModel 초기화 실패: {ex.Message}");
-                    return;
-                }
-            }
 
-            // 채팅 데이터가 아직 로드되지 않은 경우에만 로드
-            if (_teamsViewModel != null && _teamsViewModel.Chats.Count == 0)
-            {
-                Log4.Info("[OnChatSyncedFromWindow] 채팅 데이터 자동 로드 시작");
-                try
+                // 채팅 데이터가 아직 로드되지 않은 경우에만 로드
+                if (_teamsViewModel != null && _teamsViewModel.Chats.Count == 0)
                 {
-                    await _teamsViewModel.LoadChatsAsync();
-                    Log4.Info($"[OnChatSyncedFromWindow] 채팅 데이터 로드 완료: {_teamsViewModel.Chats.Count}개");
+                    Log4.Info("[OnChatSyncedFromWindow] 채팅 데이터 자동 로드 시작");
+                    try
+                    {
+                        await _teamsViewModel.LoadChatsAsync();
+                        Log4.Info($"[OnChatSyncedFromWindow] 채팅 데이터 로드 완료: {_teamsViewModel.Chats.Count}개");
+                    }
+                    catch (Exception ex)
+                    {
+                        Log4.Error($"[OnChatSyncedFromWindow] 채팅 데이터 로드 실패: {ex.Message}");
+                    }
                 }
-                catch (Exception ex)
+                else
                 {
-                    Log4.Error($"[OnChatSyncedFromWindow] 채팅 데이터 로드 실패: {ex.Message}");
+                    Log4.Debug($"[OnChatSyncedFromWindow] 이미 로드됨: {_teamsViewModel?.Chats.Count ?? 0}개");
                 }
             }
-            else
+            catch (Exception ex)
             {
-                Log4.Debug($"[OnChatSyncedFromWindow] 이미 로드됨: {_teamsViewModel?.Chats.Count ?? 0}개");
+                Log4.Error($"[MainWindow] OnChatSyncedFromWindow Dispatcher 처리 중 오류: {ex.Message}");
             }
         });
     }
@@ -921,8 +960,15 @@ public partial class MainWindow : FluentWindow
                     "메일 주소 복사", null, Microsoft.Web.WebView2.Core.CoreWebView2ContextMenuItemKind.Command);
                 copyEmailItem.CustomItemSelected += async (s, args) =>
                 {
-                    await Dispatcher.InvokeAsync(() => System.Windows.Clipboard.SetText(emailAddress));
-                    Log4.Debug($"메일 주소 복사됨: {emailAddress}");
+                    try
+                    {
+                        await Dispatcher.InvokeAsync(() => System.Windows.Clipboard.SetText(emailAddress));
+                        Log4.Debug($"메일 주소 복사됨: {emailAddress}");
+                    }
+                    catch (Exception ex)
+                    {
+                        Log4.Error($"[MainWindow] 메일 주소 복사 핸들러 실패: {ex}");
+                    }
                 };
                 menuItems.Add(copyEmailItem);
             }
@@ -954,8 +1000,15 @@ public partial class MainWindow : FluentWindow
                     "링크 복사", null, Microsoft.Web.WebView2.Core.CoreWebView2ContextMenuItemKind.Command);
                 copyLinkItem.CustomItemSelected += async (s, args) =>
                 {
-                    await Dispatcher.InvokeAsync(() => System.Windows.Clipboard.SetText(linkUri));
-                    Log4.Debug($"링크 복사됨: {linkUri}");
+                    try
+                    {
+                        await Dispatcher.InvokeAsync(() => System.Windows.Clipboard.SetText(linkUri));
+                        Log4.Debug($"링크 복사됨: {linkUri}");
+                    }
+                    catch (Exception ex)
+                    {
+                        Log4.Error($"[MainWindow] 링크 복사 핸들러 실패: {ex}");
+                    }
                 };
                 menuItems.Add(copyLinkItem);
             }
@@ -9201,9 +9254,16 @@ public partial class MainWindow : FluentWindow
             // 일정 클릭 시 편집 다이얼로그 열기
             eventBorder.MouseLeftButtonDown += async (s, args) =>
             {
-                args.Handled = true; // 날짜 셀 클릭 이벤트 전파 방지
-                Log4.Info($"일정 클릭: {capturedEvent.Subject}");
-                await OpenEventEditDialogAsync(capturedEvent, null);
+                try
+                {
+                    args.Handled = true; // 날짜 셀 클릭 이벤트 전파 방지
+                    Log4.Info($"일정 클릭: {capturedEvent.Subject}");
+                    await OpenEventEditDialogAsync(capturedEvent, null);
+                }
+                catch (Exception ex)
+                {
+                    Log4.Error($"[MainWindow] 일정 클릭 핸들러 실패: {ex}");
+                }
             };
 
             stack.Children.Add(eventBorder);
@@ -9227,18 +9287,25 @@ public partial class MainWindow : FluentWindow
         // 클릭 이벤트: 단일 클릭=날짜 선택, 더블 클릭=새 일정 생성
         cell.MouseLeftButtonDown += async (s, e) =>
         {
-            if (e.ClickCount == 2)
+            try
             {
-                Log4.Info($"날짜 더블클릭: {date:yyyy-MM-dd} - 새 일정 생성");
-                await OpenEventEditDialogAsync(null, date);
+                if (e.ClickCount == 2)
+                {
+                    Log4.Info($"날짜 더블클릭: {date:yyyy-MM-dd} - 새 일정 생성");
+                    await OpenEventEditDialogAsync(null, date);
+                }
+                else if (e.ClickCount == 1)
+                {
+                    Log4.Info($"날짜 클릭: {date:yyyy-MM-dd}");
+                    _selectedCalendarDate = date;
+                    _viewModel.StatusMessage = $"{date:yyyy년 M월 d일} 선택됨 ({dayEvents.Count}건 일정)";
+                    UpdateSelectedDateEventsPanel(date, dayEvents);
+                    UpdateCalendarDetailPanel(date, dayEvents);
+                }
             }
-            else if (e.ClickCount == 1)
+            catch (Exception ex)
             {
-                Log4.Info($"날짜 클릭: {date:yyyy-MM-dd}");
-                _selectedCalendarDate = date;
-                _viewModel.StatusMessage = $"{date:yyyy년 M월 d일} 선택됨 ({dayEvents.Count}건 일정)";
-                UpdateSelectedDateEventsPanel(date, dayEvents);
-                UpdateCalendarDetailPanel(date, dayEvents);
+                Log4.Error($"[MainWindow] 캘린더 날짜 셀 클릭 핸들러 실패: {ex}");
             }
         };
 
@@ -9292,8 +9359,15 @@ public partial class MainWindow : FluentWindow
             var eventCard = CreateEventCard(evt);
             eventCard.MouseLeftButtonDown += async (s, e) =>
             {
-                e.Handled = true;
-                await OpenEventEditDialogAsync(capturedEvent, null);
+                try
+                {
+                    e.Handled = true;
+                    await OpenEventEditDialogAsync(capturedEvent, null);
+                }
+                catch (Exception ex)
+                {
+                    Log4.Error($"[MainWindow] 일정 카드 클릭 핸들러 실패: {ex}");
+                }
             };
             SelectedDateEventsPanel.Children.Add(eventCard);
         }
@@ -9417,8 +9491,15 @@ public partial class MainWindow : FluentWindow
                 var eventCard = CreateDetailEventCard(evt);
                 eventCard.MouseLeftButtonDown += async (s, e) =>
                 {
-                    e.Handled = true;
-                    await OpenEventEditDialogAsync(capturedEvent, null);
+                    try
+                    {
+                        e.Handled = true;
+                        await OpenEventEditDialogAsync(capturedEvent, null);
+                    }
+                    catch (Exception ex)
+                    {
+                        Log4.Error($"[MainWindow] 세부 일정 카드 클릭 핸들러 실패: {ex}");
+                    }
                 };
                 CalDetailEventsList.Children.Add(eventCard);
             }
@@ -13315,6 +13396,8 @@ public partial class MainWindow : FluentWindow
                     // 녹음 완료 후 새 파일 선택 이벤트 핸들러
                     _oneNoteViewModel.NewRecordingSelected += async (newRecording) =>
                     {
+                        try
+                        {
                         await Dispatcher.InvokeAsync(() =>
                         {
                             if (OneNoteRecordingsList != null && newRecording != null)
@@ -13353,11 +13436,18 @@ public partial class MainWindow : FluentWindow
                                 Log4.Info($"[MainWindow] NewRecordingSelected 이벤트 완료");
                             }
                         });
+                        }
+                        catch (Exception ex)
+                        {
+                            Log4.Error($"[MainWindow] NewRecordingSelected 핸들러 실패: {ex}");
+                        }
                     };
 
                     // HasUnsavedChanges 변경 시 ● 표시 업데이트 및 SelectedPage 변경 시 녹음 목록 업데이트
                     _oneNoteViewModel.PropertyChanged += async (s, e) =>
                     {
+                        try
+                        {
                         if (e.PropertyName == nameof(OneNoteViewModel.HasUnsavedChanges))
                         {
                             await Dispatcher.InvokeAsync(() =>
@@ -13468,51 +13558,77 @@ public partial class MainWindow : FluentWindow
                                 }
                             });
                         }
+                        }
+                        catch (Exception ex)
+                        {
+                            Log4.Error($"[MainWindow] OneNote PropertyChanged 핸들러 실패: {ex}");
+                        }
                     };
 
                     // 실시간 STT 세그먼트 추가 시 UI 업데이트
                     _oneNoteViewModel.LiveSTTSegments.CollectionChanged += async (s, e) =>
                     {
-                        if (e.Action == System.Collections.Specialized.NotifyCollectionChangedAction.Add ||
-                            e.Action == System.Collections.Specialized.NotifyCollectionChangedAction.Reset)
+                        try
                         {
-                            await Dispatcher.InvokeAsync(() =>
+                            if (e.Action == System.Collections.Specialized.NotifyCollectionChangedAction.Add ||
+                                e.Action == System.Collections.Specialized.NotifyCollectionChangedAction.Reset)
                             {
-                                Log4.Info($"[MainWindow] LiveSTTSegments 변경 - 실시간 UI 업데이트 ({_oneNoteViewModel.LiveSTTSegments.Count}개)");
-                                UpdateRecordingContentPanel();
-                            });
+                                await Dispatcher.InvokeAsync(() =>
+                                {
+                                    Log4.Info($"[MainWindow] LiveSTTSegments 변경 - 실시간 UI 업데이트 ({_oneNoteViewModel.LiveSTTSegments.Count}개)");
+                                    UpdateRecordingContentPanel();
+                                });
+                            }
+                        }
+                        catch (Exception ex)
+                        {
+                            Log4.Error($"[MainWindow] LiveSTTSegments CollectionChanged 핸들러 실패: {ex}");
                         }
                     };
 
                     // STT 세그먼트 변경 시 UI 업데이트 (녹음 파일 선택 시)
                     _oneNoteViewModel.STTSegments.CollectionChanged += async (s, e) =>
                     {
-                        await Dispatcher.InvokeAsync(() =>
+                        try
                         {
-                            Log4.Debug($"[MainWindow] STTSegments 변경 - UI 업데이트 ({_oneNoteViewModel.STTSegments.Count}개)");
-                            UpdateRecordingContentPanel();
-                        });
+                            await Dispatcher.InvokeAsync(() =>
+                            {
+                                Log4.Debug($"[MainWindow] STTSegments 변경 - UI 업데이트 ({_oneNoteViewModel.STTSegments.Count}개)");
+                                UpdateRecordingContentPanel();
+                            });
+                        }
+                        catch (Exception ex)
+                        {
+                            Log4.Error($"[MainWindow] STTSegments CollectionChanged 핸들러 실패: {ex}");
+                        }
                     };
 
                     // CurrentSummary 변경 시 UI 업데이트
                     _oneNoteViewModel.PropertyChanged += async (s, e) =>
                     {
-                        if (e.PropertyName == nameof(OneNoteViewModel.CurrentSummary))
+                        try
                         {
-                            await Dispatcher.InvokeAsync(() =>
+                            if (e.PropertyName == nameof(OneNoteViewModel.CurrentSummary))
                             {
-                                Log4.Debug($"[MainWindow] CurrentSummary 변경 - UI 업데이트");
-                                UpdateSummaryContentPanel();
-                            });
+                                await Dispatcher.InvokeAsync(() =>
+                                {
+                                    Log4.Debug($"[MainWindow] CurrentSummary 변경 - UI 업데이트");
+                                    UpdateSummaryContentPanel();
+                                });
+                            }
+                            // 화자분리 전/후 비교 데이터 변경 시 토글 버튼 가시성 업데이트
+                            else if (e.PropertyName == nameof(OneNoteViewModel.HasDiarizationComparison))
+                            {
+                                await Dispatcher.InvokeAsync(() =>
+                                {
+                                    Log4.Debug($"[MainWindow] HasDiarizationComparison 변경 - 토글 버튼 업데이트");
+                                    UpdateDiarizationToggleVisibility();
+                                });
+                            }
                         }
-                        // 화자분리 전/후 비교 데이터 변경 시 토글 버튼 가시성 업데이트
-                        else if (e.PropertyName == nameof(OneNoteViewModel.HasDiarizationComparison))
+                        catch (Exception ex)
                         {
-                            await Dispatcher.InvokeAsync(() =>
-                            {
-                                Log4.Debug($"[MainWindow] HasDiarizationComparison 변경 - 토글 버튼 업데이트");
-                                UpdateDiarizationToggleVisibility();
-                            });
+                            Log4.Error($"[MainWindow] OneNote CurrentSummary PropertyChanged 핸들러 실패: {ex}");
                         }
                     };
 
@@ -16073,11 +16189,19 @@ public partial class MainWindow : FluentWindow
             var contextMenu = new ContextMenu();
 
             var renameItem = new System.Windows.Controls.MenuItem { Header = "이름 변경" };
-            renameItem.Click += async (s, args) => await RenameBucketAsync(bucket);
+            renameItem.Click += async (s, args) =>
+            {
+                try { await RenameBucketAsync(bucket); }
+                catch (Exception ex) { Log4.Error($"[MainWindow] 버킷 이름 변경 핸들러 실패: {ex}"); }
+            };
             contextMenu.Items.Add(renameItem);
 
             var deleteItem = new System.Windows.Controls.MenuItem { Header = "삭제" };
-            deleteItem.Click += async (s, args) => await DeleteBucketAsync(bucket);
+            deleteItem.Click += async (s, args) =>
+            {
+                try { await DeleteBucketAsync(bucket); }
+                catch (Exception ex) { Log4.Error($"[MainWindow] 버킷 삭제 핸들러 실패: {ex}"); }
+            };
             contextMenu.Items.Add(deleteItem);
 
             contextMenu.IsOpen = true;
@@ -16541,10 +16665,17 @@ public partial class MainWindow : FluentWindow
             var menuItem = new System.Windows.Controls.MenuItem { Header = text, Tag = status };
             menuItem.Click += async (s, args) =>
             {
-                if (_callsViewModel != null)
+                try
                 {
-                    await _callsViewModel.SetMyStatusAsync((string)((System.Windows.Controls.MenuItem)s!).Tag!);
-                    UpdateCallsMyStatus();
+                    if (_callsViewModel != null)
+                    {
+                        await _callsViewModel.SetMyStatusAsync((string)((System.Windows.Controls.MenuItem)s!).Tag!);
+                        UpdateCallsMyStatus();
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Log4.Error($"[MainWindow] 통화 상태 설정 핸들러 실패: {ex}");
                 }
             };
             contextMenu.Items.Add(menuItem);
@@ -17604,11 +17735,18 @@ public partial class MainWindow : FluentWindow
         var reloadBtn = new Wpf.Ui.Controls.Button { Content = "프롬프트 리로드", Appearance = Wpf.Ui.Controls.ControlAppearance.Secondary, Margin = new Thickness(8, 0, 0, 0) };
         reloadBtn.Click += async (s, e) =>
         {
-            var 캐시서비스 = (App.Current as App)?.GetService<Services.AI.PromptCacheService>();
-            if (캐시서비스 != null)
+            try
             {
-                var 개수 = await 캐시서비스.ReloadAllAsync();
-                System.Windows.MessageBox.Show($"프롬프트 {개수}개가 리로드되었습니다.", "프롬프트 리로드", System.Windows.MessageBoxButton.OK, System.Windows.MessageBoxImage.Information);
+                var 캐시서비스 = (App.Current as App)?.GetService<Services.AI.PromptCacheService>();
+                if (캐시서비스 != null)
+                {
+                    var 개수 = await 캐시서비스.ReloadAllAsync();
+                    System.Windows.MessageBox.Show($"프롬프트 {개수}개가 리로드되었습니다.", "프롬프트 리로드", System.Windows.MessageBoxButton.OK, System.Windows.MessageBoxImage.Information);
+                }
+            }
+            catch (Exception ex)
+            {
+                Log4.Error($"[MainWindow] 프롬프트 리로드 핸들러 실패: {ex}");
             }
         };
         var saveBtn = new Wpf.Ui.Controls.Button { Content = "저장", Appearance = Wpf.Ui.Controls.ControlAppearance.Primary, Margin = new Thickness(8, 0, 0, 0) };
@@ -18537,14 +18675,21 @@ public partial class MainWindow : FluentWindow
             };
             testButton.Click += async (s, e) =>
             {
-                // 테스트 전 현재 입력값 저장
-                var currentKey = apiKeyBox.Text;
-                if (!currentKey.Contains("*"))
+                try
                 {
-                    config.ApiKey = currentKey;
-                    apiKeyBox.Tag = currentKey;
+                    // 테스트 전 현재 입력값 저장
+                    var currentKey = apiKeyBox.Text;
+                    if (!currentKey.Contains("*"))
+                    {
+                        config.ApiKey = currentKey;
+                        apiKeyBox.Tag = currentKey;
+                    }
+                    await TestAndLoadModelsAsync(providerName, statusText);
                 }
-                await TestAndLoadModelsAsync(providerName, statusText);
+                catch (Exception ex)
+                {
+                    Log4.Error($"[MainWindow] API 키 테스트 핸들러 실패: {ex}");
+                }
             };
             Grid.SetColumn(testButton, 1);
             apiKeyPanel.Children.Add(testButton);
@@ -18561,7 +18706,11 @@ public partial class MainWindow : FluentWindow
                 Appearance = Wpf.Ui.Controls.ControlAppearance.Secondary,
                 Padding = new Thickness(16, 6, 16, 6)
             };
-            testButton.Click += async (s, e) => await TestAndLoadModelsAsync(providerName, statusText);
+            testButton.Click += async (s, e) =>
+            {
+                try { await TestAndLoadModelsAsync(providerName, statusText); }
+                catch (Exception ex) { Log4.Error($"[MainWindow] 로컬 연결 테스트 핸들러 실패: {ex}"); }
+            };
             testPanel.Children.Add(testButton);
             contentStack.Children.Add(testPanel);
         }

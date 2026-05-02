@@ -185,25 +185,32 @@ public partial class MainViewModel : ViewModelBase, IDisposable
 
         app.Dispatcher.InvokeAsync(async () =>
         {
-            Log4.Info("[MainViewModel] Dispatcher에서 읽음 상태 갱신 시작");
-            HideSyncProgressAfterDelay();
-            UpdateSyncStatus();
-
-            // 현재 표시 중인 메일 목록의 읽음 상태 갱신
-            await RefreshEmailReadStatusAsync();
-
-            // 읽음 상태 변경 여부와 무관하게 폴더 카운트 항상 갱신
-            // (다른 앱에서 메일을 읽은 경우 UI 메일 목록 변경 없어도 카운트 반영 필요)
-            await RefreshFolderUnreadCountsAsync();
-
-            // 캐시 정합성: 백그라운드 동기화로 추가된 메일을 캐시 스냅샷에서 UI로 반영
-            if (SelectedFolder != null && _cacheService != null)
+            try
             {
-                var snapshot = _cacheService.GetSnapshot(SelectedFolder.Id, ShowSnoozedEmails);
-                if (snapshot != null)
+                Log4.Info("[MainViewModel] Dispatcher에서 읽음 상태 갱신 시작");
+                HideSyncProgressAfterDelay();
+                UpdateSyncStatus();
+
+                // 현재 표시 중인 메일 목록의 읽음 상태 갱신
+                await RefreshEmailReadStatusAsync();
+
+                // 읽음 상태 변경 여부와 무관하게 폴더 카운트 항상 갱신
+                // (다른 앱에서 메일을 읽은 경우 UI 메일 목록 변경 없어도 카운트 반영 필요)
+                await RefreshFolderUnreadCountsAsync();
+
+                // 캐시 정합성: 백그라운드 동기화로 추가된 메일을 캐시 스냅샷에서 UI로 반영
+                if (SelectedFolder != null && _cacheService != null)
                 {
-                    ReplaceEmails(snapshot);
+                    var snapshot = _cacheService.GetSnapshot(SelectedFolder.Id, ShowSnoozedEmails);
+                    if (snapshot != null)
+                    {
+                        ReplaceEmails(snapshot);
+                    }
                 }
+            }
+            catch (Exception ex)
+            {
+                Log4.Error($"[MainViewModel] OnMailSyncCompleted Dispatcher 처리 중 오류: {ex.Message}\n{ex.StackTrace}");
             }
         });
     }
@@ -241,36 +248,43 @@ public partial class MainViewModel : ViewModelBase, IDisposable
 
         app.Dispatcher.InvokeAsync(async () =>
         {
-            // _emails 컬렉션에서 교정된 EntryId 항목의 IsRead를 실제 교정값으로 패치 (Bug 2 수정)
-            var entryIdToIsRead = correctedEntries.ToDictionary(e => e.EntryId, e => e.IsRead);
-            lock (_emailsLock)
+            try
             {
-                foreach (var email in _emails)
+                // _emails 컬렉션에서 교정된 EntryId 항목의 IsRead를 실제 교정값으로 패치 (Bug 2 수정)
+                var entryIdToIsRead = correctedEntries.ToDictionary(e => e.EntryId, e => e.IsRead);
+                lock (_emailsLock)
                 {
-                    if (email.EntryId != null && entryIdToIsRead.TryGetValue(email.EntryId, out var isRead))
+                    foreach (var email in _emails)
                     {
-                        Log4.Info($"[MainViewModel] 캐시 패치: EntryId={email.EntryId.Substring(0, Math.Min(email.EntryId.Length, 20))}, IsRead={isRead}");
-                        email.IsRead = isRead;
+                        if (email.EntryId != null && entryIdToIsRead.TryGetValue(email.EntryId, out var isRead))
+                        {
+                            Log4.Info($"[MainViewModel] 캐시 패치: EntryId={email.EntryId.Substring(0, Math.Min(email.EntryId.Length, 20))}, IsRead={isRead}");
+                            email.IsRead = isRead;
+                        }
                     }
                 }
-            }
 
-            // Bug 3 수정: MailFolderCache도 갱신 — 다른 폴더에 캐시된 경우도 정합성 유지
-            if (_cacheService != null)
+                // Bug 3 수정: MailFolderCache도 갱신 — 다른 폴더에 캐시된 경우도 정합성 유지
+                if (_cacheService != null)
+                {
+                    // true 그룹 (읽음으로 교정)
+                    var readIds = correctedEntries.Where(e => e.IsRead).Select(e => e.EntryId).ToList();
+                    if (readIds.Count > 0)
+                        _cacheService.OnEmailsUpdated(readIds, e => e.IsRead = true);
+
+                    // false 그룹 (미읽음으로 교정)
+                    var unreadIds = correctedEntries.Where(e => !e.IsRead).Select(e => e.EntryId).ToList();
+                    if (unreadIds.Count > 0)
+                        _cacheService.OnEmailsUpdated(unreadIds, e => e.IsRead = false);
+                }
+
+                // 폴더 미읽음 카운트 갱신 (배지 업데이트)
+                await RefreshFolderUnreadCountsAsync();
+            }
+            catch (Exception ex)
             {
-                // true 그룹 (읽음으로 교정)
-                var readIds = correctedEntries.Where(e => e.IsRead).Select(e => e.EntryId).ToList();
-                if (readIds.Count > 0)
-                    _cacheService.OnEmailsUpdated(readIds, e => e.IsRead = true);
-
-                // false 그룹 (미읽음으로 교정)
-                var unreadIds = correctedEntries.Where(e => !e.IsRead).Select(e => e.EntryId).ToList();
-                if (unreadIds.Count > 0)
-                    _cacheService.OnEmailsUpdated(unreadIds, e => e.IsRead = false);
+                Log4.Error($"[MainViewModel] OnReadStatusCorrected Dispatcher 처리 중 오류: {ex.Message}\n{ex.StackTrace}");
             }
-
-            // 폴더 미읽음 카운트 갱신 (배지 업데이트)
-            await RefreshFolderUnreadCountsAsync();
         });
     }
 

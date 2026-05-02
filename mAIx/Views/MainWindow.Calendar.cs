@@ -398,8 +398,15 @@ namespace mAIx.Views
                     var card = CreateDetailEventCard(evt);
                     card.MouseLeftButtonDown += async (s, args) =>
                     {
-                        args.Handled = true;
-                        await OpenEventEditDialogAsync(capturedEvent, null);
+                        try
+                        {
+                            args.Handled = true;
+                            await OpenEventEditDialogAsync(capturedEvent, null);
+                        }
+                        catch (Exception ex)
+                        {
+                            Log4.Error($"[Calendar] 아젠다 이벤트 클릭 핸들러 실패: {ex}");
+                        }
                     };
                     AgendaEventsPanel.Children.Add(card);
                 }

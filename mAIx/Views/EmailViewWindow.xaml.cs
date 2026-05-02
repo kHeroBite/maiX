@@ -510,7 +510,17 @@ public partial class EmailViewWindow : FluentWindow
             "인쇄 (Ctrl+P)", null, Microsoft.Web.WebView2.Core.CoreWebView2ContextMenuItemKind.Command);
         printItem.CustomItemSelected += (s, args) =>
         {
-            Dispatcher.BeginInvoke(new Action(async () => await PrintEmailAsync()));
+            _ = Dispatcher.InvokeAsync(async () =>
+            {
+                try
+                {
+                    await PrintEmailAsync();
+                }
+                catch (Exception ex)
+                {
+                    Log4.Error($"[EmailViewWindow] PrintEmailAsync Dispatcher 처리 중 오류: {ex.Message}\n{ex.StackTrace}");
+                }
+            });
         };
         menuItems.Add(printItem);
 
@@ -519,7 +529,17 @@ public partial class EmailViewWindow : FluentWindow
             "EML 파일로 저장", null, Microsoft.Web.WebView2.Core.CoreWebView2ContextMenuItemKind.Command);
         emlItem.CustomItemSelected += (s, args) =>
         {
-            Dispatcher.BeginInvoke(new Action(async () => await ExportAsEmlAsync()));
+            _ = Dispatcher.InvokeAsync(async () =>
+            {
+                try
+                {
+                    await ExportAsEmlAsync();
+                }
+                catch (Exception ex)
+                {
+                    Log4.Error($"[EmailViewWindow] ExportAsEmlAsync Dispatcher 처리 중 오류: {ex.Message}\n{ex.StackTrace}");
+                }
+            });
         };
         menuItems.Add(emlItem);
 
@@ -528,7 +548,17 @@ public partial class EmailViewWindow : FluentWindow
             "PDF 파일로 저장", null, Microsoft.Web.WebView2.Core.CoreWebView2ContextMenuItemKind.Command);
         pdfItem.CustomItemSelected += (s, args) =>
         {
-            Dispatcher.BeginInvoke(new Action(async () => await ExportAsPdfAsync()));
+            _ = Dispatcher.InvokeAsync(async () =>
+            {
+                try
+                {
+                    await ExportAsPdfAsync();
+                }
+                catch (Exception ex)
+                {
+                    Log4.Error($"[EmailViewWindow] ExportAsPdfAsync Dispatcher 처리 중 오류: {ex.Message}\n{ex.StackTrace}");
+                }
+            });
         };
         menuItems.Add(pdfItem);
     }

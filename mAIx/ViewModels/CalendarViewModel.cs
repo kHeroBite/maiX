@@ -269,7 +269,14 @@ public partial class CalendarViewModel : ViewModelBase
         // UI 스레드에서 새로고침
         System.Windows.Application.Current.Dispatcher.InvokeAsync(async () =>
         {
-            await LoadEventsAsync();
+            try
+            {
+                await LoadEventsAsync();
+            }
+            catch (Exception ex)
+            {
+                _logger.Error(ex, "[CalendarViewModel] OnCalendarEventsSynced Dispatcher 처리 중 오류");
+            }
         });
     }
 

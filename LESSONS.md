@@ -903,6 +903,66 @@
 - **연관**: L-370 (async void 이벤트 핸들러 일반 원칙), L-377 (외부 try-catch 래핑 특수 요건)
 - **Level**: 2 (WPF 이벤트 핸들러 패턴에서 반복 재현 위험)
 
+### L-378: oralph 자동 반복 검증의 가치 — 수동 검증 후에도 연관 패턴 지속 발견 (2026-05-02)
+
+- **문제**: async void/InvokeAsync 패턴 수동 수정 후 "완료"로 판단했으나, oralph 자동 반복 검증(5회)으로 총 37건 추가 발견
+  - iter1: InvokeAsync(async lambda) fire-and-forget try-catch 누락 5건
+  - iter2: InvokeAsync(async lambda) Task.Unwrap 미적용 + try-catch 누락 8건
+  - iter3: BeginInvoke(async lambda) + Timer.Elapsed async lambda 4건
+  - iter4: async lambda 이벤트 핸들러 외부 try-catch 누락 20건
+  - iter5: 0건 → 수렴 ✅
+- **근본 원인**: 단일 패턴 수정이 연관 패턴 검색을 유발하는 연쇄 확장 현상. 수동 1회 검증은 해당 패턴 변형을 놓치기 쉬움
+- **재발방지**: 동일 카테고리 버그(async 관련 패턴 등) 수정 후 oralph로 연관 패턴 전수 검증 권장
+- **Level**: 1 (프로세스 참고 교훈)
+
+### L-379: async 람다 이벤트 핸들러 try-catch 외부 래핑 — InvokeAsync(async lambda)도 예외 소실 위험 (2026-05-02)
+
+- **문제**: `Dispatcher.InvokeAsync(async () => { await ... })` 패턴에서 async lambda가 `DispatcherOperation`을 반환하므로, inner async 예외가 `.Task.Unwrap()` 없이 소실됨
+  ```csharp
+  // ❌ 잘못 — inner async 예외 소실
+  _ = Dispatcher.InvokeAsync(async () => {
+      await SomeAsync();  // 예외가 소실됨
+  });
+
+  // ✅ 올바름 — Task.Unwrap + try-catch
+  _ = Dispatcher.InvokeAsync(async () => {
+      try { await SomeAsync(); }
+      catch (Exception ex) { _log.Error(ex, "처리 실패"); }
+  }).Task.Unwrap();
+
+  // ✅ fire-and-forget 허용 시 — 외부 try-catch로 감싸기
+  _ = Dispatcher.InvokeAsync(async () => {
+      try { await SomeAsync(); }
+      catch (Exception ex) { _log.Error(ex, "처리 실패"); }
+  });
+  ```
+- **근본 원인**: InvokeAsync 반환 타입이 `DispatcherOperation`(Task 아님)이므로 async lambda 내부 예외가 외부로 전파되지 않음. L-374(DispatcherOperation.Task 경유)와 연관
+- **재발방지**: InvokeAsync(async lambda) 사용 시 내부 반드시 try-catch 또는 `.Task.Unwrap()` 적용 필수
+- **연관**: L-374 (DispatcherOperation.Task 경유), L-377 (async void 외부 try-catch)
+- **Level**: 2 (InvokeAsync 패턴이 WPF 코드에서 자주 사용 — 반복 재현 위험)
+
+### L-380: Timer.Elapsed/PropertyChanged 등 비WPF 이벤트 핸들러도 async void 패턴 동일 위험 (2026-05-02)
+
+- **문제**: WPF 이벤트 핸들러에만 집중하다 `Timer.Elapsed += async (s, e) => { await ... }` 패턴을 놓침
+  - `System.Timers.Timer.Elapsed`는 ThreadPool 스레드에서 실행 — async void와 동일하게 예외 소실
+  - `System.Threading.Timer` 콜백, `PropertyChanged`, `NotifyCollectionChanged` 등도 동일
+  ```csharp
+  // ❌ 잘못 — Timer.Elapsed에서 async lambda 예외 소실
+  _timer.Elapsed += async (s, e) => {
+      await DoWorkAsync();  // 예외 소실!
+  };
+
+  // ✅ 올바름 — 외부 try-catch 래핑
+  _timer.Elapsed += async (s, e) => {
+      try { await DoWorkAsync(); }
+      catch (Exception ex) { _log.Error(ex, "타이머 작업 실패"); }
+  };
+  ```
+- **근본 원인**: L-377/L-379가 WPF 이벤트 핸들러에만 초점을 맞춰 비WPF 이벤트 핸들러의 동일 위험 간과
+- **재발방지**: `async (s, e) =>` 패턴이 있는 모든 이벤트 핸들러(Timer, PropertyChanged 포함)에서 try-catch 래핑 확인 필수
+- **연관**: L-370 (async void 일반), L-377 (외부 try-catch 래핑), L-379 (InvokeAsync async lambda)
+- **Level**: 2 (Timer 패턴이 백그라운드 서비스에서 자주 사용 — 반복 재현 위험)
+
 ## 반영 추적 테이블
 
 | 교훈 ID | 교훈 요약 | 반영 대상 | 반영 위치 | 반영일 | 검증 |
@@ -925,3 +985,6 @@
 | L-375 | grep 기반 ConfigureAwait 누락 검사 멀티라인 오탐 | docs | LESSONS.md | 2026-05-02 | ✅ |
 | L-376 | SemaphoreSlim IDisposable — 메서드 내 지역 생성 시 using 필수 | docs | LESSONS.md + MEMORY.md | 2026-05-02 | ✅ |
 | L-377 | async void 이벤트 핸들러 외부 try-catch 래핑 필수 — 내부 분기 try-catch만 불충분 | docs | LESSONS.md + MEMORY.md | 2026-05-02 | ✅ |
+| L-378 | oralph 자동 반복 검증 — 수동 검증 후에도 37건 추가 발견, 연쇄 확장 현상 | docs | LESSONS.md | 2026-05-02 | ✅ |
+| L-379 | InvokeAsync(async lambda) — inner async 예외 소실, .Task.Unwrap 또는 try-catch 필수 | docs | LESSONS.md + MEMORY.md | 2026-05-02 | ✅ |
+| L-380 | Timer.Elapsed 등 비WPF 이벤트 핸들러도 async lambda try-catch 필수 | docs | LESSONS.md | 2026-05-02 | ✅ |

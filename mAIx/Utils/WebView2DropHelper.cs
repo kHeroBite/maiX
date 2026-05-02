@@ -252,34 +252,41 @@ namespace mAIx.Utils
                 // UI 스레드에서 비동기 실행
                 _webView.Dispatcher.InvokeAsync(async () =>
                 {
-                    if (_webView.CoreWebView2 == null) return;
-
-                    foreach (var filePath in files)
+                    try
                     {
-                        if (!File.Exists(filePath)) continue;
+                        if (_webView.CoreWebView2 == null) return;
 
-                        var fileName = Path.GetFileName(filePath);
-
-                        if (TinyMCEEditorService.IsImageFile(filePath))
+                        foreach (var filePath in files)
                         {
-                            // 이미지 → Base64 data URL로 삽입
-                            var dataUrl = TinyMCEEditorService.ConvertFileToDataUrl(filePath);
-                            if (dataUrl == null) continue;
+                            if (!File.Exists(filePath)) continue;
 
-                            var escapedUrl = System.Text.Json.JsonSerializer.Serialize(dataUrl);
-                            var escapedName = System.Text.Json.JsonSerializer.Serialize(fileName);
-                            await _webView.CoreWebView2.ExecuteScriptAsync(
-                                $"window.insertDroppedImage({escapedUrl}, {escapedName})");
+                            var fileName = Path.GetFileName(filePath);
+
+                            if (TinyMCEEditorService.IsImageFile(filePath))
+                            {
+                                // 이미지 → Base64 data URL로 삽입
+                                var dataUrl = TinyMCEEditorService.ConvertFileToDataUrl(filePath);
+                                if (dataUrl == null) continue;
+
+                                var escapedUrl = System.Text.Json.JsonSerializer.Serialize(dataUrl);
+                                var escapedName = System.Text.Json.JsonSerializer.Serialize(fileName);
+                                await _webView.CoreWebView2.ExecuteScriptAsync(
+                                    $"window.insertDroppedImage({escapedUrl}, {escapedName})");
+                            }
+                            else
+                            {
+                                // 비이미지 → file:/// 링크로 삽입
+                                var fileUrl = "file:///" + filePath.Replace("\\", "/");
+                                var escapedUrl = System.Text.Json.JsonSerializer.Serialize(fileUrl);
+                                var escapedName = System.Text.Json.JsonSerializer.Serialize(fileName);
+                                await _webView.CoreWebView2.ExecuteScriptAsync(
+                                    $"window.insertDroppedFileLink({escapedUrl}, {escapedName})");
+                            }
                         }
-                        else
-                        {
-                            // 비이미지 → file:/// 링크로 삽입
-                            var fileUrl = "file:///" + filePath.Replace("\\", "/");
-                            var escapedUrl = System.Text.Json.JsonSerializer.Serialize(fileUrl);
-                            var escapedName = System.Text.Json.JsonSerializer.Serialize(fileName);
-                            await _webView.CoreWebView2.ExecuteScriptAsync(
-                                $"window.insertDroppedFileLink({escapedUrl}, {escapedName})");
-                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        Log4.Error($"[WebView2DropHelper] Drop Dispatcher 처리 중 오류: {ex.Message}\n{ex.StackTrace}");
                     }
                 });
 

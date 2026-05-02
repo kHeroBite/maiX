@@ -228,10 +228,17 @@ public partial class ActivityViewModel : ViewModelBase
         };
         _pollingTimer.Tick += async (_, _) =>
         {
-            if (_isTabActive)
+            try
             {
-                _log.Debug("활동 피드 폴링 새로고침");
-                await LoadActivitiesAsync();
+                if (_isTabActive)
+                {
+                    _log.Debug("활동 피드 폴링 새로고침");
+                    await LoadActivitiesAsync();
+                }
+            }
+            catch (Exception ex)
+            {
+                _log.Error($"[ActivityViewModel] 폴링 타이머 핸들러 실패: {ex}");
             }
         };
         _pollingTimer.Start();
