@@ -66,24 +66,31 @@ namespace mAIx.Views
         /// </summary>
         private async void OneDriveUploadLargeFile()
         {
-            var openFileDialog = new OpenFileDialog
+            try
             {
-                Title = "업로드할 파일 선택",
-                Filter = "모든 파일 (*.*)|*.*",
-                Multiselect = false
-            };
+                var openFileDialog = new OpenFileDialog
+                {
+                    Title = "업로드할 파일 선택",
+                    Filter = "모든 파일 (*.*)|*.*",
+                    Multiselect = false
+                };
 
-            if (openFileDialog.ShowDialog() == true)
+                if (openFileDialog.ShowDialog() == true)
+                {
+                    if (_oneDriveViewModel == null) return;
+
+                    var filePath = openFileDialog.FileName;
+                    var fileInfo = new FileInfo(filePath);
+
+                    _oneDriveLog.Information("파일 업로드 시작: {FileName} ({Size})",
+                        fileInfo.Name, GraphOneDriveService.FormatFileSize(fileInfo.Length));
+
+                    await _oneDriveViewModel.UploadLargeFileAsync(filePath);
+                }
+            }
+            catch (Exception ex)
             {
-                if (_oneDriveViewModel == null) return;
-
-                var filePath = openFileDialog.FileName;
-                var fileInfo = new FileInfo(filePath);
-
-                _oneDriveLog.Information("파일 업로드 시작: {FileName} ({Size})",
-                    fileInfo.Name, GraphOneDriveService.FormatFileSize(fileInfo.Length));
-
-                await _oneDriveViewModel.UploadLargeFileAsync(filePath);
+                _oneDriveLog.Error(ex, "[OneDrive] OneDriveUploadLargeFile 핸들러 실패");
             }
         }
     }

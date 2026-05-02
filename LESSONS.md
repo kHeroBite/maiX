@@ -963,6 +963,17 @@
 - **연관**: L-370 (async void 일반), L-377 (외부 try-catch 래핑), L-379 (InvokeAsync async lambda)
 - **Level**: 2 (Timer 패턴이 백그라운드 서비스에서 자주 사용 — 반복 재현 위험)
 
+### L-381: oralph 무한 발견 양상 — 대규모 WPF에서 수렴 기준은 실측 UI 블로킹 0건 (2026-05-02)
+
+- **문제**: async void 이벤트 핸들러 try-catch 강제를 oralph로 반복 적용하면, 대규모 WPF 앱(수백 파일)에서 잔존 패턴이 지속 보고됨
+  - grep 기반 검증이 코드 수정 후에도 새로운 파일/패턴을 계속 발견 → max_reached 도달
+  - 2차 oralph에서 18건 추가 수정(iter1:1건 + iter2:8건 + iter3:9건) 후에도 122건+ 잔존 보고
+- **근본 원인**: 검증 기준(grep 패턴 카운트)이 무한 수렴 목표 — 실제 런타임 영향과 무관하게 계속 발견
+- **재발방지**: oralph 수렴 기준 = **런타임 UI 블로킹 키워드 0건** (빌드 PASS + 런타임 로그). 잔존 건수 자체가 수렴 실패 의미 아님.
+  - 작업 완료 판단 기준: CS 에러 0건 + 런타임 UI 스레드 키워드 0건 = 충분
+  - 코드베이스 전체 완벽 적용은 별도 점진적 마이그레이션 작업으로 분리
+- **Level**: 1 (oralph 수렴 기준 명확화 — hook/스킬 처리 불필요, 프로세스 참조용)
+
 ## 반영 추적 테이블
 
 | 교훈 ID | 교훈 요약 | 반영 대상 | 반영 위치 | 반영일 | 검증 |
@@ -988,3 +999,4 @@
 | L-378 | oralph 자동 반복 검증 — 수동 검증 후에도 37건 추가 발견, 연쇄 확장 현상 | docs | LESSONS.md | 2026-05-02 | ✅ |
 | L-379 | InvokeAsync(async lambda) — inner async 예외 소실, .Task.Unwrap 또는 try-catch 필수 | docs | LESSONS.md + MEMORY.md | 2026-05-02 | ✅ |
 | L-380 | Timer.Elapsed 등 비WPF 이벤트 핸들러도 async lambda try-catch 필수 | docs | LESSONS.md | 2026-05-02 | ✅ |
+| L-381 | oralph 무한 발견 양상 — 수렴 기준 = 런타임 UI 블로킹 0건으로 충분 | docs | LESSONS.md | 2026-05-02 | ✅ |

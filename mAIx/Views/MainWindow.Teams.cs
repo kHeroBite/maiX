@@ -23,15 +23,22 @@ namespace mAIx.Views
 
         private async void ReactionButton_Click(object sender, RoutedEventArgs e)
         {
-            if (sender is not Wpf.Ui.Controls.Button btn) return;
-
-            var messageId = btn.Tag as string;
-            var reaction = btn.Content?.ToString();
-            if (string.IsNullOrEmpty(messageId) || string.IsNullOrEmpty(reaction)) return;
-
-            if (_teamsViewModel != null)
+            try
             {
-                await _teamsViewModel.AddReactionCommand.ExecuteAsync($"{messageId}|{reaction}");
+                if (sender is not Wpf.Ui.Controls.Button btn) return;
+
+                var messageId = btn.Tag as string;
+                var reaction = btn.Content?.ToString();
+                if (string.IsNullOrEmpty(messageId) || string.IsNullOrEmpty(reaction)) return;
+
+                if (_teamsViewModel != null)
+                {
+                    await _teamsViewModel.AddReactionCommand.ExecuteAsync($"{messageId}|{reaction}");
+                }
+            }
+            catch (Exception ex)
+            {
+                _teamsLog.Error(ex, "[Teams] ReactionButton_Click 핸들러 실패");
             }
         }
 
@@ -41,17 +48,24 @@ namespace mAIx.Views
 
         private async void ThreadButton_Click(object sender, RoutedEventArgs e)
         {
-            if (sender is not Wpf.Ui.Controls.Button btn) return;
-            if (btn.Tag is not MessageItemViewModel message) return;
-
-            if (_teamsViewModel != null)
+            try
             {
-                await _teamsViewModel.OpenThreadCommand.ExecuteAsync(message);
+                if (sender is not Wpf.Ui.Controls.Button btn) return;
+                if (btn.Tag is not MessageItemViewModel message) return;
 
-                // 스레드 패널 UI 업데이트
-                ChatThreadPanel.ParentMessage = _teamsViewModel.ThreadParentMessage;
-                ChatThreadPanel.Replies = _teamsViewModel.ThreadReplies;
-                ChatThreadPanelBorder.Visibility = Visibility.Visible;
+                if (_teamsViewModel != null)
+                {
+                    await _teamsViewModel.OpenThreadCommand.ExecuteAsync(message);
+
+                    // 스레드 패널 UI 업데이트
+                    ChatThreadPanel.ParentMessage = _teamsViewModel.ThreadParentMessage;
+                    ChatThreadPanel.Replies = _teamsViewModel.ThreadReplies;
+                    ChatThreadPanelBorder.Visibility = Visibility.Visible;
+                }
+            }
+            catch (Exception ex)
+            {
+                _teamsLog.Error(ex, "[Teams] ThreadButton_Click 핸들러 실패");
             }
         }
 
@@ -63,10 +77,17 @@ namespace mAIx.Views
 
         private async void ChatThreadPanel_ReplySubmitted(object? sender, string replyText)
         {
-            if (_teamsViewModel == null) return;
+            try
+            {
+                if (_teamsViewModel == null) return;
 
-            _teamsViewModel.ThreadReplyText = replyText;
-            await _teamsViewModel.SendThreadReplyCommand.ExecuteAsync(null);
+                _teamsViewModel.ThreadReplyText = replyText;
+                await _teamsViewModel.SendThreadReplyCommand.ExecuteAsync(null);
+            }
+            catch (Exception ex)
+            {
+                _teamsLog.Error(ex, "[Teams] ChatThreadPanel_ReplySubmitted 핸들러 실패");
+            }
         }
 
         #endregion
@@ -160,40 +181,54 @@ namespace mAIx.Views
 
         private async void ChatInputBorder_Drop(object sender, DragEventArgs e)
         {
-            if (!e.Data.GetDataPresent(DataFormats.FileDrop)) return;
-
-            var files = (string[]?)e.Data.GetData(DataFormats.FileDrop);
-            if (files == null || files.Length == 0 || _teamsViewModel == null) return;
-
-            foreach (var file in files)
+            try
             {
-                try
+                if (!e.Data.GetDataPresent(DataFormats.FileDrop)) return;
+
+                var files = (string[]?)e.Data.GetData(DataFormats.FileDrop);
+                if (files == null || files.Length == 0 || _teamsViewModel == null) return;
+
+                foreach (var file in files)
                 {
-                    await _teamsViewModel.ShareFileCommand.ExecuteAsync(file);
-                    _teamsLog.Info("[Teams] 파일 드롭 공유: {0}", file);
+                    try
+                    {
+                        await _teamsViewModel.ShareFileCommand.ExecuteAsync(file);
+                        _teamsLog.Info("[Teams] 파일 드롭 공유: {0}", file);
+                    }
+                    catch (Exception ex)
+                    {
+                        _teamsLog.Error(ex, "[Teams] 파일 드롭 공유 실패: {0}", file);
+                    }
                 }
-                catch (Exception ex)
-                {
-                    _teamsLog.Error(ex, "[Teams] 파일 드롭 공유 실패: {0}", file);
-                }
+            }
+            catch (Exception ex)
+            {
+                _teamsLog.Error(ex, "[Teams] ChatInputBorder_Drop 핸들러 실패");
             }
         }
 
         private async void ChatAttachButton_Click(object sender, RoutedEventArgs e)
         {
-            var dialog = new Microsoft.Win32.OpenFileDialog
+            try
             {
-                Title = "공유할 파일 선택",
-                Filter = "모든 파일 (*.*)|*.*",
-                Multiselect = true
-            };
-
-            if (dialog.ShowDialog() == true && _teamsViewModel != null)
-            {
-                foreach (var file in dialog.FileNames)
+                var dialog = new Microsoft.Win32.OpenFileDialog
                 {
-                    await _teamsViewModel.ShareFileCommand.ExecuteAsync(file);
+                    Title = "공유할 파일 선택",
+                    Filter = "모든 파일 (*.*)|*.*",
+                    Multiselect = true
+                };
+
+                if (dialog.ShowDialog() == true && _teamsViewModel != null)
+                {
+                    foreach (var file in dialog.FileNames)
+                    {
+                        await _teamsViewModel.ShareFileCommand.ExecuteAsync(file);
+                    }
                 }
+            }
+            catch (Exception ex)
+            {
+                _teamsLog.Error(ex, "[Teams] ChatAttachButton_Click 핸들러 실패");
             }
         }
 
@@ -203,30 +238,37 @@ namespace mAIx.Views
 
         private async void ChatMeetingButton_Click(object sender, RoutedEventArgs e)
         {
-            var teamsService = ((App)Application.Current).GetService<GraphTeamsService>();
-            if (teamsService == null) return;
-
-            var dialog = new MeetingScheduleDialog(teamsService)
+            try
             {
-                Owner = this
-            };
+                var teamsService = ((App)Application.Current).GetService<GraphTeamsService>();
+                if (teamsService == null) return;
 
-            if (dialog.ShowDialog() == true && dialog.CreatedMeeting != null)
-            {
-                // 미팅 링크를 채팅에 전송
-                var meetingLink = dialog.CreatedMeeting.JoinWebUrl;
-                var subject = dialog.CreatedMeeting.Subject ?? "Teams 미팅";
-
-                if (_teamsViewModel?.SelectedChat != null && !string.IsNullOrEmpty(meetingLink))
+                var dialog = new MeetingScheduleDialog(teamsService)
                 {
-                    var messageContent = $"📅 <b>{subject}</b><br/>" +
-                                        $"<a href=\"{meetingLink}\">미팅 참가하기</a>";
+                    Owner = this
+                };
 
-                    _teamsViewModel.NewMessageText = messageContent;
-                    await _teamsViewModel.SendMessageCommand.ExecuteAsync(null);
+                if (dialog.ShowDialog() == true && dialog.CreatedMeeting != null)
+                {
+                    // 미팅 링크를 채팅에 전송
+                    var meetingLink = dialog.CreatedMeeting.JoinWebUrl;
+                    var subject = dialog.CreatedMeeting.Subject ?? "Teams 미팅";
+
+                    if (_teamsViewModel?.SelectedChat != null && !string.IsNullOrEmpty(meetingLink))
+                    {
+                        var messageContent = $"📅 <b>{subject}</b><br/>" +
+                                            $"<a href=\"{meetingLink}\">미팅 참가하기</a>";
+
+                        _teamsViewModel.NewMessageText = messageContent;
+                        await _teamsViewModel.SendMessageCommand.ExecuteAsync(null);
+                    }
+
+                    _teamsLog.Info("[Teams] 미팅 생성 완료: {0}", subject);
                 }
-
-                _teamsLog.Info("[Teams] 미팅 생성 완료: {0}", subject);
+            }
+            catch (Exception ex)
+            {
+                _teamsLog.Error(ex, "[Teams] ChatMeetingButton_Click 핸들러 실패");
             }
         }
 
@@ -244,18 +286,25 @@ namespace mAIx.Views
         /// </summary>
         private async void OnChannelTabChanged(string tabName)
         {
-            if (_teamsViewModel == null) return;
+            try
+            {
+                if (_teamsViewModel == null) return;
 
-            _teamsViewModel.CurrentChannelTab = tabName;
-            _teamsLog.Debug("채널 탭 전환: {Tab}", tabName);
+                _teamsViewModel.CurrentChannelTab = tabName;
+                _teamsLog.Debug("채널 탭 전환: {Tab}", tabName);
 
-            // 선택된 채널이 있을 때만 Sub-VM 초기화
-            var ch = _teamsViewModel.SelectedChannel;
-            if (ch == null || string.IsNullOrEmpty(ch.TeamId) || string.IsNullOrEmpty(ch.Id))
-                return;
+                // 선택된 채널이 있을 때만 Sub-VM 초기화
+                var ch = _teamsViewModel.SelectedChannel;
+                if (ch == null || string.IsNullOrEmpty(ch.TeamId) || string.IsNullOrEmpty(ch.Id))
+                    return;
 
-            var key = $"{ch.TeamId}_{ch.Id}";
-            await _teamsViewModel.InitializeCurrentTabVmAsync(key, ch.TeamId, ch.Id);
+                var key = $"{ch.TeamId}_{ch.Id}";
+                await _teamsViewModel.InitializeCurrentTabVmAsync(key, ch.TeamId, ch.Id);
+            }
+            catch (Exception ex)
+            {
+                _teamsLog.Error(ex, "[Teams] OnChannelTabChanged 핸들러 실패: {Tab}", tabName);
+            }
         }
 
         /// <summary>
@@ -263,7 +312,14 @@ namespace mAIx.Views
         /// </summary>
         private async void ChannelPostsTabButton_Click(object sender, RoutedEventArgs e)
         {
-            await Task.Run(() => Dispatcher.InvokeAsync(() => OnChannelTabChanged("posts")));
+            try
+            {
+                await Task.Run(() => Dispatcher.InvokeAsync(() => OnChannelTabChanged("posts")));
+            }
+            catch (Exception ex)
+            {
+                _teamsLog.Error(ex, "[Teams] ChannelPostsTabButton_Click 핸들러 실패");
+            }
         }
 
         /// <summary>
@@ -271,7 +327,14 @@ namespace mAIx.Views
         /// </summary>
         private async void ChannelFilesTabButton_Click(object sender, RoutedEventArgs e)
         {
-            await Task.Run(() => Dispatcher.InvokeAsync(() => OnChannelTabChanged("files")));
+            try
+            {
+                await Task.Run(() => Dispatcher.InvokeAsync(() => OnChannelTabChanged("files")));
+            }
+            catch (Exception ex)
+            {
+                _teamsLog.Error(ex, "[Teams] ChannelFilesTabButton_Click 핸들러 실패");
+            }
         }
 
         #endregion

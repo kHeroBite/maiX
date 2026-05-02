@@ -422,8 +422,15 @@ namespace mAIx.Views
         /// </summary>
         private async void OnCalendarEventClicked(object? sender, Event evt)
         {
-            Log4.Info($"이벤트 클릭: {evt.Subject}");
-            await OpenEventEditDialogAsync(evt, null);
+            try
+            {
+                Log4.Info($"이벤트 클릭: {evt.Subject}");
+                await OpenEventEditDialogAsync(evt, null);
+            }
+            catch (Exception ex)
+            {
+                Log4.Error($"[Calendar] OnCalendarEventClicked 핸들러 실패: {ex}");
+            }
         }
 
         /// <summary>
@@ -431,8 +438,15 @@ namespace mAIx.Views
         /// </summary>
         private async void OnTimeSlotDoubleClicked(object? sender, DateTime targetDateTime)
         {
-            Log4.Info($"시간 슬롯 더블클릭: {targetDateTime:yyyy-MM-dd HH:mm}");
-            await OpenEventEditDialogAsync(null, targetDateTime);
+            try
+            {
+                Log4.Info($"시간 슬롯 더블클릭: {targetDateTime:yyyy-MM-dd HH:mm}");
+                await OpenEventEditDialogAsync(null, targetDateTime);
+            }
+            catch (Exception ex)
+            {
+                Log4.Error($"[Calendar] OnTimeSlotDoubleClicked 핸들러 실패: {ex}");
+            }
         }
 
         #endregion

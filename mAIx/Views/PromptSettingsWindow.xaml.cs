@@ -8,12 +8,14 @@ using mAIx.Models;
 using mAIx.Services.AI;
 using mAIx.Services.Storage;
 using Microsoft.Extensions.DependencyInjection;
+using NLog;
 using Wpf.Ui.Controls;
 
 namespace mAIx.Views;
 
 public partial class PromptSettingsWindow : FluentWindow
 {
+    private static readonly Logger Log4 = LogManager.GetCurrentClassLogger();
     private readonly IServiceProvider _serviceProvider;
     private ObservableCollection<string> _categories = new();
     private ObservableCollection<Prompt> _prompts = new();
@@ -28,7 +30,14 @@ public partial class PromptSettingsWindow : FluentWindow
 
     private async void OnLoaded(object sender, RoutedEventArgs e)
     {
-        await LoadCategoriesAsync();
+        try
+        {
+            await LoadCategoriesAsync();
+        }
+        catch (Exception ex)
+        {
+            Log4.Error(ex, "[PromptSettings] OnLoaded 핸들러 실패");
+        }
     }
 
     private async Task LoadCategoriesAsync()
@@ -51,16 +60,23 @@ public partial class PromptSettingsWindow : FluentWindow
 
     private async void CategoryListBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
     {
-        if (CategoryListBox.SelectedItem is not string category) return;
+        try
+        {
+            if (CategoryListBox.SelectedItem is not string category) return;
 
-        using var scope = _serviceProvider.CreateScope();
-        var promptService = scope.ServiceProvider.GetRequiredService<PromptService>();
-        var prompts = await promptService.GetPromptsByCategoryAsync(category);
+            using var scope = _serviceProvider.CreateScope();
+            var promptService = scope.ServiceProvider.GetRequiredService<PromptService>();
+            var prompts = await promptService.GetPromptsByCategoryAsync(category);
 
-        _prompts = new ObservableCollection<Prompt>(prompts);
-        PromptListBox.ItemsSource = _prompts;
-        if (_prompts.Count > 0)
-            PromptListBox.SelectedIndex = 0;
+            _prompts = new ObservableCollection<Prompt>(prompts);
+            PromptListBox.ItemsSource = _prompts;
+            if (_prompts.Count > 0)
+                PromptListBox.SelectedIndex = 0;
+        }
+        catch (Exception ex)
+        {
+            Log4.Error($"[PromptSettingsWindow] CategoryListBox_SelectionChanged 핸들러 실패: {ex}");
+        }
     }
 
     private void PromptListBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
@@ -77,16 +93,23 @@ public partial class PromptSettingsWindow : FluentWindow
 
     private async void SaveButton_Click(object sender, RoutedEventArgs e)
     {
-        if (_selectedPrompt == null) return;
+        try
+        {
+            if (_selectedPrompt == null) return;
 
-        _selectedPrompt.Template = TemplateTextBox.Text;
-        _selectedPrompt.IsEnabled = EnabledToggle.IsChecked == true;
+            _selectedPrompt.Template = TemplateTextBox.Text;
+            _selectedPrompt.IsEnabled = EnabledToggle.IsChecked == true;
 
-        using var scope = _serviceProvider.CreateScope();
-        var promptService = scope.ServiceProvider.GetRequiredService<PromptService>();
-        await promptService.SavePromptAsync(_selectedPrompt);
+            using var scope = _serviceProvider.CreateScope();
+            var promptService = scope.ServiceProvider.GetRequiredService<PromptService>();
+            await promptService.SavePromptAsync(_selectedPrompt);
 
-        System.Windows.MessageBox.Show("저장되었습니다.", "AI 프롬프트", System.Windows.MessageBoxButton.OK, System.Windows.MessageBoxImage.Information);
+            System.Windows.MessageBox.Show("저장되었습니다.", "AI 프롬프트", System.Windows.MessageBoxButton.OK, System.Windows.MessageBoxImage.Information);
+        }
+        catch (Exception ex)
+        {
+            Log4.Error($"[PromptSettingsWindow] SaveButton_Click 핸들러 실패: {ex}");
+        }
     }
 
     private void RestoreDefaultButton_Click(object sender, RoutedEventArgs e)
@@ -106,13 +129,20 @@ public partial class PromptSettingsWindow : FluentWindow
 
     private async void ReloadAllButton_Click(object sender, RoutedEventArgs e)
     {
-        var 캐시서비스 = _serviceProvider.GetRequiredService<PromptCacheService>();
-        var 개수 = await 캐시서비스.ReloadAllAsync();
-        System.Windows.MessageBox.Show(
-            $"프롬프트 {개수}개가 리로드되었습니다.",
-            "프롬프트 리로드",
-            System.Windows.MessageBoxButton.OK,
-            System.Windows.MessageBoxImage.Information);
+        try
+        {
+            var 캐시서비스 = _serviceProvider.GetRequiredService<PromptCacheService>();
+            var 개수 = await 캐시서비스.ReloadAllAsync();
+            System.Windows.MessageBox.Show(
+                $"프롬프트 {개수}개가 리로드되었습니다.",
+                "프롬프트 리로드",
+                System.Windows.MessageBoxButton.OK,
+                System.Windows.MessageBoxImage.Information);
+        }
+        catch (Exception ex)
+        {
+            Log4.Error($"[PromptSettingsWindow] ReloadAllButton_Click 핸들러 실패: {ex}");
+        }
     }
 
     private void CloseButton_Click(object sender, RoutedEventArgs e)

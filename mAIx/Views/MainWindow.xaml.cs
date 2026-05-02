@@ -2893,25 +2893,32 @@ public partial class MainWindow : FluentWindow
     /// </summary>
     private async void OnReadReceiptRequested(object? sender, Email email)
     {
-        await Dispatcher.InvokeAsync(() =>
+        try
         {
-            var result = System.Windows.MessageBox.Show(
-                $"발신자가 읽기 확인을 요청했습니다.\n\n보낸 사람: {email.From}\n제목: {email.Subject}\n\n읽기 확인을 보내시겠습니까?",
-                "읽기 확인 요청",
-                System.Windows.MessageBoxButton.YesNo,
-                System.Windows.MessageBoxImage.Question);
+            await Dispatcher.InvokeAsync(() =>
+            {
+                var result = System.Windows.MessageBox.Show(
+                    $"발신자가 읽기 확인을 요청했습니다.\n\n보낸 사람: {email.From}\n제목: {email.Subject}\n\n읽기 확인을 보내시겠습니까?",
+                    "읽기 확인 요청",
+                    System.Windows.MessageBoxButton.YesNo,
+                    System.Windows.MessageBoxImage.Question);
 
-            if (result == System.Windows.MessageBoxResult.Yes)
-            {
-                Log4.Info($"읽기 확인 응답 전송 승인: {email.Subject}");
-                // Graph API는 자동으로 읽기 확인을 처리하므로
-                // 사용자가 승인하면 별도 작업 불필요 (메일 클라이언트가 읽기 확인 전송)
-            }
-            else
-            {
-                Log4.Info($"읽기 확인 응답 거부: {email.Subject}");
-            }
-        });
+                if (result == System.Windows.MessageBoxResult.Yes)
+                {
+                    Log4.Info($"읽기 확인 응답 전송 승인: {email.Subject}");
+                    // Graph API는 자동으로 읽기 확인을 처리하므로
+                    // 사용자가 승인하면 별도 작업 불필요 (메일 클라이언트가 읽기 확인 전송)
+                }
+                else
+                {
+                    Log4.Info($"읽기 확인 응답 거부: {email.Subject}");
+                }
+            });
+        }
+        catch (Exception ex)
+        {
+            Log4.Error($"[MainWindow] OnReadReceiptRequested 핸들러 실패: {ex}");
+        }
     }
 
     /// <summary>
@@ -7580,30 +7587,37 @@ public partial class MainWindow : FluentWindow
         // 진행률 변경 감지를 위한 PropertyChanged 구독
         async void OnPropertyChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
         {
-            if (_oneNoteViewModel == null) return;
-
-            await Dispatcher.InvokeAsync(() =>
+            try
             {
-                switch (e.PropertyName)
+                if (_oneNoteViewModel == null) return;
+
+                await Dispatcher.InvokeAsync(() =>
                 {
-                    case nameof(_oneNoteViewModel.SttProgress):
-                        if (OneNoteSTTProgressBar != null)
-                            OneNoteSTTProgressBar.Value = _oneNoteViewModel.SttProgress * 100;
-                        if (OneNoteSTTProgressPercent != null)
-                            OneNoteSTTProgressPercent.Text = $"{_oneNoteViewModel.SttProgress:P0}";
-                        break;
+                    switch (e.PropertyName)
+                    {
+                        case nameof(_oneNoteViewModel.SttProgress):
+                            if (OneNoteSTTProgressBar != null)
+                                OneNoteSTTProgressBar.Value = _oneNoteViewModel.SttProgress * 100;
+                            if (OneNoteSTTProgressPercent != null)
+                                OneNoteSTTProgressPercent.Text = $"{_oneNoteViewModel.SttProgress:P0}";
+                            break;
 
-                    case nameof(_oneNoteViewModel.SttProgressText):
-                        if (OneNoteSTTProgressText != null)
-                            OneNoteSTTProgressText.Text = _oneNoteViewModel.SttProgressText;
-                        break;
+                        case nameof(_oneNoteViewModel.SttProgressText):
+                            if (OneNoteSTTProgressText != null)
+                                OneNoteSTTProgressText.Text = _oneNoteViewModel.SttProgressText;
+                            break;
 
-                    case nameof(_oneNoteViewModel.SttTimeRemaining):
-                        if (OneNoteSTTTimeRemaining != null)
-                            OneNoteSTTTimeRemaining.Text = _oneNoteViewModel.SttTimeRemaining;
-                        break;
-                }
-            });
+                        case nameof(_oneNoteViewModel.SttTimeRemaining):
+                            if (OneNoteSTTTimeRemaining != null)
+                                OneNoteSTTTimeRemaining.Text = _oneNoteViewModel.SttTimeRemaining;
+                            break;
+                    }
+                });
+            }
+            catch (Exception ex)
+            {
+                Log4.Error($"[MainWindow] STT 진행률 PropertyChanged 핸들러 실패: {ex}");
+            }
         }
 
         _oneNoteViewModel.PropertyChanged += OnPropertyChanged;
