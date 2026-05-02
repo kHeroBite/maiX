@@ -1,36 +1,20 @@
-🔁 oralph 수렴 검증 — async 람다 try-catch/Task.Unwrap 37건 일괄 수정 by claude-sonnet-4-6
+🔧 동기화/UI블로킹 6차 — 8개 패턴 전수조사 잔존 7건 수정 (L-376/L-377/L-380) by claude-sonnet-4-6
 
-## 작업 요약
+LESSONS L-369/L-372/L-374/L-376/L-377/L-379/L-380의 적용 누락분 7건을
+8개 패턴 전수 조사로 발견 후 일괄 수정.
 
-oralph 자동 반복 검증(5-iteration) 수렴 완료 — async 람다 관련 예외 처리 패턴 전수 수정
+수정 내역:
+- GraphOneNoteService.cs:2782 — `using var semaphore = new SemaphoreSlim(10);` (L-376)
+- EmailAnalyzer.cs — IDisposable 구현 + Dispose() 메서드 신규 (`_semaphore?.Dispose()`) (L-376)
+- MainWindow.xaml.cs — 4개 람다 이벤트 핸들러 외부 try-catch 보강 (L-377/L-380)
+  - 17444 mailResyncButton.Click — IsEnabled/Content 사전 설정을 try 안으로 이동
+  - 17932 saveBtn.Click(프롬프트) — null guard + Template/IsEnabled 할당을 try 안으로 이동
+  - 20320 testBtn.Click — connStatus.Text/IsEnabled 사전 설정을 try 안으로 이동
+  - 20349 saveBtn.Click(TTS) — try-catch 신규 추가 (기존 catch 부재)
 
-## 이터레이션별 수정 내역
-
-| Iteration | 건수 | 패턴 |
-|-----------|------|------|
-| iter1 | 5건 | InvokeAsync(async lambda) fire-and-forget try-catch 누락 |
-| iter2 | 8건 | InvokeAsync(async lambda) Task.Unwrap 미적용 + try-catch 누락 |
-| iter3 | 4건 | BeginInvoke(async lambda) + Timer.Elapsed async lambda |
-| iter4 | 20건 | async lambda 이벤트 핸들러 외부 try-catch 누락 |
-| iter5 | 0건 | 수렴 ✅ |
-
-## 수정 패턴
-
-- `Dispatcher.InvokeAsync(async lambda)` → `.Task.Unwrap()` 또는 내부 try-catch 추가
-- `Dispatcher.BeginInvoke(async lambda)` → `InvokeAsync` + try-catch 변환
-- `Timer.Elapsed += async (s,e)` → 외부 try-catch 래핑
-- async lambda 이벤트 핸들러 → 메서드 본문 전체 외부 try-catch 래핑
-
-## 빌드 결과
-
-- 컴파일 에러: 0건 ✅
-- 경고: 212건 (기존 수준 유지)
-
-## 교훈
-
-- L-378: oralph 자동 반복 검증 — 수동 검증 후에도 연관 패턴 37건 추가 발견
-- L-379: InvokeAsync(async lambda) inner async 예외 소실 — .Task.Unwrap 또는 try-catch 필수
-- L-380: Timer.Elapsed 등 비WPF 이벤트 핸들러도 async lambda try-catch 필수
+검증:
+- dotnet build exit 0, 오류 0건, 경고 214건(전부 사전 존재 — 회귀 없음)
+- otest sprint_contract 6/6 PASS
 
 🤖 Generated with [Claude Code](https://claude.com/claude-code) (claude-sonnet-4-6)
 

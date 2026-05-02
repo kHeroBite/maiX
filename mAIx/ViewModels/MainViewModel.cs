@@ -204,7 +204,7 @@ public partial class MainViewModel : ViewModelBase, IDisposable
                     var snapshot = _cacheService.GetSnapshot(SelectedFolder.Id, ShowSnoozedEmails);
                     if (snapshot != null)
                     {
-                        ReplaceEmails(snapshot);
+                        ReplaceEmails(snapshot, preserveSelection: true);
                     }
                 }
             }
@@ -554,8 +554,13 @@ public partial class MainViewModel : ViewModelBase, IDisposable
     /// <summary>
     /// 이메일 목록 전체 교체. 단일 OC 인스턴스를 유지하면서 Clear+Add로 재구성한다.
     /// </summary>
-    private void ReplaceEmails(IEnumerable<Email> newEmails)
+    /// <param name="newEmails">새 이메일 목록</param>
+    /// <param name="preserveSelection">true이면 교체 후 이전 선택 메일을 복원한다 (sync 트리거 전용).</param>
+    private void ReplaceEmails(IEnumerable<Email> newEmails, bool preserveSelection = false)
     {
+        int? lastSelectedId = preserveSelection ? SelectedEmail?.Id : null;
+        string? lastSelectedEntryId = preserveSelection ? SelectedEmail?.EntryId : null;
+
         lock (_emailsLock)
         {
             _emails.Clear();
@@ -566,6 +571,38 @@ public partial class MainViewModel : ViewModelBase, IDisposable
         }
         OnPropertyChanged(nameof(EmailCount));
         OnPropertyChanged(nameof(StatusBarCountText));
+
+        // selection 복원 (preserveSelection=true이고 이전 선택 ID/EntryId가 유효한 경우만)
+        if (preserveSelection && (lastSelectedId is > 0 || !string.IsNullOrEmpty(lastSelectedEntryId)))
+        {
+            Email? restored = null;
+            if (lastSelectedId is > 0)
+            {
+                restored = _emails.FirstOrDefault(e => e.Id == lastSelectedId.Value);
+            }
+            if (restored == null && !string.IsNullOrEmpty(lastSelectedEntryId))
+            {
+                restored = _emails.FirstOrDefault(e => e.EntryId == lastSelectedEntryId);
+            }
+
+            if (restored != null && !ReferenceEquals(restored, SelectedEmail))
+            {
+                // OnSelectedEmailChanged 부수효과 억제 (기존 _isSwitchingFolder 패턴 활용)
+                _isSwitchingFolder = true;
+                try
+                {
+                    SelectedEmail = restored;
+                }
+                finally
+                {
+                    _isSwitchingFolder = false;
+                }
+            }
+            else if (restored == null)
+            {
+                Log4.Debug($"[ReplaceEmails] preserveSelection=true이지만 이전 선택 메일이 새 스냅샷에 없음 (Id={lastSelectedId}, EntryId={lastSelectedEntryId})");
+            }
+        }
     }
 
     /// <summary>
@@ -1775,7 +1812,7 @@ public partial class MainViewModel : ViewModelBase, IDisposable
                 if (snapshot != null)
                 {
                     Log4.Debug($"[Perf][SyncIncremental] Emails재바인딩 시작 {swSync.ElapsedMilliseconds}ms");
-                    ReplaceEmails(snapshot);
+                    ReplaceEmails(snapshot, preserveSelection: true);
                     StatusMessage = $"{Emails.Count}개 이메일 (캐시 + 신규 {newEmails.Count}건)";
                     Log4.Debug($"[Perf][SyncIncremental] Emails재바인딩 완료 {swSync.ElapsedMilliseconds}ms");
                 }

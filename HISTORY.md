@@ -2,6 +2,32 @@
 
 > PROJECT.md 작업 이력 테이블의 상세 보완본
 
+## 2026-05-03: 메일 자동 닫힘 회귀 수정 — ReplaceEmails Clear+Add 패턴이 ListBox SelectedEmail=null 유발
+
+**분류**: O3 Normal
+**범위**: 1개 파일 (mAIx/ViewModels/MainViewModel.cs)
+**수정 건수**: 37줄 변경 (시그니처 보강 + preserveSelection 로직 + 호출지 2곳 수정)
+
+### 배경
+- 사용자 보고: "메일을 보고 있는데 갑자기 닫힌다. 동기화/초기화 시점에"
+- `ReplaceEmails(IEnumerable<Email>)` 내부 `ObservableCollection.Clear()` 호출 시 WPF ListBox의 `SelectionChanged` 발화
+- 2-way 바인딩이 `SelectedEmail = null` write-back → `NullToVisibilityConverter` → 리딩 페인 `Collapsed`
+
+### 수정 내역
+1. **`ReplaceEmails` 시그니처 보강**: `preserveSelection = false` 선택적 파라미터 추가
+2. **preserveSelection 로직**: 호출 전 `_selectedEmail?.Id` 캡처 → Clear+Add → 동일 ID 재선택
+3. **백그라운드 sync 호출지 2곳**: `preserveSelection: true` 적용 (선택 보존)
+4. **사용자 액션 호출지 8곳**: `default false` 유지 (의도된 selection 변경 보존, 회귀 방지)
+
+### 테스트 결과
+- otest: 7/7 AC PASS
+- 빌드 정상, 구동 정상, 스크린샷 확인
+
+### 신규 교훈
+- **L-385**: WPF ListBox + ObservableCollection.Clear+Add + 2-way 바인딩 → SelectedItem=null write-back, 리딩 페인 Collapsed
+
+---
+
 ## 2026-05-02: 동기화/UI블로킹 8차 전수조사 — async void→Task 3건 + Task.Run try-catch + InvokeAsync.Unwrap 2건 (oralph)
 
 **분류**: O4 Heavy (oralph → ok 파이프라인 → 자체 검증 루프)

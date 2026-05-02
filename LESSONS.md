@@ -1028,6 +1028,25 @@
 - **연관**: L-369 (Dispatcher.Invoke async 람다), L-374 (DispatcherOperation 자체는 Task 아님), L-379 (InvokeAsync async 람다 try-catch 또는 Unwrap)
 - **Level**: 2 (반복 재현 위험 — 외관상 안전해 보이는 함정 패턴)
 
+### L-385: WPF ListBox + ObservableCollection.Clear+Add — SelectedItem=null write-back으로 리딩 페인 Collapsed (2026-05-03)
+
+- **문제**: 메일을 읽고 있는 도중 백그라운드 동기화가 실행되면 리딩 페인이 갑자기 닫힘
+- **원인**:
+  - `ReplaceEmails(IEnumerable<Email>)` 내부에서 `ObservableCollection.Clear()` → `Add(item) × N` 패턴 사용
+  - `Clear()` 호출 시점에 WPF ListBox의 `SelectionChanged` 이벤트가 발화
+  - 2-way 바인딩(`SelectedEmail`)에 의해 `null`이 write-back → `SelectedEmail = null`
+  - `NullToVisibilityConverter`가 `Collapsed`로 평가 → 리딩 페인 즉시 숨김
+- **해결**:
+  - `ReplaceEmails(IEnumerable<Email> emails, bool preserveSelection = false)` 시그니처 보강
+  - `preserveSelection=true` 시: "이전 selection ID 캡처 → Clear+Add → 동일 ID 재선택" 패턴 적용
+  - 백그라운드 sync 호출지 2곳만 `preserveSelection: true` 적용 (사용자 액션 8곳은 default false 유지)
+- **재발방지**:
+  - 백그라운드에서 `ObservableCollection.Clear()`를 포함하는 갱신 시 반드시 selection 보존 여부를 명시적으로 결정
+  - `ReplaceEmails` 또는 이와 유사한 bulk replace 메서드 작성 시 `preserveSelection` 옵션을 설계에 포함
+  - 코드 리뷰 시: `ObservableCollection.Clear()` 다음에 `SelectedItem` 2-way 바인딩이 있는지 grep 확인
+- **연관**: L-369(Dispatcher.Invoke async 람다), L-370(async void 이벤트 핸들러)
+- **Level**: 2 (재발 위험 — 백그라운드 sync + ListBox 컬렉션 갱신 패턴은 프로젝트 전반에 반복 등장)
+
 ### L-384: SESSION_DIR 이중 경로 — hook 참조 CLAUDE_CONFIG_DIR 정확 확인 필수 (2026-05-02)
 
 - **문제**: 파이프라인 evidence/state 파일 저장 시 SESSION_DIR이 두 곳에 존재
@@ -1074,3 +1093,4 @@
 | L-382 | 표본 수정 후 체계적 전수조사 필수 — 패턴 규칙 등록 시 전수 batch 권장 | docs | LESSONS.md, HISTORY.md | 2026-05-02 | ✅ |
 | L-383 | `InvokeAsync(async lambda).Task.ConfigureAwait(false)` 외관상 안전 함정 — inner async 예외 소실, .Task.Unwrap() 또는 try-catch 필수 | docs+code | LESSONS.md + MEMORY.md + MainWindow.xaml.cs L135/L230 | 2026-05-02 | ✅ |
 | L-384 | SESSION_DIR 이중 경로 — `$HOME/.claude/session-env` vs `/tmp/cc-{프로젝트UUID}/session-env`, evidence 마커는 hook이 참조하는 CLAUDE_CONFIG_DIR 경로에 정확히 생성 필수 | docs | LESSONS.md | 2026-05-02 | ✅ |
+| L-385 | WPF ListBox + ObservableCollection.Clear+Add + 2-way 바인딩 패턴 — SelectedItem=null write-back으로 리딩 페인 Collapsed (사용자 관점: 메일 닫힘) | docs+code | LESSONS.md + MEMORY.md + MainViewModel.cs ReplaceEmails preserveSelection | 2026-05-03 | ✅ |
