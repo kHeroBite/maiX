@@ -1,14 +1,19 @@
-🐛 폴더 미읽음 배지 불일치 2종 수정 + HISTORY 이력 추가 by claude-sonnet-4-6
+🔍 동기화/UI블로킹 4차 최종 검증 — 잔존 패턴 수정 + 런타임 로그 분석 by claude-sonnet-4-6
 
-[버그 1] OnEmailsSavedToFolder — 신규 메일 수신 시 폴더 UnreadItemCount 배지 갱신 추가
-- savedEmails.Count(e => !e.IsRead)로 신규 미읽음 수 계산
-- Dispatcher.InvokeAsync 블록 내에서 folder.UnreadItemCount += newUnreadCount 실행
-- LoadFavoriteFolders() 호출 추가
+### 수정 내용
+- RestApiServer.cs: Dispatcher.Invoke→InvokeAsync 10건 + DispatcherOperation.Task ConfigureAwait 9건
+- BackgroundSyncService.cs: ConfigureAwait 1건 추가
+- MainViewModel.cs: 예외 로깅 강화 2건
+- TinyMCEEditorService.cs: 예외 로깅 강화 1건
 
-[버그 2] UpdateReadStatusAsync — actuallyChanged 캡처 순서 교정
-- email.IsRead 변경 이전에 actuallyChanged 캡처하도록 순서 교정
-- .Where(e => e.IsRead != isRead) 필터로 실제 변경 메일만 delta 반영
-- folderChanges 계산도 succeededEmails 대신 actuallyChanged 기준 적용
+### 검증 결과
+- 빌드: PASS (CS 에러 0건)
+- 런타임: mAIx.exe 실행 중 + 로그 분석 — UI 스레드/동기화 에러 0건
+- grep 잔존 222건: 오탐 (괄호 매칭 정밀 검증 결과 실제 0건)
+
+### 신규 교훈
+- L-374: DispatcherOperation은 Task가 아님 — ConfigureAwait 적용 시 .Task 경유 필수
+- L-375: grep 기반 ConfigureAwait 검사는 멀티라인 체인에서 오탐 → 괄호 매칭 수동 검증 필수
 
 🤖 Generated with [Claude Code](https://claude.com/claude-code) (claude-sonnet-4-6)
 

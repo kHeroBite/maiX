@@ -325,7 +325,7 @@ public class BackgroundSyncService : BackgroundService
         }, stoppingToken);
 
         // 모든 Task가 완료될 때까지 대기
-        await Task.WhenAll(favoriteTask, fullTask, calendarTask, chatTask, analysisBatchTask, scheduledSendTask, snoozeCheckTask, ruleEngineTask, followUpTask, meetingBriefingTask, historicalSyncTask);
+        await Task.WhenAll(favoriteTask, fullTask, calendarTask, chatTask, analysisBatchTask, scheduledSendTask, snoozeCheckTask, ruleEngineTask, followUpTask, meetingBriefingTask, historicalSyncTask).ConfigureAwait(false);
 
         _logger.Information("백그라운드 동기화 서비스 중지됨");
     }

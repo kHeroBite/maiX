@@ -174,7 +174,7 @@ public class RestApiServer
             try
             {
                 var context = _listener.GetContext();
-                Task.Run(() => HandleRequest(context));
+                Task.Run(async () => await HandleRequest(context).ConfigureAwait(false));
             }
             catch (HttpListenerException)
             {
@@ -190,7 +190,7 @@ public class RestApiServer
     /// <summary>
     /// HTTP 요청 처리 및 라우팅
     /// </summary>
-    private void HandleRequest(HttpListenerContext context)
+    private async Task HandleRequest(HttpListenerContext context)
     {
         var request = context.Request;
         var response = context.Response;
@@ -222,7 +222,7 @@ public class RestApiServer
                     break;
 
                 case ("GET", "/api/status"):
-                    HandleStatus(response);
+                    await HandleStatus(response).ConfigureAwait(false);
                     break;
 
                 case ("POST", "/api/shutdown"):
@@ -234,7 +234,7 @@ public class RestApiServer
                     break;
 
                 case ("POST", "/api/screenshot"):
-                    HandleScreenshot(response);
+                    await HandleScreenshot(response).ConfigureAwait(false);
                     break;
 
                 case ("GET", "/api/logs/latest"):
@@ -246,19 +246,19 @@ public class RestApiServer
                     break;
 
                 case ("POST", "/api/window/maximize"):
-                    HandleWindowMaximize(response);
+                    await HandleWindowMaximize(response).ConfigureAwait(false);
                     break;
 
                 case ("POST", "/api/window/minimize"):
-                    HandleWindowMinimize(response);
+                    await HandleWindowMinimize(response).ConfigureAwait(false);
                     break;
 
                 case ("POST", "/api/window/restore"):
-                    HandleWindowRestore(response);
+                    await HandleWindowRestore(response).ConfigureAwait(false);
                     break;
 
                 case ("POST", "/api/window/activate"):
-                    HandleWindowActivate(response);
+                    await HandleWindowActivate(response).ConfigureAwait(false);
                     break;
 
                 case ("GET", "/api/current-tab"):
@@ -266,7 +266,7 @@ public class RestApiServer
                     break;
 
                 case ("POST", "/api/theme/toggle"):
-                    HandleThemeToggle(response);
+                    await HandleThemeToggle(response).ConfigureAwait(false);
                     break;
 
                 case ("GET", "/api/theme"):
@@ -278,7 +278,7 @@ public class RestApiServer
                     if (method == "POST" && path.StartsWith("/api/navigate/"))
                     {
                         var tab = path.Substring("/api/navigate/".Length).ToLowerInvariant();
-                        HandleNavigate(tab, response);
+                        await HandleNavigate(tab, response).ConfigureAwait(false);
                     }
                     // 동적 경로 매칭: /api/planner/select/{index}
                     else if (method == "POST" && path.StartsWith("/api/planner/select/"))
@@ -286,7 +286,7 @@ public class RestApiServer
                         var indexStr = path.Substring("/api/planner/select/".Length);
                         if (int.TryParse(indexStr, out int index))
                         {
-                            HandlePlannerSelect(index, response);
+                            await HandlePlannerSelect(index, response).ConfigureAwait(false);
                         }
                         else
                         {
@@ -298,7 +298,7 @@ public class RestApiServer
                     {
                         var view = path.Substring("/api/onedrive/".Length).ToLowerInvariant();
                         Log4.Info($"[RestAPI] POST /api/onedrive/{view} 라우팅 매칭됨");
-                        HandleOneDriveNavigate(view, response);
+                        await HandleOneDriveNavigate(view, response).ConfigureAwait(false);
                     }
                     else
                     {
@@ -332,19 +332,19 @@ public class RestApiServer
     /// <summary>
     /// GET /api/status - 앱 상태 조회
     /// </summary>
-    private void HandleStatus(HttpListenerResponse response)
+    private async Task HandleStatus(HttpListenerResponse response)
     {
         string? mainWindowState = null;
         bool mainWindowVisible = false;
 
-        _app.Dispatcher.Invoke(() =>
+        await _app.Dispatcher.InvokeAsync(() =>
         {
             if (MainWindow != null)
             {
                 mainWindowState = MainWindow.WindowState.ToString();
                 mainWindowVisible = MainWindow.IsVisible;
             }
-        });
+        }).Task.ConfigureAwait(false);
 
         SendResponse(response, 200, new
         {
@@ -432,7 +432,7 @@ public class RestApiServer
     /// <summary>
     /// POST /api/screenshot - 스크린샷 촬영
     /// </summary>
-    private void HandleScreenshot(HttpListenerResponse response)
+    private async Task HandleScreenshot(HttpListenerResponse response)
     {
         try
         {
@@ -445,7 +445,7 @@ public class RestApiServer
             string? filePath = null;
             string? errorMessage = null;
 
-            _app.Dispatcher.Invoke(() =>
+            await _app.Dispatcher.InvokeAsync(() =>
             {
                 try
                 {
@@ -626,7 +626,7 @@ public class RestApiServer
     /// <summary>
     /// POST /api/window/maximize - 창 최대화
     /// </summary>
-    private void HandleWindowMaximize(HttpListenerResponse response)
+    private async Task HandleWindowMaximize(HttpListenerResponse response)
     {
         try
         {
@@ -636,10 +636,10 @@ public class RestApiServer
                 return;
             }
 
-            _app.Dispatcher.Invoke(() =>
+            await _app.Dispatcher.InvokeAsync(() =>
             {
                 MainWindow.WindowState = WindowState.Maximized;
-            });
+            }).Task.ConfigureAwait(false);
 
             SendResponse(response, 200, new
             {
@@ -656,7 +656,7 @@ public class RestApiServer
     /// <summary>
     /// POST /api/window/minimize - 창 최소화
     /// </summary>
-    private void HandleWindowMinimize(HttpListenerResponse response)
+    private async Task HandleWindowMinimize(HttpListenerResponse response)
     {
         try
         {
@@ -666,10 +666,10 @@ public class RestApiServer
                 return;
             }
 
-            _app.Dispatcher.Invoke(() =>
+            await _app.Dispatcher.InvokeAsync(() =>
             {
                 MainWindow.WindowState = WindowState.Minimized;
-            });
+            }).Task.ConfigureAwait(false);
 
             SendResponse(response, 200, new
             {
@@ -686,7 +686,7 @@ public class RestApiServer
     /// <summary>
     /// POST /api/window/restore - 창 복원
     /// </summary>
-    private void HandleWindowRestore(HttpListenerResponse response)
+    private async Task HandleWindowRestore(HttpListenerResponse response)
     {
         try
         {
@@ -696,10 +696,10 @@ public class RestApiServer
                 return;
             }
 
-            _app.Dispatcher.Invoke(() =>
+            await _app.Dispatcher.InvokeAsync(() =>
             {
                 MainWindow.WindowState = WindowState.Normal;
-            });
+            }).Task.ConfigureAwait(false);
 
             SendResponse(response, 200, new
             {
@@ -716,7 +716,7 @@ public class RestApiServer
     /// <summary>
     /// POST /api/window/activate - 창 활성화 (포그라운드로 가져오기)
     /// </summary>
-    private void HandleWindowActivate(HttpListenerResponse response)
+    private async Task HandleWindowActivate(HttpListenerResponse response)
     {
         try
         {
@@ -726,7 +726,7 @@ public class RestApiServer
                 return;
             }
 
-            _app.Dispatcher.Invoke(() =>
+            await _app.Dispatcher.InvokeAsync(() =>
             {
                 // 최소화 상태면 복원
                 if (MainWindow.WindowState == WindowState.Minimized)
@@ -739,7 +739,7 @@ public class RestApiServer
                 MainWindow.Topmost = true;
                 MainWindow.Topmost = false;
                 MainWindow.Focus();
-            });
+            }).Task.ConfigureAwait(false);
 
             SendResponse(response, 200, new
             {
@@ -756,14 +756,14 @@ public class RestApiServer
     /// <summary>
     /// POST /api/theme/toggle - 테마 전환 (다크/라이트)
     /// </summary>
-    private void HandleThemeToggle(HttpListenerResponse response)
+    private async Task HandleThemeToggle(HttpListenerResponse response)
     {
         try
         {
-            _app.Dispatcher.Invoke(() =>
+            await _app.Dispatcher.InvokeAsync(() =>
             {
                 Services.Theme.ThemeService.Instance.ToggleTheme();
-            });
+            }).Task.ConfigureAwait(false);
 
             var isDark = Services.Theme.ThemeService.Instance.IsDarkMode;
             SendResponse(response, 200, new
@@ -801,7 +801,7 @@ public class RestApiServer
     /// <summary>
     /// POST /api/navigate/{tab} - 탭 전환
     /// </summary>
-    private void HandleNavigate(string tab, HttpListenerResponse response)
+    private async Task HandleNavigate(string tab, HttpListenerResponse response)
     {
         try
         {
@@ -820,11 +820,11 @@ public class RestApiServer
             Log4.Info($"[RestAPI] 탭 전환 요청: {tab}");
 
             // UI 스레드에서 탭 전환 실행
-            _app.Dispatcher.Invoke(() =>
+            await _app.Dispatcher.InvokeAsync(() =>
             {
                 CurrentTab = tab;
                 NavigateRequested?.Invoke(this, tab);
-            });
+            }).Task.ConfigureAwait(false);
 
             SendResponse(response, 200, new
             {
@@ -861,17 +861,17 @@ public class RestApiServer
     /// <summary>
     /// POST /api/planner/select/{index} - Planner 플랜 선택
     /// </summary>
-    private void HandlePlannerSelect(int index, HttpListenerResponse response)
+    private async Task HandlePlannerSelect(int index, HttpListenerResponse response)
     {
         try
         {
             Log4.Info($"[RestAPI] Planner 플랜 선택 요청: 인덱스 {index}");
 
             // UI 스레드에서 플랜 선택 실행
-            _app.Dispatcher.Invoke(() =>
+            await _app.Dispatcher.InvokeAsync(() =>
             {
                 PlannerPlanSelectRequested?.Invoke(this, index);
-            });
+            }).Task.ConfigureAwait(false);
 
             SendResponse(response, 200, new
             {
@@ -893,7 +893,7 @@ public class RestApiServer
         "home", "myfiles", "shared", "favorites", "trash", "people", "meetings", "media"
     };
 
-    private void HandleOneDriveNavigate(string view, HttpListenerResponse response)
+    private async Task HandleOneDriveNavigate(string view, HttpListenerResponse response)
     {
         try
         {
@@ -913,12 +913,12 @@ public class RestApiServer
 
             // UI 스레드에서 뷰 전환 실행
             Log4.Debug($"[RestAPI] OneDrive 이벤트 발생 시도 - 핸들러 등록 여부: {OneDriveNavigateRequested != null}");
-            _app.Dispatcher.Invoke(() =>
+            await _app.Dispatcher.InvokeAsync(() =>
             {
                 Log4.Debug($"[RestAPI] Dispatcher 내부 - 이벤트 호출 시작");
                 OneDriveNavigateRequested?.Invoke(this, view);
                 Log4.Debug($"[RestAPI] Dispatcher 내부 - 이벤트 호출 완료");
-            });
+            }).Task.ConfigureAwait(false);
 
             SendResponse(response, 200, new
             {

@@ -814,6 +814,52 @@
 - **조치**: 16건 `BeginInvoke → InvokeAsync + await` 전환
 - **Level**: 1 (코드 규칙 강화)
 
+### L-372: ConfigureAwait 잘못된 괄호 위치 안티패턴 (2026-05-02)
+
+- **문제**: 멀티라인 체인에서 `(await x.Method()).Property` 패턴 처리 시 `.ConfigureAwait(false)`를 `await x.Method()` 직후가 아닌 `.Property` 접근 직후에 삽입하는 실수 발생
+  ```csharp
+  // ❌ 잘못된 패턴 (Property 접근 후 ConfigureAwait — 컴파일 에러 또는 의도 불명확)
+  var result = (await x.GetAsync())
+      .SomeProperty.ConfigureAwait(false);
+  
+  // ✅ 올바른 패턴 (await 대상 Task에 ConfigureAwait 적용)
+  var result = (await x.GetAsync().ConfigureAwait(false))
+      .SomeProperty;
+  ```
+- **발생 원인**: 대량 자동 적용 시 체인 구조 파악 없이 줄 끝에 기계적으로 삽입
+- **재발방지**: 멀티라인 체인 수정 시 `(await ...)` 패턴 여부를 먼저 확인하고, ConfigureAwait는 반드시 `Task` 반환 직후 (괄호 닫기 전)에 삽입
+- **Level**: 2 (대량 적용 시 반복 재현 위험)
+
+### L-373: ConfigureAwait(false) 대규모 적용 — 4 Phase 분할 전략 (2026-05-02)
+
+- **교훈**: 수백 건 이상의 대규모 ConfigureAwait 적용은 단일 Phase로 수행하면 버그 발생 시 추적이 어려움
+- **권장 전략**:
+  1. **Phase 별 레이어 분리**: Graph → BackgroundSync → AI/Converter → 잔존 순으로 레이어별 분리
+  2. **Phase 완료 후 빌드 검증**: 각 Phase 완료마다 `dotnet build` 실행하여 즉시 확인
+  3. **fire-and-forget 식별 선행**: ConfigureAwait 적용 전 의도적 fire-and-forget 패턴 먼저 식별하여 제외
+- **Level**: 1 (프로세스 개선 사항)
+
+### L-374: DispatcherOperation은 Task가 아님 — ConfigureAwait 적용 시 .Task 경유 필수 (2026-05-02)
+
+- **문제**: `Dispatcher.InvokeAsync()`의 반환 타입은 `DispatcherOperation`이며 `System.Threading.Tasks.Task`가 아님. 직접 `ConfigureAwait(false)`를 체이닝하면 컴파일 에러 또는 의도 불명확
+  ```csharp
+  // ❌ 잘못된 패턴 — DispatcherOperation에 ConfigureAwait 직접 체이닝
+  await _dispatcher.InvokeAsync(() => { ... }).ConfigureAwait(false);
+  
+  // ✅ 올바른 패턴 — .Task 프로퍼티 경유 후 ConfigureAwait
+  await _dispatcher.InvokeAsync(() => { ... }).Task.ConfigureAwait(false);
+  ```
+- **근본 원인**: ConfigureAwait 대량 적용 시 반환 타입 구분 없이 일괄 체이닝
+- **재발방지**: Dispatcher.InvokeAsync 뒤에 ConfigureAwait 적용 시 반드시 `.Task.ConfigureAwait(false)` 패턴 사용
+- **Level**: 2 (대량 적용 시 반복 재현 위험)
+
+### L-375: grep 기반 ConfigureAwait 누락 검사 — 멀티라인 체인에서 오탐 (2026-05-02)
+
+- **문제**: 줄 단위 grep으로 `ConfigureAwait` 누락 여부를 검사할 때, 멀티라인 체인 패턴 `(await x.GetAsync())\n.SomeProperty`에서 실제로 올바르게 삽입된 패턴을 "누락"으로 오탐하거나 잘못 삽입된 패턴을 통과시키는 경우 발생
+- **근본 원인**: grep은 줄 단위 검색이므로 멀티라인 체인의 괄호 구조를 추적하지 못함
+- **재발방지**: ConfigureAwait 누락 grep 검사 후 `(await ...).` 패턴이 발견되면 반드시 괄호 매칭 수동 검증 수행. 대량 적용 전/후 정밀 검증은 Roslyn 분석기 또는 IDE 기능 활용 권장
+- **Level**: 1 (프로세스 주의사항)
+
 ## 반영 추적 테이블
 
 | 교훈 ID | 교훈 요약 | 반영 대상 | 반영 위치 | 반영일 | 검증 |
@@ -830,3 +876,7 @@
 | L-369 | Dispatcher.Invoke(async 람다) — async void 처리로 예외 미전파 + UI 블로킹 | skill | domain-csharp/SKILL.md 금지패턴/체크리스트 | 2026-05-02 | ✅ |
 | L-370 | async void 이벤트 핸들러 — 예외 소실 + 비동기 흐름 단절 | code | MainWindow.xaml.cs 외 5개 파일 (15건 변환) | 2026-05-02 | ✅ |
 | L-371 | Dispatcher.BeginInvoke 구식 API — 결과/예외 추적 불가 | code | MainWindow.xaml.cs, ComposeWindow.xaml.cs (16건 변환) | 2026-05-02 | ✅ |
+| L-372 | ConfigureAwait 잘못된 괄호 위치 — 멀티라인 체인에서 Property 접근 후 삽입 버그 | docs+code | LESSONS.md + 버그 5종 직접 수정 | 2026-05-02 | ✅ |
+| L-373 | ConfigureAwait 대규모 적용 4 Phase 분할 전략 | docs | LESSONS.md | 2026-05-02 | ✅ |
+| L-374 | DispatcherOperation은 Task 아님 — ConfigureAwait 적용 시 .Task 경유 필수 | docs | LESSONS.md + MEMORY.md | 2026-05-02 | ✅ |
+| L-375 | grep 기반 ConfigureAwait 누락 검사 멀티라인 오탐 | docs | LESSONS.md | 2026-05-02 | ✅ |

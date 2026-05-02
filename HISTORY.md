@@ -2,6 +2,42 @@
 
 > PROJECT.md 작업 이력 테이블의 상세 보완본
 
+## 2026-05-02: 동기화/UI블로킹 4차 최종 검증 — 잔존 패턴 수정 + 런타임 로그 분석
+
+**분류**: Heavy Path (o4)
+**수정 파일**: 4개 (RestApiServer.cs, BackgroundSyncService.cs, MainViewModel.cs, TinyMCEEditorService.cs)
+
+### 배경
+
+3차까지 수행한 ConfigureAwait(false) 전면 적용 및 Dispatcher 패턴 수정 후,
+4차 최종 검증으로 잔존 패턴을 재점검하고 런타임 로그를 분석하여 최종 확인.
+
+### 수정 내용
+
+| 파일 | 수정 내용 | 건수 |
+|------|-----------|------|
+| `RestApiServer.cs` | `Dispatcher.Invoke` → `InvokeAsync` 전환 + `DispatcherOperation.Task.ConfigureAwait` 9건 | 10+9건 |
+| `BackgroundSyncService.cs` | ConfigureAwait 1건 추가 | 1건 |
+| `MainViewModel.cs` | 예외 로깅 강화 | 2건 |
+| `TinyMCEEditorService.cs` | 예외 로깅 강화 | 1건 |
+
+### 검증 결과
+
+- **빌드**: PASS (CS 에러 0건) ✅
+- **런타임**: mAIx.exe 실행 중 + 로그 분석 — UI 스레드/동기화 에러 0건 ✅
+- **grep 정밀 검증**: 발견된 잔존 222건은 오탐 (괄호 매칭 정밀 검증 결과 실제 0건) ✅
+
+### 신규 교훈
+
+- **L-374**: `DispatcherOperation`은 `Task`가 아님 — ConfigureAwait 적용 시 `.Task` 경유 필수
+- **L-375**: grep 기반 ConfigureAwait 누락 검사 — 멀티라인 체인에서 오탐 발생 → 괄호 매칭 수동 검증 필수
+
+### 커밋
+
+- `(이번 커밋)`: 🔍 동기화/UI블로킹 4차 최종 검증 — 잔존 패턴 수정 + 런타임 로그 분석
+
+---
+
 ## 2026-05-02: UI블로킹 2차 전수조사 — async void→Task / BeginInvoke→InvokeAsync / try-catch 35건 수정
 
 **분류**: Heavy Path (o4)
@@ -878,6 +914,40 @@ HIGH/MEDIUM/LOW 3단계로 분류하여 2차 전수조사를 실시.
 - BUG-2 ComposeWindow 닫기 정상 동작 ✅
 - BUG-3 인라인 컴포즈 패널 표시/숨김 동작 ✅
 - BUG-4 UI 블로킹 해소 (InvokeAsync 비동기 전환) ✅
+
+---
+
+## 2026-05-02: ConfigureAwait(false) Service 레이어 전면 적용
+
+### 작업 내용
+ConfigureAwait(false)를 Service 레이어 전체에 적용하여 스레드 컨텍스트 캡처 오버헤드 제거 및 데드락 위험 완전 차단.
+4 Phase로 나눠 단계별 빌드 검증 후 진행.
+
+### 적용 규모
+- **Phase 1 — Graph 레이어**: 432건 (11개 파일: GraphMailService, GraphCalendarService, GraphContactService, GraphTeamsService 등)
+- **Phase 2 — BackgroundSyncService**: 125건 (1개 파일)
+- **Phase 3 — AI/Converter/Notification 등**: ~100건 (58개 파일: AIProviderBase, ClaudeProvider, GeminiProvider, AttachmentProcessor 등)
+- **Phase 4 — 잔존 버그 수정 + MEDIUM 보완**: 13건 버그 수정 + ComposeWindow 이벤트 해제 2건
+- **총계**: 약 670건 수정, 60개 파일
+
+### 부수 항목
+- **fire-and-forget 패턴 식별**: RestApiServer, ToastNotificationService — 의도적 패턴으로 수정 불필요 결론
+- **이벤트 해제 추가**: ComposeWindow.xaml.cs Closing 이벤트 핸들러 2건 추가
+- **ConfigureAwait 잘못 삽입 버그 5종 수정** (L-372 참조 — 멀티라인 체인 위치 오류)
+
+### 주요 변경 파일
+- `mAIx/Services/AI/` (10개 파일): AIProviderBase, AIService, ClaudeProvider 등
+- `mAIx/Services/Graph/` (11개 파일): GraphMailService, GraphCalendarService 등
+- `mAIx/Services/Converter/` (9개 파일): AttachmentProcessor, ClosedXmlConverter 등
+- `mAIx/Services/Sync/BackgroundSyncService.cs`
+- `mAIx/Views/ComposeWindow.xaml.cs`
+
+### 테스트 결과 (빌드 검증)
+- 빌드: 성공 (CS 컴파일 에러 0건) ✅
+- Phase별 빌드 검증 통과 ✅
+
+### 커밋
+- `154a56da`: 🔧 ConfigureAwait(false) Service 레이어 전면 적용 (~670건)
 
 ---
 

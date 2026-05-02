@@ -720,7 +720,7 @@ public static class TinyMCEEditorService
         }
         catch (Exception ex)
         {
-            Log4.Error($"[TinyMCE] 링크 열기 실패: {url} — {ex.Message}");
+            Log4.Error($"[TinyMCE] 링크 열기 실패: {url} — {ex}");
         }
     }
     /// </summary>

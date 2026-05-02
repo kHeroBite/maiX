@@ -1265,7 +1265,7 @@ public partial class MainViewModel : ViewModelBase, IDisposable
         }
         catch (Exception ex)
         {
-            Log4.Error($"[MainViewModel] OnFoldersSynced 실패: {ex.Message}");
+            Log4.Error($"[MainViewModel] OnFoldersSynced 처리 실패: {ex}");
         }
     }
 
@@ -1292,7 +1292,7 @@ public partial class MainViewModel : ViewModelBase, IDisposable
         }
         catch (Exception ex)
         {
-            Log4.Error($"[MainViewModel] OnEmailsSynced 실패: {ex.Message}");
+            Log4.Error($"[MainViewModel] OnEmailsSynced 처리 실패: {ex}");
         }
     }
 
