@@ -132,7 +132,7 @@ public partial class MainWindow : FluentWindow
                     {
                         await RefreshOneNoteTinyMCEThemeAsync();
                     }
-                }).Task.ConfigureAwait(false);
+                }).Task.Unwrap().ConfigureAwait(false);
             }
             catch (Exception ex)
             {
@@ -227,7 +227,7 @@ public partial class MainWindow : FluentWindow
                         await LoadMonthEventsAsync(_currentCalendarDate);
                         UpdateCalendarDisplay();
                     }
-                }).Task.ConfigureAwait(false);
+                }).Task.Unwrap().ConfigureAwait(false);
             }
             catch (Exception ex)
             {
@@ -14103,65 +14103,72 @@ public partial class MainWindow : FluentWindow
                                 // 녹음 목록 로드 완료까지 폴링 방식으로 대기
                                 _ = Task.Run(async () =>
                                 {
-                                    // 최대 3초 동안 녹음 목록이 로드될 때까지 대기
-                                    for (int i = 0; i < 30; i++)
+                                    try
                                     {
-                                        await Task.Delay(100);
-                                        if (_oneNoteViewModel?.CurrentPageRecordings.Count > 0)
-                                            break;
-                                    }
-
-                                    await Dispatcher.InvokeAsync(() =>
-                                    {
-                                        if (OneNoteRecordingsList != null && _oneNoteViewModel != null)
+                                        // 최대 3초 동안 녹음 목록이 로드될 때까지 대기
+                                        for (int i = 0; i < 30; i++)
                                         {
-                                            OneNoteRecordingsList.ItemsSource = _oneNoteViewModel.CurrentPageRecordings;
-                                            Log4.Info($"[MainWindow] SelectedPage 변경 - 녹음 목록 UI 업데이트: {_oneNoteViewModel.CurrentPageRecordings.Count}개");
+                                            await Task.Delay(100);
+                                            if (_oneNoteViewModel?.CurrentPageRecordings.Count > 0)
+                                                break;
+                                        }
 
-                                            // 녹음 파일이 있으면 첫 번째 파일 자동 선택 및 UI 활성화
-                                            // 단, 녹음 중이거나 SelectedRecording이 이미 설정되어 있으면 건너뜀
-                                            if (_oneNoteViewModel.CurrentPageRecordings.Count > 0 && !_oneNoteViewModel.IsRecording)
+                                        await Dispatcher.InvokeAsync(() =>
+                                        {
+                                            if (OneNoteRecordingsList != null && _oneNoteViewModel != null)
                                             {
-                                                // 이미 현재 페이지의 녹음 파일이 선택되어 있으면 건너뜀
-                                                var currentSelected = _oneNoteViewModel.SelectedRecording;
-                                                var isCurrentPageRecording = currentSelected != null &&
-                                                    _oneNoteViewModel.CurrentPageRecordings.Any(r => r.FilePath == currentSelected.FilePath);
+                                                OneNoteRecordingsList.ItemsSource = _oneNoteViewModel.CurrentPageRecordings;
+                                                Log4.Info($"[MainWindow] SelectedPage 변경 - 녹음 목록 UI 업데이트: {_oneNoteViewModel.CurrentPageRecordings.Count}개");
 
-                                                if (!isCurrentPageRecording)
+                                                // 녹음 파일이 있으면 첫 번째 파일 자동 선택 및 UI 활성화
+                                                // 단, 녹음 중이거나 SelectedRecording이 이미 설정되어 있으면 건너뜀
+                                                if (_oneNoteViewModel.CurrentPageRecordings.Count > 0 && !_oneNoteViewModel.IsRecording)
                                                 {
-                                                    var firstRecording = _oneNoteViewModel.CurrentPageRecordings[0];
-                                                    _oneNoteViewModel.SelectedRecording = firstRecording;
+                                                    // 이미 현재 페이지의 녹음 파일이 선택되어 있으면 건너뜀
+                                                    var currentSelected = _oneNoteViewModel.SelectedRecording;
+                                                    var isCurrentPageRecording = currentSelected != null &&
+                                                        _oneNoteViewModel.CurrentPageRecordings.Any(r => r.FilePath == currentSelected.FilePath);
 
-                                                    // ListBox가 아이템을 렌더링한 후 선택 (다음 렌더링 사이클에서 실행)
-                                                    _ = Dispatcher.InvokeAsync(() =>
+                                                    if (!isCurrentPageRecording)
                                                     {
-                                                        OneNoteRecordingsList.SelectedItem = firstRecording;
-                                                        Log4.Info($"[MainWindow] 첫 번째 녹음 파일 자동 선택: {firstRecording.FileName}");
+                                                        var firstRecording = _oneNoteViewModel.CurrentPageRecordings[0];
+                                                        _oneNoteViewModel.SelectedRecording = firstRecording;
 
-                                                        // 우측 AI 패널의 녹음 탭 활성화
-                                                        SwitchAITab("record");
+                                                        // ListBox가 아이템을 렌더링한 후 선택 (다음 렌더링 사이클에서 실행)
+                                                        _ = Dispatcher.InvokeAsync(() =>
+                                                        {
+                                                            OneNoteRecordingsList.SelectedItem = firstRecording;
+                                                            Log4.Info($"[MainWindow] 첫 번째 녹음 파일 자동 선택: {firstRecording.FileName}");
 
-                                                        // 탭 바 표시 (노트내용 탭이 기본)
-                                                        if (OneNoteContentTabBar != null)
-                                                            OneNoteContentTabBar.Visibility = Visibility.Visible;
+                                                            // 우측 AI 패널의 녹음 탭 활성화
+                                                            SwitchAITab("record");
 
-                                                        // 노트 선택 시에는 노트내용 탭이 기본으로 열림 (녹음 탭 아님)
-                                                        SwitchToNoteContentTab();
+                                                            // 탭 바 표시 (노트내용 탭이 기본)
+                                                            if (OneNoteContentTabBar != null)
+                                                                OneNoteContentTabBar.Visibility = Visibility.Visible;
 
-                                                        // STT/요약 결과 명시적 로드 (partial 메서드가 호출되지 않을 수 있음)
-                                                        _oneNoteViewModel?.LoadSelectedRecordingResults();
+                                                            // 노트 선택 시에는 노트내용 탭이 기본으로 열림 (녹음 탭 아님)
+                                                            SwitchToNoteContentTab();
 
-                                                        UpdateRecordingContentPanel();
-                                                        UpdateSummaryContentPanel();
-                                                    }, System.Windows.Threading.DispatcherPriority.Loaded);
-                                                }
-                                                else
-                                                {
-                                                    Log4.Debug($"[MainWindow] 현재 페이지 녹음 파일 이미 선택됨: {currentSelected?.FileName}");
+                                                            // STT/요약 결과 명시적 로드 (partial 메서드가 호출되지 않을 수 있음)
+                                                            _oneNoteViewModel?.LoadSelectedRecordingResults();
+
+                                                            UpdateRecordingContentPanel();
+                                                            UpdateSummaryContentPanel();
+                                                        }, System.Windows.Threading.DispatcherPriority.Loaded);
+                                                    }
+                                                    else
+                                                    {
+                                                        Log4.Debug($"[MainWindow] 현재 페이지 녹음 파일 이미 선택됨: {currentSelected?.FileName}");
+                                                    }
                                                 }
                                             }
-                                        }
-                                    });
+                                        });
+                                    }
+                                    catch (Exception ex)
+                                    {
+                                        Log4.Error($"[MainWindow] SelectedPage 녹음 목록 폴링 Task.Run 실패: {ex.Message}\n{ex.StackTrace}");
+                                    }
                                 });
                             });
                         }

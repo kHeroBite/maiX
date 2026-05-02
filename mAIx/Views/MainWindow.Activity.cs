@@ -56,7 +56,7 @@ namespace mAIx.Views
         /// <summary>
         /// 활동에서 원본 항목으로 이동 (크로스탭)
         /// </summary>
-        private async void NavigateToActivitySource(ActivityItemViewModel activity)
+        private async System.Threading.Tasks.Task NavigateToActivitySource(ActivityItemViewModel activity)
         {
             try
             {

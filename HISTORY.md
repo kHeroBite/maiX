@@ -2,6 +2,43 @@
 
 > PROJECT.md 작업 이력 테이블의 상세 보완본
 
+## 2026-05-02: 동기화/UI블로킹 8차 전수조사 — async void→Task 3건 + Task.Run try-catch + InvokeAsync.Unwrap 2건 (oralph)
+
+**분류**: O4 Heavy (oralph → ok 파이프라인 → 자체 검증 루프)
+**범위 (전수조사 ultrathink)**: 272 파일 / 102,139 LOC / 17개 패턴
+**수정 파일**: 4개
+**수정 건수**: 6건
+**커밋**: (odone_git 단계에서 갱신 예정)
+
+### 배경
+- 8차 라운드 — oralph 자동 반복 검증으로 7차 이후 잔존 패턴 추가 발굴
+- ultrathink 전수조사 : 272 파일 × 17 패턴(async void / Dispatcher.Invoke / SemaphoreSlim / .Wait()/.Result / Task.Run / fire-and-forget / Lock 패턴 / EF 동기 호출 / WebView2 동기 / Timer.Elapsed async / InvokeAsync 변형 / 외부 try-catch / ConfigureAwait 위치 등)
+- oplan 분석으로 잔존 4건 식별 → odev로 수정 → otest 19/19 AC 검증 중 추가 2건 발견 → 추가 수정 후 재검증 PASS
+
+### 수정 내역 (oplan 분석 4건)
+1. **MainWindow.Activity.cs:59** — `async void NavigateToActivitySource` → `async Task` (외부 호출자가 await 가능하도록)
+2. **MainWindow.OneNote.cs:37** — `async void NavigateToBacklinkPage` → `async Task`
+3. **MainWindow.Calls.cs:75** — `async void StartTeamsChatFromContact` → `async Task`
+4. **MainWindow.xaml.cs:14104** — `_ = Task.Run(async () => {...})` 람다 본문 try-catch 래핑 (예외 소실 방지)
+
+### 추가 발견 (otest AC-007 검증 중 2건)
+5. **MainWindow.xaml.cs:135** — `InvokeAsync(async lambda).Task.ConfigureAwait` → `.Task.Unwrap().ConfigureAwait` 변경 (L-383 신규 패턴)
+6. **MainWindow.xaml.cs:230** — 동일 패턴 변경
+
+### 테스트 결과
+- otest: 19/19 AC PASS
+- canary FAIL (정상 — 의도된 fail-condition 검증)
+
+### 신규 교훈
+- **L-383**: `InvokeAsync(async lambda).Task.ConfigureAwait(false)` 외관상 안전 함정 — inner async 예외 소실, `.Task.Unwrap()` 또는 inner try-catch 필수
+- **L-384**: SESSION_DIR 이중 경로 — `$HOME/.claude/session-env` vs `/tmp/cc-{프로젝트UUID}/session-env`, evidence 마커는 hook 참조 CLAUDE_CONFIG_DIR 경로에 정확히 생성 필수
+
+### 후속 과제
+- L-383 검출 grep 패턴(`InvokeAsync\(async.*\.Task\.ConfigureAwait`)을 oplan/odev 단계 자동 검사에 통합 검토
+- 검증 스크립트 sed 패턴 정밀도 — AC-007에서 실제 버그 2건 발견(스크립트 미세조정 효과)
+
+---
+
 ## 2026-05-02: 동기화/UI블로킹 7차 — async void 외부 try-catch 전수 수정 (171건/20파일)
 
 **분류**: O3 Fast Path (oplan_normal → odev → otest → odone)

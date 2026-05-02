@@ -34,7 +34,7 @@ namespace mAIx.Views
         /// <summary>
         /// 백링크 항목 클릭 시 해당 페이지로 이동
         /// </summary>
-        private async void NavigateToBacklinkPage(BacklinkItem backlink)
+        private async Task NavigateToBacklinkPage(BacklinkItem backlink)
         {
             try
             {

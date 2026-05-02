@@ -72,7 +72,7 @@ namespace mAIx.Views
         /// <summary>
         /// 연락처에서 Teams 채팅 시작 (크로스탭)
         /// </summary>
-        private async void StartTeamsChatFromContact(ContactItemViewModel contact)
+        private async System.Threading.Tasks.Task StartTeamsChatFromContact(ContactItemViewModel contact)
         {
             try
             {

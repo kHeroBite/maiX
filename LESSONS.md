@@ -988,6 +988,63 @@
 - **연관**: L-377 (외부 try-catch 본 규칙), L-378/L-381 (oralph 자동 반복 검증), L-364 (NLog/Serilog 혼용)
 - **Level**: 1 (프로세스 교훈 — 새 패턴 규칙 등록 시 운영 절차로 참조)
 
+### L-383: `InvokeAsync(async lambda).Task.ConfigureAwait(false)` 외관상 안전 함정 — inner async 예외 소실 (2026-05-02)
+
+- **문제**: `Dispatcher.InvokeAsync(async () => { await ... }).Task.ConfigureAwait(false)` 패턴은 `.Task` 접근으로 외관상 안전해 보이지만, inner async 람다 본문에서 발생하는 예외는 여전히 소실됨
+  ```csharp
+  // ❌ 위험 — .Task는 DispatcherOperation 완료만 await, inner 예외 소실
+  await Dispatcher.InvokeAsync(async () =>
+  {
+      await SomeAsyncMethod(); // ← 예외 발생 시 소실됨!
+  }).Task.ConfigureAwait(false);
+
+  // ✅ 안전 1 — Task.Unwrap() 사용 (inner Task 결합)
+  await Dispatcher.InvokeAsync(async () =>
+  {
+      await SomeAsyncMethod();
+  }).Task.Unwrap().ConfigureAwait(false);
+
+  // ✅ 안전 2 — inner try-catch
+  await Dispatcher.InvokeAsync(async () =>
+  {
+      try
+      {
+          await SomeAsyncMethod();
+      }
+      catch (Exception ex)
+      {
+          _log.Error(ex, "...");
+      }
+  }).Task.ConfigureAwait(false);
+  ```
+- **근본 원인**:
+  - `Dispatcher.InvokeAsync(async lambda)` 반환은 `DispatcherOperation<Task>` (외부 Task가 inner Task를 감싼 형태)
+  - `.Task.ConfigureAwait(false)`는 외부 Task의 완료(=inner Task 시작)만 기다림 — inner Task 본문 예외는 별도 미관측 Task에 머물러 소실
+  - `.Task.Unwrap()`만이 외부 Task와 inner Task를 결합하여 전체 await 가능
+- **재발방지**:
+  - L-379 본 규칙(`InvokeAsync(async` grep 검사)의 자동 검출 패턴 강화: `.Task.ConfigureAwait`로 끝나는 패턴은 즉시 위험 표시
+  - 코드 리뷰 시: `Grep("InvokeAsync\\(async.*\\.Task\\.ConfigureAwait", "*.cs")` — 발견되면 모두 `.Task.Unwrap().ConfigureAwait(false)` 또는 inner try-catch로 변환
+  - oralph 8차 라운드 otest 중 AC-007 검증으로 추가 발견 → 검증 스크립트 sed 패턴 정밀도가 결과를 좌우함
+- **연관**: L-369 (Dispatcher.Invoke async 람다), L-374 (DispatcherOperation 자체는 Task 아님), L-379 (InvokeAsync async 람다 try-catch 또는 Unwrap)
+- **Level**: 2 (반복 재현 위험 — 외관상 안전해 보이는 함정 패턴)
+
+### L-384: SESSION_DIR 이중 경로 — hook 참조 CLAUDE_CONFIG_DIR 정확 확인 필수 (2026-05-02)
+
+- **문제**: 파이프라인 evidence/state 파일 저장 시 SESSION_DIR이 두 곳에 존재
+  - 메인 세션 경로: `$HOME/.claude/session-env/${UUID}/` (~/.claude 기반)
+  - hook 참조 경로: `/tmp/cc-{프로젝트UUID}/session-env/${UUID}/` (CLAUDE_CONFIG_DIR 기반)
+  - 한 쪽에만 evidence 생성하면 hook이 참조 시 누락 인식 → 파이프라인 검증 실패
+- **근본 원인**:
+  - Claude Code가 `CLAUDE_CONFIG_DIR` 환경변수로 hook 작업 디렉토리를 분리 (프로젝트별 격리)
+  - 기존 hook은 `$HOME/.claude` 기준이었으나, 일부 hook은 `CLAUDE_CONFIG_DIR` 기준으로 동작
+  - 두 경로의 동기화는 자동이 아님 — 명시적 양쪽 쓰기 필요
+- **재발방지**:
+  - evidence/state/lock 파일 생성 시 양쪽 경로 모두 동기화: `for D in $HOME/.claude/session-env/${UUID} /tmp/cc-{ID}/session-env/${UUID}; do mkdir -p $D/{logs,evidence,plans}; done`
+  - hook 진단 시 직전 에이전트 결과 맹신 금지 — 어느 경로의 evidence를 hook이 참조하는지 `CLAUDE_CONFIG_DIR` 환경변수로 명시 확인
+  - oralph/ok 진입 시 SESSION_DIR 결정 로직에 양쪽 경로 동기화 추가 검토
+- **연관**: 없음 (신규 영역)
+- **Level**: 1 (인프라 교훈 — hook 통합 환경에서 자주 재현)
+
 ## 반영 추적 테이블
 
 | 교훈 ID | 교훈 요약 | 반영 대상 | 반영 위치 | 반영일 | 검증 |
@@ -1015,3 +1072,5 @@
 | L-380 | Timer.Elapsed 등 비WPF 이벤트 핸들러도 async lambda try-catch 필수 | docs | LESSONS.md | 2026-05-02 | ✅ |
 | L-381 | oralph 무한 발견 양상 — 수렴 기준 = 런타임 UI 블로킹 0건으로 충분 | docs | LESSONS.md | 2026-05-02 | ✅ |
 | L-382 | 표본 수정 후 체계적 전수조사 필수 — 패턴 규칙 등록 시 전수 batch 권장 | docs | LESSONS.md, HISTORY.md | 2026-05-02 | ✅ |
+| L-383 | `InvokeAsync(async lambda).Task.ConfigureAwait(false)` 외관상 안전 함정 — inner async 예외 소실, .Task.Unwrap() 또는 try-catch 필수 | docs+code | LESSONS.md + MEMORY.md + MainWindow.xaml.cs L135/L230 | 2026-05-02 | ✅ |
+| L-384 | SESSION_DIR 이중 경로 — `$HOME/.claude/session-env` vs `/tmp/cc-{프로젝트UUID}/session-env`, evidence 마커는 hook이 참조하는 CLAUDE_CONFIG_DIR 경로에 정확히 생성 필수 | docs | LESSONS.md | 2026-05-02 | ✅ |
