@@ -71,7 +71,7 @@ public static class TinyMCEEditorService
             var escapedUrl = System.Text.Json.JsonSerializer.Serialize(fileUrl);
             var escapedName = System.Text.Json.JsonSerializer.Serialize(fileName);
             await webView.CoreWebView2.ExecuteScriptAsync(
-                $"window.insertDroppedFileLink({escapedUrl}, {escapedName})");
+                $"window.insertDroppedFileLink({escapedUrl}, {escapedName})").ConfigureAwait(false);
         }
         else
         {
@@ -79,7 +79,7 @@ public static class TinyMCEEditorService
             Log4.Warn($"[TinyMCE] 비이미지 파일 드롭 (경로 미확인): {fileName}");
             var escaped = System.Text.Json.JsonSerializer.Serialize($"📎 {fileName} ");
             await webView.CoreWebView2.ExecuteScriptAsync(
-                $"tinymce.activeEditor && tinymce.activeEditor.insertContent({escaped})");
+                $"tinymce.activeEditor && tinymce.activeEditor.insertContent({escaped})").ConfigureAwait(false);
         }
     }
 
@@ -505,7 +505,7 @@ public static class TinyMCEEditorService
             var escapedUrl = System.Text.Json.JsonSerializer.Serialize(dataUrl);
             var escapedName = System.Text.Json.JsonSerializer.Serialize(fileName);
             await webView.CoreWebView2.ExecuteScriptAsync(
-                $"window.filePickerResult({escapedUrl}, {{alt: {escapedName}}})");
+                $"window.filePickerResult({escapedUrl}, {{alt: {escapedName}}})").ConfigureAwait(false);
         }
         else
         {
@@ -514,7 +514,7 @@ public static class TinyMCEEditorService
             var escapedUrl = System.Text.Json.JsonSerializer.Serialize(fileUrl);
             var escapedName = System.Text.Json.JsonSerializer.Serialize(fileName);
             await webView.CoreWebView2.ExecuteScriptAsync(
-                $"window.filePickerResult({escapedUrl}, {{text: {escapedName}, title: {escapedName}}})");
+                $"window.filePickerResult({escapedUrl}, {{text: {escapedName}, title: {escapedName}}})").ConfigureAwait(false);
         }
     }
 
@@ -550,7 +550,7 @@ public static class TinyMCEEditorService
                 var escapedUrl = System.Text.Json.JsonSerializer.Serialize(dataUrl);
                 var escapedName = System.Text.Json.JsonSerializer.Serialize(fileName);
                 await webView.CoreWebView2.ExecuteScriptAsync(
-                    $"window.insertDroppedImage({escapedUrl}, {escapedName})");
+                    $"window.insertDroppedImage({escapedUrl}, {escapedName})").ConfigureAwait(false);
             }
             else
             {
@@ -560,7 +560,7 @@ public static class TinyMCEEditorService
                 var escapedUrl = System.Text.Json.JsonSerializer.Serialize(fileUrl);
                 var escapedName = System.Text.Json.JsonSerializer.Serialize(fileName);
                 await webView.CoreWebView2.ExecuteScriptAsync(
-                    $"window.insertDroppedFileLink({escapedUrl}, {escapedName})");
+                    $"window.insertDroppedFileLink({escapedUrl}, {escapedName})").ConfigureAwait(false);
             }
         }
     }
@@ -595,7 +595,7 @@ public static class TinyMCEEditorService
             var escapedUrl = System.Text.Json.JsonSerializer.Serialize(fileUrl);
             var escapedName = System.Text.Json.JsonSerializer.Serialize(fileName);
             await webView.CoreWebView2.ExecuteScriptAsync(
-                $"window.insertDroppedFileLink({escapedUrl}, {escapedName})");
+                $"window.insertDroppedFileLink({escapedUrl}, {escapedName})").ConfigureAwait(false);
         }
         else
         {
@@ -603,7 +603,7 @@ public static class TinyMCEEditorService
             Log4.Warn($"[TinyMCE] 비이미지 파일 드롭 (경로 미확인): {fileName}, JS경로: {filePath}");
             var escaped = System.Text.Json.JsonSerializer.Serialize($"📎 {fileName} ");
             await webView.CoreWebView2.ExecuteScriptAsync(
-                $"tinymce.activeEditor && tinymce.activeEditor.insertContent({escaped})");
+                $"tinymce.activeEditor && tinymce.activeEditor.insertContent({escaped})").ConfigureAwait(false);
         }
     }
 
@@ -625,7 +625,7 @@ public static class TinyMCEEditorService
             var tempPath = System.IO.Path.Combine(tempDir, safeName);
 
             var bytes = Convert.FromBase64String(base64Data);
-            await System.IO.File.WriteAllBytesAsync(tempPath, bytes);
+            await System.IO.File.WriteAllBytesAsync(tempPath, bytes).ConfigureAwait(false);
 
             Log4.Debug2($"[TinyMCE] 파일드롭 임시저장: {fileName} → {tempPath} ({bytes.Length:N0} bytes)");
             return tempPath;
@@ -683,7 +683,7 @@ public static class TinyMCEEditorService
                     var saveDir = System.IO.Path.Combine(
                         Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
                         "mAIx", "mAIx_Drop");
-                    var localPath = await graphService.DownloadAudioResourceAsync(url, downloadFileName, saveDir);
+                    var localPath = await graphService.DownloadAudioResourceAsync(url, downloadFileName, saveDir).ConfigureAwait(false);
                     if (!string.IsNullOrEmpty(localPath) && System.IO.File.Exists(localPath))
                     {
                         Log4.Info($"[TinyMCE] OneNote 리소스 다운로드 완료, 열기: {localPath}");
@@ -757,7 +757,7 @@ public static class TinyMCEEditorService
                         var escapedUrl = System.Text.Json.JsonSerializer.Serialize(dataUrl);
                         var escapedName = System.Text.Json.JsonSerializer.Serialize(fileName);
                         await webView.CoreWebView2.ExecuteScriptAsync(
-                            $"tinymce.activeEditor && tinymce.activeEditor.insertContent('<img src=\"' + {escapedUrl} + '\" alt=\"' + {escapedName} + '\" />')");
+                            $"tinymce.activeEditor && tinymce.activeEditor.insertContent('<img src=\"' + {escapedUrl} + '\" alt=\"' + {escapedName} + '\" />')").ConfigureAwait(false);
                     }
                 }
                 else
@@ -807,7 +807,7 @@ public static class TinyMCEEditorService
                         try
                         {
                             var jsResult = await wv.CoreWebView2.ExecuteScriptAsync(
-                                "(() => { var el = document.querySelector('a[href*=\"graph.microsoft.com\"][data-attachment]'); return el ? el.getAttribute('data-attachment') : ''; })()");
+                                "(() => { var el = document.querySelector('a[href*=\"graph.microsoft.com\"][data-attachment]').ConfigureAwait(false); return el ? el.getAttribute('data-attachment') : ''; })()");
                             var parsed = jsResult?.Trim('"');
                             if (!string.IsNullOrEmpty(parsed))
                                 fileName = parsed;
@@ -818,7 +818,7 @@ public static class TinyMCEEditorService
                     var saveDir = System.IO.Path.Combine(
                         Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
                         "mAIx", "mAIx_Drop");
-                    var localPath = await graphService.DownloadAudioResourceAsync(e.Uri, fileName, saveDir);
+                    var localPath = await graphService.DownloadAudioResourceAsync(e.Uri, fileName, saveDir).ConfigureAwait(false);
                     if (!string.IsNullOrEmpty(localPath) && System.IO.File.Exists(localPath))
                     {
                         Log4.Info($"[TinyMCE] OneNote 리소스 다운로드 완료, 열기: {localPath}");
@@ -925,7 +925,7 @@ public static class TinyMCEEditorService
             var escapedUrl = System.Text.Json.JsonSerializer.Serialize(dataUrl);
             var escapedName = System.Text.Json.JsonSerializer.Serialize(fileName);
             await webView.CoreWebView2.ExecuteScriptAsync(
-                $"window.insertDroppedImage({escapedUrl}, {escapedName})");
+                $"window.insertDroppedImage({escapedUrl}, {escapedName})").ConfigureAwait(false);
         }
         else
         {
@@ -933,7 +933,7 @@ public static class TinyMCEEditorService
             var escapedUrl = System.Text.Json.JsonSerializer.Serialize(fileUrl);
             var escapedName = System.Text.Json.JsonSerializer.Serialize(fileName);
             await webView.CoreWebView2.ExecuteScriptAsync(
-                $"window.insertDroppedFileLink({escapedUrl}, {escapedName})");
+                $"window.insertDroppedFileLink({escapedUrl}, {escapedName})").ConfigureAwait(false);
         }
     }
 }

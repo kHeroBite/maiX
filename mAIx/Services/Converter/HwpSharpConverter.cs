@@ -126,14 +126,14 @@ namespace mAIx.Services.Converter
             if (!IsAvailable)
             {
                 _logger.Warning("HwpSharp를 사용할 수 없어 폴백 방식으로 처리합니다.");
-                return await Task.Run(() => ExtractTextFallback(filePath), ct);
+                return await Task.Run(() => ExtractTextFallback(filePath), ct).ConfigureAwait(false);
             }
 
             _logger.Debug("HwpSharp 변환 시작: {FilePath}", filePath);
 
             try
             {
-                return await Task.Run(() => ExtractTextFromHwp(filePath), ct);
+                return await Task.Run(() => ExtractTextFromHwp(filePath), ct).ConfigureAwait(false);
             }
             catch (OperationCanceledException)
             {
@@ -143,7 +143,7 @@ namespace mAIx.Services.Converter
             catch (Exception ex)
             {
                 _logger.Warning(ex, "HwpSharp 변환 실패, 폴백 시도: {FilePath}", filePath);
-                return await Task.Run(() => ExtractTextFallback(filePath), ct);
+                return await Task.Run(() => ExtractTextFallback(filePath), ct).ConfigureAwait(false);
             }
         }
 

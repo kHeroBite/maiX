@@ -80,7 +80,7 @@ public class GraphOneDriveService
             return _driveId;
 
         var client = _authService.GetGraphClient();
-        var drive = await client.Me.Drive.GetAsync();
+        var drive = await client.Me.Drive.GetAsync().ConfigureAwait(false);
         _driveId = drive?.Id ?? throw new InvalidOperationException("Drive ID를 가져올 수 없습니다.");
         return _driveId;
     }
@@ -94,12 +94,12 @@ public class GraphOneDriveService
         try
         {
             var client = _authService.GetGraphClient();
-            var driveId = await GetDriveIdAsync();
+            var driveId = await GetDriveIdAsync().ConfigureAwait(false);
             var response = await client.Drives[driveId].Items["root"].Children.GetAsync(config =>
             {
                 config.QueryParameters.Top = 100;
                 config.QueryParameters.Orderby = new[] { "name" };
-            });
+            }).ConfigureAwait(false);
 
             Log4.Debug($"[OneDriveService] 루트 아이템 {response?.Value?.Count ?? 0}개 조회");
             return response?.Value ?? new List<DriveItem>();
@@ -124,12 +124,12 @@ public class GraphOneDriveService
         try
         {
             var client = _authService.GetGraphClient();
-            var driveId = await GetDriveIdAsync();
+            var driveId = await GetDriveIdAsync().ConfigureAwait(false);
             var response = await client.Drives[driveId].Items[folderId].Children.GetAsync(config =>
             {
                 config.QueryParameters.Top = 100;
                 config.QueryParameters.Orderby = new[] { "name" };
-            });
+            }).ConfigureAwait(false);
 
             Log4.Debug($"[OneDriveService] 폴더 {folderId} 아이템 {response?.Value?.Count ?? 0}개 조회");
             return response?.Value ?? new List<DriveItem>();
@@ -149,17 +149,17 @@ public class GraphOneDriveService
     public async Task<IEnumerable<DriveItem>> GetItemsByPathAsync(string path)
     {
         if (string.IsNullOrEmpty(path))
-            return await GetRootItemsAsync();
+            return await GetRootItemsAsync().ConfigureAwait(false);
 
         try
         {
             var client = _authService.GetGraphClient();
-            var driveId = await GetDriveIdAsync();
+            var driveId = await GetDriveIdAsync().ConfigureAwait(false);
             var response = await client.Drives[driveId].Items["root"].ItemWithPath(path).Children.GetAsync(config =>
             {
                 config.QueryParameters.Top = 100;
                 config.QueryParameters.Orderby = new[] { "name" };
-            });
+            }).ConfigureAwait(false);
 
             Log4.Debug($"[OneDriveService] 경로 '{path}' 아이템 {response?.Value?.Count ?? 0}개 조회");
             return response?.Value ?? new List<DriveItem>();
@@ -180,7 +180,7 @@ public class GraphOneDriveService
         try
         {
             var client = _authService.GetGraphClient();
-            var drive = await client.Me.Drive.GetAsync();
+            var drive = await client.Me.Drive.GetAsync().ConfigureAwait(false);
 
             Log4.Debug($"[OneDriveService] 드라이브 정보 조회: 사용 {drive?.Quota?.Used ?? 0} / 전체 {drive?.Quota?.Total ?? 0}");
             return drive;
@@ -206,7 +206,7 @@ public class GraphOneDriveService
         try
         {
             var client = _authService.GetGraphClient();
-            var driveId = await GetDriveIdAsync();
+            var driveId = await GetDriveIdAsync().ConfigureAwait(false);
 
             var newFolder = new DriveItem
             {
@@ -217,11 +217,11 @@ public class GraphOneDriveService
             DriveItem? response;
             if (string.IsNullOrEmpty(parentId))
             {
-                response = await client.Drives[driveId].Items["root"].Children.PostAsync(newFolder);
+                response = await client.Drives[driveId].Items["root"].Children.PostAsync(newFolder).ConfigureAwait(false);
             }
             else
             {
-                response = await client.Drives[driveId].Items[parentId].Children.PostAsync(newFolder);
+                response = await client.Drives[driveId].Items[parentId].Children.PostAsync(newFolder).ConfigureAwait(false);
             }
 
             Log4.Info($"[OneDriveService] 폴더 생성 완료: {folderName}");
@@ -251,16 +251,16 @@ public class GraphOneDriveService
         try
         {
             var client = _authService.GetGraphClient();
-            var driveId = await GetDriveIdAsync();
+            var driveId = await GetDriveIdAsync().ConfigureAwait(false);
 
             DriveItem? response;
             if (string.IsNullOrEmpty(parentId))
             {
-                response = await client.Drives[driveId].Items["root"].ItemWithPath(fileName).Content.PutAsync(content);
+                response = await client.Drives[driveId].Items["root"].ItemWithPath(fileName).Content.PutAsync(content).ConfigureAwait(false);
             }
             else
             {
-                response = await client.Drives[driveId].Items[parentId].ItemWithPath(fileName).Content.PutAsync(content);
+                response = await client.Drives[driveId].Items[parentId].ItemWithPath(fileName).Content.PutAsync(content).ConfigureAwait(false);
             }
 
             Log4.Info($"[OneDriveService] 파일 업로드 완료: {fileName}");
@@ -286,8 +286,8 @@ public class GraphOneDriveService
         try
         {
             var client = _authService.GetGraphClient();
-            var driveId = await GetDriveIdAsync();
-            var content = await client.Drives[driveId].Items[itemId].Content.GetAsync();
+            var driveId = await GetDriveIdAsync().ConfigureAwait(false);
+            var content = await client.Drives[driveId].Items[itemId].Content.GetAsync().ConfigureAwait(false);
 
             Log4.Debug($"[OneDriveService] 파일 다운로드 시작: {itemId}");
             return content;
@@ -312,8 +312,8 @@ public class GraphOneDriveService
         try
         {
             var client = _authService.GetGraphClient();
-            var driveId = await GetDriveIdAsync();
-            await client.Drives[driveId].Items[itemId].DeleteAsync();
+            var driveId = await GetDriveIdAsync().ConfigureAwait(false);
+            await client.Drives[driveId].Items[itemId].DeleteAsync().ConfigureAwait(false);
 
             Log4.Info($"[OneDriveService] 아이템 삭제 완료: {itemId}");
             return true;
@@ -341,14 +341,14 @@ public class GraphOneDriveService
         try
         {
             var client = _authService.GetGraphClient();
-            var driveId = await GetDriveIdAsync();
+            var driveId = await GetDriveIdAsync().ConfigureAwait(false);
 
             var updateItem = new DriveItem
             {
                 Name = newName
             };
 
-            var response = await client.Drives[driveId].Items[itemId].PatchAsync(updateItem);
+            var response = await client.Drives[driveId].Items[itemId].PatchAsync(updateItem).ConfigureAwait(false);
 
             Log4.Info($"[OneDriveService] 아이템 이름 변경 완료: {newName}");
             return response;
@@ -376,7 +376,7 @@ public class GraphOneDriveService
         try
         {
             var client = _authService.GetGraphClient();
-            var driveId = await GetDriveIdAsync();
+            var driveId = await GetDriveIdAsync().ConfigureAwait(false);
 
             var updateItem = new DriveItem
             {
@@ -386,7 +386,7 @@ public class GraphOneDriveService
                 }
             };
 
-            var response = await client.Drives[driveId].Items[itemId].PatchAsync(updateItem);
+            var response = await client.Drives[driveId].Items[itemId].PatchAsync(updateItem).ConfigureAwait(false);
 
             Log4.Info($"[OneDriveService] 아이템 이동 완료: {itemId} -> {newParentId}");
             return response;
@@ -415,7 +415,7 @@ public class GraphOneDriveService
         try
         {
             var client = _authService.GetGraphClient();
-            var driveId = await GetDriveIdAsync();
+            var driveId = await GetDriveIdAsync().ConfigureAwait(false);
 
             var copyRequest = new Microsoft.Graph.Drives.Item.Items.Item.Copy.CopyPostRequestBody
             {
@@ -426,7 +426,7 @@ public class GraphOneDriveService
                 Name = newName
             };
 
-            var response = await client.Drives[driveId].Items[itemId].Copy.PostAsync(copyRequest);
+            var response = await client.Drives[driveId].Items[itemId].Copy.PostAsync(copyRequest).ConfigureAwait(false);
 
             Log4.Info($"[OneDriveService] 아이템 복사 시작: {itemId}");
             return response?.Id;
@@ -451,11 +451,11 @@ public class GraphOneDriveService
         try
         {
             var client = _authService.GetGraphClient();
-            var driveId = await GetDriveIdAsync();
+            var driveId = await GetDriveIdAsync().ConfigureAwait(false);
             var response = await client.Drives[driveId].Items["root"].SearchWithQ(query).GetAsync(config =>
             {
                 config.QueryParameters.Top = 50;
-            });
+            }).ConfigureAwait(false);
 
             Log4.Debug($"[OneDriveService] 검색 '{query}': {response?.Value?.Count ?? 0}개 발견");
             return response?.Value ?? new List<DriveItem>();
@@ -480,8 +480,8 @@ public class GraphOneDriveService
         try
         {
             var client = _authService.GetGraphClient();
-            var driveId = await GetDriveIdAsync();
-            var item = await client.Drives[driveId].Items[itemId].GetAsync();
+            var driveId = await GetDriveIdAsync().ConfigureAwait(false);
+            var item = await client.Drives[driveId].Items[itemId].GetAsync().ConfigureAwait(false);
 
             return item;
         }
@@ -502,7 +502,7 @@ public class GraphOneDriveService
         try
         {
             var client = _authService.GetGraphClient();
-            var driveId = await GetDriveIdAsync();
+            var driveId = await GetDriveIdAsync().ConfigureAwait(false);
             var response = await client.Drives[driveId].Recent.GetAsRecentGetResponseAsync(config =>
             {
                 config.QueryParameters.Top = top;
@@ -512,7 +512,7 @@ public class GraphOneDriveService
                     "id", "name", "webUrl", "size", "createdDateTime", "lastModifiedDateTime",
                     "createdBy", "lastModifiedBy", "remoteItem", "file", "folder", "shared"
                 };
-            });
+            }).ConfigureAwait(false);
 
             Log4.Debug($"[OneDriveService] 최근 파일 {response?.Value?.Count ?? 0}개 조회");
             return response?.Value ?? new List<DriveItem>();
@@ -534,13 +534,13 @@ public class GraphOneDriveService
         try
         {
             var client = _authService.GetGraphClient();
-            var driveId = await GetDriveIdAsync();
+            var driveId = await GetDriveIdAsync().ConfigureAwait(false);
             
             // SharedWithMe는 Drives[driveId].SharedWithMe 사용
             var response = await client.Drives[driveId].SharedWithMe.GetAsSharedWithMeGetResponseAsync(config =>
             {
                 config.QueryParameters.Top = top;
-            });
+            }).ConfigureAwait(false);
 
             var items = response?.Value ?? new List<DriveItem>();
             
@@ -568,7 +568,7 @@ public class GraphOneDriveService
             var client = _authService.GetGraphClient();
 
             // 1. OneDrive WebUrl에서 SharePoint 사이트 URL 추출
-            var drive = await client.Me.Drive.GetAsync();
+            var drive = await client.Me.Drive.GetAsync().ConfigureAwait(false);
             if (drive?.WebUrl == null)
             {
                 Log4.Warn("[OneDriveService] Drive WebUrl을 가져올 수 없습니다.");
@@ -587,7 +587,7 @@ public class GraphOneDriveService
             Log4.Debug($"[OneDriveService] SharePoint 사이트 URL: {webUrl}");
 
             // 2. SharePoint REST API용 토큰 획득
-            var accessToken = await _authService.GetSharePointAccessTokenAsync(webUrl);
+            var accessToken = await _authService.GetSharePointAccessTokenAsync(webUrl).ConfigureAwait(false);
             if (string.IsNullOrEmpty(accessToken))
             {
                 Log4.Warn("[OneDriveService] SharePoint 토큰 획득 실패 - 휴지통 접근 불가");
@@ -604,15 +604,15 @@ public class GraphOneDriveService
             var recyclebinUrl = $"{webUrl}/_api/web/recyclebin?$top={top}&$orderby=DeletedDate desc";
             Log4.Debug($"[OneDriveService] 휴지통 API 호출: {recyclebinUrl}");
 
-            var response = await httpClient.GetAsync(recyclebinUrl);
+            var response = await httpClient.GetAsync(recyclebinUrl).ConfigureAwait(false);
             if (!response.IsSuccessStatusCode)
             {
-                var errorContent = await response.Content.ReadAsStringAsync();
+                var errorContent = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
                 Log4.Error($"[OneDriveService] 휴지통 조회 실패: {response.StatusCode} - {errorContent}");
                 return result;
             }
 
-            var jsonContent = await response.Content.ReadAsStringAsync();
+            var jsonContent = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
             var jsonDoc = System.Text.Json.JsonDocument.Parse(jsonContent);
 
             if (jsonDoc.RootElement.TryGetProperty("value", out var valueArray))
@@ -654,7 +654,7 @@ public class GraphOneDriveService
         try
         {
             var client = _authService.GetGraphClient();
-            var drive = await client.Me.Drive.GetAsync();
+            var drive = await client.Me.Drive.GetAsync().ConfigureAwait(false);
             if (drive?.WebUrl == null) return false;
 
             var webUrl = drive.WebUrl;
@@ -664,7 +664,7 @@ public class GraphOneDriveService
                 webUrl = webUrl.Substring(0, documentsIndex);
             }
 
-            var accessToken = await _authService.GetSharePointAccessTokenAsync(webUrl);
+            var accessToken = await _authService.GetSharePointAccessTokenAsync(webUrl).ConfigureAwait(false);
             if (string.IsNullOrEmpty(accessToken))
             {
                 Log4.Warn("[OneDriveService] SharePoint 토큰 획득 실패 - 복원 불가");
@@ -679,7 +679,7 @@ public class GraphOneDriveService
 
             // 휴지통 아이템 복원 API
             var restoreUrl = $"{webUrl}/_api/web/recyclebin('{itemId}')/restore()";
-            var response = await httpClient.PostAsync(restoreUrl, null);
+            var response = await httpClient.PostAsync(restoreUrl, null).ConfigureAwait(false);
 
             if (response.IsSuccessStatusCode)
             {
@@ -688,7 +688,7 @@ public class GraphOneDriveService
             }
             else
             {
-                var error = await response.Content.ReadAsStringAsync();
+                var error = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
                 Log4.Error($"[OneDriveService] 휴지통 아이템 복원 실패: {response.StatusCode} - {error}");
                 return false;
             }
@@ -708,7 +708,7 @@ public class GraphOneDriveService
         try
         {
             var client = _authService.GetGraphClient();
-            var drive = await client.Me.Drive.GetAsync();
+            var drive = await client.Me.Drive.GetAsync().ConfigureAwait(false);
             if (drive?.WebUrl == null) return false;
 
             var webUrl = drive.WebUrl;
@@ -718,7 +718,7 @@ public class GraphOneDriveService
                 webUrl = webUrl.Substring(0, documentsIndex);
             }
 
-            var accessToken = await _authService.GetSharePointAccessTokenAsync(webUrl);
+            var accessToken = await _authService.GetSharePointAccessTokenAsync(webUrl).ConfigureAwait(false);
             if (string.IsNullOrEmpty(accessToken))
             {
                 Log4.Warn("[OneDriveService] SharePoint 토큰 획득 실패 - 삭제 불가");
@@ -733,7 +733,7 @@ public class GraphOneDriveService
 
             // 휴지통 아이템 영구 삭제 API
             var deleteUrl = $"{webUrl}/_api/web/recyclebin('{itemId}')/deleteObject()";
-            var response = await httpClient.PostAsync(deleteUrl, null);
+            var response = await httpClient.PostAsync(deleteUrl, null).ConfigureAwait(false);
 
             if (response.IsSuccessStatusCode)
             {
@@ -742,7 +742,7 @@ public class GraphOneDriveService
             }
             else
             {
-                var error = await response.Content.ReadAsStringAsync();
+                var error = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
                 Log4.Error($"[OneDriveService] 휴지통 아이템 영구 삭제 실패: {response.StatusCode} - {error}");
                 return false;
             }
@@ -763,7 +763,7 @@ public class GraphOneDriveService
         try
         {
             var client = _authService.GetGraphClient();
-            var driveId = await GetDriveIdAsync();
+            var driveId = await GetDriveIdAsync().ConfigureAwait(false);
             
             var requestBody = new Microsoft.Graph.Drives.Item.Items.Item.CreateLink.CreateLinkPostRequestBody
             {
@@ -771,7 +771,7 @@ public class GraphOneDriveService
                 Scope = "organization"
             };
             
-            var permission = await client.Drives[driveId].Items[itemId].CreateLink.PostAsync(requestBody);
+            var permission = await client.Drives[driveId].Items[itemId].CreateLink.PostAsync(requestBody).ConfigureAwait(false);
             
             Log4.Debug($"[OneDriveService] 공유 링크 생성 완료: {permission?.Link?.WebUrl}");
             return permission?.Link?.WebUrl;
@@ -791,13 +791,13 @@ public class GraphOneDriveService
         try
         {
             var client = _authService.GetGraphClient();
-            var driveId = await GetDriveIdAsync();
+            var driveId = await GetDriveIdAsync().ConfigureAwait(false);
             var allMediaItems = new List<DriveItem>();
             
             // 1. 최근 파일에서 미디어 파일 필터링
             try
             {
-                var recentItems = await GetRecentItemsAsync(200);
+                var recentItems = await GetRecentItemsAsync(200).ConfigureAwait(false);
                 var recentMedia = recentItems.Where(i => IsMediaFile(i.Name ?? string.Empty)).ToList();
                 allMediaItems.AddRange(recentMedia);
                 Log4.Debug($"[OneDriveService] 최근 파일에서 미디어: {recentMedia.Count}개");
@@ -811,7 +811,7 @@ public class GraphOneDriveService
             var mediaFolderNames = new[] { "그림", "Pictures", "사진", "바탕 화면", "Desktop", "스크린샷", "Screenshots", "카메라 롤", "Camera Roll" };
             try
             {
-                var rootItems = await client.Drives[driveId].Items["root"].Children.GetAsync();
+                var rootItems = await client.Drives[driveId].Items["root"].Children.GetAsync().ConfigureAwait(false);
                 var mediaFolders = rootItems?.Value?.Where(i => 
                     i.Folder != null && 
                     mediaFolderNames.Any(name => i.Name?.Equals(name, StringComparison.OrdinalIgnoreCase) == true))
@@ -819,7 +819,7 @@ public class GraphOneDriveService
                 
                 foreach (var folder in mediaFolders)
                 {
-                    await CollectMediaFromFolderAsync(client, driveId, folder.Id!, allMediaItems, depth: 0, maxDepth: 3);
+                    await CollectMediaFromFolderAsync(client, driveId, folder.Id!, allMediaItems, depth: 0, maxDepth: 3).ConfigureAwait(false);
                 }
             }
             catch (Exception ex)
@@ -830,7 +830,7 @@ public class GraphOneDriveService
             // 3. Insights/Used에서 미디어 파일 필터링
             try
             {
-                var usedInsights = await GetUsedInsightsAsync(200);
+                var usedInsights = await GetUsedInsightsAsync(200).ConfigureAwait(false);
                 var usedMedia = usedInsights.Where(i => IsMediaFile(i.Name ?? string.Empty)).ToList();
                 allMediaItems.AddRange(usedMedia);
                 Log4.Debug($"[OneDriveService] Insights/Used 미디어: {usedMedia.Count}개");
@@ -864,7 +864,7 @@ public class GraphOneDriveService
                         var itemWithThumbnail = await client.Drives[driveId].Items[item.Id].GetAsync(config =>
                         {
                             config.QueryParameters.Expand = new[] { "thumbnails" };
-                        });
+                        }).ConfigureAwait(false);
                         return (item.Id, itemWithThumbnail);
                     }
                     catch
@@ -873,7 +873,7 @@ public class GraphOneDriveService
                     }
                 });
                 
-                var results = await Task.WhenAll(thumbnailTasks);
+                var results = await Task.WhenAll(thumbnailTasks).ConfigureAwait(false);
                 
                 // 썸네일을 가져온 아이템으로 교체
                 var thumbnailDict = results.Where(r => r.Item2 != null).ToDictionary(r => r.Item1!, r => r.Item2!);
@@ -910,7 +910,7 @@ public class GraphOneDriveService
             {
                 config.QueryParameters.Top = 200;
                 config.QueryParameters.Expand = new[] { "thumbnails" };
-            });
+            }).ConfigureAwait(false);
             
             if (folderItems?.Value == null) return;
             
@@ -923,7 +923,7 @@ public class GraphOneDriveService
                 else if (item.Folder != null && depth < maxDepth)
                 {
                     // 하위 폴더 재귀 탐색
-                    await CollectMediaFromFolderAsync(client, driveId, item.Id!, allMediaItems, depth + 1, maxDepth);
+                    await CollectMediaFromFolderAsync(client, driveId, item.Id!, allMediaItems, depth + 1, maxDepth).ConfigureAwait(false);
                 }
             }
             
@@ -961,7 +961,7 @@ public class GraphOneDriveService
             // 1. SharedWithMe (직접 공유된 파일) - 최대치로
             try
             {
-                var sharedItems = await GetSharedWithMeAsync(200);
+                var sharedItems = await GetSharedWithMeAsync(200).ConfigureAwait(false);
                 allItems.AddRange(sharedItems);
                 Log4.Debug($"[OneDriveService] SharedWithMe: {sharedItems.Count()}개");
             }
@@ -973,7 +973,7 @@ public class GraphOneDriveService
             // 2. Recent (최근 접근한 파일)
             try
             {
-                var recentItems = await GetRecentItemsAsync(200);
+                var recentItems = await GetRecentItemsAsync(200).ConfigureAwait(false);
                 allItems.AddRange(recentItems);
                 Log4.Debug($"[OneDriveService] Recent: {recentItems.Count()}개");
             }
@@ -985,7 +985,7 @@ public class GraphOneDriveService
             // 3. Insights/Used (사용한 파일들)
             try
             {
-                var usedInsights = await GetUsedInsightsAsync(200);
+                var usedInsights = await GetUsedInsightsAsync(200).ConfigureAwait(false);
                 allItems.AddRange(usedInsights);
                 Log4.Debug($"[OneDriveService] Insights/Used: {usedInsights.Count()}개");
             }
@@ -997,7 +997,7 @@ public class GraphOneDriveService
             // 4. Insights/Shared (공유된 파일들)
             try
             {
-                var sharedInsights = await GetSharedInsightsAsync(200);
+                var sharedInsights = await GetSharedInsightsAsync(200).ConfigureAwait(false);
                 allItems.AddRange(sharedInsights);
                 Log4.Debug($"[OneDriveService] Insights/Shared: {sharedInsights.Count()}개");
             }
@@ -1009,7 +1009,7 @@ public class GraphOneDriveService
             // 5. Insights/Trending (인기 파일들)
             try
             {
-                var trendingInsights = await GetTrendingInsightsAsync(200);
+                var trendingInsights = await GetTrendingInsightsAsync(200).ConfigureAwait(false);
                 allItems.AddRange(trendingInsights);
                 Log4.Debug($"[OneDriveService] Insights/Trending: {trendingInsights.Count()}개");
             }
@@ -1068,7 +1068,7 @@ public class GraphOneDriveService
         {
             config.QueryParameters.Top = top;
             config.QueryParameters.Orderby = new[] { "lastUsed/lastAccessedDateTime desc" };
-        });
+        }).ConfigureAwait(false);
         
         if (response?.Value != null)
         {
@@ -1111,7 +1111,7 @@ public class GraphOneDriveService
         {
             config.QueryParameters.Top = top;
             // Orderby 제거 - LastShared 속성은 필터링 지원하지 않음
-        });
+        }).ConfigureAwait(false);
         
         if (response?.Value != null)
         {
@@ -1155,7 +1155,7 @@ public class GraphOneDriveService
             var response = await client.Me.Insights.Trending.GetAsync(config =>
             {
                 config.QueryParameters.Top = top;
-            });
+            }).ConfigureAwait(false);
             
             if (response?.Value != null)
             {
@@ -1273,8 +1273,8 @@ public class GraphOneDriveService
         try
         {
             var client = _authService.GetGraphClient();
-            var driveId = await GetDriveIdAsync();
-            var response = await client.Drives[driveId].Items[itemId].Versions.GetAsync();
+            var driveId = await GetDriveIdAsync().ConfigureAwait(false);
+            var response = await client.Drives[driveId].Items[itemId].Versions.GetAsync().ConfigureAwait(false);
             return response?.Value?.ToList() ?? new List<DriveItemVersion>();
         }
         catch (Exception ex)
@@ -1292,8 +1292,8 @@ public class GraphOneDriveService
         try
         {
             var client = _authService.GetGraphClient();
-            var driveId = await GetDriveIdAsync();
-            await client.Drives[driveId].Items[itemId].Versions[versionId].RestoreVersion.PostAsync();
+            var driveId = await GetDriveIdAsync().ConfigureAwait(false);
+            await client.Drives[driveId].Items[itemId].Versions[versionId].RestoreVersion.PostAsync().ConfigureAwait(false);
             Log4.Info($"[OneDriveService] 버전 복원 완료: {itemId} → {versionId}");
             return true;
         }
@@ -1312,7 +1312,7 @@ public class GraphOneDriveService
         try
         {
             var client = _authService.GetGraphClient();
-            var driveId = await GetDriveIdAsync();
+            var driveId = await GetDriveIdAsync().ConfigureAwait(false);
 
             var requestBody = new Microsoft.Graph.Drives.Item.Items.Item.CreateLink.CreateLinkPostRequestBody
             {
@@ -1321,7 +1321,7 @@ public class GraphOneDriveService
                 ExpirationDateTime = expiry
             };
 
-            var permission = await client.Drives[driveId].Items[itemId].CreateLink.PostAsync(requestBody);
+            var permission = await client.Drives[driveId].Items[itemId].CreateLink.PostAsync(requestBody).ConfigureAwait(false);
             Log4.Debug($"[OneDriveService] 공유 링크 생성: type={type}, url={permission?.Link?.WebUrl}");
             return permission;
         }
@@ -1340,8 +1340,8 @@ public class GraphOneDriveService
         try
         {
             var client = _authService.GetGraphClient();
-            var driveId = await GetDriveIdAsync();
-            var response = await client.Drives[driveId].Items[itemId].Permissions.GetAsync();
+            var driveId = await GetDriveIdAsync().ConfigureAwait(false);
+            var response = await client.Drives[driveId].Items[itemId].Permissions.GetAsync().ConfigureAwait(false);
             return response?.Value?.ToList() ?? new List<Permission>();
         }
         catch (Exception ex)
@@ -1359,7 +1359,7 @@ public class GraphOneDriveService
         try
         {
             var client = _authService.GetGraphClient();
-            var driveId = await GetDriveIdAsync();
+            var driveId = await GetDriveIdAsync().ConfigureAwait(false);
 
             // 업로드 세션 생성
             var uploadSessionBody = new Microsoft.Graph.Drives.Item.Items.Item.CreateUploadSession.CreateUploadSessionPostRequestBody
@@ -1380,7 +1380,7 @@ public class GraphOneDriveService
                 .Items[string.IsNullOrEmpty(parentId) ? "root" : parentId]
                 .ItemWithPath(fileName)
                 .CreateUploadSession
-                .PostAsync(uploadSessionBody, cancellationToken: ct);
+                .PostAsync(uploadSessionBody, cancellationToken: ct).ConfigureAwait(false);
 
             if (uploadSession?.UploadUrl == null)
             {
@@ -1403,7 +1403,7 @@ public class GraphOneDriveService
 
                 int currentChunkSize = (int)Math.Min(chunkSize, totalLength - uploaded);
                 byte[] buffer = new byte[currentChunkSize];
-                int bytesRead = await content.ReadAsync(buffer, 0, currentChunkSize, ct);
+                int bytesRead = await content.ReadAsync(buffer, 0, currentChunkSize, ct).ConfigureAwait(false);
 
                 if (bytesRead == 0) break;
 
@@ -1413,7 +1413,7 @@ public class GraphOneDriveService
 
                 try
                 {
-                    var response = await httpClient.PutAsync(uploadSession.UploadUrl, chunkContent, ct);
+                    var response = await httpClient.PutAsync(uploadSession.UploadUrl, chunkContent, ct).ConfigureAwait(false);
 
                     if (response.IsSuccessStatusCode)
                     {
@@ -1424,10 +1424,10 @@ public class GraphOneDriveService
                         // 업로드 완료 (200 또는 201 반환)
                         if (response.StatusCode == System.Net.HttpStatusCode.OK || response.StatusCode == System.Net.HttpStatusCode.Created)
                         {
-                            var json = await response.Content.ReadAsStringAsync(ct);
+                            var json = await response.Content.ReadAsStringAsync(ct).ConfigureAwait(false);
                             Log4.Info($"[OneDriveService] 대용량 파일 업로드 완료: {fileName}");
                             // 완료 후 아이템 정보 다시 가져오기
-                            var driveItem = await GetItemAsync(parentId ?? "root");
+                            var driveItem = await GetItemAsync(parentId ?? "root").ConfigureAwait(false);
                             return driveItem;
                         }
                     }
@@ -1436,7 +1436,7 @@ public class GraphOneDriveService
                         retryCount++;
                         content.Position = uploaded; // 다시 같은 위치에서 시도
                         Log4.Warn($"[OneDriveService] 청크 업로드 재시도 {retryCount}/{maxRetries}");
-                        await Task.Delay(1000 * retryCount, ct);
+                        await Task.Delay(1000 * retryCount, ct).ConfigureAwait(false);
                     }
                     else
                     {
@@ -1449,7 +1449,7 @@ public class GraphOneDriveService
                     retryCount++;
                     content.Position = uploaded;
                     Log4.Warn($"[OneDriveService] 청크 업로드 네트워크 오류, 재시도 {retryCount}: {ex.Message}");
-                    await Task.Delay(1000 * retryCount, ct);
+                    await Task.Delay(1000 * retryCount, ct).ConfigureAwait(false);
                 }
             }
 
@@ -1477,8 +1477,8 @@ public class GraphOneDriveService
         try
         {
             var client = _authService.GetGraphClient();
-            var driveId = await GetDriveIdAsync();
-            var preview = await client.Drives[driveId].Items[itemId].Preview.PostAsync(new Microsoft.Graph.Drives.Item.Items.Item.Preview.PreviewPostRequestBody());
+            var driveId = await GetDriveIdAsync().ConfigureAwait(false);
+            var preview = await client.Drives[driveId].Items[itemId].Preview.PostAsync(new Microsoft.Graph.Drives.Item.Items.Item.Preview.PreviewPostRequestBody()).ConfigureAwait(false);
             return preview?.GetUrl;
         }
         catch (Exception ex)
@@ -1496,8 +1496,8 @@ public class GraphOneDriveService
         try
         {
             var client = _authService.GetGraphClient();
-            var driveId = await GetDriveIdAsync();
-            var thumbnails = await client.Drives[driveId].Items[itemId].Thumbnails.GetAsync();
+            var driveId = await GetDriveIdAsync().ConfigureAwait(false);
+            var thumbnails = await client.Drives[driveId].Items[itemId].Thumbnails.GetAsync().ConfigureAwait(false);
             var thumb = thumbnails?.Value?.FirstOrDefault();
             return size switch
             {

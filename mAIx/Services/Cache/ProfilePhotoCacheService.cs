@@ -69,7 +69,7 @@ public class ProfilePhotoCacheService
                 // Microsoft 연락처 프로필 사진
                 try
                 {
-                    photoStream = await client.Me.Contacts[contactId].Photo.Content.GetAsync();
+                    photoStream = await client.Me.Contacts[contactId].Photo.Content.GetAsync().ConfigureAwait(false);
                 }
                 catch
                 {
@@ -81,7 +81,7 @@ public class ProfilePhotoCacheService
                 // 조직 사용자 프로필 사진
                 try
                 {
-                    photoStream = await client.Users[contactId].Photo.Content.GetAsync();
+                    photoStream = await client.Users[contactId].Photo.Content.GetAsync().ConfigureAwait(false);
                 }
                 catch
                 {
@@ -93,7 +93,7 @@ public class ProfilePhotoCacheService
             if (photoStream != null)
             {
                 using var memoryStream = new MemoryStream();
-                await photoStream.CopyToAsync(memoryStream);
+                await photoStream.CopyToAsync(memoryStream).ConfigureAwait(false);
                 photoBase64 = Convert.ToBase64String(memoryStream.ToArray());
             }
 
@@ -140,7 +140,7 @@ public class ProfilePhotoCacheService
         {
             try
             {
-                var photo = await GetPhotoAsync(suggestion.Source, suggestion.ContactId);
+                var photo = await GetPhotoAsync(suggestion.Source, suggestion.ContactId).ConfigureAwait(false);
 
                 // UI 쓰레드에서 속성 업데이트
                 if (!string.IsNullOrEmpty(photo))
@@ -160,7 +160,7 @@ public class ProfilePhotoCacheService
             }
         });
 
-        await Task.WhenAll(tasks);
+        await Task.WhenAll(tasks).ConfigureAwait(false);
 
         _logger.Debug("프로필 사진 일괄 로딩 완료");
     }

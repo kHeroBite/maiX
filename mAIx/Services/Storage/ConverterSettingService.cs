@@ -33,7 +33,7 @@ public class ConverterSettingService
     {
         return await _dbContext.ConverterSettings
             .OrderBy(s => s.Extension)
-            .ToListAsync();
+            .ToListAsync().ConfigureAwait(false);
     }
 
     /// <summary>
@@ -46,7 +46,7 @@ public class ConverterSettingService
 
         var ext = extension.StartsWith(".") ? extension : $".{extension}";
         return await _dbContext.ConverterSettings
-            .FirstOrDefaultAsync(s => s.Extension == ext);
+            .FirstOrDefaultAsync(s => s.Extension == ext).ConfigureAwait(false);
     }
 
     /// <summary>
@@ -63,7 +63,7 @@ public class ConverterSettingService
         var ext = extension.StartsWith(".") ? extension : $".{extension}";
 
         var existing = await _dbContext.ConverterSettings
-            .FirstOrDefaultAsync(s => s.Extension == ext);
+            .FirstOrDefaultAsync(s => s.Extension == ext).ConfigureAwait(false);
 
         if (existing != null)
         {
@@ -80,10 +80,10 @@ public class ConverterSettingService
                 UpdatedAt = DateTime.UtcNow,
                 IsEnabled = true
             };
-            await _dbContext.ConverterSettings.AddAsync(existing);
+            await _dbContext.ConverterSettings.AddAsync(existing).ConfigureAwait(false);
         }
 
-        await _dbContext.SaveChangesAsync();
+        await _dbContext.SaveChangesAsync().ConfigureAwait(false);
 
         // AttachmentProcessor에도 적용
         _attachmentProcessor.SelectConverter(ext, converterName);
@@ -102,13 +102,13 @@ public class ConverterSettingService
 
         var ext = extension.StartsWith(".") ? extension : $".{extension}";
         var setting = await _dbContext.ConverterSettings
-            .FirstOrDefaultAsync(s => s.Extension == ext);
+            .FirstOrDefaultAsync(s => s.Extension == ext).ConfigureAwait(false);
 
         if (setting == null)
             return false;
 
         _dbContext.ConverterSettings.Remove(setting);
-        await _dbContext.SaveChangesAsync();
+        await _dbContext.SaveChangesAsync().ConfigureAwait(false);
 
         _logger.Information("변환기 설정 삭제: {Extension}", ext);
         return true;
@@ -121,7 +121,7 @@ public class ConverterSettingService
     {
         var settings = await _dbContext.ConverterSettings
             .Where(s => s.IsEnabled)
-            .ToListAsync();
+            .ToListAsync().ConfigureAwait(false);
 
         var settingsDict = settings.ToDictionary(
             s => s.Extension,
@@ -142,7 +142,7 @@ public class ConverterSettingService
 
         foreach (var kvp in currentSettings)
         {
-            await SaveSettingAsync(kvp.Key, kvp.Value);
+            await SaveSettingAsync(kvp.Key, kvp.Value).ConfigureAwait(false);
         }
 
         _logger.Information("변환기 설정 일괄 저장 완료: {Count}개", currentSettings.Count);
@@ -155,7 +155,7 @@ public class ConverterSettingService
     {
         var result = new Dictionary<string, ConverterSelectionInfo>(StringComparer.OrdinalIgnoreCase);
         var allInfo = _attachmentProcessor.GetAllConverterInfo();
-        var dbSettings = await GetAllSettingsAsync();
+        var dbSettings = await GetAllSettingsAsync().ConfigureAwait(false);
         var dbSettingsDict = dbSettings.ToDictionary(s => s.Extension, StringComparer.OrdinalIgnoreCase);
 
         foreach (var kvp in allInfo)
@@ -189,9 +189,9 @@ public class ConverterSettingService
     /// </summary>
     public async Task ResetAllSettingsAsync()
     {
-        var allSettings = await _dbContext.ConverterSettings.ToListAsync();
+        var allSettings = await _dbContext.ConverterSettings.ToListAsync().ConfigureAwait(false);
         _dbContext.ConverterSettings.RemoveRange(allSettings);
-        await _dbContext.SaveChangesAsync();
+        await _dbContext.SaveChangesAsync().ConfigureAwait(false);
 
         _logger.Information("모든 변환기 설정 초기화 완료");
     }

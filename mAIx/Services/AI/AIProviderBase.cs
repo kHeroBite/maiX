@@ -99,7 +99,7 @@ namespace mAIx.Services.AI
         /// </summary>
         protected async Task HandleErrorResponseAsync(HttpResponseMessage response)
         {
-            var content = await response.Content.ReadAsStringAsync();
+            var content = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
             _logger.Error("{Provider} API 오류: {StatusCode} - {Content}",
                 ProviderName, response.StatusCode, content);
             throw new HttpRequestException($"{ProviderName} API 오류: {response.StatusCode} - {content}");

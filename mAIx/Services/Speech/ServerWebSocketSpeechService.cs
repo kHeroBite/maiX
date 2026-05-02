@@ -85,12 +85,12 @@ public class ServerWebSocketSpeechService : IDisposable
     public async Task ConnectSttAsync(string serverBaseUrl, string model, string wsPath = "/ws/stt", CancellationToken ct = default)
     {
         if (IsSttConnected)
-            await DisconnectSttAsync();
+            await DisconnectSttAsync().ConfigureAwait(false);
 
         var wsUrl = BuildWebSocketUrl(serverBaseUrl, $"{wsPath}?model={Uri.EscapeDataString(model)}");
         _sttWebSocket = new ClientWebSocket();
 
-        await _sttWebSocket.ConnectAsync(new Uri(wsUrl), ct);
+        await _sttWebSocket.ConnectAsync(new Uri(wsUrl), ct).ConfigureAwait(false);
 
         _sttReceiveCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
         _sttReceiveTask = Task.Run(() => SttReceiveLoopAsync(_sttReceiveCts.Token), _sttReceiveCts.Token);
@@ -142,7 +142,7 @@ public class ServerWebSocketSpeechService : IDisposable
             bitDepth,
         };
 
-        await SendJsonAsync(_sttWebSocket!, startMsg, ct);
+        await SendJsonAsync(_sttWebSocket!, startMsg, ct).ConfigureAwait(false);
     }
 
     /// <summary>
@@ -157,7 +157,7 @@ public class ServerWebSocketSpeechService : IDisposable
             new ArraySegment<byte>(pcmData),
             WebSocketMessageType.Binary,
             endOfMessage: true,
-            cancellationToken: ct);
+            cancellationToken: ct).ConfigureAwait(false);
     }
 
     /// <summary>
@@ -169,7 +169,7 @@ public class ServerWebSocketSpeechService : IDisposable
             return null;
 
         var stopMsg = new { type = "stop" };
-        await SendJsonAsync(_sttWebSocket!, stopMsg, ct);
+        await SendJsonAsync(_sttWebSocket!, stopMsg, ct).ConfigureAwait(false);
 
         // stt_final 이벤트 대기 (5초 타임아웃)
         var finalTcs = new TaskCompletionSource<string>();
@@ -196,12 +196,12 @@ public class ServerWebSocketSpeechService : IDisposable
     public async Task ConnectTtsAsync(string serverBaseUrl, string wsPath = "/ws/tts", CancellationToken ct = default)
     {
         if (IsTtsConnected)
-            await DisconnectTtsAsync();
+            await DisconnectTtsAsync().ConfigureAwait(false);
 
         var wsUrl = BuildWebSocketUrl(serverBaseUrl, wsPath);
         _ttsWebSocket = new ClientWebSocket();
 
-        await _ttsWebSocket.ConnectAsync(new Uri(wsUrl), ct);
+        await _ttsWebSocket.ConnectAsync(new Uri(wsUrl), ct).ConfigureAwait(false);
 
         _ttsReceiveCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
         _ttsReceiveTask = Task.Run(() => TtsReceiveLoopAsync(_ttsReceiveCts.Token), _ttsReceiveCts.Token);
@@ -223,7 +223,7 @@ public class ServerWebSocketSpeechService : IDisposable
             engine,
         };
 
-        await SendJsonAsync(_ttsWebSocket!, synthMsg, ct);
+        await SendJsonAsync(_ttsWebSocket!, synthMsg, ct).ConfigureAwait(false);
     }
 
     /// <summary>
@@ -236,12 +236,12 @@ public class ServerWebSocketSpeechService : IDisposable
             throw new ArgumentException("서버 URL이 지정되지 않았습니다.", nameof(baseUrl));
 
         if (IsSplitConnected)
-            await DisconnectSplitAsync();
+            await DisconnectSplitAsync().ConfigureAwait(false);
 
         var wsUrl = BuildWebSocketUrl(baseUrl, $"{wsPath}?model={Uri.EscapeDataString(model)}");
         _splitWebSocket = new ClientWebSocket();
 
-        await _splitWebSocket.ConnectAsync(new Uri(wsUrl), ct);
+        await _splitWebSocket.ConnectAsync(new Uri(wsUrl), ct).ConfigureAwait(false);
 
         _splitReceiveCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
         _splitReceiveTask = Task.Run(() => SplitReceiveLoopAsync(_splitReceiveCts.Token), _splitReceiveCts.Token);
@@ -289,7 +289,7 @@ public class ServerWebSocketSpeechService : IDisposable
             bit_depth = bitDepth,
         };
 
-        await SendJsonAsync(_splitWebSocket!, startMsg, ct);
+        await SendJsonAsync(_splitWebSocket!, startMsg, ct).ConfigureAwait(false);
     }
 
     /// <summary>
@@ -304,7 +304,7 @@ public class ServerWebSocketSpeechService : IDisposable
             new ArraySegment<byte>(pcmData),
             WebSocketMessageType.Binary,
             endOfMessage: true,
-            cancellationToken: ct);
+            cancellationToken: ct).ConfigureAwait(false);
     }
 
     /// <summary>
@@ -316,7 +316,7 @@ public class ServerWebSocketSpeechService : IDisposable
             return null;
 
         var stopMsg = new { type = "end" };
-        await SendJsonAsync(_splitWebSocket!, stopMsg, ct);
+        await SendJsonAsync(_splitWebSocket!, stopMsg, ct).ConfigureAwait(false);
 
         var finalTcs = new TaskCompletionSource<string>();
         void OnFinal(string text) => finalTcs.TrySetResult(text);
@@ -341,9 +341,9 @@ public class ServerWebSocketSpeechService : IDisposable
     /// </summary>
     public async Task DisconnectAsync()
     {
-        await DisconnectSttAsync();
-        await DisconnectTtsAsync();
-        await DisconnectSplitAsync();
+        await DisconnectSttAsync().ConfigureAwait(false);
+        await DisconnectTtsAsync().ConfigureAwait(false);
+        await DisconnectSplitAsync().ConfigureAwait(false);
     }
 
     /// <summary>
@@ -355,7 +355,7 @@ public class ServerWebSocketSpeechService : IDisposable
         var url = $"{serverBaseUrl.TrimEnd('/')}/api/stt/model";
         using var http = new HttpClient { Timeout = TimeSpan.FromSeconds(30) };
         var payload = new { model };
-        var resp = await http.PostAsJsonAsync(url, payload, ct);
+        var resp = await http.PostAsJsonAsync(url, payload, ct).ConfigureAwait(false);
         resp.EnsureSuccessStatusCode();
     }
 
@@ -403,7 +403,7 @@ public class ServerWebSocketSpeechService : IDisposable
             new ArraySegment<byte>(bytes),
             WebSocketMessageType.Text,
             endOfMessage: true,
-            cancellationToken: ct);
+            cancellationToken: ct).ConfigureAwait(false);
     }
 
     /// <summary>
@@ -420,7 +420,7 @@ public class ServerWebSocketSpeechService : IDisposable
                 WebSocketReceiveResult result;
                 do
                 {
-                    result = await _sttWebSocket.ReceiveAsync(new ArraySegment<byte>(buffer), ct);
+                    result = await _sttWebSocket.ReceiveAsync(new ArraySegment<byte>(buffer), ct).ConfigureAwait(false);
                     if (result.MessageType == WebSocketMessageType.Close)
                         return;
                     ms.Write(buffer, 0, result.Count);
@@ -454,7 +454,7 @@ public class ServerWebSocketSpeechService : IDisposable
                 WebSocketReceiveResult result;
                 do
                 {
-                    result = await _ttsWebSocket.ReceiveAsync(new ArraySegment<byte>(buffer), ct);
+                    result = await _ttsWebSocket.ReceiveAsync(new ArraySegment<byte>(buffer), ct).ConfigureAwait(false);
                     if (result.MessageType == WebSocketMessageType.Close)
                         return;
                     ms.Write(buffer, 0, result.Count);
@@ -493,7 +493,7 @@ public class ServerWebSocketSpeechService : IDisposable
                 WebSocketReceiveResult result;
                 do
                 {
-                    result = await _splitWebSocket.ReceiveAsync(new ArraySegment<byte>(buffer), ct);
+                    result = await _splitWebSocket.ReceiveAsync(new ArraySegment<byte>(buffer), ct).ConfigureAwait(false);
                     if (result.MessageType == WebSocketMessageType.Close)
                         return;
                     ms.Write(buffer, 0, result.Count);
@@ -685,14 +685,14 @@ public class ServerWebSocketSpeechService : IDisposable
         {
             try
             {
-                await _sttWebSocket.CloseAsync(WebSocketCloseStatus.NormalClosure, "종료", CancellationToken.None);
+                await _sttWebSocket.CloseAsync(WebSocketCloseStatus.NormalClosure, "종료", CancellationToken.None).ConfigureAwait(false);
             }
             catch { }
         }
 
         if (_sttReceiveTask != null)
         {
-            try { await _sttReceiveTask; } catch { }
+            try { await _sttReceiveTask.ConfigureAwait(false); } catch { }
         }
 
         _sttWebSocket?.Dispose();
@@ -713,14 +713,14 @@ public class ServerWebSocketSpeechService : IDisposable
         {
             try
             {
-                await _ttsWebSocket.CloseAsync(WebSocketCloseStatus.NormalClosure, "종료", CancellationToken.None);
+                await _ttsWebSocket.CloseAsync(WebSocketCloseStatus.NormalClosure, "종료", CancellationToken.None).ConfigureAwait(false);
             }
             catch { }
         }
 
         if (_ttsReceiveTask != null)
         {
-            try { await _ttsReceiveTask; } catch { }
+            try { await _ttsReceiveTask.ConfigureAwait(false); } catch { }
         }
 
         _ttsWebSocket?.Dispose();
@@ -741,14 +741,14 @@ public class ServerWebSocketSpeechService : IDisposable
         {
             try
             {
-                await _splitWebSocket.CloseAsync(WebSocketCloseStatus.NormalClosure, "종료", CancellationToken.None);
+                await _splitWebSocket.CloseAsync(WebSocketCloseStatus.NormalClosure, "종료", CancellationToken.None).ConfigureAwait(false);
             }
             catch { }
         }
 
         if (_splitReceiveTask != null)
         {
-            try { await _splitReceiveTask; } catch { }
+            try { await _splitReceiveTask.ConfigureAwait(false); } catch { }
         }
 
         _splitWebSocket?.Dispose();

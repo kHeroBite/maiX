@@ -70,7 +70,7 @@ public class UnsubscribeService
         try
         {
             // Graph API로 메일 조회 (인터넷 헤더 포함)
-            var message = await mailService.GetMessageAsync(emailId);
+            var message = await mailService.GetMessageAsync(emailId).ConfigureAwait(false);
             if (message == null)
                 return false;
 
@@ -88,7 +88,7 @@ public class UnsubscribeService
             if (!string.IsNullOrEmpty(httpUrl))
             {
                 var postBody = new StringContent("List-Unsubscribe=One-Click", Encoding.UTF8, "application/x-www-form-urlencoded");
-                var response = await _httpClient.PostAsync(httpUrl, postBody);
+                var response = await _httpClient.PostAsync(httpUrl, postBody).ConfigureAwait(false);
                 if (response.IsSuccessStatusCode)
                 {
                     _logger.Information("[UnsubscribeService] HTTP One-Click 구독 취소 성공: {Url}", httpUrl);
@@ -109,7 +109,7 @@ public class UnsubscribeService
                         new() { EmailAddress = new EmailAddress { Address = mailtoAddress } }
                     }
                 };
-                await mailService.SendMessageAsync(unsubscribeMessage);
+                await mailService.SendMessageAsync(unsubscribeMessage).ConfigureAwait(false);
                 _logger.Information("[UnsubscribeService] mailto 구독 취소 메일 발송: {Address}", mailtoAddress);
                 return true;
             }

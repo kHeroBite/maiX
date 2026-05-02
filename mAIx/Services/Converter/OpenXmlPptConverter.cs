@@ -83,7 +83,7 @@ namespace mAIx.Services.Converter
 
             try
             {
-                return await Task.Run(() => ExtractTextFromPptx(filePath), ct);
+                return await Task.Run(() => ExtractTextFromPptx(filePath), ct).ConfigureAwait(false);
             }
             catch (OperationCanceledException)
             {

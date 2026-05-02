@@ -293,24 +293,24 @@ public class BackgroundSyncService : BackgroundService
             try
             {
                 // 메일 초기 동기화 (2초 지연)
-                await Task.Delay(TimeSpan.FromSeconds(2), stoppingToken);
+                await Task.Delay(TimeSpan.FromSeconds(2), stoppingToken).ConfigureAwait(false);
                 Log4.Info("[BackgroundSyncService] 초기 메일 동기화 시작 (lazy)");
-                await SyncAllAccountsAsync(stoppingToken);
+                await SyncAllAccountsAsync(stoppingToken).ConfigureAwait(false);
                 _lastFullSyncTime = DateTime.UtcNow;
                 _lastFavoriteSyncTime = DateTime.UtcNow;
                 Log4.Info("[BackgroundSyncService] 초기 메일 동기화 완료 (lazy)");
 
                 // 캘린더 초기 동기화 (메일 완료 후 추가 6초 지연)
-                await Task.Delay(TimeSpan.FromSeconds(6), stoppingToken);
+                await Task.Delay(TimeSpan.FromSeconds(6), stoppingToken).ConfigureAwait(false);
                 Log4.Info("[BackgroundSyncService] 초기 캘린더 동기화 시작 (lazy)");
-                await SyncCalendarAsync(stoppingToken);
+                await SyncCalendarAsync(stoppingToken).ConfigureAwait(false);
                 _lastCalendarSyncTime = DateTime.UtcNow;
                 Log4.Info("[BackgroundSyncService] 초기 캘린더 동기화 완료 (lazy)");
 
                 // 채팅 초기 동기화 (캘린더 완료 후 추가 7초 지연)
-                await Task.Delay(TimeSpan.FromSeconds(7), stoppingToken);
+                await Task.Delay(TimeSpan.FromSeconds(7), stoppingToken).ConfigureAwait(false);
                 Log4.Info("[BackgroundSyncService] 초기 채팅 동기화 시작 (lazy)");
-                await SyncChatsAsync(stoppingToken);
+                await SyncChatsAsync(stoppingToken).ConfigureAwait(false);
                 _lastChatSyncTime = DateTime.UtcNow;
                 Log4.Info("[BackgroundSyncService] 초기 채팅 동기화 완료 (lazy)");
             }
@@ -358,7 +358,7 @@ public class BackgroundSyncService : BackgroundService
 
                     try
                     {
-                        await SyncFavoriteFoldersAsync(stoppingToken);
+                        await SyncFavoriteFoldersAsync(stoppingToken).ConfigureAwait(false);
                         _lastFavoriteSyncTime = DateTime.UtcNow;
                         Interlocked.Increment(ref _favoriteSyncCount);
                     }
@@ -399,7 +399,7 @@ public class BackgroundSyncService : BackgroundService
                 if (timeSinceLastSync.TotalSeconds >= _fullSyncIntervalSeconds)
                 {
                     Log4.Debug2($"[BackgroundSyncService] 전체 동기화 주기 경과 ({timeSinceLastSync.TotalSeconds:F0}초) - 즉시 실행");
-                    await ExecuteFullSyncAsync(stoppingToken);
+                    await ExecuteFullSyncAsync(stoppingToken).ConfigureAwait(false);
                 }
 
                 using var timer = new PeriodicTimer(TimeSpan.FromSeconds(_fullSyncIntervalSeconds));
@@ -413,7 +413,7 @@ public class BackgroundSyncService : BackgroundService
                         continue;
                     }
 
-                    await ExecuteFullSyncAsync(stoppingToken);
+                    await ExecuteFullSyncAsync(stoppingToken).ConfigureAwait(false);
                 }
             }
             catch (OperationCanceledException) when (!stoppingToken.IsCancellationRequested)
@@ -435,10 +435,10 @@ public class BackgroundSyncService : BackgroundService
         try
         {
             // 폴더 동기화
-            await SyncFoldersAsync(stoppingToken);
+            await SyncFoldersAsync(stoppingToken).ConfigureAwait(false);
 
             // 전체 메일 동기화 (Delta Query)
-            await SyncAllAccountsAsync(stoppingToken);
+            await SyncAllAccountsAsync(stoppingToken).ConfigureAwait(false);
 
             _lastFullSyncTime = DateTime.UtcNow;
             _lastSyncTime = DateTime.UtcNow;  // 하위 호환용
@@ -473,7 +473,7 @@ public class BackgroundSyncService : BackgroundService
                 if (timeSinceLastSync.TotalSeconds >= _calendarSyncIntervalSeconds)
                 {
                     Log4.Debug2($"[BackgroundSyncService] 캘린더 동기화 주기 경과 ({timeSinceLastSync.TotalSeconds:F0}초) - 즉시 실행");
-                    await ExecuteCalendarSyncAsync(stoppingToken);
+                    await ExecuteCalendarSyncAsync(stoppingToken).ConfigureAwait(false);
                 }
 
                 using var timer = new PeriodicTimer(TimeSpan.FromSeconds(_calendarSyncIntervalSeconds));
@@ -487,7 +487,7 @@ public class BackgroundSyncService : BackgroundService
                         continue;
                     }
 
-                    await ExecuteCalendarSyncAsync(stoppingToken);
+                    await ExecuteCalendarSyncAsync(stoppingToken).ConfigureAwait(false);
                 }
             }
             catch (OperationCanceledException) when (!stoppingToken.IsCancellationRequested)
@@ -514,10 +514,10 @@ public class BackgroundSyncService : BackgroundService
         try
         {
             // 캘린더 동기화
-            await SyncCalendarAsync(stoppingToken);
+            await SyncCalendarAsync(stoppingToken).ConfigureAwait(false);
 
             // 캘린더 알림 체크
-            await CheckCalendarRemindersAsync(stoppingToken);
+            await CheckCalendarRemindersAsync(stoppingToken).ConfigureAwait(false);
 
             _lastCalendarSyncTime = DateTime.UtcNow;
             Interlocked.Increment(ref _calendarSyncCount);
@@ -554,7 +554,7 @@ public class BackgroundSyncService : BackgroundService
                 if (timeSinceLastSync.TotalSeconds >= _chatSyncIntervalSeconds)
                 {
                     Log4.Debug2($"[BackgroundSyncService] 채팅 동기화 주기 경과 ({timeSinceLastSync.TotalSeconds:F0}초) - 즉시 실행");
-                    await ExecuteChatSyncAsync(stoppingToken);
+                    await ExecuteChatSyncAsync(stoppingToken).ConfigureAwait(false);
                 }
 
                 using var timer = new PeriodicTimer(TimeSpan.FromSeconds(_chatSyncIntervalSeconds));
@@ -568,7 +568,7 @@ public class BackgroundSyncService : BackgroundService
                         continue;
                     }
 
-                    await ExecuteChatSyncAsync(stoppingToken);
+                    await ExecuteChatSyncAsync(stoppingToken).ConfigureAwait(false);
                 }
             }
             catch (OperationCanceledException) when (!stoppingToken.IsCancellationRequested)
@@ -594,7 +594,7 @@ public class BackgroundSyncService : BackgroundService
 
         try
         {
-            await SyncChatsAsync(stoppingToken);
+            await SyncChatsAsync(stoppingToken).ConfigureAwait(false);
 
             _lastChatSyncTime = DateTime.UtcNow;
             Interlocked.Increment(ref _chatSyncCount);
@@ -624,7 +624,7 @@ public class BackgroundSyncService : BackgroundService
             var teamsService = scope.ServiceProvider.GetRequiredService<GraphTeamsService>();
 
             // Teams 채팅 목록 가져오기
-            var chats = await teamsService.GetChatsAsync();
+            var chats = await teamsService.GetChatsAsync().ConfigureAwait(false);
             var chatCount = chats.Count();
 
             Log4.Debug($"[BackgroundSyncService] 채팅 동기화: {chatCount}개 채팅방");
@@ -678,7 +678,7 @@ public class BackgroundSyncService : BackgroundService
                                 (e.AnalysisStatus == "pending" || e.AnalysisStatus == "failed"))
                     .OrderBy(e => e.ReceivedDateTime)
                     .Take(AnalysisBatchMaxCount)
-                    .ToListAsync(stoppingToken);
+                    .ToListAsync(stoppingToken).ConfigureAwait(false);
 
                 if (pendingEmails.Count == 0)
                 {
@@ -697,7 +697,7 @@ public class BackgroundSyncService : BackgroundService
 
                     try
                     {
-                        var result = await emailAnalyzer.AnalyzeEmailAsync(email, stoppingToken);
+                        var result = await emailAnalyzer.AnalyzeEmailAsync(email, stoppingToken).ConfigureAwait(false);
 
                         if (result.IsSuccess)
                         {
@@ -750,7 +750,7 @@ public class BackgroundSyncService : BackgroundService
                     }
                 }
 
-                await dbContext.SaveChangesAsync(stoppingToken);
+                await dbContext.SaveChangesAsync(stoppingToken).ConfigureAwait(false);
                 Log4.Info($"[BackgroundSyncService] 분석 배치 완료: 성공 {successCount}건, 실패 {failCount}건");
             }
             catch (OperationCanceledException)
@@ -803,7 +803,7 @@ public class BackgroundSyncService : BackgroundService
                     .Where(e => e.AccountEmail == accountEmail &&
                                 e.ScheduledSendTime != null &&
                                 e.ScheduledSendTime <= now)
-                    .ToListAsync(stoppingToken);
+                    .ToListAsync(stoppingToken).ConfigureAwait(false);
 
                 if (scheduledEmails.Count == 0)
                 {
@@ -822,7 +822,7 @@ public class BackgroundSyncService : BackgroundService
                         // Graph API로 발송 (InternetMessageId가 있는 경우 Draft 발송, 없으면 새 메일 발송)
                         if (!string.IsNullOrEmpty(email.InternetMessageId))
                         {
-                            await graphMailService.SendDraftMessageAsync(email.InternetMessageId);
+                            await graphMailService.SendDraftMessageAsync(email.InternetMessageId).ConfigureAwait(false);
                         }
                         else
                         {
@@ -851,7 +851,7 @@ public class BackgroundSyncService : BackgroundService
                     }
                 }
 
-                await dbContext.SaveChangesAsync(stoppingToken);
+                await dbContext.SaveChangesAsync(stoppingToken).ConfigureAwait(false);
                 Log4.Info($"[BackgroundSyncService] 예약 발송 처리 완료: {scheduledEmails.Count}건");
             }
             catch (OperationCanceledException)
@@ -903,7 +903,7 @@ public class BackgroundSyncService : BackgroundService
                     .Where(e => e.AccountEmail == accountEmail &&
                                 e.SnoozedUntil != null &&
                                 e.SnoozedUntil <= now)
-                    .ToListAsync(stoppingToken);
+                    .ToListAsync(stoppingToken).ConfigureAwait(false);
 
                 if (snoozedEmails.Count == 0)
                 {
@@ -927,7 +927,7 @@ public class BackgroundSyncService : BackgroundService
                     Log4.Debug($"[BackgroundSyncService] 스누즈 해제: Id={email.Id}, Subject={email.Subject}");
                 }
 
-                await dbContext.SaveChangesAsync(stoppingToken);
+                await dbContext.SaveChangesAsync(stoppingToken).ConfigureAwait(false);
                 Log4.Info($"[BackgroundSyncService] 스누즈 해제 완료: {snoozedEmails.Count}건");
             }
             catch (OperationCanceledException)
@@ -975,7 +975,7 @@ public class BackgroundSyncService : BackgroundService
             var favoriteFolders = await dbContext.Folders
                 .AsNoTracking()
                 .Where(f => f.AccountEmail == accountEmail && f.IsFavorite)
-                .ToListAsync(ct);
+                .ToListAsync(ct).ConfigureAwait(false);
 
             if (favoriteFolders.Count == 0)
             {
@@ -1000,7 +1000,7 @@ public class BackgroundSyncService : BackgroundService
                     var latestMessages = await graphMailService.GetLatestMessagesAsync(
                         folder.Id,
                         count: 50,
-                        since: null);
+                        since: null).ConfigureAwait(false);
 
                     var latestMessageList = latestMessages.ToList();
                     if (latestMessageList.Count > 0)
@@ -1019,7 +1019,7 @@ public class BackgroundSyncService : BackgroundService
 
                         // 직접 조회한 메일 저장 (중복은 SaveEmailsAsync에서 처리)
                         var directSavedEmails = await SaveEmailsAsync(
-                            dbContext, latestMessageList, accountEmail, folder.Id, ct);
+                            dbContext, latestMessageList, accountEmail, folder.Id, ct).ConfigureAwait(false);
 
                         allSavedEmails.AddRange(directSavedEmails);
                         totalChanged += directSavedEmails.Count;
@@ -1027,7 +1027,7 @@ public class BackgroundSyncService : BackgroundService
 
                     // 2단계: Delta Query 실행 (상태 변경 감지 및 삭제 처리)
                     var (changed, deleted, savedEmails) = await SyncFolderAsync(
-                        dbContext, graphMailService, accountEmail, folder, ct);
+                        dbContext, graphMailService, accountEmail, folder, ct).ConfigureAwait(false);
 
                     // Delta Query에서 저장된 메일 중 직접 조회와 중복 제거
                     var newFromDelta = savedEmails
@@ -1047,7 +1047,7 @@ public class BackgroundSyncService : BackgroundService
                 try
                 {
                     var (readStatusUpdated, readCorrected) = await SyncReadStatusAsync(
-                        dbContext, graphMailService, folder.Id, ct, accountEmail);
+                        dbContext, graphMailService, folder.Id, ct, accountEmail).ConfigureAwait(false);
                     if (readStatusUpdated > 0)
                     {
                         _logger.Information("읽음 상태 동기화: {Count}건 업데이트 (폴더: {FolderName})",
@@ -1083,7 +1083,7 @@ public class BackgroundSyncService : BackgroundService
                         latestInbox.Subject ?? "(제목 없음)",
                         inboxEmails.Count > 1 ? $"외 {inboxEmails.Count - 1}건" : "");
 
-                    await AnalyzeAndNotifyAsync(emailAnalyzer, notificationService, inboxEmails, ct);
+                    await AnalyzeAndNotifyAsync(emailAnalyzer, notificationService, inboxEmails, ct).ConfigureAwait(false);
                 }
             }
 
@@ -1133,7 +1133,7 @@ public class BackgroundSyncService : BackgroundService
             {
                 try
                 {
-                    await SyncAccountAsync(graphAuthService.CurrentUserEmail, ct);
+                    await SyncAccountAsync(graphAuthService.CurrentUserEmail, ct).ConfigureAwait(false);
                     break;
                 }
                 catch (Exception ex) when (IsAuthenticationError(ex))
@@ -1151,7 +1151,7 @@ public class BackgroundSyncService : BackgroundService
                         var delaySeconds = (int)Math.Pow(2, attempt);  // 1s, 2s, 4s
                         _logger.Warning(ex, "계정 동기화 실패 (시도 {Attempt}/{Max}), {Delay}초 후 재시도: {Email}",
                             attempt + 1, MaxRetryCount, delaySeconds, graphAuthService.CurrentUserEmail);
-                        await Task.Delay(TimeSpan.FromSeconds(delaySeconds), ct);
+                        await Task.Delay(TimeSpan.FromSeconds(delaySeconds), ct).ConfigureAwait(false);
                     }
                     else
                     {
@@ -1197,7 +1197,7 @@ public class BackgroundSyncService : BackgroundService
         var folders = await dbContext.Folders
             .AsNoTracking()
             .Where(f => f.AccountEmail == accountEmail)
-            .ToListAsync(ct);
+            .ToListAsync(ct).ConfigureAwait(false);
 
         if (folders.Count == 0)
         {
@@ -1230,7 +1230,7 @@ public class BackgroundSyncService : BackgroundService
             try
             {
                 var (changed, deleted, savedEmails) = await SyncFolderAsync(
-                    dbContext, graphMailService, accountEmail, folder, ct);
+                    dbContext, graphMailService, accountEmail, folder, ct).ConfigureAwait(false);
 
                 totalChanged += changed;
                 totalDeleted += deleted;
@@ -1248,7 +1248,7 @@ public class BackgroundSyncService : BackgroundService
                 try
                 {
                     var (readStatusUpdated, readCorrected) = await SyncReadStatusAsync(
-                        dbContext, graphMailService, folder.Id, ct, accountEmail);
+                        dbContext, graphMailService, folder.Id, ct, accountEmail).ConfigureAwait(false);
                     if (readStatusUpdated > 0)
                     {
                         _logger.Information("읽음 상태 동기화: {Count}건 업데이트 (폴더: {FolderName})",
@@ -1288,7 +1288,7 @@ public class BackgroundSyncService : BackgroundService
                     latestInbox.Subject ?? "(제목 없음)",
                     inboxEmails.Count > 1 ? $"외 {inboxEmails.Count - 1}건" : "");
 
-                await AnalyzeAndNotifyAsync(emailAnalyzer, notificationService, inboxEmails, ct);
+                await AnalyzeAndNotifyAsync(emailAnalyzer, notificationService, inboxEmails, ct).ConfigureAwait(false);
             }
         }
 
@@ -1321,7 +1321,7 @@ public class BackgroundSyncService : BackgroundService
 
         // 폴더별 동기화 상태 조회/생성
         var syncState = await dbContext.SyncStates
-            .FirstOrDefaultAsync(s => s.AccountEmail == accountEmail && s.FolderId == folder.Id, ct);
+            .FirstOrDefaultAsync(s => s.AccountEmail == accountEmail && s.FolderId == folder.Id, ct).ConfigureAwait(false);
 
         if (syncState == null)
         {
@@ -1331,7 +1331,7 @@ public class BackgroundSyncService : BackgroundService
                 FolderId = folder.Id
             };
             dbContext.SyncStates.Add(syncState);
-            await dbContext.SaveChangesAsync(ct);
+            await dbContext.SaveChangesAsync(ct).ConfigureAwait(false);
         }
 
         // Delta Query로 변경된 메일 조회
@@ -1381,7 +1381,7 @@ public class BackgroundSyncService : BackgroundService
                         {
                             using var pageScope = _serviceProvider.CreateScope();
                             var bgDb = pageScope.ServiceProvider.GetRequiredService<mAIxDbContext>();
-                            var pageSaved = await SaveEmailsAsync(bgDb, pageMessages.ToList(), accountEmail, folder.Id, CancellationToken.None);
+                            var pageSaved = await SaveEmailsAsync(bgDb, pageMessages.ToList(), accountEmail, folder.Id, CancellationToken.None).ConfigureAwait(false);
                             bgAccumulated.AddRange(pageMessages);
                             if (!firstPageCompleted)
                             {
@@ -1389,17 +1389,17 @@ public class BackgroundSyncService : BackgroundService
                                 firstPageSaved.AddRange(pageSaved);
                                 tcs.TrySetResult(true);
                             }
-                        }, CancellationToken.None);
+                        }, CancellationToken.None).ConfigureAwait(false);
 
                     // deltaLink + LastSyncedAt 저장
                     var finalDb = bgScope.ServiceProvider.GetRequiredService<mAIxDbContext>();
                     var finalSyncState = await finalDb.SyncStates
-                        .FirstOrDefaultAsync(s => s.AccountEmail == accountEmail && s.FolderId == folder.Id, CancellationToken.None);
+                        .FirstOrDefaultAsync(s => s.AccountEmail == accountEmail && s.FolderId == folder.Id, CancellationToken.None).ConfigureAwait(false);
                     if (finalSyncState != null)
                     {
                         finalSyncState.DeltaLink = bgDeltaLink;
                         finalSyncState.LastSyncedAt = DateTime.UtcNow;
-                        await finalDb.SaveChangesAsync(CancellationToken.None);
+                        await finalDb.SaveChangesAsync(CancellationToken.None).ConfigureAwait(false);
                     }
 
                     _logger.Information("폴더 {FolderId} 백그라운드 동기화 완료. 총 {Count}건", folder.Id, bgAccumulated.Count);
@@ -1410,7 +1410,7 @@ public class BackgroundSyncService : BackgroundService
                         using var readScope = _serviceProvider.CreateScope();
                         var readDb = readScope.ServiceProvider.GetRequiredService<mAIxDbContext>();
                         var readGraphService = readScope.ServiceProvider.GetRequiredService<GraphMailService>();
-                        var (readUpdated, readCorrected) = await SyncReadStatusAsync(readDb, readGraphService, folder.Id, CancellationToken.None, accountEmail);
+                        var (readUpdated, readCorrected) = await SyncReadStatusAsync(readDb, readGraphService, folder.Id, CancellationToken.None, accountEmail).ConfigureAwait(false);
                         if (readUpdated > 0)
                             Log4.Info($"[TCS] 백그라운드 완료 후 읽음 상태 동기화: {readUpdated}건");
                         if (readCorrected.Count > 0)
@@ -1444,7 +1444,7 @@ public class BackgroundSyncService : BackgroundService
         else
         {
             var (msgs, delIds) = await FetchNewEmailsAsync(
-                graphMailService, syncState, folder.Id, ct, isInitialSync);
+                graphMailService, syncState, folder.Id, ct, isInitialSync).ConfigureAwait(false);
             changedMessages = msgs;
             deletedIds = delIds;
         }
@@ -1453,13 +1453,13 @@ public class BackgroundSyncService : BackgroundService
         // (이전에 deltaLink가 있었는데 FetchNewEmailsAsync에서 리셋된 경우)
         if (!string.IsNullOrEmpty(previousDeltaLink) && syncState.DeltaLink != previousDeltaLink)
         {
-            await ReconcileDeletedEmailsAsync(dbContext, graphMailService, folder.Id, accountEmail, ct);
+            await ReconcileDeletedEmailsAsync(dbContext, graphMailService, folder.Id, accountEmail, ct).ConfigureAwait(false);
         }
 
         // 삭제된 메일 처리
         if (deletedIds.Count > 0)
         {
-            await ProcessDeletedEmailsAsync(dbContext, deletedIds, ct);
+            await ProcessDeletedEmailsAsync(dbContext, deletedIds, ct).ConfigureAwait(false);
         }
 
         // Paged API 경로는 콜백에서 이미 저장 완료 — else 경로만 여기서 저장
@@ -1469,7 +1469,7 @@ public class BackgroundSyncService : BackgroundService
                 folder.DisplayName, changedMessages.Count);
 
             savedEmails = await SaveEmailsAsync(
-                dbContext, changedMessages, accountEmail, folder.Id, ct);
+                dbContext, changedMessages, accountEmail, folder.Id, ct).ConfigureAwait(false);
         }
         else if (usedPagedApi && changedMessages.Count > 0)
         {
@@ -1479,7 +1479,7 @@ public class BackgroundSyncService : BackgroundService
 
         // 동기화 상태 업데이트
         syncState.LastSyncedAt = DateTime.UtcNow;
-        await dbContext.SaveChangesAsync(ct);
+        await dbContext.SaveChangesAsync(ct).ConfigureAwait(false);
 
         return (changedMessages.Count, deletedIds.Count, savedEmails);
     }
@@ -1517,7 +1517,7 @@ public class BackgroundSyncService : BackgroundService
             var (messages, newDeltaLink, deletedIds) = await mailService.GetMessagesDeltaAsync(
                 folderId,
                 deltaLinkToUse,
-                isInitialSync);
+                isInitialSync).ConfigureAwait(false);
 
             // 새 deltaLink 저장
             if (!string.IsNullOrEmpty(newDeltaLink))
@@ -1538,7 +1538,7 @@ public class BackgroundSyncService : BackgroundService
             // P3-04: DeltaLink 410 Gone — deltaLink 리셋 후 전체 재동기화
             _logger.Warning("DeltaLink 만료(410 Gone) 감지 — deltaLink 초기화 후 재시도 (폴더: {FolderId})", folderId);
             syncState.DeltaLink = null;
-            var (messages, newDeltaLink, deletedIds) = await mailService.GetMessagesDeltaAsync(folderId, null);
+            var (messages, newDeltaLink, deletedIds) = await mailService.GetMessagesDeltaAsync(folderId, null).ConfigureAwait(false);
             if (!string.IsNullOrEmpty(newDeltaLink))
                 syncState.DeltaLink = newDeltaLink;
             return (messages.ToList(), deletedIds.ToList());
@@ -1561,7 +1561,7 @@ public class BackgroundSyncService : BackgroundService
         foreach (var entryId in deletedIds)
         {
             var email = await dbContext.Emails
-                .FirstOrDefaultAsync(e => e.EntryId == entryId, ct);
+                .FirstOrDefaultAsync(e => e.EntryId == entryId, ct).ConfigureAwait(false);
 
             if (email != null)
             {
@@ -1572,7 +1572,7 @@ public class BackgroundSyncService : BackgroundService
 
         if (deletedIds.Count > 0)
         {
-            await dbContext.SaveChangesAsync(ct);
+            await dbContext.SaveChangesAsync(ct).ConfigureAwait(false);
             _logger.Information("삭제된 메일 처리 완료: {Count}건", deletedIds.Count);
         }
     }
@@ -1602,7 +1602,7 @@ public class BackgroundSyncService : BackgroundService
                 if (!string.IsNullOrEmpty(message.Id))
                 {
                     existingEmail = await dbContext.Emails
-                        .FirstOrDefaultAsync(e => e.EntryId == message.Id, ct);
+                        .FirstOrDefaultAsync(e => e.EntryId == message.Id, ct).ConfigureAwait(false);
                     if (existingEmail != null) foundBy = "EntryId";
                 }
 
@@ -1613,7 +1613,7 @@ public class BackgroundSyncService : BackgroundService
                 {
                     existingEmail = await dbContext.Emails
                         .FirstOrDefaultAsync(e => e.InternetMessageId == message.InternetMessageId
-                            && e.ParentFolderId == folderId, ct);
+                            && e.ParentFolderId == folderId, ct).ConfigureAwait(false);
                     if (existingEmail != null) foundBy = "InternetMessageId+FolderId";
                 }
 
@@ -1795,7 +1795,7 @@ public class BackgroundSyncService : BackgroundService
 
                     if (updated)
                     {
-                        await dbContext.SaveChangesAsync(ct);
+                        await dbContext.SaveChangesAsync(ct).ConfigureAwait(false);
                         _logger.Debug("기존 메일 상태 업데이트: {Subject} (IsRead={IsRead}, Flag={Flag}, Categories={Categories})",
                             existingEmail.Subject, existingEmail.IsRead, existingEmail.FlagStatus, existingEmail.Categories);
                     }
@@ -1835,7 +1835,7 @@ public class BackgroundSyncService : BackgroundService
                 try
                 {
                     dbContext.Emails.Add(email);
-                    await dbContext.SaveChangesAsync(ct);  // 개별 저장
+                    await dbContext.SaveChangesAsync(ct).ConfigureAwait(false);  // 개별 저장
                     savedEmails.Add(email);
                 }
                 catch (Microsoft.EntityFrameworkCore.DbUpdateException uniqueEx)
@@ -1848,7 +1848,7 @@ public class BackgroundSyncService : BackgroundService
                     if (!string.IsNullOrEmpty(email.EntryId))
                     {
                         existing = await dbContext.Emails
-                            .FirstOrDefaultAsync(e => e.EntryId == email.EntryId, ct);
+                            .FirstOrDefaultAsync(e => e.EntryId == email.EntryId, ct).ConfigureAwait(false);
                     }
                     // 2. EntryId로 못 찾으면 InternetMessageId + ParentFolderId로 검색
                     //    (보낸편지함 먼저 저장 후 받은편지함 저장 시 EntryId가 다를 수 있음)
@@ -1856,14 +1856,14 @@ public class BackgroundSyncService : BackgroundService
                     {
                         existing = await dbContext.Emails
                             .FirstOrDefaultAsync(e => e.InternetMessageId == email.InternetMessageId
-                                && e.ParentFolderId == email.ParentFolderId, ct);
+                                && e.ParentFolderId == email.ParentFolderId, ct).ConfigureAwait(false);
                     }
                     if (existing != null)
                     {
                         if (existing.IsRead != email.IsRead)
                         {
                             existing.IsRead = email.IsRead;
-                            await dbContext.SaveChangesAsync(ct);
+                            await dbContext.SaveChangesAsync(ct).ConfigureAwait(false);
                             _logger.Debug("UNIQUE 중복 — IsRead 업데이트: {Subject} IsRead={IsRead}", message.Subject, email.IsRead);
                         }
                         else
@@ -1915,7 +1915,7 @@ public class BackgroundSyncService : BackgroundService
         {
             // [방안 B] 서버에서 실제 미읽음 메일 ID 목록 조회 (날짜 제한 없음)
             // 서버 상태가 ground truth: 서버 미읽음 목록에 없으면 → 읽음으로 간주
-            var serverUnreadIds = await graphMailService.GetUnreadMessageIdsAsync(folderId, ct);
+            var serverUnreadIds = await graphMailService.GetUnreadMessageIdsAsync(folderId, ct).ConfigureAwait(false);
 
             _logger.Debug("서버 미읽음: {Count}건 (폴더: {FolderId})", serverUnreadIds.Count, folderId.Substring(0, Math.Min(folderId.Length, 20)));
 
@@ -1923,7 +1923,7 @@ public class BackgroundSyncService : BackgroundService
             var dbUnreadEmails = await dbContext.Emails
                 .Where(e => e.ParentFolderId == folderId && e.EntryId != null && !e.IsRead)
                 .Select(e => new { e.Id, e.EntryId, e.Subject })
-                .ToListAsync(ct);
+                .ToListAsync(ct).ConfigureAwait(false);
 
             _logger.Debug("DB 미읽음: {DbCount}건 vs 서버 미읽음: {ServerCount}건 (폴더: {FolderId})", dbUnreadEmails.Count, serverUnreadIds.Count, folderId.Substring(0, Math.Min(folderId.Length, 20)));
 
@@ -1940,7 +1940,7 @@ public class BackgroundSyncService : BackgroundService
                         // DB에서 EntryId로 조회 (ParentFolderId 무관)
                         var existingEmail = await dbContext.Emails
                             .Where(e => e.EntryId == msgId)
-                            .FirstOrDefaultAsync(ct);
+                            .FirstOrDefaultAsync(ct).ConfigureAwait(false);
 
                         if (existingEmail != null)
                         {
@@ -1969,13 +1969,13 @@ public class BackgroundSyncService : BackgroundService
                         else if (!string.IsNullOrEmpty(accountEmail))
                         {
                             // existingEmail이 null → DB에 없는 메일 → 서버에서 fetch 후 저장
-                            var message = await graphMailService.GetMessageAsync(msgId);
+                            var message = await graphMailService.GetMessageAsync(msgId).ConfigureAwait(false);
                             if (message != null)
                             {
                                 message.ParentFolderId = folderId;
                                 using var saveScope = _serviceProvider.CreateScope();
                                 var saveDb = saveScope.ServiceProvider.GetRequiredService<mAIxDbContext>();
-                                await SaveEmailsAsync(saveDb, new List<Microsoft.Graph.Models.Message> { message }, accountEmail, folderId, ct);
+                                await SaveEmailsAsync(saveDb, new List<Microsoft.Graph.Models.Message> { message }, accountEmail, folderId, ct).ConfigureAwait(false);
                                 correctedEntries.Add((msgId, false)); // 신규 저장 메일도 미읽음(false)
                                 updatedCount++;
                             }
@@ -2004,7 +2004,7 @@ public class BackgroundSyncService : BackgroundService
                     // 서버 미읽음 목록에 없으면 → 서버에서 이미 읽음 처리됨 → 로컬 DB 업데이트
                     if (!serverUnreadIds.Contains(dbEmail.EntryId))
                     {
-                        var email = await dbContext.Emails.FindAsync(new object[] { dbEmail.Id }, ct);
+                        var email = await dbContext.Emails.FindAsync(new object[] { dbEmail.Id }, ct).ConfigureAwait(false);
                         if (email != null)
                         {
                             email.IsRead = true;
@@ -2019,7 +2019,7 @@ public class BackgroundSyncService : BackgroundService
 
             if (updatedCount > 0)
             {
-                await dbContext.SaveChangesAsync(ct);
+                await dbContext.SaveChangesAsync(ct).ConfigureAwait(false);
             }
 
             return (updatedCount, correctedEntries);
@@ -2055,7 +2055,7 @@ public class BackgroundSyncService : BackgroundService
                 if (!string.IsNullOrEmpty(message.Id))
                 {
                     existingEmail = await dbContext.Emails
-                        .FirstOrDefaultAsync(e => e.EntryId == message.Id, ct);
+                        .FirstOrDefaultAsync(e => e.EntryId == message.Id, ct).ConfigureAwait(false);
                 }
 
                 // 2. EntryId로 못 찾으면 InternetMessageId + ParentFolderId로 검색
@@ -2064,7 +2064,7 @@ public class BackgroundSyncService : BackgroundService
                     var parentFolderId = message.ParentFolderId ?? folderId;
                     existingEmail = await dbContext.Emails
                         .FirstOrDefaultAsync(e => e.InternetMessageId == message.InternetMessageId
-                            && e.ParentFolderId == parentFolderId, ct);
+                            && e.ParentFolderId == parentFolderId, ct).ConfigureAwait(false);
                 }
 
                 if (existingEmail != null)
@@ -2112,7 +2112,7 @@ public class BackgroundSyncService : BackgroundService
 
                     if (updated)
                     {
-                        await dbContext.SaveChangesAsync(ct);
+                        await dbContext.SaveChangesAsync(ct).ConfigureAwait(false);
                     }
                 }
                 else
@@ -2140,7 +2140,7 @@ public class BackgroundSyncService : BackgroundService
                     };
 
                     dbContext.Emails.Add(email);
-                    await dbContext.SaveChangesAsync(ct);
+                    await dbContext.SaveChangesAsync(ct).ConfigureAwait(false);
                 }
 
                 // 진행률 업데이트
@@ -2226,7 +2226,7 @@ public class BackgroundSyncService : BackgroundService
                 // await notificationService.NotifyNewEmailAsync(email);
 
                 // AI 분석
-                var result = await analyzer.AnalyzeEmailAsync(email, ct);
+                var result = await analyzer.AnalyzeEmailAsync(email, ct).ConfigureAwait(false);
 
                 if (result.IsSuccess)
                 {
@@ -2273,7 +2273,7 @@ public class BackgroundSyncService : BackgroundService
             dbContext.Emails.Update(email);
         }
 
-        await dbContext.SaveChangesAsync(ct);
+        await dbContext.SaveChangesAsync(ct).ConfigureAwait(false);
 
         // 분석 완료 후 UI 업데이트를 위해 이벤트 발생 (0건으로 새 메일 없음을 알림)
         EmailsSynced?.Invoke(0);
@@ -2432,7 +2432,7 @@ public class BackgroundSyncService : BackgroundService
     public async Task TriggerSyncAsync(CancellationToken ct = default)
     {
         _logger.Information("수동 동기화 요청됨");
-        await SyncAllAccountsAsync(ct);
+        await SyncAllAccountsAsync(ct).ConfigureAwait(false);
     }
 
     /// <summary>
@@ -2441,7 +2441,7 @@ public class BackgroundSyncService : BackgroundService
     public async Task TriggerSyncForAccountAsync(string accountEmail, CancellationToken ct = default)
     {
         _logger.Information("수동 동기화 요청됨: {Email}", accountEmail);
-        await SyncAccountAsync(accountEmail, ct);
+        await SyncAccountAsync(accountEmail, ct).ConfigureAwait(false);
     }
 
 
@@ -2461,7 +2461,7 @@ public class BackgroundSyncService : BackgroundService
             .FirstOrDefaultAsync(f => f.AccountEmail == accountEmail &&
                 (f.DisplayName == "보낸 편지함" ||
                  f.DisplayName.Equals("Sent Items", StringComparison.OrdinalIgnoreCase) ||
-                 f.DisplayName.Equals("SentItems", StringComparison.OrdinalIgnoreCase)), ct);
+                 f.DisplayName.Equals("SentItems", StringComparison.OrdinalIgnoreCase)), ct).ConfigureAwait(false);
 
         if (sentFolder == null)
         {
@@ -2472,7 +2472,7 @@ public class BackgroundSyncService : BackgroundService
         try
         {
             var (changed, deleted, savedEmails) = await SyncFolderAsync(
-                dbContext, graphMailService, accountEmail, sentFolder, ct);
+                dbContext, graphMailService, accountEmail, sentFolder, ct).ConfigureAwait(false);
 
             if (changed > 0 || deleted > 0)
             {
@@ -2503,7 +2503,7 @@ public class BackgroundSyncService : BackgroundService
         var inboxFolder = await dbContext.Folders
             .FirstOrDefaultAsync(f => f.AccountEmail == accountEmail &&
                 (f.DisplayName == "받은 편지함" ||
-                 f.DisplayName.Equals("Inbox", StringComparison.OrdinalIgnoreCase)), ct);
+                 f.DisplayName.Equals("Inbox", StringComparison.OrdinalIgnoreCase)), ct).ConfigureAwait(false);
 
         if (inboxFolder == null)
         {
@@ -2514,7 +2514,7 @@ public class BackgroundSyncService : BackgroundService
         try
         {
             var (changed, deleted, savedEmails) = await SyncFolderAsync(
-                dbContext, graphMailService, accountEmail, inboxFolder, ct);
+                dbContext, graphMailService, accountEmail, inboxFolder, ct).ConfigureAwait(false);
 
             if (changed > 0 || deleted > 0)
             {
@@ -2543,17 +2543,17 @@ public class BackgroundSyncService : BackgroundService
 
         // 해당 폴더의 deltaLink 초기화
         var syncState = await dbContext.SyncStates
-            .FirstOrDefaultAsync(s => s.AccountEmail == accountEmail && s.FolderId == folderId, ct);
+            .FirstOrDefaultAsync(s => s.AccountEmail == accountEmail && s.FolderId == folderId, ct).ConfigureAwait(false);
 
         if (syncState != null)
         {
             syncState.DeltaLink = null;  // deltaLink 초기화
-            await dbContext.SaveChangesAsync(ct);
+            await dbContext.SaveChangesAsync(ct).ConfigureAwait(false);
             _logger.Debug("DeltaLink 초기화 완료: {FolderId}", folderId);
         }
 
         // 서버에서 전체 메일 목록 조회 (deltaLink 없이)
-        var (serverMessages, newDeltaLink, _) = await graphMailService.GetMessagesDeltaAsync(folderId, null);
+        var (serverMessages, newDeltaLink, _) = await graphMailService.GetMessagesDeltaAsync(folderId, null).ConfigureAwait(false);
         var serverMessageList = serverMessages.ToList();
         var serverMessageIds = serverMessageList.Select(m => m.Id).Where(id => !string.IsNullOrEmpty(id)).ToHashSet();
 
@@ -2565,7 +2565,7 @@ public class BackgroundSyncService : BackgroundService
         // DB에서 해당 폴더의 메일 목록 조회
         var dbEmails = await dbContext.Emails
             .Where(e => e.ParentFolderId == folderId)
-            .ToListAsync(ct);
+            .ToListAsync(ct).ConfigureAwait(false);
 
         _logger.Debug("DB 메일 수: {Count}", dbEmails.Count);
 
@@ -2579,19 +2579,19 @@ public class BackgroundSyncService : BackgroundService
                 _logger.Debug("서버에 없는 메일 삭제: {Subject}", email.Subject);
                 dbContext.Emails.Remove(email);
             }
-            await dbContext.SaveChangesAsync(ct);
+            await dbContext.SaveChangesAsync(ct).ConfigureAwait(false);
             _logger.Information("폴더에서 제거된 메일 삭제 완료: {Count}건", emailsToDelete.Count);
         }
 
         // 새 메일 저장 및 기존 메일 업데이트 (진행률 이벤트 포함)
-        await SaveEmailsWithProgressAsync(dbContext, serverMessageList, accountEmail, folderId, ct);
+        await SaveEmailsWithProgressAsync(dbContext, serverMessageList, accountEmail, folderId, ct).ConfigureAwait(false);
 
         // deltaLink 업데이트
         if (syncState != null && !string.IsNullOrEmpty(newDeltaLink))
         {
             syncState.DeltaLink = newDeltaLink;
             syncState.LastSyncedAt = DateTime.UtcNow;
-            await dbContext.SaveChangesAsync(ct);
+            await dbContext.SaveChangesAsync(ct).ConfigureAwait(false);
         }
 
         // 마지막 동기화 시간 업데이트 (UI 표시용)
@@ -2623,7 +2623,7 @@ public class BackgroundSyncService : BackgroundService
                 return;
             }
 
-            var folders = (await graphMailService.GetFoldersAsync()).ToList();
+            var folders = (await graphMailService.GetFoldersAsync().ConfigureAwait(false)).ToList();
             _logger.Information("Graph API에서 {Count}개 폴더 조회됨", folders.Count);
 
             var accountEmail = graphAuthService.CurrentUserEmail;
@@ -2634,7 +2634,7 @@ public class BackgroundSyncService : BackgroundService
                 if (string.IsNullOrEmpty(folder.Id))
                     continue;
 
-                var existing = await dbContext.Folders.FindAsync([folder.Id], ct);
+                var existing = await dbContext.Folders.FindAsync([folder.Id], ct).ConfigureAwait(false);
 
                 if (existing == null)
                 {
@@ -2658,7 +2658,7 @@ public class BackgroundSyncService : BackgroundService
                 }
             }
 
-            await dbContext.SaveChangesAsync(ct);
+            await dbContext.SaveChangesAsync(ct).ConfigureAwait(false);
             _logger.Information("폴더 동기화 완료: {Count}개 신규 폴더", syncedCount);
 
             // 마지막 동기화 시간 업데이트 (UI 표시용 - 폴더 동기화도 동기화 작업임)
@@ -2708,7 +2708,7 @@ public class BackgroundSyncService : BackgroundService
 
             // CalendarSyncState 조회/생성
             var syncState = await dbContext.CalendarSyncStates
-                .FirstOrDefaultAsync(s => s.AccountEmail == accountEmail && s.CalendarId == null, ct);
+                .FirstOrDefaultAsync(s => s.AccountEmail == accountEmail && s.CalendarId == null, ct).ConfigureAwait(false);
 
             if (syncState == null)
             {
@@ -2721,7 +2721,7 @@ public class BackgroundSyncService : BackgroundService
                     CreatedAt = DateTime.UtcNow
                 };
                 dbContext.CalendarSyncStates.Add(syncState);
-                await dbContext.SaveChangesAsync(ct);
+                await dbContext.SaveChangesAsync(ct).ConfigureAwait(false);
             }
 
             // 진행 상태 알림: 2/4 - Delta Query 실행
@@ -2734,7 +2734,7 @@ public class BackgroundSyncService : BackgroundService
                 deltaResult = await calendarService.GetEventsDeltaAsync(
                     syncState.DeltaLink,
                     syncState.SyncStartDate,
-                    syncState.SyncEndDate);
+                    syncState.SyncEndDate).ConfigureAwait(false);
             }
             catch (Exception ex)
             {
@@ -2743,7 +2743,7 @@ public class BackgroundSyncService : BackgroundService
                 deltaResult = await calendarService.GetEventsDeltaAsync(
                     null,
                     syncState.SyncStartDate,
-                    syncState.SyncEndDate);
+                    syncState.SyncEndDate).ConfigureAwait(false);
             }
 
             // 진행 상태 알림: 3/4 - DB 저장
@@ -2759,7 +2759,7 @@ public class BackgroundSyncService : BackgroundService
                 foreach (var deletedId in deltaResult.DeletedEventIds)
                 {
                     var existingEvent = await dbContext.CalendarEvents
-                        .FirstOrDefaultAsync(e => e.GraphId == deletedId && e.AccountEmail == accountEmail, ct);
+                        .FirstOrDefaultAsync(e => e.GraphId == deletedId && e.AccountEmail == accountEmail, ct).ConfigureAwait(false);
 
                     if (existingEvent != null)
                     {
@@ -2778,7 +2778,7 @@ public class BackgroundSyncService : BackgroundService
                     continue;
 
                 var existingEvent = await dbContext.CalendarEvents
-                    .FirstOrDefaultAsync(e => e.GraphId == graphEvent.Id && e.AccountEmail == accountEmail, ct);
+                    .FirstOrDefaultAsync(e => e.GraphId == graphEvent.Id && e.AccountEmail == accountEmail, ct).ConfigureAwait(false);
 
                 if (existingEvent != null)
                 {
@@ -2799,7 +2799,7 @@ public class BackgroundSyncService : BackgroundService
             }
 
             // DB 저장
-            await dbContext.SaveChangesAsync(ct);
+            await dbContext.SaveChangesAsync(ct).ConfigureAwait(false);
 
             // 동기화 상태 업데이트
             syncState.DeltaLink = deltaResult.DeltaLink;
@@ -2809,7 +2809,7 @@ public class BackgroundSyncService : BackgroundService
             syncState.LastSyncDeletedCount = deletedCount;
             syncState.UpdatedAt = DateTime.UtcNow;
             syncState.LastErrorMessage = null;  // 성공 시 오류 메시지 초기화
-            await dbContext.SaveChangesAsync(ct);
+            await dbContext.SaveChangesAsync(ct).ConfigureAwait(false);
 
             // 진행 상태 알림: 4/4 - 동기화 완료
             CalendarSyncProgress?.Invoke(4, 4, "캘린더 동기화 완료");
@@ -2846,13 +2846,13 @@ public class BackgroundSyncService : BackgroundService
                 if (graphAuthService.IsLoggedIn && !string.IsNullOrEmpty(graphAuthService.CurrentUserEmail))
                 {
                     var syncState = await errorDbContext.CalendarSyncStates
-                        .FirstOrDefaultAsync(s => s.AccountEmail == graphAuthService.CurrentUserEmail && s.CalendarId == null);
+                        .FirstOrDefaultAsync(s => s.AccountEmail == graphAuthService.CurrentUserEmail && s.CalendarId == null).ConfigureAwait(false);
 
                     if (syncState != null)
                     {
                         syncState.LastErrorMessage = ex.Message;
                         syncState.LastErrorAt = DateTime.UtcNow;
-                        await errorDbContext.SaveChangesAsync();
+                        await errorDbContext.SaveChangesAsync().ConfigureAwait(false);
                     }
                 }
             }
@@ -3011,7 +3011,7 @@ public class BackgroundSyncService : BackgroundService
 
             _logger.Debug("캘린더 알림 체크: {Start} ~ {End}", now, until);
 
-            var events = await calendarService.GetEventsAsync(now, until);
+            var events = await calendarService.GetEventsAsync(now, until).ConfigureAwait(false);
             if (events == null || !events.Any())
             {
                 return;
@@ -3020,7 +3020,7 @@ public class BackgroundSyncService : BackgroundService
             _logger.Debug("임박한 일정 {Count}건 발견", events.Count());
 
             // 알림 발송
-            await notificationService.CheckAndNotifyUpcomingEventsAsync(events);
+            await notificationService.CheckAndNotifyUpcomingEventsAsync(events).ConfigureAwait(false);
         }
         catch (Exception ex)
         {
@@ -3039,7 +3039,7 @@ public class BackgroundSyncService : BackgroundService
         {
             try
             {
-                await Task.Delay(TimeSpan.FromSeconds(120), stoppingToken);
+                await Task.Delay(TimeSpan.FromSeconds(120), stoppingToken).ConfigureAwait(false);
 
                 using var scope = _serviceProvider.CreateScope();
                 var dbContext = scope.ServiceProvider.GetRequiredService<mAIxDbContext>();
@@ -3047,14 +3047,14 @@ public class BackgroundSyncService : BackgroundService
                 var cutoff = DateTime.UtcNow.AddMinutes(-10);
                 var recentEmails = await dbContext.Emails
                     .Where(e => e.ReceivedDateTime >= cutoff)
-                    .ToListAsync(stoppingToken);
+                    .ToListAsync(stoppingToken).ConfigureAwait(false);
 
                 if (recentEmails.Count > 0)
                 {
                     var accountGroups = recentEmails.GroupBy(e => e.AccountEmail);
                     foreach (var group in accountGroups)
                     {
-                        await _mailRuleService.ApplyRulesAsync(group.ToList(), group.Key);
+                        await _mailRuleService.ApplyRulesAsync(group.ToList(), group.Key).ConfigureAwait(false);
                     }
                     Log4.Info($"[BackgroundSyncService] 규칙 엔진: {recentEmails.Count}건 메일에 규칙 적용");
                 }
@@ -3078,7 +3078,7 @@ public class BackgroundSyncService : BackgroundService
         {
             try
             {
-                await Task.Delay(TimeSpan.FromSeconds(3600), stoppingToken);
+                await Task.Delay(TimeSpan.FromSeconds(3600), stoppingToken).ConfigureAwait(false);
 
                 using var scope = _serviceProvider.CreateScope();
                 var dbContext = scope.ServiceProvider.GetRequiredService<mAIxDbContext>();
@@ -3087,7 +3087,7 @@ public class BackgroundSyncService : BackgroundService
                 var overdueEmails = await dbContext.Emails
                     .AsNoTracking()
                     .Where(e => e.FollowUpDate != null && e.FollowUpDate <= now)
-                    .ToListAsync(stoppingToken);
+                    .ToListAsync(stoppingToken).ConfigureAwait(false);
 
                 foreach (var email in overdueEmails)
                 {
@@ -3095,7 +3095,7 @@ public class BackgroundSyncService : BackgroundService
                     var hasReply = !string.IsNullOrEmpty(email.ConversationId) &&
                         await dbContext.Emails
                             .AnyAsync(e => e.ConversationId == email.ConversationId &&
-                                          e.ReceivedDateTime > email.ReceivedDateTime, stoppingToken);
+                                          e.ReceivedDateTime > email.ReceivedDateTime, stoppingToken).ConfigureAwait(false);
 
                     if (!hasReply)
                     {
@@ -3109,7 +3109,7 @@ public class BackgroundSyncService : BackgroundService
 
                 if (overdueEmails.Count > 0)
                 {
-                    await dbContext.SaveChangesAsync(stoppingToken);
+                    await dbContext.SaveChangesAsync(stoppingToken).ConfigureAwait(false);
                     Log4.Info($"[BackgroundSyncService] 팔로업 체크: {overdueEmails.Count}건 처리 완료");
                 }
             }
@@ -3132,7 +3132,7 @@ public class BackgroundSyncService : BackgroundService
         {
             try
             {
-                await Task.Delay(TimeSpan.FromSeconds(300), stoppingToken);
+                await Task.Delay(TimeSpan.FromSeconds(300), stoppingToken).ConfigureAwait(false);
 
                 using var scope = _serviceProvider.CreateScope();
                 var calendarService = scope.ServiceProvider.GetService<GraphCalendarService>();
@@ -3144,7 +3144,7 @@ public class BackgroundSyncService : BackgroundService
                 // 향후 30분 내 일정 조회
                 var now = DateTime.Now;
                 var until = now.AddMinutes(30);
-                var events = await calendarService.GetEventsAsync(now, until);
+                var events = await calendarService.GetEventsAsync(now, until).ConfigureAwait(false);
 
                 if (events == null) continue;
 
@@ -3166,10 +3166,10 @@ public class BackgroundSyncService : BackgroundService
                                     (!string.IsNullOrEmpty(subject) && e.Subject.Contains(subject)))
                         .OrderByDescending(e => e.ReceivedDateTime)
                         .Take(10)
-                        .ToListAsync(stoppingToken);
+                        .ToListAsync(stoppingToken).ConfigureAwait(false);
 
                     // AI 브리핑 생성
-                    var briefing = await aiMailService.GenerateMeetingBriefingAsync(subject, relatedEmails, stoppingToken);
+                    var briefing = await aiMailService.GenerateMeetingBriefingAsync(subject, relatedEmails, stoppingToken).ConfigureAwait(false);
                     if (!string.IsNullOrEmpty(briefing))
                     {
                         _toastNotificationService.ShowNewMailNotification($"미팅 브리핑: {subject}", briefing, string.Empty);
@@ -3192,7 +3192,7 @@ public class BackgroundSyncService : BackgroundService
     private async Task RunHistoricalSyncLoopAsync(CancellationToken stoppingToken)
     {
         Log4.Info("[BackgroundSyncService] 역방향 동기화 루프 시작");
-        await Task.Delay(TimeSpan.FromSeconds(5), stoppingToken);
+        await Task.Delay(TimeSpan.FromSeconds(5), stoppingToken).ConfigureAwait(false);
 
         while (!stoppingToken.IsCancellationRequested && !_historicalSyncCompleted)
         {
@@ -3203,14 +3203,14 @@ public class BackgroundSyncService : BackgroundService
                 while (await timer.WaitForNextTickAsync(_historicalSyncTriggerCts.Token))
                 {
                     if (_isPaused) continue;
-                    await ExecuteHistoricalSyncAsync(stoppingToken);
+                    await ExecuteHistoricalSyncAsync(stoppingToken).ConfigureAwait(false);
                     if (_historicalSyncCompleted) break;
                 }
             }
             catch (OperationCanceledException) when (!stoppingToken.IsCancellationRequested)
             {
                 Log4.Info("[BackgroundSyncService] 역방향 동기화 수동 트리거 — 즉시 실행");
-                await ExecuteHistoricalSyncAsync(stoppingToken);
+                await ExecuteHistoricalSyncAsync(stoppingToken).ConfigureAwait(false);
             }
         }
         Log4.Info($"[BackgroundSyncService] 역방향 동기화 루프 종료 (총 {_historicalSyncFetched}건)");
@@ -3233,12 +3233,12 @@ public class BackgroundSyncService : BackgroundService
 
             var inboxFolder = await dbContext.Folders
                 .FirstOrDefaultAsync(f => f.AccountEmail == graphAuthService.CurrentUserEmail
-                    && (f.DisplayName == "받은 편지함" || f.DisplayName.ToLower() == "inbox"), ct);
+                    && (f.DisplayName == "받은 편지함" || f.DisplayName.ToLower() == "inbox"), ct).ConfigureAwait(false);
             if (inboxFolder == null) return;
 
             var oldestDate = await dbContext.Emails
                 .Where(e => e.ParentFolderId == inboxFolder.Id && e.ReceivedDateTime.HasValue)
-                .MinAsync(e => (DateTime?)e.ReceivedDateTime, ct);
+                .MinAsync(e => (DateTime?)e.ReceivedDateTime, ct).ConfigureAwait(false);
 
             if (!oldestDate.HasValue)
             {
@@ -3248,7 +3248,7 @@ public class BackgroundSyncService : BackgroundService
             }
 
             var messages = (await graphMailService.GetHistoricalMessagesAsync(
-                inboxFolder.Id, oldestDate.Value, HistoricalSyncBatchSize, ct)).ToList();
+                inboxFolder.Id, oldestDate.Value, HistoricalSyncBatchSize, ct).ConfigureAwait(false)).ToList();
 
             if (messages.Count == 0)
             {
@@ -3258,7 +3258,7 @@ public class BackgroundSyncService : BackgroundService
                 return;
             }
 
-            await SaveEmailsAsync(dbContext, messages, graphAuthService.CurrentUserEmail, inboxFolder.Id, ct);
+            await SaveEmailsAsync(dbContext, messages, graphAuthService.CurrentUserEmail, inboxFolder.Id, ct).ConfigureAwait(false);
             Interlocked.Add(ref _historicalSyncFetched, messages.Count);
             Log4.Info($"[BackgroundSyncService] 역방향 동기화 {messages.Count}건 저장 (누계: {_historicalSyncFetched}건)");
             HistoricalSyncProgress?.Invoke(_historicalSyncFetched);
@@ -3299,21 +3299,21 @@ public class BackgroundSyncService : BackgroundService
         {
             // 서버에서 해당 폴더의 모든 메일 ID 조회
             var serverIds = new HashSet<string>(
-                await graphMailService.GetAllMessageIdsAsync(folderId, ct),
+                await graphMailService.GetAllMessageIdsAsync(folderId, ct).ConfigureAwait(false),
                 StringComparer.Ordinal);
 
             // 로컬 DB에서 해당 폴더의 모든 메일 EntryId 조회
             var localEmails = await dbContext.Emails
                 .Where(e => e.ParentFolderId == folderId && e.AccountEmail == accountEmail && e.EntryId != null)
                 .Select(e => new { e.Id, e.EntryId, e.Subject })
-                .ToListAsync(ct);
+                .ToListAsync(ct).ConfigureAwait(false);
 
             var deletedCount = 0;
             foreach (var local in localEmails)
             {
                 if (!serverIds.Contains(local.EntryId!))
                 {
-                    var email = await dbContext.Emails.FindAsync(new object[] { local.Id }, ct);
+                    var email = await dbContext.Emails.FindAsync(new object[] { local.Id }, ct).ConfigureAwait(false);
                     if (email != null)
                     {
                         dbContext.Emails.Remove(email);
@@ -3325,7 +3325,7 @@ public class BackgroundSyncService : BackgroundService
 
             if (deletedCount > 0)
             {
-                await dbContext.SaveChangesAsync(ct);
+                await dbContext.SaveChangesAsync(ct).ConfigureAwait(false);
                 _logger.Information("Reconciliation 완료: 서버에서 삭제된 {Count}건 로컬 제거 (폴더: {FolderId})", deletedCount, folderId);
             }
         }

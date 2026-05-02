@@ -622,6 +622,8 @@ public partial class ComposeWindow : FluentWindow
                     if (EditorWebView?.CoreWebView2 != null)
                     {
                         EditorWebView.CoreWebView2.WebMessageReceived -= CoreWebView2_WebMessageReceived;
+                        EditorWebView.CoreWebView2.NavigationStarting -= Services.Editor.TinyMCEEditorService.HandleEditorNavigationStarting;
+                        EditorWebView.CoreWebView2.FrameNavigationStarting -= Services.Editor.TinyMCEEditorService.HandleEditorNavigationStarting;
                     }
                 }
                 catch (Exception ex)

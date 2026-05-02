@@ -36,7 +36,7 @@ public class ReplyLaterService
             .Where(r => !r.IsCompleted)
             .OrderBy(r => r.RemindAt)
             .ThenBy(r => r.CreatedAt)
-            .ToListAsync();
+            .ToListAsync().ConfigureAwait(false);
     }
 
     /// <summary>
@@ -59,7 +59,8 @@ public class ReplyLaterService
             CreatedAt = DateTime.UtcNow
         });
 
-        await dbContext.SaveChangesAsync();
+        await dbContext.SaveChangesAsync().ConfigureAwait(false);
+
         Log4.Info($"[ReplyLaterService] Reply Later 추가: {subject} (EmailId={emailId})");
     }
 
@@ -71,7 +72,8 @@ public class ReplyLaterService
         using var scope = _serviceProvider.CreateScope();
         var dbContext = scope.ServiceProvider.GetRequiredService<mAIxDbContext>();
 
-        var item = await dbContext.ReplyLaterItems.FindAsync(id);
+        var item = await dbContext.ReplyLaterItems.FindAsync(id).ConfigureAwait(false);
+
         if (item == null)
         {
             _logger.Warning("[ReplyLaterService] 완료 처리 대상 없음: Id={Id}", id);
@@ -79,7 +81,8 @@ public class ReplyLaterService
         }
 
         item.IsCompleted = true;
-        await dbContext.SaveChangesAsync();
+        await dbContext.SaveChangesAsync().ConfigureAwait(false);
+
         Log4.Info($"[ReplyLaterService] Reply Later 완료: Id={id}");
     }
 
@@ -91,7 +94,8 @@ public class ReplyLaterService
         using var scope = _serviceProvider.CreateScope();
         var dbContext = scope.ServiceProvider.GetRequiredService<mAIxDbContext>();
 
-        var item = await dbContext.ReplyLaterItems.FindAsync(id);
+        var item = await dbContext.ReplyLaterItems.FindAsync(id).ConfigureAwait(false);
+
         if (item == null)
         {
             _logger.Warning("[ReplyLaterService] 삭제 대상 없음: Id={Id}", id);
@@ -99,7 +103,8 @@ public class ReplyLaterService
         }
 
         dbContext.ReplyLaterItems.Remove(item);
-        await dbContext.SaveChangesAsync();
+        await dbContext.SaveChangesAsync().ConfigureAwait(false);
+
         Log4.Info($"[ReplyLaterService] Reply Later 삭제: Id={id}");
     }
 
@@ -114,6 +119,6 @@ public class ReplyLaterService
         return await dbContext.ReplyLaterItems
             .Where(r => !r.IsCompleted && r.RemindAt.HasValue && r.RemindAt.Value <= now)
             .OrderBy(r => r.RemindAt)
-            .ToListAsync();
+            .ToListAsync().ConfigureAwait(false);
     }
 }

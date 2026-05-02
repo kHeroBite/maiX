@@ -96,7 +96,7 @@ public class NotificationService : IDisposable
             Sender = email.From
         };
 
-        await EnqueueAsync(message);
+        await EnqueueAsync(message).ConfigureAwait(false);
     }
 
     /// <summary>
@@ -145,7 +145,7 @@ public class NotificationService : IDisposable
         };
 
         // 중요 메일은 배치 처리 없이 즉시 발송
-        await SendNotificationAsync(message);
+        await SendNotificationAsync(message).ConfigureAwait(false);
     }
 
     /// <summary>
@@ -194,7 +194,7 @@ public class NotificationService : IDisposable
             EmailId = email.Id
         };
 
-        await SendNotificationAsync(message);
+        await SendNotificationAsync(message).ConfigureAwait(false);
     }
 
     /// <summary>
@@ -221,7 +221,7 @@ public class NotificationService : IDisposable
             Tags = tags ?? new List<string>()
         };
 
-        await SendNotificationAsync(notification);
+        await SendNotificationAsync(notification).ConfigureAwait(false);
     }
 
     /// <summary>
@@ -296,7 +296,7 @@ public class NotificationService : IDisposable
             }
         }
 
-        await SendNotificationAsync(message);
+        await SendNotificationAsync(message).ConfigureAwait(false);
         _logger.Information("일정 알림 발송: {Subject} ({Minutes}분 전)", calendarEvent.Subject, minutesBefore);
     }
 
@@ -330,7 +330,7 @@ public class NotificationService : IDisposable
             {
                 if (Math.Abs(minutesUntilStart - reminderMin) <= 2)
                 {
-                    await NotifyUpcomingEventAsync(evt, minutesUntilStart);
+                    await NotifyUpcomingEventAsync(evt, minutesUntilStart).ConfigureAwait(false);
                     break; // 하나의 알림 시간에만 발송
                 }
             }
@@ -344,7 +344,7 @@ public class NotificationService : IDisposable
     {
         try
         {
-            await _notificationQueue.Writer.WriteAsync(message, _cts.Token);
+            await _notificationQueue.Writer.WriteAsync(message, _cts.Token).ConfigureAwait(false);
             _logger.Debug("알림 큐에 추가됨: {Title}", message.Title);
         }
         catch (ChannelClosedException)
@@ -362,7 +362,7 @@ public class NotificationService : IDisposable
 
         try
         {
-            await foreach (var message in _notificationQueue.Reader.ReadAllAsync(_cts.Token))
+            await foreach (var message in _notificationQueue.Reader.ReadAllAsync(_cts.Token).ConfigureAwait(false))
             {
                 try
                 {
@@ -374,12 +374,12 @@ public class NotificationService : IDisposable
                         // 배치 플러시 조건 확인
                         if (ShouldFlushBatch())
                         {
-                            await FlushBatchAsync();
+                            await FlushBatchAsync().ConfigureAwait(false);
                         }
                     }
                     else
                     {
-                        await SendNotificationAsync(message);
+                        await SendNotificationAsync(message).ConfigureAwait(false);
                     }
                 }
                 catch (Exception ex)
@@ -394,7 +394,7 @@ public class NotificationService : IDisposable
         }
 
         // 남은 배치 플러시
-        await FlushBatchAsync();
+        await FlushBatchAsync().ConfigureAwait(false);
         _logger.Information("알림 처리 백그라운드 작업 종료");
     }
 
@@ -462,7 +462,7 @@ public class NotificationService : IDisposable
                 };
             }
 
-            await SendNotificationAsync(notification);
+            await SendNotificationAsync(notification).ConfigureAwait(false);
         }
 
         _batchBuffer.Clear();
@@ -518,7 +518,7 @@ public class NotificationService : IDisposable
             });
 
             var content = new StringContent(json, Encoding.UTF8, "application/json");
-            var response = await _httpClient.PostAsync(_settings.NtfyServerUrl, content);
+            var response = await _httpClient.PostAsync(_settings.NtfyServerUrl, content).ConfigureAwait(false);
 
             if (response.IsSuccessStatusCode)
             {
@@ -528,7 +528,7 @@ public class NotificationService : IDisposable
             else
             {
                 Interlocked.Increment(ref _failedCount);
-                var errorBody = await response.Content.ReadAsStringAsync();
+                var errorBody = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
                 _logger.Warning("알림 발송 실패: {Status} - {Error}",
                     response.StatusCode, errorBody);
             }

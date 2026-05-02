@@ -57,11 +57,11 @@ public class DelayedSendService
         try
         {
             Log4.Debug($"[DelayedSendService] {delay}초 지연 전송 시작");
-            await Task.Delay(delay * 1000, token);
+            await Task.Delay(delay * 1000, token).ConfigureAwait(false);
 
             // 지연 완료 — 실제 전송
             Log4.Debug("[DelayedSendService] 지연 완료, 전송 실행");
-            var result = await sendAction();
+            var result = await sendAction().ConfigureAwait(false);
             return result;
         }
         catch (TaskCanceledException)

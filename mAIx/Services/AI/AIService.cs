@@ -145,7 +145,7 @@ namespace mAIx.Services.AI
         public async Task<string> CompleteAsync(string prompt, CancellationToken ct = default)
         {
             EnsureProviderAvailable();
-            return await _currentProvider.CompleteAsync(prompt, ct);
+            return await _currentProvider.CompleteAsync(prompt, ct).ConfigureAwait(false);
         }
 
         /// <summary>
@@ -154,7 +154,7 @@ namespace mAIx.Services.AI
         public async Task<IAsyncEnumerable<string>> StreamCompleteAsync(string prompt, CancellationToken ct = default)
         {
             EnsureProviderAvailable();
-            return await _currentProvider.StreamCompleteAsync(prompt, ct);
+            return await _currentProvider.StreamCompleteAsync(prompt, ct).ConfigureAwait(false);
         }
 
         /// <summary>
@@ -173,7 +173,7 @@ namespace mAIx.Services.AI
                 throw new InvalidOperationException($"Provider가 사용 불가 상태: {providerName}");
             }
 
-            return await provider.CompleteAsync(prompt, ct);
+            return await provider.CompleteAsync(prompt, ct).ConfigureAwait(false);
         }
 
         /// <summary>
@@ -193,7 +193,7 @@ namespace mAIx.Services.AI
                 throw new InvalidOperationException($"Provider가 사용 불가 상태: {providerName}");
             }
 
-            return await provider.StreamCompleteAsync(prompt, ct);
+            return await provider.StreamCompleteAsync(prompt, ct).ConfigureAwait(false);
         }
 
         /// <summary>

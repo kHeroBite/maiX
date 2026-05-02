@@ -78,7 +78,7 @@ public class EmailAnalyzer
 
         try
         {
-            await _semaphore.WaitAsync(ct);
+            await _semaphore.WaitAsync(ct).ConfigureAwait(false);
 
             _logger.Information("이메일 분석 시작: {Id} - {Subject}", email.Id, email.Subject);
 
@@ -86,7 +86,7 @@ public class EmailAnalyzer
             var emailData = PrepareEmailData(email);
 
             // 7단계 분석 파이프라인 실행
-            await ExecutePipelineAsync(emailData, result, ct);
+            await ExecutePipelineAsync(emailData, result, ct).ConfigureAwait(false);
 
             // 최종 우선순위 계산
             CalculateFinalPriority(email, result);
@@ -151,24 +151,24 @@ public class EmailAnalyzer
 
                 var task = Task.Run(async () =>
                 {
-                    var result = await AnalyzeEmailAsync(email, ct);
-                    await writer.WriteAsync(result, ct);
+                    var result = await AnalyzeEmailAsync(email, ct).ConfigureAwait(false);
+                    await writer.WriteAsync(result, ct).ConfigureAwait(false);
                 }, ct);
 
                 tasks.Add(task);
             }
 
-            await Task.WhenAll(tasks);
+            await Task.WhenAll(tasks).ConfigureAwait(false);
             writer.Complete();
         }, ct);
 
         // Consumer: 분석 결과 반환
-        await foreach (var result in reader.ReadAllAsync(ct))
+        await foreach (var result in reader.ReadAllAsync(ct).ConfigureAwait(false))
         {
             yield return result;
         }
 
-        await producerTask;
+        await producerTask.ConfigureAwait(false);
     }
 
     /// <summary>
@@ -226,78 +226,78 @@ public class EmailAnalyzer
             "1_summary_oneline",
             async () =>
             {
-                var response = await ExecutePromptAsync(PromptKeys.SummaryOneline, emailData, ct);
+                var response = await ExecutePromptAsync(PromptKeys.SummaryOneline, emailData, ct).ConfigureAwait(false);
                 result.SummaryOneline = response?.Trim();
             },
             result,
-            ct);
+            ct).ConfigureAwait(false);
 
         // 2단계: 상세 요약
         await ExecuteStepWithRetryAsync(
             "2_summary_detail",
             async () =>
             {
-                var response = await ExecutePromptAsync(PromptKeys.SummaryDetail, emailData, ct);
+                var response = await ExecutePromptAsync(PromptKeys.SummaryDetail, emailData, ct).ConfigureAwait(false);
                 result.SummaryDetail = response?.Trim();
             },
             result,
-            ct);
+            ct).ConfigureAwait(false);
 
         // 3단계: 마감일 추출
         await ExecuteStepWithRetryAsync(
             "3_deadline",
             async () =>
             {
-                var response = await ExecutePromptAsync(PromptKeys.Deadline, emailData, ct);
+                var response = await ExecutePromptAsync(PromptKeys.Deadline, emailData, ct).ConfigureAwait(false);
                 ParseDeadline(response, result);
             },
             result,
-            ct);
+            ct).ConfigureAwait(false);
 
         // 4단계: 중요도 판단
         await ExecuteStepWithRetryAsync(
             "4_importance",
             async () =>
             {
-                var response = await ExecutePromptAsync(PromptKeys.Importance, emailData, ct);
+                var response = await ExecutePromptAsync(PromptKeys.Importance, emailData, ct).ConfigureAwait(false);
                 ParseImportance(response, result);
             },
             result,
-            ct);
+            ct).ConfigureAwait(false);
 
         // 5단계: 긴급도 판단
         await ExecuteStepWithRetryAsync(
             "5_urgency",
             async () =>
             {
-                var response = await ExecutePromptAsync(PromptKeys.Urgency, emailData, ct);
+                var response = await ExecutePromptAsync(PromptKeys.Urgency, emailData, ct).ConfigureAwait(false);
                 ParseUrgency(response, result);
             },
             result,
-            ct);
+            ct).ConfigureAwait(false);
 
         // 6단계: 계약정보 추출
         await ExecuteStepWithRetryAsync(
             "6_contract_info",
             async () =>
             {
-                var response = await ExecutePromptAsync(PromptKeys.ContractInfo, emailData, ct);
+                var response = await ExecutePromptAsync(PromptKeys.ContractInfo, emailData, ct).ConfigureAwait(false);
                 result.ContractInfo = _contractExtractor.Parse(response);
                 result.HasContractInfo = result.ContractInfo != null;
             },
             result,
-            ct);
+            ct).ConfigureAwait(false);
 
         // 7단계: 할일 추출
         await ExecuteStepWithRetryAsync(
             "7_todo",
             async () =>
             {
-                var response = await ExecutePromptAsync(PromptKeys.Todo, emailData, ct);
+                var response = await ExecutePromptAsync(PromptKeys.Todo, emailData, ct).ConfigureAwait(false);
                 result.Todos = _todoExtractor.Parse(response);
             },
             result,
-            ct);
+            ct).ConfigureAwait(false);
     }
 
     /// <summary>
@@ -316,7 +316,7 @@ public class EmailAnalyzer
         {
             try
             {
-                await action();
+                await action().ConfigureAwait(false);
                 stepwatch.Stop();
                 result.StepDurations[stepName] = stepwatch.ElapsedMilliseconds;
                 _logger.Debug("분석 단계 완료: {Step} ({Time}ms)", stepName, stepwatch.ElapsedMilliseconds);
@@ -327,7 +327,7 @@ public class EmailAnalyzer
                 retryCount++;
                 _logger.Warning(ex, "분석 단계 재시도: {Step} ({Retry}/{Max})",
                     stepName, retryCount, MaxRetryCount);
-                await Task.Delay(RetryDelayMs * retryCount, ct);
+                await Task.Delay(RetryDelayMs * retryCount, ct).ConfigureAwait(false);
             }
         }
 
@@ -345,14 +345,14 @@ public class EmailAnalyzer
         Dictionary<string, string> variables,
         CancellationToken ct)
     {
-        var renderedPrompt = await _promptService.RenderPromptAsync(promptKey, variables);
+        var renderedPrompt = await _promptService.RenderPromptAsync(promptKey, variables).ConfigureAwait(false);
         if (string.IsNullOrEmpty(renderedPrompt))
         {
             _logger.Warning("프롬프트를 찾을 수 없음: {Key}", promptKey);
             return null;
         }
 
-        return await _aiService.CompleteAsync(renderedPrompt, ct);
+        return await _aiService.CompleteAsync(renderedPrompt, ct).ConfigureAwait(false);
     }
 
     /// <summary>

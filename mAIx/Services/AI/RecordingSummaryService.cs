@@ -68,10 +68,10 @@ public class RecordingSummaryService
             ProgressChanged?.Invoke(0.1);
 
             // 요약 프롬프트 생성
-            var prompt = await BuildSummaryPromptAsync(transcriptText);
+            var prompt = await BuildSummaryPromptAsync(transcriptText).ConfigureAwait(false);
 
             // AI 요약 요청
-            var summaryResponse = await _aiService.CompleteAsync(prompt, cancellationToken);
+            var summaryResponse = await _aiService.CompleteAsync(prompt, cancellationToken).ConfigureAwait(false);
             ProgressChanged?.Invoke(0.6);
 
             // 응답 파싱
@@ -121,7 +121,7 @@ public class RecordingSummaryService
 
         try
         {
-            var response = await _aiService.CompleteAsync(prompt, cancellationToken);
+            var response = await _aiService.CompleteAsync(prompt, cancellationToken).ConfigureAwait(false);
             SummaryUpdated?.Invoke(response);
             return response;
         }
@@ -157,7 +157,7 @@ public class RecordingSummaryService
             using var scope = _serviceProvider.CreateScope();
             var promptService = scope.ServiceProvider.GetRequiredService<PromptService>();
             var result = await promptService.RenderPromptAsync("onenote_recording_summary",
-                new Dictionary<string, string> { ["transcript_text"] = transcriptText });
+                new Dictionary<string, string> { ["transcript_text"] = transcriptText }).ConfigureAwait(false);
             if (result != null) return result;
         }
         catch (Exception ex)
@@ -301,7 +301,7 @@ public class RecordingSummaryService
         };
 
         var json = JsonSerializer.Serialize(result, options);
-        await File.WriteAllTextAsync(outputPath, json);
+        await File.WriteAllTextAsync(outputPath, json).ConfigureAwait(false);
 
         _logger.Information("요약 결과 저장: {Path}", outputPath);
     }
@@ -314,7 +314,7 @@ public class RecordingSummaryService
         if (!File.Exists(path))
             return null;
 
-        var json = await File.ReadAllTextAsync(path);
+        var json = await File.ReadAllTextAsync(path).ConfigureAwait(false);
         return JsonSerializer.Deserialize<Models.RecordingSummary>(json);
     }
 }

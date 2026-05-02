@@ -34,7 +34,7 @@ public class ServerSpeechService : IDisposable
     {
         try
         {
-            var resp = await _http.GetAsync($"{_baseUrl}{_prefs?.EndpointHealth ?? "/health"}", ct);
+            var resp = await _http.GetAsync($"{_baseUrl}{_prefs?.EndpointHealth ?? "/health"}", ct).ConfigureAwait(false);
             return resp.IsSuccessStatusCode;
         }
         catch { return false; }
@@ -44,13 +44,13 @@ public class ServerSpeechService : IDisposable
     public async Task<TranscriptResult> TranscribeFileAsync(string audioFilePath, CancellationToken ct = default)
     {
         using var form = new MultipartFormDataContent();
-        var fileBytes = await File.ReadAllBytesAsync(audioFilePath, ct);
+        var fileBytes = await File.ReadAllBytesAsync(audioFilePath, ct).ConfigureAwait(false);
         form.Add(new ByteArrayContent(fileBytes), "audio", Path.GetFileName(audioFilePath));
 
-        var resp = await _http.PostAsync($"{_baseUrl}{_prefs?.EndpointStt ?? "/api/stt"}", form, ct);
+        var resp = await _http.PostAsync($"{_baseUrl}{_prefs?.EndpointStt ?? "/api/stt"}", form, ct).ConfigureAwait(false);
         resp.EnsureSuccessStatusCode();
 
-        var json = await resp.Content.ReadFromJsonAsync<SttResult>(cancellationToken: ct)
+        var json = await resp.Content.ReadFromJsonAsync<SttResult>(cancellationToken: ct).ConfigureAwait(false)
             ?? throw new InvalidOperationException("STT 서버 응답 파싱 실패");
 
         // 서버가 segments 배열 반환 시 시간 정보 포함 파싱 (우선)
@@ -91,14 +91,14 @@ public class ServerSpeechService : IDisposable
         string audioFilePath, int numSpeakers = 0, CancellationToken ct = default)
     {
         using var form = new MultipartFormDataContent();
-        var fileBytes = await File.ReadAllBytesAsync(audioFilePath, ct);
+        var fileBytes = await File.ReadAllBytesAsync(audioFilePath, ct).ConfigureAwait(false);
         form.Add(new ByteArrayContent(fileBytes), "audio", Path.GetFileName(audioFilePath));
         form.Add(new StringContent(numSpeakers.ToString()), "num_speakers");
 
-        var resp = await _http.PostAsync($"{_baseUrl}{_prefs?.EndpointDiarize ?? "/api/diarize"}", form, ct);
+        var resp = await _http.PostAsync($"{_baseUrl}{_prefs?.EndpointDiarize ?? "/api/diarize"}", form, ct).ConfigureAwait(false);
         resp.EnsureSuccessStatusCode();
 
-        var result = await resp.Content.ReadFromJsonAsync<DiarizeResult>(cancellationToken: ct);
+        var result = await resp.Content.ReadFromJsonAsync<DiarizeResult>(cancellationToken: ct).ConfigureAwait(false);
         if (result?.Segments == null) return new List<(TimeSpan, TimeSpan, string)>();
 
         return result.Segments.Select(s => (
@@ -112,53 +112,53 @@ public class ServerSpeechService : IDisposable
     public async Task<byte[]> SynthesizeAsync(string text, int speakerId = 0, CancellationToken ct = default)
     {
         var req = new { text, speaker_id = speakerId, engine = "vits2" };
-        var resp = await _http.PostAsJsonAsync($"{_baseUrl}{_prefs?.EndpointTts ?? "/api/tts/preview"}", req, ct);
+        var resp = await _http.PostAsJsonAsync($"{_baseUrl}{_prefs?.EndpointTts ?? "/api/tts/preview"}", req, ct).ConfigureAwait(false);
         resp.EnsureSuccessStatusCode();
-        return await resp.Content.ReadAsByteArrayAsync(ct);
+        return await resp.Content.ReadAsByteArrayAsync(ct).ConfigureAwait(false);
     }
 
     /// <summary>서버 STT 모델 목록 조회</summary>
     public async Task<(List<string> Models, string? Active)> GetSttModelsAsync(CancellationToken ct = default)
     {
-        var resp = await _http.GetAsync($"{_baseUrl}{_prefs?.EndpointSttModels ?? "/api/stt/models"}", ct);
+        var resp = await _http.GetAsync($"{_baseUrl}{_prefs?.EndpointSttModels ?? "/api/stt/models"}", ct).ConfigureAwait(false);
         resp.EnsureSuccessStatusCode();
-        var json = await resp.Content.ReadFromJsonAsync<SttModelsResponse>(cancellationToken: ct);
+        var json = await resp.Content.ReadFromJsonAsync<SttModelsResponse>(cancellationToken: ct).ConfigureAwait(false);
         return (json?.Models ?? new(), json?.Active);
     }
 
     /// <summary>서버 TTS 화자 목록 조회</summary>
     public async Task<List<TtsSpeakerInfo>> GetTtsSpeakersAsync(CancellationToken ct = default)
     {
-        var resp = await _http.GetAsync($"{_baseUrl}{_prefs?.EndpointTtsSpeakers ?? "/api/tts/speakers"}", ct);
+        var resp = await _http.GetAsync($"{_baseUrl}{_prefs?.EndpointTtsSpeakers ?? "/api/tts/speakers"}", ct).ConfigureAwait(false);
         resp.EnsureSuccessStatusCode();
-        return await resp.Content.ReadFromJsonAsync<List<TtsSpeakerInfo>>(cancellationToken: ct) ?? new();
+        return await resp.Content.ReadFromJsonAsync<List<TtsSpeakerInfo>>(cancellationToken: ct).ConfigureAwait(false) ?? new();
     }
 
     /// <summary>통합 모델 상태 조회 (STT/TTS/VAD)</summary>
     public async Task<FullModelStatusResponse?> GetFullModelStatusAsync(CancellationToken ct = default)
     {
-        var resp = await _http.GetAsync($"{_baseUrl}{_prefs?.EndpointModelsFullStatus ?? "/api/models/full-status"}", ct);
+        var resp = await _http.GetAsync($"{_baseUrl}{_prefs?.EndpointModelsFullStatus ?? "/api/models/full-status"}", ct).ConfigureAwait(false);
         resp.EnsureSuccessStatusCode();
         var opts = new System.Text.Json.JsonSerializerOptions { PropertyNameCaseInsensitive = true };
-        return await resp.Content.ReadFromJsonAsync<FullModelStatusResponse>(opts, ct);
+        return await resp.Content.ReadFromJsonAsync<FullModelStatusResponse>(opts, ct).ConfigureAwait(false);
     }
 
     /// <summary>TTS 엔진 목록 상세 조회</summary>
     public async Task<TtsEnginesResponse?> GetTtsEnginesAsync(CancellationToken ct = default)
     {
-        var resp = await _http.GetAsync($"{_baseUrl}{_prefs?.EndpointTtsEngines ?? "/api/tts/engines"}", ct);
+        var resp = await _http.GetAsync($"{_baseUrl}{_prefs?.EndpointTtsEngines ?? "/api/tts/engines"}", ct).ConfigureAwait(false);
         resp.EnsureSuccessStatusCode();
         var opts = new System.Text.Json.JsonSerializerOptions { PropertyNameCaseInsensitive = true };
-        return await resp.Content.ReadFromJsonAsync<TtsEnginesResponse>(opts, ct);
+        return await resp.Content.ReadFromJsonAsync<TtsEnginesResponse>(opts, ct).ConfigureAwait(false);
     }
 
     /// <summary>오디오 지원 포맷/샘플레이트/채널 조회</summary>
     public async Task<AudioCapabilitiesResponse?> GetAudioCapabilitiesAsync(CancellationToken ct = default)
     {
-        var resp = await _http.GetAsync($"{_baseUrl}{_prefs?.EndpointAudioCapabilities ?? "/api/audio/capabilities"}", ct);
+        var resp = await _http.GetAsync($"{_baseUrl}{_prefs?.EndpointAudioCapabilities ?? "/api/audio/capabilities"}", ct).ConfigureAwait(false);
         resp.EnsureSuccessStatusCode();
         var opts = new System.Text.Json.JsonSerializerOptions { PropertyNameCaseInsensitive = true };
-        return await resp.Content.ReadFromJsonAsync<AudioCapabilitiesResponse>(opts, ct);
+        return await resp.Content.ReadFromJsonAsync<AudioCapabilitiesResponse>(opts, ct).ConfigureAwait(false);
     }
 
     public void Dispose()

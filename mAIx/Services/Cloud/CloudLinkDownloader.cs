@@ -63,10 +63,10 @@ namespace mAIx.Services.Cloud
 
             return type switch
             {
-                CloudType.GoogleDrive => await DownloadFromGoogleDriveAsync(link, targetFolder, ct),
-                CloudType.OneDrive => await DownloadFromOneDriveAsync(link, targetFolder, ct),
-                CloudType.Dropbox => await DownloadFromDropboxAsync(link, targetFolder, ct),
-                CloudType.SharePoint => await DownloadFromSharePointAsync(link, targetFolder, ct),
+                CloudType.GoogleDrive => await DownloadFromGoogleDriveAsync(link, targetFolder, ct).ConfigureAwait(false),
+                CloudType.OneDrive => await DownloadFromOneDriveAsync(link, targetFolder, ct).ConfigureAwait(false),
+                CloudType.Dropbox => await DownloadFromDropboxAsync(link, targetFolder, ct).ConfigureAwait(false),
+                CloudType.SharePoint => await DownloadFromSharePointAsync(link, targetFolder, ct).ConfigureAwait(false),
                 _ => throw new NotSupportedException($"지원하지 않는 클라우드 유형: {type}")
             };
         }
@@ -93,7 +93,7 @@ namespace mAIx.Services.Cloud
             var downloadUrl = $"https://drive.google.com/uc?export=download&id={fileId}";
 
             // 1차 요청 (소용량 파일 직접 다운로드 또는 확인 페이지)
-            using var response = await _httpClient.GetAsync(downloadUrl, HttpCompletionOption.ResponseHeadersRead, ct);
+            using var response = await _httpClient.GetAsync(downloadUrl, HttpCompletionOption.ResponseHeadersRead, ct).ConfigureAwait(false);
             response.EnsureSuccessStatusCode();
 
             // 파일명 추출 시도
@@ -104,13 +104,13 @@ namespace mAIx.Services.Cloud
             if (contentType?.Contains("text/html") == true)
             {
                 // 확인 토큰이 필요한 경우 (대용량 파일)
-                return await DownloadLargeGoogleDriveFileAsync(fileId, targetFolder, fileName, ct);
+                return await DownloadLargeGoogleDriveFileAsync(fileId, targetFolder, fileName, ct).ConfigureAwait(false);
             }
 
             // 소용량 파일 직접 다운로드
             var filePath = Path.Combine(targetFolder, fileName);
             await using var fileStream = File.Create(filePath);
-            await response.Content.CopyToAsync(fileStream, ct);
+            await response.Content.CopyToAsync(fileStream, ct).ConfigureAwait(false);
 
             _logger.Information("Google Drive 다운로드 완료: {FileName}", fileName);
             return (filePath, fileName);
@@ -128,12 +128,12 @@ namespace mAIx.Services.Cloud
             // 확인 페이지에서 토큰 추출 (confirm=t 파라미터 추가)
             var downloadUrl = $"https://drive.google.com/uc?export=download&confirm=t&id={fileId}";
 
-            using var response = await _httpClient.GetAsync(downloadUrl, HttpCompletionOption.ResponseHeadersRead, ct);
+            using var response = await _httpClient.GetAsync(downloadUrl, HttpCompletionOption.ResponseHeadersRead, ct).ConfigureAwait(false);
             response.EnsureSuccessStatusCode();
 
             var filePath = Path.Combine(targetFolder, fileName);
             await using var fileStream = File.Create(filePath);
-            await response.Content.CopyToAsync(fileStream, ct);
+            await response.Content.CopyToAsync(fileStream, ct).ConfigureAwait(false);
 
             _logger.Information("Google Drive 대용량 파일 다운로드 완료: {FileName}", fileName);
             return (filePath, fileName);
@@ -150,7 +150,7 @@ namespace mAIx.Services.Cloud
             // OneDrive 공유 링크를 직접 다운로드 URL로 변환
             var downloadUrl = ConvertOneDriveLinkToDownload(link);
 
-            using var response = await _httpClient.GetAsync(downloadUrl, HttpCompletionOption.ResponseHeadersRead, ct);
+            using var response = await _httpClient.GetAsync(downloadUrl, HttpCompletionOption.ResponseHeadersRead, ct).ConfigureAwait(false);
 
             // 리다이렉트 처리 (실제 다운로드 URL로 이동)
             if (response.StatusCode == System.Net.HttpStatusCode.Redirect ||
@@ -159,7 +159,7 @@ namespace mAIx.Services.Cloud
                 var redirectUrl = response.Headers.Location?.ToString();
                 if (!string.IsNullOrEmpty(redirectUrl))
                 {
-                    return await DownloadFromUrlAsync(redirectUrl, targetFolder, ct);
+                    return await DownloadFromUrlAsync(redirectUrl, targetFolder, ct).ConfigureAwait(false);
                 }
             }
 
@@ -169,7 +169,7 @@ namespace mAIx.Services.Cloud
             var filePath = Path.Combine(targetFolder, fileName);
 
             await using var fileStream = File.Create(filePath);
-            await response.Content.CopyToAsync(fileStream, ct);
+            await response.Content.CopyToAsync(fileStream, ct).ConfigureAwait(false);
 
             _logger.Information("OneDrive 다운로드 완료: {FileName}", fileName);
             return (filePath, fileName);
@@ -216,7 +216,7 @@ namespace mAIx.Services.Cloud
                 downloadUrl = link.Contains("?") ? link + "&dl=1" : link + "?dl=1";
             }
 
-            return await DownloadFromUrlAsync(downloadUrl, targetFolder, ct);
+            return await DownloadFromUrlAsync(downloadUrl, targetFolder, ct).ConfigureAwait(false);
         }
 
         /// <summary>
@@ -232,7 +232,7 @@ namespace mAIx.Services.Cloud
                 ? link + "&download=1"
                 : link + "?download=1";
 
-            return await DownloadFromUrlAsync(downloadUrl, targetFolder, ct);
+            return await DownloadFromUrlAsync(downloadUrl, targetFolder, ct).ConfigureAwait(false);
         }
 
         /// <summary>
@@ -243,14 +243,14 @@ namespace mAIx.Services.Cloud
             string targetFolder,
             CancellationToken ct)
         {
-            using var response = await _httpClient.GetAsync(url, HttpCompletionOption.ResponseHeadersRead, ct);
+            using var response = await _httpClient.GetAsync(url, HttpCompletionOption.ResponseHeadersRead, ct).ConfigureAwait(false);
             response.EnsureSuccessStatusCode();
 
             var fileName = ExtractFileName(response, "downloaded_file");
             var filePath = Path.Combine(targetFolder, fileName);
 
             await using var fileStream = File.Create(filePath);
-            await response.Content.CopyToAsync(fileStream, ct);
+            await response.Content.CopyToAsync(fileStream, ct).ConfigureAwait(false);
 
             _logger.Information("파일 다운로드 완료: {FileName}", fileName);
             return (filePath, fileName);

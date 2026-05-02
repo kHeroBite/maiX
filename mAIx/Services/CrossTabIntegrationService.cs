@@ -103,7 +103,7 @@ public class CrossTabIntegrationService
         {
             Log4.Info("[CrossTab] Flagged 메일 → ToDo 동기화 시작");
 
-            var lists = await _todoService.GetAllListsAsync();
+            var lists = await _todoService.GetAllListsAsync().ConfigureAwait(false);
             var flaggedList = lists?.FirstOrDefault(l =>
                 l.DisplayName.Contains("Flagged", StringComparison.OrdinalIgnoreCase) ||
                 l.DisplayName.Contains("플래그", StringComparison.OrdinalIgnoreCase));
@@ -136,7 +136,7 @@ public class CrossTabIntegrationService
                 return null;
             }
 
-            var chats = await _teamsService.GetChatsAsync();
+            var chats = await _teamsService.GetChatsAsync().ConfigureAwait(false);
             var existingChat = chats?.FirstOrDefault(c =>
                 c.ChatType == ChatType.OneOnOne);
 

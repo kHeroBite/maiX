@@ -59,7 +59,7 @@ public class EmailSearchService
             {
                 try
                 {
-                    var 가중치결과 = await SearchWithFts5Async(query.Keywords, ct);
+                    var 가중치결과 = await SearchWithFts5Async(query.Keywords, ct).ConfigureAwait(false);
                     if (가중치결과.Count > 0)
                     {
                         // score ASC 정렬된 ID 순서 보존
@@ -84,7 +84,7 @@ public class EmailSearchService
             }
 
             // 전체 개수 조회
-            var totalCount = await dbQuery.CountAsync(ct);
+            var totalCount = await dbQuery.CountAsync(ct).ConfigureAwait(false);
 
             // 정렬 적용 (FTS5 가중치 결과가 있으면 score 순서 우선, 없으면 기본 정렬)
             List<Email> items;
@@ -95,7 +95,7 @@ public class EmailSearchService
                 var 페이지아이디 = fts5OrderedIds.Skip(페이지시작).Take(query.PageSize).ToList();
                 var 페이지이메일맵 = await _dbContext.Emails.AsNoTracking()
                     .Where(e => 페이지아이디.Contains(e.Id))
-                    .ToListAsync(ct);
+                    .ToListAsync(ct).ConfigureAwait(false);
                 // score 순서에 맞게 재정렬
                 items = 페이지아이디
                     .Select(id => 페이지이메일맵.FirstOrDefault(e => e.Id == id))
@@ -109,7 +109,7 @@ public class EmailSearchService
                 items = await dbQuery
                     .Skip((query.Page - 1) * query.PageSize)
                     .Take(query.PageSize)
-                    .ToListAsync(ct);
+                    .ToListAsync(ct).ConfigureAwait(false);
             }
 
             stopwatch.Stop();
@@ -251,14 +251,14 @@ public class EmailSearchService
 
         var conn = _dbContext.Database.GetDbConnection();
         if (conn.State != System.Data.ConnectionState.Open)
-            await conn.OpenAsync(ct);
+            await conn.OpenAsync(ct).ConfigureAwait(false);
 
         // EmailsFts 가중치 검색 (bm25 + 날짜 boost)
         using (var cmd = conn.CreateCommand())
         {
             cmd.CommandText = EmailFtsQueries.BuildWeightedMatchQuery(keywords);
-            using var reader = await cmd.ExecuteReaderAsync(ct);
-            while (await reader.ReadAsync(ct))
+            using var reader = await cmd.ExecuteReaderAsync(ct).ConfigureAwait(false);
+            while (await reader.ReadAsync(ct).ConfigureAwait(false))
             {
                 var id = reader.GetInt32(0);
                 var score = reader.GetDouble(1);
@@ -277,8 +277,8 @@ public class EmailSearchService
                               $"WHERE af.AttachmentsFts MATCH '{keywords.Replace("'", "''")}'";
             try
             {
-                using var reader = await cmd.ExecuteReaderAsync(ct);
-                while (await reader.ReadAsync(ct))
+                using var reader = await cmd.ExecuteReaderAsync(ct).ConfigureAwait(false);
+                while (await reader.ReadAsync(ct).ConfigureAwait(false))
                 {
                     var emailId = reader.GetInt32(0);
                     if (!이미매칭.Contains(emailId))

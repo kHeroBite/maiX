@@ -37,7 +37,7 @@ public class QuickStepService
         return await dbContext.QuickSteps
             .OrderBy(q => q.SortOrder)
             .ThenBy(q => q.Name)
-            .ToListAsync();
+            .ToListAsync().ConfigureAwait(false);
     }
 
     /// <summary>
@@ -62,7 +62,8 @@ public class QuickStepService
             dbContext.QuickSteps.Update(quickStep);
         }
 
-        await dbContext.SaveChangesAsync();
+        await dbContext.SaveChangesAsync().ConfigureAwait(false);
+
         Log4.Info($"[QuickStepService] QuickStep 저장 완료: {quickStep.Name} (Id={quickStep.Id})");
     }
 
@@ -74,7 +75,8 @@ public class QuickStepService
         using var scope = _serviceProvider.CreateScope();
         var dbContext = scope.ServiceProvider.GetRequiredService<mAIxDbContext>();
 
-        var quickStep = await dbContext.QuickSteps.FindAsync(id);
+        var quickStep = await dbContext.QuickSteps.FindAsync(id).ConfigureAwait(false);
+
         if (quickStep == null)
         {
             _logger.Warning("[QuickStepService] 삭제 대상 QuickStep 없음: Id={Id}", id);
@@ -82,7 +84,8 @@ public class QuickStepService
         }
 
         dbContext.QuickSteps.Remove(quickStep);
-        await dbContext.SaveChangesAsync();
+        await dbContext.SaveChangesAsync().ConfigureAwait(false);
+
         Log4.Info($"[QuickStepService] QuickStep 삭제 완료: Id={id}");
     }
 
@@ -101,7 +104,8 @@ public class QuickStepService
         using var scope = _serviceProvider.CreateScope();
         var dbContext = scope.ServiceProvider.GetRequiredService<mAIxDbContext>();
 
-        var quickStep = await dbContext.QuickSteps.FindAsync(quickStepId);
+        var quickStep = await dbContext.QuickSteps.FindAsync(quickStepId).ConfigureAwait(false);
+
         if (quickStep == null)
         {
             _logger.Warning("[QuickStepService] QuickStep 없음: Id={Id}", quickStepId);
@@ -146,7 +150,8 @@ public class QuickStepService
                 switch (actionType)
                 {
                     case "MarkAsRead":
-                        await graphMailService.UpdateMessageReadStatusAsync(emailId, true);
+                        await graphMailService.UpdateMessageReadStatusAsync(emailId, true).ConfigureAwait(false);
+
                         Log4.Debug($"[QuickStepService] MarkAsRead 완료");
                         break;
 
@@ -156,18 +161,21 @@ public class QuickStepService
                             : "";
                         if (!string.IsNullOrEmpty(folderId))
                         {
-                            await graphMailService.MoveMessageAsync(emailId, folderId);
+                            await graphMailService.MoveMessageAsync(emailId, folderId).ConfigureAwait(false);
+
                             Log4.Debug($"[QuickStepService] MoveToFolder 완료: {folderId}");
                         }
                         break;
 
                     case "Delete":
-                        await graphMailService.DeleteMessageAsync(emailId);
+                        await graphMailService.DeleteMessageAsync(emailId).ConfigureAwait(false);
+
                         Log4.Debug($"[QuickStepService] Delete 완료");
                         break;
 
                     case "Flag":
-                        await graphMailService.UpdateMessageFlagAsync(emailId, "flagged");
+                        await graphMailService.UpdateMessageFlagAsync(emailId, "flagged").ConfigureAwait(false);
+
                         Log4.Debug($"[QuickStepService] Flag 완료");
                         break;
 
@@ -177,7 +185,8 @@ public class QuickStepService
                             : "";
                         if (!string.IsNullOrEmpty(category))
                         {
-                            await graphMailService.UpdateMessageCategoriesAsync(emailId, new List<string> { category });
+                            await graphMailService.UpdateMessageCategoriesAsync(emailId, new List<string> { category }).ConfigureAwait(false);
+
                             Log4.Debug($"[QuickStepService] AddCategory 완료: {category}");
                         }
                         break;

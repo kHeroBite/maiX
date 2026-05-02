@@ -35,7 +35,7 @@ public class ScreenerService
         return await dbContext.ScreenerEntries
             .OrderBy(s => s.Action)
             .ThenBy(s => s.SenderEmail)
-            .ToListAsync();
+            .ToListAsync().ConfigureAwait(false);
     }
 
     /// <summary>
@@ -49,7 +49,7 @@ public class ScreenerService
         var dbContext = scope.ServiceProvider.GetRequiredService<mAIxDbContext>();
 
         var existing = await dbContext.ScreenerEntries
-            .FirstOrDefaultAsync(s => s.SenderEmail == email);
+            .FirstOrDefaultAsync(s => s.SenderEmail == email).ConfigureAwait(false);
 
         if (existing != null)
         {
@@ -67,7 +67,8 @@ public class ScreenerService
             });
         }
 
-        await dbContext.SaveChangesAsync();
+        await dbContext.SaveChangesAsync().ConfigureAwait(false);
+
         Log4.Info($"[ScreenerService] 발신자 차단 추가: {email}");
     }
 
@@ -82,7 +83,7 @@ public class ScreenerService
         var dbContext = scope.ServiceProvider.GetRequiredService<mAIxDbContext>();
 
         var existing = await dbContext.ScreenerEntries
-            .FirstOrDefaultAsync(s => s.SenderEmail == email);
+            .FirstOrDefaultAsync(s => s.SenderEmail == email).ConfigureAwait(false);
 
         if (existing != null)
         {
@@ -100,7 +101,8 @@ public class ScreenerService
             });
         }
 
-        await dbContext.SaveChangesAsync();
+        await dbContext.SaveChangesAsync().ConfigureAwait(false);
+
         Log4.Info($"[ScreenerService] 발신자 허용 추가: {email}");
     }
 
@@ -112,7 +114,8 @@ public class ScreenerService
         using var scope = _serviceProvider.CreateScope();
         var dbContext = scope.ServiceProvider.GetRequiredService<mAIxDbContext>();
 
-        var entry = await dbContext.ScreenerEntries.FindAsync(id);
+        var entry = await dbContext.ScreenerEntries.FindAsync(id).ConfigureAwait(false);
+
         if (entry == null)
         {
             _logger.Warning("[ScreenerService] 삭제 대상 항목 없음: Id={Id}", id);
@@ -120,7 +123,8 @@ public class ScreenerService
         }
 
         dbContext.ScreenerEntries.Remove(entry);
-        await dbContext.SaveChangesAsync();
+        await dbContext.SaveChangesAsync().ConfigureAwait(false);
+
         Log4.Info($"[ScreenerService] 스크리너 항목 삭제: Id={id}");
     }
 

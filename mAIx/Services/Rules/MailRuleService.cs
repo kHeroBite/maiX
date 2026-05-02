@@ -35,7 +35,8 @@ public class MailRuleService
     {
         if (emails.Count == 0) return;
 
-        var rules = await GetRulesAsync(accountEmail);
+        var rules = await GetRulesAsync(accountEmail).ConfigureAwait(false);
+
         if (rules.Count == 0) return;
 
         Log4.Debug($"[MailRuleService] 규칙 {rules.Count}개 로드, 메일 {emails.Count}건에 적용 시작");
@@ -51,7 +52,8 @@ public class MailRuleService
                 {
                     if (EvaluateCondition(email, rule))
                     {
-                        await ExecuteActionAsync(email, rule, graphMailService);
+                        await ExecuteActionAsync(email, rule, graphMailService).ConfigureAwait(false);
+
                         Log4.Debug($"[MailRuleService] 규칙 '{rule.Name}' 적용 → 메일: {email.Subject}");
                     }
                 }
@@ -66,7 +68,8 @@ public class MailRuleService
         try
         {
             var dbContext = scope.ServiceProvider.GetRequiredService<mAIxDbContext>();
-            await dbContext.SaveChangesAsync();
+            await dbContext.SaveChangesAsync().ConfigureAwait(false);
+
         }
         catch (Exception ex)
         {
@@ -112,7 +115,8 @@ public class MailRuleService
                 {
                     // ActionValue에 폴더 ID 또는 폴더명이 담겨 있음
                     // 폴더 ID로 이동 시도
-                    await graphMailService.MoveMessageAsync(email.EntryId, rule.ActionValue);
+                    await graphMailService.MoveMessageAsync(email.EntryId, rule.ActionValue).ConfigureAwait(false);
+
                     Log4.Debug($"[MailRuleService] 메일 이동: {email.Subject} → {rule.ActionValue}");
                 }
                 break;
@@ -135,7 +139,8 @@ public class MailRuleService
             case "Delete":
                 if (graphMailService != null && !string.IsNullOrEmpty(email.EntryId))
                 {
-                    await graphMailService.DeleteMessageAsync(email.EntryId);
+                    await graphMailService.DeleteMessageAsync(email.EntryId).ConfigureAwait(false);
+
                     Log4.Debug($"[MailRuleService] 메일 삭제: {email.Subject}");
                 }
                 break;
@@ -157,7 +162,7 @@ public class MailRuleService
         return await dbContext.MailRules
             .Where(r => r.IsEnabled && (r.AccountEmail == null || r.AccountEmail == accountEmail))
             .OrderBy(r => r.Priority)
-            .ToListAsync();
+            .ToListAsync().ConfigureAwait(false);
     }
 
     /// <summary>
@@ -180,7 +185,8 @@ public class MailRuleService
             dbContext.MailRules.Update(rule);
         }
 
-        await dbContext.SaveChangesAsync();
+        await dbContext.SaveChangesAsync().ConfigureAwait(false);
+
         Log4.Debug($"[MailRuleService] 규칙 저장 완료: {rule.Name} (Id={rule.Id})");
     }
 
@@ -192,11 +198,13 @@ public class MailRuleService
         using var scope = _serviceProvider.CreateScope();
         var dbContext = scope.ServiceProvider.GetRequiredService<mAIxDbContext>();
 
-        var rule = await dbContext.MailRules.FindAsync(id);
+        var rule = await dbContext.MailRules.FindAsync(id).ConfigureAwait(false);
+
         if (rule != null)
         {
             dbContext.MailRules.Remove(rule);
-            await dbContext.SaveChangesAsync();
+            await dbContext.SaveChangesAsync().ConfigureAwait(false);
+
             Log4.Debug($"[MailRuleService] 규칙 삭제: Id={id}");
         }
     }

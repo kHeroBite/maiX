@@ -106,10 +106,10 @@ namespace mAIx.Services.Converter
                 // PDF는 별도 처리 (pdftotext 또는 Pandoc + pdflatex)
                 if (extension.Equals(".pdf", StringComparison.OrdinalIgnoreCase))
                 {
-                    return await ConvertPdfAsync(filePath, ct);
+                    return await ConvertPdfAsync(filePath, ct).ConfigureAwait(false);
                 }
 
-                return await RunPandocAsync(filePath, ct);
+                return await RunPandocAsync(filePath, ct).ConfigureAwait(false);
             }
             catch (OperationCanceledException)
             {
@@ -170,7 +170,7 @@ namespace mAIx.Services.Converter
 
             try
             {
-                await process.WaitForExitAsync(cts.Token);
+                await process.WaitForExitAsync(cts.Token).ConfigureAwait(false);
             }
             catch (OperationCanceledException)
             {
@@ -211,7 +211,7 @@ namespace mAIx.Services.Converter
             {
                 try
                 {
-                    return await RunPdfToTextAsync(filePath, pdftotextPath, ct);
+                    return await RunPdfToTextAsync(filePath, pdftotextPath, ct).ConfigureAwait(false);
                 }
                 catch (Exception ex)
                 {
@@ -222,7 +222,7 @@ namespace mAIx.Services.Converter
             // Pandoc으로 PDF 변환 시도
             try
             {
-                return await RunPandocAsync(filePath, ct);
+                return await RunPandocAsync(filePath, ct).ConfigureAwait(false);
             }
             catch
             {
@@ -266,7 +266,7 @@ namespace mAIx.Services.Converter
             using var cts = CancellationTokenSource.CreateLinkedTokenSource(ct);
             cts.CancelAfter(TimeSpan.FromSeconds(60));
 
-            await process.WaitForExitAsync(cts.Token);
+            await process.WaitForExitAsync(cts.Token).ConfigureAwait(false);
 
             return output.ToString().Trim();
         }

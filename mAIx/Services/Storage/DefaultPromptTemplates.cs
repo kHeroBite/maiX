@@ -856,13 +856,13 @@ JSON 형식으로 응답:
         {
             // 이미 존재하는지 확인
             var exists = await dbContext.Prompts
-                .AnyAsync(p => p.PromptKey == prompt.PromptKey);
+                .AnyAsync(p => p.PromptKey == prompt.PromptKey).ConfigureAwait(false);
 
             if (!exists)
             {
                 // ID 초기화 (새로 삽입되도록)
                 prompt.Id = 0;
-                await dbContext.Prompts.AddAsync(prompt);
+                await dbContext.Prompts.AddAsync(prompt).ConfigureAwait(false);
                 insertedCount++;
                 _logger.Information("기본 프롬프트 추가: {Key}", prompt.PromptKey);
             }
@@ -870,7 +870,7 @@ JSON 형식으로 응답:
             {
                 // 시스템 프롬프트의 Name/Template이 변경된 경우 동기화
                 var existing = await dbContext.Prompts
-                    .FirstAsync(p => p.PromptKey == prompt.PromptKey);
+                    .FirstAsync(p => p.PromptKey == prompt.PromptKey).ConfigureAwait(false);
                 if (existing.IsSystem && (existing.Name != prompt.Name || existing.Template != prompt.Template))
                 {
                     existing.Name = prompt.Name;
@@ -883,7 +883,7 @@ JSON 형식으로 응답:
 
         if (insertedCount > 0)
         {
-            await dbContext.SaveChangesAsync();
+            await dbContext.SaveChangesAsync().ConfigureAwait(false);
             _logger.Information("기본 프롬프트 시드 완료: {Count}개 추가", insertedCount);
         }
         else

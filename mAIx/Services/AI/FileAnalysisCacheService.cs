@@ -32,13 +32,13 @@ public class FileAnalysisCacheService
 
         try
         {
-            var cache = await LoadOrCreateCacheAsync(pageId);
+            var cache = await LoadOrCreateCacheAsync(pageId).ConfigureAwait(false);
             cache[fileName] = result;
             _memoryCache[pageId] = cache;
 
             var filePath = GetCacheFilePath(pageId);
             var json = JsonSerializer.Serialize(cache, new JsonSerializerOptions { WriteIndented = true });
-            await File.WriteAllTextAsync(filePath, json);
+            await File.WriteAllTextAsync(filePath, json).ConfigureAwait(false);
 
             _log.Debug($"[AnalysisCache] 저장: PageId={ShortenId(pageId)}, File={fileName}, Length={result.Length}");
         }
@@ -56,7 +56,7 @@ public class FileAnalysisCacheService
         if (string.IsNullOrEmpty(pageId) || string.IsNullOrEmpty(fileName))
             return null;
 
-        var cache = await LoadOrCreateCacheAsync(pageId);
+        var cache = await LoadOrCreateCacheAsync(pageId).ConfigureAwait(false);
         return cache.TryGetValue(fileName, out var result) ? result : null;
     }
 
@@ -68,7 +68,7 @@ public class FileAnalysisCacheService
         if (string.IsNullOrEmpty(pageId))
             return new Dictionary<string, string>();
 
-        return await LoadOrCreateCacheAsync(pageId);
+        return await LoadOrCreateCacheAsync(pageId).ConfigureAwait(false);
     }
 
     private async Task<Dictionary<string, string>> LoadOrCreateCacheAsync(string pageId)
@@ -81,7 +81,7 @@ public class FileAnalysisCacheService
         {
             try
             {
-                var json = await File.ReadAllTextAsync(filePath);
+                var json = await File.ReadAllTextAsync(filePath).ConfigureAwait(false);
                 var dict = JsonSerializer.Deserialize<Dictionary<string, string>>(json);
                 if (dict != null)
                 {

@@ -35,7 +35,7 @@ public class GraphCalendarService
         var today = DateTime.Today;
         var tomorrow = today.AddDays(1);
 
-        return await GetEventsAsync(today, tomorrow);
+        return await GetEventsAsync(today, tomorrow).ConfigureAwait(false);
     }
 
     /// <summary>
@@ -48,7 +48,7 @@ public class GraphCalendarService
         var startOfWeek = today.AddDays(-(int)today.DayOfWeek);
         var endOfWeek = startOfWeek.AddDays(7);
 
-        return await GetEventsAsync(startOfWeek, endOfWeek);
+        return await GetEventsAsync(startOfWeek, endOfWeek).ConfigureAwait(false);
     }
 
     /// <summary>
@@ -79,7 +79,7 @@ public class GraphCalendarService
                     "organizer", "attendees", "isAllDay", "importance",
                     "bodyPreview", "webLink"
                 };
-            });
+            }).ConfigureAwait(false);
 
             _logger.Debug("일정 {Count}개 조회 ({Start} ~ {End})",
                 response?.Value?.Count ?? 0, startDate.ToShortDateString(), endDate.ToShortDateString());
@@ -139,7 +139,7 @@ public class GraphCalendarService
                 Categories = new List<string> { "이메일 마감" }
             };
 
-            var createdEvent = await client.Me.Calendar.Events.PostAsync(newEvent);
+            var createdEvent = await client.Me.Calendar.Events.PostAsync(newEvent).ConfigureAwait(false);
 
             _logger.Information("마감일 일정 생성: {Subject} - {Deadline}",
                 email.Subject, email.Deadline.Value.ToShortDateString());
@@ -194,7 +194,7 @@ public class GraphCalendarService
                 Categories = new List<string> { "할일" }
             };
 
-            var createdEvent = await client.Me.Calendar.Events.PostAsync(newEvent);
+            var createdEvent = await client.Me.Calendar.Events.PostAsync(newEvent).ConfigureAwait(false);
 
             _logger.Information("할일 일정 생성: {Content} - {DueDate}",
                 todo.Content.Substring(0, Math.Min(30, todo.Content.Length)), dueDate.ToShortDateString());
@@ -224,7 +224,7 @@ public class GraphCalendarService
             var calendarEvent = await client.Me.Calendar.Events[eventId].GetAsync(config =>
             {
                 config.QueryParameters.Expand = new[] { "attachments" };
-            });
+            }).ConfigureAwait(false);
 
             if (calendarEvent == null)
                 return null;
@@ -284,7 +284,7 @@ public class GraphCalendarService
                         {
                             Comment = comment,
                             SendResponse = true
-                        });
+                        }).ConfigureAwait(false);
                     break;
 
                 case "decline":
@@ -293,7 +293,7 @@ public class GraphCalendarService
                         {
                             Comment = comment,
                             SendResponse = true
-                        });
+                        }).ConfigureAwait(false);
                     break;
 
                 case "tentative":
@@ -302,7 +302,7 @@ public class GraphCalendarService
                         {
                             Comment = comment,
                             SendResponse = true
-                        });
+                        }).ConfigureAwait(false);
                     break;
 
                 default:
@@ -429,7 +429,7 @@ public class GraphCalendarService
             _logger.Debug("일정 생성 API 호출: Subject={Subject}, Start={Start}, End={End}, IsAllDay={IsAllDay}",
                 request.Subject, request.StartDateTime, request.EndDateTime, request.IsAllDay);
 
-            var createdEvent = await client.Me.Calendar.Events.PostAsync(newEvent);
+            var createdEvent = await client.Me.Calendar.Events.PostAsync(newEvent).ConfigureAwait(false);
             _logger.Information("일정 생성 완료: {Subject} ({Start})", request.Subject, request.StartDateTime);
             return createdEvent;
         }
@@ -556,7 +556,7 @@ public class GraphCalendarService
 
             _logger.Debug("일정 수정 API 호출: EventId={EventId}, Subject={Subject}", eventId, request.Subject);
 
-            var result = await client.Me.Calendar.Events[eventId].PatchAsync(updatedEvent);
+            var result = await client.Me.Calendar.Events[eventId].PatchAsync(updatedEvent).ConfigureAwait(false);
             _logger.Information("일정 수정 완료: {EventId} - {Subject}", eventId, request.Subject);
             return result;
         }
@@ -584,7 +584,7 @@ public class GraphCalendarService
         try
         {
             var client = _authService.GetGraphClient();
-            await client.Me.Calendar.Events[eventId].DeleteAsync();
+            await client.Me.Calendar.Events[eventId].DeleteAsync().ConfigureAwait(false);
             _logger.Information("일정 삭제 완료: {EventId}", eventId);
             return true;
         }
@@ -606,7 +606,7 @@ public class GraphCalendarService
         try
         {
             var client = _authService.GetGraphClient();
-            var evt = await client.Me.Calendar.Events[eventId].GetAsync();
+            var evt = await client.Me.Calendar.Events[eventId].GetAsync().ConfigureAwait(false);
             return evt;
         }
         catch (Exception ex)
@@ -665,7 +665,7 @@ public class GraphCalendarService
                 Categories = new List<string> { "이메일 일정" }
             };
 
-            var createdEvent = await client.Me.Calendar.Events.PostAsync(newEvent);
+            var createdEvent = await client.Me.Calendar.Events.PostAsync(newEvent).ConfigureAwait(false);
 
             _logger.Information("이메일에서 일정 생성: {Subject} - {StartDate}",
                 email.Subject, startDateTime.ToString("yyyy-MM-dd HH:mm"));
@@ -816,7 +816,7 @@ public class GraphCalendarService
                     "id", "name", "color", "isDefaultCalendar",
                     "canEdit", "owner"
                 };
-            });
+            }).ConfigureAwait(false);
 
             var calendars = response?.Value?.Select(c => new CalendarInfo
             {
@@ -863,12 +863,12 @@ public class GraphCalendarService
             if (!string.IsNullOrEmpty(deltaLink))
             {
                 // Delta 링크로 변경분 조회
-                result = await GetDeltaWithLinkAsync(client, deltaLink);
+                result = await GetDeltaWithLinkAsync(client, deltaLink).ConfigureAwait(false);
             }
             else
             {
                 // 초기 동기화 - CalendarView 사용
-                result = await GetInitialEventsAsync(client, syncStart, syncEnd);
+                result = await GetInitialEventsAsync(client, syncStart, syncEnd).ConfigureAwait(false);
             }
 
             _logger.Information("캘린더 Delta 조회: 추가={Added}, 수정={Updated}, 삭제={Deleted}",
@@ -896,7 +896,7 @@ public class GraphCalendarService
         {
             // Delta 링크 파싱 및 요청
             var request = new Microsoft.Graph.Me.CalendarView.Delta.DeltaRequestBuilder(deltaLink, client.RequestAdapter);
-            var response = await request.GetAsDeltaGetResponseAsync();
+            var response = await request.GetAsDeltaGetResponseAsync().ConfigureAwait(false);
 
             while (response != null)
             {
@@ -923,7 +923,7 @@ public class GraphCalendarService
                 if (response.OdataNextLink != null)
                 {
                     request = new Microsoft.Graph.Me.CalendarView.Delta.DeltaRequestBuilder(response.OdataNextLink, client.RequestAdapter);
-                    response = await request.GetAsDeltaGetResponseAsync();
+                    response = await request.GetAsDeltaGetResponseAsync().ConfigureAwait(false);
                 }
                 else
                 {
@@ -944,7 +944,7 @@ public class GraphCalendarService
         {
             _logger.Warning(ex, "Delta 링크로 조회 실패, 전체 동기화로 폴백");
             // Delta 링크가 만료된 경우 전체 동기화로 폴백
-            return await GetInitialEventsAsync(client, DateTime.Today.AddMonths(-3), DateTime.Today.AddMonths(6));
+            return await GetInitialEventsAsync(client, DateTime.Today.AddMonths(-3), DateTime.Today.AddMonths(6)).ConfigureAwait(false);
         }
     }
 
@@ -981,7 +981,7 @@ public class GraphCalendarService
                     "categories", "webLink", "createdDateTime", "lastModifiedDateTime",
                     "responseStatus", "isCancelled"
                 };
-            });
+            }).ConfigureAwait(false);
 
             while (response != null)
             {
@@ -995,7 +995,7 @@ public class GraphCalendarService
                 {
                     var request = new Microsoft.Graph.Me.CalendarView.Delta.DeltaRequestBuilder(
                         response.OdataNextLink, client.RequestAdapter);
-                    response = await request.GetAsDeltaGetResponseAsync();
+                    response = await request.GetAsDeltaGetResponseAsync().ConfigureAwait(false);
                 }
                 else
                 {
@@ -1046,12 +1046,12 @@ public class GraphCalendarService
             if (!string.IsNullOrEmpty(deltaLink))
             {
                 // 특정 캘린더의 Delta 조회
-                result = await GetCalendarDeltaWithLinkAsync(client, calendarId, deltaLink);
+                result = await GetCalendarDeltaWithLinkAsync(client, calendarId, deltaLink).ConfigureAwait(false);
             }
             else
             {
                 // 특정 캘린더의 초기 동기화
-                result = await GetCalendarInitialEventsAsync(client, calendarId, syncStart, syncEnd);
+                result = await GetCalendarInitialEventsAsync(client, calendarId, syncStart, syncEnd).ConfigureAwait(false);
             }
 
             return result;
@@ -1079,7 +1079,7 @@ public class GraphCalendarService
         {
             var request = new Microsoft.Graph.Me.Calendars.Item.CalendarView.Delta.DeltaRequestBuilder(
                 deltaLink, client.RequestAdapter);
-            var response = await request.GetAsDeltaGetResponseAsync();
+            var response = await request.GetAsDeltaGetResponseAsync().ConfigureAwait(false);
 
             while (response != null)
             {
@@ -1105,7 +1105,7 @@ public class GraphCalendarService
                 {
                     request = new Microsoft.Graph.Me.Calendars.Item.CalendarView.Delta.DeltaRequestBuilder(
                         response.OdataNextLink, client.RequestAdapter);
-                    response = await request.GetAsDeltaGetResponseAsync();
+                    response = await request.GetAsDeltaGetResponseAsync().ConfigureAwait(false);
                 }
                 else
                 {
@@ -1125,7 +1125,7 @@ public class GraphCalendarService
         {
             _logger.Warning(ex, "캘린더 {CalendarId} Delta 링크 조회 실패", calendarId);
             return await GetCalendarInitialEventsAsync(client, calendarId,
-                DateTime.Today.AddMonths(-3), DateTime.Today.AddMonths(6));
+                DateTime.Today.AddMonths(-3), DateTime.Today.AddMonths(6)).ConfigureAwait(false);
         }
     }
 
@@ -1150,7 +1150,7 @@ public class GraphCalendarService
             {
                 config.QueryParameters.StartDateTime = startDateTime;
                 config.QueryParameters.EndDateTime = endDateTime;
-            });
+            }).ConfigureAwait(false);
 
             while (response != null)
             {
@@ -1163,7 +1163,7 @@ public class GraphCalendarService
                 {
                     var request = new Microsoft.Graph.Me.Calendars.Item.CalendarView.Delta.DeltaRequestBuilder(
                         response.OdataNextLink, client.RequestAdapter);
-                    response = await request.GetAsDeltaGetResponseAsync();
+                    response = await request.GetAsDeltaGetResponseAsync().ConfigureAwait(false);
                 }
                 else
                 {
@@ -1207,7 +1207,7 @@ public class GraphCalendarService
             {
                 config.QueryParameters.StartDateTime = startDateTime;
                 config.QueryParameters.EndDateTime = endDateTime;
-            });
+            }).ConfigureAwait(false);
 
             var instances = response?.Value?.ToList() ?? new List<Event>();
 

@@ -33,13 +33,13 @@ public class ExportService
 
         Log4.Debug($"[ExportService] EML 내보내기 시작: {messageId}");
 
-        using var httpClient = await _authService.GetHttpClientAsync();
+        using var httpClient = await _authService.GetHttpClientAsync().ConfigureAwait(false);
         var url = $"https://graph.microsoft.com/v1.0/me/messages/{messageId}/$value";
-        var response = await httpClient.GetAsync(url);
+        var response = await httpClient.GetAsync(url).ConfigureAwait(false);
         response.EnsureSuccessStatusCode();
 
-        var content = await response.Content.ReadAsByteArrayAsync();
-        await File.WriteAllBytesAsync(savePath, content);
+        var content = await response.Content.ReadAsByteArrayAsync().ConfigureAwait(false);
+        await File.WriteAllBytesAsync(savePath, content).ConfigureAwait(false);
 
         Log4.Info($"[ExportService] EML 내보내기 완료: {savePath} ({content.Length} bytes)");
     }
@@ -63,7 +63,7 @@ public class ExportService
         printSettings.ShouldPrintBackgrounds = true;
         printSettings.ShouldPrintHeaderAndFooter = false;
 
-        var success = await coreWebView2.PrintToPdfAsync(savePath, printSettings);
+        var success = await coreWebView2.PrintToPdfAsync(savePath, printSettings).ConfigureAwait(false);
 
         if (success)
         {
@@ -86,7 +86,7 @@ public class ExportService
             throw new ArgumentNullException(nameof(coreWebView2));
 
         Log4.Debug("[ExportService] 인쇄 시작");
-        await coreWebView2.ExecuteScriptAsync("window.print();");
+        await coreWebView2.ExecuteScriptAsync("window.print();").ConfigureAwait(false);
         Log4.Info("[ExportService] 인쇄 대화상자 표시됨");
     }
 }

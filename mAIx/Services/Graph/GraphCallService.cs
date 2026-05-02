@@ -32,7 +32,7 @@ public class GraphCallService
         try
         {
             var client = _authService.GetGraphClient();
-            var presence = await client.Me.Presence.GetAsync();
+            var presence = await client.Me.Presence.GetAsync().ConfigureAwait(false);
             _logger.Debug("내 프레즌스 조회: {Availability}", presence?.Availability);
             return presence;
         }
@@ -51,7 +51,7 @@ public class GraphCallService
         try
         {
             var client = _authService.GetGraphClient();
-            var presence = await client.Users[userId].Presence.GetAsync();
+            var presence = await client.Users[userId].Presence.GetAsync().ConfigureAwait(false);
             _logger.Debug("사용자 {UserId} 프레즌스 조회: {Availability}", userId, presence?.Availability);
             return presence;
         }
@@ -79,7 +79,7 @@ public class GraphCallService
                 Ids = ids
             };
 
-            var response = await client.Communications.GetPresencesByUserId.PostAsGetPresencesByUserIdPostResponseAsync(requestBody);
+            var response = await client.Communications.GetPresencesByUserId.PostAsGetPresencesByUserIdPostResponseAsync(requestBody).ConfigureAwait(false);
 
             _logger.Debug("{Count}명의 프레즌스 일괄 조회 완료", response?.Value?.Count ?? 0);
             return response?.Value ?? new List<Presence>();
@@ -108,7 +108,7 @@ public class GraphCallService
                 ExpirationDuration = duration ?? TimeSpan.FromMinutes(5)
             };
 
-            await client.Me.Presence.SetPresence.PostAsync(requestBody);
+            await client.Me.Presence.SetPresence.PostAsync(requestBody).ConfigureAwait(false);
             _logger.Information("프레즌스 설정: {Availability}/{Activity}", availability, activity);
             return true;
         }
@@ -137,7 +137,7 @@ public class GraphCallService
                 config.QueryParameters.Filter = $"startswith(displayName,'{query}') or startswith(mail,'{query}') or startswith(userPrincipalName,'{query}')";
                 config.QueryParameters.Top = top;
                 config.QueryParameters.Select = new[] { "id", "displayName", "mail", "userPrincipalName", "jobTitle", "department", "mobilePhone", "businessPhones" };
-            });
+            }).ConfigureAwait(false);
 
             _logger.Debug("사용자 검색 '{Query}': {Count}명", query, response?.Value?.Count ?? 0);
             return response?.Value ?? new List<User>();
@@ -161,7 +161,7 @@ public class GraphCallService
             var response = await client.Me.Contacts.GetAsync(config =>
             {
                 config.QueryParameters.Top = top;
-            });
+            }).ConfigureAwait(false);
 
             _logger.Debug("자주 연락하는 사용자 {Count}명 조회", response?.Value?.Count ?? 0);
             return response?.Value ?? new List<Contact>();
@@ -204,7 +204,7 @@ public class GraphCallService
     {
         try
         {
-            var allRecords = await GetCallRecordsAsync(7);
+            var allRecords = await GetCallRecordsAsync(7).ConfigureAwait(false);
             return allRecords.Where(r => r.IsMissed);
         }
         catch (Exception ex)

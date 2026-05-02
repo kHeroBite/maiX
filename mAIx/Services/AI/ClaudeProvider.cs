@@ -51,13 +51,13 @@ namespace mAIx.Services.AI
 
             _logger.Debug("Claude API 요청: Model={Model}", _model);
 
-            var response = await _httpClient.PostAsync(_baseUrl, content, ct);
+            var response = await _httpClient.PostAsync(_baseUrl, content, ct).ConfigureAwait(false);
             if (!response.IsSuccessStatusCode)
             {
-                await HandleErrorResponseAsync(response);
+                await HandleErrorResponseAsync(response).ConfigureAwait(false);
             }
 
-            var responseJson = await response.Content.ReadAsStringAsync(ct);
+            var responseJson = await response.Content.ReadAsStringAsync(ct).ConfigureAwait(false);
             using var doc = JsonDocument.Parse(responseJson);
             var root = doc.RootElement;
 
@@ -104,18 +104,18 @@ namespace mAIx.Services.AI
                 Content = content
             };
 
-            var response = await _httpClient.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, ct);
+            var response = await _httpClient.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, ct).ConfigureAwait(false);
             if (!response.IsSuccessStatusCode)
             {
-                await HandleErrorResponseAsync(response);
+                await HandleErrorResponseAsync(response).ConfigureAwait(false);
             }
 
-            using var stream = await response.Content.ReadAsStreamAsync(ct);
+            using var stream = await response.Content.ReadAsStreamAsync(ct).ConfigureAwait(false);
             using var reader = new System.IO.StreamReader(stream);
 
             while (!reader.EndOfStream && !ct.IsCancellationRequested)
             {
-                var line = await reader.ReadLineAsync();
+                var line = await reader.ReadLineAsync().ConfigureAwait(false);
                 if (string.IsNullOrEmpty(line) || !line.StartsWith("data: "))
                     continue;
 

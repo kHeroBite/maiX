@@ -40,7 +40,7 @@ public class PromptCacheService
         foreach (var 파일 in 파일목록)
         {
             var 파일명 = Path.GetFileName(파일);
-            var 내용 = await File.ReadAllTextAsync(파일);
+            var 내용 = await File.ReadAllTextAsync(파일).ConfigureAwait(false);
             _캐시[파일명] = 내용;
         }
 
@@ -60,7 +60,7 @@ public class PromptCacheService
         if (!File.Exists(파일경로))
             throw new FileNotFoundException($"프롬프트 템플릿 파일을 찾을 수 없습니다: {파일경로}");
 
-        var 내용 = await File.ReadAllTextAsync(파일경로);
+        var 내용 = await File.ReadAllTextAsync(파일경로).ConfigureAwait(false);
         _캐시[파일명] = 내용;
         _log.Debug($"프롬프트 캐시 미스 → 디스크 로드: {파일명}");
         return 내용;
@@ -72,7 +72,7 @@ public class PromptCacheService
     public async Task<int> ReloadAllAsync()
     {
         _캐시.Clear();
-        await InitializeAsync();
+        await InitializeAsync().ConfigureAwait(false);
         _log.Info($"프롬프트 전체 리로드 완료: {_캐시.Count}개");
         return _캐시.Count;
     }
@@ -89,7 +89,7 @@ public class PromptCacheService
             return;
         }
 
-        var 내용 = await File.ReadAllTextAsync(파일경로);
+        var 내용 = await File.ReadAllTextAsync(파일경로).ConfigureAwait(false);
         _캐시[파일명] = 내용;
         _log.Debug($"프롬프트 개별 리로드: {파일명}");
     }

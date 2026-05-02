@@ -51,7 +51,7 @@ public class GraphContactService
                     "department", "jobTitle", "mobilePhone", "businessPhones",
                     "personalNotes", "categories"
                 };
-            });
+            }).ConfigureAwait(false);
 
             _logger.Debug("연락처 {Count}개 조회", response?.Value?.Count ?? 0);
             return response?.Value ?? new List<Contact>();
@@ -91,7 +91,7 @@ public class GraphContactService
                     "id", "displayName", "emailAddresses", "companyName",
                     "department", "jobTitle", "photo"
                 };
-            });
+            }).ConfigureAwait(false);
 
             _logger.Debug("연락처 검색 '{Query}': {Count}개 발견", searchQuery, response?.Value?.Count ?? 0);
             return response?.Value ?? new List<Contact>();
@@ -126,7 +126,7 @@ public class GraphContactService
                     "id", "displayName", "emailAddresses", "companyName",
                     "department", "jobTitle", "photo"
                 };
-            });
+            }).ConfigureAwait(false);
 
             var contact = response?.Value?.FirstOrDefault(c =>
                 c.EmailAddresses?.Any(e =>
@@ -164,7 +164,7 @@ public class GraphContactService
         try
         {
             // 1. 연락처에서 검색
-            var contact = await GetContactByEmailAsync(senderEmail);
+            var contact = await GetContactByEmailAsync(senderEmail).ConfigureAwait(false);
 
             if (contact != null)
             {
@@ -173,15 +173,15 @@ public class GraphContactService
                 result.Department = contact.Department;
                 result.JobTitle = contact.JobTitle;
                 result.IsInContacts = true;
-                result.IsVip = await IsVipContactAsync(senderEmail);
+                result.IsVip = await IsVipContactAsync(senderEmail).ConfigureAwait(false);
 
                 // 프로필 사진 가져오기
-                result.PhotoBase64 = await GetContactPhotoAsync(contact.Id);
+                result.PhotoBase64 = await GetContactPhotoAsync(contact.Id).ConfigureAwait(false);
             }
             else
             {
                 // 2. 조직 디렉터리에서 검색 (조직 계정인 경우)
-                var orgUser = await GetOrganizationUserAsync(senderEmail);
+                var orgUser = await GetOrganizationUserAsync(senderEmail).ConfigureAwait(false);
 
                 if (orgUser != null)
                 {
@@ -192,7 +192,7 @@ public class GraphContactService
                     result.IsInOrganization = true;
 
                     // 조직 사용자 프로필 사진
-                    result.PhotoBase64 = await GetOrganizationUserPhotoAsync(orgUser.Id);
+                    result.PhotoBase64 = await GetOrganizationUserPhotoAsync(orgUser.Id).ConfigureAwait(false);
                 }
             }
 
@@ -221,7 +221,7 @@ public class GraphContactService
         // 캐시 갱신
         if (DateTime.Now > _vipCacheExpiry)
         {
-            await RefreshVipCacheAsync();
+            await RefreshVipCacheAsync().ConfigureAwait(false);
         }
 
         return _vipContacts.Contains(email);
@@ -308,7 +308,7 @@ public class GraphContactService
                     "id", "displayName", "mail", "companyName",
                     "department", "jobTitle", "officeLocation"
                 };
-            });
+            }).ConfigureAwait(false);
 
             return response?.Value?.FirstOrDefault();
         }
@@ -332,13 +332,13 @@ public class GraphContactService
         try
         {
             var client = _authService.GetGraphClient();
-            var photoStream = await client.Me.Contacts[contactId].Photo.Content.GetAsync();
+            var photoStream = await client.Me.Contacts[contactId].Photo.Content.GetAsync().ConfigureAwait(false);
 
             if (photoStream == null)
                 return null;
 
             using var memoryStream = new MemoryStream();
-            await photoStream.CopyToAsync(memoryStream);
+            await photoStream.CopyToAsync(memoryStream).ConfigureAwait(false);
             return Convert.ToBase64String(memoryStream.ToArray());
         }
         catch
@@ -361,13 +361,13 @@ public class GraphContactService
         try
         {
             var client = _authService.GetGraphClient();
-            var photoStream = await client.Users[userId].Photo.Content.GetAsync();
+            var photoStream = await client.Users[userId].Photo.Content.GetAsync().ConfigureAwait(false);
 
             if (photoStream == null)
                 return null;
 
             using var memoryStream = new MemoryStream();
-            await photoStream.CopyToAsync(memoryStream);
+            await photoStream.CopyToAsync(memoryStream).ConfigureAwait(false);
             return Convert.ToBase64String(memoryStream.ToArray());
         }
         catch
@@ -384,7 +384,7 @@ public class GraphContactService
     {
         try
         {
-            var contacts = await GetContactsAsync(500);
+            var contacts = await GetContactsAsync(500).ConfigureAwait(false);
 
             _vipContacts.Clear();
 
@@ -429,7 +429,7 @@ public class GraphContactService
         try
         {
             var client = _authService.GetGraphClient();
-            var created = await client.Me.Contacts.PostAsync(contact);
+            var created = await client.Me.Contacts.PostAsync(contact).ConfigureAwait(false);
             _logger.Information("연락처 생성: {Name}", created?.DisplayName);
             return created;
         }
@@ -451,7 +451,7 @@ public class GraphContactService
         try
         {
             var client = _authService.GetGraphClient();
-            var updated = await client.Me.Contacts[contactId].PatchAsync(contact);
+            var updated = await client.Me.Contacts[contactId].PatchAsync(contact).ConfigureAwait(false);
             _logger.Information("연락처 수정: {Id}", contactId);
             return updated;
         }
@@ -471,7 +471,7 @@ public class GraphContactService
         try
         {
             var client = _authService.GetGraphClient();
-            await client.Me.Contacts[contactId].DeleteAsync();
+            await client.Me.Contacts[contactId].DeleteAsync().ConfigureAwait(false);
             _logger.Information("연락처 삭제: {Id}", contactId);
         }
         catch (Exception ex)

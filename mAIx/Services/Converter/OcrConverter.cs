@@ -103,7 +103,7 @@ namespace mAIx.Services.Converter
 
             try
             {
-                return await Task.Run(() => PerformOcr(filePath), ct);
+                return await Task.Run(() => PerformOcr(filePath), ct).ConfigureAwait(false);
             }
             catch (OperationCanceledException)
             {
@@ -318,7 +318,7 @@ namespace mAIx.Services.Converter
                 using var img = Pix.LoadFromFile(filePath);
                 using var page = engine.Process(img);
                 return page.GetText().Trim();
-            }, ct);
+            }, ct).ConfigureAwait(false);
         }
     }
 }

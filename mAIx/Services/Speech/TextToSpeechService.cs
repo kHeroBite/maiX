@@ -40,7 +40,7 @@ public class TextToSpeechService : IDisposable
 
             // 서버에서 WAV 데이터 수신
             using var serverSvc = new ServerSpeechService(prefs.SpeechServerUrl, prefs);
-            var wavBytes = await serverSvc.SynthesizeAsync(text, 0, _cts.Token);
+            var wavBytes = await serverSvc.SynthesizeAsync(text, 0, _cts.Token).ConfigureAwait(false);
 
             if (_cts.Token.IsCancellationRequested) return;
 

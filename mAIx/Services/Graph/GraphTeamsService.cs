@@ -51,7 +51,7 @@ public class GraphTeamsService
     {
         if (_cachedCurrentUserId == null)
         {
-            _cachedCurrentUserId = await GetCurrentUserIdAsync();
+            _cachedCurrentUserId = await GetCurrentUserIdAsync().ConfigureAwait(false);
         }
         return _cachedCurrentUserId;
     }
@@ -69,7 +69,7 @@ public class GraphTeamsService
             {
                 config.QueryParameters.Top = 50;
                 config.QueryParameters.Expand = new[] { "members", "lastMessagePreview" };
-            });
+            }).ConfigureAwait(false);
 
             _logger.Debug("채팅방 {Count}개 조회", response?.Value?.Count ?? 0);
             return response?.Value ?? new List<Chat>();
@@ -99,7 +99,7 @@ public class GraphTeamsService
             {
                 config.QueryParameters.Top = top;
                 config.QueryParameters.Orderby = new[] { "createdDateTime desc" };
-            });
+            }).ConfigureAwait(false);
 
             _logger.Debug("채팅방 {ChatId} 메시지 {Count}개 조회", chatId, response?.Value?.Count ?? 0);
             return response?.Value ?? new List<ChatMessage>();
@@ -129,7 +129,7 @@ public class GraphTeamsService
             {
                 config.QueryParameters.Top = 10;
                 config.QueryParameters.Orderby = new[] { "createdDateTime desc" };
-            });
+            }).ConfigureAwait(false);
 
             if (response?.Value == null || response.Value.Count == 0)
                 return (null, null);
@@ -181,7 +181,7 @@ public class GraphTeamsService
             var chats = await client.Me.Chats.GetAsync(config =>
             {
                 config.QueryParameters.Filter = "unreadMessagesCount gt 0";
-            });
+            }).ConfigureAwait(false);
 
             // 모든 채팅방의 읽지 않은 메시지 수 합산
             // Note: Microsoft Graph에서 unreadMessagesCount는 chats endpoint에서 개별적으로 가져와야 함
@@ -211,14 +211,14 @@ public class GraphTeamsService
         try
         {
             var allMessages = new List<ChatMessage>();
-            var chats = await GetChatsAsync();
+            var chats = await GetChatsAsync().ConfigureAwait(false);
 
             foreach (var chat in chats)
             {
                 if (string.IsNullOrEmpty(chat.Id))
                     continue;
 
-                var messages = await GetChatMessagesAsync(chat.Id, 100);
+                var messages = await GetChatMessagesAsync(chat.Id, 100).ConfigureAwait(false);
 
                 // 클라이언트측 필터링 (Graph API는 메시지 내용 검색을 직접 지원하지 않음)
                 var matchedMessages = messages.Where(m =>
@@ -254,11 +254,11 @@ public class GraphTeamsService
         {
             var messageId = chatMessage.Id ?? Guid.NewGuid().ToString();
 
-            await using var dbContext = await _dbContextFactory.CreateDbContextAsync();
+            await using var dbContext = await _dbContextFactory.CreateDbContextAsync().ConfigureAwait(false);
 
             // 기존 메시지 확인
             var existingMessage = await dbContext.TeamsMessages
-                .FirstOrDefaultAsync(m => m.Id == messageId);
+                .FirstOrDefaultAsync(m => m.Id == messageId).ConfigureAwait(false);
 
             if (existingMessage != null)
             {
@@ -283,7 +283,7 @@ public class GraphTeamsService
                 existingMessage = teamsMessage;
             }
 
-            await dbContext.SaveChangesAsync();
+            await dbContext.SaveChangesAsync().ConfigureAwait(false);
             _logger.Debug("Teams 메시지 저장: {MessageId}", messageId);
 
             return existingMessage;
@@ -308,12 +308,12 @@ public class GraphTeamsService
 
         try
         {
-            var messages = await GetChatMessagesAsync(chatId, count);
+            var messages = await GetChatMessagesAsync(chatId, count).ConfigureAwait(false);
             var syncedCount = 0;
 
             foreach (var message in messages)
             {
-                await SaveMessageAsync(message, chatId);
+                await SaveMessageAsync(message, chatId).ConfigureAwait(false);
                 syncedCount++;
             }
 
@@ -334,11 +334,11 @@ public class GraphTeamsService
     /// <returns>연결된 Teams 메시지 목록</returns>
     public async Task<IEnumerable<TeamsMessage>> GetLinkedMessagesAsync(int emailId)
     {
-        await using var dbContext = await _dbContextFactory.CreateDbContextAsync();
+        await using var dbContext = await _dbContextFactory.CreateDbContextAsync().ConfigureAwait(false);
         return await dbContext.TeamsMessages
             .Where(m => m.LinkedEmailId == emailId)
             .OrderByDescending(m => m.CreatedDateTime)
-            .ToListAsync();
+            .ToListAsync().ConfigureAwait(false);
     }
 
     /// <summary>
@@ -367,7 +367,7 @@ public class GraphTeamsService
                 }
             };
 
-            var response = await client.Me.Chats[chatId].Messages.PostAsync(chatMessage);
+            var response = await client.Me.Chats[chatId].Messages.PostAsync(chatMessage).ConfigureAwait(false);
 
             _logger.Info("채팅 메시지 전송 성공: ChatId={ChatId}", chatId);
             return response;
@@ -403,7 +403,7 @@ public class GraphTeamsService
                 config.QueryParameters.Filter = filter;
                 config.QueryParameters.Orderby = new[] { "createdDateTime desc" };
                 config.QueryParameters.Top = 50;
-            });
+            }).ConfigureAwait(false);
 
             _logger.Debug("채팅방 {ChatId} 새 메시지 {Count}개 조회", chatId, response?.Value?.Count ?? 0);
             return response?.Value ?? new List<ChatMessage>();
@@ -427,7 +427,7 @@ public class GraphTeamsService
 
         try
         {
-            var messages = await GetChatMessagesAsync(chatId, 1);
+            var messages = await GetChatMessagesAsync(chatId, 1).ConfigureAwait(false);
             return messages.FirstOrDefault();
         }
         catch (Exception ex)
@@ -454,7 +454,7 @@ public class GraphTeamsService
         // 1:1 채팅인 경우 상대방 이름 사용
         if (chat.ChatType == ChatType.OneOnOne && chat.Members?.Count >= 2)
         {
-            var currentUserId = await GetCachedCurrentUserIdAsync();
+            var currentUserId = await GetCachedCurrentUserIdAsync().ConfigureAwait(false);
             var otherMember = chat.Members
                 .OfType<AadUserConversationMember>()
                 .FirstOrDefault(m => !string.IsNullOrEmpty(m.UserId) && m.UserId != currentUserId);
@@ -465,7 +465,7 @@ public class GraphTeamsService
         // 그룹 채팅이지만 topic이 없는 경우 - 본인 제외한 멤버 이름
         if (chat.ChatType == ChatType.Group)
         {
-            var currentUserId = await GetCachedCurrentUserIdAsync();
+            var currentUserId = await GetCachedCurrentUserIdAsync().ConfigureAwait(false);
             var memberNames = chat.Members?
                 .OfType<AadUserConversationMember>()
                 .Where(m => m.UserId != currentUserId)
@@ -529,7 +529,7 @@ public class GraphTeamsService
     /// <returns>팀 목록</returns>
     public async Task<IEnumerable<Team>> GetMyTeamsAsync()
     {
-        var (teams, _) = await GetMyTeamsWithErrorAsync();
+        var (teams, _) = await GetMyTeamsWithErrorAsync().ConfigureAwait(false);
         return teams;
     }
 
@@ -549,7 +549,7 @@ public class GraphTeamsService
             Utils.Log4.Info("[GraphTeamsService] GraphClient 획득 완료");
 
             Serilog.Log.Information("[GraphTeamsService] Graph API 호출 중... (Me.JoinedTeams)");
-            var response = await client.Me.JoinedTeams.GetAsync();
+            var response = await client.Me.JoinedTeams.GetAsync().ConfigureAwait(false);
 
             var count = response?.Value?.Count ?? 0;
             Serilog.Log.Information("[GraphTeamsService] Graph API 응답: {Count}개 팀", count);
@@ -593,7 +593,7 @@ public class GraphTeamsService
         try
         {
             var client = _authService.GetGraphClient();
-            var team = await client.Teams[teamId].GetAsync();
+            var team = await client.Teams[teamId].GetAsync().ConfigureAwait(false);
             return team;
         }
         catch (Exception ex)
@@ -623,7 +623,7 @@ public class GraphTeamsService
             // 1차 시도: Teams API (Channel.ReadBasic.All 필요)
             try
             {
-                var response = await client.Teams[teamId].Channels.GetAsync();
+                var response = await client.Teams[teamId].Channels.GetAsync().ConfigureAwait(false);
                 var count = response?.Value?.Count ?? 0;
                 Serilog.Log.Information("[GraphTeamsService] 채널 조회 완료 (Teams API): TeamId={TeamId}, Count={Count}", teamId, count);
                 Utils.Log4.Info($"[GraphTeamsService] 채널 조회 완료 (Teams API): TeamId={teamId}, Count={count}");
@@ -636,7 +636,7 @@ public class GraphTeamsService
             }
 
             // 2차 시도: Groups API (Group.Read.All 권한으로 접근)
-            var groupResponse = await client.Groups[teamId].Team.Channels.GetAsync();
+            var groupResponse = await client.Groups[teamId].Team.Channels.GetAsync().ConfigureAwait(false);
             var groupCount = groupResponse?.Value?.Count ?? 0;
             Serilog.Log.Information("[GraphTeamsService] 채널 조회 완료 (Groups API): TeamId={TeamId}, Count={Count}", teamId, groupCount);
             Utils.Log4.Info($"[GraphTeamsService] 채널 조회 완료 (Groups API): TeamId={teamId}, Count={groupCount}");
@@ -669,7 +669,7 @@ public class GraphTeamsService
             var response = await client.Teams[teamId].Channels[channelId].Messages.GetAsync(config =>
             {
                 config.QueryParameters.Top = top;
-            });
+            }).ConfigureAwait(false);
 
             _logger.Debug("팀 {TeamId} 채널 {ChannelId} 메시지 {Count}개 조회", teamId, channelId, response?.Value?.Count ?? 0);
             return response?.Value ?? new List<ChatMessage>();
@@ -706,7 +706,7 @@ public class GraphTeamsService
                 }
             };
 
-            var response = await client.Teams[teamId].Channels[channelId].Messages.PostAsync(chatMessage);
+            var response = await client.Teams[teamId].Channels[channelId].Messages.PostAsync(chatMessage).ConfigureAwait(false);
 
             _logger.Info("채널 메시지 전송 성공: TeamId={TeamId}, ChannelId={ChannelId}", teamId, channelId);
             return response;
@@ -745,7 +745,7 @@ public class GraphTeamsService
             };
 
             await client.Teams[teamId].Channels[channelId].Messages[messageId]
-                .PatchAsync(updatedMessage);
+                .PatchAsync(updatedMessage).ConfigureAwait(false);
 
             _logger.Info("채널 메시지 수정 성공: TeamId={TeamId}, ChannelId={ChannelId}, MessageId={MessageId}",
                 teamId, channelId, messageId);
@@ -786,7 +786,7 @@ public class GraphTeamsService
 
             // Graph API는 채널 메시지 직접 삭제를 지원하지 않음 — SoftDelete 사용
             await client.Teams[teamId].Channels[channelId].Messages[messageId]
-                .SoftDelete.PostAsync();
+                .SoftDelete.PostAsync().ConfigureAwait(false);
 
             _logger.Info("채널 메시지 삭제 성공: TeamId={TeamId}, ChannelId={ChannelId}, MessageId={MessageId}",
                 teamId, channelId, messageId);
@@ -820,7 +820,7 @@ public class GraphTeamsService
                 .SetReaction.PostAsync(new Microsoft.Graph.Teams.Item.Channels.Item.Messages.Item.SetReaction.SetReactionPostRequestBody
                 {
                     ReactionType = reactionType
-                });
+                }).ConfigureAwait(false);
 
             _logger.Debug("채널 리액션 추가: TeamId={TeamId}, ChannelId={ChannelId}, MessageId={MessageId}, Reaction={Reaction}",
                 teamId, channelId, messageId, reactionType);
@@ -845,7 +845,7 @@ public class GraphTeamsService
         try
         {
             var client = _authService.GetGraphClient();
-            var response = await client.Teams[teamId].Members.GetAsync();
+            var response = await client.Teams[teamId].Members.GetAsync().ConfigureAwait(false);
 
             _logger.Debug("팀 {TeamId} 멤버 {Count}명 조회", teamId, response?.Value?.Count ?? 0);
             return response?.Value ?? new List<ConversationMember>();
@@ -871,7 +871,7 @@ public class GraphTeamsService
         try
         {
             var client = _authService.GetGraphClient();
-            var response = await client.Teams[teamId].Channels[channelId].FilesFolder.GetAsync();
+            var response = await client.Teams[teamId].Channels[channelId].FilesFolder.GetAsync().ConfigureAwait(false);
 
             if (response?.Id != null)
             {
@@ -879,7 +879,7 @@ public class GraphTeamsService
                 var driveId = response.ParentReference?.DriveId;
                 if (!string.IsNullOrEmpty(driveId))
                 {
-                    var childrenResponse = await client.Drives[driveId].Items[response.Id].Children.GetAsync();
+                    var childrenResponse = await client.Drives[driveId].Items[response.Id].Children.GetAsync().ConfigureAwait(false);
                     return childrenResponse?.Value ?? new List<DriveItem>();
                 }
             }
@@ -908,7 +908,7 @@ public class GraphTeamsService
         try
         {
             var client = _authService.GetGraphClient();
-            var response = await client.Teams[teamId].Channels[channelId].Messages[messageId].Replies.GetAsync();
+            var response = await client.Teams[teamId].Channels[channelId].Messages[messageId].Replies.GetAsync().ConfigureAwait(false);
 
             return response?.Value ?? new List<ChatMessage>();
         }
@@ -946,7 +946,7 @@ public class GraphTeamsService
                 }
             };
 
-            var response = await client.Teams[teamId].Channels[channelId].Messages[messageId].Replies.PostAsync(reply);
+            var response = await client.Teams[teamId].Channels[channelId].Messages[messageId].Replies.PostAsync(reply).ConfigureAwait(false);
 
             _logger.Info("답글 작성 성공: MessageId={MessageId}", messageId);
             return response;
@@ -982,7 +982,7 @@ public class GraphTeamsService
                 .SetReaction.PostAsync(new Microsoft.Graph.Me.Chats.Item.Messages.Item.SetReaction.SetReactionPostRequestBody
                 {
                     ReactionType = reactionType
-                });
+                }).ConfigureAwait(false);
 
             _logger.Debug("리액션 추가: ChatId={ChatId}, MessageId={MessageId}, Reaction={Reaction}", chatId, messageId, reactionType);
         }
@@ -1007,7 +1007,7 @@ public class GraphTeamsService
                 .UnsetReaction.PostAsync(new Microsoft.Graph.Me.Chats.Item.Messages.Item.UnsetReaction.UnsetReactionPostRequestBody
                 {
                     ReactionType = reactionType
-                });
+                }).ConfigureAwait(false);
 
             _logger.Debug("리액션 제거: ChatId={ChatId}, MessageId={MessageId}", chatId, messageId);
         }
@@ -1029,7 +1029,7 @@ public class GraphTeamsService
         try
         {
             var client = _authService.GetGraphClient();
-            var response = await client.Me.Chats[chatId].Messages[messageId].Replies.GetAsync();
+            var response = await client.Me.Chats[chatId].Messages[messageId].Replies.GetAsync().ConfigureAwait(false);
             return response?.Value ?? new List<ChatMessage>();
         }
         catch (Exception ex)
@@ -1059,7 +1059,7 @@ public class GraphTeamsService
                 }
             };
 
-            var response = await client.Me.Chats[chatId].Messages[messageId].Replies.PostAsync(reply);
+            var response = await client.Me.Chats[chatId].Messages[messageId].Replies.PostAsync(reply).ConfigureAwait(false);
             _logger.Info("채팅 답글 전송 성공: ChatId={ChatId}, MessageId={MessageId}", chatId, messageId);
             return response;
         }
@@ -1081,7 +1081,7 @@ public class GraphTeamsService
         try
         {
             var client = _authService.GetGraphClient();
-            var response = await client.Me.Chats[chatId].Members.GetAsync();
+            var response = await client.Me.Chats[chatId].Members.GetAsync().ConfigureAwait(false);
             return response?.Value ?? new List<ConversationMember>();
         }
         catch (Exception ex)
@@ -1103,7 +1103,7 @@ public class GraphTeamsService
             var client = _authService.GetGraphClient();
 
             // 드라이브 ID 조회
-            var drive = await client.Me.Drive.GetAsync();
+            var drive = await client.Me.Drive.GetAsync().ConfigureAwait(false);
             var driveId = drive?.Id;
             if (string.IsNullOrEmpty(driveId))
             {
@@ -1117,7 +1117,7 @@ public class GraphTeamsService
 
             var driveItem = await client.Drives[driveId].Items["root"]
                 .ItemWithPath($"MaiX Shared/{fileName}")
-                .Content.PutAsync(fileStream);
+                .Content.PutAsync(fileStream).ConfigureAwait(false);
 
             if (driveItem != null)
             {
@@ -1141,7 +1141,7 @@ public class GraphTeamsService
                     }
                 };
 
-                await client.Me.Chats[chatId].Messages.PostAsync(shareMessage);
+                await client.Me.Chats[chatId].Messages.PostAsync(shareMessage).ConfigureAwait(false);
                 _logger.Info("파일 공유 성공: {FileName} → ChatId={ChatId}", fileName, chatId);
             }
         }
@@ -1186,7 +1186,7 @@ public class GraphTeamsService
                 };
             }
 
-            var result = await client.Me.OnlineMeetings.PostAsync(meeting);
+            var result = await client.Me.OnlineMeetings.PostAsync(meeting).ConfigureAwait(false);
             _logger.Info("온라인 미팅 생성 성공: {Subject}", subject);
             return result;
         }
@@ -1268,7 +1268,7 @@ public class GraphTeamsService
         {
             try
             {
-                var cachedPhoto = await System.IO.File.ReadAllTextAsync(cacheFile);
+                var cachedPhoto = await System.IO.File.ReadAllTextAsync(cacheFile).ConfigureAwait(false);
                 // 메모리 캐시에도 저장
                 lock (_photoCacheLock)
                 {
@@ -1287,17 +1287,17 @@ public class GraphTeamsService
         try
         {
             var client = _authService.GetGraphClient();
-            var photoStream = await client.Users[userId].Photo.Content.GetAsync();
+            var photoStream = await client.Users[userId].Photo.Content.GetAsync().ConfigureAwait(false);
 
             if (photoStream != null)
             {
                 using var ms = new System.IO.MemoryStream();
-                await photoStream.CopyToAsync(ms);
+                await photoStream.CopyToAsync(ms).ConfigureAwait(false);
                 var photoBytes = ms.ToArray();
                 photo = Convert.ToBase64String(photoBytes);
 
                 // 로컬 파일에 저장
-                await System.IO.File.WriteAllTextAsync(cacheFile, photo);
+                await System.IO.File.WriteAllTextAsync(cacheFile, photo).ConfigureAwait(false);
             }
         }
         catch (Microsoft.Graph.Models.ODataErrors.ODataError odataEx)
@@ -1336,18 +1336,18 @@ public class GraphTeamsService
         try
         {
             var client = _authService.GetGraphClient();
-            var photoStream = await client.Users[userId].Photo.Content.GetAsync();
+            var photoStream = await client.Users[userId].Photo.Content.GetAsync().ConfigureAwait(false);
 
             if (photoStream != null)
             {
                 using var ms = new System.IO.MemoryStream();
-                await photoStream.CopyToAsync(ms);
+                await photoStream.CopyToAsync(ms).ConfigureAwait(false);
                 var photoBytes = ms.ToArray();
                 photo = Convert.ToBase64String(photoBytes);
 
                 // 로컬 파일에 저장
                 var cacheFile = GetPhotoCachePath(userId);
-                await System.IO.File.WriteAllTextAsync(cacheFile, photo);
+                await System.IO.File.WriteAllTextAsync(cacheFile, photo).ConfigureAwait(false);
 
                 // 메모리 캐시 업데이트
                 lock (_photoCacheLock)
@@ -1426,7 +1426,7 @@ public class GraphTeamsService
             {
                 // 현재 사용자가 아닌 멤버 찾기
                 var client = _authService.GetGraphClient();
-                var me = await client.Me.GetAsync();
+                var me = await client.Me.GetAsync().ConfigureAwait(false);
                 var myId = me?.Id;
 
                 var otherMember = chat.Members
@@ -1435,7 +1435,7 @@ public class GraphTeamsService
 
                 if (otherMember?.UserId != null)
                 {
-                    return await GetUserPhotoAsync(otherMember.UserId);
+                    return await GetUserPhotoAsync(otherMember.UserId).ConfigureAwait(false);
                 }
             }
             // 그룹 채팅인 경우 첫 번째 멤버 사진 (임시)
@@ -1447,7 +1447,7 @@ public class GraphTeamsService
 
                 if (firstMember?.UserId != null)
                 {
-                    return await GetUserPhotoAsync(firstMember.UserId);
+                    return await GetUserPhotoAsync(firstMember.UserId).ConfigureAwait(false);
                 }
             }
         }
@@ -1475,7 +1475,7 @@ public class GraphTeamsService
         {
             // 현재 사용자 ID 조회
             var client = _authService.GetGraphClient();
-            var me = await client.Me.GetAsync();
+            var me = await client.Me.GetAsync().ConfigureAwait(false);
             var myId = me?.Id;
 
             // 나를 제외한 멤버 최대 4명
@@ -1490,7 +1490,7 @@ public class GraphTeamsService
                 if (string.IsNullOrEmpty(member.UserId))
                     continue;
 
-                var photo = await GetUserPhotoAsync(member.UserId);
+                var photo = await GetUserPhotoAsync(member.UserId).ConfigureAwait(false);
                 result.Add((member.UserId, member.DisplayName ?? "알 수 없음", photo));
             }
 
@@ -1513,7 +1513,7 @@ public class GraphTeamsService
         try
         {
             var client = _authService.GetGraphClient();
-            var me = await client.Me.GetAsync();
+            var me = await client.Me.GetAsync().ConfigureAwait(false);
             return me?.Id;
         }
         catch (Exception ex)
@@ -1541,7 +1541,7 @@ public class GraphTeamsService
         {
             var client = _authService.GetGraphClient();
             // 채널 파일 폴더의 driveId/itemId 획득
-            var folder = await client.Teams[teamId].Channels[channelId].FilesFolder.GetAsync();
+            var folder = await client.Teams[teamId].Channels[channelId].FilesFolder.GetAsync().ConfigureAwait(false);
             if (folder?.ParentReference?.DriveId == null || folder.Id == null)
             {
                 _logger.Error("채널 파일 폴더 정보를 가져올 수 없습니다: TeamId={TeamId}, ChannelId={ChannelId}", teamId, channelId);
@@ -1552,7 +1552,7 @@ public class GraphTeamsService
             var folderId = folder.Id;
 
             // 폴더 하위에 파일 업로드 (4MB 이하 PUT)
-            var result = await client.Drives[driveId].Items[folderId].ItemWithPath(fileName).Content.PutAsync(stream);
+            var result = await client.Drives[driveId].Items[folderId].ItemWithPath(fileName).Content.PutAsync(stream).ConfigureAwait(false);
             _logger.Info("채널 파일 업로드 성공: {FileName}, TeamId={TeamId}", fileName, teamId);
             return result;
         }
@@ -1577,7 +1577,7 @@ public class GraphTeamsService
         try
         {
             var client = _authService.GetGraphClient();
-            var response = await client.Drives[driveId].Items[itemId].Versions.GetAsync();
+            var response = await client.Drives[driveId].Items[itemId].Versions.GetAsync().ConfigureAwait(false);
             _logger.Debug("파일 버전 조회: DriveId={DriveId}, ItemId={ItemId}, Count={Count}", driveId, itemId, response?.Value?.Count ?? 0);
             return response?.Value ?? new List<DriveItemVersion>();
         }

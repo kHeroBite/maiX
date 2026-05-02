@@ -80,14 +80,14 @@ public class ContactSearchService
             var graphContactsTask = SearchGraphContactsAsync(query);
             var organizationTask = SearchOrganizationUsersAsync(query);
 
-            await Task.WhenAll(localTask, graphContactsTask, organizationTask);
+            await Task.WhenAll(localTask, graphContactsTask, organizationTask).ConfigureAwait(false);
 
             var results = new List<ContactSuggestion>();
 
             // 결과 병합 (우선순위: 로컬 > 연락처 > 조직)
-            results.AddRange(await localTask);
-            results.AddRange(await graphContactsTask);
-            results.AddRange(await organizationTask);
+            results.AddRange(await localTask.ConfigureAwait(false));
+            results.AddRange(await graphContactsTask.ConfigureAwait(false));
+            results.AddRange(await organizationTask.ConfigureAwait(false));
 
             // 중복 제거 (이메일 기준, 로컬 우선)
             var deduplicated = results
@@ -132,10 +132,10 @@ public class ContactSearchService
         try
         {
             // 300ms 대기
-            await Task.Delay(DebounceDelayMs, _debounceTokenSource.Token);
+            await Task.Delay(DebounceDelayMs, _debounceTokenSource.Token).ConfigureAwait(false);
 
             // 검색 실행
-            var results = await SearchContactsAsync(query, _debounceTokenSource.Token);
+            var results = await SearchContactsAsync(query, _debounceTokenSource.Token).ConfigureAwait(false);
             onResult?.Invoke(results);
         }
         catch (TaskCanceledException)
@@ -162,7 +162,7 @@ public class ContactSearchService
                 .Select(g => new { From = g.Key, Count = g.Count() })
                 .OrderByDescending(x => x.Count)
                 .Take(100)
-                .ToListAsync();
+                .ToListAsync().ConfigureAwait(false);
 
             // 메모리에서 필터링 + BigramHelper 유사도 점수
             var filtered = emails
@@ -217,7 +217,7 @@ public class ContactSearchService
             if (!_authService.IsLoggedIn)
                 return new List<ContactSuggestion>();
 
-            var contacts = await _contactService.SearchContactsAsync(query);
+            var contacts = await _contactService.SearchContactsAsync(query).ConfigureAwait(false);
 
             var suggestions = contacts
                 .SelectMany(c => c.EmailAddresses ?? Enumerable.Empty<EmailAddress>(),
@@ -275,7 +275,7 @@ public class ContactSearchService
                     "id", "displayName", "mail", "userPrincipalName",
                     "department", "jobTitle", "companyName"
                 };
-            });
+            }).ConfigureAwait(false);
 
             var suggestions = (response?.Value ?? new List<User>())
                 .Where(u => !string.IsNullOrEmpty(u.Mail) || !string.IsNullOrEmpty(u.UserPrincipalName))
@@ -342,7 +342,7 @@ public class ContactSearchService
     {
         try
         {
-            await _photoCacheService.LoadPhotosAsync(suggestions);
+            await _photoCacheService.LoadPhotosAsync(suggestions).ConfigureAwait(false);
         }
         catch (Exception ex)
         {

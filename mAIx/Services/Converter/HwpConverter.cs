@@ -82,7 +82,7 @@ namespace mAIx.Services.Converter
 
             try
             {
-                return await Task.Run(() => ExtractTextFromHwp(filePath), ct);
+                return await Task.Run(() => ExtractTextFromHwp(filePath), ct).ConfigureAwait(false);
             }
             catch (OperationCanceledException)
             {

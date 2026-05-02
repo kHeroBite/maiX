@@ -185,7 +185,7 @@ namespace mAIx.Services.Converter
 
             try
             {
-                return await ExtractTextFromImageAsync(filePath, ct);
+                return await ExtractTextFromImageAsync(filePath, ct).ConfigureAwait(false);
             }
             catch (OperationCanceledException)
             {
@@ -284,7 +284,7 @@ $stream.Dispose()
             process.Start();
 
             // 스크립트 전송
-            await process.StandardInput.WriteLineAsync(script);
+            await process.StandardInput.WriteLineAsync(script).ConfigureAwait(false);
             process.StandardInput.Close();
 
             // 결과 읽기
@@ -292,7 +292,7 @@ $stream.Dispose()
             var errorTask = process.StandardError.ReadToEndAsync();
 
             // 프로세스 종료 대기 (타임아웃: 60초)
-            var completed = await Task.Run(() => process.WaitForExit(60000), ct);
+            var completed = await Task.Run(() => process.WaitForExit(60000), ct).ConfigureAwait(false);
 
             if (!completed)
             {
@@ -300,8 +300,8 @@ $stream.Dispose()
                 throw new TimeoutException("Windows OCR 처리 시간 초과");
             }
 
-            var output = await outputTask;
-            var error = await errorTask;
+            var output = await outputTask.ConfigureAwait(false);
+            var error = await errorTask.ConfigureAwait(false);
 
             if (process.ExitCode != 0)
             {

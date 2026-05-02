@@ -51,7 +51,7 @@ public class PromptService
         }
 
         // P4-02: 파일 우선 조회 — 외부 파일 수정이 DB보다 우선 적용됨 (Resources/Prompts/{key}.txt)
-        var fileTemplate = await _promptCache.GetTemplateAsync(promptKey);
+        var fileTemplate = await _promptCache.GetTemplateAsync(promptKey).ConfigureAwait(false);
         if (!string.IsNullOrEmpty(fileTemplate))
         {
             _logger.Debug("파일에서 프롬프트 로드: {Key}", promptKey);
@@ -66,7 +66,7 @@ public class PromptService
 
         // Fallback: DB에서 조회
         var prompt = await _dbContext.Prompts
-            .FirstOrDefaultAsync(p => p.PromptKey == promptKey);
+            .FirstOrDefaultAsync(p => p.PromptKey == promptKey).ConfigureAwait(false);
 
         if (prompt == null)
         {
@@ -85,7 +85,7 @@ public class PromptService
         return await _dbContext.Prompts
             .OrderBy(p => p.Category)
             .ThenBy(p => p.Name)
-            .ToListAsync();
+            .ToListAsync().ConfigureAwait(false);
     }
 
     /// <summary>
@@ -97,13 +97,13 @@ public class PromptService
     {
         if (string.IsNullOrWhiteSpace(category))
         {
-            return await GetAllPromptsAsync();
+            return await GetAllPromptsAsync().ConfigureAwait(false);
         }
 
         return await _dbContext.Prompts
             .Where(p => p.Category == category)
             .OrderBy(p => p.Name)
-            .ToListAsync();
+            .ToListAsync().ConfigureAwait(false);
     }
 
     /// <summary>
@@ -123,7 +123,7 @@ public class PromptService
             throw new ArgumentException("프롬프트 템플릿은 필수입니다.", nameof(prompt));
 
         var existing = await _dbContext.Prompts
-            .FirstOrDefaultAsync(p => p.PromptKey == prompt.PromptKey);
+            .FirstOrDefaultAsync(p => p.PromptKey == prompt.PromptKey).ConfigureAwait(false);
 
         if (existing != null)
         {
@@ -141,7 +141,7 @@ public class PromptService
             existing.IsEnabled = prompt.IsEnabled;
 
             _dbContext.Prompts.Update(existing);
-            await _dbContext.SaveChangesAsync();
+            await _dbContext.SaveChangesAsync().ConfigureAwait(false);
 
             _logger.Information("프롬프트 업데이트 완료: {Key}", prompt.PromptKey);
             return existing;
@@ -149,8 +149,8 @@ public class PromptService
         else
         {
             // 신규 추가
-            await _dbContext.Prompts.AddAsync(prompt);
-            await _dbContext.SaveChangesAsync();
+            await _dbContext.Prompts.AddAsync(prompt).ConfigureAwait(false);
+            await _dbContext.SaveChangesAsync().ConfigureAwait(false);
 
             _logger.Information("프롬프트 생성 완료: {Key}", prompt.PromptKey);
             return prompt;
@@ -171,7 +171,7 @@ public class PromptService
         }
 
         var prompt = await _dbContext.Prompts
-            .FirstOrDefaultAsync(p => p.PromptKey == promptKey);
+            .FirstOrDefaultAsync(p => p.PromptKey == promptKey).ConfigureAwait(false);
 
         if (prompt == null)
         {
@@ -187,7 +187,7 @@ public class PromptService
         }
 
         _dbContext.Prompts.Remove(prompt);
-        await _dbContext.SaveChangesAsync();
+        await _dbContext.SaveChangesAsync().ConfigureAwait(false);
 
         _logger.Information("프롬프트 삭제 완료: {Key}", promptKey);
         return true;
@@ -201,7 +201,7 @@ public class PromptService
     /// <returns>렌더링된 프롬프트 문자열</returns>
     public async Task<string?> RenderPromptAsync(string promptKey, Dictionary<string, string> variables)
     {
-        var prompt = await GetPromptAsync(promptKey);
+        var prompt = await GetPromptAsync(promptKey).ConfigureAwait(false);
         if (prompt == null)
         {
             _logger.Warning("렌더링할 프롬프트를 찾을 수 없음: {Key}", promptKey);
@@ -252,7 +252,7 @@ public class PromptService
         string? provider = null,
         CancellationToken ct = default)
     {
-        var prompt = await GetPromptAsync(promptKey);
+        var prompt = await GetPromptAsync(promptKey).ConfigureAwait(false);
         if (prompt == null)
         {
             _logger.Warning("테스트할 프롬프트를 찾을 수 없음: {Key}", promptKey);
@@ -272,12 +272,12 @@ public class PromptService
         {
             if (!string.IsNullOrEmpty(provider))
             {
-                result = await _aiService.CompleteWithProviderAsync(provider, renderedPrompt, ct);
+                result = await _aiService.CompleteWithProviderAsync(provider, renderedPrompt, ct).ConfigureAwait(false);
                 usedProvider = provider;
             }
             else
             {
-                result = await _aiService.CompleteAsync(renderedPrompt, ct);
+                result = await _aiService.CompleteAsync(renderedPrompt, ct).ConfigureAwait(false);
                 usedProvider = _aiService.CurrentProviderName;
             }
         }
@@ -304,8 +304,8 @@ public class PromptService
             CreatedAt = DateTime.UtcNow
         };
 
-        await _dbContext.PromptTestHistories.AddAsync(history, ct);
-        await _dbContext.SaveChangesAsync(ct);
+        await _dbContext.PromptTestHistories.AddAsync(history, ct).ConfigureAwait(false);
+        await _dbContext.SaveChangesAsync(ct).ConfigureAwait(false);
 
         _logger.Information(
             "프롬프트 테스트 완료: {Key}, Provider: {Provider}, 실행시간: {Time}ms",
@@ -326,7 +326,7 @@ public class PromptService
             .Where(h => h.PromptId == promptId)
             .OrderByDescending(h => h.CreatedAt)
             .Take(limit)
-            .ToListAsync();
+            .ToListAsync().ConfigureAwait(false);
     }
 
     /// <summary>
@@ -337,13 +337,13 @@ public class PromptService
     /// <returns>테스트 이력 목록</returns>
     public async Task<List<PromptTestHistory>> GetTestHistoryByKeyAsync(string promptKey, int limit = 10)
     {
-        var prompt = await GetPromptAsync(promptKey);
+        var prompt = await GetPromptAsync(promptKey).ConfigureAwait(false);
         if (prompt == null)
         {
             return new List<PromptTestHistory>();
         }
 
-        return await GetTestHistoryAsync(prompt.Id, limit);
+        return await GetTestHistoryAsync(prompt.Id, limit).ConfigureAwait(false);
     }
 
     /// <summary>
@@ -356,7 +356,7 @@ public class PromptService
             .Where(p => p.IsEnabled)
             .OrderBy(p => p.Category)
             .ThenBy(p => p.Name)
-            .ToListAsync();
+            .ToListAsync().ConfigureAwait(false);
     }
 
     /// <summary>

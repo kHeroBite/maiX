@@ -29,7 +29,7 @@ public class SplitInboxService
         await using var db = _dbFactory.CreateDbContext();
         return await db.SplitInboxRules
             .OrderBy(r => r.SortOrder)
-            .ToListAsync();
+            .ToListAsync().ConfigureAwait(false);
     }
 
     /// <summary>
@@ -46,7 +46,7 @@ public class SplitInboxService
         {
             db.SplitInboxRules.Update(rule);
         }
-        await db.SaveChangesAsync();
+        await db.SaveChangesAsync().ConfigureAwait(false);
     }
 
     /// <summary>
@@ -55,11 +55,11 @@ public class SplitInboxService
     public async Task DeleteTabAsync(int id)
     {
         await using var db = _dbFactory.CreateDbContext();
-        var rule = await db.SplitInboxRules.FindAsync(id);
+        var rule = await db.SplitInboxRules.FindAsync(id).ConfigureAwait(false);
         if (rule != null)
         {
             db.SplitInboxRules.Remove(rule);
-            await db.SaveChangesAsync();
+            await db.SaveChangesAsync().ConfigureAwait(false);
         }
     }
 

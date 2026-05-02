@@ -31,7 +31,7 @@ public class GraphPlannerService
         try
         {
             var client = _authService.GetGraphClient();
-            var response = await client.Me.Planner.Plans.GetAsync();
+            var response = await client.Me.Planner.Plans.GetAsync().ConfigureAwait(false);
 
             Log4.Debug($"[PlannerService] 플랜 {response?.Value?.Count ?? 0}개 조회");
             return response?.Value ?? new List<PlannerPlan>();
@@ -54,7 +54,7 @@ public class GraphPlannerService
         try
         {
             var client = _authService.GetGraphClient();
-            var plan = await client.Planner.Plans[planId].GetAsync();
+            var plan = await client.Planner.Plans[planId].GetAsync().ConfigureAwait(false);
             return plan;
         }
         catch (Exception ex)
@@ -75,7 +75,7 @@ public class GraphPlannerService
         try
         {
             var client = _authService.GetGraphClient();
-            var response = await client.Planner.Plans[planId].Buckets.GetAsync();
+            var response = await client.Planner.Plans[planId].Buckets.GetAsync().ConfigureAwait(false);
 
             Log4.Debug($"[PlannerService] 플랜 {planId} 버킷 {response?.Value?.Count ?? 0}개 조회");
             return response?.Value ?? new List<PlannerBucket>();
@@ -98,7 +98,7 @@ public class GraphPlannerService
         try
         {
             var client = _authService.GetGraphClient();
-            var response = await client.Planner.Plans[planId].Tasks.GetAsync();
+            var response = await client.Planner.Plans[planId].Tasks.GetAsync().ConfigureAwait(false);
 
             Log4.Debug($"[PlannerService] 플랜 {planId} 작업 {response?.Value?.Count ?? 0}개 조회");
             return response?.Value ?? new List<PlannerTask>();
@@ -118,7 +118,7 @@ public class GraphPlannerService
         try
         {
             var client = _authService.GetGraphClient();
-            var response = await client.Me.Planner.Tasks.GetAsync();
+            var response = await client.Me.Planner.Tasks.GetAsync().ConfigureAwait(false);
 
             Log4.Debug($"[PlannerService] 내 작업 {response?.Value?.Count ?? 0}개 조회");
             return response?.Value ?? new List<PlannerTask>();
@@ -150,7 +150,7 @@ public class GraphPlannerService
                 OrderHint = orderHint ?? " !"
             };
 
-            var response = await client.Planner.Buckets.PostAsync(bucket);
+            var response = await client.Planner.Buckets.PostAsync(bucket).ConfigureAwait(false);
             Log4.Info($"[PlannerService] 버킷 생성 완료: {name}");
             return response;
         }
@@ -193,7 +193,7 @@ public class GraphPlannerService
                 };
             }
 
-            var response = await client.Planner.Tasks.PostAsync(task);
+            var response = await client.Planner.Tasks.PostAsync(task).ConfigureAwait(false);
             Log4.Info($"[PlannerService] 작업 생성 완료: {title}");
             return response;
         }
@@ -215,7 +215,7 @@ public class GraphPlannerService
         try
         {
             var client = _authService.GetGraphClient();
-            var details = await client.Planner.Tasks[taskId].Details.GetAsync();
+            var details = await client.Planner.Tasks[taskId].Details.GetAsync().ConfigureAwait(false);
             return details;
         }
         catch (Exception ex)
@@ -238,7 +238,7 @@ public class GraphPlannerService
             var client = _authService.GetGraphClient();
 
             // 먼저 현재 details를 가져와서 etag 획득
-            var currentDetails = await client.Planner.Tasks[taskId].Details.GetAsync();
+            var currentDetails = await client.Planner.Tasks[taskId].Details.GetAsync().ConfigureAwait(false);
             var etag = currentDetails?.AdditionalData?.TryGetValue("@odata.etag", out var etagValue) == true
                 ? etagValue?.ToString()
                 : null;
@@ -259,7 +259,7 @@ public class GraphPlannerService
             var response = await client.Planner.Tasks[taskId].Details.PatchAsync(updatedDetails, config =>
             {
                 config.Headers.Add("If-Match", etag);
-            });
+            }).ConfigureAwait(false);
 
             Log4.Info($"[PlannerService] 작업 상세 업데이트 완료: {taskId}");
             return response;
@@ -287,7 +287,7 @@ public class GraphPlannerService
             var response = await client.Planner.Tasks[taskId].PatchAsync(updatedTask, config =>
             {
                 config.Headers.Add("If-Match", etag);
-            });
+            }).ConfigureAwait(false);
 
             Log4.Info($"[PlannerService] 작업 업데이트 완료: {taskId}");
             return response;
@@ -309,7 +309,7 @@ public class GraphPlannerService
             PercentComplete = percentComplete
         };
 
-        return await UpdateTaskAsync(taskId, etag, task);
+        return await UpdateTaskAsync(taskId, etag, task).ConfigureAwait(false);
     }
 
     /// <summary>
@@ -322,7 +322,7 @@ public class GraphPlannerService
             BucketId = newBucketId
         };
 
-        return await UpdateTaskAsync(taskId, etag, task);
+        return await UpdateTaskAsync(taskId, etag, task).ConfigureAwait(false);
     }
 
     /// <summary>
@@ -341,7 +341,7 @@ public class GraphPlannerService
             await client.Planner.Tasks[taskId].DeleteAsync(config =>
             {
                 config.Headers.Add("If-Match", etag);
-            });
+            }).ConfigureAwait(false);
 
             Log4.Info($"[PlannerService] 작업 삭제 완료: {taskId}");
             return true;
@@ -369,7 +369,7 @@ public class GraphPlannerService
             await client.Planner.Buckets[bucketId].DeleteAsync(config =>
             {
                 config.Headers.Add("If-Match", etag);
-            });
+            }).ConfigureAwait(false);
 
             Log4.Info($"[PlannerService] 버킷 삭제 완료: {bucketId}");
             return true;
@@ -423,7 +423,7 @@ public class GraphPlannerService
         try
         {
             // Beta API를 사용하여 category1~25 모두 가져오기
-            var categoryNames = await GetPlanCategoryNamesFromBetaApiAsync(planId);
+            var categoryNames = await GetPlanCategoryNamesFromBetaApiAsync(planId).ConfigureAwait(false);
 
             // 이름이 있는 카테고리만 추가
             foreach (var kvp in categoryNames)
@@ -486,12 +486,12 @@ public class GraphPlannerService
         try
         {
             // Beta API 엔드포인트 직접 호출
-            var httpClient = await _authService.GetHttpClientAsync();
-            var response = await httpClient.GetAsync($"https://graph.microsoft.com/beta/planner/plans/{planId}/details");
+            var httpClient = await _authService.GetHttpClientAsync().ConfigureAwait(false);
+            var response = await httpClient.GetAsync($"https://graph.microsoft.com/beta/planner/plans/{planId}/details").ConfigureAwait(false);
 
             if (response.IsSuccessStatusCode)
             {
-                var content = await response.Content.ReadAsStringAsync();
+                var content = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
                 var json = JsonDocument.Parse(content);
 
                 if (json.RootElement.TryGetProperty("categoryDescriptions", out var catDescElement))
@@ -516,14 +516,14 @@ public class GraphPlannerService
             {
                 Log4.Warn($"[PlannerService] Beta API 카테고리 조회 실패: {response.StatusCode}");
                 // v1.0 API fallback
-                return await GetPlanCategoryNamesFromV1ApiAsync(planId);
+                return await GetPlanCategoryNamesFromV1ApiAsync(planId).ConfigureAwait(false);
             }
         }
         catch (Exception ex)
         {
             Log4.Warn($"[PlannerService] Beta API 카테고리 조회 예외: {ex.Message}");
             // v1.0 API fallback
-            return await GetPlanCategoryNamesFromV1ApiAsync(planId);
+            return await GetPlanCategoryNamesFromV1ApiAsync(planId).ConfigureAwait(false);
         }
 
         return categoryNames;
@@ -539,7 +539,7 @@ public class GraphPlannerService
         try
         {
             var client = _authService.GetGraphClient();
-            var details = await client.Planner.Plans[planId].Details.GetAsync();
+            var details = await client.Planner.Plans[planId].Details.GetAsync().ConfigureAwait(false);
 
             if (details?.CategoryDescriptions != null)
             {
@@ -571,7 +571,7 @@ public class GraphPlannerService
         try
         {
             var client = _authService.GetGraphClient();
-            var response = await client.Planner.Plans[planId].Tasks.GetAsync();
+            var response = await client.Planner.Plans[planId].Tasks.GetAsync().ConfigureAwait(false);
 
             Log4.Debug($"[PlannerService] 플랜 {planId} 작업 {response?.Value?.Count ?? 0}개 조회");
             return response?.Value ?? new List<PlannerTask>();
@@ -608,7 +608,7 @@ public class GraphPlannerService
             var response = await client.Planner.Tasks[taskId].PatchAsync(task, config =>
             {
                 config.Headers.Add("If-Match", etag);
-            });
+            }).ConfigureAwait(false);
 
             Log4.Info($"[PlannerService] 작업 카테고리 업데이트 완료: {taskId}");
             return response;
@@ -642,7 +642,7 @@ public class GraphPlannerService
             var response = await client.Planner.Tasks[taskId].PatchAsync(task, config =>
             {
                 config.Headers.Add("If-Match", etag);
-            });
+            }).ConfigureAwait(false);
 
             Log4.Info($"[PlannerService] 작업 순서 업데이트 완료: {taskId}");
             return response;
@@ -683,7 +683,7 @@ public class GraphPlannerService
             var response = await client.Planner.Tasks[taskId].PatchAsync(task, config =>
             {
                 config.Headers.Add("If-Match", etag);
-            });
+            }).ConfigureAwait(false);
 
             Log4.Info($"[PlannerService] 작업 담당자 업데이트 완료: {taskId}");
             return response;
@@ -705,7 +705,7 @@ public class GraphPlannerService
             Priority = priority
         };
 
-        return await UpdateTaskAsync(taskId, etag, task);
+        return await UpdateTaskAsync(taskId, etag, task).ConfigureAwait(false);
     }
 
     /// <summary>
@@ -720,7 +720,7 @@ public class GraphPlannerService
             task.DueDateTime = new DateTimeOffset(DateTime.SpecifyKind(dueDate.Value, DateTimeKind.Utc));
         }
 
-        return await UpdateTaskAsync(taskId, etag, task);
+        return await UpdateTaskAsync(taskId, etag, task).ConfigureAwait(false);
     }
 
     /// <summary>
@@ -736,7 +736,7 @@ public class GraphPlannerService
             Title = title
         };
 
-        return await UpdateTaskAsync(taskId, etag, task);
+        return await UpdateTaskAsync(taskId, etag, task).ConfigureAwait(false);
     }
 
     /// <summary>
@@ -751,7 +751,7 @@ public class GraphPlannerService
             task.StartDateTime = new DateTimeOffset(DateTime.SpecifyKind(startDate.Value, DateTimeKind.Utc));
         }
 
-        return await UpdateTaskAsync(taskId, etag, task);
+        return await UpdateTaskAsync(taskId, etag, task).ConfigureAwait(false);
     }
 
     /// <summary>
@@ -759,7 +759,7 @@ public class GraphPlannerService
     /// </summary>
     public async Task<PlannerTask?> AssignTaskAsync(string taskId, string etag, string userId)
     {
-        return await UpdateTaskAssignmentsAsync(taskId, etag, new List<string> { userId });
+        return await UpdateTaskAssignmentsAsync(taskId, etag, new List<string> { userId }).ConfigureAwait(false);
     }
 
     /// <summary>
@@ -767,7 +767,7 @@ public class GraphPlannerService
     /// </summary>
     public async Task<PlannerTask?> SetTaskProgressAsync(string taskId, string etag, int percentComplete)
     {
-        return await UpdateTaskPercentCompleteAsync(taskId, etag, percentComplete);
+        return await UpdateTaskPercentCompleteAsync(taskId, etag, percentComplete).ConfigureAwait(false);
     }
 
     /// <summary>
@@ -788,7 +788,7 @@ public class GraphPlannerService
             var response = await client.Planner.Buckets[bucketId].PatchAsync(bucket, config =>
             {
                 config.Headers.Add("If-Match", etag);
-            });
+            }).ConfigureAwait(false);
 
             Log4.Info($"[PlannerService] 버킷 이름 변경 완료: {newName}");
             return response;
@@ -824,7 +824,7 @@ public class GraphPlannerService
             var user = await client.Users[userId].GetAsync(config =>
             {
                 config.QueryParameters.Select = new[] { "displayName" };
-            });
+            }).ConfigureAwait(false);
 
             var displayName = user?.DisplayName ?? "Unknown";
             _userNameCache[userId] = displayName;
@@ -863,10 +863,10 @@ public class GraphPlannerService
         // 캐시에 없는 사용자들 병렬 조회 (최대 3개 동시)
         var tasks = uncachedIds.Select(async userId =>
         {
-            await _graphSemaphore.WaitAsync();
+            await _graphSemaphore.WaitAsync().ConfigureAwait(false);
             try
             {
-                var displayName = await GetUserDisplayNameAsync(userId);
+                var displayName = await GetUserDisplayNameAsync(userId).ConfigureAwait(false);
                 return (userId, displayName);
             }
             finally
@@ -875,7 +875,7 @@ public class GraphPlannerService
             }
         });
 
-        var fetchResults = await Task.WhenAll(tasks);
+        var fetchResults = await Task.WhenAll(tasks).ConfigureAwait(false);
         foreach (var (userId, displayName) in fetchResults)
         {
             result[userId] = displayName;
@@ -904,12 +904,12 @@ public class GraphPlannerService
         try
         {
             var client = _authService.GetGraphClient();
-            var photoStream = await client.Users[userId].Photo.Content.GetAsync();
+            var photoStream = await client.Users[userId].Photo.Content.GetAsync().ConfigureAwait(false);
 
             if (photoStream != null)
             {
                 using var memoryStream = new System.IO.MemoryStream();
-                await photoStream.CopyToAsync(memoryStream);
+                await photoStream.CopyToAsync(memoryStream).ConfigureAwait(false);
                 var photoBase64 = Convert.ToBase64String(memoryStream.ToArray());
                 _userPhotoCache[userId] = photoBase64;
                 return photoBase64;
@@ -947,10 +947,10 @@ public class GraphPlannerService
         // 캐시에 없는 사용자들 병렬 조회 (최대 3개 동시)
         var tasks = uncachedIds.Select(async userId =>
         {
-            await _graphSemaphore.WaitAsync();
+            await _graphSemaphore.WaitAsync().ConfigureAwait(false);
             try
             {
-                var photo = await GetUserPhotoAsync(userId);
+                var photo = await GetUserPhotoAsync(userId).ConfigureAwait(false);
                 return (userId, photo);
             }
             finally
@@ -959,7 +959,7 @@ public class GraphPlannerService
             }
         });
 
-        var results = await Task.WhenAll(tasks);
+        var results = await Task.WhenAll(tasks).ConfigureAwait(false);
         foreach (var (userId, photo) in results)
         {
             result[userId] = photo;

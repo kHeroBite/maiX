@@ -34,7 +34,7 @@ public class GraphActivityService
                 config.QueryParameters.Top = count;
                 config.QueryParameters.Select = new[] { "id", "subject", "from", "receivedDateTime", "isRead" };
                 config.QueryParameters.Orderby = new[] { "receivedDateTime desc" };
-            });
+            }).ConfigureAwait(false);
 
             var activities = new List<ActivityItem>();
             foreach (var message in response?.Value ?? new List<Message>())
@@ -72,7 +72,7 @@ public class GraphActivityService
             var response = await client.Me.Chats.GetAsync(config =>
             {
                 config.QueryParameters.Top = count;
-            });
+            }).ConfigureAwait(false);
 
             var activities = new List<ActivityItem>();
             foreach (var chat in response?.Value ?? new List<Chat>())
@@ -113,7 +113,7 @@ public class GraphActivityService
         {
             var client = _authService.GetGraphClient();
             // DriveId를 먼저 가져와서 Recent API 호출
-            var drive = await client.Me.Drive.GetAsync();
+            var drive = await client.Me.Drive.GetAsync().ConfigureAwait(false);
             var driveId = drive?.Id;
             if (string.IsNullOrEmpty(driveId))
             {
@@ -123,7 +123,7 @@ public class GraphActivityService
             var response = await client.Drives[driveId].Recent.GetAsync(config =>
             {
                 config.QueryParameters.Top = count;
-            });
+            }).ConfigureAwait(false);
 
             var activities = new List<ActivityItem>();
             foreach (var item in response?.Value ?? new List<DriveItem>())
@@ -162,11 +162,11 @@ public class GraphActivityService
         var chatTask = GetRecentChatActivityAsync(count / 3);
         var fileTask = GetRecentFileActivityAsync(count / 3);
 
-        await Task.WhenAll(mailTask, chatTask, fileTask);
+        await Task.WhenAll(mailTask, chatTask, fileTask).ConfigureAwait(false);
 
-        allActivities.AddRange(await mailTask);
-        allActivities.AddRange(await chatTask);
-        allActivities.AddRange(await fileTask);
+        allActivities.AddRange(await mailTask.ConfigureAwait(false));
+        allActivities.AddRange(await chatTask.ConfigureAwait(false));
+        allActivities.AddRange(await fileTask.ConfigureAwait(false));
 
         // 시간순 정렬
         return allActivities.OrderByDescending(a => a.Timestamp).Take(count);
@@ -183,11 +183,11 @@ public class GraphActivityService
         var chatTask = GetRecentChatActivityAsync(20);
         var fileTask = GetRecentFileActivityAsync(20);
 
-        await Task.WhenAll(mailTask, chatTask, fileTask);
+        await Task.WhenAll(mailTask, chatTask, fileTask).ConfigureAwait(false);
 
-        allActivities.AddRange((await mailTask).Where(a => a.Timestamp >= since));
-        allActivities.AddRange((await chatTask).Where(a => a.Timestamp >= since));
-        allActivities.AddRange((await fileTask).Where(a => a.Timestamp >= since));
+        allActivities.AddRange((await mailTask.ConfigureAwait(false)).Where(a => a.Timestamp >= since));
+        allActivities.AddRange((await chatTask.ConfigureAwait(false)).Where(a => a.Timestamp >= since));
+        allActivities.AddRange((await fileTask.ConfigureAwait(false)).Where(a => a.Timestamp >= since));
 
         return allActivities.OrderByDescending(a => a.Timestamp);
     }
@@ -203,7 +203,7 @@ public class GraphActivityService
             {
                 var client = _authService.GetGraphClient();
                 var message = new Message { IsRead = true };
-                await client.Me.Messages[activityId].PatchAsync(message);
+                await client.Me.Messages[activityId].PatchAsync(message).ConfigureAwait(false);
                 Log4.Debug($"[ActivityService] 활동 읽음 처리: {activityId}");
                 return true;
             }

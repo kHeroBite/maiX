@@ -80,7 +80,7 @@ namespace mAIx.Services.Converter
 
             try
             {
-                return await Task.Run(() => ExtractTextFromWord(filePath), ct);
+                return await Task.Run(() => ExtractTextFromWord(filePath), ct).ConfigureAwait(false);
             }
             catch (OperationCanceledException)
             {

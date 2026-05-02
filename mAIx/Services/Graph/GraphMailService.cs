@@ -35,7 +35,7 @@ namespace mAIx.Services.Graph
             {
                 try
                 {
-                    return await action();
+                    return await action().ConfigureAwait(false);
                 }
                 catch (ApiException ex) when (ex.ResponseStatusCode == (int)HttpStatusCode.TooManyRequests)
                 {
@@ -59,7 +59,7 @@ namespace mAIx.Services.Graph
                     }
 
                     logger.Warning("Graph API 429 — {Wait}초 대기 후 재시도 ({Attempt}/{Max})", waitSeconds, attempt + 1, MaxRetryCount);
-                    await Task.Delay(TimeSpan.FromSeconds(waitSeconds), ct);
+                    await Task.Delay(TimeSpan.FromSeconds(waitSeconds), ct).ConfigureAwait(false);
                 }
             }
 
@@ -92,7 +92,7 @@ namespace mAIx.Services.Graph
                 config.QueryParameters.Top = 100; // 한 번에 최대 100개
                 config.QueryParameters.Select = new[] { "id", "displayName", "parentFolderId",
                     "unreadItemCount", "totalItemCount", "childFolderCount", "isHidden" };
-            }), _logger, ct);
+            }), _logger, ct).ConfigureAwait(false);
 
             // 모든 최상위 폴더 수집 (페이징)
             var topLevelFolders = new List<MailFolder>();
@@ -108,7 +108,7 @@ namespace mAIx.Services.Graph
                 {
                     response = await client.Me.MailFolders
                         .WithUrl(response.OdataNextLink)
-                        .GetAsync();
+                        .GetAsync().ConfigureAwait(false);
                 }
                 else
                 {
@@ -124,7 +124,7 @@ namespace mAIx.Services.Graph
                 // 하위 폴더 재귀 조회
                 if (folder.Id != null)
                 {
-                    await GetChildFoldersRecursiveAsync(client, folder.Id, allFolders);
+                    await GetChildFoldersRecursiveAsync(client, folder.Id, allFolders).ConfigureAwait(false);
                 }
             }
 
@@ -141,7 +141,7 @@ namespace mAIx.Services.Graph
                 var response = await client.Me.MailFolders[parentFolderId].ChildFolders.GetAsync(config =>
                 {
                     config.QueryParameters.Top = 100;
-                });
+                }).ConfigureAwait(false);
 
                 // 페이징 처리
                 while (response != null)
@@ -155,7 +155,7 @@ namespace mAIx.Services.Graph
                         // 모든 폴더에 대해 하위 폴더 조회 시도
                         if (child.Id != null)
                         {
-                            await GetChildFoldersRecursiveAsync(client, child.Id, allFolders);
+                            await GetChildFoldersRecursiveAsync(client, child.Id, allFolders).ConfigureAwait(false);
                         }
                     }
 
@@ -164,7 +164,7 @@ namespace mAIx.Services.Graph
                     {
                         response = await client.Me.MailFolders[parentFolderId].ChildFolders
                             .WithUrl(response.OdataNextLink)
-                            .GetAsync();
+                            .GetAsync().ConfigureAwait(false);
                     }
                     else
                     {
@@ -203,7 +203,7 @@ namespace mAIx.Services.Graph
                     config.QueryParameters.Top = top;
                     config.QueryParameters.Select = selectFields;
                     config.QueryParameters.Orderby = new[] { "receivedDateTime desc" };
-                });
+                }).ConfigureAwait(false);
                 return response?.Value ?? new List<Message>();
             }
             else
@@ -213,7 +213,7 @@ namespace mAIx.Services.Graph
                     config.QueryParameters.Top = top;
                     config.QueryParameters.Select = selectFields;
                     config.QueryParameters.Orderby = new[] { "receivedDateTime desc" };
-                });
+                }).ConfigureAwait(false);
                 return response?.Value ?? new List<Message>();
             }
         }
@@ -246,7 +246,7 @@ namespace mAIx.Services.Graph
                     config.QueryParameters.Top = top;
                     config.QueryParameters.Orderby = new[] { "receivedDateTime desc" };
                     config.QueryParameters.Filter = $"receivedDateTime lt {beforeUtc}";
-                }), _logger, ct);
+                }), _logger, ct).ConfigureAwait(false);
 
             return response?.Value ?? new List<Message>();
         }
@@ -262,7 +262,7 @@ namespace mAIx.Services.Graph
             {
                 var client = _authService.GetGraphClient();
                 var attachments = await ExecuteWithRetryAsync(() =>
-                    client.Me.Messages[messageId].Attachments.GetAsync(), _logger, ct);
+                    client.Me.Messages[messageId].Attachments.GetAsync(), _logger, ct).ConfigureAwait(false);
 
                 if (attachments?.Value == null) return result;
 
@@ -318,7 +318,7 @@ namespace mAIx.Services.Graph
                         {
                             config.QueryParameters.Select = selectFields;
                             config.QueryParameters.Top = top;
-                        }), _logger);
+                        }), _logger).ConfigureAwait(false);
                 }
                 else
                 {
@@ -326,7 +326,7 @@ namespace mAIx.Services.Graph
                     response = await ExecuteWithRetryAsync(() =>
                         client.Me.MailFolders[folderId].Messages.Delta
                             .WithUrl(deltaLink)
-                            .GetAsDeltaGetResponseAsync(), _logger);
+                            .GetAsDeltaGetResponseAsync(), _logger).ConfigureAwait(false);
                 }
 
                 // 페이징 처리
@@ -361,7 +361,7 @@ namespace mAIx.Services.Graph
                     {
                         response = await client.Me.MailFolders[folderId].Messages.Delta
                             .WithUrl(response.OdataNextLink)
-                            .GetAsDeltaGetResponseAsync();
+                            .GetAsDeltaGetResponseAsync().ConfigureAwait(false);
                     }
                     else
                     {
@@ -375,7 +375,7 @@ namespace mAIx.Services.Graph
                 if (ex.Message.Contains("resync", StringComparison.OrdinalIgnoreCase) ||
                     ex.Message.Contains("syncStateNotFound", StringComparison.OrdinalIgnoreCase))
                 {
-                    return await GetMessagesDeltaAsync(folderId, null);
+                    return await GetMessagesDeltaAsync(folderId, null).ConfigureAwait(false);
                 }
                 throw;
             }
@@ -426,14 +426,14 @@ namespace mAIx.Services.Graph
                         {
                             config.QueryParameters.Select = selectFields;
                             config.QueryParameters.Top = top;
-                        }), _logger, ct);
+                        }), _logger, ct).ConfigureAwait(false);
                 }
                 else
                 {
                     response = await ExecuteWithRetryAsync(() =>
                         client.Me.MailFolders[folderId].Messages.Delta
                             .WithUrl(deltaLink)
-                            .GetAsDeltaGetResponseAsync(), _logger, ct);
+                            .GetAsDeltaGetResponseAsync(), _logger, ct).ConfigureAwait(false);
                 }
 
                 while (response != null)
@@ -460,7 +460,7 @@ namespace mAIx.Services.Graph
                     // 페이지 단위 즉시 전달 (Progressive UI)
                     if (pageMessages.Count > 0)
                     {
-                        await onPageReady(pageMessages);
+                        await onPageReady(pageMessages).ConfigureAwait(false);
                     }
 
                     if (!string.IsNullOrEmpty(response.OdataDeltaLink))
@@ -473,7 +473,7 @@ namespace mAIx.Services.Graph
                     {
                         response = await client.Me.MailFolders[folderId].Messages.Delta
                             .WithUrl(response.OdataNextLink)
-                            .GetAsDeltaGetResponseAsync();
+                            .GetAsDeltaGetResponseAsync().ConfigureAwait(false);
                     }
                     else
                     {
@@ -490,7 +490,7 @@ namespace mAIx.Services.Graph
                 if (ex.Message.Contains("resync", StringComparison.OrdinalIgnoreCase) ||
                     ex.Message.Contains("syncStateNotFound", StringComparison.OrdinalIgnoreCase))
                 {
-                    return await GetMessagesDeltaPagedAsync(folderId, null, isInitialSync, onPageReady, ct);
+                    return await GetMessagesDeltaPagedAsync(folderId, null, isInitialSync, onPageReady, ct).ConfigureAwait(false);
                 }
                 throw;
             }
@@ -536,7 +536,7 @@ namespace mAIx.Services.Graph
                             var sinceUtc = since.Value.ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ssZ");
                             config.QueryParameters.Filter = $"receivedDateTime ge {sinceUtc}";
                         }
-                    }), _logger, ct);
+                    }), _logger, ct).ConfigureAwait(false);
 
             return response?.Value ?? new List<Message>();
         }
@@ -565,7 +565,7 @@ namespace mAIx.Services.Graph
                     config.QueryParameters.Top = 500;  // 한 번에 최대 500개 (30일치 커버)
                     config.QueryParameters.Filter = $"receivedDateTime ge {sinceDate}";
                     config.QueryParameters.Orderby = new[] { "receivedDateTime desc" };
-                });
+                }).ConfigureAwait(false);
 
             // 페이징 처리
             while (response != null)
@@ -586,7 +586,7 @@ namespace mAIx.Services.Graph
                 {
                     response = await client.Me.MailFolders[folderId].Messages
                         .WithUrl(response.OdataNextLink)
-                        .GetAsync();
+                        .GetAsync().ConfigureAwait(false);
                 }
                 else
                 {
@@ -617,7 +617,7 @@ namespace mAIx.Services.Graph
                     config.QueryParameters.Select = new[] { "id" };
                     config.QueryParameters.Filter = "isRead eq false";
                     config.QueryParameters.Top = 1000;
-                }, ct);
+                }, ct).ConfigureAwait(false);
 
             // 페이징 처리 (@odata.nextLink)
             while (response != null)
@@ -635,7 +635,7 @@ namespace mAIx.Services.Graph
                 {
                     response = await client.Me.MailFolders[folderId].Messages
                         .WithUrl(response.OdataNextLink)
-                        .GetAsync(cancellationToken: ct);
+                        .GetAsync(cancellationToken: ct).ConfigureAwait(false);
                 }
                 else
                 {
@@ -659,7 +659,7 @@ namespace mAIx.Services.Graph
             }
 
             var client = _authService.GetGraphClient();
-            return await client.Me.Messages[messageId].GetAsync();
+            return await client.Me.Messages[messageId].GetAsync().ConfigureAwait(false);
         }
 
         /// <summary>
@@ -678,7 +678,7 @@ namespace mAIx.Services.Graph
             {
                 Message = message,
                 SaveToSentItems = true
-            });
+            }).ConfigureAwait(false);
         }
 
         /// <summary>
@@ -707,7 +707,7 @@ namespace mAIx.Services.Graph
                 .PostAsync(new Microsoft.Graph.Me.Messages.Item.Attachments.CreateUploadSession.CreateUploadSessionPostRequestBody
                 {
                     AttachmentItem = attachmentItem
-                });
+                }).ConfigureAwait(false);
 
             if (uploadSession?.UploadUrl == null)
                 throw new InvalidOperationException("Upload session 생성 실패");
@@ -723,12 +723,12 @@ namespace mAIx.Services.Graph
 
             while (offset < fileSize)
             {
-                var bytesRead = await fileStream.ReadAsync(buffer, 0, (int)Math.Min(chunkSize, fileSize - offset));
+                var bytesRead = await fileStream.ReadAsync(buffer, 0, (int)Math.Min(chunkSize, fileSize - offset)).ConfigureAwait(false);
                 var content = new System.Net.Http.ByteArrayContent(buffer, 0, bytesRead);
                 content.Headers.Add("Content-Range", $"bytes {offset}-{offset + bytesRead - 1}/{fileSize}");
                 content.Headers.ContentLength = bytesRead;
 
-                var response = await httpClient.PutAsync(uploadSession.UploadUrl, content);
+                var response = await httpClient.PutAsync(uploadSession.UploadUrl, content).ConfigureAwait(false);
                 response.EnsureSuccessStatusCode();
 
                 offset += bytesRead;
@@ -744,7 +744,7 @@ namespace mAIx.Services.Graph
                 throw new ArgumentNullException(nameof(messageId));
 
             var client = _authService.GetGraphClient();
-            await client.Me.Messages[messageId].Send.PostAsync();
+            await client.Me.Messages[messageId].Send.PostAsync().ConfigureAwait(false);
         }
 
         /// <summary>
@@ -761,7 +761,7 @@ namespace mAIx.Services.Graph
 
             var client = _authService.GetGraphClient();
             // 임시보관함(Drafts)에 메시지 저장
-            var savedMessage = await client.Me.Messages.PostAsync(message);
+            var savedMessage = await client.Me.Messages.PostAsync(message).ConfigureAwait(false);
             return savedMessage;
         }
 
@@ -784,7 +784,7 @@ namespace mAIx.Services.Graph
 
             var client = _authService.GetGraphClient();
             // 기존 드래프트 메시지 업데이트
-            var updatedMessage = await client.Me.Messages[messageId].PatchAsync(message);
+            var updatedMessage = await client.Me.Messages[messageId].PatchAsync(message).ConfigureAwait(false);
             return updatedMessage;
         }
 
@@ -815,7 +815,7 @@ namespace mAIx.Services.Graph
                 {
                     FlagStatus = flagType
                 }
-            });
+            }).ConfigureAwait(false);
         }
 
         /// <summary>
@@ -835,7 +835,7 @@ namespace mAIx.Services.Graph
             await client.Me.Messages[messageId].PatchAsync(new Message
             {
                 IsRead = isRead
-            });
+            }).ConfigureAwait(false);
         }
 
         /// <summary>
@@ -855,7 +855,7 @@ namespace mAIx.Services.Graph
             await client.Me.Messages[messageId].PatchAsync(new Message
             {
                 Categories = categories ?? new List<string>()
-            });
+            }).ConfigureAwait(false);
         }
 
         /// <summary>
@@ -882,7 +882,7 @@ namespace mAIx.Services.Graph
             await client.Me.Messages[messageId].PatchAsync(new Message
             {
                 Importance = importanceLevel
-            });
+            }).ConfigureAwait(false);
         }
 
         /// <summary>
@@ -908,7 +908,7 @@ namespace mAIx.Services.Graph
                 new Microsoft.Graph.Me.Messages.Item.Move.MovePostRequestBody
                 {
                     DestinationId = destinationFolderId
-                });
+                }).ConfigureAwait(false);
         }
 
         /// <summary>
@@ -923,7 +923,7 @@ namespace mAIx.Services.Graph
             }
 
             var client = _authService.GetGraphClient();
-            await client.Me.Messages[messageId].DeleteAsync();
+            await client.Me.Messages[messageId].DeleteAsync().ConfigureAwait(false);
         }
 
         #region 스팸/정크 메일 관리
@@ -944,7 +944,7 @@ namespace mAIx.Services.Graph
                 new Microsoft.Graph.Me.Messages.Item.Move.MovePostRequestBody
                 {
                     DestinationId = "junkemail"
-                });
+                }).ConfigureAwait(false);
         }
 
         /// <summary>
@@ -963,7 +963,7 @@ namespace mAIx.Services.Graph
                 new Microsoft.Graph.Me.Messages.Item.Move.MovePostRequestBody
                 {
                     DestinationId = "inbox"
-                });
+                }).ConfigureAwait(false);
         }
 
         /// <summary>
@@ -975,7 +975,7 @@ namespace mAIx.Services.Graph
             {
                 var client = _authService.GetGraphClient();
                 return await ExecuteWithRetryAsync(() =>
-                    client.Me.MailFolders["junkemail"].GetAsync(cancellationToken: ct), _logger, ct);
+                    client.Me.MailFolders["junkemail"].GetAsync(cancellationToken: ct), _logger, ct).ConfigureAwait(false);
             }
             catch (Exception ex)
             {
@@ -1010,12 +1010,12 @@ namespace mAIx.Services.Graph
             if (string.IsNullOrEmpty(parentFolderId))
             {
                 // 루트 레벨에 생성
-                return await client.Me.MailFolders.PostAsync(newFolder);
+                return await client.Me.MailFolders.PostAsync(newFolder).ConfigureAwait(false);
             }
             else
             {
                 // 지정된 부모 폴더 아래에 생성
-                return await client.Me.MailFolders[parentFolderId].ChildFolders.PostAsync(newFolder);
+                return await client.Me.MailFolders[parentFolderId].ChildFolders.PostAsync(newFolder).ConfigureAwait(false);
             }
         }
 
@@ -1043,7 +1043,7 @@ namespace mAIx.Services.Graph
                 await client.Me.MailFolders[folderId].PatchAsync(new MailFolder
                 {
                     DisplayName = newName
-                });
+                }).ConfigureAwait(false);
                 return true;
             }
             catch (Exception ex)
@@ -1068,7 +1068,7 @@ namespace mAIx.Services.Graph
             try
             {
                 var client = _authService.GetGraphClient();
-                await client.Me.MailFolders[folderId].DeleteAsync();
+                await client.Me.MailFolders[folderId].DeleteAsync().ConfigureAwait(false);
                 return true;
             }
             catch (Exception ex)
@@ -1095,7 +1095,7 @@ namespace mAIx.Services.Graph
 
             var client = _authService.GetGraphClient();
             var attachment = await ExecuteWithRetryAsync(() =>
-                client.Me.Messages[messageId].Attachments[attachmentId].GetAsync(cancellationToken: ct), _logger, ct);
+                client.Me.Messages[messageId].Attachments[attachmentId].GetAsync(cancellationToken: ct), _logger, ct).ConfigureAwait(false);
 
             if (attachment is FileAttachment fileAttachment)
             {
@@ -1125,7 +1125,7 @@ namespace mAIx.Services.Graph
                 {
                     config.QueryParameters.Select = new[] { "id" };
                     config.QueryParameters.Top = 1000;
-                }, ct), _logger, ct);
+                }, ct), _logger, ct).ConfigureAwait(false);
 
             while (response != null)
             {
@@ -1142,7 +1142,7 @@ namespace mAIx.Services.Graph
                 {
                     response = await client.Me.MailFolders[folderId].Messages
                         .WithUrl(response.OdataNextLink)
-                        .GetAsync(cancellationToken: ct);
+                        .GetAsync(cancellationToken: ct).ConfigureAwait(false);
                 }
                 else
                 {

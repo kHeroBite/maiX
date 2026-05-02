@@ -90,7 +90,7 @@ public class ChunkedUploadService
             // 5MB 미만이면 소규모 업로드 사용
             if (fileInfo.Length < 5 * 1024 * 1024)
             {
-                var result = await _oneDriveService.UploadSmallFileAsync(parentFolderId, fileName, stream);
+                var result = await _oneDriveService.UploadSmallFileAsync(parentFolderId, fileName, stream).ConfigureAwait(false);
                 if (result != null)
                 {
                     CurrentProgress = 100;
@@ -104,7 +104,7 @@ public class ChunkedUploadService
             }
 
             // 대용량 업로드
-            var item = await _oneDriveService.UploadLargeFileAsync(stream, parentFolderId, fileName, progress, ct);
+            var item = await _oneDriveService.UploadLargeFileAsync(stream, parentFolderId, fileName, progress, ct).ConfigureAwait(false);
             CurrentProgress = 100;
             ProgressChanged?.Invoke(this, 100);
             UploadCompleted?.Invoke(this, fileName);

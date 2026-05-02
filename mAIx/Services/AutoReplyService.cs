@@ -71,7 +71,7 @@ namespace mAIx.Services
             try
             {
                 var client = _authService.GetGraphClient();
-                var settings = await client.Me.MailboxSettings.GetAsync();
+                var settings = await client.Me.MailboxSettings.GetAsync().ConfigureAwait(false);
 
                 if (settings?.AutomaticRepliesSetting == null)
                 {
@@ -165,7 +165,7 @@ namespace mAIx.Services
                 await client.Me.MailboxSettings.PatchAsync(new MailboxSettings
                 {
                     AutomaticRepliesSetting = automaticReplies
-                });
+                }).ConfigureAwait(false);
 
                 _logger.Information("자동응답 설정 적용 완료: {Status}", setting.Status);
             }
@@ -181,7 +181,7 @@ namespace mAIx.Services
         /// </summary>
         public async Task DisableAutoReplyAsync()
         {
-            await SetAutoReplyAsync(new AutoReplySetting { Status = "disabled" });
+            await SetAutoReplyAsync(new AutoReplySetting { Status = "disabled" }).ConfigureAwait(false);
         }
     }
 }

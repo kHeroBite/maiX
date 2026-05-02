@@ -38,7 +38,7 @@ namespace mAIx.Services.Graph
                 var client = _authService.GetGraphClient();
 
                 // 모든 To Do 목록 조회
-                var listsResponse = await client.Me.Todo.Lists.GetAsync();
+                var listsResponse = await client.Me.Todo.Lists.GetAsync().ConfigureAwait(false);
 
                 if (listsResponse?.Value == null || !listsResponse.Value.Any())
                 {
@@ -84,7 +84,7 @@ namespace mAIx.Services.Graph
 
             try
             {
-                var listId = await GetDefaultListIdAsync();
+                var listId = await GetDefaultListIdAsync().ConfigureAwait(false);
                 if (string.IsNullOrEmpty(listId))
                 {
                     _logger.Error("[GraphToDoService] 기본 목록을 찾을 수 없어 작업을 생성할 수 없습니다");
@@ -119,7 +119,7 @@ namespace mAIx.Services.Graph
                     };
                 }
 
-                var createdTask = await client.Me.Todo.Lists[listId].Tasks.PostAsync(newTask);
+                var createdTask = await client.Me.Todo.Lists[listId].Tasks.PostAsync(newTask).ConfigureAwait(false);
 
                 if (createdTask != null)
                 {
@@ -149,7 +149,7 @@ namespace mAIx.Services.Graph
 
             try
             {
-                var listId = await GetDefaultListIdAsync();
+                var listId = await GetDefaultListIdAsync().ConfigureAwait(false);
                 if (string.IsNullOrEmpty(listId))
                 {
                     _logger.Error("[GraphToDoService] 기본 목록을 찾을 수 없어 작업을 삭제할 수 없습니다");
@@ -157,7 +157,7 @@ namespace mAIx.Services.Graph
                 }
 
                 var client = _authService.GetGraphClient();
-                await client.Me.Todo.Lists[listId].Tasks[taskId].DeleteAsync();
+                await client.Me.Todo.Lists[listId].Tasks[taskId].DeleteAsync().ConfigureAwait(false);
 
                 _logger.Information("[GraphToDoService] 작업 삭제 완료: {TaskId}", taskId);
                 return true;
@@ -189,7 +189,7 @@ namespace mAIx.Services.Graph
 
             try
             {
-                var listId = await GetDefaultListIdAsync();
+                var listId = await GetDefaultListIdAsync().ConfigureAwait(false);
                 if (string.IsNullOrEmpty(listId))
                 {
                     _logger.Error("[GraphToDoService] 기본 목록을 찾을 수 없습니다");
@@ -212,7 +212,7 @@ namespace mAIx.Services.Graph
                     };
                 }
 
-                await client.Me.Todo.Lists[listId].Tasks[taskId].PatchAsync(updateTask);
+                await client.Me.Todo.Lists[listId].Tasks[taskId].PatchAsync(updateTask).ConfigureAwait(false);
 
                 _logger.Information("[GraphToDoService] 작업 상태 업데이트: {TaskId}, 완료={IsCompleted}",
                     taskId, isCompleted);
@@ -234,7 +234,7 @@ namespace mAIx.Services.Graph
             try
             {
                 var client = _authService.GetGraphClient();
-                var listsResponse = await client.Me.Todo.Lists.GetAsync();
+                var listsResponse = await client.Me.Todo.Lists.GetAsync().ConfigureAwait(false);
 
                 if (listsResponse?.Value == null)
                     return new List<TodoTaskListInfo>();
@@ -261,7 +261,7 @@ namespace mAIx.Services.Graph
         {
             try
             {
-                var listId = await GetDefaultListIdAsync();
+                var listId = await GetDefaultListIdAsync().ConfigureAwait(false);
                 if (string.IsNullOrEmpty(listId))
                 {
                     _logger.Warning("[GraphToDoService] 기본 목록을 찾을 수 없습니다");
@@ -279,7 +279,7 @@ namespace mAIx.Services.Graph
                     {
                         config.QueryParameters.Filter = "status ne 'completed'";
                     }
-                });
+                }).ConfigureAwait(false);
 
                 if (tasksResponse?.Value == null)
                     return new List<TodoTaskItem>();
@@ -324,7 +324,7 @@ namespace mAIx.Services.Graph
                     {
                         config.QueryParameters.Filter = "status ne 'completed'";
                     }
-                });
+                }).ConfigureAwait(false);
 
                 if (tasksResponse?.Value == null)
                     return new List<TodoTaskItem>();
@@ -388,7 +388,7 @@ namespace mAIx.Services.Graph
                     };
                 }
 
-                var createdTask = await client.Me.Todo.Lists[listId].Tasks.PostAsync(newTask);
+                var createdTask = await client.Me.Todo.Lists[listId].Tasks.PostAsync(newTask).ConfigureAwait(false);
 
                 if (createdTask != null)
                 {
@@ -428,7 +428,7 @@ namespace mAIx.Services.Graph
                     };
                 }
 
-                await client.Me.Todo.Lists[listId].Tasks[taskId].PatchAsync(updateTask);
+                await client.Me.Todo.Lists[listId].Tasks[taskId].PatchAsync(updateTask).ConfigureAwait(false);
                 return true;
             }
             catch (Exception ex)
@@ -452,7 +452,7 @@ namespace mAIx.Services.Graph
                     Importance = isImportant ? Importance.High : Importance.Normal
                 };
 
-                await client.Me.Todo.Lists[listId].Tasks[taskId].PatchAsync(updateTask);
+                await client.Me.Todo.Lists[listId].Tasks[taskId].PatchAsync(updateTask).ConfigureAwait(false);
                 return true;
             }
             catch (Exception ex)
@@ -470,7 +470,7 @@ namespace mAIx.Services.Graph
             try
             {
                 var client = _authService.GetGraphClient();
-                await client.Me.Todo.Lists[listId].Tasks[taskId].DeleteAsync();
+                await client.Me.Todo.Lists[listId].Tasks[taskId].DeleteAsync().ConfigureAwait(false);
                 _logger.Information("[GraphToDoService] 작업 삭제: {TaskId} (목록: {ListId})", taskId, listId);
                 return true;
             }
@@ -496,7 +496,7 @@ namespace mAIx.Services.Graph
             {
                 var client = _authService.GetGraphClient();
                 var newList = new TodoTaskList { DisplayName = displayName };
-                var created = await client.Me.Todo.Lists.PostAsync(newList);
+                var created = await client.Me.Todo.Lists.PostAsync(newList).ConfigureAwait(false);
                 _logger.Information("[GraphToDoService] 목록 생성: {Name}", displayName);
                 return created?.Id;
             }
@@ -515,7 +515,7 @@ namespace mAIx.Services.Graph
             try
             {
                 var client = _authService.GetGraphClient();
-                await client.Me.Todo.Lists[listId].DeleteAsync();
+                await client.Me.Todo.Lists[listId].DeleteAsync().ConfigureAwait(false);
                 _logger.Information("[GraphToDoService] 목록 삭제: {ListId}", listId);
                 return true;
             }
@@ -546,7 +546,7 @@ namespace mAIx.Services.Graph
                 };
 
                 var updateTask = new TodoTask { Recurrence = recurrence };
-                await client.Me.Todo.Lists[listId].Tasks[taskId].PatchAsync(updateTask);
+                await client.Me.Todo.Lists[listId].Tasks[taskId].PatchAsync(updateTask).ConfigureAwait(false);
 
                 _logger.Information("[GraphToDoService] 반복 설정: {TaskId} → {Pattern}", taskId, pattern);
                 return true;
@@ -626,7 +626,7 @@ namespace mAIx.Services.Graph
                     config.QueryParameters.Select = new[] { "id", "subject", "receivedDateTime" };
                     config.QueryParameters.Top = 50;
                     config.QueryParameters.Orderby = new[] { "receivedDateTime desc" };
-                });
+                }).ConfigureAwait(false);
 
                 if (flaggedEmails?.Value == null || !flaggedEmails.Value.Any())
                 {
@@ -635,10 +635,10 @@ namespace mAIx.Services.Graph
                 }
 
                 // 기본 목록에 플래그 이메일을 할일로 생성
-                var listId = await GetDefaultListIdAsync();
+                var listId = await GetDefaultListIdAsync().ConfigureAwait(false);
                 if (string.IsNullOrEmpty(listId)) return;
 
-                var existingTasks = await GetTasksFromListAsync(listId, true);
+                var existingTasks = await GetTasksFromListAsync(listId, true).ConfigureAwait(false);
                 var existingTitles = new HashSet<string>(existingTasks.Select(t => t.Title));
 
                 foreach (var email in flaggedEmails.Value)
@@ -646,7 +646,7 @@ namespace mAIx.Services.Graph
                     var title = $"📧 {email.Subject}";
                     if (existingTitles.Contains(title)) continue;
 
-                    await CreateTaskInListAsync(listId, title, body: $"이메일에서 가져옴 (수신: {email.ReceivedDateTime?.ToString("yyyy-MM-dd HH:mm")})");
+                    await CreateTaskInListAsync(listId, title, body: $"이메일에서 가져옴 (수신: {email.ReceivedDateTime?.ToString("yyyy-MM-dd HH:mm")})").ConfigureAwait(false);
                 }
 
                 _logger.Information("[GraphToDoService] 플래그 이메일 동기화 완료: {Count}건 확인", flaggedEmails.Value.Count);

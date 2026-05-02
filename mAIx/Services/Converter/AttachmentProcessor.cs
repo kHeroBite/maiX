@@ -249,7 +249,7 @@ namespace mAIx.Services.Converter
                     // 텍스트 파일인 경우 직접 읽기
                     if (IsTextFile(extension))
                     {
-                        var text = await File.ReadAllTextAsync(filePath, ct);
+                        var text = await File.ReadAllTextAsync(filePath, ct).ConfigureAwait(false);
                         sw.Stop();
                         var result = ConversionResult.Succeeded(text, filePath, "DirectRead");
                         result.Duration = sw.Elapsed;
@@ -263,7 +263,7 @@ namespace mAIx.Services.Converter
                 }
 
                 // 변환 수행
-                var convertedText = await converter.ConvertToTextAsync(filePath, ct);
+                var convertedText = await converter.ConvertToTextAsync(filePath, ct).ConfigureAwait(false);
                 sw.Stop();
 
                 var conversionResult = ConversionResult.Succeeded(convertedText, filePath, converter.Name);
@@ -323,7 +323,7 @@ namespace mAIx.Services.Converter
 
             try
             {
-                var text = await converter.ConvertToTextAsync(filePath, ct);
+                var text = await converter.ConvertToTextAsync(filePath, ct).ConfigureAwait(false);
                 sw.Stop();
 
                 var result = ConversionResult.Succeeded(text, filePath, converter.Name);
@@ -356,8 +356,8 @@ namespace mAIx.Services.Converter
 
             try
             {
-                await File.WriteAllBytesAsync(tempPath, content, ct);
-                return await ProcessAttachmentAsync(tempPath, ct);
+                await File.WriteAllBytesAsync(tempPath, content, ct).ConfigureAwait(false);
+                return await ProcessAttachmentAsync(tempPath, ct).ConfigureAwait(false);
             }
             finally
             {
@@ -385,10 +385,10 @@ namespace mAIx.Services.Converter
             try
             {
                 await using var fileStream = File.Create(tempPath);
-                await stream.CopyToAsync(fileStream, ct);
-                await fileStream.FlushAsync(ct);
+                await stream.CopyToAsync(fileStream, ct).ConfigureAwait(false);
+                await fileStream.FlushAsync(ct).ConfigureAwait(false);
 
-                return await ProcessAttachmentAsync(tempPath, ct);
+                return await ProcessAttachmentAsync(tempPath, ct).ConfigureAwait(false);
             }
             finally
             {
@@ -410,7 +410,7 @@ namespace mAIx.Services.Converter
                 if (ct.IsCancellationRequested)
                     break;
 
-                var result = await ProcessAttachmentAsync(filePath, ct);
+                var result = await ProcessAttachmentAsync(filePath, ct).ConfigureAwait(false);
                 results.Add(result);
             }
 
@@ -436,11 +436,11 @@ namespace mAIx.Services.Converter
 
                 try
                 {
-                    var (filePath, fileName) = await _cloudDownloader.DownloadAsync(link, type, _tempFolder, ct);
+                    var (filePath, fileName) = await _cloudDownloader.DownloadAsync(link, type, _tempFolder, ct).ConfigureAwait(false);
 
                     if (!string.IsNullOrEmpty(filePath))
                     {
-                        var result = await ProcessAttachmentAsync(filePath, ct);
+                        var result = await ProcessAttachmentAsync(filePath, ct).ConfigureAwait(false);
                         result.Metadata["CloudLink"] = link;
                         result.Metadata["CloudType"] = type.ToString();
                         results.Add(result);
@@ -515,7 +515,7 @@ namespace mAIx.Services.Converter
                 if (ct.IsCancellationRequested)
                     break;
 
-                var convResult = await ProcessAttachmentAsync(filePath, ct);
+                var convResult = await ProcessAttachmentAsync(filePath, ct).ConfigureAwait(false);
                 result.Results.Add(convResult);
 
                 if (convResult.Success && !string.IsNullOrEmpty(convResult.Text))
@@ -529,7 +529,7 @@ namespace mAIx.Services.Converter
             // 클라우드 링크 처리
             if (!string.IsNullOrEmpty(emailBody))
             {
-                var cloudResults = await ProcessCloudLinksAsync(emailBody, ct);
+                var cloudResults = await ProcessCloudLinksAsync(emailBody, ct).ConfigureAwait(false);
                 result.Results.AddRange(cloudResults);
 
                 foreach (var cloudResult in cloudResults.Where(r => r.Success))

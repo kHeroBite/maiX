@@ -207,12 +207,12 @@ namespace mAIx.Services.Graph
                 // 1단계: 승인 완료된 최소 스코프로 대화형 로그인
                 _authResult = await _msalClient!
                     .AcquireTokenInteractive(LoginScopes)
-                    .ExecuteAsync();
+                    .ExecuteAsync().ConfigureAwait(false);
 
                 Log4.Info($"[GraphAuthService] 로그인 성공 - {_authResult.Account?.Username}");
 
                 // 2단계: 전체 스코프로 Silent 증분 획득 시도
-                await TryAcquireFullScopesAsync();
+                await TryAcquireFullScopesAsync().ConfigureAwait(false);
 
                 return IsLoggedIn;
             }
@@ -257,7 +257,7 @@ namespace mAIx.Services.Graph
                 {
                     var fullResult = await _msalClient
                         .AcquireTokenSilent(_scopes, _authResult.Account)
-                        .ExecuteAsync();
+                        .ExecuteAsync().ConfigureAwait(false);
 
                     _authResult = fullResult;
                     Log4.Info($"[GraphAuthService] 전체 스코프 Silent 획득 성공 ({_scopes.Length}개)");
@@ -273,7 +273,7 @@ namespace mAIx.Services.Graph
                     .AcquireTokenInteractive(_scopes)
                     .WithAccount(_authResult.Account)
                     .WithPrompt(Microsoft.Identity.Client.Prompt.NoPrompt)
-                    .ExecuteAsync();
+                    .ExecuteAsync().ConfigureAwait(false);
 
                 _authResult = interactiveResult;
                 Log4.Info($"[GraphAuthService] 전체 스코프 대화형 획득 성공 ({_scopes.Length}개)");
@@ -309,7 +309,7 @@ namespace mAIx.Services.Graph
                     return false;
                 }
 
-                var accounts = await _msalClient!.GetAccountsAsync();
+                var accounts = await _msalClient!.GetAccountsAsync().ConfigureAwait(false);
                 IAccount? account = null;
 
                 if (!string.IsNullOrEmpty(email))
@@ -331,12 +331,12 @@ namespace mAIx.Services.Graph
                 // 승인 완료된 최소 스코프로 Silent 로그인
                 _authResult = await _msalClient
                     .AcquireTokenSilent(LoginScopes, account)
-                    .ExecuteAsync();
+                    .ExecuteAsync().ConfigureAwait(false);
 
                 Log4.Info($"[GraphAuthService] Silent 로그인 성공 - {_authResult.Account?.Username}");
 
                 // 전체 스코프로 Silent 증분 획득 시도
-                await TryAcquireFullScopesAsync();
+                await TryAcquireFullScopesAsync().ConfigureAwait(false);
 
                 return IsLoggedIn;
             }
@@ -362,10 +362,10 @@ namespace mAIx.Services.Graph
 
             if (_msalClient != null)
             {
-                var accounts = await _msalClient.GetAccountsAsync();
+                var accounts = await _msalClient.GetAccountsAsync().ConfigureAwait(false);
                 foreach (var account in accounts)
                 {
-                    await _msalClient.RemoveAsync(account);
+                    await _msalClient.RemoveAsync(account).ConfigureAwait(false);
                 }
             }
 
@@ -407,7 +407,7 @@ namespace mAIx.Services.Graph
             }
 
             var httpClient = new System.Net.Http.HttpClient();
-            var token = await GetAccessTokenAsync();
+            var token = await GetAccessTokenAsync().ConfigureAwait(false);
             httpClient.DefaultRequestHeaders.Authorization =
                 new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", token);
             return httpClient;
@@ -427,7 +427,7 @@ namespace mAIx.Services.Graph
             if (_authResult.ExpiresOn <= DateTimeOffset.UtcNow.AddMinutes(5))
             {
                 Log4.Debug("[GraphAuthService] 토큰 자동 갱신 시도");
-                await LoginSilentAsync(_authResult.Account?.Username);
+                await LoginSilentAsync(_authResult.Account?.Username).ConfigureAwait(false);
             }
 
             return _authResult.AccessToken;
@@ -457,7 +457,7 @@ namespace mAIx.Services.Graph
                 var sharePointScopes = new[] { $"{baseUrl}/AllSites.Manage" };
                 Log4.Debug($"[GraphAuthService] SharePoint 토큰 요청 - 스코프: {string.Join(", ", sharePointScopes)}");
 
-                var accounts = await _msalClient.GetAccountsAsync();
+                var accounts = await _msalClient.GetAccountsAsync().ConfigureAwait(false);
                 var account = accounts.FirstOrDefault();
 
                 if (account == null)
@@ -471,7 +471,7 @@ namespace mAIx.Services.Graph
                     // Silent 토큰 획득 시도
                     var result = await _msalClient
                         .AcquireTokenSilent(sharePointScopes, account)
-                        .ExecuteAsync();
+                        .ExecuteAsync().ConfigureAwait(false);
 
                     Log4.Info($"[GraphAuthService] SharePoint 토큰 획득 성공");
                     return result.AccessToken;
@@ -486,7 +486,7 @@ namespace mAIx.Services.Graph
                         var result = await _msalClient
                             .AcquireTokenInteractive(sharePointScopes)
                             .WithUseEmbeddedWebView(false) // 시스템 브라우저 사용
-                            .ExecuteAsync();
+                            .ExecuteAsync().ConfigureAwait(false);
 
                         Log4.Info($"[GraphAuthService] SharePoint 대화형 토큰 획득 성공");
                         return result.AccessToken;
@@ -533,7 +533,7 @@ namespace mAIx.Services.Graph
             Dictionary<string, object>? additionalAuthenticationContext = null,
             CancellationToken cancellationToken = default)
         {
-            var token = await _getAccessToken();
+            var token = await _getAccessToken().ConfigureAwait(false);
             request.Headers.Add("Authorization", $"Bearer {token}");
         }
     }

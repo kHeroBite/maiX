@@ -52,7 +52,7 @@ public class GraphOneNoteService
             var client = _authService.GetGraphClient();
             Log4.Debug("[GetNotebooksAsync] Graph 클라이언트 획득 완료");
             
-            var response = await client.Me.Onenote.Notebooks.GetAsync();
+            var response = await client.Me.Onenote.Notebooks.GetAsync().ConfigureAwait(false);
 
             var count = response?.Value?.Count ?? 0;
             Log4.Info($"[GetNotebooksAsync] 개인 노트북 {count}개 조회");
@@ -76,7 +76,7 @@ public class GraphOneNoteService
             var client = _authService.GetGraphClient();
 
             // Teams에서 사용자가 속한 팀 가져오기 (Teams 팀 = Microsoft 365 그룹)
-            var teamsResponse = await client.Me.JoinedTeams.GetAsync();
+            var teamsResponse = await client.Me.JoinedTeams.GetAsync().ConfigureAwait(false);
 
             var teams = teamsResponse?.Value ?? new List<Microsoft.Graph.Models.Team>();
 
@@ -112,7 +112,7 @@ public class GraphOneNoteService
         try
         {
             var client = _authService.GetGraphClient();
-            var response = await client.Groups[groupId].Onenote.Notebooks.GetAsync();
+            var response = await client.Groups[groupId].Onenote.Notebooks.GetAsync().ConfigureAwait(false);
 
             _logger.Debug("그룹 {GroupId} 노트북 {Count}개 조회", groupId, response?.Value?.Count ?? 0);
             return response?.Value ?? new List<Notebook>();
@@ -135,7 +135,7 @@ public class GraphOneNoteService
         try
         {
             var client = _authService.GetGraphClient();
-            var response = await client.Groups[groupId].Onenote.Notebooks[notebookId].Sections.GetAsync();
+            var response = await client.Groups[groupId].Onenote.Notebooks[notebookId].Sections.GetAsync().ConfigureAwait(false);
 
             _logger.Debug("그룹 {GroupId} 노트북 {NotebookId} 섹션 {Count}개 조회",
                 groupId, notebookId, response?.Value?.Count ?? 0);
@@ -163,7 +163,7 @@ public class GraphOneNoteService
             {
                 config.QueryParameters.Top = 100;
                 config.QueryParameters.Orderby = new[] { "createdDateTime desc" };
-            });
+            }).ConfigureAwait(false);
 
             _logger.Debug("그룹 {GroupId} 섹션 {SectionId} 페이지 {Count}개 조회",
                 groupId, sectionId, response?.Value?.Count ?? 0);
@@ -190,14 +190,14 @@ public class GraphOneNoteService
             var client = _authService.GetGraphClient();
 
             // 1. 사용자가 속한 Microsoft 365 그룹의 SharePoint 루트 사이트에서 노트북 조회
-            var groups = await GetUserGroupsAsync();
+            var groups = await GetUserGroupsAsync().ConfigureAwait(false);
 
             foreach (var group in groups)
             {
                 try
                 {
                     // 그룹의 루트 SharePoint 사이트 가져오기
-                    var rootSite = await client.Groups[group.Id].Sites["root"].GetAsync();
+                    var rootSite = await client.Groups[group.Id].Sites["root"].GetAsync().ConfigureAwait(false);
                     if (rootSite != null && !string.IsNullOrEmpty(rootSite.Id))
                     {
                         if (!processedSiteIds.Contains(rootSite.Id))
@@ -206,7 +206,7 @@ public class GraphOneNoteService
 
                             try
                             {
-                                var siteNotebooks = await client.Sites[rootSite.Id].Onenote.Notebooks.GetAsync();
+                                var siteNotebooks = await client.Sites[rootSite.Id].Onenote.Notebooks.GetAsync().ConfigureAwait(false);
                                 if (siteNotebooks?.Value != null && siteNotebooks.Value.Count > 0)
                                 {
                                     foreach (var nb in siteNotebooks.Value)
@@ -240,7 +240,7 @@ public class GraphOneNoteService
                 try
                 {
                     // 그룹의 루트 사이트에서 모든 노트북 조회 (필터 없이)
-                    var rootSite = await client.Groups[group.Id].Sites["root"].GetAsync();
+                    var rootSite = await client.Groups[group.Id].Sites["root"].GetAsync().ConfigureAwait(false);
                     if (rootSite != null && !string.IsNullOrEmpty(rootSite.Id) && !processedSiteIds.Contains(rootSite.Id + "_all"))
                     {
                         processedSiteIds.Add(rootSite.Id + "_all");
@@ -248,7 +248,7 @@ public class GraphOneNoteService
                         try
                         {
                             // 사이트의 모든 노트북 조회 (Top 없이 전체)
-                            var allNotebooks = await client.Sites[rootSite.Id].Onenote.Notebooks.GetAsync();
+                            var allNotebooks = await client.Sites[rootSite.Id].Onenote.Notebooks.GetAsync().ConfigureAwait(false);
 
                             if (allNotebooks?.Value != null)
                             {
@@ -287,7 +287,7 @@ public class GraphOneNoteService
                 var followedSites = await client.Me.FollowedSites.GetAsync(config =>
                 {
                     config.QueryParameters.Top = 50;
-                });
+                }).ConfigureAwait(false);
 
                 if (followedSites?.Value != null)
                 {
@@ -300,7 +300,7 @@ public class GraphOneNoteService
 
                         try
                         {
-                            var siteNotebooks = await client.Sites[site.Id].Onenote.Notebooks.GetAsync();
+                            var siteNotebooks = await client.Sites[site.Id].Onenote.Notebooks.GetAsync().ConfigureAwait(false);
                             if (siteNotebooks?.Value != null)
                             {
                                 foreach (var nb in siteNotebooks.Value)
@@ -371,7 +371,7 @@ public class GraphOneNoteService
             // 예: GET /sites/diquest01.sharepoint.com:/sites/AI785-1:
             
             // 먼저 루트 사이트에서 호스트명 추출
-            var rootSite = await client.Sites["root"].GetAsync();
+            var rootSite = await client.Sites["root"].GetAsync().ConfigureAwait(false);
             var hostname = rootSite?.SiteCollection?.Hostname ?? "sharepoint.com";
             
             Log4.Debug($"[GetNotebooksFromSitePath] 호스트명: {hostname}");
@@ -379,7 +379,7 @@ public class GraphOneNoteService
             // 사이트 정보 조회
             // Graph API: GET /sites/{hostname}:/{relative-path}:
             var siteRequestUrl = $"{hostname}:/{normalizedPath}:";
-            var site = await client.Sites[siteRequestUrl].GetAsync();
+            var site = await client.Sites[siteRequestUrl].GetAsync().ConfigureAwait(false);
 
             if (site == null || string.IsNullOrEmpty(site.Id))
             {
@@ -390,7 +390,7 @@ public class GraphOneNoteService
             Log4.Info($"[GetNotebooksFromSitePath] 사이트 발견: {site.DisplayName} (ID: {site.Id})");
 
             // 사이트의 노트북 조회
-            var siteNotebooks = await client.Sites[site.Id].Onenote.Notebooks.GetAsync();
+            var siteNotebooks = await client.Sites[site.Id].Onenote.Notebooks.GetAsync().ConfigureAwait(false);
 
             if (siteNotebooks?.Value != null && siteNotebooks.Value.Count > 0)
             {
@@ -440,7 +440,7 @@ public class GraphOneNoteService
         try
         {
             var client = _authService.GetGraphClient();
-            var response = await client.Sites[siteId].Onenote.Notebooks[notebookId].Sections.GetAsync();
+            var response = await client.Sites[siteId].Onenote.Notebooks[notebookId].Sections.GetAsync().ConfigureAwait(false);
 
             _logger.Debug("사이트 {SiteId} 노트북 {NotebookId} 섹션 {Count}개 조회",
                 siteId, notebookId, response?.Value?.Count ?? 0);
@@ -468,7 +468,7 @@ public class GraphOneNoteService
             {
                 config.QueryParameters.Top = 100;
                 config.QueryParameters.Orderby = new[] { "createdDateTime desc" };
-            });
+            }).ConfigureAwait(false);
 
             _logger.Debug("사이트 {SiteId} 섹션 {SectionId} 페이지 {Count}개 조회",
                 siteId, sectionId, response?.Value?.Count ?? 0);
@@ -494,7 +494,7 @@ public class GraphOneNoteService
         {
             // 1. 개인 노트북 조회
             Log4.Info("[GetAllNotebooks] 1단계: 개인 노트북 조회 시작");
-            var personalNotebooks = await GetNotebooksAsync();
+            var personalNotebooks = await GetNotebooksAsync().ConfigureAwait(false);
             var personalCount = personalNotebooks.Count();
             foreach (var nb in personalNotebooks)
             {
@@ -509,7 +509,7 @@ public class GraphOneNoteService
 
             // 2. 그룹 노트북 조회 (순차 처리 - Rate Limit 방지)
             Log4.Info("[GetAllNotebooks] 2단계: 그룹 노트북 조회 시작");
-            var groups = await GetUserGroupsAsync();
+            var groups = await GetUserGroupsAsync().ConfigureAwait(false);
             var groupList = groups.ToList();
             Log4.Info($"[GetAllNotebooks] 그룹 {groupList.Count}개 발견");
 
@@ -523,7 +523,7 @@ public class GraphOneNoteService
                     string siteId = string.Empty;
                     try
                     {
-                        var rootSite = await client.Groups[group.Id].Sites["root"].GetAsync();
+                        var rootSite = await client.Groups[group.Id].Sites["root"].GetAsync().ConfigureAwait(false);
                         siteId = rootSite?.Id ?? string.Empty;
                     }
                     catch
@@ -531,7 +531,7 @@ public class GraphOneNoteService
                         // 사이트 ID 조회 실패 시 무시
                     }
 
-                    var notebooks = await GetGroupNotebooksAsync(group.Id ?? string.Empty);
+                    var notebooks = await GetGroupNotebooksAsync(group.Id ?? string.Empty).ConfigureAwait(false);
                     foreach (var nb in notebooks)
                     {
                         result.Add(new NotebookWithSource
@@ -567,7 +567,7 @@ public class GraphOneNoteService
                 var followedSites = await client.Me.FollowedSites.GetAsync(config =>
                 {
                     config.QueryParameters.Top = 50;
-                });
+                }).ConfigureAwait(false);
 
                 if (followedSites?.Value != null)
                 {
@@ -584,7 +584,7 @@ public class GraphOneNoteService
 
                         try
                         {
-                            var siteNotebooks = await client.Sites[site.Id].Onenote.Notebooks.GetAsync();
+                            var siteNotebooks = await client.Sites[site.Id].Onenote.Notebooks.GetAsync().ConfigureAwait(false);
                             if (siteNotebooks?.Value != null)
                             {
                                 foreach (var nb in siteNotebooks.Value)
@@ -650,7 +650,7 @@ public class GraphOneNoteService
         try
         {
             var client = _authService.GetGraphClient();
-            var response = await client.Me.Onenote.Notebooks[notebookId].Sections.GetAsync();
+            var response = await client.Me.Onenote.Notebooks[notebookId].Sections.GetAsync().ConfigureAwait(false);
 
             _logger.Debug("노트북 {NotebookId} 섹션 {Count}개 조회", notebookId, response?.Value?.Count ?? 0);
             return response?.Value ?? new List<OnenoteSection>();
@@ -679,7 +679,7 @@ public class GraphOneNoteService
             {
                 config.QueryParameters.Top = 100;
                 config.QueryParameters.Orderby = new[] { "createdDateTime desc" };
-            });
+            }).ConfigureAwait(false);
 
             _logger.Debug("섹션 {SectionId} 페이지 {Count}개 조회", sectionId, response?.Value?.Count ?? 0);
             return response?.Value ?? new List<OnenotePage>();
@@ -698,7 +698,7 @@ public class GraphOneNoteService
     /// <returns>페이지 HTML 내용</returns>
     public async Task<string?> GetPageContentAsync(string pageId)
     {
-        return await GetPageContentAsync(pageId, null, null);
+        return await GetPageContentAsync(pageId, null, null).ConfigureAwait(false);
     }
 
     /// <summary>
@@ -722,26 +722,26 @@ public class GraphOneNoteService
             if (!string.IsNullOrEmpty(groupId))
             {
                 Log4.Debug($"[OneNote] 그룹 페이지 콘텐츠 로드: GroupId={groupId}, PageId={pageId}");
-                contentStream = await client.Groups[groupId].Onenote.Pages[pageId].Content.GetAsync();
+                contentStream = await client.Groups[groupId].Onenote.Pages[pageId].Content.GetAsync().ConfigureAwait(false);
             }
             // 사이트 노트북인 경우
             else if (!string.IsNullOrEmpty(siteId))
             {
                 Log4.Debug($"[OneNote] 사이트 페이지 콘텐츠 로드: SiteId={siteId}, PageId={pageId}");
-                contentStream = await client.Sites[siteId].Onenote.Pages[pageId].Content.GetAsync();
+                contentStream = await client.Sites[siteId].Onenote.Pages[pageId].Content.GetAsync().ConfigureAwait(false);
             }
             // 개인 노트북인 경우
             else
             {
                 Log4.Debug($"[OneNote] 개인 페이지 콘텐츠 로드: PageId={pageId}");
-                contentStream = await client.Me.Onenote.Pages[pageId].Content.GetAsync();
+                contentStream = await client.Me.Onenote.Pages[pageId].Content.GetAsync().ConfigureAwait(false);
             }
 
             if (contentStream == null)
                 return null;
 
             using var reader = new System.IO.StreamReader(contentStream);
-            var content = await reader.ReadToEndAsync();
+            var content = await reader.ReadToEndAsync().ConfigureAwait(false);
 
             // 디버그: API 원본 응답 전체를 파일에 덤프 (최초 5회만)
             var dumpPath = Path.Combine(Path.GetTempPath(), $"onenote_api_dump_{DateTime.Now:HHmmss}.html");
@@ -783,12 +783,12 @@ public class GraphOneNoteService
             var htmlContent = BuildEmailHtmlContent(email);
 
             // Graph SDK v5.x에서는 OnenotePage 객체를 사용
-            var page = await CreatePageWithHtmlContentAsync(sectionId, htmlContent);
+            var page = await CreatePageWithHtmlContentAsync(sectionId, htmlContent).ConfigureAwait(false);
 
             if (page != null)
             {
                 // 로컬 DB에 저장
-                await SavePageAsync(page, email.Id);
+                await SavePageAsync(page, email.Id).ConfigureAwait(false);
                 _logger.Information("이메일에서 OneNote 페이지 생성: {Title}", email.Subject);
             }
 
@@ -819,11 +819,11 @@ public class GraphOneNoteService
             var htmlContent = BuildTodoHtmlContent(todo);
 
             // Graph SDK v5.x에서는 OnenotePage 객체를 사용
-            var page = await CreatePageWithHtmlContentAsync(sectionId, htmlContent);
+            var page = await CreatePageWithHtmlContentAsync(sectionId, htmlContent).ConfigureAwait(false);
 
             if (page != null)
             {
-                await SavePageAsync(page, todo.EmailId);
+                await SavePageAsync(page, todo.EmailId).ConfigureAwait(false);
                 _logger.Information("할일에서 OneNote 페이지 생성: {Content}", todo.Content.Substring(0, Math.Min(50, todo.Content.Length)));
             }
 
@@ -869,7 +869,7 @@ public class GraphOneNoteService
 
             // Note: 이 방식은 빈 페이지를 생성함
             // 실제 HTML 콘텐츠 전송은 별도의 HTTP 요청 필요
-            var createdPage = await client.Me.Onenote.Sections[sectionId].Pages.PostAsync(newPage);
+            var createdPage = await client.Me.Onenote.Sections[sectionId].Pages.PostAsync(newPage).ConfigureAwait(false);
 
             return createdPage;
         }
@@ -922,7 +922,7 @@ public class GraphOneNoteService
             var pageId = onenotePage.Id ?? Guid.NewGuid().ToString();
 
             var existingPage = await _dbContext.OneNotePages
-                .FirstOrDefaultAsync(p => p.Id == pageId);
+                .FirstOrDefaultAsync(p => p.Id == pageId).ConfigureAwait(false);
 
             if (existingPage != null)
             {
@@ -946,7 +946,7 @@ public class GraphOneNoteService
                 existingPage = page;
             }
 
-            await _dbContext.SaveChangesAsync();
+            await _dbContext.SaveChangesAsync().ConfigureAwait(false);
             _logger.Debug("OneNote 페이지 저장: {PageId}", pageId);
 
             return existingPage;
@@ -968,7 +968,7 @@ public class GraphOneNoteService
         return await _dbContext.OneNotePages
             .Where(p => p.LinkedEmailId == emailId)
             .OrderByDescending(p => p.CreatedDateTime)
-            .ToListAsync();
+            .ToListAsync().ConfigureAwait(false);
     }
 
     /// <summary>
@@ -1097,7 +1097,7 @@ public class GraphOneNoteService
                 DisplayName = displayName
             };
 
-            var response = await client.Me.Onenote.Notebooks.PostAsync(notebook);
+            var response = await client.Me.Onenote.Notebooks.PostAsync(notebook).ConfigureAwait(false);
 
             _logger.Information("노트북 생성 완료: {DisplayName}", displayName);
             return response;
@@ -1131,7 +1131,7 @@ public class GraphOneNoteService
                 DisplayName = displayName
             };
 
-            var response = await client.Me.Onenote.Notebooks[notebookId].Sections.PostAsync(section);
+            var response = await client.Me.Onenote.Notebooks[notebookId].Sections.PostAsync(section).ConfigureAwait(false);
 
             _logger.Information("섹션 생성 완료: {DisplayName}", displayName);
             return response;
@@ -1175,17 +1175,17 @@ public class GraphOneNoteService
 
             // REST API 직접 호출 (Graph SDK가 스트림을 지원하지 않는 경우)
             var httpClient = _httpClientFactory.CreateClient();
-            var token = await _authService.GetAccessTokenAsync();
+            var token = await _authService.GetAccessTokenAsync().ConfigureAwait(false);
             httpClient.DefaultRequestHeaders.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", token);
 
             var content = new System.Net.Http.StringContent(htmlPage, System.Text.Encoding.UTF8, "text/html");
             var response = await httpClient.PostAsync(
                 $"https://graph.microsoft.com/v1.0/me/onenote/sections/{sectionId}/pages",
-                content);
+                content).ConfigureAwait(false);
 
             if (response.IsSuccessStatusCode)
             {
-                var json = await response.Content.ReadAsStringAsync();
+                var json = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
                 var page = System.Text.Json.JsonSerializer.Deserialize<OnenotePage>(json, new System.Text.Json.JsonSerializerOptions
                 {
                     PropertyNameCaseInsensitive = true
@@ -1195,7 +1195,7 @@ public class GraphOneNoteService
             }
             else
             {
-                var errorContent = await response.Content.ReadAsStringAsync();
+                var errorContent = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
                 _logger.Error("페이지 생성 실패: {StatusCode} - {Error}", response.StatusCode, errorContent);
                 return null;
             }
@@ -1247,11 +1247,11 @@ public class GraphOneNoteService
 
         // 첨부파일 없으면 기존 메서드 사용
         if (attachments == null || attachments.Count == 0)
-            return await CreatePageAsync(sectionId, title, htmlContent);
+            return await CreatePageAsync(sectionId, title, htmlContent).ConfigureAwait(false);
 
         try
         {
-            var token = await _authService.GetAccessTokenAsync();
+            var token = await _authService.GetAccessTokenAsync().ConfigureAwait(false);
             var httpClient = _httpClientFactory.CreateClient();
             httpClient.DefaultRequestHeaders.Authorization =
                 new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", token);
@@ -1290,7 +1290,7 @@ public class GraphOneNoteService
             {
                 var (filePath, fileName) = attachments[i];
                 var partName = $"file{i + 1}";
-                var fileBytes = await File.ReadAllBytesAsync(filePath);
+                var fileBytes = await File.ReadAllBytesAsync(filePath).ConfigureAwait(false);
                 var fileContent = new ByteArrayContent(fileBytes);
                 fileContent.Headers.ContentType =
                     new System.Net.Http.Headers.MediaTypeHeaderValue(GetMimeType(fileName));
@@ -1299,11 +1299,11 @@ public class GraphOneNoteService
 
             var response = await httpClient.PostAsync(
                 $"https://graph.microsoft.com/v1.0/me/onenote/sections/{sectionId}/pages",
-                multipart);
+                multipart).ConfigureAwait(false);
 
             if (response.IsSuccessStatusCode)
             {
-                var json = await response.Content.ReadAsStringAsync();
+                var json = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
                 var page = JsonSerializer.Deserialize<OnenotePage>(json,
                     new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
                 _logger.Information("파일 첨부 페이지 생성 완료: {Title}, 첨부={Count}개", title, attachments.Count);
@@ -1311,7 +1311,7 @@ public class GraphOneNoteService
             }
             else
             {
-                var errorContent = await response.Content.ReadAsStringAsync();
+                var errorContent = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
                 _logger.Error("파일 첨부 페이지 생성 실패: {StatusCode} - {Error}", response.StatusCode, errorContent);
                 return null;
             }
@@ -1342,7 +1342,7 @@ public class GraphOneNoteService
 
         try
         {
-            var token = await _authService.GetAccessTokenAsync();
+            var token = await _authService.GetAccessTokenAsync().ConfigureAwait(false);
             var httpClient = _httpClientFactory.CreateClient();
             httpClient.DefaultRequestHeaders.Authorization =
                 new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", token);
@@ -1370,14 +1370,14 @@ public class GraphOneNoteService
             var commandsContent = new StringContent(commandsJson, Encoding.UTF8, "application/json");
             multipart.Add(commandsContent, "Commands");
 
-            var fileBytes = await File.ReadAllBytesAsync(filePath);
+            var fileBytes = await File.ReadAllBytesAsync(filePath).ConfigureAwait(false);
             var fileContent = new ByteArrayContent(fileBytes);
             fileContent.Headers.ContentType =
                 new System.Net.Http.Headers.MediaTypeHeaderValue(mimeType);
             multipart.Add(fileContent, partName);
 
             var url = $"https://graph.microsoft.com/v1.0/me/onenote/pages/{pageId}/content";
-            var response = await httpClient.PatchAsync(url, multipart);
+            var response = await httpClient.PatchAsync(url, multipart).ConfigureAwait(false);
 
             Log4.Debug($"[OneNote] AppendFileToPageAsync PATCH 응답: {response.StatusCode}");
             if (response.IsSuccessStatusCode)
@@ -1388,7 +1388,7 @@ public class GraphOneNoteService
             }
             else
             {
-                var errorContent = await response.Content.ReadAsStringAsync();
+                var errorContent = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
                 Log4.Warn($"[OneNote] AppendFileToPageAsync API 실패: {response.StatusCode} - {errorContent}");
                 _logger.Error("페이지 파일 첨부 실패: {StatusCode} - {Error}", response.StatusCode, errorContent);
                 return false;
@@ -1414,11 +1414,11 @@ public class GraphOneNoteService
         try
         {
             var httpClient = _httpClientFactory.CreateClient();
-            var token = await _authService.GetAccessTokenAsync();
+            var token = await _authService.GetAccessTokenAsync().ConfigureAwait(false);
             httpClient.DefaultRequestHeaders.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", token);
 
             var response = await httpClient.DeleteAsync(
-                $"https://graph.microsoft.com/v1.0/me/onenote/sections/{sectionId}");
+                $"https://graph.microsoft.com/v1.0/me/onenote/sections/{sectionId}").ConfigureAwait(false);
 
             if (response.IsSuccessStatusCode)
             {
@@ -1426,7 +1426,7 @@ public class GraphOneNoteService
             }
             else
             {
-                var errorContent = await response.Content.ReadAsStringAsync();
+                var errorContent = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
                 _logger.Error("섹션 삭제 실패: {StatusCode} - {Error}", response.StatusCode, errorContent);
                 throw new Exception($"섹션 삭제 실패: {response.StatusCode} - {errorContent}");
             }
@@ -1449,11 +1449,11 @@ public class GraphOneNoteService
         try
         {
             var httpClient = _httpClientFactory.CreateClient();
-            var token = await _authService.GetAccessTokenAsync();
+            var token = await _authService.GetAccessTokenAsync().ConfigureAwait(false);
             httpClient.DefaultRequestHeaders.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", token);
 
             var response = await httpClient.DeleteAsync(
-                $"https://graph.microsoft.com/v1.0/me/onenote/pages/{pageId}");
+                $"https://graph.microsoft.com/v1.0/me/onenote/pages/{pageId}").ConfigureAwait(false);
 
             if (response.IsSuccessStatusCode)
             {
@@ -1461,7 +1461,7 @@ public class GraphOneNoteService
             }
             else
             {
-                var errorContent = await response.Content.ReadAsStringAsync();
+                var errorContent = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
                 _logger.Error("페이지 삭제 실패: {StatusCode} - {Error}", response.StatusCode, errorContent);
                 throw new Exception($"페이지 삭제 실패: {response.StatusCode} - {errorContent}");
             }
@@ -1491,7 +1491,7 @@ public class GraphOneNoteService
         {
             Log4.Info($"[GraphOneNote] 페이지 제목 업데이트 시작: PageId={pageId}, NewTitle={newTitle}");
 
-            var accessToken = await _authService.GetAccessTokenAsync();
+            var accessToken = await _authService.GetAccessTokenAsync().ConfigureAwait(false);
 
             var httpClient = _httpClientFactory.CreateClient();
             httpClient.DefaultRequestHeaders.Authorization =
@@ -1513,7 +1513,7 @@ public class GraphOneNoteService
             var jsonContent = System.Text.Json.JsonSerializer.Serialize(patchOperations);
             var content = new StringContent(jsonContent, System.Text.Encoding.UTF8, "application/json");
 
-            var response = await httpClient.PatchAsync(url, content);
+            var response = await httpClient.PatchAsync(url, content).ConfigureAwait(false);
 
             if (response.IsSuccessStatusCode)
             {
@@ -1522,7 +1522,7 @@ public class GraphOneNoteService
             }
             else
             {
-                var errorBody = await response.Content.ReadAsStringAsync();
+                var errorBody = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
                 Log4.Warn($"[GraphOneNote] 페이지 제목 업데이트 실패: {response.StatusCode}, {errorBody}");
                 return false;
             }
@@ -1551,7 +1551,7 @@ public class GraphOneNoteService
 
         try
         {
-            var accessToken = await _authService.GetAccessTokenAsync();
+            var accessToken = await _authService.GetAccessTokenAsync().ConfigureAwait(false);
             Log4.Debug("[GraphOneNote] 액세스 토큰 획득 완료");
 
             var httpClient = _httpClientFactory.CreateClient();
@@ -1585,7 +1585,7 @@ public class GraphOneNoteService
 
             // 현재 페이지에서 editorRoot의 generated ID 조회
             Log4.Debug("[GraphOneNote] editorRoot generated ID 조회 중...");
-            var editorRootGeneratedId = await GetEditorRootGeneratedIdAsync(httpClient, pageId);
+            var editorRootGeneratedId = await GetEditorRootGeneratedIdAsync(httpClient, pageId).ConfigureAwait(false);
             Log4.Debug($"[GraphOneNote] editorRoot generated ID: {editorRootGeneratedId ?? "없음"}");
 
             var url = $"https://graph.microsoft.com/v1.0/me/onenote/pages/{pageId}/content";
@@ -1625,7 +1625,7 @@ public class GraphOneNoteService
             Log4.Debug($"[GraphOneNote] PATCH 요청 전송: PageId={pageId}, JSON길이={patchJson.Length}");
 
             var patchContent = new StringContent(patchJson, Encoding.UTF8, "application/json");
-            var response = await httpClient.PatchAsync(url, patchContent);
+            var response = await httpClient.PatchAsync(url, patchContent).ConfigureAwait(false);
             Log4.Debug($"[GraphOneNote] PATCH 응답: StatusCode={response.StatusCode}");
 
             if (response.IsSuccessStatusCode)
@@ -1635,7 +1635,7 @@ public class GraphOneNoteService
             }
             else
             {
-                var errorContent = await response.Content.ReadAsStringAsync();
+                var errorContent = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
                 Log4.Warn($"[GraphOneNote] 페이지 업데이트 실패: StatusCode={response.StatusCode}, Error={errorContent}");
                 return false;
             }
@@ -1828,12 +1828,12 @@ public class GraphOneNoteService
             var url = $"https://graph.microsoft.com/v1.0/me/onenote/pages/{pageId}/content?includeIDs=true";
             Log4.Debug($"[GraphOneNote] editorRoot generated ID GET: {url}");
 
-            var response = await httpClient.GetAsync(url);
+            var response = await httpClient.GetAsync(url).ConfigureAwait(false);
             Log4.Debug($"[GraphOneNote] editorRoot 조회 응답: StatusCode={response.StatusCode}");
 
             if (response.IsSuccessStatusCode)
             {
-                var html = await response.Content.ReadAsStringAsync();
+                var html = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
                 Log4.Debug($"[GraphOneNote] 페이지 HTML 길이: {html?.Length ?? 0}");
 
                 if (string.IsNullOrEmpty(html))
@@ -1875,7 +1875,7 @@ public class GraphOneNoteService
             }
             else
             {
-                var errorContent = await response.Content.ReadAsStringAsync();
+                var errorContent = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
                 Log4.Warn($"[GraphOneNote] 페이지 콘텐츠 조회 실패: StatusCode={response.StatusCode}, Error={errorContent}");
             }
             return null;
@@ -2278,7 +2278,7 @@ public class GraphOneNoteService
 
             _logger.Debug("변환할 이미지 {Count}개 발견", matches.Count);
 
-            var accessToken = await _authService.GetAccessTokenAsync();
+            var accessToken = await _authService.GetAccessTokenAsync().ConfigureAwait(false);
             var httpClient = _httpClientFactory.CreateClient();
             httpClient.DefaultRequestHeaders.Authorization =
                 new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", accessToken);
@@ -2289,7 +2289,7 @@ public class GraphOneNoteService
                 try
                 {
                     // 이미지 다운로드
-                    var imageBytes = await httpClient.GetByteArrayAsync(imageUrl);
+                    var imageBytes = await httpClient.GetByteArrayAsync(imageUrl).ConfigureAwait(false);
 
                     // MIME 타입 감지
                     var mimeType = DetectMimeType(imageBytes);
@@ -2336,14 +2336,14 @@ public class GraphOneNoteService
 
         try
         {
-            var accessToken = await _authService.GetAccessTokenAsync();
+            var accessToken = await _authService.GetAccessTokenAsync().ConfigureAwait(false);
             var httpClient = _httpClientFactory.CreateClient();
             httpClient.DefaultRequestHeaders.Authorization =
                 new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", accessToken);
 
             // 페이지 콘텐츠 가져오기
             var url = $"https://graph.microsoft.com/v1.0/me/onenote/pages/{pageId}/content";
-            var response = await httpClient.GetAsync(url);
+            var response = await httpClient.GetAsync(url).ConfigureAwait(false);
 
             if (!response.IsSuccessStatusCode)
             {
@@ -2351,7 +2351,7 @@ public class GraphOneNoteService
                 return resources;
             }
 
-            var html = await response.Content.ReadAsStringAsync();
+            var html = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
 
             Log4.Info($"[OneNote Audio] 페이지 {pageId} HTML 길이: {html?.Length ?? 0}자");
 
@@ -2606,12 +2606,12 @@ public class GraphOneNoteService
 
         try
         {
-            var accessToken = await _authService.GetAccessTokenAsync();
+            var accessToken = await _authService.GetAccessTokenAsync().ConfigureAwait(false);
             var httpClient = _httpClientFactory.CreateClient();
             httpClient.DefaultRequestHeaders.Authorization =
                 new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", accessToken);
 
-            var bytes = await httpClient.GetByteArrayAsync(resourceUrl);
+            var bytes = await httpClient.GetByteArrayAsync(resourceUrl).ConfigureAwait(false);
 
             if (!Directory.Exists(saveDir))
                 Directory.CreateDirectory(saveDir);
@@ -2632,7 +2632,7 @@ public class GraphOneNoteService
                 counter++;
             }
 
-            await File.WriteAllBytesAsync(filePath, bytes);
+            await File.WriteAllBytesAsync(filePath, bytes).ConfigureAwait(false);
             _logger.Debug("오디오 리소스 다운로드 완료: {FilePath}", filePath);
             return filePath;
         }
@@ -2705,7 +2705,7 @@ public class GraphOneNoteService
                 {
                     config.QueryParameters.Top = 100;
                     config.QueryParameters.Select = new[] { "id" };
-                });
+                }).ConfigureAwait(false);
                 if (response?.Value != null)
                 {
                     foreach (var s in response.Value.Where(s => !string.IsNullOrEmpty(s.Id)))
@@ -2732,7 +2732,7 @@ public class GraphOneNoteService
                     {
                         config.QueryParameters.Top = 100;
                         config.QueryParameters.Select = new[] { "id" };
-                    });
+                    }).ConfigureAwait(false);
                     if (response?.Value != null)
                     {
                         foreach (var s in response.Value.Where(s => !string.IsNullOrEmpty(s.Id)))
@@ -2760,7 +2760,7 @@ public class GraphOneNoteService
                     {
                         config.QueryParameters.Top = 100;
                         config.QueryParameters.Select = new[] { "id" };
-                    });
+                    }).ConfigureAwait(false);
                     if (response?.Value != null)
                     {
                         foreach (var s in response.Value.Where(s => !string.IsNullOrEmpty(s.Id)))
@@ -2775,7 +2775,7 @@ public class GraphOneNoteService
             }));
         }
 
-        var sectionResults = await Task.WhenAll(sectionTasks);
+        var sectionResults = await Task.WhenAll(sectionTasks).ConfigureAwait(false);
         var allSections = sectionResults.SelectMany(s => s).ToList();
         Log4.Info($"[OneNote검색] 총 {allSections.Count}개 섹션에서 '{query}' 검색 시작");
 
@@ -2783,7 +2783,7 @@ public class GraphOneNoteService
         var semaphore = new SemaphoreSlim(10);
         var pageTasks = allSections.Select(async section =>
         {
-            await semaphore.WaitAsync();
+            await semaphore.WaitAsync().ConfigureAwait(false);
             try
             {
                 if (section.groupId != null)
@@ -2793,7 +2793,7 @@ public class GraphOneNoteService
                         config.QueryParameters.Filter = pageFilter;
                         config.QueryParameters.Top = 20;
                         config.QueryParameters.Expand = new[] { "parentSection($select=id,displayName)", "parentNotebook($select=id,displayName)" };
-                    });
+                    }).ConfigureAwait(false);
                     return response?.Value?.ToList() ?? new List<OnenotePage>();
                 }
                 else if (section.siteId != null)
@@ -2803,7 +2803,7 @@ public class GraphOneNoteService
                         config.QueryParameters.Filter = pageFilter;
                         config.QueryParameters.Top = 20;
                         config.QueryParameters.Expand = new[] { "parentSection($select=id,displayName)", "parentNotebook($select=id,displayName)" };
-                    });
+                    }).ConfigureAwait(false);
                     return response?.Value?.ToList() ?? new List<OnenotePage>();
                 }
                 else
@@ -2813,7 +2813,7 @@ public class GraphOneNoteService
                         config.QueryParameters.Filter = pageFilter;
                         config.QueryParameters.Top = 20;
                         config.QueryParameters.Expand = new[] { "parentSection($select=id,displayName)", "parentNotebook($select=id,displayName)" };
-                    });
+                    }).ConfigureAwait(false);
                     return response?.Value?.ToList() ?? new List<OnenotePage>();
                 }
             }
@@ -2828,7 +2828,7 @@ public class GraphOneNoteService
             }
         }).ToList();
 
-        var pageResults = await Task.WhenAll(pageTasks);
+        var pageResults = await Task.WhenAll(pageTasks).ConfigureAwait(false);
         foreach (var pages in pageResults)
         {
             allPages.AddRange(pages);
@@ -2862,7 +2862,7 @@ public class GraphOneNoteService
                     config.QueryParameters.Filter = sectionFilter;
                     config.QueryParameters.Top = 50;
                     config.QueryParameters.Expand = new[] { "parentNotebook($select=id,displayName)" };
-                });
+                }).ConfigureAwait(false);
                 return response?.Value?.ToList() ?? new List<OnenoteSection>();
             }
             catch (Exception ex)
@@ -2885,7 +2885,7 @@ public class GraphOneNoteService
                         config.QueryParameters.Filter = sectionFilter;
                         config.QueryParameters.Top = 50;
                         config.QueryParameters.Expand = new[] { "parentNotebook($select=id,displayName)" };
-                    });
+                    }).ConfigureAwait(false);
                     return response?.Value?.ToList() ?? new List<OnenoteSection>();
                 }
                 catch (Exception ex)
@@ -2909,7 +2909,7 @@ public class GraphOneNoteService
                         config.QueryParameters.Filter = sectionFilter;
                         config.QueryParameters.Top = 50;
                         config.QueryParameters.Expand = new[] { "parentNotebook($select=id,displayName)" };
-                    });
+                    }).ConfigureAwait(false);
                     return response?.Value?.ToList() ?? new List<OnenoteSection>();
                 }
                 catch (Exception ex)
@@ -2920,7 +2920,7 @@ public class GraphOneNoteService
             }));
         }
 
-        var results = await Task.WhenAll(tasks);
+        var results = await Task.WhenAll(tasks).ConfigureAwait(false);
         foreach (var sections in results)
         {
             allSections.AddRange(sections);

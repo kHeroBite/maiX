@@ -81,7 +81,7 @@ namespace mAIx.Services.Converter
 
             try
             {
-                return await Task.Run(() => ExtractTextFromPdf(filePath), ct);
+                return await Task.Run(() => ExtractTextFromPdf(filePath), ct).ConfigureAwait(false);
             }
             catch (OperationCanceledException)
             {

@@ -419,7 +419,7 @@ public class RestApiServer
             // 짧은 지연 후 프로세스 강제 종료
             Task.Run(async () =>
             {
-                await Task.Delay(100);
+                await Task.Delay(100).ConfigureAwait(false);
                 Environment.Exit(0);
             });
         }
