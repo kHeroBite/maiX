@@ -243,8 +243,9 @@ public partial class PlannerViewModel : ViewModelBase
             var bucketsTask = _plannerService.GetBucketsAsync(planId);
             var tasksTask = _plannerService.GetTasksAsync(planId);
 
-            await Task.WhenAll(categoriesTask, bucketsTask, tasksTask);
+            await Task.WhenAll(categoriesTask, bucketsTask, tasksTask).ConfigureAwait(false);
 
+            // WhenAll 완료 후 .Result 접근 — 이미 완료된 태스크이므로 블로킹 없음
             var categories = categoriesTask.Result.ToList();
             var buckets = bucketsTask.Result.ToList();
             var taskList = tasksTask.Result.ToList();

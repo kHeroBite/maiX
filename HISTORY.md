@@ -2,6 +2,46 @@
 
 > PROJECT.md 작업 이력 테이블의 상세 보완본
 
+## 2026-05-02: 동기화/UI블로킹 5차 마무리 — Lock/EF/WebView2 6건 수정
+
+**분류**: Normal Path (o3)
+**수정 파일**: 7개
+
+### 배경
+
+4차 최종 검증(L-374/L-375) 이후 발견된 새로운 차원의 패턴:
+- SemaphoreSlim IDisposable 미관리 (Lock 차원)
+- async void 이벤트 핸들러 외부 try-catch 누락 (WebView2 차원)
+- fire-and-forget SaveChangesAsync (EF 저장 차원)
+- Task.Wait 의도 주석 부재 (의도 명확성 차원)
+
+### 수정 내용
+
+| 파일 | 수정 내용 | 분류 |
+|------|-----------|------|
+| `mAIx/Services/Editor/TinyMCEEditorService.cs` | `HandleEditorNavigationStarting` 외부 try-catch 추가 | CRITICAL |
+| `mAIx/ViewModels/MainViewModel.cs` | `SemaphoreSlim` 4건 `using` 패턴 적용 | HIGH |
+| `mAIx/Views/Dialogs/TaskEditDialog.xaml.cs` | fire-and-forget `_ = SaveChangesAsync()` → `SaveAndCloseAsync()` await 패턴 | HIGH |
+| `mAIx/Services/Audio/MicrophoneTestService.cs` | `Task.Wait` 의도 주석 명시 (Dispose 경로 — 동기 블로킹 의도적) | MEDIUM |
+| `mAIx/Services/Notification/NotificationService.cs` | `Task.Wait` 의도 주석 명시 (Dispose 경로 — 동기 블로킹 의도적) | MEDIUM |
+| `mAIx/ViewModels/OneNoteViewModel.cs` | `WhenAll` 후 `.Result` 명확성 주석 추가 + `ConfigureAwait(false)` | LOW |
+| `mAIx/ViewModels/PlannerViewModel.cs` | `WhenAll` 후 `.Result` 명확성 주석 추가 + `ConfigureAwait(false)` | LOW |
+
+### 신규 교훈
+
+- **L-376**: `SemaphoreSlim`은 `IDisposable` — 메서드 내 지역 생성 시 `using var` 필수
+- **L-377**: `async void` 이벤트 핸들러 외부 try-catch 래핑 필수 — 내부 분기 try-catch만으로 불충분
+
+### 검증 결과
+
+- **빌드**: PASS (CS 에러 0건) ✅
+
+### 커밋
+
+- `(이번 커밋)`: 🔧 동기화 5차 — Lock/EF/WebView2 6건 수정 (SemaphoreSlim using, async void try-catch, fire-and-forget 제거)
+
+---
+
 ## 2026-05-02: 동기화/UI블로킹 4차 최종 검증 — 잔존 패턴 수정 + 런타임 로그 분석
 
 **분류**: Heavy Path (o4)

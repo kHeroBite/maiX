@@ -565,12 +565,31 @@ public partial class TaskEditDialog : FluentWindow
 
             if (result == System.Windows.MessageBoxResult.Yes)
             {
-                _ = SaveChangesAsync();
+                // 닫기를 취소하고 저장 완료 후 재닫기 (fire-and-forget 방지)
+                e.Cancel = true;
+                SaveAndCloseAsync();
             }
             else if (result == System.Windows.MessageBoxResult.Cancel)
             {
                 e.Cancel = true;
             }
+        }
+    }
+
+    private async void SaveAndCloseAsync()
+    {
+        try
+        {
+            await SaveChangesAsync();
+        }
+        catch (Exception ex)
+        {
+            Log4.Error($"[TaskEditDialog] 창 닫기 시 저장 실패: {ex}");
+        }
+        finally
+        {
+            _hasChanges = false; // 재귀 방지
+            Close();
         }
     }
 

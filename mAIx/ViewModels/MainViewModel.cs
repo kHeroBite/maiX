@@ -2191,7 +2191,7 @@ public partial class MainViewModel : ViewModelBase, IDisposable
                                           f.DisplayName.ToLower() == "deleteditems");
 
             // Graph API 병렬 처리 (세마포어 8)
-            var semaphore = new SemaphoreSlim(8, 8);
+            using var semaphore = new SemaphoreSlim(8, 8);
             var succeededEmails = new ConcurrentBag<Email>();
             int apiFailed = 0;
 
@@ -2380,7 +2380,7 @@ public partial class MainViewModel : ViewModelBase, IDisposable
         {
             StatusMessage = $"플래그 업데이트 중... (0/{emails.Count})";
 
-            var semaphore = new SemaphoreSlim(8, 8);
+            using var semaphore = new SemaphoreSlim(8, 8);
             var succeededEmails = new ConcurrentBag<Email>();
             int failed = 0;
 
@@ -2452,7 +2452,7 @@ public partial class MainViewModel : ViewModelBase, IDisposable
             string statusText = isRead ? "읽음" : "읽지 않음";
             StatusMessage = $"{statusText} 표시 중... (0/{emails.Count})";
 
-            var semaphore = new SemaphoreSlim(8, 8);
+            using var semaphore = new SemaphoreSlim(8, 8);
             var succeededEmails = new ConcurrentBag<Email>();
             int failed = 0;
 
@@ -3424,7 +3424,7 @@ public partial class MainViewModel : ViewModelBase, IDisposable
         {
             StatusMessage = $"메일 이동 중... (0/{emails.Count})";
 
-            var semaphore = new SemaphoreSlim(8, 8);
+            using var semaphore = new SemaphoreSlim(8, 8);
             var succeededMoves = new ConcurrentBag<(Email email, string newEntryId)>();
             int failed = 0;
 

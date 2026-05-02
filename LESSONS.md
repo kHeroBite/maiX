@@ -860,6 +860,49 @@
 - **재발방지**: ConfigureAwait 누락 grep 검사 후 `(await ...).` 패턴이 발견되면 반드시 괄호 매칭 수동 검증 수행. 대량 적용 전/후 정밀 검증은 Roslyn 분석기 또는 IDE 기능 활용 권장
 - **Level**: 1 (프로세스 주의사항)
 
+### L-376: SemaphoreSlim은 IDisposable — 메서드 내 지역 생성 시 using 필수 (2026-05-02)
+
+- **문제**: `var semaphore = new SemaphoreSlim(N, N)` 형태로 메서드 내에서 지역 변수로 생성 후 `using` 없이 사용. `SemaphoreSlim`은 내부적으로 `AvailableWaitHandle`(`ManualResetEventSlim`)을 보유하며 `IDisposable`을 구현함
+- **근본 원인**: SemaphoreSlim을 단순 카운터로 인식 — IDisposable 구현 여부를 확인하지 않은 채 생성
+- **재발방지**:
+  - 메서드 내 지역 변수 생성 시 반드시 `using var semaphore = new SemaphoreSlim(N, N)` 패턴 사용
+  - 클래스 필드로 보유 시 `Dispose()` 메서드에서 `_semaphore?.Dispose()` 호출 필수
+  - 코드 리뷰 시 `new SemaphoreSlim` grep 후 `using` 패턴 확인: `Grep("new SemaphoreSlim", "*.cs")`
+- **Level**: 2 (반복 재현 위험 — 병렬 처리 코드에서 자주 사용)
+
+### L-377: async void 이벤트 핸들러 외부 try-catch 래핑 필수 (2026-05-02)
+
+- **문제**: `async void` 이벤트 핸들러에서 내부 각 분기마다 try-catch를 적용했으나, 분기 진입 전 코드(파라미터 검사, URI 파싱 등)에서 예외 발생 시 캐치 불가 — 예외가 UI 스레드로 전파되어 앱 크래시 또는 소실
+  ```csharp
+  // ❌ 불충분 — 분기 진입 전 예외 소실 위험
+  public async void SomeEventHandler(...)
+  {
+      if (e.Uri.StartsWith("about:"))  // ← 이 줄에서 예외 발생 시 소실!
+          return;
+      try { ... } catch { }
+      try { ... } catch { }
+  }
+  
+  // ✅ 올바른 패턴 — 메서드 전체 외부 래핑
+  public async void SomeEventHandler(...)
+  {
+      try
+      {
+          if (e.Uri.StartsWith("about:"))
+              return;
+          // ... 내부 로직
+      }
+      catch (Exception ex)
+      {
+          Log.Error($"핸들러 처리 실패: {ex}");
+      }
+  }
+  ```
+- **근본 원인**: async void는 예외를 호출자에게 전파하지 않으므로 외부 전체 래핑이 필수인데, 내부 분기별 try-catch만으로 충분하다고 판단
+- **재발방지**: `async void` 이벤트 핸들러 작성/리뷰 시 메서드 본문 최외곽에 try-catch 존재 여부 확인 필수
+- **연관**: L-370 (async void 이벤트 핸들러 일반 원칙), L-377 (외부 try-catch 래핑 특수 요건)
+- **Level**: 2 (WPF 이벤트 핸들러 패턴에서 반복 재현 위험)
+
 ## 반영 추적 테이블
 
 | 교훈 ID | 교훈 요약 | 반영 대상 | 반영 위치 | 반영일 | 검증 |
@@ -880,3 +923,5 @@
 | L-373 | ConfigureAwait 대규모 적용 4 Phase 분할 전략 | docs | LESSONS.md | 2026-05-02 | ✅ |
 | L-374 | DispatcherOperation은 Task 아님 — ConfigureAwait 적용 시 .Task 경유 필수 | docs | LESSONS.md + MEMORY.md | 2026-05-02 | ✅ |
 | L-375 | grep 기반 ConfigureAwait 누락 검사 멀티라인 오탐 | docs | LESSONS.md | 2026-05-02 | ✅ |
+| L-376 | SemaphoreSlim IDisposable — 메서드 내 지역 생성 시 using 필수 | docs | LESSONS.md + MEMORY.md | 2026-05-02 | ✅ |
+| L-377 | async void 이벤트 핸들러 외부 try-catch 래핑 필수 — 내부 분기 try-catch만 불충분 | docs | LESSONS.md + MEMORY.md | 2026-05-02 | ✅ |

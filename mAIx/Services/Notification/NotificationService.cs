@@ -589,7 +589,7 @@ public class NotificationService : IDisposable
 
         try
         {
-            _processingTask.Wait(TimeSpan.FromSeconds(5));
+            _processingTask.Wait(TimeSpan.FromSeconds(5)); // Dispose 경로 — 동기 블로킹 의도적 (타임아웃 5초)
         }
         catch (AggregateException) { }
 

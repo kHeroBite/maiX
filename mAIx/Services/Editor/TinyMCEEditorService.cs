@@ -726,6 +726,8 @@ public static class TinyMCEEditorService
     /// </summary>
     public static async void HandleEditorNavigationStarting(object? sender, Microsoft.Web.WebView2.Core.CoreWebView2NavigationStartingEventArgs e)
     {
+        try
+        {
         // 초기 로드(about:blank) 및 data: URI는 허용
         if (e.Uri.StartsWith("about:") || e.Uri.StartsWith("data:"))
             return;
@@ -854,6 +856,11 @@ public static class TinyMCEEditorService
             {
                 Log4.Error($"[TinyMCE] 외부 링크 열기 실패: {e.Uri} — {ex.Message}");
             }
+        }
+        } // try
+        catch (Exception ex)
+        {
+            Log4.Error($"[TinyMCE] NavigationStarting 처리 실패: {e.Uri} — {ex}");
         }
     }
 

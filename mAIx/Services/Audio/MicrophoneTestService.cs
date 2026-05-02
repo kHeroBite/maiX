@@ -182,7 +182,7 @@ public class MicrophoneTestService : IDisposable
         if (_monitorCts != null)
         {
             _monitorCts.Cancel();
-            try { _monitorTask?.Wait(1000); } catch { }
+            try { _monitorTask?.Wait(1000); } catch { } // Dispose 경로 — 동기 블로킹 의도적 (타임아웃 1초)
             _monitorCts.Dispose();
             _monitorCts = null;
             _monitorTask = null;

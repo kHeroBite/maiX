@@ -3764,8 +3764,9 @@ public partial class OneNoteViewModel : ViewModelBase
             // 페이지 검색 + 섹션 검색 병렬 실행
             var pageTask = _oneNoteService.SearchPagesAsync(query, groupIds, siteIds);
             var sectionTask = _oneNoteService.SearchSectionsAsync(query, groupIds, siteIds);
-            await Task.WhenAll(pageTask, sectionTask);
+            await Task.WhenAll(pageTask, sectionTask).ConfigureAwait(false);
 
+            // WhenAll 완료 후 .Result 접근 — 이미 완료된 태스크이므로 블로킹 없음
             var pages = pageTask.Result;
             var sections = sectionTask.Result;
 
