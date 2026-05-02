@@ -2,6 +2,55 @@
 
 > PROJECT.md 작업 이력 테이블의 상세 보완본
 
+## 2026-05-02: 동기화/UI블로킹 6차 — 8개 패턴 전수 조사 + 잔존 7건 수정
+
+**분류**: O3 Fast Path (oplan_normal → odev → otest → odone)
+**수정 파일**: 3개 (GraphOneNoteService.cs, EmailAnalyzer.cs, MainWindow.xaml.cs)
+**커밋**: (커밋 후 갱신 예정)
+
+### 배경
+
+oralph 1·2차 자동 검증(L-378/L-381) 이후 잔존 가능성을 8개 패턴 전수 조사로 최종 마무리.
+LESSONS L-369/L-372/L-374/L-376/L-377/L-379/L-380의 적용 누락분 7건 발견 후 일괄 수정.
+
+### 8개 패턴 전수 조사 결과
+
+| 패턴 | 매치 | 위반 | 비고 |
+|------|------|------|------|
+| 1. Dispatcher.Invoke(async ...) | 0 | 0 | ✅ L-369 적용 완료 |
+| 2. InvokeAsync .Task 누락 | 0 | 0 | ✅ L-374 적용 완료 |
+| 3. async void 이벤트 핸들러 외부 try-catch | 205 | 0 | ✅ b11afe67 정리 완료 |
+| 4. InvokeAsync(async lambda) 내부 예외 소실 | 18 | 0 | ✅ L-379 적용 완료 |
+| 5. Timer.Elapsed/이벤트 += async 람다 | 34 | **5** | ⚠ MainWindow 람다 핸들러 잔존 |
+| 6. ConfigureAwait 괄호 위치 오류 | 0 | 0 | ✅ L-372 적용 완료 |
+| 7. SemaphoreSlim 지역변수/필드 Dispose 누락 | 6 | **2** | ⚠ 1지역변수 + 1 IDisposable 누락 |
+| 8. .Result/.Wait() 동기 차단 | 0/24 | 0 | ✅ DTO/WhenAll 후 안전 |
+
+**총 위반: 7건 / 수정 대상 파일: 3개**
+
+### 수정 내역
+
+- `GraphOneNoteService.cs:2782` — `var semaphore = new SemaphoreSlim(10);` → `using var semaphore = new SemaphoreSlim(10);` (L-376)
+- `EmailAnalyzer.cs` — `: IDisposable` 추가 + `Dispose()` 메서드 신규 (`_semaphore?.Dispose()`) (L-376)
+- `MainWindow.xaml.cs` — 4개 람다 이벤트 핸들러 외부 try-catch 보강 (L-377/L-380)
+  - 17444 mailResyncButton.Click — IsEnabled/Content 사전 설정을 try 안으로 이동
+  - 17932 saveBtn.Click(프롬프트) — null guard + Template/IsEnabled 할당을 try 안으로 이동
+  - 20320 testBtn.Click — connStatus.Text/IsEnabled 사전 설정을 try 안으로 이동
+  - 20349 saveBtn.Click(TTS) — try-catch 신규 추가 (기존 catch 부재)
+
+### 검증
+
+- 빌드: `dotnet build` exit 0, 오류 0건, 경고 214건(전부 사전 존재 — 회귀 없음)
+- 정적 검증: 4개 핸들러 본문 첫 줄이 `try {` 인지 grep 재확인 PASS
+- otest sprint_contract 6/6 PASS
+
+### 교훈 반영
+
+- 신규 교훈 없음 — 이번 작업은 기존 L-369/L-372/L-374/L-376/L-377/L-379/L-380의 잔존 적용 마무리
+- review_actions: 0건 (클린 런 — 역라우팅 0회, 오류 0건, 사용자 피드백 0건)
+
+---
+
 ## 2026-05-02: oralph 2차 — async void 이벤트 핸들러 외부 try-catch 18건 추가 (max_reached)
 
 **분류**: oralph 2차 자동 반복 검증

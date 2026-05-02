@@ -2780,7 +2780,7 @@ public class GraphOneNoteService
         Log4.Info($"[OneNote검색] 총 {allSections.Count}개 섹션에서 '{query}' 검색 시작");
 
         // 2단계: 각 섹션에서 페이지 검색 (병렬, 동시 10개 제한)
-        var semaphore = new SemaphoreSlim(10);
+        using var semaphore = new SemaphoreSlim(10);
         var pageTasks = allSections.Select(async section =>
         {
             await semaphore.WaitAsync().ConfigureAwait(false);

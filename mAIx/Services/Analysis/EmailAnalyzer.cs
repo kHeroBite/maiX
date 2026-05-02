@@ -16,7 +16,7 @@ namespace mAIx.Services.Analysis;
 /// 이메일 분석기 - 7단계 AI 분석 파이프라인 실행
 /// Channel&lt;T&gt; + SemaphoreSlim으로 비동기 병렬 처리
 /// </summary>
-public class EmailAnalyzer
+public class EmailAnalyzer : IDisposable
 {
     private readonly AIService _aiService;
     private readonly PromptService _promptService;
@@ -484,5 +484,13 @@ public class EmailAnalyzer
 
         result.PriorityScore = priorityResult.Score;
         result.PriorityLevel = priorityResult.Level;
+    }
+
+    /// <summary>
+    /// IDisposable 구현 — SemaphoreSlim 자원 해제 (L-376)
+    /// </summary>
+    public void Dispose()
+    {
+        _semaphore?.Dispose();
     }
 }

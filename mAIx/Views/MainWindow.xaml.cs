@@ -17443,25 +17443,32 @@ public partial class MainWindow : FluentWindow
         };
         mailResyncButton.Click += async (s, e) =>
         {
-            mailResyncButton.IsEnabled = false;
-            mailResyncButton.Content = "재동기화 중...";
             try
             {
-                await _viewModel.ForceResyncAllAsync();
-                mailResyncButton.Content = "✅ 완료";
-                await Task.Delay(2000);
-                mailResyncButton.Content = "메일 재동기화";
+                mailResyncButton.IsEnabled = false;
+                mailResyncButton.Content = "재동기화 중...";
+                try
+                {
+                    await _viewModel.ForceResyncAllAsync();
+                    mailResyncButton.Content = "✅ 완료";
+                    await Task.Delay(2000);
+                    mailResyncButton.Content = "메일 재동기화";
+                }
+                catch (Exception ex)
+                {
+                    Log4.Error($"메일 재동기화 실패: {ex.Message}");
+                    mailResyncButton.Content = "❌ 실패";
+                    await Task.Delay(2000);
+                    mailResyncButton.Content = "메일 재동기화";
+                }
+                finally
+                {
+                    mailResyncButton.IsEnabled = true;
+                }
             }
             catch (Exception ex)
             {
-                Log4.Error($"메일 재동기화 실패: {ex.Message}");
-                mailResyncButton.Content = "❌ 실패";
-                await Task.Delay(2000);
-                mailResyncButton.Content = "메일 재동기화";
-            }
-            finally
-            {
-                mailResyncButton.IsEnabled = true;
+                Log4.Error($"메일 재동기화 핸들러 처리 실패: {ex.Message}");
             }
         };
         mailResyncStack.Children.Add(mailResyncButton);
@@ -17924,22 +17931,29 @@ public partial class MainWindow : FluentWindow
         // 저장 버튼
         saveBtn.Click += async (s, e) =>
         {
-            if (selectedPrompt == null) return;
-            selectedPrompt.Template = templateTextBox.Text;
-            selectedPrompt.IsEnabled = enabledToggle.IsChecked == true;
             try
             {
-                var app = (App)Application.Current;
-                using var scope = app.ServiceProvider.CreateScope();
-                var promptService = scope.ServiceProvider.GetRequiredService<PromptService>();
-                await promptService.SavePromptAsync(selectedPrompt);
-                Log4.Info($"프롬프트 저장 완료: {selectedPrompt.PromptKey}");
-                System.Windows.MessageBox.Show("저장되었습니다.", "AI 프롬프트", System.Windows.MessageBoxButton.OK, System.Windows.MessageBoxImage.Information);
+                if (selectedPrompt == null) return;
+                selectedPrompt.Template = templateTextBox.Text;
+                selectedPrompt.IsEnabled = enabledToggle.IsChecked == true;
+                try
+                {
+                    var app = (App)Application.Current;
+                    using var scope = app.ServiceProvider.CreateScope();
+                    var promptService = scope.ServiceProvider.GetRequiredService<PromptService>();
+                    await promptService.SavePromptAsync(selectedPrompt);
+                    Log4.Info($"프롬프트 저장 완료: {selectedPrompt.PromptKey}");
+                    System.Windows.MessageBox.Show("저장되었습니다.", "AI 프롬프트", System.Windows.MessageBoxButton.OK, System.Windows.MessageBoxImage.Information);
+                }
+                catch (Exception ex)
+                {
+                    Log4.Error($"프롬프트 저장 실패: {ex.Message}");
+                    System.Windows.MessageBox.Show($"저장 실패: {ex.Message}", "오류", System.Windows.MessageBoxButton.OK, System.Windows.MessageBoxImage.Error);
+                }
             }
             catch (Exception ex)
             {
-                Log4.Error($"프롬프트 저장 실패: {ex.Message}");
-                System.Windows.MessageBox.Show($"저장 실패: {ex.Message}", "오류", System.Windows.MessageBoxButton.OK, System.Windows.MessageBoxImage.Error);
+                Log4.Error($"프롬프트 저장 핸들러 처리 실패: {ex.Message}");
             }
         };
 
@@ -20305,52 +20319,66 @@ public partial class MainWindow : FluentWindow
         // 연결 테스트
         testBtn.Click += async (s, e) =>
         {
-            connStatus.Text = "연결 중...";
-            testBtn.IsEnabled = false;
             try
             {
-                using var svc = new mAIx.Services.Speech.ServerSpeechService(urlBox.Text.Trim(), prefs);
-                var ok = await svc.TestConnectionAsync();
-                connStatus.Text = ok ? "✅ 연결 성공" : "❌ 연결 실패";
-                connStatus.Foreground = ok
-                    ? new SolidColorBrush(Colors.Green)
-                    : new SolidColorBrush(Colors.Red);
+                connStatus.Text = "연결 중...";
+                testBtn.IsEnabled = false;
+                try
+                {
+                    using var svc = new mAIx.Services.Speech.ServerSpeechService(urlBox.Text.Trim(), prefs);
+                    var ok = await svc.TestConnectionAsync();
+                    connStatus.Text = ok ? "✅ 연결 성공" : "❌ 연결 실패";
+                    connStatus.Foreground = ok
+                        ? new SolidColorBrush(Colors.Green)
+                        : new SolidColorBrush(Colors.Red);
+                }
+                catch (Exception ex)
+                {
+                    connStatus.Text = $"❌ 오류: {ex.Message}";
+                    connStatus.Foreground = new SolidColorBrush(Colors.Red);
+                }
+                finally { testBtn.IsEnabled = true; }
             }
             catch (Exception ex)
             {
-                connStatus.Text = $"❌ 오류: {ex.Message}";
-                connStatus.Foreground = new SolidColorBrush(Colors.Red);
+                Log4.Error($"연결 테스트 핸들러 처리 실패: {ex.Message}");
             }
-            finally { testBtn.IsEnabled = true; }
         };
 
         // 저장
         saveBtn.Click += async (s, e) =>
         {
-            if (prefs == null) return;
-            prefs.SpeechServerUrl = string.IsNullOrWhiteSpace(urlBox.Text)
-                ? "http://172.10.74.2:18989" : urlBox.Text.Trim();
-            prefs.TtsMode = "server"; // TTS 모드는 항상 서버로 고정
+            try
+            {
+                if (prefs == null) return;
+                prefs.SpeechServerUrl = string.IsNullOrWhiteSpace(urlBox.Text)
+                    ? "http://172.10.74.2:18989" : urlBox.Text.Trim();
+                prefs.TtsMode = "server"; // TTS 모드는 항상 서버로 고정
 
-            // STT 분석 주기 저장
-            if (sttIntervalComboBox.SelectedItem is System.Windows.Controls.ComboBoxItem sttItem && sttItem.Tag is float sttVal)
-                prefs.STTIntervalSeconds = sttVal;
+                // STT 분석 주기 저장
+                if (sttIntervalComboBox.SelectedItem is System.Windows.Controls.ComboBoxItem sttItem && sttItem.Tag is float sttVal)
+                    prefs.STTIntervalSeconds = sttVal;
 
-            // AI 요약 주기 저장
-            if (summaryIntervalComboBox.SelectedItem is System.Windows.Controls.ComboBoxItem sumItem && sumItem.Tag is int sumVal)
-                prefs.SummaryIntervalSeconds = sumVal;
+                // AI 요약 주기 저장
+                if (summaryIntervalComboBox.SelectedItem is System.Windows.Controls.ComboBoxItem sumItem && sumItem.Tag is int sumVal)
+                    prefs.SummaryIntervalSeconds = sumVal;
 
-            // 엔드포인트 저장 (빈값 → 기본값 자동 대체)
-            prefs.EndpointStt = string.IsNullOrWhiteSpace(epSttBox.Text) ? "/api/stt" : epSttBox.Text.Trim();
-            prefs.EndpointTts = string.IsNullOrWhiteSpace(epTtsBox.Text) ? "/api/tts/preview" : epTtsBox.Text.Trim();
-            prefs.EndpointDiarize = string.IsNullOrWhiteSpace(epDiarizeBox.Text) ? "/api/diarize" : epDiarizeBox.Text.Trim();
-            prefs.WsEndpointStt = string.IsNullOrWhiteSpace(epWsSttBox.Text) ? "/ws/stt" : epWsSttBox.Text.Trim();
-            prefs.WsEndpointTts = string.IsNullOrWhiteSpace(epWsTtsBox.Text) ? "/ws/tts" : epWsTtsBox.Text.Trim();
-            prefs.WsEndpointSplit = string.IsNullOrWhiteSpace(epWsSplitBox.Text) ? "/ws/split" : epWsSplitBox.Text.Trim();
+                // 엔드포인트 저장 (빈값 → 기본값 자동 대체)
+                prefs.EndpointStt = string.IsNullOrWhiteSpace(epSttBox.Text) ? "/api/stt" : epSttBox.Text.Trim();
+                prefs.EndpointTts = string.IsNullOrWhiteSpace(epTtsBox.Text) ? "/api/tts/preview" : epTtsBox.Text.Trim();
+                prefs.EndpointDiarize = string.IsNullOrWhiteSpace(epDiarizeBox.Text) ? "/api/diarize" : epDiarizeBox.Text.Trim();
+                prefs.WsEndpointStt = string.IsNullOrWhiteSpace(epWsSttBox.Text) ? "/ws/stt" : epWsSttBox.Text.Trim();
+                prefs.WsEndpointTts = string.IsNullOrWhiteSpace(epWsTtsBox.Text) ? "/ws/tts" : epWsTtsBox.Text.Trim();
+                prefs.WsEndpointSplit = string.IsNullOrWhiteSpace(epWsSplitBox.Text) ? "/ws/split" : epWsSplitBox.Text.Trim();
 
-            App.Settings?.SaveUserPreferences();
+                App.Settings?.SaveUserPreferences();
 
-            ShowSettingsSavedMessage();
+                ShowSettingsSavedMessage();
+            }
+            catch (Exception ex)
+            {
+                Log4.Error($"TTS/Speech 설정 저장 실패: {ex.Message}");
+            }
         };
     }
 
