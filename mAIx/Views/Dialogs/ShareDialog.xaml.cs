@@ -30,7 +30,14 @@ namespace mAIx.Views.Dialogs
 
         private async void Window_Loaded(object sender, RoutedEventArgs e)
         {
-            await LoadPermissionsAsync();
+            try
+            {
+                await LoadPermissionsAsync();
+            }
+            catch (Exception ex)
+            {
+                _log.Error(ex, "[ShareDialog] Window_Loaded 실패");
+            }
         }
 
         private async System.Threading.Tasks.Task LoadPermissionsAsync()
@@ -110,31 +117,38 @@ namespace mAIx.Views.Dialogs
 
         private async void InviteButton_Click(object sender, RoutedEventArgs e)
         {
-            var email = InviteEmailTextBox.Text?.Trim();
-            if (string.IsNullOrEmpty(email))
-                return;
-
             try
             {
-                InviteButton.IsEnabled = false;
-                // 편집 권한으로 공유 링크 생성 (사용자별 초대는 Graph Beta API 필요)
-                var permission = await _oneDriveService.CreateShareLinkWithOptionsAsync(_itemId, "edit");
-                if (permission?.Link?.WebUrl != null)
-                {
-                    ShareLinkTextBox.Text = permission.Link.WebUrl;
-                    InviteEmailTextBox.Text = string.Empty;
-                    _log.Information("사용자 초대 링크 생성: {Email}", email);
-                }
+                var email = InviteEmailTextBox.Text?.Trim();
+                if (string.IsNullOrEmpty(email))
+                    return;
 
-                await LoadPermissionsAsync();
+                try
+                {
+                    InviteButton.IsEnabled = false;
+                    // 편집 권한으로 공유 링크 생성 (사용자별 초대는 Graph Beta API 필요)
+                    var permission = await _oneDriveService.CreateShareLinkWithOptionsAsync(_itemId, "edit");
+                    if (permission?.Link?.WebUrl != null)
+                    {
+                        ShareLinkTextBox.Text = permission.Link.WebUrl;
+                        InviteEmailTextBox.Text = string.Empty;
+                        _log.Information("사용자 초대 링크 생성: {Email}", email);
+                    }
+
+                    await LoadPermissionsAsync();
+                }
+                catch (Exception ex)
+                {
+                    _log.Error(ex, "사용자 초대 실패");
+                }
+                finally
+                {
+                    InviteButton.IsEnabled = true;
+                }
             }
-            catch (Exception ex)
+            catch (Exception exOuter)
             {
-                _log.Error(ex, "사용자 초대 실패");
-            }
-            finally
-            {
-                InviteButton.IsEnabled = true;
+                _log.Error(exOuter, "[ShareDialog] InviteButton_Click 실패");
             }
         }
 

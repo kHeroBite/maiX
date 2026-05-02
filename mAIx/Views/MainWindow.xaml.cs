@@ -615,8 +615,15 @@ public partial class MainWindow : FluentWindow
     /// </summary>
     private async void DraftBodyWebView_Drop(object sender, System.Windows.DragEventArgs e)
     {
-        if (!_draftEditorReady) return;
-        await Services.Editor.TinyMCEEditorService.HandleDropAsync(DraftBodyWebView, e);
+        try
+        {
+            if (!_draftEditorReady) return;
+            await Services.Editor.TinyMCEEditorService.HandleDropAsync(DraftBodyWebView, e);
+        }
+        catch (Exception ex)
+        {
+            Serilog.Log.Error(ex, "[MainWindow] DraftBodyWebView_Drop 실패");
+        }
     }
 
     /// <summary>
@@ -1365,38 +1372,45 @@ public partial class MainWindow : FluentWindow
 
     private async void MainWindow_Loaded(object sender, RoutedEventArgs e)
     {
-        Log4.Debug("MainWindow_Loaded 시작");
-        Log4.Info($"[진단] 실행파일 경로: {Environment.ProcessPath}");
-        Log4.Info($"[진단] 현재 디렉토리: {AppDomain.CurrentDomain.BaseDirectory}");
+        try
+        {
+            Log4.Debug("MainWindow_Loaded 시작");
+            Log4.Info($"[진단] 실행파일 경로: {Environment.ProcessPath}");
+            Log4.Info($"[진단] 현재 디렉토리: {AppDomain.CurrentDomain.BaseDirectory}");
 
-        // 타이틀바 아이콘 초기화
-        UpdateGpuIcon();
+            // 타이틀바 아이콘 초기화
+            UpdateGpuIcon();
 
-        // 저장된 동기화 설정 로드
-        LoadSavedSyncSettings();
+            // 저장된 동기화 설정 로드
+            LoadSavedSyncSettings();
 
-        // 테마 아이콘 초기화
-        UpdateThemeIcon();
+            // 테마 아이콘 초기화
+            UpdateThemeIcon();
 
-        // 검색창 초기 크기 설정
-        UpdateSearchBoxWidth();
+            // 검색창 초기 크기 설정
+            UpdateSearchBoxWidth();
 
-        // 검색 자동완성 팝업 닫기를 위한 전역 클릭 이벤트
-        PreviewMouseDown += MainWindow_PreviewMouseDown;
+            // 검색 자동완성 팝업 닫기를 위한 전역 클릭 이벤트
+            PreviewMouseDown += MainWindow_PreviewMouseDown;
 
-        // 윈도우 비활성화 시 팝업 닫기
-        Deactivated += (s, args) => SearchAutocompletePopup.IsOpen = false;
+            // 윈도우 비활성화 시 팝업 닫기
+            Deactivated += (s, args) => SearchAutocompletePopup.IsOpen = false;
 
-        // 읽기 창 위치 + 밀도 모드 복원
-        RestoreViewSettings();
+            // 읽기 창 위치 + 밀도 모드 복원
+            RestoreViewSettings();
 
-        // 폴더 목록 초기 로드
-        await _viewModel.LoadFoldersCommand.ExecuteAsync(null);
+            // 폴더 목록 초기 로드
+            await _viewModel.LoadFoldersCommand.ExecuteAsync(null);
 
-        // 채팅 데이터 자동 로드 (BackgroundSyncService 초기 동기화보다 MainWindow 생성이 늦기 때문에 직접 로드)
-        await LoadChatsOnStartupAsync();
+            // 채팅 데이터 자동 로드 (BackgroundSyncService 초기 동기화보다 MainWindow 생성이 늦기 때문에 직접 로드)
+            await LoadChatsOnStartupAsync();
 
-        Log4.Debug("MainWindow_Loaded 완료");
+            Log4.Debug("MainWindow_Loaded 완료");
+        }
+        catch (Exception ex)
+        {
+            Serilog.Log.Error(ex, "[MainWindow] MainWindow_Loaded 실패");
+        }
     }
 
     /// <summary>
@@ -1842,44 +1856,51 @@ public partial class MainWindow : FluentWindow
     /// </summary>
     private async void FolderCreate_Click(object sender, RoutedEventArgs e)
     {
-        if (_rightClickedFolder == null)
+        try
         {
-            Log4.Warn("폴더 생성 실패: 선택된 폴더 없음");
-            return;
-        }
-
-        // 폴더 이름 입력 다이얼로그 (간단한 InputBox 대용)
-        var dialog = new Wpf.Ui.Controls.MessageBox
-        {
-            Title = "새 폴더 만들기",
-            Content = new System.Windows.Controls.TextBox
+            if (_rightClickedFolder == null)
             {
-                Name = "FolderNameInput",
-                Width = 300,
-                Text = "새 폴더",
-                SelectionStart = 0,
-                SelectionLength = 4
-            },
-            PrimaryButtonText = "만들기",
-            CloseButtonText = "취소"
-        };
+                Log4.Warn("폴더 생성 실패: 선택된 폴더 없음");
+                return;
+            }
 
-        var result = await dialog.ShowDialogAsync();
-        if (result == Wpf.Ui.Controls.MessageBoxResult.Primary)
-        {
-            var textBox = dialog.Content as System.Windows.Controls.TextBox;
-            var folderName = textBox?.Text?.Trim();
-
-            if (!string.IsNullOrEmpty(folderName))
+            // 폴더 이름 입력 다이얼로그 (간단한 InputBox 대용)
+            var dialog = new Wpf.Ui.Controls.MessageBox
             {
-                Log4.Info($"폴더 생성 요청: '{folderName}' (상위: {_rightClickedFolder.DisplayName})");
-                // 선택된 폴더를 설정한 후 Command 호출
-                _viewModel.SelectedFolder = _rightClickedFolder;
-                if (_viewModel.CreateFolderCommand.CanExecute(folderName))
+                Title = "새 폴더 만들기",
+                Content = new System.Windows.Controls.TextBox
                 {
-                    await _viewModel.CreateFolderCommand.ExecuteAsync(folderName);
+                    Name = "FolderNameInput",
+                    Width = 300,
+                    Text = "새 폴더",
+                    SelectionStart = 0,
+                    SelectionLength = 4
+                },
+                PrimaryButtonText = "만들기",
+                CloseButtonText = "취소"
+            };
+
+            var result = await dialog.ShowDialogAsync();
+            if (result == Wpf.Ui.Controls.MessageBoxResult.Primary)
+            {
+                var textBox = dialog.Content as System.Windows.Controls.TextBox;
+                var folderName = textBox?.Text?.Trim();
+
+                if (!string.IsNullOrEmpty(folderName))
+                {
+                    Log4.Info($"폴더 생성 요청: '{folderName}' (상위: {_rightClickedFolder.DisplayName})");
+                    // 선택된 폴더를 설정한 후 Command 호출
+                    _viewModel.SelectedFolder = _rightClickedFolder;
+                    if (_viewModel.CreateFolderCommand.CanExecute(folderName))
+                    {
+                        await _viewModel.CreateFolderCommand.ExecuteAsync(folderName);
+                    }
                 }
             }
+        }
+        catch (Exception ex)
+        {
+            Serilog.Log.Error(ex, "[MainWindow] FolderCreate_Click 실패");
         }
     }
 
@@ -1888,52 +1909,59 @@ public partial class MainWindow : FluentWindow
     /// </summary>
     private async void FolderRename_Click(object sender, RoutedEventArgs e)
     {
-        if (_rightClickedFolder == null)
+        try
         {
-            Log4.Warn("폴더 이름 변경 실패: 선택된 폴더 없음");
-            return;
-        }
-
-        // 시스템 폴더는 이름 변경 불가
-        if (IsSystemFolder(_rightClickedFolder.DisplayName))
-        {
-            await new Wpf.Ui.Controls.MessageBox
+            if (_rightClickedFolder == null)
             {
-                Title = "알림",
-                Content = "시스템 폴더는 이름을 변경할 수 없습니다.",
-                CloseButtonText = "확인"
-            }.ShowDialogAsync();
-            return;
-        }
+                Log4.Warn("폴더 이름 변경 실패: 선택된 폴더 없음");
+                return;
+            }
 
-        var dialog = new Wpf.Ui.Controls.MessageBox
-        {
-            Title = "폴더 이름 바꾸기",
-            Content = new System.Windows.Controls.TextBox
+            // 시스템 폴더는 이름 변경 불가
+            if (IsSystemFolder(_rightClickedFolder.DisplayName))
             {
-                Name = "FolderNameInput",
-                Width = 300,
-                Text = _rightClickedFolder.DisplayName
-            },
-            PrimaryButtonText = "변경",
-            CloseButtonText = "취소"
-        };
-
-        var result = await dialog.ShowDialogAsync();
-        if (result == Wpf.Ui.Controls.MessageBoxResult.Primary)
-        {
-            var textBox = dialog.Content as System.Windows.Controls.TextBox;
-            var newName = textBox?.Text?.Trim();
-
-            if (!string.IsNullOrEmpty(newName) && newName != _rightClickedFolder.DisplayName)
-            {
-                Log4.Info($"폴더 이름 변경 요청: '{_rightClickedFolder.DisplayName}' → '{newName}'");
-                var args = (_rightClickedFolder, newName);
-                if (_viewModel.RenameFolderCommand.CanExecute(args))
+                await new Wpf.Ui.Controls.MessageBox
                 {
-                    await _viewModel.RenameFolderCommand.ExecuteAsync(args);
+                    Title = "알림",
+                    Content = "시스템 폴더는 이름을 변경할 수 없습니다.",
+                    CloseButtonText = "확인"
+                }.ShowDialogAsync();
+                return;
+            }
+
+            var dialog = new Wpf.Ui.Controls.MessageBox
+            {
+                Title = "폴더 이름 바꾸기",
+                Content = new System.Windows.Controls.TextBox
+                {
+                    Name = "FolderNameInput",
+                    Width = 300,
+                    Text = _rightClickedFolder.DisplayName
+                },
+                PrimaryButtonText = "변경",
+                CloseButtonText = "취소"
+            };
+
+            var result = await dialog.ShowDialogAsync();
+            if (result == Wpf.Ui.Controls.MessageBoxResult.Primary)
+            {
+                var textBox = dialog.Content as System.Windows.Controls.TextBox;
+                var newName = textBox?.Text?.Trim();
+
+                if (!string.IsNullOrEmpty(newName) && newName != _rightClickedFolder.DisplayName)
+                {
+                    Log4.Info($"폴더 이름 변경 요청: '{_rightClickedFolder.DisplayName}' → '{newName}'");
+                    var args = (_rightClickedFolder, newName);
+                    if (_viewModel.RenameFolderCommand.CanExecute(args))
+                    {
+                        await _viewModel.RenameFolderCommand.ExecuteAsync(args);
+                    }
                 }
             }
+        }
+        catch (Exception ex)
+        {
+            Serilog.Log.Error(ex, "[MainWindow] FolderRename_Click 실패");
         }
     }
 
@@ -1942,40 +1970,47 @@ public partial class MainWindow : FluentWindow
     /// </summary>
     private async void FolderDelete_Click(object sender, RoutedEventArgs e)
     {
-        if (_rightClickedFolder == null)
+        try
         {
-            Log4.Warn("폴더 삭제 실패: 선택된 폴더 없음");
-            return;
-        }
-
-        // 시스템 폴더는 삭제 불가
-        if (IsSystemFolder(_rightClickedFolder.DisplayName))
-        {
-            await new Wpf.Ui.Controls.MessageBox
+            if (_rightClickedFolder == null)
             {
-                Title = "알림",
-                Content = "시스템 폴더는 삭제할 수 없습니다.",
-                CloseButtonText = "확인"
-            }.ShowDialogAsync();
-            return;
-        }
-
-        var dialog = new Wpf.Ui.Controls.MessageBox
-        {
-            Title = "폴더 삭제",
-            Content = $"'{_rightClickedFolder.DisplayName}' 폴더를 삭제하시겠습니까?\n폴더 내 모든 메일이 함께 삭제됩니다.",
-            PrimaryButtonText = "삭제",
-            CloseButtonText = "취소"
-        };
-
-        var result = await dialog.ShowDialogAsync();
-        if (result == Wpf.Ui.Controls.MessageBoxResult.Primary)
-        {
-            Log4.Info($"폴더 삭제 요청: '{_rightClickedFolder.DisplayName}'");
-            if (_viewModel.DeleteFolderCommand.CanExecute(_rightClickedFolder))
-            {
-                await _viewModel.DeleteFolderCommand.ExecuteAsync(_rightClickedFolder);
+                Log4.Warn("폴더 삭제 실패: 선택된 폴더 없음");
+                return;
             }
+
+            // 시스템 폴더는 삭제 불가
+            if (IsSystemFolder(_rightClickedFolder.DisplayName))
+            {
+                await new Wpf.Ui.Controls.MessageBox
+                {
+                    Title = "알림",
+                    Content = "시스템 폴더는 삭제할 수 없습니다.",
+                    CloseButtonText = "확인"
+                }.ShowDialogAsync();
+                return;
+            }
+
+            var dialog = new Wpf.Ui.Controls.MessageBox
+            {
+                Title = "폴더 삭제",
+                Content = $"'{_rightClickedFolder.DisplayName}' 폴더를 삭제하시겠습니까?\n폴더 내 모든 메일이 함께 삭제됩니다.",
+                PrimaryButtonText = "삭제",
+                CloseButtonText = "취소"
+            };
+
+            var result = await dialog.ShowDialogAsync();
+            if (result == Wpf.Ui.Controls.MessageBoxResult.Primary)
+            {
+                Log4.Info($"폴더 삭제 요청: '{_rightClickedFolder.DisplayName}'");
+                if (_viewModel.DeleteFolderCommand.CanExecute(_rightClickedFolder))
+                {
+                    await _viewModel.DeleteFolderCommand.ExecuteAsync(_rightClickedFolder);
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            Serilog.Log.Error(ex, "[MainWindow] FolderDelete_Click 실패");
         }
     }
 
@@ -2113,58 +2148,65 @@ public partial class MainWindow : FluentWindow
     /// </summary>
     private async void FavoriteListBox_Drop(object sender, DragEventArgs e)
     {
-        // 메일 드롭 처리 - 메일을 폴더로 이동
-        if (e.Data.GetDataPresent("EmailDragData"))
+        try
         {
-            var element = e.OriginalSource as DependencyObject;
-            var listBoxItem = FindAncestor<ListBoxItem>(element);
-
-            if (listBoxItem?.DataContext is Folder targetFolder)
+            // 메일 드롭 처리 - 메일을 폴더로 이동
+            if (e.Data.GetDataPresent("EmailDragData"))
             {
-                var emails = e.Data.GetData("EmailDragData") as List<Email>;
-                if (emails != null && emails.Count > 0)
+                var element = e.OriginalSource as DependencyObject;
+                var listBoxItem = FindAncestor<ListBoxItem>(element);
+
+                if (listBoxItem?.DataContext is Folder targetFolder)
                 {
-                    // 실행취소를 위해 원래 폴더 정보 저장
-                    _lastMovedEmails = new List<Email>(emails);
-                    _lastMovedFromFolderIds = emails.ToDictionary(em => em.Id, em => em.ParentFolderId ?? string.Empty);
+                    var emails = e.Data.GetData("EmailDragData") as List<Email>;
+                    if (emails != null && emails.Count > 0)
+                    {
+                        // 실행취소를 위해 원래 폴더 정보 저장
+                        _lastMovedEmails = new List<Email>(emails);
+                        _lastMovedFromFolderIds = emails.ToDictionary(em => em.Id, em => em.ParentFolderId ?? string.Empty);
 
-                    Log4.Info($"메일 드롭 (즐겨찾기): {emails.Count}건 → {targetFolder.DisplayName}");
-                    await _viewModel.MoveEmailsToFolderAsync(emails, targetFolder);
+                        Log4.Info($"메일 드롭 (즐겨찾기): {emails.Count}건 → {targetFolder.DisplayName}");
+                        await _viewModel.MoveEmailsToFolderAsync(emails, targetFolder);
 
-                    // 실행취소 팝업 표시
-                    ShowUndoMovePopup(emails.Count);
+                        // 실행취소 팝업 표시
+                        ShowUndoMovePopup(emails.Count);
+                    }
                 }
+                e.Handled = true;
+                return;
             }
-            e.Handled = true;
-            return;
-        }
 
-        // 폴더 순서 변경 처리
-        if (!e.Data.GetDataPresent(typeof(Folder)))
-            return;
+            // 폴더 순서 변경 처리
+            if (!e.Data.GetDataPresent(typeof(Folder)))
+                return;
 
-        var droppedFolder = e.Data.GetData(typeof(Folder)) as Folder;
-        if (droppedFolder == null || _draggedFolder == null)
-            return;
+            var droppedFolder = e.Data.GetData(typeof(Folder)) as Folder;
+            if (droppedFolder == null || _draggedFolder == null)
+                return;
 
-        // 드롭 위치의 폴더 찾기
-        Folder? targetFolderForOrder = null;
-        if (e.OriginalSource is FrameworkElement element2)
-        {
-            targetFolderForOrder = FindParentDataContext<Folder>(element2);
-        }
+            // 드롭 위치의 폴더 찾기
+            Folder? targetFolderForOrder = null;
+            if (e.OriginalSource is FrameworkElement element2)
+            {
+                targetFolderForOrder = FindParentDataContext<Folder>(element2);
+            }
 
-        // 같은 폴더면 무시
-        if (targetFolderForOrder == null || targetFolderForOrder.Id == droppedFolder.Id)
-        {
+            // 같은 폴더면 무시
+            if (targetFolderForOrder == null || targetFolderForOrder.Id == droppedFolder.Id)
+            {
+                _draggedFolder = null;
+                return;
+            }
+
+            // ViewModel에 순서 변경 요청
+            _ = _viewModel.MoveFavoriteOrder(droppedFolder, targetFolderForOrder);
+
             _draggedFolder = null;
-            return;
         }
-
-        // ViewModel에 순서 변경 요청
-        _ = _viewModel.MoveFavoriteOrder(droppedFolder, targetFolderForOrder);
-
-        _draggedFolder = null;
+        catch (Exception ex)
+        {
+            Serilog.Log.Error(ex, "[MainWindow] FavoriteListBox_Drop 실패");
+        }
     }
 
     #endregion
@@ -2176,8 +2218,15 @@ public partial class MainWindow : FluentWindow
     /// </summary>
     private async void MenuRefresh_Click(object sender, RoutedEventArgs e)
     {
-        Log4.Info("메뉴: 메일 새로고침 클릭");
-        await _viewModel.RefreshMailsCommand.ExecuteAsync(null);
+        try
+        {
+            Log4.Info("메뉴: 메일 새로고침 클릭");
+            await _viewModel.RefreshMailsCommand.ExecuteAsync(null);
+        }
+        catch (Exception ex)
+        {
+            Serilog.Log.Error(ex, "[MainWindow] MenuRefresh_Click 실패");
+        }
     }
 
     /// <summary>
@@ -2261,49 +2310,56 @@ public partial class MainWindow : FluentWindow
     /// </summary>
     private async void MenuLogout_Click(object sender, RoutedEventArgs e)
     {
-        Log4.Info("메뉴: 로그아웃 클릭");
-
-        var result = System.Windows.MessageBox.Show(
-            "로그아웃 하시겠습니까?\n\n프로그램이 종료되고 다시 로그인 창이 표시됩니다.",
-            "로그아웃",
-            System.Windows.MessageBoxButton.YesNo,
-            System.Windows.MessageBoxImage.Question);
-
-        if (result == System.Windows.MessageBoxResult.Yes)
+        try
         {
-            try
+            Log4.Info("메뉴: 로그아웃 클릭");
+
+            var result = System.Windows.MessageBox.Show(
+                "로그아웃 하시겠습니까?\n\n프로그램이 종료되고 다시 로그인 창이 표시됩니다.",
+                "로그아웃",
+                System.Windows.MessageBoxButton.YesNo,
+                System.Windows.MessageBoxImage.Question);
+
+            if (result == System.Windows.MessageBoxResult.Yes)
             {
-                var graphAuthService = ((App)Application.Current).GetService<Services.Graph.GraphAuthService>();
-                if (graphAuthService != null)
+                try
                 {
-                    await graphAuthService.LogoutAsync();
-                }
+                    var graphAuthService = ((App)Application.Current).GetService<Services.Graph.GraphAuthService>();
+                    if (graphAuthService != null)
+                    {
+                        await graphAuthService.LogoutAsync();
+                    }
 
-                // 자동 로그인 해제
-                var loginSettings = _loginSettingsService.Load();
-                if (loginSettings != null)
+                    // 자동 로그인 해제
+                    var loginSettings = _loginSettingsService.Load();
+                    if (loginSettings != null)
+                    {
+                        loginSettings.AutoLogin = false;
+                        _loginSettingsService.Save(loginSettings);
+                    }
+
+                    Log4.Info("로그아웃 완료 - 앱 재시작");
+
+                    // 앱 재시작 (로그인 창 표시)
+                    var exePath = System.Diagnostics.Process.GetCurrentProcess().MainModule?.FileName;
+                    if (!string.IsNullOrEmpty(exePath))
+                    {
+                        System.Diagnostics.Process.Start(exePath);
+                    }
+
+                    // 현재 앱 종료
+                    Application.Current.Shutdown();
+                }
+                catch (Exception ex)
                 {
-                    loginSettings.AutoLogin = false;
-                    _loginSettingsService.Save(loginSettings);
+                    Log4.Error($"로그아웃 실패: {ex.Message}");
+                    _viewModel.StatusMessage = "로그아웃 중 오류가 발생했습니다.";
                 }
-
-                Log4.Info("로그아웃 완료 - 앱 재시작");
-
-                // 앱 재시작 (로그인 창 표시)
-                var exePath = System.Diagnostics.Process.GetCurrentProcess().MainModule?.FileName;
-                if (!string.IsNullOrEmpty(exePath))
-                {
-                    System.Diagnostics.Process.Start(exePath);
-                }
-
-                // 현재 앱 종료
-                Application.Current.Shutdown();
             }
-            catch (Exception ex)
-            {
-                Log4.Error($"로그아웃 실패: {ex.Message}");
-                _viewModel.StatusMessage = "로그아웃 중 오류가 발생했습니다.";
-            }
+        }
+        catch (Exception ex)
+        {
+            Serilog.Log.Error(ex, "[MainWindow] MenuLogout_Click 실패");
         }
     }
 
@@ -2491,49 +2547,56 @@ public partial class MainWindow : FluentWindow
     /// </summary>
     private async void MenuForceResync_Click(object sender, RoutedEventArgs e)
     {
-        Log4.Info("메뉴: 전체 재동기화 클릭 (모든 서비스)");
-
         try
         {
-            // 1. 메일 동기화
-            _viewModel.StatusMessage = "메일 동기화 중...";
-            await _viewModel.ForceResyncAllAsync();
+            Log4.Info("메뉴: 전체 재동기화 클릭 (모든 서비스)");
 
-            // 2. 캘린더 동기화
-            _viewModel.StatusMessage = "캘린더 동기화 중...";
-            await _syncService.SyncCalendarAsync();
-
-            // 3. 채팅 동기화
-            _viewModel.StatusMessage = "채팅 동기화 중...";
-            await _syncService.SyncChatsAsync();
-            if (_teamsViewModel != null)
+            try
             {
-                await _teamsViewModel.LoadChatsAsync();
-            }
+                // 1. 메일 동기화
+                _viewModel.StatusMessage = "메일 동기화 중...";
+                await _viewModel.ForceResyncAllAsync();
 
-            // 4. 원노트 동기화
-            _viewModel.StatusMessage = "원노트 동기화 중...";
-            if (_oneNoteViewModel != null)
+                // 2. 캘린더 동기화
+                _viewModel.StatusMessage = "캘린더 동기화 중...";
+                await _syncService.SyncCalendarAsync();
+
+                // 3. 채팅 동기화
+                _viewModel.StatusMessage = "채팅 동기화 중...";
+                await _syncService.SyncChatsAsync();
+                if (_teamsViewModel != null)
+                {
+                    await _teamsViewModel.LoadChatsAsync();
+                }
+
+                // 4. 원노트 동기화
+                _viewModel.StatusMessage = "원노트 동기화 중...";
+                if (_oneNoteViewModel != null)
+                {
+                    await _oneNoteViewModel.LoadNotebooksAsync();
+                    await _oneNoteViewModel.LoadRecentPagesAsync();
+                }
+
+                // 5. 플래너 동기화
+                _viewModel.StatusMessage = "플래너 동기화 중...";
+                if (_plannerViewModel != null)
+                {
+                    await _plannerViewModel.LoadPlansAsync();
+                    await _plannerViewModel.LoadMyTasksAsync();
+                }
+
+                _viewModel.StatusMessage = "전체 재동기화 완료";
+                Log4.Info("전체 재동기화 완료 (모든 서비스)");
+            }
+            catch (Exception ex)
             {
-                await _oneNoteViewModel.LoadNotebooksAsync();
-                await _oneNoteViewModel.LoadRecentPagesAsync();
+                Log4.Error($"전체 재동기화 실패: {ex.Message}");
+                _viewModel.StatusMessage = $"재동기화 실패: {ex.Message}";
             }
-
-            // 5. 플래너 동기화
-            _viewModel.StatusMessage = "플래너 동기화 중...";
-            if (_plannerViewModel != null)
-            {
-                await _plannerViewModel.LoadPlansAsync();
-                await _plannerViewModel.LoadMyTasksAsync();
-            }
-
-            _viewModel.StatusMessage = "전체 재동기화 완료";
-            Log4.Info("전체 재동기화 완료 (모든 서비스)");
         }
         catch (Exception ex)
         {
-            Log4.Error($"전체 재동기화 실패: {ex.Message}");
-            _viewModel.StatusMessage = $"재동기화 실패: {ex.Message}";
+            Serilog.Log.Error(ex, "[MainWindow] MenuForceResync_Click 실패");
         }
     }
 
@@ -2637,11 +2700,18 @@ public partial class MainWindow : FluentWindow
     /// </summary>
     private async void EmailSetFlag_Click(object sender, RoutedEventArgs e)
     {
-        var selectedEmails = EmailListBox.SelectedItems.Cast<Email>().ToList();
-        if (selectedEmails.Count > 0)
+        try
         {
-            Log4.Info($"플래그 설정: {selectedEmails.Count}건");
-            await _viewModel.UpdateFlagStatusAsync(selectedEmails, "flagged");
+            var selectedEmails = EmailListBox.SelectedItems.Cast<Email>().ToList();
+            if (selectedEmails.Count > 0)
+            {
+                Log4.Info($"플래그 설정: {selectedEmails.Count}건");
+                await _viewModel.UpdateFlagStatusAsync(selectedEmails, "flagged");
+            }
+        }
+        catch (Exception ex)
+        {
+            Serilog.Log.Error(ex, "[MainWindow] EmailSetFlag_Click 실패");
         }
     }
 
@@ -2650,11 +2720,18 @@ public partial class MainWindow : FluentWindow
     /// </summary>
     private async void EmailCompleteFlag_Click(object sender, RoutedEventArgs e)
     {
-        var selectedEmails = EmailListBox.SelectedItems.Cast<Email>().ToList();
-        if (selectedEmails.Count > 0)
+        try
         {
-            Log4.Info($"플래그 완료: {selectedEmails.Count}건");
-            await _viewModel.UpdateFlagStatusAsync(selectedEmails, "complete");
+            var selectedEmails = EmailListBox.SelectedItems.Cast<Email>().ToList();
+            if (selectedEmails.Count > 0)
+            {
+                Log4.Info($"플래그 완료: {selectedEmails.Count}건");
+                await _viewModel.UpdateFlagStatusAsync(selectedEmails, "complete");
+            }
+        }
+        catch (Exception ex)
+        {
+            Serilog.Log.Error(ex, "[MainWindow] EmailCompleteFlag_Click 실패");
         }
     }
 
@@ -2663,11 +2740,18 @@ public partial class MainWindow : FluentWindow
     /// </summary>
     private async void EmailClearFlag_Click(object sender, RoutedEventArgs e)
     {
-        var selectedEmails = EmailListBox.SelectedItems.Cast<Email>().ToList();
-        if (selectedEmails.Count > 0)
+        try
         {
-            Log4.Info($"플래그 해제: {selectedEmails.Count}건");
-            await _viewModel.UpdateFlagStatusAsync(selectedEmails, "notFlagged");
+            var selectedEmails = EmailListBox.SelectedItems.Cast<Email>().ToList();
+            if (selectedEmails.Count > 0)
+            {
+                Log4.Info($"플래그 해제: {selectedEmails.Count}건");
+                await _viewModel.UpdateFlagStatusAsync(selectedEmails, "notFlagged");
+            }
+        }
+        catch (Exception ex)
+        {
+            Serilog.Log.Error(ex, "[MainWindow] EmailClearFlag_Click 실패");
         }
     }
 
@@ -2693,11 +2777,18 @@ public partial class MainWindow : FluentWindow
     /// </summary>
     private async void EmailMarkAsRead_Click(object sender, RoutedEventArgs e)
     {
-        var selectedEmails = EmailListBox.SelectedItems.Cast<Email>().ToList();
-        if (selectedEmails.Count > 0)
+        try
         {
-            Log4.Info($"읽음 표시: {selectedEmails.Count}건");
-            await _viewModel.UpdateReadStatusAsync(selectedEmails, true);
+            var selectedEmails = EmailListBox.SelectedItems.Cast<Email>().ToList();
+            if (selectedEmails.Count > 0)
+            {
+                Log4.Info($"읽음 표시: {selectedEmails.Count}건");
+                await _viewModel.UpdateReadStatusAsync(selectedEmails, true);
+            }
+        }
+        catch (Exception ex)
+        {
+            Serilog.Log.Error(ex, "[MainWindow] EmailMarkAsRead_Click 실패");
         }
     }
 
@@ -2706,11 +2797,18 @@ public partial class MainWindow : FluentWindow
     /// </summary>
     private async void EmailMarkAsUnread_Click(object sender, RoutedEventArgs e)
     {
-        var selectedEmails = EmailListBox.SelectedItems.Cast<Email>().ToList();
-        if (selectedEmails.Count > 0)
+        try
         {
-            Log4.Info($"읽지 않음 표시: {selectedEmails.Count}건");
-            await _viewModel.UpdateReadStatusAsync(selectedEmails, false);
+            var selectedEmails = EmailListBox.SelectedItems.Cast<Email>().ToList();
+            if (selectedEmails.Count > 0)
+            {
+                Log4.Info($"읽지 않음 표시: {selectedEmails.Count}건");
+                await _viewModel.UpdateReadStatusAsync(selectedEmails, false);
+            }
+        }
+        catch (Exception ex)
+        {
+            Serilog.Log.Error(ex, "[MainWindow] EmailMarkAsUnread_Click 실패");
         }
     }
 
@@ -2719,28 +2817,35 @@ public partial class MainWindow : FluentWindow
     /// </summary>
     private async void EmailPrint_Click(object sender, RoutedEventArgs e)
     {
-        var email = _rightClickedEmail ?? _viewModel.SelectedEmail;
-        if (email == null)
-        {
-            Log4.Warn("인쇄할 메일이 없습니다.");
-            return;
-        }
-
         try
         {
-            if (_webView2Initialized && MailBodyWebView.CoreWebView2 != null)
+            var email = _rightClickedEmail ?? _viewModel.SelectedEmail;
+            if (email == null)
             {
-                Log4.Info($"메일 인쇄: {email.Subject}");
-                await MailBodyWebView.CoreWebView2.ExecuteScriptAsync("window.print();");
+                Log4.Warn("인쇄할 메일이 없습니다.");
+                return;
             }
-            else
+
+            try
             {
-                Log4.Warn("WebView2가 초기화되지 않았습니다.");
+                if (_webView2Initialized && MailBodyWebView.CoreWebView2 != null)
+                {
+                    Log4.Info($"메일 인쇄: {email.Subject}");
+                    await MailBodyWebView.CoreWebView2.ExecuteScriptAsync("window.print();");
+                }
+                else
+                {
+                    Log4.Warn("WebView2가 초기화되지 않았습니다.");
+                }
+            }
+            catch (Exception ex)
+            {
+                Log4.Error($"인쇄 실패: {ex.Message}");
             }
         }
         catch (Exception ex)
         {
-            Log4.Error($"인쇄 실패: {ex.Message}");
+            Serilog.Log.Error(ex, "[MainWindow] EmailPrint_Click 실패");
         }
     }
 
@@ -2749,38 +2854,45 @@ public partial class MainWindow : FluentWindow
     /// </summary>
     private async void EmailExportEml_Click(object sender, RoutedEventArgs e)
     {
-        var email = _rightClickedEmail ?? _viewModel.SelectedEmail;
-        if (email == null || string.IsNullOrEmpty(email.EntryId))
-        {
-            Log4.Warn("내보낼 메일이 없습니다.");
-            return;
-        }
-
         try
         {
-            var dialog = new Microsoft.Win32.SaveFileDialog
+            var email = _rightClickedEmail ?? _viewModel.SelectedEmail;
+            if (email == null || string.IsNullOrEmpty(email.EntryId))
             {
-                Filter = "EML 파일 (*.eml)|*.eml",
-                FileName = SanitizeFileName(email.Subject ?? "메일") + ".eml",
-                DefaultExt = ".eml"
-            };
+                Log4.Warn("내보낼 메일이 없습니다.");
+                return;
+            }
 
-            if (dialog.ShowDialog() == true)
+            try
             {
-                var exportService = (App.Current as App)?.GetService<ExportService>();
-                if (exportService != null)
+                var dialog = new Microsoft.Win32.SaveFileDialog
                 {
-                    await exportService.ExportAsEmlAsync(email.EntryId, dialog.FileName);
-                    _viewModel.StatusMessage = $"EML 내보내기 완료: {System.IO.Path.GetFileName(dialog.FileName)}";
-                    Log4.Info($"EML 내보내기 완료: {dialog.FileName}");
+                    Filter = "EML 파일 (*.eml)|*.eml",
+                    FileName = SanitizeFileName(email.Subject ?? "메일") + ".eml",
+                    DefaultExt = ".eml"
+                };
+
+                if (dialog.ShowDialog() == true)
+                {
+                    var exportService = (App.Current as App)?.GetService<ExportService>();
+                    if (exportService != null)
+                    {
+                        await exportService.ExportAsEmlAsync(email.EntryId, dialog.FileName);
+                        _viewModel.StatusMessage = $"EML 내보내기 완료: {System.IO.Path.GetFileName(dialog.FileName)}";
+                        Log4.Info($"EML 내보내기 완료: {dialog.FileName}");
+                    }
                 }
+            }
+            catch (Exception ex)
+            {
+                Log4.Error($"EML 내보내기 실패: {ex.Message}");
+                System.Windows.MessageBox.Show($"EML 내보내기 실패: {ex.Message}", "오류",
+                    System.Windows.MessageBoxButton.OK, System.Windows.MessageBoxImage.Error);
             }
         }
         catch (Exception ex)
         {
-            Log4.Error($"EML 내보내기 실패: {ex.Message}");
-            System.Windows.MessageBox.Show($"EML 내보내기 실패: {ex.Message}", "오류",
-                System.Windows.MessageBoxButton.OK, System.Windows.MessageBoxImage.Error);
+            Serilog.Log.Error(ex, "[MainWindow] EmailExportEml_Click 실패");
         }
     }
 
@@ -2789,44 +2901,51 @@ public partial class MainWindow : FluentWindow
     /// </summary>
     private async void EmailExportPdf_Click(object sender, RoutedEventArgs e)
     {
-        var email = _rightClickedEmail ?? _viewModel.SelectedEmail;
-        if (email == null)
-        {
-            Log4.Warn("내보낼 메일이 없습니다.");
-            return;
-        }
-
         try
         {
-            if (!_webView2Initialized || MailBodyWebView.CoreWebView2 == null)
+            var email = _rightClickedEmail ?? _viewModel.SelectedEmail;
+            if (email == null)
             {
-                Log4.Warn("WebView2가 초기화되지 않았습니다.");
+                Log4.Warn("내보낼 메일이 없습니다.");
                 return;
             }
 
-            var dialog = new Microsoft.Win32.SaveFileDialog
+            try
             {
-                Filter = "PDF 파일 (*.pdf)|*.pdf",
-                FileName = SanitizeFileName(email.Subject ?? "메일") + ".pdf",
-                DefaultExt = ".pdf"
-            };
-
-            if (dialog.ShowDialog() == true)
-            {
-                var exportService = (App.Current as App)?.GetService<ExportService>();
-                if (exportService != null)
+                if (!_webView2Initialized || MailBodyWebView.CoreWebView2 == null)
                 {
-                    await exportService.ExportAsPdfAsync(MailBodyWebView.CoreWebView2, dialog.FileName);
-                    _viewModel.StatusMessage = $"PDF 내보내기 완료: {System.IO.Path.GetFileName(dialog.FileName)}";
-                    Log4.Info($"PDF 내보내기 완료: {dialog.FileName}");
+                    Log4.Warn("WebView2가 초기화되지 않았습니다.");
+                    return;
                 }
+
+                var dialog = new Microsoft.Win32.SaveFileDialog
+                {
+                    Filter = "PDF 파일 (*.pdf)|*.pdf",
+                    FileName = SanitizeFileName(email.Subject ?? "메일") + ".pdf",
+                    DefaultExt = ".pdf"
+                };
+
+                if (dialog.ShowDialog() == true)
+                {
+                    var exportService = (App.Current as App)?.GetService<ExportService>();
+                    if (exportService != null)
+                    {
+                        await exportService.ExportAsPdfAsync(MailBodyWebView.CoreWebView2, dialog.FileName);
+                        _viewModel.StatusMessage = $"PDF 내보내기 완료: {System.IO.Path.GetFileName(dialog.FileName)}";
+                        Log4.Info($"PDF 내보내기 완료: {dialog.FileName}");
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                Log4.Error($"PDF 내보내기 실패: {ex.Message}");
+                System.Windows.MessageBox.Show($"PDF 내보내기 실패: {ex.Message}", "오류",
+                    System.Windows.MessageBoxButton.OK, System.Windows.MessageBoxImage.Error);
             }
         }
         catch (Exception ex)
         {
-            Log4.Error($"PDF 내보내기 실패: {ex.Message}");
-            System.Windows.MessageBox.Show($"PDF 내보내기 실패: {ex.Message}", "오류",
-                System.Windows.MessageBoxButton.OK, System.Windows.MessageBoxImage.Error);
+            Serilog.Log.Error(ex, "[MainWindow] EmailExportPdf_Click 실패");
         }
     }
 
@@ -2926,25 +3045,32 @@ public partial class MainWindow : FluentWindow
     /// </summary>
     private async void EmailMoveToJunk_Click(object sender, RoutedEventArgs e)
     {
-        var email = _rightClickedEmail ?? _viewModel.SelectedEmail;
-        if (email == null || string.IsNullOrEmpty(email.EntryId)) return;
-
         try
         {
-            Log4.Info($"스팸 신고: {email.Subject}");
-            using var scope = ((App)Application.Current).ServiceProvider.CreateScope();
-            var graphMailService = scope.ServiceProvider.GetRequiredService<Services.Graph.GraphMailService>();
-            await graphMailService.MoveToJunkAsync(email.EntryId);
+            var email = _rightClickedEmail ?? _viewModel.SelectedEmail;
+            if (email == null || string.IsNullOrEmpty(email.EntryId)) return;
 
-            // UI에서 제거
-            _viewModel.Emails.Remove(email);
-            Log4.Info("스팸 신고 완료");
+            try
+            {
+                Log4.Info($"스팸 신고: {email.Subject}");
+                using var scope = ((App)Application.Current).ServiceProvider.CreateScope();
+                var graphMailService = scope.ServiceProvider.GetRequiredService<Services.Graph.GraphMailService>();
+                await graphMailService.MoveToJunkAsync(email.EntryId);
+
+                // UI에서 제거
+                _viewModel.Emails.Remove(email);
+                Log4.Info("스팸 신고 완료");
+            }
+            catch (Exception ex)
+            {
+                Log4.Error($"스팸 신고 실패: {ex.Message}");
+                System.Windows.MessageBox.Show($"스팸 신고에 실패했습니다.\n{ex.Message}", "오류",
+                    System.Windows.MessageBoxButton.OK, System.Windows.MessageBoxImage.Warning);
+            }
         }
         catch (Exception ex)
         {
-            Log4.Error($"스팸 신고 실패: {ex.Message}");
-            System.Windows.MessageBox.Show($"스팸 신고에 실패했습니다.\n{ex.Message}", "오류",
-                System.Windows.MessageBoxButton.OK, System.Windows.MessageBoxImage.Warning);
+            Serilog.Log.Error(ex, "[MainWindow] EmailMoveToJunk_Click 실패");
         }
     }
 
@@ -2953,25 +3079,32 @@ public partial class MainWindow : FluentWindow
     /// </summary>
     private async void EmailMarkAsNotJunk_Click(object sender, RoutedEventArgs e)
     {
-        var email = _rightClickedEmail ?? _viewModel.SelectedEmail;
-        if (email == null || string.IsNullOrEmpty(email.EntryId)) return;
-
         try
         {
-            Log4.Info($"스팸 아님 처리: {email.Subject}");
-            using var scope = ((App)Application.Current).ServiceProvider.CreateScope();
-            var graphMailService = scope.ServiceProvider.GetRequiredService<Services.Graph.GraphMailService>();
-            await graphMailService.MarkAsNotJunkAsync(email.EntryId);
+            var email = _rightClickedEmail ?? _viewModel.SelectedEmail;
+            if (email == null || string.IsNullOrEmpty(email.EntryId)) return;
 
-            // UI에서 제거 (정크 폴더에서 보고 있는 경우)
-            _viewModel.Emails.Remove(email);
-            Log4.Info("스팸 아님 처리 완료");
+            try
+            {
+                Log4.Info($"스팸 아님 처리: {email.Subject}");
+                using var scope = ((App)Application.Current).ServiceProvider.CreateScope();
+                var graphMailService = scope.ServiceProvider.GetRequiredService<Services.Graph.GraphMailService>();
+                await graphMailService.MarkAsNotJunkAsync(email.EntryId);
+
+                // UI에서 제거 (정크 폴더에서 보고 있는 경우)
+                _viewModel.Emails.Remove(email);
+                Log4.Info("스팸 아님 처리 완료");
+            }
+            catch (Exception ex)
+            {
+                Log4.Error($"스팸 아님 처리 실패: {ex.Message}");
+                System.Windows.MessageBox.Show($"스팸 아님 처리에 실패했습니다.\n{ex.Message}", "오류",
+                    System.Windows.MessageBoxButton.OK, System.Windows.MessageBoxImage.Warning);
+            }
         }
         catch (Exception ex)
         {
-            Log4.Error($"스팸 아님 처리 실패: {ex.Message}");
-            System.Windows.MessageBox.Show($"스팸 아님 처리에 실패했습니다.\n{ex.Message}", "오류",
-                System.Windows.MessageBoxButton.OK, System.Windows.MessageBoxImage.Warning);
+            Serilog.Log.Error(ex, "[MainWindow] EmailMarkAsNotJunk_Click 실패");
         }
     }
 
@@ -2980,8 +3113,15 @@ public partial class MainWindow : FluentWindow
     /// </summary>
     private async void EmailDelete_Click(object sender, RoutedEventArgs e)
     {
-        Log4.Info("=== EmailDelete_Click 호출됨 ===");
-        await DeleteSelectedEmailAsync();
+        try
+        {
+            Log4.Info("=== EmailDelete_Click 호출됨 ===");
+            await DeleteSelectedEmailAsync();
+        }
+        catch (Exception ex)
+        {
+            Serilog.Log.Error(ex, "[MainWindow] EmailDelete_Click 실패");
+        }
     }
 
     /// <summary>
@@ -2989,26 +3129,33 @@ public partial class MainWindow : FluentWindow
     /// </summary>
     private async void EmailDelete_Button_Click(object sender, RoutedEventArgs e)
     {
-        Log4.Info("=== EmailDelete_Button_Click 호출됨 ===");
-        Log4.Debug($"_rightClickedEmail: {_rightClickedEmail?.Subject ?? "null"}");
-        Log4.Debug($"_viewModel.SelectedEmail: {_viewModel.SelectedEmail?.Subject ?? "null"}");
-        Log4.Debug($"EmailListBox.SelectedItem: {(EmailListBox.SelectedItem as Email)?.Subject ?? "null"}");
-
         try
         {
-            // ContextMenu 닫기
-            if (EmailListBox.ContextMenu != null)
-            {
-                EmailListBox.ContextMenu.IsOpen = false;
-            }
+            Log4.Info("=== EmailDelete_Button_Click 호출됨 ===");
+            Log4.Debug($"_rightClickedEmail: {_rightClickedEmail?.Subject ?? "null"}");
+            Log4.Debug($"_viewModel.SelectedEmail: {_viewModel.SelectedEmail?.Subject ?? "null"}");
+            Log4.Debug($"EmailListBox.SelectedItem: {(EmailListBox.SelectedItem as Email)?.Subject ?? "null"}");
 
-            await DeleteSelectedEmailAsync();
-            Log4.Info("삭제 완료");
+            try
+            {
+                // ContextMenu 닫기
+                if (EmailListBox.ContextMenu != null)
+                {
+                    EmailListBox.ContextMenu.IsOpen = false;
+                }
+
+                await DeleteSelectedEmailAsync();
+                Log4.Info("삭제 완료");
+            }
+            catch (Exception ex)
+            {
+                Log4.Error($"EmailDelete_Button_Click 예외: {ex.Message}");
+                Log4.Error($"스택: {ex.StackTrace}");
+            }
         }
         catch (Exception ex)
         {
-            Log4.Error($"EmailDelete_Button_Click 예외: {ex.Message}");
-            Log4.Error($"스택: {ex.StackTrace}");
+            Serilog.Log.Error(ex, "[MainWindow] EmailDelete_Button_Click 실패");
         }
     }
 
@@ -3076,20 +3223,27 @@ public partial class MainWindow : FluentWindow
     /// </summary>
     private async void UndoAction_Click(object sender, RoutedEventArgs e)
     {
-        _undoTimer?.Stop();
-
-        // 팝업 숨기기
-        UndoDeletePopup.Visibility = Visibility.Collapsed;
-
-        if (_isUndoForMove)
+        try
         {
-            // 이동 실행취소
-            await UndoMoveAsync();
+            _undoTimer?.Stop();
+
+            // 팝업 숨기기
+            UndoDeletePopup.Visibility = Visibility.Collapsed;
+
+            if (_isUndoForMove)
+            {
+                // 이동 실행취소
+                await UndoMoveAsync();
+            }
+            else
+            {
+                // 삭제 실행취소
+                await UndoDeleteAsync();
+            }
         }
-        else
+        catch (Exception ex)
         {
-            // 삭제 실행취소
-            await UndoDeleteAsync();
+            Serilog.Log.Error(ex, "[MainWindow] UndoAction_Click 실패");
         }
     }
 
@@ -3156,20 +3310,27 @@ public partial class MainWindow : FluentWindow
     /// </summary>
     private async void EmailFlag_Click(object sender, RoutedEventArgs e)
     {
-        e.Handled = true; // 이벤트 버블링 방지
-
-        if (sender is FrameworkElement element && element.Tag is Email email)
+        try
         {
-            // 플래그 상태 토글: notFlagged → flagged → complete → notFlagged
-            var newStatus = email.FlagStatus?.ToLower() switch
-            {
-                "flagged" => "complete",
-                "complete" => "notFlagged",
-                _ => "flagged"
-            };
+            e.Handled = true; // 이벤트 버블링 방지
 
-            await _viewModel.UpdateFlagStatusAsync(new List<Email> { email }, newStatus);
-            Log4.Debug($"플래그 변경: {email.Subject} → {newStatus}");
+            if (sender is FrameworkElement element && element.Tag is Email email)
+            {
+                // 플래그 상태 토글: notFlagged → flagged → complete → notFlagged
+                var newStatus = email.FlagStatus?.ToLower() switch
+                {
+                    "flagged" => "complete",
+                    "complete" => "notFlagged",
+                    _ => "flagged"
+                };
+
+                await _viewModel.UpdateFlagStatusAsync(new List<Email> { email }, newStatus);
+                Log4.Debug($"플래그 변경: {email.Subject} → {newStatus}");
+            }
+        }
+        catch (Exception ex)
+        {
+            Serilog.Log.Error(ex, "[MainWindow] EmailFlag_Click 실패");
         }
     }
 
@@ -3178,23 +3339,30 @@ public partial class MainWindow : FluentWindow
     /// </summary>
     private async void EmailFlag_PreviewMouseDown(object sender, MouseButtonEventArgs e)
     {
-        e.Handled = true; // ListBox 선택 방지
-        Serilog.Log.Information("[EmailFlag_PreviewMouseDown] 플래그 버튼 마우스다운 이벤트 발생");
-
-        if (sender is FrameworkElement element && element.Tag is Email email)
+        try
         {
-            // 플래그 상태 토글: notFlagged → flagged → complete → notFlagged
-            var newStatus = email.FlagStatus?.ToLower() switch
+            e.Handled = true; // ListBox 선택 방지
+            Serilog.Log.Information("[EmailFlag_PreviewMouseDown] 플래그 버튼 마우스다운 이벤트 발생");
+
+            if (sender is FrameworkElement element && element.Tag is Email email)
             {
-                "flagged" => "complete",
-                "complete" => "notFlagged",
-                _ => "flagged"
-            };
+                // 플래그 상태 토글: notFlagged → flagged → complete → notFlagged
+                var newStatus = email.FlagStatus?.ToLower() switch
+                {
+                    "flagged" => "complete",
+                    "complete" => "notFlagged",
+                    _ => "flagged"
+                };
 
-            Serilog.Log.Information("[EmailFlag_PreviewMouseDown] 플래그 변경 시도: {Subject} → {NewStatus}",
-                email.Subject, newStatus);
+                Serilog.Log.Information("[EmailFlag_PreviewMouseDown] 플래그 변경 시도: {Subject} → {NewStatus}",
+                    email.Subject, newStatus);
 
-            await _viewModel.UpdateFlagStatusAsync(new List<Email> { email }, newStatus);
+                await _viewModel.UpdateFlagStatusAsync(new List<Email> { email }, newStatus);
+            }
+        }
+        catch (Exception ex)
+        {
+            Serilog.Log.Error(ex, "[MainWindow] EmailFlag_PreviewMouseDown 실패");
         }
     }
 
@@ -3252,32 +3420,39 @@ public partial class MainWindow : FluentWindow
     /// </summary>
     private async void EmailDelete_PreviewMouseDown(object sender, MouseButtonEventArgs e)
     {
-        e.Handled = true; // ListBox 선택 방지
-        Serilog.Log.Information("[EmailDelete_PreviewMouseDown] 삭제 버튼 마우스다운 이벤트 발생");
-
-        if (sender is FrameworkElement element && element.Tag is Email email)
+        try
         {
-            if (string.IsNullOrEmpty(email.EntryId))
+            e.Handled = true; // ListBox 선택 방지
+            Serilog.Log.Information("[EmailDelete_PreviewMouseDown] 삭제 버튼 마우스다운 이벤트 발생");
+
+            if (sender is FrameworkElement element && element.Tag is Email email)
             {
-                Log4.Warn($"EntryId가 없는 메일은 삭제할 수 없습니다: {email.Subject}");
-                return;
+                if (string.IsNullOrEmpty(email.EntryId))
+                {
+                    Log4.Warn($"EntryId가 없는 메일은 삭제할 수 없습니다: {email.Subject}");
+                    return;
+                }
+
+                Serilog.Log.Information("[EmailDelete_PreviewMouseDown] 삭제 시도: {Subject}", email.Subject);
+
+                // 삭제 전 정보 저장 (실행취소용)
+                _lastDeletedEmail = email;
+                _lastDeletedFromFolderId = email.ParentFolderId;
+
+                // DeleteEmailCommand로 삭제
+                if (_viewModel.DeleteEmailCommand.CanExecute(email))
+                {
+                    await _viewModel.DeleteEmailCommand.ExecuteAsync(email);
+                    Serilog.Log.Information("[EmailDelete_PreviewMouseDown] 삭제 명령 실행됨: {Subject}", email.Subject);
+
+                    // 실행취소 팝업 표시
+                    ShowUndoDeletePopup();
+                }
             }
-
-            Serilog.Log.Information("[EmailDelete_PreviewMouseDown] 삭제 시도: {Subject}", email.Subject);
-
-            // 삭제 전 정보 저장 (실행취소용)
-            _lastDeletedEmail = email;
-            _lastDeletedFromFolderId = email.ParentFolderId;
-
-            // DeleteEmailCommand로 삭제
-            if (_viewModel.DeleteEmailCommand.CanExecute(email))
-            {
-                await _viewModel.DeleteEmailCommand.ExecuteAsync(email);
-                Serilog.Log.Information("[EmailDelete_PreviewMouseDown] 삭제 명령 실행됨: {Subject}", email.Subject);
-
-                // 실행취소 팝업 표시
-                ShowUndoDeletePopup();
-            }
+        }
+        catch (Exception ex)
+        {
+            Serilog.Log.Error(ex, "[MainWindow] EmailDelete_PreviewMouseDown 실패");
         }
     }
 
@@ -3678,11 +3853,18 @@ public partial class MainWindow : FluentWindow
     /// </summary>
     private async void AiCategoryFilterComboBox_SelectionChanged(object sender, System.Windows.Controls.SelectionChangedEventArgs e)
     {
-        if (sender is System.Windows.Controls.ComboBox comboBox &&
-            comboBox.SelectedItem is System.Windows.Controls.ComboBoxItem item)
+        try
         {
-            _viewModel.SelectedAiCategory = item.Content?.ToString() ?? "전체";
-            await _viewModel.SearchCommand.ExecuteAsync(null);
+            if (sender is System.Windows.Controls.ComboBox comboBox &&
+                comboBox.SelectedItem is System.Windows.Controls.ComboBoxItem item)
+            {
+                _viewModel.SelectedAiCategory = item.Content?.ToString() ?? "전체";
+                await _viewModel.SearchCommand.ExecuteAsync(null);
+            }
+        }
+        catch (Exception ex)
+        {
+            Serilog.Log.Error(ex, "[MainWindow] AiCategoryFilterComboBox_SelectionChanged 실패");
         }
     }
 
@@ -3722,18 +3904,25 @@ public partial class MainWindow : FluentWindow
     /// </summary>
     private async void EmailListBox_ScrollChanged(object sender, ScrollChangedEventArgs e)
     {
-        // 현재 스크롤 오프셋을 캐시에 저장 (폴더 재진입 시 복원용)
-        if (_viewModel.SelectedFolder != null && e.VerticalChange != 0)
+        try
         {
-            _viewModel.CacheService.SetScrollOffset(
-                _viewModel.SelectedFolder.Id,
-                _viewModel.ShowSnoozedEmails,
-                e.VerticalOffset);
-        }
+            // 현재 스크롤 오프셋을 캐시에 저장 (폴더 재진입 시 복원용)
+            if (_viewModel.SelectedFolder != null && e.VerticalChange != 0)
+            {
+                _viewModel.CacheService.SetScrollOffset(
+                    _viewModel.SelectedFolder.Id,
+                    _viewModel.ShowSnoozedEmails,
+                    e.VerticalOffset);
+            }
 
-        if (e.VerticalOffset + e.ViewportHeight >= e.ExtentHeight - 50 && e.ExtentHeight > 0)
+            if (e.VerticalOffset + e.ViewportHeight >= e.ExtentHeight - 50 && e.ExtentHeight > 0)
+            {
+                await _viewModel.LoadMoreEmailsAsync();
+            }
+        }
+        catch (Exception ex)
         {
-            await _viewModel.LoadMoreEmailsAsync();
+            Serilog.Log.Error(ex, "[MainWindow] EmailListBox_ScrollChanged 실패");
         }
     }
 
@@ -3785,35 +3974,63 @@ public partial class MainWindow : FluentWindow
 
     private async void BulkDelete_Click(object sender, RoutedEventArgs e)
     {
-        var emails = EmailListBox.SelectedItems.Cast<Email>().ToList();
-        if (emails.Count == 0) return;
-        Log4.Info($"일괄 삭제: {emails.Count}건");
-        await _viewModel.DeleteEmailsAsync(emails);
-        EmailListBox.UnselectAll();
+        try
+        {
+            var emails = EmailListBox.SelectedItems.Cast<Email>().ToList();
+            if (emails.Count == 0) return;
+            Log4.Info($"일괄 삭제: {emails.Count}건");
+            await _viewModel.DeleteEmailsAsync(emails);
+            EmailListBox.UnselectAll();
+        }
+        catch (Exception ex)
+        {
+            Serilog.Log.Error(ex, "[MainWindow] BulkDelete_Click 실패");
+        }
     }
 
     private async void BulkMarkRead_Click(object sender, RoutedEventArgs e)
     {
-        var emails = EmailListBox.SelectedItems.Cast<Email>().ToList();
-        if (emails.Count == 0) return;
-        await _viewModel.UpdateReadStatusAsync(emails, true);
-        EmailListBox.UnselectAll();
+        try
+        {
+            var emails = EmailListBox.SelectedItems.Cast<Email>().ToList();
+            if (emails.Count == 0) return;
+            await _viewModel.UpdateReadStatusAsync(emails, true);
+            EmailListBox.UnselectAll();
+        }
+        catch (Exception ex)
+        {
+            Serilog.Log.Error(ex, "[MainWindow] BulkMarkRead_Click 실패");
+        }
     }
 
     private async void BulkMarkUnread_Click(object sender, RoutedEventArgs e)
     {
-        var emails = EmailListBox.SelectedItems.Cast<Email>().ToList();
-        if (emails.Count == 0) return;
-        await _viewModel.UpdateReadStatusAsync(emails, false);
-        EmailListBox.UnselectAll();
+        try
+        {
+            var emails = EmailListBox.SelectedItems.Cast<Email>().ToList();
+            if (emails.Count == 0) return;
+            await _viewModel.UpdateReadStatusAsync(emails, false);
+            EmailListBox.UnselectAll();
+        }
+        catch (Exception ex)
+        {
+            Serilog.Log.Error(ex, "[MainWindow] BulkMarkUnread_Click 실패");
+        }
     }
 
     private async void BulkFlag_Click(object sender, RoutedEventArgs e)
     {
-        var emails = EmailListBox.SelectedItems.Cast<Email>().ToList();
-        if (emails.Count == 0) return;
-        await _viewModel.UpdateFlagStatusAsync(emails, "flagged");
-        EmailListBox.UnselectAll();
+        try
+        {
+            var emails = EmailListBox.SelectedItems.Cast<Email>().ToList();
+            if (emails.Count == 0) return;
+            await _viewModel.UpdateFlagStatusAsync(emails, "flagged");
+            EmailListBox.UnselectAll();
+        }
+        catch (Exception ex)
+        {
+            Serilog.Log.Error(ex, "[MainWindow] BulkFlag_Click 실패");
+        }
     }
 
     private void BulkMove_Click(object sender, RoutedEventArgs e)
@@ -3861,26 +4078,33 @@ public partial class MainWindow : FluentWindow
     /// </summary>
     private async void DailyBriefingButton_Click(object sender, RoutedEventArgs e)
     {
-        var aiMailService = (App.Current as App)?.GetService<AiMailService>();
-        if (aiMailService == null)
+        try
         {
-            Log4.Warn("[MainWindow] AiMailService 미등록 — 브리핑 불가");
-            return;
+            var aiMailService = (App.Current as App)?.GetService<AiMailService>();
+            if (aiMailService == null)
+            {
+                Log4.Warn("[MainWindow] AiMailService 미등록 — 브리핑 불가");
+                return;
+            }
+
+            // 오늘 수신된 메일 목록 수집
+            var today = DateTime.Today;
+            var todayEmails = _viewModel.Emails?
+                .Where(m => m.ReceivedDateTime.HasValue && m.ReceivedDateTime.Value.Date == today)
+                .ToList() ?? new List<Email>();
+
+            Log4.Debug($"[MainWindow] 브리핑 대상 메일 수={todayEmails.Count}");
+
+            var dialog = new DailyBriefingDialog(aiMailService, todayEmails)
+            {
+                Owner = this
+            };
+            dialog.ShowDialog();
         }
-
-        // 오늘 수신된 메일 목록 수집
-        var today = DateTime.Today;
-        var todayEmails = _viewModel.Emails?
-            .Where(m => m.ReceivedDateTime.HasValue && m.ReceivedDateTime.Value.Date == today)
-            .ToList() ?? new List<Email>();
-
-        Log4.Debug($"[MainWindow] 브리핑 대상 메일 수={todayEmails.Count}");
-
-        var dialog = new DailyBriefingDialog(aiMailService, todayEmails)
+        catch (Exception ex)
         {
-            Owner = this
-        };
-        dialog.ShowDialog();
+            Serilog.Log.Error(ex, "[MainWindow] DailyBriefingButton_Click 실패");
+        }
     }
 
     #endregion
@@ -4020,30 +4244,37 @@ public partial class MainWindow : FluentWindow
     /// </summary>
     private async void FolderTreeView_Drop(object sender, DragEventArgs e)
     {
-        if (!e.Data.GetDataPresent("EmailDragData")) return;
-
-        // 드롭 대상 폴더 찾기
-        var element = e.OriginalSource as DependencyObject;
-        var treeViewItem = FindAncestor<System.Windows.Controls.TreeViewItem>(element);
-
-        if (treeViewItem?.DataContext is Folder targetFolder)
+        try
         {
-            var emails = e.Data.GetData("EmailDragData") as List<Email>;
-            if (emails != null && emails.Count > 0)
+            if (!e.Data.GetDataPresent("EmailDragData")) return;
+
+            // 드롭 대상 폴더 찾기
+            var element = e.OriginalSource as DependencyObject;
+            var treeViewItem = FindAncestor<System.Windows.Controls.TreeViewItem>(element);
+
+            if (treeViewItem?.DataContext is Folder targetFolder)
             {
-                // 실행취소를 위해 원래 폴더 정보 저장
-                _lastMovedEmails = new List<Email>(emails);
-                _lastMovedFromFolderIds = emails.ToDictionary(em => em.Id, em => em.ParentFolderId ?? string.Empty);
+                var emails = e.Data.GetData("EmailDragData") as List<Email>;
+                if (emails != null && emails.Count > 0)
+                {
+                    // 실행취소를 위해 원래 폴더 정보 저장
+                    _lastMovedEmails = new List<Email>(emails);
+                    _lastMovedFromFolderIds = emails.ToDictionary(em => em.Id, em => em.ParentFolderId ?? string.Empty);
 
-                Log4.Info($"메일 드롭: {emails.Count}건 → {targetFolder.DisplayName}");
-                await _viewModel.MoveEmailsToFolderAsync(emails, targetFolder);
+                    Log4.Info($"메일 드롭: {emails.Count}건 → {targetFolder.DisplayName}");
+                    await _viewModel.MoveEmailsToFolderAsync(emails, targetFolder);
 
-                // 실행취소 팝업 표시
-                ShowUndoMovePopup(emails.Count);
+                    // 실행취소 팝업 표시
+                    ShowUndoMovePopup(emails.Count);
+                }
             }
-        }
 
-        e.Handled = true;
+            e.Handled = true;
+        }
+        catch (Exception ex)
+        {
+            Serilog.Log.Error(ex, "[MainWindow] FolderTreeView_Drop 실패");
+        }
     }
 
     /// <summary>
@@ -4478,12 +4709,19 @@ public partial class MainWindow : FluentWindow
     /// </summary>
     private async void TitleBarSearchBox_TextChanged(object sender, TextChangedEventArgs e)
     {
-        var searchText = TitleBarSearchBox.Text?.Trim() ?? "";
-
-        // "모두" 또는 "사람" 탭일 때만 연락처 검색
-        if (_currentSearchTab == "모두" || _currentSearchTab == "사람")
+        try
         {
-            await SearchContactsAsync(searchText);
+            var searchText = TitleBarSearchBox.Text?.Trim() ?? "";
+
+            // "모두" 또는 "사람" 탭일 때만 연락처 검색
+            if (_currentSearchTab == "모두" || _currentSearchTab == "사람")
+            {
+                await SearchContactsAsync(searchText);
+            }
+        }
+        catch (Exception ex)
+        {
+            Serilog.Log.Error(ex, "[MainWindow] TitleBarSearchBox_TextChanged 실패");
         }
     }
 
@@ -4542,44 +4780,51 @@ public partial class MainWindow : FluentWindow
     /// </summary>
     private async void SearchTab_Click(object sender, RoutedEventArgs e)
     {
-        if (sender is not Wpf.Ui.Controls.Button clickedTab) return;
-
-        // 모든 탭 버튼을 Secondary로 변경
-        SearchTabAll.Appearance = Wpf.Ui.Controls.ControlAppearance.Secondary;
-        SearchTabMail.Appearance = Wpf.Ui.Controls.ControlAppearance.Secondary;
-        SearchTabPerson.Appearance = Wpf.Ui.Controls.ControlAppearance.Secondary;
-
-        // 클릭한 탭을 Primary로 변경
-        clickedTab.Appearance = Wpf.Ui.Controls.ControlAppearance.Primary;
-
-        _currentSearchTab = clickedTab.Content?.ToString() ?? "모두";
-        Log4.Info($"검색 탭 변경: {_currentSearchTab}");
-
-        // 탭에 따라 검색 결과 필터링
-        var searchText = TitleBarSearchBox.Text?.Trim() ?? "";
-
-        if (_currentSearchTab == "사람")
+        try
         {
-            // 연락처만 표시
-            RecentSearchItems.Visibility = Visibility.Collapsed;
-            await SearchContactsAsync(searchText);
-        }
-        else
-        {
-            // 최근 검색 표시
-            RecentSearchItems.Visibility = Visibility.Visible;
+            if (sender is not Wpf.Ui.Controls.Button clickedTab) return;
 
-            if (_currentSearchTab == "모두" && !string.IsNullOrEmpty(searchText))
+            // 모든 탭 버튼을 Secondary로 변경
+            SearchTabAll.Appearance = Wpf.Ui.Controls.ControlAppearance.Secondary;
+            SearchTabMail.Appearance = Wpf.Ui.Controls.ControlAppearance.Secondary;
+            SearchTabPerson.Appearance = Wpf.Ui.Controls.ControlAppearance.Secondary;
+
+            // 클릭한 탭을 Primary로 변경
+            clickedTab.Appearance = Wpf.Ui.Controls.ControlAppearance.Primary;
+
+            _currentSearchTab = clickedTab.Content?.ToString() ?? "모두";
+            Log4.Info($"검색 탭 변경: {_currentSearchTab}");
+
+            // 탭에 따라 검색 결과 필터링
+            var searchText = TitleBarSearchBox.Text?.Trim() ?? "";
+
+            if (_currentSearchTab == "사람")
             {
-                // 모두 탭: 연락처도 함께 표시
+                // 연락처만 표시
+                RecentSearchItems.Visibility = Visibility.Collapsed;
                 await SearchContactsAsync(searchText);
             }
             else
             {
-                // 메일 탭: 연락처 숨김
-                ContactSuggestionsHeader.Visibility = Visibility.Collapsed;
-                ContactSuggestionItems.ItemsSource = null;
+                // 최근 검색 표시
+                RecentSearchItems.Visibility = Visibility.Visible;
+
+                if (_currentSearchTab == "모두" && !string.IsNullOrEmpty(searchText))
+                {
+                    // 모두 탭: 연락처도 함께 표시
+                    await SearchContactsAsync(searchText);
+                }
+                else
+                {
+                    // 메일 탭: 연락처 숨김
+                    ContactSuggestionsHeader.Visibility = Visibility.Collapsed;
+                    ContactSuggestionItems.ItemsSource = null;
+                }
             }
+        }
+        catch (Exception ex)
+        {
+            Serilog.Log.Error(ex, "[MainWindow] SearchTab_Click 실패");
         }
     }
 
@@ -5686,67 +5931,74 @@ public partial class MainWindow : FluentWindow
     /// </summary>
     private async void OneNoteAttachmentAnalyze_Click(object sender, RoutedEventArgs e)
     {
-        if (sender is not System.Windows.Controls.Button btn) return;
-        if (btn.DataContext is not Models.OneNoteAttachment attachment) return;
-
-        // 분석 중이면 중지
-        if (attachment.IsAnalyzing && attachment.Cts != null)
-        {
-            btn.Content = "■ 중지 중...";
-            attachment.Cts.Cancel();
-            return;
-        }
-
-        // 기존 분석 탭 모두 닫기
-        CloseAllAnalysisTabs();
-
-        var fileAnalysisService = ((App)Application.Current).GetService<Services.AI.FileAnalysisService>();
-        if (fileAnalysisService == null) return;
-
-        var cacheService = ((App)Application.Current).GetService<Services.AI.FileAnalysisCacheService>();
-        var pageId = _oneNoteViewModel?.SelectedPage?.Id;
-
-        // CancellationTokenSource 생성
-        attachment.Cts = new System.Threading.CancellationTokenSource();
-        btn.Content = "■ 분석 중지";
-
-        attachment.PropertyChanged += (s, args) =>
-        {
-            if (args.PropertyName == nameof(Models.OneNoteAttachment.AnalysisResult) ||
-                args.PropertyName == nameof(Models.OneNoteAttachment.AnalysisStatus))
-            {
-                _ = Dispatcher.InvokeAsync(() => UpdateFileAnalysisResult(attachment));
-            }
-            // 분석 완료 시 캐시에 자동 저장
-            if (args.PropertyName == nameof(Models.OneNoteAttachment.AnalysisStatus) &&
-                attachment.AnalysisStatus == "완료" && cacheService != null && !string.IsNullOrEmpty(pageId))
-            {
-                _ = cacheService.SaveAnalysisResultAsync(pageId, attachment.FileName, attachment.AnalysisResult);
-            }
-            // 분석 완료/취소 시 버튼 복구
-            if (args.PropertyName == nameof(Models.OneNoteAttachment.IsAnalyzing) && !attachment.IsAnalyzing)
-            {
-                _ = Dispatcher.InvokeAsync(() =>
-                {
-                    attachment.Cts = null;
-                    btn.Content = new Wpf.Ui.Controls.SymbolIcon { Symbol = Wpf.Ui.Controls.SymbolRegular.Sparkle24, FontSize = 12 };
-                });
-            }
-        };
-
         try
         {
-            // Task.Run으로 전체 분석을 백그라운드 스레드에서 실행 (UI 블로킹 방지)
-            await Task.Run(() => fileAnalysisService.AnalyzeFileAsync(attachment, attachment.Cts.Token));
+            if (sender is not System.Windows.Controls.Button btn) return;
+            if (btn.DataContext is not Models.OneNoteAttachment attachment) return;
+
+            // 분석 중이면 중지
+            if (attachment.IsAnalyzing && attachment.Cts != null)
+            {
+                btn.Content = "■ 중지 중...";
+                attachment.Cts.Cancel();
+                return;
+            }
+
+            // 기존 분석 탭 모두 닫기
+            CloseAllAnalysisTabs();
+
+            var fileAnalysisService = ((App)Application.Current).GetService<Services.AI.FileAnalysisService>();
+            if (fileAnalysisService == null) return;
+
+            var cacheService = ((App)Application.Current).GetService<Services.AI.FileAnalysisCacheService>();
+            var pageId = _oneNoteViewModel?.SelectedPage?.Id;
+
+            // CancellationTokenSource 생성
+            attachment.Cts = new System.Threading.CancellationTokenSource();
+            btn.Content = "■ 분석 중지";
+
+            attachment.PropertyChanged += (s, args) =>
+            {
+                if (args.PropertyName == nameof(Models.OneNoteAttachment.AnalysisResult) ||
+                    args.PropertyName == nameof(Models.OneNoteAttachment.AnalysisStatus))
+                {
+                    _ = Dispatcher.InvokeAsync(() => UpdateFileAnalysisResult(attachment));
+                }
+                // 분석 완료 시 캐시에 자동 저장
+                if (args.PropertyName == nameof(Models.OneNoteAttachment.AnalysisStatus) &&
+                    attachment.AnalysisStatus == "완료" && cacheService != null && !string.IsNullOrEmpty(pageId))
+                {
+                    _ = cacheService.SaveAnalysisResultAsync(pageId, attachment.FileName, attachment.AnalysisResult);
+                }
+                // 분석 완료/취소 시 버튼 복구
+                if (args.PropertyName == nameof(Models.OneNoteAttachment.IsAnalyzing) && !attachment.IsAnalyzing)
+                {
+                    _ = Dispatcher.InvokeAsync(() =>
+                    {
+                        attachment.Cts = null;
+                        btn.Content = new Wpf.Ui.Controls.SymbolIcon { Symbol = Wpf.Ui.Controls.SymbolRegular.Sparkle24, FontSize = 12 };
+                    });
+                }
+            };
+
+            try
+            {
+                // Task.Run으로 전체 분석을 백그라운드 스레드에서 실행 (UI 블로킹 방지)
+                await Task.Run(() => fileAnalysisService.AnalyzeFileAsync(attachment, attachment.Cts.Token));
+            }
+            catch (System.OperationCanceledException)
+            {
+                // 정상 취소 — 에러 아님
+            }
+            finally
+            {
+                attachment.Cts = null;
+                btn.Content = new Wpf.Ui.Controls.SymbolIcon { Symbol = Wpf.Ui.Controls.SymbolRegular.Sparkle24, FontSize = 12 };
+            }
         }
-        catch (System.OperationCanceledException)
+        catch (Exception ex)
         {
-            // 정상 취소 — 에러 아님
-        }
-        finally
-        {
-            attachment.Cts = null;
-            btn.Content = new Wpf.Ui.Controls.SymbolIcon { Symbol = Wpf.Ui.Controls.SymbolRegular.Sparkle24, FontSize = 12 };
+            Serilog.Log.Error(ex, "[MainWindow] OneNoteAttachmentAnalyze_Click 실패");
         }
     }
 
@@ -5755,77 +6007,84 @@ public partial class MainWindow : FluentWindow
     /// </summary>
     private async void OneNoteAttachmentAnalyzeAll_Click(object sender, RoutedEventArgs e)
     {
-        if (_oneNoteViewModel?.CurrentPageAttachments == null) return;
-        var attachments = _oneNoteViewModel.CurrentPageAttachments;
-        if (attachments.Count == 0) return;
-
-        // 분석 중이면 모든 진행 중인 분석 중지
-        var analyzingAttachments = attachments.Where(a => a.IsAnalyzing && a.Cts != null).ToList();
-        if (analyzingAttachments.Any())
-        {
-            foreach (var att in analyzingAttachments)
-            {
-                att.Cts?.Cancel();
-            }
-            return;
-        }
-
-        // 기존 분석 탭 모두 닫기
-        CloseAllAnalysisTabs();
-
-        var fileAnalysisService = ((App)Application.Current).GetService<Services.AI.FileAnalysisService>();
-        if (fileAnalysisService == null) return;
-
-        var cacheService = ((App)Application.Current).GetService<Services.AI.FileAnalysisCacheService>();
-        var pageId = _oneNoteViewModel?.SelectedPage?.Id;
-
-        if (OneNoteFileListBox != null)
-            OneNoteFileListBox.SelectedIndex = 0;
-
-        foreach (var att in attachments)
-        {
-            // CancellationTokenSource 생성
-            att.Cts = new System.Threading.CancellationTokenSource();
-
-            att.PropertyChanged += (s, args) =>
-            {
-                if (args.PropertyName == nameof(Models.OneNoteAttachment.AnalysisResult))
-                {
-                    _ = Dispatcher.InvokeAsync(() =>
-                    {
-                        if (OneNoteFileListBox?.SelectedItem == att)
-                            UpdateFileAnalysisResult(att);
-                    });
-                }
-                // 분석 완료 시 캐시에 자동 저장
-                if (args.PropertyName == nameof(Models.OneNoteAttachment.AnalysisStatus) &&
-                    att.AnalysisStatus == "완료" && cacheService != null && !string.IsNullOrEmpty(pageId))
-                {
-                    _ = cacheService.SaveAnalysisResultAsync(pageId, att.FileName, att.AnalysisResult);
-                }
-                // 분석 완료/취소 시 Cts 정리
-                if (args.PropertyName == nameof(Models.OneNoteAttachment.IsAnalyzing) && !att.IsAnalyzing)
-                {
-                    _ = Dispatcher.InvokeAsync(() => att.Cts = null);
-                }
-            };
-        }
-
         try
         {
-            // Task.Run으로 전체 일괄 분석을 백그라운드 스레드에서 실행 (UI 블로킹 방지)
-            await Task.Run(() => fileAnalysisService.AnalyzeAllFilesAsync(attachments));
-        }
-        catch (System.OperationCanceledException)
-        {
-            // 정상 취소 — 에러 아님
-        }
-        finally
-        {
+            if (_oneNoteViewModel?.CurrentPageAttachments == null) return;
+            var attachments = _oneNoteViewModel.CurrentPageAttachments;
+            if (attachments.Count == 0) return;
+
+            // 분석 중이면 모든 진행 중인 분석 중지
+            var analyzingAttachments = attachments.Where(a => a.IsAnalyzing && a.Cts != null).ToList();
+            if (analyzingAttachments.Any())
+            {
+                foreach (var att in analyzingAttachments)
+                {
+                    att.Cts?.Cancel();
+                }
+                return;
+            }
+
+            // 기존 분석 탭 모두 닫기
+            CloseAllAnalysisTabs();
+
+            var fileAnalysisService = ((App)Application.Current).GetService<Services.AI.FileAnalysisService>();
+            if (fileAnalysisService == null) return;
+
+            var cacheService = ((App)Application.Current).GetService<Services.AI.FileAnalysisCacheService>();
+            var pageId = _oneNoteViewModel?.SelectedPage?.Id;
+
+            if (OneNoteFileListBox != null)
+                OneNoteFileListBox.SelectedIndex = 0;
+
             foreach (var att in attachments)
             {
-                att.Cts = null;
+                // CancellationTokenSource 생성
+                att.Cts = new System.Threading.CancellationTokenSource();
+
+                att.PropertyChanged += (s, args) =>
+                {
+                    if (args.PropertyName == nameof(Models.OneNoteAttachment.AnalysisResult))
+                    {
+                        _ = Dispatcher.InvokeAsync(() =>
+                        {
+                            if (OneNoteFileListBox?.SelectedItem == att)
+                                UpdateFileAnalysisResult(att);
+                        });
+                    }
+                    // 분석 완료 시 캐시에 자동 저장
+                    if (args.PropertyName == nameof(Models.OneNoteAttachment.AnalysisStatus) &&
+                        att.AnalysisStatus == "완료" && cacheService != null && !string.IsNullOrEmpty(pageId))
+                    {
+                        _ = cacheService.SaveAnalysisResultAsync(pageId, att.FileName, att.AnalysisResult);
+                    }
+                    // 분석 완료/취소 시 Cts 정리
+                    if (args.PropertyName == nameof(Models.OneNoteAttachment.IsAnalyzing) && !att.IsAnalyzing)
+                    {
+                        _ = Dispatcher.InvokeAsync(() => att.Cts = null);
+                    }
+                };
             }
+
+            try
+            {
+                // Task.Run으로 전체 일괄 분석을 백그라운드 스레드에서 실행 (UI 블로킹 방지)
+                await Task.Run(() => fileAnalysisService.AnalyzeAllFilesAsync(attachments));
+            }
+            catch (System.OperationCanceledException)
+            {
+                // 정상 취소 — 에러 아님
+            }
+            finally
+            {
+                foreach (var att in attachments)
+                {
+                    att.Cts = null;
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            Serilog.Log.Error(ex, "[MainWindow] OneNoteAttachmentAnalyzeAll_Click 실패");
         }
     }
 
@@ -5918,65 +6177,72 @@ public partial class MainWindow : FluentWindow
     /// </summary>
     private async void OneNoteRecordStart_Click(object sender, RoutedEventArgs e)
     {
-        if (_oneNoteViewModel == null) return;
-
-        if (_oneNoteViewModel.IsRecording)
+        try
         {
-            // 녹음 중지
-            _oneNoteViewModel.StopRecording();
-            await UpdateRecordingUI(false);
+            if (_oneNoteViewModel == null) return;
 
-            // 녹음 중지 시 노트내용 탭으로 전환 (녹음 선택된 게 없으면)
-            if (_oneNoteViewModel.SelectedRecording == null)
+            if (_oneNoteViewModel.IsRecording)
             {
-                // 탭 바는 항상 표시
-                SwitchToNoteContentTab();
+                // 녹음 중지
+                _oneNoteViewModel.StopRecording();
+                await UpdateRecordingUI(false);
+
+                // 녹음 중지 시 노트내용 탭으로 전환 (녹음 선택된 게 없으면)
+                if (_oneNoteViewModel.SelectedRecording == null)
+                {
+                    // 탭 바는 항상 표시
+                    SwitchToNoteContentTab();
+                }
+            }
+            else
+            {
+                // 녹음 시작 전 노트 선택 확인
+                if (_oneNoteViewModel.SelectedPage == null)
+                {
+                    Log4.Warn("[OneNote] 녹음 시작 실패: 노트가 선택되지 않음");
+
+                    // 녹음 상태 텍스트로 알림 표시
+                    if (OneNoteRecordingStatus != null)
+                    {
+                        OneNoteRecordingStatus.Text = "⚠️ 먼저 노트를 선택해주세요";
+                        OneNoteRecordingStatus.Foreground = new System.Windows.Media.SolidColorBrush(
+                            System.Windows.Media.Color.FromRgb(255, 193, 7)); // 노란색 경고색
+                    }
+                    return;
+                }
+
+                // 녹음 시작
+                try
+                {
+                    await _oneNoteViewModel.StartRecordingAsync();
+                    await UpdateRecordingUI(true);
+
+                    // 녹음 시작 시 녹음내용 탭으로 전환 (탭 바는 항상 표시)
+                    SwitchToRecordingContentTab();
+                    UpdateRecordingContentPanel();
+
+                    // 이벤트 구독하여 UI 업데이트
+                    if (_oneNoteViewModel != null)
+                    {
+                        _oneNoteViewModel.PropertyChanged += OneNoteViewModel_PropertyChanged;
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Log4.Error($"[OneNote] 녹음 시작 실패: {ex.Message}");
+                    await UpdateRecordingUI(false);
+                    if (OneNoteRecordingStatus != null)
+                    {
+                        OneNoteRecordingStatus.Text = "⚠️ 마이크를 사용할 수 없습니다. 마이크 설정을 확인해주세요.";
+                        OneNoteRecordingStatus.Foreground = new System.Windows.Media.SolidColorBrush(
+                            System.Windows.Media.Colors.Red);
+                    }
+                }
             }
         }
-        else
+        catch (Exception ex)
         {
-            // 녹음 시작 전 노트 선택 확인
-            if (_oneNoteViewModel.SelectedPage == null)
-            {
-                Log4.Warn("[OneNote] 녹음 시작 실패: 노트가 선택되지 않음");
-
-                // 녹음 상태 텍스트로 알림 표시
-                if (OneNoteRecordingStatus != null)
-                {
-                    OneNoteRecordingStatus.Text = "⚠️ 먼저 노트를 선택해주세요";
-                    OneNoteRecordingStatus.Foreground = new System.Windows.Media.SolidColorBrush(
-                        System.Windows.Media.Color.FromRgb(255, 193, 7)); // 노란색 경고색
-                }
-                return;
-            }
-
-            // 녹음 시작
-            try
-            {
-                await _oneNoteViewModel.StartRecordingAsync();
-                await UpdateRecordingUI(true);
-
-                // 녹음 시작 시 녹음내용 탭으로 전환 (탭 바는 항상 표시)
-                SwitchToRecordingContentTab();
-                UpdateRecordingContentPanel();
-
-                // 이벤트 구독하여 UI 업데이트
-                if (_oneNoteViewModel != null)
-                {
-                    _oneNoteViewModel.PropertyChanged += OneNoteViewModel_PropertyChanged;
-                }
-            }
-            catch (Exception ex)
-            {
-                Log4.Error($"[OneNote] 녹음 시작 실패: {ex.Message}");
-                await UpdateRecordingUI(false);
-                if (OneNoteRecordingStatus != null)
-                {
-                    OneNoteRecordingStatus.Text = "⚠️ 마이크를 사용할 수 없습니다. 마이크 설정을 확인해주세요.";
-                    OneNoteRecordingStatus.Foreground = new System.Windows.Media.SolidColorBrush(
-                        System.Windows.Media.Colors.Red);
-                }
-            }
+            Serilog.Log.Error(ex, "[MainWindow] OneNoteRecordStart_Click 실패");
         }
     }
 
@@ -6098,46 +6364,53 @@ public partial class MainWindow : FluentWindow
 
     private async void OneNoteRecordingPlay_Click(object sender, RoutedEventArgs e)
     {
-        Log4.Info("[MainWindow] OneNoteRecordingPlay_Click 호출됨");
-        Log4.Info($"[MainWindow] sender 타입: {sender?.GetType().FullName}");
-
-        // 표준 WPF Button 또는 Wpf.Ui.Controls.Button 모두 지원
-        object? tag = null;
-        if (sender is System.Windows.Controls.Button wpfButton)
+        try
         {
-            tag = wpfButton.Tag;
-            Log4.Info($"[MainWindow] WPF Button.Tag 타입: {tag?.GetType().FullName}");
-        }
-        else if (sender is Wpf.Ui.Controls.Button uiButton)
-        {
-            tag = uiButton.Tag;
-            Log4.Info($"[MainWindow] UI Button.Tag 타입: {tag?.GetType().FullName}");
-        }
-        else
-        {
-            Log4.Warn($"[MainWindow] sender가 Button이 아님");
-            return;
-        }
+            Log4.Info("[MainWindow] OneNoteRecordingPlay_Click 호출됨");
+            Log4.Info($"[MainWindow] sender 타입: {sender?.GetType().FullName}");
 
-        if (tag is Models.RecordingInfo recording)
-        {
-            Log4.Info($"[MainWindow] 재생할 녹음: {recording.FileName}, Source={recording.Source}");
-
-            // 녹음 항목 자동 선택
-            SelectRecordingItem(recording);
-
-            if (_oneNoteViewModel != null)
+            // 표준 WPF Button 또는 Wpf.Ui.Controls.Button 모두 지원
+            object? tag = null;
+            if (sender is System.Windows.Controls.Button wpfButton)
             {
-                await _oneNoteViewModel.PlayRecordingAsync(recording);
+                tag = wpfButton.Tag;
+                Log4.Info($"[MainWindow] WPF Button.Tag 타입: {tag?.GetType().FullName}");
+            }
+            else if (sender is Wpf.Ui.Controls.Button uiButton)
+            {
+                tag = uiButton.Tag;
+                Log4.Info($"[MainWindow] UI Button.Tag 타입: {tag?.GetType().FullName}");
             }
             else
             {
-                Log4.Warn("[MainWindow] _oneNoteViewModel이 null입니다");
+                Log4.Warn($"[MainWindow] sender가 Button이 아님");
+                return;
+            }
+
+            if (tag is Models.RecordingInfo recording)
+            {
+                Log4.Info($"[MainWindow] 재생할 녹음: {recording.FileName}, Source={recording.Source}");
+
+                // 녹음 항목 자동 선택
+                SelectRecordingItem(recording);
+
+                if (_oneNoteViewModel != null)
+                {
+                    await _oneNoteViewModel.PlayRecordingAsync(recording);
+                }
+                else
+                {
+                    Log4.Warn("[MainWindow] _oneNoteViewModel이 null입니다");
+                }
+            }
+            else
+            {
+                Log4.Warn($"[MainWindow] button.Tag가 RecordingInfo가 아님: {tag}");
             }
         }
-        else
+        catch (Exception ex)
         {
-            Log4.Warn($"[MainWindow] button.Tag가 RecordingInfo가 아님: {tag}");
+            Serilog.Log.Error(ex, "[MainWindow] OneNoteRecordingPlay_Click 실패");
         }
     }
 
@@ -6553,50 +6826,57 @@ public partial class MainWindow : FluentWindow
 
     private async void OneNoteRecordingRunSTT_Click(object sender, RoutedEventArgs e)
     {
-        Log4.Debug($"[DEBUG][클릭] OneNoteRecordingRunSTT_Click 진입 — sender={sender?.GetType().Name}, IsSTTInProgress={_oneNoteViewModel?.IsSTTInProgress}");
-        if (_oneNoteViewModel == null) return;
-
-        var clickedButton = sender as Wpf.Ui.Controls.Button;
-
-        // 이미 진행 중이면 중지
-        if (_oneNoteViewModel.IsSTTInProgress)
+        try
         {
-            Log4.Info("[OneNote] 녹음 목록 STT 분석 중지 요청");
-            _oneNoteViewModel.CancelSTT();
-            _oneNoteViewModel.IsSTTInProgress = false;
-            _oneNoteViewModel.SttProgressText = "STT 분석이 취소되었습니다";
+            Log4.Debug($"[DEBUG][클릭] OneNoteRecordingRunSTT_Click 진입 — sender={sender?.GetType().Name}, IsSTTInProgress={_oneNoteViewModel?.IsSTTInProgress}");
+            if (_oneNoteViewModel == null) return;
+
+            var clickedButton = sender as Wpf.Ui.Controls.Button;
+
+            // 이미 진행 중이면 중지
+            if (_oneNoteViewModel.IsSTTInProgress)
+            {
+                Log4.Info("[OneNote] 녹음 목록 STT 분석 중지 요청");
+                _oneNoteViewModel.CancelSTT();
+                _oneNoteViewModel.IsSTTInProgress = false;
+                _oneNoteViewModel.SttProgressText = "STT 분석이 취소되었습니다";
+                UpdateSTTButtonState(false);
+                UpdateRecordingListSTTButton(false);
+                return;
+            }
+
+            // Button 또는 MenuItem에서 Tag로 RecordingInfo 가져오기
+            Models.RecordingInfo? recording = null;
+            if (clickedButton != null)
+                recording = clickedButton.Tag as Models.RecordingInfo;
+            else if (sender is System.Windows.Controls.MenuItem menuItem)
+                recording = menuItem.Tag as Models.RecordingInfo;
+
+            if (recording == null) return;
+
+            // 클릭된 버튼 저장 및 상태 변경
+            _clickedRecordingSTTButton = clickedButton;
+
+            Log4.Debug($"[OneNote] 녹음 목록 STT 분석 클릭: {recording.FileName}");
+
+            // 1. 해당 녹음 선택 및 탭 전환
+            SelectRecordingItem(recording);
+
+            // 2. 버튼 상태 변경 (녹음내용 탭 + 녹음 파일 목록 동시 업데이트)
+            UpdateSTTButtonState(true);
+            UpdateRecordingListSTTButton(true);
+
+            // 3. STT 분석 실행
+            await RunSTTAnalysisAsync(recording);
+
+            // 완료 후 버튼 상태 복원
             UpdateSTTButtonState(false);
             UpdateRecordingListSTTButton(false);
-            return;
         }
-
-        // Button 또는 MenuItem에서 Tag로 RecordingInfo 가져오기
-        Models.RecordingInfo? recording = null;
-        if (clickedButton != null)
-            recording = clickedButton.Tag as Models.RecordingInfo;
-        else if (sender is System.Windows.Controls.MenuItem menuItem)
-            recording = menuItem.Tag as Models.RecordingInfo;
-
-        if (recording == null) return;
-
-        // 클릭된 버튼 저장 및 상태 변경
-        _clickedRecordingSTTButton = clickedButton;
-
-        Log4.Debug($"[OneNote] 녹음 목록 STT 분석 클릭: {recording.FileName}");
-
-        // 1. 해당 녹음 선택 및 탭 전환
-        SelectRecordingItem(recording);
-
-        // 2. 버튼 상태 변경 (녹음내용 탭 + 녹음 파일 목록 동시 업데이트)
-        UpdateSTTButtonState(true);
-        UpdateRecordingListSTTButton(true);
-
-        // 3. STT 분석 실행
-        await RunSTTAnalysisAsync(recording);
-
-        // 완료 후 버튼 상태 복원
-        UpdateSTTButtonState(false);
-        UpdateRecordingListSTTButton(false);
+        catch (Exception ex)
+        {
+            Serilog.Log.Error(ex, "[MainWindow] OneNoteRecordingRunSTT_Click 실패");
+        }
     }
 
     /// <summary>
@@ -6604,58 +6884,65 @@ public partial class MainWindow : FluentWindow
     /// </summary>
     private async void OneNoteRecordingRunSummary_Click(object sender, RoutedEventArgs e)
     {
-        if (_oneNoteViewModel == null) return;
-
-        var clickedButton = sender as Wpf.Ui.Controls.Button;
-
-        // 이미 진행 중이면 중지
-        if (_oneNoteViewModel.IsSummaryInProgress)
+        try
         {
-            Log4.Info("[OneNote] 녹음 목록 AI 요약 중지 요청");
-            _oneNoteViewModel.CancelSummary();
+            if (_oneNoteViewModel == null) return;
+
+            var clickedButton = sender as Wpf.Ui.Controls.Button;
+
+            // 이미 진행 중이면 중지
+            if (_oneNoteViewModel.IsSummaryInProgress)
+            {
+                Log4.Info("[OneNote] 녹음 목록 AI 요약 중지 요청");
+                _oneNoteViewModel.CancelSummary();
+                UpdateSummaryButtonState(false);
+                UpdateRecordingListSummaryButton(false);
+                return;
+            }
+
+            // Button 또는 MenuItem에서 Tag로 RecordingInfo 가져오기
+            Models.RecordingInfo? recording = null;
+            if (clickedButton != null)
+                recording = clickedButton.Tag as Models.RecordingInfo;
+            else if (sender is System.Windows.Controls.MenuItem menuItem)
+                recording = menuItem.Tag as Models.RecordingInfo;
+
+            if (recording == null) return;
+
+            // 클릭된 버튼 저장 및 상태 변경
+            _clickedRecordingSummaryButton = clickedButton;
+
+            Log4.Debug($"[OneNote] 녹음 목록 AI 요약 클릭: {recording.FileName}");
+
+            // 1. 해당 녹음 선택 및 탭 전환
+            SelectRecordingItem(recording);
+
+            // 2. STT 결과 확인
+            if (_oneNoteViewModel.STTSegments.Count == 0)
+            {
+                System.Windows.MessageBox.Show(
+                    "먼저 STT 분석을 실행해주세요.",
+                    "AI 요약",
+                    System.Windows.MessageBoxButton.OK,
+                    System.Windows.MessageBoxImage.Information);
+                return;
+            }
+
+            // 3. 버튼 상태 변경 (녹음내용 탭 + 녹음 파일 목록 동시 업데이트)
+            UpdateSummaryButtonState(true);
+            UpdateRecordingListSummaryButton(true);
+
+            // 4. AI 요약 실행
+            await RunSummaryAnalysisAsync(recording);
+
+            // 완료 후 버튼 상태 복원
             UpdateSummaryButtonState(false);
             UpdateRecordingListSummaryButton(false);
-            return;
         }
-
-        // Button 또는 MenuItem에서 Tag로 RecordingInfo 가져오기
-        Models.RecordingInfo? recording = null;
-        if (clickedButton != null)
-            recording = clickedButton.Tag as Models.RecordingInfo;
-        else if (sender is System.Windows.Controls.MenuItem menuItem)
-            recording = menuItem.Tag as Models.RecordingInfo;
-
-        if (recording == null) return;
-
-        // 클릭된 버튼 저장 및 상태 변경
-        _clickedRecordingSummaryButton = clickedButton;
-
-        Log4.Debug($"[OneNote] 녹음 목록 AI 요약 클릭: {recording.FileName}");
-
-        // 1. 해당 녹음 선택 및 탭 전환
-        SelectRecordingItem(recording);
-
-        // 2. STT 결과 확인
-        if (_oneNoteViewModel.STTSegments.Count == 0)
+        catch (Exception ex)
         {
-            System.Windows.MessageBox.Show(
-                "먼저 STT 분석을 실행해주세요.",
-                "AI 요약",
-                System.Windows.MessageBoxButton.OK,
-                System.Windows.MessageBoxImage.Information);
-            return;
+            Serilog.Log.Error(ex, "[MainWindow] OneNoteRecordingRunSummary_Click 실패");
         }
-
-        // 3. 버튼 상태 변경 (녹음내용 탭 + 녹음 파일 목록 동시 업데이트)
-        UpdateSummaryButtonState(true);
-        UpdateRecordingListSummaryButton(true);
-
-        // 4. AI 요약 실행
-        await RunSummaryAnalysisAsync(recording);
-
-        // 완료 후 버튼 상태 복원
-        UpdateSummaryButtonState(false);
-        UpdateRecordingListSummaryButton(false);
     }
 
     /// <summary>
@@ -6730,65 +7017,72 @@ public partial class MainWindow : FluentWindow
     /// </summary>
     private async void OneNoteRecordingsList_SelectionChanged(object sender, System.Windows.Controls.SelectionChangedEventArgs e)
     {
-        Log4.Debug($"[DEBUG][클릭] SelectionChanged 진입 — AddedItems={e.AddedItems.Count}, RemovedItems={e.RemovedItems.Count}");
-        Log4.Info($"[OneNote] OneNoteRecordingsList_SelectionChanged 호출됨");
-
-        if (_oneNoteViewModel == null)
+        try
         {
-            Log4.Warn("[OneNote] _oneNoteViewModel이 null");
-            return;
-        }
+            Log4.Debug($"[DEBUG][클릭] SelectionChanged 진입 — AddedItems={e.AddedItems.Count}, RemovedItems={e.RemovedItems.Count}");
+            Log4.Info($"[OneNote] OneNoteRecordingsList_SelectionChanged 호출됨");
 
-        // 녹음 중에는 다른 녹음 파일 선택 불가
-        if (_oneNoteViewModel.IsRecording)
-        {
-            Log4.Warn("[OneNote] 녹음 중 - 다른 녹음 파일 선택 불가");
-            // 이전 선택으로 되돌리기
-            if (sender is System.Windows.Controls.ListBox lb && _oneNoteViewModel.SelectedRecording != null)
+            if (_oneNoteViewModel == null)
             {
-                lb.SelectedItem = _oneNoteViewModel.SelectedRecording;
-            }
-            if (OneNoteRecordingStatus != null)
-            {
-                OneNoteRecordingStatus.Text = "⚠️ 녹음 중에는 다른 파일을 선택할 수 없습니다";
-                OneNoteRecordingStatus.Foreground = new System.Windows.Media.SolidColorBrush(
-                    System.Windows.Media.Color.FromRgb(255, 193, 7));
-            }
-            return;
-        }
-
-        if (sender is System.Windows.Controls.ListBox listBox)
-        {
-            var selectedRecording = listBox.SelectedItem as Models.RecordingInfo;
-            Log4.Info($"[OneNote] 선택된 녹음: {selectedRecording?.FileName ?? "null"}, 현재 ViewModel 선택: {_oneNoteViewModel.SelectedRecording?.FileName ?? "null"}");
-
-            // ViewModel의 SelectedRecording과 다른 경우에만 업데이트
-            // (ViewModel에서 이미 설정된 경우 중복 설정 방지)
-            if (_oneNoteViewModel.SelectedRecording != selectedRecording)
-            {
-                Log4.Info($"[OneNote] SelectedRecording 변경: {selectedRecording?.FileName ?? "null"}");
-                _oneNoteViewModel.SelectedRecording = selectedRecording;
-            }
-            else
-            {
-                Log4.Info("[OneNote] SelectedRecording 동일 - 스킵");
+                Log4.Warn("[OneNote] _oneNoteViewModel이 null");
+                return;
             }
 
-            // 녹음 선택 시 탭 바 표시 및 녹음내용 탭으로 자동 전환
-            if (_oneNoteViewModel.SelectedRecording != null)
+            // 녹음 중에는 다른 녹음 파일 선택 불가
+            if (_oneNoteViewModel.IsRecording)
             {
-                OneNoteContentTabBar.Visibility = Visibility.Visible;
-                SwitchToRecordingContentTab();
+                Log4.Warn("[OneNote] 녹음 중 - 다른 녹음 파일 선택 불가");
+                // 이전 선택으로 되돌리기
+                if (sender is System.Windows.Controls.ListBox lb && _oneNoteViewModel.SelectedRecording != null)
+                {
+                    lb.SelectedItem = _oneNoteViewModel.SelectedRecording;
+                }
+                if (OneNoteRecordingStatus != null)
+                {
+                    OneNoteRecordingStatus.Text = "⚠️ 녹음 중에는 다른 파일을 선택할 수 없습니다";
+                    OneNoteRecordingStatus.Foreground = new System.Windows.Media.SolidColorBrush(
+                        System.Windows.Media.Color.FromRgb(255, 193, 7));
+                }
+                return;
+            }
 
-                // OnSelectedRecordingChanged에서 이미 STT/요약 로드 처리됨
-                // STT/요약 로드가 완료될 때까지 대기 후 UI 갱신
-                await Task.Delay(300);
-                UpdateRecordingContentPanel();
-                UpdateSummaryContentPanel();
+            if (sender is System.Windows.Controls.ListBox listBox)
+            {
+                var selectedRecording = listBox.SelectedItem as Models.RecordingInfo;
+                Log4.Info($"[OneNote] 선택된 녹음: {selectedRecording?.FileName ?? "null"}, 현재 ViewModel 선택: {_oneNoteViewModel.SelectedRecording?.FileName ?? "null"}");
 
+                // ViewModel의 SelectedRecording과 다른 경우에만 업데이트
+                // (ViewModel에서 이미 설정된 경우 중복 설정 방지)
+                if (_oneNoteViewModel.SelectedRecording != selectedRecording)
+                {
+                    Log4.Info($"[OneNote] SelectedRecording 변경: {selectedRecording?.FileName ?? "null"}");
+                    _oneNoteViewModel.SelectedRecording = selectedRecording;
+                }
+                else
+                {
+                    Log4.Info("[OneNote] SelectedRecording 동일 - 스킵");
+                }
+
+                // 녹음 선택 시 탭 바 표시 및 녹음내용 탭으로 자동 전환
                 if (_oneNoteViewModel.SelectedRecording != null)
-                    Log4.Debug($"[OneNote] 녹음 선택: {_oneNoteViewModel.SelectedRecording.FileName}, STT 세그먼트: {_oneNoteViewModel.STTSegments.Count}개");
+                {
+                    OneNoteContentTabBar.Visibility = Visibility.Visible;
+                    SwitchToRecordingContentTab();
+
+                    // OnSelectedRecordingChanged에서 이미 STT/요약 로드 처리됨
+                    // STT/요약 로드가 완료될 때까지 대기 후 UI 갱신
+                    await Task.Delay(300);
+                    UpdateRecordingContentPanel();
+                    UpdateSummaryContentPanel();
+
+                    if (_oneNoteViewModel.SelectedRecording != null)
+                        Log4.Debug($"[OneNote] 녹음 선택: {_oneNoteViewModel.SelectedRecording.FileName}, STT 세그먼트: {_oneNoteViewModel.STTSegments.Count}개");
+                }
             }
+        }
+        catch (Exception ex)
+        {
+            Serilog.Log.Error(ex, "[MainWindow] OneNoteRecordingsList_SelectionChanged 실패");
         }
     }
 
@@ -7368,44 +7662,51 @@ public partial class MainWindow : FluentWindow
     /// </summary>
     private async void OneNoteDetailRunSTT_Click(object sender, RoutedEventArgs e)
     {
-        Log4.Debug("[OneNote] STT 분석 버튼 클릭됨");
-
-        if (_oneNoteViewModel == null)
+        try
         {
-            Log4.Warn("[OneNote] STT 분석 불가: _oneNoteViewModel이 null");
-            return;
-        }
+            Log4.Debug("[OneNote] STT 분석 버튼 클릭됨");
 
-        var recording = _oneNoteViewModel.SelectedRecording;
-        if (recording == null)
-        {
-            Log4.Warn("[OneNote] STT 분석 불가: SelectedRecording이 null");
-            return;
-        }
-
-        Log4.Debug($"[OneNote] STT 분석 대상: {recording.FileName}, FilePath: {recording.FilePath}");
-
-        // 기존 STT 결과 확인
-        if (recording.HasSTT)
-        {
-            var result = System.Windows.MessageBox.Show(
-                "기존 STT 결과가 있습니다. 덮어쓰시겠습니까?",
-                "STT 덮어쓰기 확인",
-                System.Windows.MessageBoxButton.YesNo,
-                System.Windows.MessageBoxImage.Question);
-
-            if (result != System.Windows.MessageBoxResult.Yes)
+            if (_oneNoteViewModel == null)
             {
-                Log4.Debug("[OneNote] STT 분석 취소 (사용자 거부)");
+                Log4.Warn("[OneNote] STT 분석 불가: _oneNoteViewModel이 null");
                 return;
             }
+
+            var recording = _oneNoteViewModel.SelectedRecording;
+            if (recording == null)
+            {
+                Log4.Warn("[OneNote] STT 분석 불가: SelectedRecording이 null");
+                return;
+            }
+
+            Log4.Debug($"[OneNote] STT 분석 대상: {recording.FileName}, FilePath: {recording.FilePath}");
+
+            // 기존 STT 결과 확인
+            if (recording.HasSTT)
+            {
+                var result = System.Windows.MessageBox.Show(
+                    "기존 STT 결과가 있습니다. 덮어쓰시겠습니까?",
+                    "STT 덮어쓰기 확인",
+                    System.Windows.MessageBoxButton.YesNo,
+                    System.Windows.MessageBoxImage.Question);
+
+                if (result != System.Windows.MessageBoxResult.Yes)
+                {
+                    Log4.Debug("[OneNote] STT 분석 취소 (사용자 거부)");
+                    return;
+                }
+            }
+
+            Log4.Debug("[OneNote] 서버 STT 분석 실행");
+            await RunSTTAnalysisAsync(recording);
+
+            // 좌측 녹음내용 패널 갱신
+            UpdateRecordingContentPanel();
         }
-
-        Log4.Debug("[OneNote] 서버 STT 분석 실행");
-        await RunSTTAnalysisAsync(recording);
-
-        // 좌측 녹음내용 패널 갱신
-        UpdateRecordingContentPanel();
+        catch (Exception ex)
+        {
+            Serilog.Log.Error(ex, "[MainWindow] OneNoteDetailRunSTT_Click 실패");
+        }
     }
 
     /// <summary>
@@ -7413,48 +7714,55 @@ public partial class MainWindow : FluentWindow
     /// </summary>
     private async void OneNoteTabRunSTT_Click(object sender, RoutedEventArgs e)
     {
-        Log4.Debug("[OneNote] 탭 STT 분석 버튼 클릭됨");
-
-        if (_oneNoteViewModel == null)
+        try
         {
-            Log4.Warn("[OneNote] STT 분석 불가: _oneNoteViewModel이 null");
-            return;
-        }
+            Log4.Debug("[OneNote] 탭 STT 분석 버튼 클릭됨");
 
-        // 이미 진행 중이면 중지
-        if (_oneNoteViewModel.IsSTTInProgress)
+            if (_oneNoteViewModel == null)
+            {
+                Log4.Warn("[OneNote] STT 분석 불가: _oneNoteViewModel이 null");
+                return;
+            }
+
+            // 이미 진행 중이면 중지
+            if (_oneNoteViewModel.IsSTTInProgress)
+            {
+                Log4.Info("[OneNote] STT 분석 중지 요청");
+                _oneNoteViewModel.CancelSTT();
+                _oneNoteViewModel.IsSTTInProgress = false;
+                _oneNoteViewModel.SttProgressText = "STT 분석이 취소되었습니다";
+                UpdateSTTButtonState(false);
+                UpdateRecordingListSTTButton(false);
+                return;
+            }
+
+            // SelectedRecording이 null이면 현재 페이지의 녹음 목록에서 첫 번째 녹음 사용
+            var recording = _oneNoteViewModel.SelectedRecording
+                ?? _oneNoteViewModel.CurrentPageRecordings?.FirstOrDefault();
+
+            if (recording == null)
+            {
+                Log4.Warn("[OneNote] STT 분석 불가: SelectedRecording이 null");
+                System.Windows.MessageBox.Show(
+                    "먼저 녹음 파일을 선택해주세요.",
+                    "STT 분석",
+                    System.Windows.MessageBoxButton.OK,
+                    System.Windows.MessageBoxImage.Information);
+                return;
+            }
+
+            // ViewModel에 선택된 녹음 동기화
+            if (_oneNoteViewModel.SelectedRecording == null)
+            {
+                _oneNoteViewModel.SelectedRecording = recording;
+            }
+
+            await RunSTTAnalysisAsync(recording);
+        }
+        catch (Exception ex)
         {
-            Log4.Info("[OneNote] STT 분석 중지 요청");
-            _oneNoteViewModel.CancelSTT();
-            _oneNoteViewModel.IsSTTInProgress = false;
-            _oneNoteViewModel.SttProgressText = "STT 분석이 취소되었습니다";
-            UpdateSTTButtonState(false);
-            UpdateRecordingListSTTButton(false);
-            return;
+            Serilog.Log.Error(ex, "[MainWindow] OneNoteTabRunSTT_Click 실패");
         }
-
-        // SelectedRecording이 null이면 현재 페이지의 녹음 목록에서 첫 번째 녹음 사용
-        var recording = _oneNoteViewModel.SelectedRecording
-            ?? _oneNoteViewModel.CurrentPageRecordings?.FirstOrDefault();
-
-        if (recording == null)
-        {
-            Log4.Warn("[OneNote] STT 분석 불가: SelectedRecording이 null");
-            System.Windows.MessageBox.Show(
-                "먼저 녹음 파일을 선택해주세요.",
-                "STT 분석",
-                System.Windows.MessageBoxButton.OK,
-                System.Windows.MessageBoxImage.Information);
-            return;
-        }
-
-        // ViewModel에 선택된 녹음 동기화
-        if (_oneNoteViewModel.SelectedRecording == null)
-        {
-            _oneNoteViewModel.SelectedRecording = recording;
-        }
-
-        await RunSTTAnalysisAsync(recording);
     }
 
     /// <summary>
@@ -7482,72 +7790,79 @@ public partial class MainWindow : FluentWindow
     /// </summary>
     private async void OneNoteTabRunSummary_Click(object sender, RoutedEventArgs e)
     {
-        Log4.Info("[OneNote] AI 요약 버튼 클릭됨");
-
-        if (_oneNoteViewModel == null)
+        try
         {
-            Log4.Warn("[OneNote] AI 요약 불가: _oneNoteViewModel이 null");
-            return;
-        }
+            Log4.Info("[OneNote] AI 요약 버튼 클릭됨");
 
-        // 이미 진행 중이면 중지
-        if (_oneNoteViewModel.IsSummaryInProgress)
-        {
-            Log4.Info("[OneNote] AI 요약 중지 요청");
-            _oneNoteViewModel.CancelSummary();
-            UpdateSummaryButtonState(false);
-            return;
-        }
-
-        // SelectedRecording이 null이면 현재 페이지의 녹음 목록에서 첫 번째 녹음 사용
-        var recording = _oneNoteViewModel.SelectedRecording
-            ?? _oneNoteViewModel.CurrentPageRecordings?.FirstOrDefault();
-
-        Log4.Info($"[OneNote] 녹음 선택됨: {recording?.FileName ?? "null"}, STT세그먼트: {_oneNoteViewModel.STTSegments.Count}개");
-
-        if (recording == null)
-        {
-            Log4.Warn("[OneNote] AI 요약 불가: SelectedRecording이 null");
-            System.Windows.MessageBox.Show(
-                "먼저 녹음 파일을 선택해주세요.",
-                "AI 요약",
-                System.Windows.MessageBoxButton.OK,
-                System.Windows.MessageBoxImage.Information);
-            return;
-        }
-
-        // ViewModel에 선택된 녹음 동기화
-        if (_oneNoteViewModel.SelectedRecording == null)
-        {
-            Log4.Info("[OneNote] SelectedRecording 동기화");
-            _oneNoteViewModel.SelectedRecording = recording;
-        }
-
-        // STT 결과 확인 - 없으면 기존 STT 파일에서 로드 시도
-        if (_oneNoteViewModel.STTSegments.Count == 0)
-        {
-            Log4.Info($"[OneNote] STT 세그먼트 없음, 파일에서 로드 시도. HasSTT={recording.HasSTT}, Path={recording.STTResultPath}");
-            // STT 결과 파일 자동 검색 및 로드 시도 (LoadSTTResultAsync 내부에서 파일명 기반 검색 수행)
-            Log4.Info($"[OneNote] AI 요약: STT 결과 로드 시도 - {recording.FileName}");
-            await _oneNoteViewModel.LoadSTTResultAsync(recording);
-            Log4.Info($"[OneNote] STT 로드 완료. 세그먼트 수: {_oneNoteViewModel.STTSegments.Count}");
-
-            // 로드 후에도 없으면 에러
-            if (_oneNoteViewModel.STTSegments.Count == 0)
+            if (_oneNoteViewModel == null)
             {
-                Log4.Warn("[OneNote] STT 로드 후에도 세그먼트 없음 - 에러 표시");
+                Log4.Warn("[OneNote] AI 요약 불가: _oneNoteViewModel이 null");
+                return;
+            }
+
+            // 이미 진행 중이면 중지
+            if (_oneNoteViewModel.IsSummaryInProgress)
+            {
+                Log4.Info("[OneNote] AI 요약 중지 요청");
+                _oneNoteViewModel.CancelSummary();
+                UpdateSummaryButtonState(false);
+                return;
+            }
+
+            // SelectedRecording이 null이면 현재 페이지의 녹음 목록에서 첫 번째 녹음 사용
+            var recording = _oneNoteViewModel.SelectedRecording
+                ?? _oneNoteViewModel.CurrentPageRecordings?.FirstOrDefault();
+
+            Log4.Info($"[OneNote] 녹음 선택됨: {recording?.FileName ?? "null"}, STT세그먼트: {_oneNoteViewModel.STTSegments.Count}개");
+
+            if (recording == null)
+            {
+                Log4.Warn("[OneNote] AI 요약 불가: SelectedRecording이 null");
                 System.Windows.MessageBox.Show(
-                    "먼저 STT 분석을 실행해주세요.",
+                    "먼저 녹음 파일을 선택해주세요.",
                     "AI 요약",
                     System.Windows.MessageBoxButton.OK,
                     System.Windows.MessageBoxImage.Information);
                 return;
             }
-        }
 
-        Log4.Info($"[OneNote] RunSummaryAnalysisAsync 호출 시작");
-        await RunSummaryAnalysisAsync(recording);
-        Log4.Info($"[OneNote] RunSummaryAnalysisAsync 호출 완료");
+            // ViewModel에 선택된 녹음 동기화
+            if (_oneNoteViewModel.SelectedRecording == null)
+            {
+                Log4.Info("[OneNote] SelectedRecording 동기화");
+                _oneNoteViewModel.SelectedRecording = recording;
+            }
+
+            // STT 결과 확인 - 없으면 기존 STT 파일에서 로드 시도
+            if (_oneNoteViewModel.STTSegments.Count == 0)
+            {
+                Log4.Info($"[OneNote] STT 세그먼트 없음, 파일에서 로드 시도. HasSTT={recording.HasSTT}, Path={recording.STTResultPath}");
+                // STT 결과 파일 자동 검색 및 로드 시도 (LoadSTTResultAsync 내부에서 파일명 기반 검색 수행)
+                Log4.Info($"[OneNote] AI 요약: STT 결과 로드 시도 - {recording.FileName}");
+                await _oneNoteViewModel.LoadSTTResultAsync(recording);
+                Log4.Info($"[OneNote] STT 로드 완료. 세그먼트 수: {_oneNoteViewModel.STTSegments.Count}");
+
+                // 로드 후에도 없으면 에러
+                if (_oneNoteViewModel.STTSegments.Count == 0)
+                {
+                    Log4.Warn("[OneNote] STT 로드 후에도 세그먼트 없음 - 에러 표시");
+                    System.Windows.MessageBox.Show(
+                        "먼저 STT 분석을 실행해주세요.",
+                        "AI 요약",
+                        System.Windows.MessageBoxButton.OK,
+                        System.Windows.MessageBoxImage.Information);
+                    return;
+                }
+            }
+
+            Log4.Info($"[OneNote] RunSummaryAnalysisAsync 호출 시작");
+            await RunSummaryAnalysisAsync(recording);
+            Log4.Info($"[OneNote] RunSummaryAnalysisAsync 호출 완료");
+        }
+        catch (Exception ex)
+        {
+            Serilog.Log.Error(ex, "[MainWindow] OneNoteTabRunSummary_Click 실패");
+        }
     }
 
     /// <summary>
@@ -7831,14 +8146,21 @@ public partial class MainWindow : FluentWindow
         // 진행 상태 텍스트 업데이트 이벤트 핸들러
         async void OnPropertyChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
         {
-            await Dispatcher.InvokeAsync(() =>
+            try
             {
-                if (e.PropertyName == nameof(_oneNoteViewModel.SummaryProgressText))
+                await Dispatcher.InvokeAsync(() =>
                 {
-                    if (OneNoteSummaryProgressText != null)
-                        OneNoteSummaryProgressText.Text = _oneNoteViewModel.SummaryProgressText;
-                }
-            });
+                    if (e.PropertyName == nameof(_oneNoteViewModel.SummaryProgressText))
+                    {
+                        if (OneNoteSummaryProgressText != null)
+                            OneNoteSummaryProgressText.Text = _oneNoteViewModel.SummaryProgressText;
+                    }
+                });
+            }
+            catch (Exception ex)
+            {
+                Serilog.Log.Error(ex, "[MainWindow] OnPropertyChanged 실패");
+            }
         }
 
         _oneNoteViewModel.PropertyChanged += OnPropertyChanged;
@@ -7951,14 +8273,21 @@ public partial class MainWindow : FluentWindow
     /// </summary>
     private async void DirectCheckBox_Checked(object sender, RoutedEventArgs e)
     {
-        Log4.Info("[OneNote] DirectCheckBox_Checked 이벤트 발생!");
-
-        if (sender is System.Windows.Controls.CheckBox checkBox &&
-            checkBox.DataContext is Models.ActionItem actionItem)
+        try
         {
-            Log4.Info($"[OneNote] 액션아이템 체크됨: {actionItem.Description}");
-            actionItem.IsAddedToTodo = true;
-            await AddActionItemToTodoAsync(actionItem);
+            Log4.Info("[OneNote] DirectCheckBox_Checked 이벤트 발생!");
+
+            if (sender is System.Windows.Controls.CheckBox checkBox &&
+                checkBox.DataContext is Models.ActionItem actionItem)
+            {
+                Log4.Info($"[OneNote] 액션아이템 체크됨: {actionItem.Description}");
+                actionItem.IsAddedToTodo = true;
+                await AddActionItemToTodoAsync(actionItem);
+            }
+        }
+        catch (Exception ex)
+        {
+            Serilog.Log.Error(ex, "[MainWindow] DirectCheckBox_Checked 실패");
         }
     }
 
@@ -7967,14 +8296,21 @@ public partial class MainWindow : FluentWindow
     /// </summary>
     private async void DirectCheckBox_Unchecked(object sender, RoutedEventArgs e)
     {
-        Log4.Info("[OneNote] DirectCheckBox_Unchecked 이벤트 발생!");
-
-        if (sender is System.Windows.Controls.CheckBox checkBox &&
-            checkBox.DataContext is Models.ActionItem actionItem)
+        try
         {
-            Log4.Info($"[OneNote] 액션아이템 체크 해제됨: {actionItem.Description}");
-            actionItem.IsAddedToTodo = false;
-            await RemoveActionItemFromTodoAsync(actionItem);
+            Log4.Info("[OneNote] DirectCheckBox_Unchecked 이벤트 발생!");
+
+            if (sender is System.Windows.Controls.CheckBox checkBox &&
+                checkBox.DataContext is Models.ActionItem actionItem)
+            {
+                Log4.Info($"[OneNote] 액션아이템 체크 해제됨: {actionItem.Description}");
+                actionItem.IsAddedToTodo = false;
+                await RemoveActionItemFromTodoAsync(actionItem);
+            }
+        }
+        catch (Exception ex)
+        {
+            Serilog.Log.Error(ex, "[MainWindow] DirectCheckBox_Unchecked 실패");
         }
     }
 
@@ -7995,21 +8331,28 @@ public partial class MainWindow : FluentWindow
     /// </summary>
     private async void AddToTodoButton_Click(object sender, RoutedEventArgs e)
     {
-        if (sender is Wpf.Ui.Controls.Button button &&
-            button.DataContext is Models.ActionItem actionItem)
+        try
         {
-            Log4.Info($"[OneNote] To Do 버튼 클릭: {actionItem.Description}, 현재 상태={actionItem.IsAddedToTodo}");
+            if (sender is Wpf.Ui.Controls.Button button &&
+                button.DataContext is Models.ActionItem actionItem)
+            {
+                Log4.Info($"[OneNote] To Do 버튼 클릭: {actionItem.Description}, 현재 상태={actionItem.IsAddedToTodo}");
 
-            if (actionItem.IsAddedToTodo)
-            {
-                // To Do에서 제거
-                await RemoveActionItemFromTodoAsync(actionItem);
+                if (actionItem.IsAddedToTodo)
+                {
+                    // To Do에서 제거
+                    await RemoveActionItemFromTodoAsync(actionItem);
+                }
+                else
+                {
+                    // To Do에 추가
+                    await AddActionItemToTodoAsync(actionItem);
+                }
             }
-            else
-            {
-                // To Do에 추가
-                await AddActionItemToTodoAsync(actionItem);
-            }
+        }
+        catch (Exception ex)
+        {
+            Serilog.Log.Error(ex, "[MainWindow] AddToTodoButton_Click 실패");
         }
     }
 
@@ -8258,34 +8601,41 @@ public partial class MainWindow : FluentWindow
     /// </summary>
     private async void OneNoteDetailRunSummary_Click(object sender, RoutedEventArgs e)
     {
-        var recording = _oneNoteViewModel?.SelectedRecording;
-        if (recording == null) return;
-
-        // STT 결과 필요
-        if (_oneNoteViewModel.STTSegments.Count == 0)
+        try
         {
-            System.Windows.MessageBox.Show(
-                "먼저 STT 분석을 실행해주세요.",
-                "요약 생성",
-                System.Windows.MessageBoxButton.OK,
-                System.Windows.MessageBoxImage.Information);
-            return;
-        }
+            var recording = _oneNoteViewModel?.SelectedRecording;
+            if (recording == null) return;
 
-        // 기존 요약 확인
-        if (recording.HasSummary)
-        {
-            var result = System.Windows.MessageBox.Show(
-                "기존 요약 결과가 있습니다. 덮어쓰시겠습니까?",
-                "요약 덮어쓰기 확인",
-                System.Windows.MessageBoxButton.YesNo,
-                System.Windows.MessageBoxImage.Question);
-
-            if (result != System.Windows.MessageBoxResult.Yes)
+            // STT 결과 필요
+            if (_oneNoteViewModel.STTSegments.Count == 0)
+            {
+                System.Windows.MessageBox.Show(
+                    "먼저 STT 분석을 실행해주세요.",
+                    "요약 생성",
+                    System.Windows.MessageBoxButton.OK,
+                    System.Windows.MessageBoxImage.Information);
                 return;
-        }
+            }
 
-        await _oneNoteViewModel.RunSummaryAsync(recording);
+            // 기존 요약 확인
+            if (recording.HasSummary)
+            {
+                var result = System.Windows.MessageBox.Show(
+                    "기존 요약 결과가 있습니다. 덮어쓰시겠습니까?",
+                    "요약 덮어쓰기 확인",
+                    System.Windows.MessageBoxButton.YesNo,
+                    System.Windows.MessageBoxImage.Question);
+
+                if (result != System.Windows.MessageBoxResult.Yes)
+                    return;
+            }
+
+            await _oneNoteViewModel.RunSummaryAsync(recording);
+        }
+        catch (Exception ex)
+        {
+            Serilog.Log.Error(ex, "[MainWindow] OneNoteDetailRunSummary_Click 실패");
+        }
     }
 
     /// <summary>
@@ -8904,8 +9254,15 @@ public partial class MainWindow : FluentWindow
     /// </summary>
     private async void NewEventButton_Click(object sender, RoutedEventArgs e)
     {
-        Log4.Info("새 일정 생성 클릭");
-        await OpenEventEditDialogAsync(null, _currentCalendarDate);
+        try
+        {
+            Log4.Info("새 일정 생성 클릭");
+            await OpenEventEditDialogAsync(null, _currentCalendarDate);
+        }
+        catch (Exception ex)
+        {
+            Serilog.Log.Error(ex, "[MainWindow] NewEventButton_Click 실패");
+        }
     }
 
     /// <summary>
@@ -9693,7 +10050,14 @@ public partial class MainWindow : FluentWindow
     /// </summary>
     private async void CalDetailAddEventButton_Click(object sender, RoutedEventArgs e)
     {
-        await OpenEventEditDialogAsync(null, _selectedCalendarDate);
+        try
+        {
+            await OpenEventEditDialogAsync(null, _selectedCalendarDate);
+        }
+        catch (Exception ex)
+        {
+            Serilog.Log.Error(ex, "[MainWindow] CalDetailAddEventButton_Click 실패");
+        }
     }
 
     /// <summary>
@@ -9701,60 +10065,67 @@ public partial class MainWindow : FluentWindow
     /// </summary>
     private async void AddTodoButton_Click(object sender, RoutedEventArgs e)
     {
-        Log4.Info("[ToDo] 추가 버튼 클릭");
-
-        // 간단한 입력 다이얼로그로 할 일 추가
-        var dialog = new Wpf.Ui.Controls.MessageBox
+        try
         {
-            Title = "새 할 일 추가",
-            Content = new System.Windows.Controls.TextBox
+            Log4.Info("[ToDo] 추가 버튼 클릭");
+
+            // 간단한 입력 다이얼로그로 할 일 추가
+            var dialog = new Wpf.Ui.Controls.MessageBox
             {
-                Width = 300,
-                Height = 60,
-                TextWrapping = TextWrapping.Wrap,
-                AcceptsReturn = true,
-                VerticalScrollBarVisibility = ScrollBarVisibility.Auto
-            },
-            PrimaryButtonText = "추가",
-            CloseButtonText = "취소"
-        };
+                Title = "새 할 일 추가",
+                Content = new System.Windows.Controls.TextBox
+                {
+                    Width = 300,
+                    Height = 60,
+                    TextWrapping = TextWrapping.Wrap,
+                    AcceptsReturn = true,
+                    VerticalScrollBarVisibility = ScrollBarVisibility.Auto
+                },
+                PrimaryButtonText = "추가",
+                CloseButtonText = "취소"
+            };
 
-        var result = await dialog.ShowDialogAsync();
-        if (result == Wpf.Ui.Controls.MessageBoxResult.Primary)
-        {
-            var textBox = dialog.Content as System.Windows.Controls.TextBox;
-            var title = textBox?.Text?.Trim();
-
-            if (!string.IsNullOrEmpty(title))
+            var result = await dialog.ShowDialogAsync();
+            if (result == Wpf.Ui.Controls.MessageBoxResult.Primary)
             {
-                try
-                {
-                    var authService = ((App)Application.Current).GetService<Services.Graph.GraphAuthService>();
-                    if (authService == null || !authService.IsLoggedIn)
-                    {
-                        _viewModel.StatusMessage = "Microsoft 계정 로그인이 필요합니다.";
-                        return;
-                    }
+                var textBox = dialog.Content as System.Windows.Controls.TextBox;
+                var title = textBox?.Text?.Trim();
 
-                    _graphToDoService ??= new Services.Graph.GraphToDoService(authService);
-                    var taskId = await _graphToDoService.CreateTaskAsync(title);
-
-                    if (!string.IsNullOrEmpty(taskId))
-                    {
-                        _viewModel.StatusMessage = $"할 일이 추가되었습니다: {title}";
-                        await LoadTodoListAsync(); // 목록 새로고침
-                    }
-                    else
-                    {
-                        _viewModel.StatusMessage = "할 일 추가에 실패했습니다.";
-                    }
-                }
-                catch (Exception ex)
+                if (!string.IsNullOrEmpty(title))
                 {
-                    Log4.Error($"[ToDo] 할 일 추가 실패: {ex.Message}");
-                    _viewModel.StatusMessage = $"오류: {ex.Message}";
+                    try
+                    {
+                        var authService = ((App)Application.Current).GetService<Services.Graph.GraphAuthService>();
+                        if (authService == null || !authService.IsLoggedIn)
+                        {
+                            _viewModel.StatusMessage = "Microsoft 계정 로그인이 필요합니다.";
+                            return;
+                        }
+
+                        _graphToDoService ??= new Services.Graph.GraphToDoService(authService);
+                        var taskId = await _graphToDoService.CreateTaskAsync(title);
+
+                        if (!string.IsNullOrEmpty(taskId))
+                        {
+                            _viewModel.StatusMessage = $"할 일이 추가되었습니다: {title}";
+                            await LoadTodoListAsync(); // 목록 새로고침
+                        }
+                        else
+                        {
+                            _viewModel.StatusMessage = "할 일 추가에 실패했습니다.";
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        Log4.Error($"[ToDo] 할 일 추가 실패: {ex.Message}");
+                        _viewModel.StatusMessage = $"오류: {ex.Message}";
+                    }
                 }
             }
+        }
+        catch (Exception ex)
+        {
+            Serilog.Log.Error(ex, "[MainWindow] AddTodoButton_Click 실패");
         }
     }
 
@@ -9763,8 +10134,15 @@ public partial class MainWindow : FluentWindow
     /// </summary>
     private async void RefreshTodoButton_Click(object sender, RoutedEventArgs e)
     {
-        Log4.Info("[ToDo] 새로고침 버튼 클릭");
-        await LoadTodoListAsync();
+        try
+        {
+            Log4.Info("[ToDo] 새로고침 버튼 클릭");
+            await LoadTodoListAsync();
+        }
+        catch (Exception ex)
+        {
+            Serilog.Log.Error(ex, "[MainWindow] RefreshTodoButton_Click 실패");
+        }
     }
 
     /// <summary>
@@ -9850,30 +10228,37 @@ public partial class MainWindow : FluentWindow
     /// </summary>
     private async void OnTodoItemCheckBox_Checked(object sender, RoutedEventArgs e)
     {
-        if (sender is System.Windows.Controls.CheckBox checkBox &&
-            checkBox.DataContext is Services.Graph.TodoTaskItem task)
+        try
         {
-            Log4.Info($"[ToDo] 작업 완료 처리: {task.Title}");
-
-            try
+            if (sender is System.Windows.Controls.CheckBox checkBox &&
+                checkBox.DataContext is Services.Graph.TodoTaskItem task)
             {
-                if (_graphToDoService != null)
+                Log4.Info($"[ToDo] 작업 완료 처리: {task.Title}");
+
+                try
                 {
-                    var success = await _graphToDoService.UpdateTaskCompletionAsync(task.Id, true);
-                    if (success)
+                    if (_graphToDoService != null)
                     {
-                        _viewModel.StatusMessage = $"완료: {task.Title}";
-                        // 잠시 후 목록에서 제거 (완료된 항목)
-                        await Task.Delay(500);
-                        await LoadTodoListAsync();
+                        var success = await _graphToDoService.UpdateTaskCompletionAsync(task.Id, true);
+                        if (success)
+                        {
+                            _viewModel.StatusMessage = $"완료: {task.Title}";
+                            // 잠시 후 목록에서 제거 (완료된 항목)
+                            await Task.Delay(500);
+                            await LoadTodoListAsync();
+                        }
                     }
                 }
+                catch (Exception ex)
+                {
+                    Log4.Error($"[ToDo] 완료 처리 실패: {ex.Message}");
+                    task.IsCompleted = false; // 롤백
+                }
             }
-            catch (Exception ex)
-            {
-                Log4.Error($"[ToDo] 완료 처리 실패: {ex.Message}");
-                task.IsCompleted = false; // 롤백
-            }
+        }
+        catch (Exception ex)
+        {
+            Serilog.Log.Error(ex, "[MainWindow] OnTodoItemCheckBox_Checked 실패");
         }
     }
 
@@ -9882,23 +10267,30 @@ public partial class MainWindow : FluentWindow
     /// </summary>
     private async void OnTodoItemCheckBox_Unchecked(object sender, RoutedEventArgs e)
     {
-        if (sender is System.Windows.Controls.CheckBox checkBox &&
-            checkBox.DataContext is Services.Graph.TodoTaskItem task)
+        try
         {
-            Log4.Info($"[ToDo] 작업 미완료 처리: {task.Title}");
-
-            try
+            if (sender is System.Windows.Controls.CheckBox checkBox &&
+                checkBox.DataContext is Services.Graph.TodoTaskItem task)
             {
-                if (_graphToDoService != null)
+                Log4.Info($"[ToDo] 작업 미완료 처리: {task.Title}");
+
+                try
                 {
-                    await _graphToDoService.UpdateTaskCompletionAsync(task.Id, false);
+                    if (_graphToDoService != null)
+                    {
+                        await _graphToDoService.UpdateTaskCompletionAsync(task.Id, false);
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Log4.Error($"[ToDo] 미완료 처리 실패: {ex.Message}");
+                    task.IsCompleted = true; // 롤백
                 }
             }
-            catch (Exception ex)
-            {
-                Log4.Error($"[ToDo] 미완료 처리 실패: {ex.Message}");
-                task.IsCompleted = true; // 롤백
-            }
+        }
+        catch (Exception ex)
+        {
+            Serilog.Log.Error(ex, "[MainWindow] OnTodoItemCheckBox_Unchecked 실패");
         }
     }
 
@@ -10367,41 +10759,48 @@ public partial class MainWindow : FluentWindow
     /// </summary>
     private async void ChatListBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
     {
-        var listBox = sender as ListBox;
-        if (listBox?.SelectedItem is ChatItemViewModel selectedChat)
+        try
         {
-            Log4.Debug($"채팅 선택: {selectedChat.DisplayName} (from: {listBox.Name})");
-
-            // 다른 ListBox의 선택 해제 (무한 루프 방지를 위해 이벤트 핸들러 임시 해제)
-            if (listBox == ChatListBox && ChatFavoritesListBox?.SelectedItem != null)
+            var listBox = sender as ListBox;
+            if (listBox?.SelectedItem is ChatItemViewModel selectedChat)
             {
-                ChatFavoritesListBox.SelectionChanged -= ChatListBox_SelectionChanged;
-                ChatFavoritesListBox.SelectedItem = null;
-                ChatFavoritesListBox.SelectionChanged += ChatListBox_SelectionChanged;
+                Log4.Debug($"채팅 선택: {selectedChat.DisplayName} (from: {listBox.Name})");
+
+                // 다른 ListBox의 선택 해제 (무한 루프 방지를 위해 이벤트 핸들러 임시 해제)
+                if (listBox == ChatListBox && ChatFavoritesListBox?.SelectedItem != null)
+                {
+                    ChatFavoritesListBox.SelectionChanged -= ChatListBox_SelectionChanged;
+                    ChatFavoritesListBox.SelectedItem = null;
+                    ChatFavoritesListBox.SelectionChanged += ChatListBox_SelectionChanged;
+                }
+                else if (listBox == ChatFavoritesListBox && ChatListBox?.SelectedItem != null)
+                {
+                    ChatListBox.SelectionChanged -= ChatListBox_SelectionChanged;
+                    ChatListBox.SelectedItem = null;
+                    ChatListBox.SelectionChanged += ChatListBox_SelectionChanged;
+                }
+
+                // 빈 상태 패널 숨기고 콘텐츠 패널 표시
+                if (ChatEmptyStatePanel != null)
+                    ChatEmptyStatePanel.Visibility = Visibility.Collapsed;
+                if (ChatContentPanel != null)
+                    ChatContentPanel.Visibility = Visibility.Visible;
+
+                // 헤더 업데이트
+                if (ChatHeaderTitle != null)
+                    ChatHeaderTitle.Text = selectedChat.DisplayName;
+                if (ChatHeaderAvatar != null)
+                    ChatHeaderAvatar.Text = !string.IsNullOrEmpty(selectedChat.DisplayName)
+                        ? selectedChat.DisplayName.Substring(0, 1).ToUpper()
+                        : "?";
+
+                // 메시지 로드
+                await LoadChatMessagesAsync(selectedChat.Id);
             }
-            else if (listBox == ChatFavoritesListBox && ChatListBox?.SelectedItem != null)
-            {
-                ChatListBox.SelectionChanged -= ChatListBox_SelectionChanged;
-                ChatListBox.SelectedItem = null;
-                ChatListBox.SelectionChanged += ChatListBox_SelectionChanged;
-            }
-
-            // 빈 상태 패널 숨기고 콘텐츠 패널 표시
-            if (ChatEmptyStatePanel != null)
-                ChatEmptyStatePanel.Visibility = Visibility.Collapsed;
-            if (ChatContentPanel != null)
-                ChatContentPanel.Visibility = Visibility.Visible;
-
-            // 헤더 업데이트
-            if (ChatHeaderTitle != null)
-                ChatHeaderTitle.Text = selectedChat.DisplayName;
-            if (ChatHeaderAvatar != null)
-                ChatHeaderAvatar.Text = !string.IsNullOrEmpty(selectedChat.DisplayName)
-                    ? selectedChat.DisplayName.Substring(0, 1).ToUpper()
-                    : "?";
-
-            // 메시지 로드
-            await LoadChatMessagesAsync(selectedChat.Id);
+        }
+        catch (Exception ex)
+        {
+            Serilog.Log.Error(ex, "[MainWindow] ChatListBox_SelectionChanged 실패");
         }
     }
 
@@ -10443,7 +10842,14 @@ public partial class MainWindow : FluentWindow
     /// </summary>
     private async void ChatRefreshButton_Click(object sender, RoutedEventArgs e)
     {
-        await LoadChatsAsync();
+        try
+        {
+            await LoadChatsAsync();
+        }
+        catch (Exception ex)
+        {
+            Serilog.Log.Error(ex, "[MainWindow] ChatRefreshButton_Click 실패");
+        }
     }
 
     /// <summary>
@@ -10451,9 +10857,16 @@ public partial class MainWindow : FluentWindow
     /// </summary>
     private async void ChatFavorite_Click(object sender, RoutedEventArgs e)
     {
-        if (ChatListBox?.SelectedItem is ChatItemViewModel chat && _teamsViewModel != null)
+        try
         {
-            await _teamsViewModel.ToggleFavoriteAsync(chat);
+            if (ChatListBox?.SelectedItem is ChatItemViewModel chat && _teamsViewModel != null)
+            {
+                await _teamsViewModel.ToggleFavoriteAsync(chat);
+            }
+        }
+        catch (Exception ex)
+        {
+            Serilog.Log.Error(ex, "[MainWindow] ChatFavorite_Click 실패");
         }
     }
 
@@ -10462,9 +10875,16 @@ public partial class MainWindow : FluentWindow
     /// </summary>
     private async void ChatUnfavorite_Click(object sender, RoutedEventArgs e)
     {
-        if (ChatFavoritesListBox?.SelectedItem is ChatItemViewModel chat && _teamsViewModel != null)
+        try
         {
-            await _teamsViewModel.ToggleFavoriteAsync(chat);
+            if (ChatFavoritesListBox?.SelectedItem is ChatItemViewModel chat && _teamsViewModel != null)
+            {
+                await _teamsViewModel.ToggleFavoriteAsync(chat);
+            }
+        }
+        catch (Exception ex)
+        {
+            Serilog.Log.Error(ex, "[MainWindow] ChatUnfavorite_Click 실패");
         }
     }
 
@@ -10537,30 +10957,37 @@ public partial class MainWindow : FluentWindow
     /// </summary>
     private async void ChatFavorites_Drop(object sender, DragEventArgs e)
     {
-        if (!e.Data.GetDataPresent(typeof(ChatItemViewModel)))
-            return;
-
-        var droppedItem = e.Data.GetData(typeof(ChatItemViewModel)) as ChatItemViewModel;
-        if (droppedItem == null || _teamsViewModel == null)
-            return;
-
-        // 드롭 위치의 아이템 찾기
-        var targetListBoxItem = FindAncestor<ListBoxItem>((DependencyObject)e.OriginalSource);
-        ChatItemViewModel? targetItem = null;
-
-        if (targetListBoxItem != null)
+        try
         {
-            targetItem = targetListBoxItem.DataContext as ChatItemViewModel;
+            if (!e.Data.GetDataPresent(typeof(ChatItemViewModel)))
+                return;
+
+            var droppedItem = e.Data.GetData(typeof(ChatItemViewModel)) as ChatItemViewModel;
+            if (droppedItem == null || _teamsViewModel == null)
+                return;
+
+            // 드롭 위치의 아이템 찾기
+            var targetListBoxItem = FindAncestor<ListBoxItem>((DependencyObject)e.OriginalSource);
+            ChatItemViewModel? targetItem = null;
+
+            if (targetListBoxItem != null)
+            {
+                targetItem = targetListBoxItem.DataContext as ChatItemViewModel;
+            }
+
+            // 동일 아이템이면 무시
+            if (targetItem == null || targetItem.Id == droppedItem.Id)
+                return;
+
+            Log4.Info($"[ChatFavorites_Drop] 드래그: {droppedItem.DisplayName} → 타겟: {targetItem.DisplayName}");
+
+            // 순서 변경 실행
+            await _teamsViewModel.ReorderFavoriteAsync(droppedItem.Id, targetItem.Id);
         }
-
-        // 동일 아이템이면 무시
-        if (targetItem == null || targetItem.Id == droppedItem.Id)
-            return;
-
-        Log4.Info($"[ChatFavorites_Drop] 드래그: {droppedItem.DisplayName} → 타겟: {targetItem.DisplayName}");
-
-        // 순서 변경 실행
-        await _teamsViewModel.ReorderFavoriteAsync(droppedItem.Id, targetItem.Id);
+        catch (Exception ex)
+        {
+            Serilog.Log.Error(ex, "[MainWindow] ChatFavorites_Drop 실패");
+        }
     }
 
     #endregion
@@ -10614,14 +11041,21 @@ public partial class MainWindow : FluentWindow
     /// </summary>
     private async void ChatMessageInput_KeyDown(object sender, KeyEventArgs e)
     {
-        // 플레이스홀더 업데이트
-        UpdateChatMessagePlaceholder();
-
-        // Enter 키로 전송 (Shift+Enter는 줄바꿈)
-        if (e.Key == Key.Enter && !Keyboard.Modifiers.HasFlag(ModifierKeys.Shift))
+        try
         {
-            e.Handled = true;
-            await SendChatMessageAsync();
+            // 플레이스홀더 업데이트
+            UpdateChatMessagePlaceholder();
+
+            // Enter 키로 전송 (Shift+Enter는 줄바꿈)
+            if (e.Key == Key.Enter && !Keyboard.Modifiers.HasFlag(ModifierKeys.Shift))
+            {
+                e.Handled = true;
+                await SendChatMessageAsync();
+            }
+        }
+        catch (Exception ex)
+        {
+            Serilog.Log.Error(ex, "[MainWindow] ChatMessageInput_KeyDown 실패");
         }
     }
 
@@ -10643,7 +11077,14 @@ public partial class MainWindow : FluentWindow
     /// </summary>
     private async void ChatSendButton_Click(object sender, RoutedEventArgs e)
     {
-        await SendChatMessageAsync();
+        try
+        {
+            await SendChatMessageAsync();
+        }
+        catch (Exception ex)
+        {
+            Serilog.Log.Error(ex, "[MainWindow] ChatSendButton_Click 실패");
+        }
     }
 
     /// <summary>
@@ -10945,39 +11386,46 @@ public partial class MainWindow : FluentWindow
     /// </summary>
     private async void OneNoteEditorWebView_Drop(object sender, System.Windows.DragEventArgs e)
     {
-        Log4.Debug2("[OneNote] WPF PreviewDrop 발동됨");
-        if (!_oneNoteEditorReady) return;
-
-        if (e.Data.GetDataPresent(System.Windows.DataFormats.FileDrop))
+        try
         {
-            var files = e.Data.GetData(System.Windows.DataFormats.FileDrop) as string[];
-            if (files != null)
-            {
-                foreach (var filePath in files)
-                {
-                    if (!System.IO.File.Exists(filePath)) continue;
-                    var fileName = System.IO.Path.GetFileName(filePath);
+            Log4.Debug2("[OneNote] WPF PreviewDrop 발동됨");
+            if (!_oneNoteEditorReady) return;
 
-                    if (Services.Editor.TinyMCEEditorService.IsImageFile(filePath))
+            if (e.Data.GetDataPresent(System.Windows.DataFormats.FileDrop))
+            {
+                var files = e.Data.GetData(System.Windows.DataFormats.FileDrop) as string[];
+                if (files != null)
+                {
+                    foreach (var filePath in files)
                     {
-                        // 이미지 → 에디터에 인라인 삽입
-                        var dataUrl = Services.Editor.TinyMCEEditorService.ConvertFileToDataUrl(filePath);
-                        if (dataUrl != null)
+                        if (!System.IO.File.Exists(filePath)) continue;
+                        var fileName = System.IO.Path.GetFileName(filePath);
+
+                        if (Services.Editor.TinyMCEEditorService.IsImageFile(filePath))
                         {
-                            var escapedUrl = System.Text.Json.JsonSerializer.Serialize(dataUrl);
-                            var escapedName = System.Text.Json.JsonSerializer.Serialize(fileName);
-                            await OneNoteEditorWebView.CoreWebView2.ExecuteScriptAsync(
-                                $"window.insertDroppedImage({escapedUrl}, {escapedName})");
+                            // 이미지 → 에디터에 인라인 삽입
+                            var dataUrl = Services.Editor.TinyMCEEditorService.ConvertFileToDataUrl(filePath);
+                            if (dataUrl != null)
+                            {
+                                var escapedUrl = System.Text.Json.JsonSerializer.Serialize(dataUrl);
+                                var escapedName = System.Text.Json.JsonSerializer.Serialize(fileName);
+                                await OneNoteEditorWebView.CoreWebView2.ExecuteScriptAsync(
+                                    $"window.insertDroppedImage({escapedUrl}, {escapedName})");
+                            }
+                        }
+                        else
+                        {
+                            // 비이미지 → Graph API로 직접 첨부
+                            await HandleOneNoteFileDropAsync(fileName, filePath);
                         }
                     }
-                    else
-                    {
-                        // 비이미지 → Graph API로 직접 첨부
-                        await HandleOneNoteFileDropAsync(fileName, filePath);
-                    }
+                    e.Handled = true;
                 }
-                e.Handled = true;
             }
+        }
+        catch (Exception ex)
+        {
+            Serilog.Log.Error(ex, "[MainWindow] OneNoteEditorWebView_Drop 실패");
         }
     }
 
@@ -10986,31 +11434,38 @@ public partial class MainWindow : FluentWindow
     /// </summary>
     private async void OneNoteEditorWebView_PreviewKeyDown(object sender, KeyEventArgs e)
     {
-        // Delete 키
-        if (e.Key == Key.Delete && _oneNoteEditorReady && OneNoteEditorWebView?.CoreWebView2 != null)
+        try
         {
-            try
+            // Delete 키
+            if (e.Key == Key.Delete && _oneNoteEditorReady && OneNoteEditorWebView?.CoreWebView2 != null)
             {
-                Log4.Debug("[OneNote] Delete 키 감지 - JavaScript로 전달");
-                // TinyMCE에 Delete 명령 전달
-                await OneNoteEditorWebView.CoreWebView2.ExecuteScriptAsync(
-                    "if(tinymce.activeEditor && tinymce.activeEditor.selection) { " +
-                    "  var sel = tinymce.activeEditor.selection; " +
-                    "  if (!sel.isCollapsed()) { " +
-                    "    tinymce.activeEditor.execCommand('Delete'); " +
-                    "  } else { " +
-                    "    var rng = sel.getRng(); " +
-                    "    rng.setEnd(rng.endContainer, rng.endOffset + 1); " +
-                    "    sel.setRng(rng); " +
-                    "    tinymce.activeEditor.execCommand('Delete'); " +
-                    "  } " +
-                    "}");
-                e.Handled = true;
+                try
+                {
+                    Log4.Debug("[OneNote] Delete 키 감지 - JavaScript로 전달");
+                    // TinyMCE에 Delete 명령 전달
+                    await OneNoteEditorWebView.CoreWebView2.ExecuteScriptAsync(
+                        "if(tinymce.activeEditor && tinymce.activeEditor.selection) { " +
+                        "  var sel = tinymce.activeEditor.selection; " +
+                        "  if (!sel.isCollapsed()) { " +
+                        "    tinymce.activeEditor.execCommand('Delete'); " +
+                        "  } else { " +
+                        "    var rng = sel.getRng(); " +
+                        "    rng.setEnd(rng.endContainer, rng.endOffset + 1); " +
+                        "    sel.setRng(rng); " +
+                        "    tinymce.activeEditor.execCommand('Delete'); " +
+                        "  } " +
+                        "}");
+                    e.Handled = true;
+                }
+                catch (Exception ex)
+                {
+                    Log4.Warn($"[OneNote] Delete 키 처리 실패: {ex.Message}");
+                }
             }
-            catch (Exception ex)
-            {
-                Log4.Warn($"[OneNote] Delete 키 처리 실패: {ex.Message}");
-            }
+        }
+        catch (Exception ex)
+        {
+            Serilog.Log.Error(ex, "[MainWindow] OneNoteEditorWebView_PreviewKeyDown 실패");
         }
     }
 
@@ -11116,8 +11571,15 @@ public partial class MainWindow : FluentWindow
     /// </summary>
     private async void OneNotePageTitleEdit_LostFocus(object sender, RoutedEventArgs e)
     {
-        Log4.Info("[OneNote] OneNotePageTitleEdit_LostFocus 이벤트 발생");
-        await SavePageTitleAsync();
+        try
+        {
+            Log4.Info("[OneNote] OneNotePageTitleEdit_LostFocus 이벤트 발생");
+            await SavePageTitleAsync();
+        }
+        catch (Exception ex)
+        {
+            Serilog.Log.Error(ex, "[MainWindow] OneNotePageTitleEdit_LostFocus 실패");
+        }
     }
 
 
@@ -11185,12 +11647,19 @@ public partial class MainWindow : FluentWindow
     /// </summary>
     private async void OneNoteEditorWebView_GotFocus(object sender, RoutedEventArgs e)
     {
-        Log4.Info("[OneNote] OneNoteEditorWebView_GotFocus 이벤트 발생");
-        
-        // 제목 편집 중이면 저장 처리
-        if (OneNotePageTitleEdit?.Visibility == Visibility.Visible)
+        try
         {
-            await SavePageTitleAsync();
+            Log4.Info("[OneNote] OneNoteEditorWebView_GotFocus 이벤트 발생");
+            
+            // 제목 편집 중이면 저장 처리
+            if (OneNotePageTitleEdit?.Visibility == Visibility.Visible)
+            {
+                await SavePageTitleAsync();
+            }
+        }
+        catch (Exception ex)
+        {
+            Serilog.Log.Error(ex, "[MainWindow] OneNoteEditorWebView_GotFocus 실패");
         }
     }
 
@@ -11199,42 +11668,49 @@ public partial class MainWindow : FluentWindow
     /// </summary>
     private async void OneNotePageTitleEdit_KeyDown(object sender, System.Windows.Input.KeyEventArgs e)
     {
-        if (e.Key == System.Windows.Input.Key.Enter)
+        try
         {
-            await SavePageTitleAsync();
-            e.Handled = true;
-        }
-        else if (e.Key == System.Windows.Input.Key.Escape)
-        {
-            // 새 노트 생성 모드인 경우 취소
-            if (_isNewPage)
+            if (e.Key == System.Windows.Input.Key.Enter)
             {
-                CancelNewPage();
+                await SavePageTitleAsync();
+                e.Handled = true;
             }
-            else
+            else if (e.Key == System.Windows.Input.Key.Escape)
             {
-                // 취소 - 원래 제목으로 복원
-                if (OneNotePageTitleText != null && OneNotePageTitleEdit != null)
+                // 새 노트 생성 모드인 경우 취소
+                if (_isNewPage)
                 {
-                    OneNotePageTitleEdit.Visibility = Visibility.Collapsed;
-                    OneNotePageTitleText.Visibility = Visibility.Visible;
+                    CancelNewPage();
+                }
+                else
+                {
+                    // 취소 - 원래 제목으로 복원
+                    if (OneNotePageTitleText != null && OneNotePageTitleEdit != null)
+                    {
+                        OneNotePageTitleEdit.Visibility = Visibility.Collapsed;
+                        OneNotePageTitleText.Visibility = Visibility.Visible;
+                    }
+                }
+                e.Handled = true;
+            }
+            else if (e.Key == System.Windows.Input.Key.Tab)
+            {
+                // Tab 키 누르면 내용 편집기로 포커스 이동
+                e.Handled = true;
+                if (OneNoteEditorWebView != null)
+                {
+                    // 1. WPF에서 WebView2로 포커스 이동
+                    OneNoteEditorWebView.Focus();
+
+                    // 2. TinyMCE 에디터에 포커스 이동
+                    await OneNoteEditorWebView.ExecuteScriptAsync("if(typeof focus === 'function') focus();");
+                    Log4.Debug("[OneNote] 제목에서 Tab 키 → 에디터로 포커스 이동");
                 }
             }
-            e.Handled = true;
         }
-        else if (e.Key == System.Windows.Input.Key.Tab)
+        catch (Exception ex)
         {
-            // Tab 키 누르면 내용 편집기로 포커스 이동
-            e.Handled = true;
-            if (OneNoteEditorWebView != null)
-            {
-                // 1. WPF에서 WebView2로 포커스 이동
-                OneNoteEditorWebView.Focus();
-
-                // 2. TinyMCE 에디터에 포커스 이동
-                await OneNoteEditorWebView.ExecuteScriptAsync("if(typeof focus === 'function') focus();");
-                Log4.Debug("[OneNote] 제목에서 Tab 키 → 에디터로 포커스 이동");
-            }
+            Serilog.Log.Error(ex, "[MainWindow] OneNotePageTitleEdit_KeyDown 실패");
         }
     }
 
@@ -11378,49 +11854,56 @@ public partial class MainWindow : FluentWindow
     /// </summary>
     private async void OneNoteSaveButton_Click(object sender, RoutedEventArgs e)
     {
-        Log4.Debug($"[OneNote] 저장 버튼 클릭 - _isNewPage={_isNewPage}");
-
-        if (_oneNoteViewModel == null)
+        try
         {
-            Log4.Warn("[OneNote] ViewModel이 null");
-            return;
-        }
+            Log4.Debug($"[OneNote] 저장 버튼 클릭 - _isNewPage={_isNewPage}");
 
-        // TinyMCE에서 현재 콘텐츠 가져오기
-        if (_oneNoteEditorReady && OneNoteEditorWebView?.CoreWebView2 != null)
-        {
-            try
+            if (_oneNoteViewModel == null)
             {
-                var contentJson = await OneNoteEditorWebView.CoreWebView2.ExecuteScriptAsync("getContent()");
-                var content = System.Text.Json.JsonSerializer.Deserialize<string>(contentJson);
+                Log4.Warn("[OneNote] ViewModel이 null");
+                return;
+            }
 
-                Log4.Debug($"[OneNote] 에디터에서 콘텐츠 가져옴: {content?.Length ?? 0}자");
-
-                if (!string.IsNullOrEmpty(content))
+            // TinyMCE에서 현재 콘텐츠 가져오기
+            if (_oneNoteEditorReady && OneNoteEditorWebView?.CoreWebView2 != null)
+            {
+                try
                 {
-                    _oneNoteViewModel.OnContentChanged(content);
+                    var contentJson = await OneNoteEditorWebView.CoreWebView2.ExecuteScriptAsync("getContent()");
+                    var content = System.Text.Json.JsonSerializer.Deserialize<string>(contentJson);
+
+                    Log4.Debug($"[OneNote] 에디터에서 콘텐츠 가져옴: {content?.Length ?? 0}자");
+
+                    if (!string.IsNullOrEmpty(content))
+                    {
+                        _oneNoteViewModel.OnContentChanged(content);
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Log4.Warn($"[OneNote] 에디터 콘텐츠 가져오기 실패: {ex.Message}");
                 }
             }
-            catch (Exception ex)
-            {
-                Log4.Warn($"[OneNote] 에디터 콘텐츠 가져오기 실패: {ex.Message}");
-            }
-        }
 
-        // 새 노트 모드인 경우 새 노트 저장
-        if (_isNewPage)
-        {
-            // 제목이 비어있으면 기본 제목 설정
-            if (string.IsNullOrWhiteSpace(OneNotePageTitleEdit.Text))
+            // 새 노트 모드인 경우 새 노트 저장
+            if (_isNewPage)
             {
-                OneNotePageTitleEdit.Text = "제목 없음";
+                // 제목이 비어있으면 기본 제목 설정
+                if (string.IsNullOrWhiteSpace(OneNotePageTitleEdit.Text))
+                {
+                    OneNotePageTitleEdit.Text = "제목 없음";
+                }
+                await SaveNewPageAsync();
             }
-            await SaveNewPageAsync();
+            else
+            {
+                // 기존 노트 저장
+                await _oneNoteViewModel.SaveAsync();
+            }
         }
-        else
+        catch (Exception ex)
         {
-            // 기존 노트 저장
-            await _oneNoteViewModel.SaveAsync();
+            Serilog.Log.Error(ex, "[MainWindow] OneNoteSaveButton_Click 실패");
         }
     }
 
@@ -11429,7 +11912,14 @@ public partial class MainWindow : FluentWindow
     /// </summary>
     private async void OneNoteRefreshButton_Click(object sender, RoutedEventArgs e)
     {
-        await LoadOneNoteNotebooksAsync();
+        try
+        {
+            await LoadOneNoteNotebooksAsync();
+        }
+        catch (Exception ex)
+        {
+            Serilog.Log.Error(ex, "[MainWindow] OneNoteRefreshButton_Click 실패");
+        }
     }
 
     /// <summary>
@@ -11437,23 +11927,30 @@ public partial class MainWindow : FluentWindow
     /// </summary>
     private async void OneNoteNewNotebookButton_Click(object sender, RoutedEventArgs e)
     {
-        // 간단한 입력 다이얼로그 (실제 구현에서는 별도 다이얼로그 필요)
-        var dialog = new Wpf.Ui.Controls.MessageBox
+        try
         {
-            Title = "새 노트북",
-            Content = "새 노트북 이름을 입력하세요 (현재는 기본 이름 사용)",
-            PrimaryButtonText = "만들기",
-            CloseButtonText = "취소"
-        };
-
-        var result = await dialog.ShowDialogAsync();
-        if (result == Wpf.Ui.Controls.MessageBoxResult.Primary)
-        {
-            if (_oneNoteViewModel != null)
+            // 간단한 입력 다이얼로그 (실제 구현에서는 별도 다이얼로그 필요)
+            var dialog = new Wpf.Ui.Controls.MessageBox
             {
-                await _oneNoteViewModel.CreateNotebookAsync($"새 노트북 {DateTime.Now:yyyyMMdd_HHmmss}");
-                await LoadOneNoteNotebooksAsync();
+                Title = "새 노트북",
+                Content = "새 노트북 이름을 입력하세요 (현재는 기본 이름 사용)",
+                PrimaryButtonText = "만들기",
+                CloseButtonText = "취소"
+            };
+
+            var result = await dialog.ShowDialogAsync();
+            if (result == Wpf.Ui.Controls.MessageBoxResult.Primary)
+            {
+                if (_oneNoteViewModel != null)
+                {
+                    await _oneNoteViewModel.CreateNotebookAsync($"새 노트북 {DateTime.Now:yyyyMMdd_HHmmss}");
+                    await LoadOneNoteNotebooksAsync();
+                }
             }
+        }
+        catch (Exception ex)
+        {
+            Serilog.Log.Error(ex, "[MainWindow] OneNoteNewNotebookButton_Click 실패");
         }
     }
 
@@ -11462,82 +11959,89 @@ public partial class MainWindow : FluentWindow
     /// </summary>
     private async void OneNoteAddSiteButton_Click(object sender, RoutedEventArgs e)
     {
-        // 입력 텍스트 박스를 포함한 다이얼로그 생성
-        var inputTextBox = new Wpf.Ui.Controls.TextBox
+        try
         {
-            PlaceholderText = "예: AI785-1 또는 sites/AI785-1",
-            Margin = new Thickness(0, 10, 0, 0),
-            MinWidth = 300
-        };
-
-        var contentPanel = new StackPanel
-        {
-            Children =
+            // 입력 텍스트 박스를 포함한 다이얼로그 생성
+            var inputTextBox = new Wpf.Ui.Controls.TextBox
             {
-                new System.Windows.Controls.TextBlock
-                {
-                    Text = "SharePoint 사이트 경로를 입력하세요.\n팔로우하지 않은 사이트의 노트북도 추가할 수 있습니다.",
-                    TextWrapping = TextWrapping.Wrap
-                },
-                inputTextBox
-            }
-        };
+                PlaceholderText = "예: AI785-1 또는 sites/AI785-1",
+                Margin = new Thickness(0, 10, 0, 0),
+                MinWidth = 300
+            };
 
-        var dialog = new Wpf.Ui.Controls.MessageBox
-        {
-            Title = "SharePoint 사이트 추가",
-            Content = contentPanel,
-            PrimaryButtonText = "추가",
-            CloseButtonText = "취소"
-        };
-
-        var result = await dialog.ShowDialogAsync();
-        if (result == Wpf.Ui.Controls.MessageBoxResult.Primary)
-        {
-            var sitePath = inputTextBox.Text?.Trim();
-            if (!string.IsNullOrEmpty(sitePath) && _oneNoteViewModel != null)
+            var contentPanel = new StackPanel
             {
-                try
+                Children =
                 {
-                    // 로딩 표시
-                    OneNoteAddSiteButton.IsEnabled = false;
-
-                    var addedCount = await _oneNoteViewModel.AddSiteNotebooksAsync(sitePath);
-
-                    // 결과 메시지
-                    var resultDialog = new Wpf.Ui.Controls.MessageBox
+                    new System.Windows.Controls.TextBlock
                     {
-                        Title = "사이트 추가 완료",
-                        Content = addedCount > 0
-                            ? $"'{sitePath}' 사이트에서 {addedCount}개의 노트북을 추가했습니다."
-                            : $"'{sitePath}' 사이트에서 노트북을 찾지 못했거나 이미 추가된 노트북입니다.",
-                        CloseButtonText = "확인"
-                    };
-                    await resultDialog.ShowDialogAsync();
+                        Text = "SharePoint 사이트 경로를 입력하세요.\n팔로우하지 않은 사이트의 노트북도 추가할 수 있습니다.",
+                        TextWrapping = TextWrapping.Wrap
+                    },
+                    inputTextBox
+                }
+            };
 
-                    // 트리뷰 갱신
-                    if (addedCount > 0)
+            var dialog = new Wpf.Ui.Controls.MessageBox
+            {
+                Title = "SharePoint 사이트 추가",
+                Content = contentPanel,
+                PrimaryButtonText = "추가",
+                CloseButtonText = "취소"
+            };
+
+            var result = await dialog.ShowDialogAsync();
+            if (result == Wpf.Ui.Controls.MessageBoxResult.Primary)
+            {
+                var sitePath = inputTextBox.Text?.Trim();
+                if (!string.IsNullOrEmpty(sitePath) && _oneNoteViewModel != null)
+                {
+                    try
                     {
-                        OneNoteTreeView.ItemsSource = null;
-                        OneNoteTreeView.ItemsSource = _oneNoteViewModel.Notebooks;
+                        // 로딩 표시
+                        OneNoteAddSiteButton.IsEnabled = false;
+
+                        var addedCount = await _oneNoteViewModel.AddSiteNotebooksAsync(sitePath);
+
+                        // 결과 메시지
+                        var resultDialog = new Wpf.Ui.Controls.MessageBox
+                        {
+                            Title = "사이트 추가 완료",
+                            Content = addedCount > 0
+                                ? $"'{sitePath}' 사이트에서 {addedCount}개의 노트북을 추가했습니다."
+                                : $"'{sitePath}' 사이트에서 노트북을 찾지 못했거나 이미 추가된 노트북입니다.",
+                            CloseButtonText = "확인"
+                        };
+                        await resultDialog.ShowDialogAsync();
+
+                        // 트리뷰 갱신
+                        if (addedCount > 0)
+                        {
+                            OneNoteTreeView.ItemsSource = null;
+                            OneNoteTreeView.ItemsSource = _oneNoteViewModel.Notebooks;
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        Log4.Error($"[OneNote] 사이트 추가 실패: {ex.Message}");
+                        var errorDialog = new Wpf.Ui.Controls.MessageBox
+                        {
+                            Title = "사이트 추가 실패",
+                            Content = $"사이트 '{sitePath}'에 접근할 수 없습니다.\n\n오류: {ex.Message}\n\n• 사이트 경로가 올바른지 확인하세요\n• 해당 사이트에 대한 접근 권한이 있는지 확인하세요",
+                            CloseButtonText = "확인"
+                        };
+                        await errorDialog.ShowDialogAsync();
+                    }
+                    finally
+                    {
+                        OneNoteAddSiteButton.IsEnabled = true;
                     }
                 }
-                catch (Exception ex)
-                {
-                    Log4.Error($"[OneNote] 사이트 추가 실패: {ex.Message}");
-                    var errorDialog = new Wpf.Ui.Controls.MessageBox
-                    {
-                        Title = "사이트 추가 실패",
-                        Content = $"사이트 '{sitePath}'에 접근할 수 없습니다.\n\n오류: {ex.Message}\n\n• 사이트 경로가 올바른지 확인하세요\n• 해당 사이트에 대한 접근 권한이 있는지 확인하세요",
-                        CloseButtonText = "확인"
-                    };
-                    await errorDialog.ShowDialogAsync();
-                }
-                finally
-                {
-                    OneNoteAddSiteButton.IsEnabled = true;
-                }
             }
+        }
+        catch (Exception ex)
+        {
+            Serilog.Log.Error(ex, "[MainWindow] OneNoteAddSiteButton_Click 실패");
         }
     }
 
@@ -11546,31 +12050,38 @@ public partial class MainWindow : FluentWindow
     /// </summary>
     private async void OneNoteSearchBox_KeyDown(object sender, KeyEventArgs e)
     {
-        if (e.Key == Key.Enter && OneNoteSearchBox != null)
+        try
         {
-            var query = OneNoteSearchBox.Text?.Trim();
-            if (!string.IsNullOrEmpty(query) && _oneNoteViewModel != null)
+            if (e.Key == Key.Enter && OneNoteSearchBox != null)
             {
-                Log4.Debug($"OneNote 검색: {query}");
-                _oneNoteViewModel.SearchQuery = query;
+                var query = OneNoteSearchBox.Text?.Trim();
+                if (!string.IsNullOrEmpty(query) && _oneNoteViewModel != null)
+                {
+                    Log4.Debug($"OneNote 검색: {query}");
+                    _oneNoteViewModel.SearchQuery = query;
 
-                // 로딩 표시
-                OneNoteSearchResultsHeader.Text = "검색 중...";
-                OneNoteSearchProgressRing.Visibility = Visibility.Visible;
-                OneNoteSearchResultsListBox.ItemsSource = null;
-                OneNoteSearchResultsPanel.Visibility = Visibility.Visible;
+                    // 로딩 표시
+                    OneNoteSearchResultsHeader.Text = "검색 중...";
+                    OneNoteSearchProgressRing.Visibility = Visibility.Visible;
+                    OneNoteSearchResultsListBox.ItemsSource = null;
+                    OneNoteSearchResultsPanel.Visibility = Visibility.Visible;
 
-                await _oneNoteViewModel.SearchPagesAsync();
+                    await _oneNoteViewModel.SearchPagesAsync();
 
-                // 로딩 숨김 + 검색 결과 표시
-                OneNoteSearchProgressRing.Visibility = Visibility.Collapsed;
-                OneNoteSearchResultsListBox.ItemsSource = _oneNoteViewModel.SearchResults;
-                OneNoteSearchResultsHeader.Text = $"검색 결과 ({_oneNoteViewModel.SearchResults.Count}개)";
+                    // 로딩 숨김 + 검색 결과 표시
+                    OneNoteSearchProgressRing.Visibility = Visibility.Collapsed;
+                    OneNoteSearchResultsListBox.ItemsSource = _oneNoteViewModel.SearchResults;
+                    OneNoteSearchResultsHeader.Text = $"검색 결과 ({_oneNoteViewModel.SearchResults.Count}개)";
+                }
+            }
+            else if (e.Key == Key.Escape && OneNoteSearchBox != null)
+            {
+                CloseOneNoteSearchResults();
             }
         }
-        else if (e.Key == Key.Escape && OneNoteSearchBox != null)
+        catch (Exception ex)
         {
-            CloseOneNoteSearchResults();
+            Serilog.Log.Error(ex, "[MainWindow] OneNoteSearchBox_KeyDown 실패");
         }
     }
 
@@ -11597,14 +12108,21 @@ public partial class MainWindow : FluentWindow
     /// </summary>
     private async void OneNoteSearchResults_SelectionChanged(object sender, System.Windows.Controls.SelectionChangedEventArgs e)
     {
-        if (OneNoteSearchResultsListBox.SelectedItem is PageItemViewModel selectedItem && _oneNoteViewModel != null)
+        try
         {
-            Log4.Debug($"[OneNote] 검색 결과 선택: {selectedItem.Title}, Type={selectedItem.ItemType}");
-
-            if (selectedItem.ItemType == FavoriteItemType.Page)
+            if (OneNoteSearchResultsListBox.SelectedItem is PageItemViewModel selectedItem && _oneNoteViewModel != null)
             {
-                await LoadOneNotePageAsync(selectedItem);
+                Log4.Debug($"[OneNote] 검색 결과 선택: {selectedItem.Title}, Type={selectedItem.ItemType}");
+
+                if (selectedItem.ItemType == FavoriteItemType.Page)
+                {
+                    await LoadOneNotePageAsync(selectedItem);
+                }
             }
+        }
+        catch (Exception ex)
+        {
+            Serilog.Log.Error(ex, "[MainWindow] OneNoteSearchResults_SelectionChanged 실패");
         }
     }
 
@@ -11613,32 +12131,39 @@ public partial class MainWindow : FluentWindow
     /// </summary>
     private async void OneNoteFavoritesTreeView_SelectedItemChanged(object sender, RoutedPropertyChangedEventArgs<object> e)
     {
-        // 삭제 중일 때는 모든 선택 이벤트 무시
-        if (_isDeletingPage)
+        try
         {
-            Log4.Debug($"[OneNote] 삭제 중 FavoritesTreeView 선택 이벤트 무시");
-            return;
-        }
-
-        Log4.Debug($"[OneNote] FavoritesTreeView SelectedItemChanged 이벤트 발생");
-        if (e.NewValue is PageItemViewModel selectedItem && _oneNoteViewModel != null)
-        {
-            Log4.Debug($"[OneNote] 즐겨찾기 항목 선택: {selectedItem.Title}, Type={selectedItem.ItemType}");
-
-            // 노트북 TreeView 선택 해제
-            ClearTreeViewSelection(OneNoteTreeView);
-
-            // 페이지 선택 시 콘텐츠 로드
-            if (selectedItem.ItemType == FavoriteItemType.Page)
+            // 삭제 중일 때는 모든 선택 이벤트 무시
+            if (_isDeletingPage)
             {
-                // 즐겨찾기 페이지에 GroupId/SiteId가 없으면 노트북 목록에서 찾아서 채움
-                if (string.IsNullOrEmpty(selectedItem.GroupId) && string.IsNullOrEmpty(selectedItem.SiteId))
-                {
-                    FillPageGroupAndSiteInfo(selectedItem);
-                }
-                await LoadOneNotePageAsync(selectedItem);
+                Log4.Debug($"[OneNote] 삭제 중 FavoritesTreeView 선택 이벤트 무시");
+                return;
             }
-            // 노트북/섹션은 확장만 하면 됨 (Expanded 이벤트에서 자식 로드)
+
+            Log4.Debug($"[OneNote] FavoritesTreeView SelectedItemChanged 이벤트 발생");
+            if (e.NewValue is PageItemViewModel selectedItem && _oneNoteViewModel != null)
+            {
+                Log4.Debug($"[OneNote] 즐겨찾기 항목 선택: {selectedItem.Title}, Type={selectedItem.ItemType}");
+
+                // 노트북 TreeView 선택 해제
+                ClearTreeViewSelection(OneNoteTreeView);
+
+                // 페이지 선택 시 콘텐츠 로드
+                if (selectedItem.ItemType == FavoriteItemType.Page)
+                {
+                    // 즐겨찾기 페이지에 GroupId/SiteId가 없으면 노트북 목록에서 찾아서 채움
+                    if (string.IsNullOrEmpty(selectedItem.GroupId) && string.IsNullOrEmpty(selectedItem.SiteId))
+                    {
+                        FillPageGroupAndSiteInfo(selectedItem);
+                    }
+                    await LoadOneNotePageAsync(selectedItem);
+                }
+                // 노트북/섹션은 확장만 하면 됨 (Expanded 이벤트에서 자식 로드)
+            }
+        }
+        catch (Exception ex)
+        {
+            Serilog.Log.Error(ex, "[MainWindow] OneNoteFavoritesTreeView_SelectedItemChanged 실패");
         }
     }
 
@@ -12067,40 +12592,47 @@ public partial class MainWindow : FluentWindow
     /// </summary>
     private async void FavoriteTreeViewItem_Expanded(object sender, RoutedEventArgs e)
     {
-        if (sender is System.Windows.Controls.TreeViewItem treeViewItem &&
-            treeViewItem.DataContext is PageItemViewModel item &&
-            _oneNoteViewModel != null)
+        try
         {
-            // 이미 로드되었거나 페이지인 경우 무시
-            if (item.IsChildrenLoaded || item.ItemType == FavoriteItemType.Page)
-                return;
-
-            Log4.Debug($"[OneNote] 즐겨찾기 자식 로드 시작: {item.Title}, Type={item.ItemType}");
-            item.IsLoadingChildren = true;
-
-            try
+            if (sender is System.Windows.Controls.TreeViewItem treeViewItem &&
+                treeViewItem.DataContext is PageItemViewModel item &&
+                _oneNoteViewModel != null)
             {
-                if (item.ItemType == FavoriteItemType.Notebook)
+                // 이미 로드되었거나 페이지인 경우 무시
+                if (item.IsChildrenLoaded || item.ItemType == FavoriteItemType.Page)
+                    return;
+
+                Log4.Debug($"[OneNote] 즐겨찾기 자식 로드 시작: {item.Title}, Type={item.ItemType}");
+                item.IsLoadingChildren = true;
+
+                try
                 {
-                    // 노트북 확장 시 섹션 로드
-                    await LoadFavoriteNotebookSectionsAsync(item);
-                }
-                else if (item.ItemType == FavoriteItemType.Section)
-                {
-                    // 섹션 확장 시 페이지 로드
-                    await LoadFavoriteSectionPagesAsync(item);
-                }
+                    if (item.ItemType == FavoriteItemType.Notebook)
+                    {
+                        // 노트북 확장 시 섹션 로드
+                        await LoadFavoriteNotebookSectionsAsync(item);
+                    }
+                    else if (item.ItemType == FavoriteItemType.Section)
+                    {
+                        // 섹션 확장 시 페이지 로드
+                        await LoadFavoriteSectionPagesAsync(item);
+                    }
 
-                item.IsChildrenLoaded = true;
+                    item.IsChildrenLoaded = true;
+                }
+                catch (Exception ex)
+                {
+                    Log4.Warn($"[OneNote] 즐겨찾기 자식 로드 실패: {ex.Message}");
+                }
+                finally
+                {
+                    item.IsLoadingChildren = false;
+                }
             }
-            catch (Exception ex)
-            {
-                Log4.Warn($"[OneNote] 즐겨찾기 자식 로드 실패: {ex.Message}");
-            }
-            finally
-            {
-                item.IsLoadingChildren = false;
-            }
+        }
+        catch (Exception ex)
+        {
+            Serilog.Log.Error(ex, "[MainWindow] FavoriteTreeViewItem_Expanded 실패");
         }
     }
 
@@ -12406,25 +12938,32 @@ public partial class MainWindow : FluentWindow
     /// </summary>
     private async void NotebookAddSection_Click(object sender, RoutedEventArgs e)
     {
-        if (_oneNoteViewModel == null) return;
-
-        if (sender is System.Windows.Controls.MenuItem menuItem)
+        try
         {
-            var notebook = menuItem.DataContext as NotebookItemViewModel;
-            if (notebook != null)
-            {
-                // TODO: 새 섹션 추가 다이얼로그 표시 후 Graph API로 섹션 생성
-                Log4.Info($"[OneNote] 새 섹션 추가 요청: {notebook.DisplayName}");
+            if (_oneNoteViewModel == null) return;
 
-                // 현재는 메시지 표시
-                var messageBox = new Wpf.Ui.Controls.MessageBox
+            if (sender is System.Windows.Controls.MenuItem menuItem)
+            {
+                var notebook = menuItem.DataContext as NotebookItemViewModel;
+                if (notebook != null)
                 {
-                    Title = "새 섹션 추가",
-                    Content = "새 섹션 추가 기능은 향후 업데이트에서 지원될 예정입니다.",
-                    PrimaryButtonText = "확인"
-                };
-                await messageBox.ShowDialogAsync();
+                    // TODO: 새 섹션 추가 다이얼로그 표시 후 Graph API로 섹션 생성
+                    Log4.Info($"[OneNote] 새 섹션 추가 요청: {notebook.DisplayName}");
+
+                    // 현재는 메시지 표시
+                    var messageBox = new Wpf.Ui.Controls.MessageBox
+                    {
+                        Title = "새 섹션 추가",
+                        Content = "새 섹션 추가 기능은 향후 업데이트에서 지원될 예정입니다.",
+                        PrimaryButtonText = "확인"
+                    };
+                    await messageBox.ShowDialogAsync();
+                }
             }
+        }
+        catch (Exception ex)
+        {
+            Serilog.Log.Error(ex, "[MainWindow] NotebookAddSection_Click 실패");
         }
     }
 
@@ -12433,16 +12972,23 @@ public partial class MainWindow : FluentWindow
     /// </summary>
     private async void SectionAddPage_Click(object sender, RoutedEventArgs e)
     {
-        if (_oneNoteViewModel == null) return;
-
-        if (sender is System.Windows.Controls.MenuItem menuItem)
+        try
         {
-            var section = menuItem.DataContext as SectionItemViewModel;
-            if (section != null)
+            if (_oneNoteViewModel == null) return;
+
+            if (sender is System.Windows.Controls.MenuItem menuItem)
             {
-                Log4.Info($"[OneNote] 새 노트 추가 요청: 섹션={section.DisplayName}");
-                await CreateNewPage(section);
+                var section = menuItem.DataContext as SectionItemViewModel;
+                if (section != null)
+                {
+                    Log4.Info($"[OneNote] 새 노트 추가 요청: 섹션={section.DisplayName}");
+                    await CreateNewPage(section);
+                }
             }
+        }
+        catch (Exception ex)
+        {
+            Serilog.Log.Error(ex, "[MainWindow] SectionAddPage_Click 실패");
         }
     }
 
@@ -12784,55 +13330,62 @@ public partial class MainWindow : FluentWindow
     /// </summary>
     private async void SectionDelete_Click(object sender, RoutedEventArgs e)
     {
-        if (_oneNoteViewModel == null) return;
-
-        if (sender is System.Windows.Controls.MenuItem menuItem)
+        try
         {
-            var section = menuItem.DataContext as SectionItemViewModel;
-            if (section != null)
-            {
-                // 확인 대화상자
-                var result = System.Windows.MessageBox.Show(
-                    $"'{section.DisplayName}' 섹션을 삭제하시겠습니까?\n\n이 섹션의 모든 노트가 함께 삭제됩니다.",
-                    "섹션 삭제 확인",
-                    System.Windows.MessageBoxButton.YesNo,
-                    System.Windows.MessageBoxImage.Warning);
+            if (_oneNoteViewModel == null) return;
 
-                if (result == System.Windows.MessageBoxResult.Yes)
+            if (sender is System.Windows.Controls.MenuItem menuItem)
+            {
+                var section = menuItem.DataContext as SectionItemViewModel;
+                if (section != null)
                 {
-                    Log4.Info($"[OneNote] 섹션 삭제 요청: {section.DisplayName} (ID: {section.Id})");
-                    try
+                    // 확인 대화상자
+                    var result = System.Windows.MessageBox.Show(
+                        $"'{section.DisplayName}' 섹션을 삭제하시겠습니까?\n\n이 섹션의 모든 노트가 함께 삭제됩니다.",
+                        "섹션 삭제 확인",
+                        System.Windows.MessageBoxButton.YesNo,
+                        System.Windows.MessageBoxImage.Warning);
+
+                    if (result == System.Windows.MessageBoxResult.Yes)
                     {
-                        var graphService = ((App)Application.Current).GetService<Services.Graph.GraphOneNoteService>();
-                        if (graphService != null)
+                        Log4.Info($"[OneNote] 섹션 삭제 요청: {section.DisplayName} (ID: {section.Id})");
+                        try
                         {
-                            await graphService.DeleteSectionAsync(section.Id);
-                            
-                            // 트리에서 섹션 제거
-                            foreach (var notebook in _oneNoteViewModel.Notebooks)
+                            var graphService = ((App)Application.Current).GetService<Services.Graph.GraphOneNoteService>();
+                            if (graphService != null)
                             {
-                                if (notebook.Sections.Contains(section))
+                                await graphService.DeleteSectionAsync(section.Id);
+                                
+                                // 트리에서 섹션 제거
+                                foreach (var notebook in _oneNoteViewModel.Notebooks)
                                 {
-                                    notebook.Sections.Remove(section);
-                                    break;
+                                    if (notebook.Sections.Contains(section))
+                                    {
+                                        notebook.Sections.Remove(section);
+                                        break;
+                                    }
                                 }
+                                
+                                _viewModel.StatusMessage = $"'{section.DisplayName}' 섹션이 삭제되었습니다.";
+                                Log4.Info($"[OneNote] 섹션 삭제 완료: {section.DisplayName}");
                             }
-                            
-                            _viewModel.StatusMessage = $"'{section.DisplayName}' 섹션이 삭제되었습니다.";
-                            Log4.Info($"[OneNote] 섹션 삭제 완료: {section.DisplayName}");
                         }
-                    }
-                    catch (Exception ex)
-                    {
-                        Log4.Error($"[OneNote] 섹션 삭제 실패: {ex.Message}");
-                        System.Windows.MessageBox.Show(
-                            $"섹션 삭제에 실패했습니다.\n\n{ex.Message}",
-                            "오류",
-                            System.Windows.MessageBoxButton.OK,
-                            System.Windows.MessageBoxImage.Error);
+                        catch (Exception ex)
+                        {
+                            Log4.Error($"[OneNote] 섹션 삭제 실패: {ex.Message}");
+                            System.Windows.MessageBox.Show(
+                                $"섹션 삭제에 실패했습니다.\n\n{ex.Message}",
+                                "오류",
+                                System.Windows.MessageBoxButton.OK,
+                                System.Windows.MessageBoxImage.Error);
+                        }
                     }
                 }
             }
+        }
+        catch (Exception ex)
+        {
+            Serilog.Log.Error(ex, "[MainWindow] SectionDelete_Click 실패");
         }
     }
 
@@ -12841,73 +13394,80 @@ public partial class MainWindow : FluentWindow
     /// </summary>
     private async void PageDelete_Click(object sender, RoutedEventArgs e)
     {
-        if (_oneNoteViewModel == null) return;
-
-        if (sender is System.Windows.Controls.MenuItem menuItem)
+        try
         {
-            var page = menuItem.DataContext as PageItemViewModel;
-            if (page != null)
+            if (_oneNoteViewModel == null) return;
+
+            if (sender is System.Windows.Controls.MenuItem menuItem)
             {
-                // 확인 대화상자
-                var result = System.Windows.MessageBox.Show(
-                    $"'{page.Title}' 노트를 삭제하시겠습니까?",
-                    "노트 삭제 확인",
-                    System.Windows.MessageBoxButton.YesNo,
-                    System.Windows.MessageBoxImage.Warning);
-
-                if (result == System.Windows.MessageBoxResult.Yes)
+                var page = menuItem.DataContext as PageItemViewModel;
+                if (page != null)
                 {
-                    Log4.Info($"[OneNote] 노트 삭제 요청: {page.Title} (ID: {page.Id})");
-                    try
+                    // 확인 대화상자
+                    var result = System.Windows.MessageBox.Show(
+                        $"'{page.Title}' 노트를 삭제하시겠습니까?",
+                        "노트 삭제 확인",
+                        System.Windows.MessageBoxButton.YesNo,
+                        System.Windows.MessageBoxImage.Warning);
+
+                    if (result == System.Windows.MessageBoxResult.Yes)
                     {
-                        var graphService = ((App)Application.Current).GetService<Services.Graph.GraphOneNoteService>();
-                        if (graphService != null)
+                        Log4.Info($"[OneNote] 노트 삭제 요청: {page.Title} (ID: {page.Id})");
+                        try
                         {
-                            await graphService.DeletePageAsync(page.Id);
-                            Log4.Info($"[OneNote] 노트 삭제 완료 (Graph API): {page.Title}");
-
-                            // 연결된 로컬 녹음 파일 삭제
-                            _oneNoteViewModel?.DeleteRecordingsForPage(page.Id);
-
-                            // 즐겨찾기에서 제거
-                            RemovePageFromFavorites(page.Id);
-
-                            // 트리에서 페이지 제거
-                            foreach (var notebook in _oneNoteViewModel.Notebooks)
+                            var graphService = ((App)Application.Current).GetService<Services.Graph.GraphOneNoteService>();
+                            if (graphService != null)
                             {
-                                foreach (var section in notebook.Sections)
+                                await graphService.DeletePageAsync(page.Id);
+                                Log4.Info($"[OneNote] 노트 삭제 완료 (Graph API): {page.Title}");
+
+                                // 연결된 로컬 녹음 파일 삭제
+                                _oneNoteViewModel?.DeleteRecordingsForPage(page.Id);
+
+                                // 즐겨찾기에서 제거
+                                RemovePageFromFavorites(page.Id);
+
+                                // 트리에서 페이지 제거
+                                foreach (var notebook in _oneNoteViewModel.Notebooks)
                                 {
-                                    var pageToRemove = section.Pages.FirstOrDefault(p => p.Id == page.Id);
-                                    if (pageToRemove != null)
+                                    foreach (var section in notebook.Sections)
                                     {
-                                        section.Pages.Remove(pageToRemove);
-                                        break;
+                                        var pageToRemove = section.Pages.FirstOrDefault(p => p.Id == page.Id);
+                                        if (pageToRemove != null)
+                                        {
+                                            section.Pages.Remove(pageToRemove);
+                                            break;
+                                        }
                                     }
                                 }
-                            }
 
-                            // 현재 열린 노트를 삭제한 경우에만 UI 초기화
-                            if (_oneNoteViewModel.SelectedPage?.Id == page.Id)
-                            {
-                                ResetOneNoteUI();
-                                Log4.Info($"[OneNote] 현재 열린 노트 삭제 - UI 초기화 완료");
-                            }
+                                // 현재 열린 노트를 삭제한 경우에만 UI 초기화
+                                if (_oneNoteViewModel.SelectedPage?.Id == page.Id)
+                                {
+                                    ResetOneNoteUI();
+                                    Log4.Info($"[OneNote] 현재 열린 노트 삭제 - UI 초기화 완료");
+                                }
 
-                            _viewModel.StatusMessage = $"'{page.Title}' 노트가 삭제되었습니다.";
-                            Log4.Info($"[OneNote] 노트 삭제 완료: {page.Title}");
+                                _viewModel.StatusMessage = $"'{page.Title}' 노트가 삭제되었습니다.";
+                                Log4.Info($"[OneNote] 노트 삭제 완료: {page.Title}");
+                            }
                         }
-                    }
-                    catch (Exception ex)
-                    {
-                        Log4.Error($"[OneNote] 노트 삭제 실패: {ex.Message}");
-                        System.Windows.MessageBox.Show(
-                            $"노트 삭제에 실패했습니다.\n\n{ex.Message}",
-                            "오류",
-                            System.Windows.MessageBoxButton.OK,
-                            System.Windows.MessageBoxImage.Error);
+                        catch (Exception ex)
+                        {
+                            Log4.Error($"[OneNote] 노트 삭제 실패: {ex.Message}");
+                            System.Windows.MessageBox.Show(
+                                $"노트 삭제에 실패했습니다.\n\n{ex.Message}",
+                                "오류",
+                                System.Windows.MessageBoxButton.OK,
+                                System.Windows.MessageBoxImage.Error);
+                        }
                     }
                 }
             }
+        }
+        catch (Exception ex)
+        {
+            Serilog.Log.Error(ex, "[MainWindow] PageDelete_Click 실패");
         }
     }
 
@@ -12934,23 +13494,30 @@ public partial class MainWindow : FluentWindow
     /// </summary>
     private async void FavoriteNotebookAddSection_Click(object sender, RoutedEventArgs e)
     {
-        if (_oneNoteViewModel == null) return;
-
-        if (sender is System.Windows.Controls.MenuItem menuItem)
+        try
         {
-            var page = menuItem.DataContext as PageItemViewModel;
-            if (page != null && page.ItemType == FavoriteItemType.Notebook)
-            {
-                Log4.Info($"[OneNote] 즐겨찾기 노트북에 새 섹션 추가 요청: {page.Title}");
+            if (_oneNoteViewModel == null) return;
 
-                var messageBox = new Wpf.Ui.Controls.MessageBox
+            if (sender is System.Windows.Controls.MenuItem menuItem)
+            {
+                var page = menuItem.DataContext as PageItemViewModel;
+                if (page != null && page.ItemType == FavoriteItemType.Notebook)
                 {
-                    Title = "새 섹션 추가",
-                    Content = "새 섹션 추가 기능은 향후 업데이트에서 지원될 예정입니다.",
-                    PrimaryButtonText = "확인"
-                };
-                await messageBox.ShowDialogAsync();
+                    Log4.Info($"[OneNote] 즐겨찾기 노트북에 새 섹션 추가 요청: {page.Title}");
+
+                    var messageBox = new Wpf.Ui.Controls.MessageBox
+                    {
+                        Title = "새 섹션 추가",
+                        Content = "새 섹션 추가 기능은 향후 업데이트에서 지원될 예정입니다.",
+                        PrimaryButtonText = "확인"
+                    };
+                    await messageBox.ShowDialogAsync();
+                }
             }
+        }
+        catch (Exception ex)
+        {
+            Serilog.Log.Error(ex, "[MainWindow] FavoriteNotebookAddSection_Click 실패");
         }
     }
 
@@ -12959,41 +13526,48 @@ public partial class MainWindow : FluentWindow
     /// </summary>
     private async void FavoriteSectionAddPage_Click(object sender, RoutedEventArgs e)
     {
-        Log4.Info($"[OneNote] FavoriteSectionAddPage_Click 호출됨");
-
-        if (_oneNoteViewModel == null)
+        try
         {
-            Log4.Warn("[OneNote] _oneNoteViewModel is null");
-            return;
-        }
+            Log4.Info($"[OneNote] FavoriteSectionAddPage_Click 호출됨");
 
-        if (sender is System.Windows.Controls.MenuItem menuItem)
-        {
-            Log4.Info($"[OneNote] MenuItem DataContext 타입: {menuItem.DataContext?.GetType().Name ?? "null"}");
-
-            var page = menuItem.DataContext as PageItemViewModel;
-            if (page != null)
+            if (_oneNoteViewModel == null)
             {
-                Log4.Info($"[OneNote] PageItemViewModel: Title={page.Title}, ItemType={page.ItemType}, Id={page.Id}");
+                Log4.Warn("[OneNote] _oneNoteViewModel is null");
+                return;
+            }
 
-                if (page.ItemType == FavoriteItemType.Section)
+            if (sender is System.Windows.Controls.MenuItem menuItem)
+            {
+                Log4.Info($"[OneNote] MenuItem DataContext 타입: {menuItem.DataContext?.GetType().Name ?? "null"}");
+
+                var page = menuItem.DataContext as PageItemViewModel;
+                if (page != null)
                 {
-                    Log4.Info($"[OneNote] 즐겨찾기 섹션에 새 노트 추가 요청: {page.Title}");
-                    await CreateNewPageFromFavoriteSection(page);
+                    Log4.Info($"[OneNote] PageItemViewModel: Title={page.Title}, ItemType={page.ItemType}, Id={page.Id}");
+
+                    if (page.ItemType == FavoriteItemType.Section)
+                    {
+                        Log4.Info($"[OneNote] 즐겨찾기 섹션에 새 노트 추가 요청: {page.Title}");
+                        await CreateNewPageFromFavoriteSection(page);
+                    }
+                    else
+                    {
+                        Log4.Warn($"[OneNote] ItemType이 Section이 아님: {page.ItemType}");
+                    }
                 }
                 else
                 {
-                    Log4.Warn($"[OneNote] ItemType이 Section이 아님: {page.ItemType}");
+                    Log4.Warn("[OneNote] DataContext를 PageItemViewModel로 캐스팅 실패");
                 }
             }
             else
             {
-                Log4.Warn("[OneNote] DataContext를 PageItemViewModel로 캐스팅 실패");
+                Log4.Warn($"[OneNote] sender가 MenuItem이 아님: {sender?.GetType().Name ?? "null"}");
             }
         }
-        else
+        catch (Exception ex)
         {
-            Log4.Warn($"[OneNote] sender가 MenuItem이 아님: {sender?.GetType().Name ?? "null"}");
+            Serilog.Log.Error(ex, "[MainWindow] FavoriteSectionAddPage_Click 실패");
         }
     }
 
@@ -13002,59 +13576,66 @@ public partial class MainWindow : FluentWindow
     /// </summary>
     private async void FavoriteSectionDelete_Click(object sender, RoutedEventArgs e)
     {
-        if (_oneNoteViewModel == null) return;
-
-        if (sender is System.Windows.Controls.MenuItem menuItem)
+        try
         {
-            var favoriteItem = menuItem.DataContext as PageItemViewModel;
-            if (favoriteItem != null && favoriteItem.ItemType == FavoriteItemType.Section)
+            if (_oneNoteViewModel == null) return;
+
+            if (sender is System.Windows.Controls.MenuItem menuItem)
             {
-                // 확인 대화상자
-                var result = System.Windows.MessageBox.Show(
-                    $"'{favoriteItem.Title}' 섹션을 삭제하시겠습니까?\n\n이 섹션의 모든 노트가 함께 삭제됩니다.",
-                    "섹션 삭제 확인",
-                    System.Windows.MessageBoxButton.YesNo,
-                    System.Windows.MessageBoxImage.Warning);
-
-                if (result == System.Windows.MessageBoxResult.Yes)
+                var favoriteItem = menuItem.DataContext as PageItemViewModel;
+                if (favoriteItem != null && favoriteItem.ItemType == FavoriteItemType.Section)
                 {
-                    Log4.Info($"[OneNote] 즐겨찾기 섹션 삭제 요청: {favoriteItem.Title} (ID: {favoriteItem.Id})");
-                    try
+                    // 확인 대화상자
+                    var result = System.Windows.MessageBox.Show(
+                        $"'{favoriteItem.Title}' 섹션을 삭제하시겠습니까?\n\n이 섹션의 모든 노트가 함께 삭제됩니다.",
+                        "섹션 삭제 확인",
+                        System.Windows.MessageBoxButton.YesNo,
+                        System.Windows.MessageBoxImage.Warning);
+
+                    if (result == System.Windows.MessageBoxResult.Yes)
                     {
-                        var graphService = ((App)Application.Current).GetService<Services.Graph.GraphOneNoteService>();
-                        if (graphService != null)
+                        Log4.Info($"[OneNote] 즐겨찾기 섹션 삭제 요청: {favoriteItem.Title} (ID: {favoriteItem.Id})");
+                        try
                         {
-                            await graphService.DeleteSectionAsync(favoriteItem.Id);
-
-                            // 즐겨찾기 목록에서 제거
-                            _oneNoteViewModel.RemoveFromFavorites(favoriteItem);
-
-                            // 노트북 트리에서도 해당 섹션 제거
-                            foreach (var notebook in _oneNoteViewModel.Notebooks)
+                            var graphService = ((App)Application.Current).GetService<Services.Graph.GraphOneNoteService>();
+                            if (graphService != null)
                             {
-                                var sectionToRemove = notebook.Sections.FirstOrDefault(s => s.Id == favoriteItem.Id);
-                                if (sectionToRemove != null)
-                                {
-                                    notebook.Sections.Remove(sectionToRemove);
-                                    break;
-                                }
-                            }
+                                await graphService.DeleteSectionAsync(favoriteItem.Id);
 
-                            _viewModel.StatusMessage = $"'{favoriteItem.Title}' 섹션이 삭제되었습니다.";
-                            Log4.Info($"[OneNote] 즐겨찾기 섹션 삭제 완료: {favoriteItem.Title}");
+                                // 즐겨찾기 목록에서 제거
+                                _oneNoteViewModel.RemoveFromFavorites(favoriteItem);
+
+                                // 노트북 트리에서도 해당 섹션 제거
+                                foreach (var notebook in _oneNoteViewModel.Notebooks)
+                                {
+                                    var sectionToRemove = notebook.Sections.FirstOrDefault(s => s.Id == favoriteItem.Id);
+                                    if (sectionToRemove != null)
+                                    {
+                                        notebook.Sections.Remove(sectionToRemove);
+                                        break;
+                                    }
+                                }
+
+                                _viewModel.StatusMessage = $"'{favoriteItem.Title}' 섹션이 삭제되었습니다.";
+                                Log4.Info($"[OneNote] 즐겨찾기 섹션 삭제 완료: {favoriteItem.Title}");
+                            }
                         }
-                    }
-                    catch (Exception ex)
-                    {
-                        Log4.Error($"[OneNote] 즐겨찾기 섹션 삭제 실패: {ex.Message}");
-                        System.Windows.MessageBox.Show(
-                            $"섹션 삭제에 실패했습니다.\n\n{ex.Message}",
-                            "오류",
-                            System.Windows.MessageBoxButton.OK,
-                            System.Windows.MessageBoxImage.Error);
+                        catch (Exception ex)
+                        {
+                            Log4.Error($"[OneNote] 즐겨찾기 섹션 삭제 실패: {ex.Message}");
+                            System.Windows.MessageBox.Show(
+                                $"섹션 삭제에 실패했습니다.\n\n{ex.Message}",
+                                "오류",
+                                System.Windows.MessageBoxButton.OK,
+                                System.Windows.MessageBoxImage.Error);
+                        }
                     }
                 }
             }
+        }
+        catch (Exception ex)
+        {
+            Serilog.Log.Error(ex, "[MainWindow] FavoriteSectionDelete_Click 실패");
         }
     }
 
@@ -13063,73 +13644,80 @@ public partial class MainWindow : FluentWindow
     /// </summary>
     private async void FavoritePageDelete_Click(object sender, RoutedEventArgs e)
     {
-        if (_oneNoteViewModel == null) return;
-
-        if (sender is System.Windows.Controls.MenuItem menuItem)
+        try
         {
-            var favoriteItem = menuItem.DataContext as PageItemViewModel;
-            if (favoriteItem != null && favoriteItem.ItemType == FavoriteItemType.Page)
+            if (_oneNoteViewModel == null) return;
+
+            if (sender is System.Windows.Controls.MenuItem menuItem)
             {
-                // 확인 대화상자
-                var result = System.Windows.MessageBox.Show(
-                    $"'{favoriteItem.Title}' 노트를 삭제하시겠습니까?",
-                    "노트 삭제 확인",
-                    System.Windows.MessageBoxButton.YesNo,
-                    System.Windows.MessageBoxImage.Warning);
-
-                if (result == System.Windows.MessageBoxResult.Yes)
+                var favoriteItem = menuItem.DataContext as PageItemViewModel;
+                if (favoriteItem != null && favoriteItem.ItemType == FavoriteItemType.Page)
                 {
-                    Log4.Info($"[OneNote] 즐겨찾기 노트 삭제 요청: {favoriteItem.Title} (ID: {favoriteItem.Id})");
-                    try
+                    // 확인 대화상자
+                    var result = System.Windows.MessageBox.Show(
+                        $"'{favoriteItem.Title}' 노트를 삭제하시겠습니까?",
+                        "노트 삭제 확인",
+                        System.Windows.MessageBoxButton.YesNo,
+                        System.Windows.MessageBoxImage.Warning);
+
+                    if (result == System.Windows.MessageBoxResult.Yes)
                     {
-                        var graphService = ((App)Application.Current).GetService<Services.Graph.GraphOneNoteService>();
-                        if (graphService != null)
+                        Log4.Info($"[OneNote] 즐겨찾기 노트 삭제 요청: {favoriteItem.Title} (ID: {favoriteItem.Id})");
+                        try
                         {
-                            await graphService.DeletePageAsync(favoriteItem.Id);
-                            Log4.Info($"[OneNote] 즐겨찾기 노트 삭제 완료 (Graph API): {favoriteItem.Title}");
-
-                            // 연결된 로컬 녹음 파일 삭제
-                            _oneNoteViewModel?.DeleteRecordingsForPage(favoriteItem.Id);
-
-                            // 즐겨찾기에서 제거
-                            RemovePageFromFavorites(favoriteItem.Id);
-
-                            // 트리에서 페이지 제거
-                            foreach (var notebook in _oneNoteViewModel.Notebooks)
+                            var graphService = ((App)Application.Current).GetService<Services.Graph.GraphOneNoteService>();
+                            if (graphService != null)
                             {
-                                foreach (var section in notebook.Sections)
+                                await graphService.DeletePageAsync(favoriteItem.Id);
+                                Log4.Info($"[OneNote] 즐겨찾기 노트 삭제 완료 (Graph API): {favoriteItem.Title}");
+
+                                // 연결된 로컬 녹음 파일 삭제
+                                _oneNoteViewModel?.DeleteRecordingsForPage(favoriteItem.Id);
+
+                                // 즐겨찾기에서 제거
+                                RemovePageFromFavorites(favoriteItem.Id);
+
+                                // 트리에서 페이지 제거
+                                foreach (var notebook in _oneNoteViewModel.Notebooks)
                                 {
-                                    var pageToRemove = section.Pages.FirstOrDefault(p => p.Id == favoriteItem.Id);
-                                    if (pageToRemove != null)
+                                    foreach (var section in notebook.Sections)
                                     {
-                                        section.Pages.Remove(pageToRemove);
-                                        break;
+                                        var pageToRemove = section.Pages.FirstOrDefault(p => p.Id == favoriteItem.Id);
+                                        if (pageToRemove != null)
+                                        {
+                                            section.Pages.Remove(pageToRemove);
+                                            break;
+                                        }
                                     }
                                 }
-                            }
 
-                            // 현재 열린 노트를 삭제한 경우에만 UI 초기화
-                            if (_oneNoteViewModel.SelectedPage?.Id == favoriteItem.Id)
-                            {
-                                ResetOneNoteUI();
-                                Log4.Info($"[OneNote] 현재 열린 노트 삭제 - UI 초기화 완료");
-                            }
+                                // 현재 열린 노트를 삭제한 경우에만 UI 초기화
+                                if (_oneNoteViewModel.SelectedPage?.Id == favoriteItem.Id)
+                                {
+                                    ResetOneNoteUI();
+                                    Log4.Info($"[OneNote] 현재 열린 노트 삭제 - UI 초기화 완료");
+                                }
 
-                            _viewModel.StatusMessage = $"'{favoriteItem.Title}' 노트가 삭제되었습니다.";
-                            Log4.Info($"[OneNote] 즐겨찾기 노트 삭제 완료: {favoriteItem.Title}");
+                                _viewModel.StatusMessage = $"'{favoriteItem.Title}' 노트가 삭제되었습니다.";
+                                Log4.Info($"[OneNote] 즐겨찾기 노트 삭제 완료: {favoriteItem.Title}");
+                            }
                         }
-                    }
-                    catch (Exception ex)
-                    {
-                        Log4.Error($"[OneNote] 즐겨찾기 노트 삭제 실패: {ex.Message}");
-                        System.Windows.MessageBox.Show(
-                            $"노트 삭제에 실패했습니다.\n\n{ex.Message}",
-                            "오류",
-                            System.Windows.MessageBoxButton.OK,
-                            System.Windows.MessageBoxImage.Error);
+                        catch (Exception ex)
+                        {
+                            Log4.Error($"[OneNote] 즐겨찾기 노트 삭제 실패: {ex.Message}");
+                            System.Windows.MessageBox.Show(
+                                $"노트 삭제에 실패했습니다.\n\n{ex.Message}",
+                                "오류",
+                                System.Windows.MessageBoxButton.OK,
+                                System.Windows.MessageBoxImage.Error);
+                        }
                     }
                 }
             }
+        }
+        catch (Exception ex)
+        {
+            Serilog.Log.Error(ex, "[MainWindow] FavoritePageDelete_Click 실패");
         }
     }
 
@@ -13266,33 +13854,40 @@ public partial class MainWindow : FluentWindow
     /// </summary>
     private async void OneNoteTreeView_SelectedItemChanged(object sender, RoutedPropertyChangedEventArgs<object> e)
     {
-        // 삭제 중일 때는 모든 선택 이벤트 무시
-        if (_isDeletingPage)
+        try
         {
-            Log4.Debug($"[OneNote] 삭제 중 TreeView 선택 이벤트 무시");
-            return;
-        }
+            // 삭제 중일 때는 모든 선택 이벤트 무시
+            if (_isDeletingPage)
+            {
+                Log4.Debug($"[OneNote] 삭제 중 TreeView 선택 이벤트 무시");
+                return;
+            }
 
-        if (e.NewValue != null)
-        {
-            // 즐겨찾기 TreeView 선택 해제
-            ClearTreeViewSelection(OneNoteFavoritesTreeView);
-        }
+            if (e.NewValue != null)
+            {
+                // 즐겨찾기 TreeView 선택 해제
+                ClearTreeViewSelection(OneNoteFavoritesTreeView);
+            }
 
-        if (e.NewValue is PageItemViewModel selectedPage && _oneNoteViewModel != null)
-        {
-            Log4.Debug($"OneNote 페이지 선택 (트리뷰): {selectedPage.Title}, GroupId={selectedPage.GroupId ?? "N/A"}, SiteId={selectedPage.SiteId ?? "N/A"}");
-            await LoadOneNotePageAsync(selectedPage);
+            if (e.NewValue is PageItemViewModel selectedPage && _oneNoteViewModel != null)
+            {
+                Log4.Debug($"OneNote 페이지 선택 (트리뷰): {selectedPage.Title}, GroupId={selectedPage.GroupId ?? "N/A"}, SiteId={selectedPage.SiteId ?? "N/A"}");
+                await LoadOneNotePageAsync(selectedPage);
+            }
+            else if (e.NewValue is SectionItemViewModel selectedSection && _oneNoteViewModel != null)
+            {
+                Log4.Debug($"OneNote 섹션 선택: {selectedSection.DisplayName}");
+                _oneNoteViewModel.SelectedSection = selectedSection;
+            }
+            else if (e.NewValue is NotebookItemViewModel selectedNotebook && _oneNoteViewModel != null)
+            {
+                Log4.Debug($"OneNote 노트북 선택: {selectedNotebook.DisplayName}");
+                _oneNoteViewModel.SelectedNotebook = selectedNotebook;
+            }
         }
-        else if (e.NewValue is SectionItemViewModel selectedSection && _oneNoteViewModel != null)
+        catch (Exception ex)
         {
-            Log4.Debug($"OneNote 섹션 선택: {selectedSection.DisplayName}");
-            _oneNoteViewModel.SelectedSection = selectedSection;
-        }
-        else if (e.NewValue is NotebookItemViewModel selectedNotebook && _oneNoteViewModel != null)
-        {
-            Log4.Debug($"OneNote 노트북 선택: {selectedNotebook.DisplayName}");
-            _oneNoteViewModel.SelectedNotebook = selectedNotebook;
+            Serilog.Log.Error(ex, "[MainWindow] OneNoteTreeView_SelectedItemChanged 실패");
         }
     }
 
@@ -13343,14 +13938,21 @@ public partial class MainWindow : FluentWindow
     /// </summary>
     private async void OneNoteTreeViewItem_Expanded(object sender, RoutedEventArgs e)
     {
-        if (sender is System.Windows.Controls.TreeViewItem treeViewItem && treeViewItem.DataContext is NotebookItemViewModel notebook)
+        try
         {
-            // 이미 로드된 경우 무시
-            if (notebook.HasSectionsLoaded)
-                return;
+            if (sender is System.Windows.Controls.TreeViewItem treeViewItem && treeViewItem.DataContext is NotebookItemViewModel notebook)
+            {
+                // 이미 로드된 경우 무시
+                if (notebook.HasSectionsLoaded)
+                    return;
 
-            Log4.Debug($"OneNote 노트북 확장: {notebook.DisplayName} - 섹션 on-demand 로드 시작");
-            await _oneNoteViewModel?.LoadSectionsForNotebookAsync(notebook)!;
+                Log4.Debug($"OneNote 노트북 확장: {notebook.DisplayName} - 섹션 on-demand 로드 시작");
+                await _oneNoteViewModel?.LoadSectionsForNotebookAsync(notebook)!;
+            }
+        }
+        catch (Exception ex)
+        {
+            Serilog.Log.Error(ex, "[MainWindow] OneNoteTreeViewItem_Expanded 실패");
         }
     }
 
@@ -13359,32 +13961,39 @@ public partial class MainWindow : FluentWindow
     /// </summary>
     private async void OneNoteNewPageButton_Click(object sender, RoutedEventArgs e)
     {
-        if (_oneNoteViewModel?.SelectedSection == null)
+        try
         {
-            var dialog = new Wpf.Ui.Controls.MessageBox
+            if (_oneNoteViewModel?.SelectedSection == null)
             {
-                Title = "알림",
-                Content = "먼저 섹션을 선택해주세요.",
-                PrimaryButtonText = "확인"
+                var dialog = new Wpf.Ui.Controls.MessageBox
+                {
+                    Title = "알림",
+                    Content = "먼저 섹션을 선택해주세요.",
+                    PrimaryButtonText = "확인"
+                };
+                await dialog.ShowDialogAsync();
+                return;
+            }
+
+            // 간단한 입력 다이얼로그 (실제 구현에서는 별도 다이얼로그 필요)
+            var createDialog = new Wpf.Ui.Controls.MessageBox
+            {
+                Title = "새 페이지",
+                Content = "새 페이지를 만드시겠습니까?",
+                PrimaryButtonText = "만들기",
+                CloseButtonText = "취소"
             };
-            await dialog.ShowDialogAsync();
-            return;
+
+            var result = await createDialog.ShowDialogAsync();
+            if (result == Wpf.Ui.Controls.MessageBoxResult.Primary)
+            {
+                await _oneNoteViewModel.CreatePageAsync($"새 페이지 {DateTime.Now:HH:mm}");
+                await LoadOneNoteNotebooksAsync();
+            }
         }
-
-        // 간단한 입력 다이얼로그 (실제 구현에서는 별도 다이얼로그 필요)
-        var createDialog = new Wpf.Ui.Controls.MessageBox
+        catch (Exception ex)
         {
-            Title = "새 페이지",
-            Content = "새 페이지를 만드시겠습니까?",
-            PrimaryButtonText = "만들기",
-            CloseButtonText = "취소"
-        };
-
-        var result = await createDialog.ShowDialogAsync();
-        if (result == Wpf.Ui.Controls.MessageBoxResult.Primary)
-        {
-            await _oneNoteViewModel.CreatePageAsync($"새 페이지 {DateTime.Now:HH:mm}");
-            await LoadOneNoteNotebooksAsync();
+            Serilog.Log.Error(ex, "[MainWindow] OneNoteNewPageButton_Click 실패");
         }
     }
 
@@ -13964,27 +14573,34 @@ public partial class MainWindow : FluentWindow
     /// </summary>
     private async void OneDriveSearchBox_KeyDown(object sender, KeyEventArgs e)
     {
-        if (e.Key == Key.Enter)
+        try
         {
-            try
+            if (e.Key == Key.Enter)
             {
-                if (_oneDriveViewModel == null)
+                try
                 {
-                    _oneDriveViewModel = ((App)Application.Current).GetService<OneDriveViewModel>()!;
-                }
+                    if (_oneDriveViewModel == null)
+                    {
+                        _oneDriveViewModel = ((App)Application.Current).GetService<OneDriveViewModel>()!;
+                    }
 
-                var searchBox = sender as System.Windows.Controls.TextBox;
-                if (!string.IsNullOrWhiteSpace(searchBox?.Text))
+                    var searchBox = sender as System.Windows.Controls.TextBox;
+                    if (!string.IsNullOrWhiteSpace(searchBox?.Text))
+                    {
+                        _oneDriveViewModel.SearchQuery = searchBox.Text;
+                        await _oneDriveViewModel.SearchAsync();
+                        Log4.Debug($"OneDrive 검색: {searchBox.Text}");
+                    }
+                }
+                catch (Exception ex)
                 {
-                    _oneDriveViewModel.SearchQuery = searchBox.Text;
-                    await _oneDriveViewModel.SearchAsync();
-                    Log4.Debug($"OneDrive 검색: {searchBox.Text}");
+                    Log4.Error($"OneDrive 검색 실패: {ex.Message}");
                 }
             }
-            catch (Exception ex)
-            {
-                Log4.Error($"OneDrive 검색 실패: {ex.Message}");
-            }
+        }
+        catch (Exception ex)
+        {
+            Serilog.Log.Error(ex, "[MainWindow] OneDriveSearchBox_KeyDown 실패");
         }
     }
 
@@ -14038,7 +14654,14 @@ public partial class MainWindow : FluentWindow
     /// </summary>
     private async void OneDriveLoadFilesButton_Click(object sender, RoutedEventArgs e)
     {
-        await LoadOneDriveFilesAsync();
+        try
+        {
+            await LoadOneDriveFilesAsync();
+        }
+        catch (Exception ex)
+        {
+            Serilog.Log.Error(ex, "[MainWindow] OneDriveLoadFilesButton_Click 실패");
+        }
     }
 
     /// <summary>
@@ -15683,10 +16306,17 @@ public partial class MainWindow : FluentWindow
     /// </summary>
     private async void TeamsChannelMessageInput_KeyDown(object sender, KeyEventArgs e)
     {
-        if (e.Key == Key.Enter && !Keyboard.Modifiers.HasFlag(ModifierKeys.Shift))
+        try
         {
-            e.Handled = true;
-            await SendTeamsChannelMessageAsync();
+            if (e.Key == Key.Enter && !Keyboard.Modifiers.HasFlag(ModifierKeys.Shift))
+            {
+                e.Handled = true;
+                await SendTeamsChannelMessageAsync();
+            }
+        }
+        catch (Exception ex)
+        {
+            Serilog.Log.Error(ex, "[MainWindow] TeamsChannelMessageInput_KeyDown 실패");
         }
     }
 
@@ -15695,7 +16325,14 @@ public partial class MainWindow : FluentWindow
     /// </summary>
     private async void TeamsChannelSendButton_Click(object sender, RoutedEventArgs e)
     {
-        await SendTeamsChannelMessageAsync();
+        try
+        {
+            await SendTeamsChannelMessageAsync();
+        }
+        catch (Exception ex)
+        {
+            Serilog.Log.Error(ex, "[MainWindow] TeamsChannelSendButton_Click 실패");
+        }
     }
 
     /// <summary>
@@ -15750,7 +16387,14 @@ public partial class MainWindow : FluentWindow
     /// </summary>
     private async void ActivityRefreshButton_Click(object sender, RoutedEventArgs e)
     {
-        await LoadActivityDataAsync();
+        try
+        {
+            await LoadActivityDataAsync();
+        }
+        catch (Exception ex)
+        {
+            Serilog.Log.Error(ex, "[MainWindow] ActivityRefreshButton_Click 실패");
+        }
     }
 
     /// <summary>
@@ -15821,7 +16465,14 @@ public partial class MainWindow : FluentWindow
     /// </summary>
     private async void ActivityLoadButton_Click(object sender, RoutedEventArgs e)
     {
-        await LoadActivityDataAsync();
+        try
+        {
+            await LoadActivityDataAsync();
+        }
+        catch (Exception ex)
+        {
+            Serilog.Log.Error(ex, "[MainWindow] ActivityLoadButton_Click 실패");
+        }
     }
 
     /// <summary>
@@ -15876,14 +16527,21 @@ public partial class MainWindow : FluentWindow
     /// </summary>
     private async void PlannerRefreshButton_Click(object sender, RoutedEventArgs e)
     {
-        if (_plannerViewModel == null)
+        try
         {
-            _plannerViewModel = ((App)Application.Current).GetService<PlannerViewModel>()!;
-        }
+            if (_plannerViewModel == null)
+            {
+                _plannerViewModel = ((App)Application.Current).GetService<PlannerViewModel>()!;
+            }
 
-        await _plannerViewModel.RefreshAsync();
-        PlannerListBox.ItemsSource = _plannerViewModel.Plans;
-        PlannerPinnedPlansItemsControl.ItemsSource = _plannerViewModel.PinnedPlans;
+            await _plannerViewModel.RefreshAsync();
+            PlannerListBox.ItemsSource = _plannerViewModel.Plans;
+            PlannerPinnedPlansItemsControl.ItemsSource = _plannerViewModel.PinnedPlans;
+        }
+        catch (Exception ex)
+        {
+            Serilog.Log.Error(ex, "[MainWindow] PlannerRefreshButton_Click 실패");
+        }
     }
 
     /// <summary>
@@ -15891,24 +16549,31 @@ public partial class MainWindow : FluentWindow
     /// </summary>
     private async void PlannerMyDayButton_Click(object sender, RoutedEventArgs e)
     {
-        if (_plannerViewModel == null)
+        try
         {
-            _plannerViewModel = ((App)Application.Current).GetService<PlannerViewModel>()!;
+            if (_plannerViewModel == null)
+            {
+                _plannerViewModel = ((App)Application.Current).GetService<PlannerViewModel>()!;
+            }
+
+            await _plannerViewModel.LoadMyDayTasksAsync();
+
+            // 보드 숨기고 내 작업 뷰 표시
+            PlannerBoardScrollViewer.Visibility = Visibility.Collapsed;
+            PlannerNoPlanSelected.Visibility = Visibility.Collapsed;
+            PlannerMyTasksView.Visibility = Visibility.Visible;
+            PlannerMyTasksViewTitle.Text = "나의 하루";
+            PlannerMyTasksListView.ItemsSource = _plannerViewModel.MyDayTasks;
+            PlannerBoardTitle.Text = "나의 하루";
+            PlannerAddBucketButton.IsEnabled = false;
+            PlannerAddTaskButton.IsEnabled = false;
+
+            Log4.Info($"Planner 나의 하루 {_plannerViewModel.MyDayTasks.Count}개 로드");
         }
-
-        await _plannerViewModel.LoadMyDayTasksAsync();
-
-        // 보드 숨기고 내 작업 뷰 표시
-        PlannerBoardScrollViewer.Visibility = Visibility.Collapsed;
-        PlannerNoPlanSelected.Visibility = Visibility.Collapsed;
-        PlannerMyTasksView.Visibility = Visibility.Visible;
-        PlannerMyTasksViewTitle.Text = "나의 하루";
-        PlannerMyTasksListView.ItemsSource = _plannerViewModel.MyDayTasks;
-        PlannerBoardTitle.Text = "나의 하루";
-        PlannerAddBucketButton.IsEnabled = false;
-        PlannerAddTaskButton.IsEnabled = false;
-
-        Log4.Info($"Planner 나의 하루 {_plannerViewModel.MyDayTasks.Count}개 로드");
+        catch (Exception ex)
+        {
+            Serilog.Log.Error(ex, "[MainWindow] PlannerMyDayButton_Click 실패");
+        }
     }
 
     /// <summary>
@@ -15916,24 +16581,31 @@ public partial class MainWindow : FluentWindow
     /// </summary>
     private async void PlannerMyTasksButton_Click(object sender, RoutedEventArgs e)
     {
-        if (_plannerViewModel == null)
+        try
         {
-            _plannerViewModel = ((App)Application.Current).GetService<PlannerViewModel>()!;
+            if (_plannerViewModel == null)
+            {
+                _plannerViewModel = ((App)Application.Current).GetService<PlannerViewModel>()!;
+            }
+
+            await _plannerViewModel.LoadMyTasksAsync();
+
+            // 보드 숨기고 내 작업 뷰 표시
+            PlannerBoardScrollViewer.Visibility = Visibility.Collapsed;
+            PlannerNoPlanSelected.Visibility = Visibility.Collapsed;
+            PlannerMyTasksView.Visibility = Visibility.Visible;
+            PlannerMyTasksViewTitle.Text = "내 작업";
+            PlannerMyTasksListView.ItemsSource = _plannerViewModel.MyTasks;
+            PlannerBoardTitle.Text = "내 작업";
+            PlannerAddBucketButton.IsEnabled = false;
+            PlannerAddTaskButton.IsEnabled = false;
+
+            Log4.Info($"Planner 내 작업 {_plannerViewModel.MyTasks.Count}개 로드");
         }
-
-        await _plannerViewModel.LoadMyTasksAsync();
-
-        // 보드 숨기고 내 작업 뷰 표시
-        PlannerBoardScrollViewer.Visibility = Visibility.Collapsed;
-        PlannerNoPlanSelected.Visibility = Visibility.Collapsed;
-        PlannerMyTasksView.Visibility = Visibility.Visible;
-        PlannerMyTasksViewTitle.Text = "내 작업";
-        PlannerMyTasksListView.ItemsSource = _plannerViewModel.MyTasks;
-        PlannerBoardTitle.Text = "내 작업";
-        PlannerAddBucketButton.IsEnabled = false;
-        PlannerAddTaskButton.IsEnabled = false;
-
-        Log4.Info($"Planner 내 작업 {_plannerViewModel.MyTasks.Count}개 로드");
+        catch (Exception ex)
+        {
+            Serilog.Log.Error(ex, "[MainWindow] PlannerMyTasksButton_Click 실패");
+        }
     }
 
     /// <summary>
@@ -15941,41 +16613,48 @@ public partial class MainWindow : FluentWindow
     /// </summary>
     private async void PlannerListBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
     {
-        if (_plannerViewModel == null)
+        try
         {
-            _plannerViewModel = ((App)Application.Current).GetService<PlannerViewModel>()!;
+            if (_plannerViewModel == null)
+            {
+                _plannerViewModel = ((App)Application.Current).GetService<PlannerViewModel>()!;
+            }
+
+            // 이전 선택 해제
+            foreach (var item in e.RemovedItems.OfType<PlanItemViewModel>())
+            {
+                item.IsSelected = false;
+            }
+
+            // 새 선택 설정
+            foreach (var item in e.AddedItems.OfType<PlanItemViewModel>())
+            {
+                item.IsSelected = true;
+            }
+
+            if (PlannerListBox.SelectedItem is PlanItemViewModel selectedPlan)
+            {
+                await _plannerViewModel.SelectPlanAsync(selectedPlan);
+
+                // 칸반 보드 표시
+                PlannerMyTasksView.Visibility = Visibility.Collapsed;
+                PlannerBoardScrollViewer.Visibility = Visibility.Visible;
+                PlannerNoPlanSelected.Visibility = Visibility.Collapsed;
+
+                // UI 업데이트
+                PlannerBoardTitle.Text = selectedPlan.Title;
+                PlannerAddBucketButton.IsEnabled = true;
+                PlannerAddTaskButton.IsEnabled = true;
+
+                // 버킷 목록 바인딩
+                PlannerBucketsItemsControl.ItemsSource = _plannerViewModel.Buckets;
+
+                Log4.Debug($"Planner 플랜 선택: {selectedPlan.Title}");
+            }
         }
-
-        // 이전 선택 해제
-        foreach (var item in e.RemovedItems.OfType<PlanItemViewModel>())
+        catch (Exception ex)
         {
-            item.IsSelected = false;
-        }
-
-        // 새 선택 설정
-        foreach (var item in e.AddedItems.OfType<PlanItemViewModel>())
-        {
-            item.IsSelected = true;
-        }
-
-        if (PlannerListBox.SelectedItem is PlanItemViewModel selectedPlan)
-        {
-            await _plannerViewModel.SelectPlanAsync(selectedPlan);
-
-            // 칸반 보드 표시
-            PlannerMyTasksView.Visibility = Visibility.Collapsed;
-            PlannerBoardScrollViewer.Visibility = Visibility.Visible;
-            PlannerNoPlanSelected.Visibility = Visibility.Collapsed;
-
-            // UI 업데이트
-            PlannerBoardTitle.Text = selectedPlan.Title;
-            PlannerAddBucketButton.IsEnabled = true;
-            PlannerAddTaskButton.IsEnabled = true;
-
-            // 버킷 목록 바인딩
-            PlannerBucketsItemsControl.ItemsSource = _plannerViewModel.Buckets;
-
-            Log4.Debug($"Planner 플랜 선택: {selectedPlan.Title}");
+            Serilog.Log.Error(ex, "[MainWindow] PlannerListBox_SelectionChanged 실패");
         }
     }
 
@@ -16079,7 +16758,14 @@ public partial class MainWindow : FluentWindow
     /// </summary>
     private async void PlannerLoadPlansButton_Click(object sender, RoutedEventArgs e)
     {
-        await LoadPlannerDataAsync();
+        try
+        {
+            await LoadPlannerDataAsync();
+        }
+        catch (Exception ex)
+        {
+            Serilog.Log.Error(ex, "[MainWindow] PlannerLoadPlansButton_Click 실패");
+        }
     }
 
     /// <summary>
@@ -16087,78 +16773,14 @@ public partial class MainWindow : FluentWindow
     /// </summary>
     private async void PlannerAddBucketButton_Click(object sender, RoutedEventArgs e)
     {
-        if (_plannerViewModel?.SelectedPlan == null)
-            return;
-
-        var dialog = new ContentDialog
-        {
-            Title = "새 버킷",
-            Content = new System.Windows.Controls.TextBox
-            {
-                Text = "",
-                Width = 300
-            },
-            PrimaryButtonText = "생성",
-            CloseButtonText = "취소"
-        };
-
-        var result = await dialog.ShowAsync();
-        if (result == ContentDialogResult.Primary)
-        {
-            var textBox = dialog.Content as System.Windows.Controls.TextBox;
-            if (!string.IsNullOrWhiteSpace(textBox?.Text))
-            {
-                await _plannerViewModel.CreateBucketAsync(textBox.Text);
-                Log4.Info($"Planner 버킷 생성: {textBox.Text}");
-            }
-        }
-    }
-
-    /// <summary>
-    /// 작업 추가 버튼 클릭
-    /// </summary>
-    private async void PlannerAddTaskButton_Click(object sender, RoutedEventArgs e)
-    {
-        if (_plannerViewModel?.SelectedPlan == null || _plannerViewModel.Buckets.Count == 0)
-            return;
-
-        var dialog = new ContentDialog
-        {
-            Title = "새 작업",
-            Content = new System.Windows.Controls.TextBox
-            {
-                Text = "",
-                Width = 300
-            },
-            PrimaryButtonText = "생성",
-            CloseButtonText = "취소"
-        };
-
-        var result = await dialog.ShowAsync();
-        if (result == ContentDialogResult.Primary)
-        {
-            var textBox = dialog.Content as System.Windows.Controls.TextBox;
-            if (!string.IsNullOrWhiteSpace(textBox?.Text))
-            {
-                await _plannerViewModel.CreateTaskAsync(textBox.Text);
-                Log4.Info($"Planner 작업 생성: {textBox.Text}");
-            }
-        }
-    }
-
-    /// <summary>
-    /// 버킷 내 작업 추가 버튼 클릭
-    /// </summary>
-    private async void PlannerBucketAddTask_Click(object sender, RoutedEventArgs e)
-    {
-        if (sender is FrameworkElement element && element.Tag is BucketViewModel bucket)
+        try
         {
             if (_plannerViewModel?.SelectedPlan == null)
                 return;
 
             var dialog = new ContentDialog
             {
-                Title = $"'{bucket.Name}'에 작업 추가",
+                Title = "새 버킷",
                 Content = new System.Windows.Controls.TextBox
                 {
                     Text = "",
@@ -16174,22 +16796,107 @@ public partial class MainWindow : FluentWindow
                 var textBox = dialog.Content as System.Windows.Controls.TextBox;
                 if (!string.IsNullOrWhiteSpace(textBox?.Text))
                 {
-                    var plannerService = ((App)Application.Current).GetService<GraphPlannerService>()!;
-                    var task = await plannerService.CreateTaskAsync(_plannerViewModel.SelectedPlan.Id, bucket.Id, textBox.Text);
-                    if (task != null)
+                    await _plannerViewModel.CreateBucketAsync(textBox.Text);
+                    Log4.Info($"Planner 버킷 생성: {textBox.Text}");
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            Serilog.Log.Error(ex, "[MainWindow] PlannerAddBucketButton_Click 실패");
+        }
+    }
+
+    /// <summary>
+    /// 작업 추가 버튼 클릭
+    /// </summary>
+    private async void PlannerAddTaskButton_Click(object sender, RoutedEventArgs e)
+    {
+        try
+        {
+            if (_plannerViewModel?.SelectedPlan == null || _plannerViewModel.Buckets.Count == 0)
+                return;
+
+            var dialog = new ContentDialog
+            {
+                Title = "새 작업",
+                Content = new System.Windows.Controls.TextBox
+                {
+                    Text = "",
+                    Width = 300
+                },
+                PrimaryButtonText = "생성",
+                CloseButtonText = "취소"
+            };
+
+            var result = await dialog.ShowAsync();
+            if (result == ContentDialogResult.Primary)
+            {
+                var textBox = dialog.Content as System.Windows.Controls.TextBox;
+                if (!string.IsNullOrWhiteSpace(textBox?.Text))
+                {
+                    await _plannerViewModel.CreateTaskAsync(textBox.Text);
+                    Log4.Info($"Planner 작업 생성: {textBox.Text}");
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            Serilog.Log.Error(ex, "[MainWindow] PlannerAddTaskButton_Click 실패");
+        }
+    }
+
+    /// <summary>
+    /// 버킷 내 작업 추가 버튼 클릭
+    /// </summary>
+    private async void PlannerBucketAddTask_Click(object sender, RoutedEventArgs e)
+    {
+        try
+        {
+            if (sender is FrameworkElement element && element.Tag is BucketViewModel bucket)
+            {
+                if (_plannerViewModel?.SelectedPlan == null)
+                    return;
+
+                var dialog = new ContentDialog
+                {
+                    Title = $"'{bucket.Name}'에 작업 추가",
+                    Content = new System.Windows.Controls.TextBox
                     {
-                        bucket.Tasks.Insert(0, new TaskItemViewModel
+                        Text = "",
+                        Width = 300
+                    },
+                    PrimaryButtonText = "생성",
+                    CloseButtonText = "취소"
+                };
+
+                var result = await dialog.ShowAsync();
+                if (result == ContentDialogResult.Primary)
+                {
+                    var textBox = dialog.Content as System.Windows.Controls.TextBox;
+                    if (!string.IsNullOrWhiteSpace(textBox?.Text))
+                    {
+                        var plannerService = ((App)Application.Current).GetService<GraphPlannerService>()!;
+                        var task = await plannerService.CreateTaskAsync(_plannerViewModel.SelectedPlan.Id, bucket.Id, textBox.Text);
+                        if (task != null)
                         {
-                            Id = task.Id ?? string.Empty,
-                            Title = task.Title ?? textBox.Text,
-                            BucketId = bucket.Id,
-                            PlanId = _plannerViewModel.SelectedPlan.Id,
-                            ETag = task.AdditionalData?.TryGetValue("@odata.etag", out var etag) == true ? etag?.ToString() : null
-                        });
-                        Log4.Info($"Planner 작업 생성 (버킷 {bucket.Name}): {textBox.Text}");
+                            bucket.Tasks.Insert(0, new TaskItemViewModel
+                            {
+                                Id = task.Id ?? string.Empty,
+                                Title = task.Title ?? textBox.Text,
+                                BucketId = bucket.Id,
+                                PlanId = _plannerViewModel.SelectedPlan.Id,
+                                ETag = task.AdditionalData?.TryGetValue("@odata.etag", out var etag) == true ? etag?.ToString() : null
+                            });
+                            Log4.Info($"Planner 작업 생성 (버킷 {bucket.Name}): {textBox.Text}");
+                        }
                     }
                 }
             }
+        }
+        catch (Exception ex)
+        {
+            Serilog.Log.Error(ex, "[MainWindow] PlannerBucketAddTask_Click 실패");
         }
     }
 
@@ -16271,19 +16978,26 @@ public partial class MainWindow : FluentWindow
     /// </summary>
     private async void PlannerTaskCard_PreviewMouseLeftButtonDown(object sender, MouseButtonEventArgs e)
     {
-        _plannerTaskDragStartPoint = e.GetPosition(null);
-        if (sender is FrameworkElement element && element.Tag is TaskItemViewModel task)
+        try
         {
-            // 더블클릭 감지
-            if (e.ClickCount == 2)
+            _plannerTaskDragStartPoint = e.GetPosition(null);
+            if (sender is FrameworkElement element && element.Tag is TaskItemViewModel task)
             {
-                await ShowTaskEditDialogAsync(task);
-                e.Handled = true;
-                return;
-            }
+                // 더블클릭 감지
+                if (e.ClickCount == 2)
+                {
+                    await ShowTaskEditDialogAsync(task);
+                    e.Handled = true;
+                    return;
+                }
 
-            _plannerDraggedTask = task;
-            _plannerDragSourceBucket = _plannerViewModel?.Buckets.FirstOrDefault(b => b.Tasks.Contains(task));
+                _plannerDraggedTask = task;
+                _plannerDragSourceBucket = _plannerViewModel?.Buckets.FirstOrDefault(b => b.Tasks.Contains(task));
+            }
+        }
+        catch (Exception ex)
+        {
+            Serilog.Log.Error(ex, "[MainWindow] PlannerTaskCard_PreviewMouseLeftButtonDown 실패");
         }
     }
 
@@ -16367,13 +17081,20 @@ public partial class MainWindow : FluentWindow
     /// </summary>
     private async void PlannerView_KeyDown(object sender, KeyEventArgs e)
     {
-        if (e.Key == Key.Delete)
+        try
         {
-            var selectedTask = GetSelectedPlannerTask();
-            if (selectedTask != null)
+            if (e.Key == Key.Delete)
             {
-                await DeletePlannerTaskWithConfirmAsync(selectedTask);
+                var selectedTask = GetSelectedPlannerTask();
+                if (selectedTask != null)
+                {
+                    await DeletePlannerTaskWithConfirmAsync(selectedTask);
+                }
             }
+        }
+        catch (Exception ex)
+        {
+            Serilog.Log.Error(ex, "[MainWindow] PlannerView_KeyDown 실패");
         }
     }
 
@@ -16382,12 +17103,19 @@ public partial class MainWindow : FluentWindow
     /// </summary>
     private async void PlannerTaskContextMenu_Open_Click(object sender, RoutedEventArgs e)
     {
-        if (sender is System.Windows.Controls.MenuItem menuItem && menuItem.Parent is ContextMenu contextMenu)
+        try
         {
-            if (contextMenu.PlacementTarget is Border border && border.Tag is TaskItemViewModel task)
+            if (sender is System.Windows.Controls.MenuItem menuItem && menuItem.Parent is ContextMenu contextMenu)
             {
-                await ShowTaskEditDialogAsync(task);
+                if (contextMenu.PlacementTarget is Border border && border.Tag is TaskItemViewModel task)
+                {
+                    await ShowTaskEditDialogAsync(task);
+                }
             }
+        }
+        catch (Exception ex)
+        {
+            Serilog.Log.Error(ex, "[MainWindow] PlannerTaskContextMenu_Open_Click 실패");
         }
     }
 
@@ -16396,15 +17124,22 @@ public partial class MainWindow : FluentWindow
     /// </summary>
     private async void PlannerTaskContextMenu_Complete_Click(object sender, RoutedEventArgs e)
     {
-        if (sender is System.Windows.Controls.MenuItem menuItem && menuItem.Parent is ContextMenu contextMenu)
+        try
         {
-            if (contextMenu.PlacementTarget is Border border && border.Tag is TaskItemViewModel task)
+            if (sender is System.Windows.Controls.MenuItem menuItem && menuItem.Parent is ContextMenu contextMenu)
             {
-                if (_plannerViewModel != null)
+                if (contextMenu.PlacementTarget is Border border && border.Tag is TaskItemViewModel task)
                 {
-                    await _plannerViewModel.CompleteTaskAsync(task);
+                    if (_plannerViewModel != null)
+                    {
+                        await _plannerViewModel.CompleteTaskAsync(task);
+                    }
                 }
             }
+        }
+        catch (Exception ex)
+        {
+            Serilog.Log.Error(ex, "[MainWindow] PlannerTaskContextMenu_Complete_Click 실패");
         }
     }
 
@@ -16413,12 +17148,19 @@ public partial class MainWindow : FluentWindow
     /// </summary>
     private async void PlannerTaskContextMenu_Delete_Click(object sender, RoutedEventArgs e)
     {
-        if (sender is System.Windows.Controls.MenuItem menuItem && menuItem.Parent is ContextMenu contextMenu)
+        try
         {
-            if (contextMenu.PlacementTarget is Border border && border.Tag is TaskItemViewModel task)
+            if (sender is System.Windows.Controls.MenuItem menuItem && menuItem.Parent is ContextMenu contextMenu)
             {
-                await DeletePlannerTaskWithConfirmAsync(task);
+                if (contextMenu.PlacementTarget is Border border && border.Tag is TaskItemViewModel task)
+                {
+                    await DeletePlannerTaskWithConfirmAsync(task);
+                }
             }
+        }
+        catch (Exception ex)
+        {
+            Serilog.Log.Error(ex, "[MainWindow] PlannerTaskContextMenu_Delete_Click 실패");
         }
     }
 
@@ -16476,33 +17218,40 @@ public partial class MainWindow : FluentWindow
     /// </summary>
     private async void PlannerBucket_Drop(object sender, DragEventArgs e)
     {
-        if (sender is Border border)
+        try
         {
-            border.BorderBrush = null;
-            border.BorderThickness = new Thickness(0);
-        }
-
-        var task = e.Data.GetData("PlannerTask") as TaskItemViewModel;
-        var sourceBucket = e.Data.GetData("SourceBucket") as BucketViewModel;
-        var targetBucket = (sender as FrameworkElement)?.Tag as BucketViewModel;
-
-        if (task != null && targetBucket != null && sourceBucket?.Id != targetBucket.Id)
-        {
-            if (_plannerViewModel != null)
+            if (sender is Border border)
             {
-                var success = await _plannerViewModel.MoveTaskToBucketAsync(task, targetBucket.Id);
-                if (success)
+                border.BorderBrush = null;
+                border.BorderThickness = new Thickness(0);
+            }
+
+            var task = e.Data.GetData("PlannerTask") as TaskItemViewModel;
+            var sourceBucket = e.Data.GetData("SourceBucket") as BucketViewModel;
+            var targetBucket = (sender as FrameworkElement)?.Tag as BucketViewModel;
+
+            if (task != null && targetBucket != null && sourceBucket?.Id != targetBucket.Id)
+            {
+                if (_plannerViewModel != null)
                 {
-                    // UI 스레드에서 컬렉션 업데이트
-                    await Dispatcher.InvokeAsync(() =>
+                    var success = await _plannerViewModel.MoveTaskToBucketAsync(task, targetBucket.Id);
+                    if (success)
                     {
-                        sourceBucket?.Tasks.Remove(task);
-                        task.BucketId = targetBucket.Id;
-                        targetBucket.Tasks.Add(task);
-                    });
-                    Log4.Info($"Planner 작업 이동: {task.Title} -> {targetBucket.Name}");
+                        // UI 스레드에서 컬렉션 업데이트
+                        await Dispatcher.InvokeAsync(() =>
+                        {
+                            sourceBucket?.Tasks.Remove(task);
+                            task.BucketId = targetBucket.Id;
+                            targetBucket.Tasks.Add(task);
+                        });
+                        Log4.Info($"Planner 작업 이동: {task.Title} -> {targetBucket.Name}");
+                    }
                 }
             }
+        }
+        catch (Exception ex)
+        {
+            Serilog.Log.Error(ex, "[MainWindow] PlannerBucket_Drop 실패");
         }
     }
 
@@ -16528,10 +17277,17 @@ public partial class MainWindow : FluentWindow
     /// </summary>
     private async void PlannerMyTasksListView_SelectionChanged(object sender, SelectionChangedEventArgs e)
     {
-        if (PlannerMyTasksListView.SelectedItem is TaskItemViewModel task)
+        try
         {
-            await ShowTaskEditDialogAsync(task);
-            PlannerMyTasksListView.SelectedItem = null;
+            if (PlannerMyTasksListView.SelectedItem is TaskItemViewModel task)
+            {
+                await ShowTaskEditDialogAsync(task);
+                PlannerMyTasksListView.SelectedItem = null;
+            }
+        }
+        catch (Exception ex)
+        {
+            Serilog.Log.Error(ex, "[MainWindow] PlannerMyTasksListView_SelectionChanged 실패");
         }
     }
 
@@ -16540,9 +17296,16 @@ public partial class MainWindow : FluentWindow
     /// </summary>
     private async void PlannerMyTaskCheckBox_Click(object sender, RoutedEventArgs e)
     {
-        if (sender is CheckBox checkBox && checkBox.DataContext is TaskItemViewModel task)
+        try
         {
-            await _plannerViewModel?.ToggleTaskCompleteCommand.ExecuteAsync(task);
+            if (sender is CheckBox checkBox && checkBox.DataContext is TaskItemViewModel task)
+            {
+                await _plannerViewModel?.ToggleTaskCompleteCommand.ExecuteAsync(task);
+            }
+        }
+        catch (Exception ex)
+        {
+            Serilog.Log.Error(ex, "[MainWindow] PlannerMyTaskCheckBox_Click 실패");
         }
     }
 
@@ -16651,11 +17414,18 @@ public partial class MainWindow : FluentWindow
     /// </summary>
     private async void CallsRefreshButton_Click(object sender, RoutedEventArgs e)
     {
-        if (_callsViewModel == null) return;
+        try
+        {
+            if (_callsViewModel == null) return;
 
-        await _callsViewModel.RefreshAsync();
-        UpdateCallsContactsEmptyState();
-        UpdateCallsMyStatus();
+            await _callsViewModel.RefreshAsync();
+            UpdateCallsContactsEmptyState();
+            UpdateCallsMyStatus();
+        }
+        catch (Exception ex)
+        {
+            Serilog.Log.Error(ex, "[MainWindow] CallsRefreshButton_Click 실패");
+        }
     }
 
     /// <summary>
@@ -16703,22 +17473,29 @@ public partial class MainWindow : FluentWindow
     /// </summary>
     private async void CallsSearchBox_KeyDown(object sender, KeyEventArgs e)
     {
-        if (e.Key == Key.Enter && _callsViewModel != null)
+        try
         {
-            _callsViewModel.SearchQuery = CallsSearchBox.Text;
-            await _callsViewModel.SearchUsersAsync();
+            if (e.Key == Key.Enter && _callsViewModel != null)
+            {
+                _callsViewModel.SearchQuery = CallsSearchBox.Text;
+                await _callsViewModel.SearchUsersAsync();
 
-            // 검색 결과가 있으면 검색 결과 패널 표시
-            if (_callsViewModel.SearchResults.Count > 0)
-            {
-                CallsSearchResultsPanel.Visibility = Visibility.Visible;
-                CallsDefaultPanel.Visibility = Visibility.Collapsed;
+                // 검색 결과가 있으면 검색 결과 패널 표시
+                if (_callsViewModel.SearchResults.Count > 0)
+                {
+                    CallsSearchResultsPanel.Visibility = Visibility.Visible;
+                    CallsDefaultPanel.Visibility = Visibility.Collapsed;
+                }
+                else
+                {
+                    CallsSearchResultsPanel.Visibility = Visibility.Collapsed;
+                    CallsDefaultPanel.Visibility = Visibility.Visible;
+                }
             }
-            else
-            {
-                CallsSearchResultsPanel.Visibility = Visibility.Collapsed;
-                CallsDefaultPanel.Visibility = Visibility.Visible;
-            }
+        }
+        catch (Exception ex)
+        {
+            Serilog.Log.Error(ex, "[MainWindow] CallsSearchBox_KeyDown 실패");
         }
     }
 
@@ -20539,9 +21316,16 @@ public partial class MainWindow : FluentWindow
     /// </summary>
     private async void MailPreviewAttachment_Click(object sender, MouseButtonEventArgs e)
     {
-        if (sender is not FrameworkElement element || element.DataContext is not MailPreviewAttachmentInfo info)
-            return;
-        await DownloadAndOpenAttachmentAsync(info);
+        try
+        {
+            if (sender is not FrameworkElement element || element.DataContext is not MailPreviewAttachmentInfo info)
+                return;
+            await DownloadAndOpenAttachmentAsync(info);
+        }
+        catch (Exception ex)
+        {
+            Serilog.Log.Error(ex, "[MainWindow] MailPreviewAttachment_Click 실패");
+        }
     }
 
     /// <summary>
@@ -20549,9 +21333,16 @@ public partial class MainWindow : FluentWindow
     /// </summary>
     private async void MailPreviewAttachment_Open_Click(object sender, RoutedEventArgs e)
     {
-        if (sender is not FrameworkElement element || element.DataContext is not MailPreviewAttachmentInfo info)
-            return;
-        await DownloadAndOpenAttachmentAsync(info);
+        try
+        {
+            if (sender is not FrameworkElement element || element.DataContext is not MailPreviewAttachmentInfo info)
+                return;
+            await DownloadAndOpenAttachmentAsync(info);
+        }
+        catch (Exception ex)
+        {
+            Serilog.Log.Error(ex, "[MainWindow] MailPreviewAttachment_Open_Click 실패");
+        }
     }
 
     /// <summary>
@@ -20559,9 +21350,16 @@ public partial class MainWindow : FluentWindow
     /// </summary>
     private async void MailPreviewAttachment_Download_Click(object sender, RoutedEventArgs e)
     {
-        if (sender is not FrameworkElement element || element.DataContext is not MailPreviewAttachmentInfo info)
-            return;
-        await DownloadAttachmentToFileAsync(info);
+        try
+        {
+            if (sender is not FrameworkElement element || element.DataContext is not MailPreviewAttachmentInfo info)
+                return;
+            await DownloadAttachmentToFileAsync(info);
+        }
+        catch (Exception ex)
+        {
+            Serilog.Log.Error(ex, "[MainWindow] MailPreviewAttachment_Download_Click 실패");
+        }
     }
 
     /// <summary>

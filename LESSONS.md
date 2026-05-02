@@ -974,6 +974,20 @@
   - 코드베이스 전체 완벽 적용은 별도 점진적 마이그레이션 작업으로 분리
 - **Level**: 1 (oralph 수렴 기준 명확화 — hook/스킬 처리 불필요, 프로세스 참조용)
 
+### L-382: 표본 수정 후 체계적 전수조사 필수 — 7차에서 패턴2 170건 잔존 발견 (2026-05-02)
+
+- **문제**: async void 이벤트 핸들러 외부 try-catch 래핑(L-377) 규칙을 1차/5차/6차에서 표본 위주로 수정 → 7차 전수조사에서 170건 잔존 발견
+  - 1차/5차/6차: 발견된 사례만 수정, 전체 grep 검증 누락
+  - 7차: `async void.*Click|TextChanged|SelectionChanged` 등 전체 패턴 grep 후 외부 try-catch 부재 파일 전수 식별 → 20개 파일 170건 일괄 수정
+  - MainWindow.xaml.cs 단독 116건(실측 150건) 거대 파일은 Batch를 분리해서 처리하는 편이 효율적
+- **근본 원인**: "보이는 것만 수정" 방식 — 패턴 규칙이 LESSONS에 반영되어도 코드베이스 전수 적용은 별도 단계 필요
+- **재발방지**:
+  - 패턴 규칙(L-3xx) 신규 등록 시 즉시 전수조사 batch 1회 실행을 권장
+  - 거대 파일(>1000줄, 매치 >50건)은 별도 Batch로 분리 처리 (병렬화 + 회수 용이)
+  - 로거 일괄 지시 금지 — Serilog/NLog/Log4 혼용 환경에서는 파일별 기존 로거 확인 후 적용 (`_log` vs `_logger.Debug` 구분)
+- **연관**: L-377 (외부 try-catch 본 규칙), L-378/L-381 (oralph 자동 반복 검증), L-364 (NLog/Serilog 혼용)
+- **Level**: 1 (프로세스 교훈 — 새 패턴 규칙 등록 시 운영 절차로 참조)
+
 ## 반영 추적 테이블
 
 | 교훈 ID | 교훈 요약 | 반영 대상 | 반영 위치 | 반영일 | 검증 |
@@ -1000,3 +1014,4 @@
 | L-379 | InvokeAsync(async lambda) — inner async 예외 소실, .Task.Unwrap 또는 try-catch 필수 | docs | LESSONS.md + MEMORY.md | 2026-05-02 | ✅ |
 | L-380 | Timer.Elapsed 등 비WPF 이벤트 핸들러도 async lambda try-catch 필수 | docs | LESSONS.md | 2026-05-02 | ✅ |
 | L-381 | oralph 무한 발견 양상 — 수렴 기준 = 런타임 UI 블로킹 0건으로 충분 | docs | LESSONS.md | 2026-05-02 | ✅ |
+| L-382 | 표본 수정 후 체계적 전수조사 필수 — 패턴 규칙 등록 시 전수 batch 권장 | docs | LESSONS.md, HISTORY.md | 2026-05-02 | ✅ |

@@ -58,12 +58,19 @@ namespace mAIx.Views
         /// </summary>
         private async void NavigateToActivitySource(ActivityItemViewModel activity)
         {
-            if (activity == null || _activityViewModel == null) return;
-
-            await _activityViewModel.NavigateToSourceAsync(activity, tabName =>
+            try
             {
-                _ = Dispatcher.InvokeAsync(() => NavigateToTab(tabName));
-            });
+                if (activity == null || _activityViewModel == null) return;
+
+                await _activityViewModel.NavigateToSourceAsync(activity, tabName =>
+                {
+                    _ = Dispatcher.InvokeAsync(() => NavigateToTab(tabName));
+                });
+            }
+            catch (Exception ex)
+            {
+                Log4.Error($"[MainWindow] NavigateToActivitySource 실패: {ex.Message}\n{ex.StackTrace}");
+            }
         }
     }
 }

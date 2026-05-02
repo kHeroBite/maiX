@@ -74,9 +74,16 @@ namespace mAIx.Views
         /// </summary>
         private async void StartTeamsChatFromContact(ContactItemViewModel contact)
         {
-            if (contact == null || _callsViewModel == null) return;
+            try
+            {
+                if (contact == null || _callsViewModel == null) return;
 
-            await _callsViewModel.StartTeamsChatAsync(contact);
+                await _callsViewModel.StartTeamsChatAsync(contact);
+            }
+            catch (Exception ex)
+            {
+                Log4.Error($"[MainWindow] StartTeamsChatFromContact 실패: {ex.Message}\n{ex.StackTrace}");
+            }
         }
     }
 }

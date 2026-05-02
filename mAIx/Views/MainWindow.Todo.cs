@@ -29,38 +29,45 @@ namespace mAIx.Views
         /// </summary>
         private async void ShowTodoView()
         {
-            HideAllViews();
-
-            if (TodoViewBorder != null) TodoViewBorder.Visibility = Visibility.Visible;
-
-            _viewModel.StatusMessage = "할일";
-            Services.Theme.ThemeService.Instance.ApplyFeatureTheme("todo");
-
-            // ViewModel 로드
-            var vm = GetTodoViewModel();
-            if (vm != null)
+            try
             {
-                TodoMainLoadingPanel.Visibility = Visibility.Visible;
-                TodoEmptyPanel.Visibility = Visibility.Collapsed;
+                HideAllViews();
 
-                try
-                {
-                    await vm.LoadDataCommand.ExecuteAsync(null);
+                if (TodoViewBorder != null) TodoViewBorder.Visibility = Visibility.Visible;
 
-                    // UI 업데이트
-                    UpdateTodoListUI(vm);
-                }
-                catch (Exception ex)
+                _viewModel.StatusMessage = "할일";
+                Services.Theme.ThemeService.Instance.ApplyFeatureTheme("todo");
+
+                // ViewModel 로드
+                var vm = GetTodoViewModel();
+                if (vm != null)
                 {
-                    Log4.Error($"[MainWindow.Todo] 데이터 로드 실패: {ex.Message}");
+                    TodoMainLoadingPanel.Visibility = Visibility.Visible;
+                    TodoEmptyPanel.Visibility = Visibility.Collapsed;
+
+                    try
+                    {
+                        await vm.LoadDataCommand.ExecuteAsync(null);
+
+                        // UI 업데이트
+                        UpdateTodoListUI(vm);
+                    }
+                    catch (Exception ex)
+                    {
+                        Log4.Error($"[MainWindow.Todo] 데이터 로드 실패: {ex.Message}");
+                    }
+                    finally
+                    {
+                        TodoMainLoadingPanel.Visibility = Visibility.Collapsed;
+                    }
                 }
-                finally
-                {
-                    TodoMainLoadingPanel.Visibility = Visibility.Collapsed;
-                }
+
+                Log4.Info("ToDo 뷰 표시 완료");
             }
-
-            Log4.Info("ToDo 뷰 표시 완료");
+            catch (Exception ex)
+            {
+                Log4.Error($"[MainWindow] ShowTodoView 실패: {ex.Message}\n{ex.StackTrace}");
+            }
         }
 
         /// <summary>
@@ -144,14 +151,21 @@ namespace mAIx.Views
         /// </summary>
         private async void TodoAddTask_Click(object sender, RoutedEventArgs e)
         {
-            var vm = GetTodoViewModel();
-            if (vm == null || TodoNewTaskInput == null) return;
+            try
+            {
+                var vm = GetTodoViewModel();
+                if (vm == null || TodoNewTaskInput == null) return;
 
-            vm.NewTaskTitle = TodoNewTaskInput.Text;
-            await vm.AddTaskCommand.ExecuteAsync(null);
+                vm.NewTaskTitle = TodoNewTaskInput.Text;
+                await vm.AddTaskCommand.ExecuteAsync(null);
 
-            TodoNewTaskInput.Text = "";
-            UpdateTodoListUI(vm);
+                TodoNewTaskInput.Text = "";
+                UpdateTodoListUI(vm);
+            }
+            catch (Exception ex)
+            {
+                Log4.Error($"[MainWindow] TodoAddTask_Click 실패: {ex.Message}\n{ex.StackTrace}");
+            }
         }
 
         /// <summary>
@@ -159,16 +173,23 @@ namespace mAIx.Views
         /// </summary>
         private async void TodoNewTaskInput_KeyDown(object sender, KeyEventArgs e)
         {
-            if (e.Key != Key.Enter) return;
+            try
+            {
+                if (e.Key != Key.Enter) return;
 
-            var vm = GetTodoViewModel();
-            if (vm == null || TodoNewTaskInput == null) return;
+                var vm = GetTodoViewModel();
+                if (vm == null || TodoNewTaskInput == null) return;
 
-            vm.NewTaskTitle = TodoNewTaskInput.Text;
-            await vm.AddTaskCommand.ExecuteAsync(null);
+                vm.NewTaskTitle = TodoNewTaskInput.Text;
+                await vm.AddTaskCommand.ExecuteAsync(null);
 
-            TodoNewTaskInput.Text = "";
-            UpdateTodoListUI(vm);
+                TodoNewTaskInput.Text = "";
+                UpdateTodoListUI(vm);
+            }
+            catch (Exception ex)
+            {
+                Log4.Error($"[MainWindow] TodoNewTaskInput_KeyDown 실패: {ex.Message}\n{ex.StackTrace}");
+            }
         }
 
         /// <summary>
@@ -187,13 +208,20 @@ namespace mAIx.Views
 
         private async void TodoMainItemCheckBox_Changed(object sender, RoutedEventArgs e)
         {
-            if (sender is CheckBox checkBox && checkBox.DataContext is TodoTaskItem task)
+            try
             {
-                var vm = GetTodoViewModel();
-                if (vm == null) return;
+                if (sender is CheckBox checkBox && checkBox.DataContext is TodoTaskItem task)
+                {
+                    var vm = GetTodoViewModel();
+                    if (vm == null) return;
 
-                await vm.ToggleTaskCompleteCommand.ExecuteAsync(task);
-                UpdateTodoListUI(vm);
+                    await vm.ToggleTaskCompleteCommand.ExecuteAsync(task);
+                    UpdateTodoListUI(vm);
+                }
+            }
+            catch (Exception ex)
+            {
+                Log4.Error($"[MainWindow] TodoMainItemCheckBox_Changed 실패: {ex.Message}\n{ex.StackTrace}");
             }
         }
 
@@ -215,13 +243,20 @@ namespace mAIx.Views
         /// </summary>
         private async void TodoToggleImportant_Click(object sender, RoutedEventArgs e)
         {
-            if (sender is FrameworkElement fe && fe.DataContext is TodoTaskItem task)
+            try
             {
-                var vm = GetTodoViewModel();
-                if (vm == null) return;
+                if (sender is FrameworkElement fe && fe.DataContext is TodoTaskItem task)
+                {
+                    var vm = GetTodoViewModel();
+                    if (vm == null) return;
 
-                await vm.ToggleImportantCommand.ExecuteAsync(task);
-                UpdateTodoListUI(vm);
+                    await vm.ToggleImportantCommand.ExecuteAsync(task);
+                    UpdateTodoListUI(vm);
+                }
+            }
+            catch (Exception ex)
+            {
+                Log4.Error($"[MainWindow] TodoToggleImportant_Click 실패: {ex.Message}\n{ex.StackTrace}");
             }
         }
 
@@ -230,23 +265,30 @@ namespace mAIx.Views
         /// </summary>
         private async void TodoDeleteTask_Click(object sender, RoutedEventArgs e)
         {
-            if (sender is FrameworkElement fe && fe.DataContext is TodoTaskItem task)
+            try
             {
-                var vm = GetTodoViewModel();
-                if (vm == null) return;
-
-                // 삭제 확인
-                var result = System.Windows.MessageBox.Show(
-                    $"'{task.Title}' 작업을 삭제하시겠습니까?",
-                    "작업 삭제",
-                    MessageBoxButton.YesNo,
-                    MessageBoxImage.Question);
-
-                if (result == MessageBoxResult.Yes)
+                if (sender is FrameworkElement fe && fe.DataContext is TodoTaskItem task)
                 {
-                    await vm.DeleteTaskCommand.ExecuteAsync(task);
-                    UpdateTodoListUI(vm);
+                    var vm = GetTodoViewModel();
+                    if (vm == null) return;
+
+                    // 삭제 확인
+                    var result = System.Windows.MessageBox.Show(
+                        $"'{task.Title}' 작업을 삭제하시겠습니까?",
+                        "작업 삭제",
+                        MessageBoxButton.YesNo,
+                        MessageBoxImage.Question);
+
+                    if (result == MessageBoxResult.Yes)
+                    {
+                        await vm.DeleteTaskCommand.ExecuteAsync(task);
+                        UpdateTodoListUI(vm);
+                    }
                 }
+            }
+            catch (Exception ex)
+            {
+                Log4.Error($"[MainWindow] TodoDeleteTask_Click 실패: {ex.Message}\n{ex.StackTrace}");
             }
         }
 
@@ -255,13 +297,20 @@ namespace mAIx.Views
         /// </summary>
         private async void TodoRefresh_Click(object sender, RoutedEventArgs e)
         {
-            var vm = GetTodoViewModel();
-            if (vm == null) return;
+            try
+            {
+                var vm = GetTodoViewModel();
+                if (vm == null) return;
 
-            TodoMainLoadingPanel.Visibility = Visibility.Visible;
-            await vm.RefreshCommand.ExecuteAsync(null);
-            UpdateTodoListUI(vm);
-            TodoMainLoadingPanel.Visibility = Visibility.Collapsed;
+                TodoMainLoadingPanel.Visibility = Visibility.Visible;
+                await vm.RefreshCommand.ExecuteAsync(null);
+                UpdateTodoListUI(vm);
+                TodoMainLoadingPanel.Visibility = Visibility.Collapsed;
+            }
+            catch (Exception ex)
+            {
+                Log4.Error($"[MainWindow] TodoRefresh_Click 실패: {ex.Message}\n{ex.StackTrace}");
+            }
         }
 
         /// <summary>
@@ -269,25 +318,32 @@ namespace mAIx.Views
         /// </summary>
         private async void TodoSyncFlagged_Click(object sender, RoutedEventArgs e)
         {
-            var vm = GetTodoViewModel();
-            if (vm == null) return;
-
             try
             {
-                var todoService = ((App)Application.Current).GetService<GraphToDoService>();
-                if (todoService != null)
+                var vm = GetTodoViewModel();
+                if (vm == null) return;
+
+                try
                 {
-                    TodoMainLoadingPanel.Visibility = Visibility.Visible;
-                    await todoService.SyncFlaggedEmailsAsync();
-                    await vm.RefreshCommand.ExecuteAsync(null);
-                    UpdateTodoListUI(vm);
+                    var todoService = ((App)Application.Current).GetService<GraphToDoService>();
+                    if (todoService != null)
+                    {
+                        TodoMainLoadingPanel.Visibility = Visibility.Visible;
+                        await todoService.SyncFlaggedEmailsAsync();
+                        await vm.RefreshCommand.ExecuteAsync(null);
+                        UpdateTodoListUI(vm);
+                        TodoMainLoadingPanel.Visibility = Visibility.Collapsed;
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Log4.Error($"[MainWindow.Todo] 플래그 이메일 동기화 실패: {ex.Message}");
                     TodoMainLoadingPanel.Visibility = Visibility.Collapsed;
                 }
             }
             catch (Exception ex)
             {
-                Log4.Error($"[MainWindow.Todo] 플래그 이메일 동기화 실패: {ex.Message}");
-                TodoMainLoadingPanel.Visibility = Visibility.Collapsed;
+                Log4.Error($"[MainWindow] TodoSyncFlagged_Click 실패: {ex.Message}\n{ex.StackTrace}");
             }
         }
     }

@@ -166,6 +166,8 @@ public partial class ApiSettingsWindow : FluentWindow
 
     private async void ClaudeTestButton_Click(object sender, RoutedEventArgs e)
     {
+      try
+      {
         var apiKey = ClaudeApiKeyBox.Password;
         if (string.IsNullOrWhiteSpace(apiKey))
         {
@@ -235,6 +237,11 @@ public partial class ApiSettingsWindow : FluentWindow
             ClaudeTestButton.IsEnabled = true;
             UpdateSaveButtonState();
         }
+      }
+      catch (Exception ex)
+      {
+          Log4.Error($"[ApiSettingsWindow] ClaudeTestButton_Click 실패: {ex.Message}\n{ex.StackTrace}");
+      }
     }
 
     #endregion
@@ -243,6 +250,8 @@ public partial class ApiSettingsWindow : FluentWindow
 
     private async void OpenAITestButton_Click(object sender, RoutedEventArgs e)
     {
+      try
+      {
         var apiKey = OpenAIApiKeyBox.Password;
         if (string.IsNullOrWhiteSpace(apiKey))
         {
@@ -319,6 +328,11 @@ public partial class ApiSettingsWindow : FluentWindow
             OpenAITestButton.IsEnabled = true;
             UpdateSaveButtonState();
         }
+      }
+      catch (Exception ex)
+      {
+          Log4.Error($"[ApiSettingsWindow] OpenAITestButton_Click 실패: {ex.Message}\n{ex.StackTrace}");
+      }
     }
 
     #endregion
@@ -327,6 +341,8 @@ public partial class ApiSettingsWindow : FluentWindow
 
     private async void GeminiTestButton_Click(object sender, RoutedEventArgs e)
     {
+      try
+      {
         var apiKey = GeminiApiKeyBox.Password;
         if (string.IsNullOrWhiteSpace(apiKey))
         {
@@ -406,6 +422,11 @@ public partial class ApiSettingsWindow : FluentWindow
             GeminiTestButton.IsEnabled = true;
             UpdateSaveButtonState();
         }
+      }
+      catch (Exception ex)
+      {
+          Log4.Error($"[ApiSettingsWindow] GeminiTestButton_Click 실패: {ex.Message}\n{ex.StackTrace}");
+      }
     }
 
     #endregion
@@ -414,6 +435,8 @@ public partial class ApiSettingsWindow : FluentWindow
 
     private async void OllamaTestButton_Click(object sender, RoutedEventArgs e)
     {
+      try
+      {
         OllamaTestButton.IsEnabled = false;
         SetStatus(OllamaStatusText, "🔄 테스트 중...", null);
 
@@ -477,6 +500,11 @@ public partial class ApiSettingsWindow : FluentWindow
             OllamaTestButton.IsEnabled = true;
             UpdateSaveButtonState();
         }
+      }
+      catch (Exception ex)
+      {
+          Log4.Error($"[ApiSettingsWindow] OllamaTestButton_Click 실패: {ex.Message}\n{ex.StackTrace}");
+      }
     }
 
     #endregion
@@ -485,6 +513,8 @@ public partial class ApiSettingsWindow : FluentWindow
 
     private async void LMStudioTestButton_Click(object sender, RoutedEventArgs e)
     {
+      try
+      {
         LMStudioTestButton.IsEnabled = false;
         SetStatus(LMStudioStatusText, "🔄 테스트 중...", null);
 
@@ -548,6 +578,11 @@ public partial class ApiSettingsWindow : FluentWindow
             LMStudioTestButton.IsEnabled = true;
             UpdateSaveButtonState();
         }
+      }
+      catch (Exception ex)
+      {
+          Log4.Error($"[ApiSettingsWindow] LMStudioTestButton_Click 실패: {ex.Message}\n{ex.StackTrace}");
+      }
     }
 
     #endregion

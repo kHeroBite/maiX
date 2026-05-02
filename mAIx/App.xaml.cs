@@ -431,6 +431,8 @@ public partial class App : Application
     /// </summary>
     protected override async void OnStartup(StartupEventArgs e)
     {
+        try
+        {
         // 전역 예외 핸들러 등록
         AppDomain.CurrentDomain.UnhandledException += (s, args) =>
         {
@@ -632,6 +634,11 @@ public partial class App : Application
 
         Log4.Debug("OnStartup 완료");
         base.OnStartup(e);
+        }
+        catch (Exception ex)
+        {
+            Log4.Error($"[App] OnStartup 실패: {ex.Message}\n{ex.StackTrace}");
+        }
     }
 
     /// <summary>
@@ -639,6 +646,8 @@ public partial class App : Application
     /// </summary>
     protected override async void OnExit(ExitEventArgs e)
     {
+        try
+        {
         Log4.Info("mAIx 애플리케이션 종료");
         Log.Information("mAIx 애플리케이션 종료");
 
@@ -659,5 +668,10 @@ public partial class App : Application
         Log.CloseAndFlush();
 
         base.OnExit(e);
+        }
+        catch (Exception ex)
+        {
+            Log4.Error($"[App] OnExit 실패: {ex.Message}\n{ex.StackTrace}");
+        }
     }
 }

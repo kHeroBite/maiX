@@ -634,6 +634,8 @@ public partial class EventEditDialog : FluentWindow
     /// </summary>
     private async void SaveButton_Click(object sender, RoutedEventArgs e)
     {
+        try
+        {
         // 유효성 검사
         if (string.IsNullOrWhiteSpace(SubjectTextBox.Text))
         {
@@ -766,6 +768,11 @@ public partial class EventEditDialog : FluentWindow
         {
             SaveButton.IsEnabled = true;
         }
+        }
+        catch (Exception exOuter)
+        {
+            Log4.Error($"[EventEditDialog] SaveButton_Click 실패: {exOuter.Message}\n{exOuter.StackTrace}");
+        }
     }
 
     /// <summary>
@@ -773,6 +780,8 @@ public partial class EventEditDialog : FluentWindow
     /// </summary>
     private async void DeleteButton_Click(object sender, RoutedEventArgs e)
     {
+        try
+        {
         if (_existingEvent?.Id == null) return;
 
         var result = System.Windows.MessageBox.Show(
@@ -819,6 +828,11 @@ public partial class EventEditDialog : FluentWindow
         finally
         {
             DeleteButton.IsEnabled = true;
+        }
+        }
+        catch (Exception exOuter)
+        {
+            Log4.Error($"[EventEditDialog] DeleteButton_Click 실패: {exOuter.Message}\n{exOuter.StackTrace}");
         }
     }
 
@@ -897,6 +911,8 @@ public partial class EventEditDialog : FluentWindow
     /// </summary>
     private async void AttendeesTextBox_TextChanged(object sender, TextChangedEventArgs e)
     {
+        try
+        {
         if (_contactSearchService == null) return;
 
         // 현재 입력 중인 이메일/이름 추출 (쉼표로 구분된 마지막 항목)
@@ -958,6 +974,11 @@ public partial class EventEditDialog : FluentWindow
         {
             Log4.Error($"참석자 검색 실패: {ex.Message}");
             CloseAttendeesPopup();
+        }
+        }
+        catch (Exception exOuter)
+        {
+            Log4.Error($"[EventEditDialog] AttendeesTextBox_TextChanged 실패: {exOuter.Message}\n{exOuter.StackTrace}");
         }
     }
 

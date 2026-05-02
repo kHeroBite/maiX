@@ -73,16 +73,30 @@ public partial class ComposeWindow : FluentWindow
     /// </summary>
     private async void ComposeWindow_KeyDown(object sender, KeyEventArgs e)
     {
-        if (e.Key == Key.Escape)
+        try
         {
-            e.Handled = true;
-            await HandleCloseRequestAsync();
+            if (e.Key == Key.Escape)
+            {
+                e.Handled = true;
+                await HandleCloseRequestAsync();
+            }
+        }
+        catch (Exception ex)
+        {
+            Log4.Error($"[ComposeWindow] ComposeWindow_KeyDown 실패: {ex.Message}\n{ex.StackTrace}");
         }
     }
 
     private async void ComposeWindow_Loaded(object sender, RoutedEventArgs e)
     {
-        await InitializeWebView2Async();
+        try
+        {
+            await InitializeWebView2Async();
+        }
+        catch (Exception ex)
+        {
+            Log4.Error($"[ComposeWindow] ComposeWindow_Loaded 실패: {ex.Message}\n{ex.StackTrace}");
+        }
     }
 
     /// <summary>
@@ -257,31 +271,38 @@ public partial class ComposeWindow : FluentWindow
     /// </summary>
     private async void EditorWebView_Drop(object sender, System.Windows.DragEventArgs e)
     {
-        Log4.Debug2("[Compose] WPF PreviewDrop 발동됨");
-        if (!_editorReady) return;
-
-        // 메일 작성: 비이미지 파일은 첨부파일로 추가, 이미지는 에디터에 삽입
-        if (e.Data.GetDataPresent(System.Windows.DataFormats.FileDrop))
+        try
         {
-            var files = e.Data.GetData(System.Windows.DataFormats.FileDrop) as string[];
-            if (files != null)
+            Log4.Debug2("[Compose] WPF PreviewDrop 발동됨");
+            if (!_editorReady) return;
+
+            // 메일 작성: 비이미지 파일은 첨부파일로 추가, 이미지는 에디터에 삽입
+            if (e.Data.GetDataPresent(System.Windows.DataFormats.FileDrop))
             {
-                foreach (var filePath in files)
+                var files = e.Data.GetData(System.Windows.DataFormats.FileDrop) as string[];
+                if (files != null)
                 {
-                    if (!System.IO.File.Exists(filePath)) continue;
-                    if (Services.Editor.TinyMCEEditorService.IsImageFile(filePath))
+                    foreach (var filePath in files)
                     {
-                        // 이미지 → 에디터에 인라인 삽입
-                        await Services.Editor.TinyMCEEditorService.InsertFileToEditorAsync(EditorWebView, filePath);
+                        if (!System.IO.File.Exists(filePath)) continue;
+                        if (Services.Editor.TinyMCEEditorService.IsImageFile(filePath))
+                        {
+                            // 이미지 → 에디터에 인라인 삽입
+                            await Services.Editor.TinyMCEEditorService.InsertFileToEditorAsync(EditorWebView, filePath);
+                        }
+                        else
+                        {
+                            // 비이미지 → 첨부파일로 추가
+                            _viewModel.AddAttachment(filePath);
+                        }
                     }
-                    else
-                    {
-                        // 비이미지 → 첨부파일로 추가
-                        _viewModel.AddAttachment(filePath);
-                    }
+                    e.Handled = true;
                 }
-                e.Handled = true;
             }
+        }
+        catch (Exception ex)
+        {
+            Log4.Error($"[ComposeWindow] EditorWebView_Drop 실패: {ex.Message}\n{ex.StackTrace}");
         }
     }
 
@@ -380,7 +401,14 @@ public partial class ComposeWindow : FluentWindow
     /// </summary>
     private async void CancelButton_Click(object sender, RoutedEventArgs e)
     {
-        await HandleCloseRequestAsync();
+        try
+        {
+            await HandleCloseRequestAsync();
+        }
+        catch (Exception ex)
+        {
+            Log4.Error($"[ComposeWindow] CancelButton_Click 실패: {ex.Message}\n{ex.StackTrace}");
+        }
     }
 
     /// <summary>
@@ -388,109 +416,116 @@ public partial class ComposeWindow : FluentWindow
     /// </summary>
     private async void SendButton_Click(object sender, RoutedEventArgs e)
     {
-        // 유효성 검사
-        if (string.IsNullOrWhiteSpace(_viewModel.To))
-        {
-            System.Windows.MessageBox.Show("받는 사람을 입력하세요.", "알림",
-                System.Windows.MessageBoxButton.OK, System.Windows.MessageBoxImage.Warning);
-            ToTextBox.Focus();
-            return;
-        }
-
-        if (string.IsNullOrWhiteSpace(_viewModel.Subject))
-        {
-            var result = System.Windows.MessageBox.Show("제목이 비어있습니다. 계속 보내시겠습니까?", "확인",
-                System.Windows.MessageBoxButton.YesNo, System.Windows.MessageBoxImage.Question);
-            if (result != System.Windows.MessageBoxResult.Yes) return;
-        }
-
-        // 에디터에서 본문 가져오기
-        var body = await GetEditorContentAsync();
-        _viewModel.Body = body;
-
-        // 카운트다운 오버레이 표시
-        _viewModel.IsSending = true;
-        SendCountdownOverlay.Visibility = Visibility.Visible;
-        _countdownSeconds = 5;
-        CountdownProgressBar.Value = 5;
-        CountdownText.Text = $"{_countdownSeconds}초 후 발송됩니다";
-
-        // CancellationTokenSource 초기화
-        _viewModel.SendCts?.Cancel(); // 이전 CTS 취소
-        var cts = new System.Threading.CancellationTokenSource();
-        _viewModel.SendCts = cts;
-
-        // 카운트다운 타이머
-        _countdownTimer?.Stop();
-        _countdownTimer = new System.Windows.Threading.DispatcherTimer
-        {
-            Interval = TimeSpan.FromSeconds(1)
-        };
-        _countdownTimer.Tick += (s, args) =>
-        {
-            _countdownSeconds--;
-            CountdownProgressBar.Value = _countdownSeconds;
-            CountdownText.Text = _countdownSeconds > 0 ? $"{_countdownSeconds}초 후 발송됩니다" : "발송 중...";
-            if (_countdownSeconds <= 0)
-                _countdownTimer.Stop();
-        };
-        _countdownTimer.Start();
-
         try
         {
-            // 5초 대기 (취소 가능)
-            await Task.Delay(5000, cts.Token);
-
-            // 카운트다운 완료 — 실제 발송
-            _countdownTimer?.Stop();
-            CountdownText.Text = "발송 중...";
-
-            // 팔로업 날짜 기록 (발송 성공 후 SentItems 동기화 시 적용 대기)
-            var followUpDays = GetFollowUpDays();
-            if (followUpDays > 0)
+            // 유효성 검사
+            if (string.IsNullOrWhiteSpace(_viewModel.To))
             {
-                _pendingFollowUpDays = followUpDays;
-                Log4.Debug2($"[ComposeWindow] 팔로업 예약: +{followUpDays}일");
+                System.Windows.MessageBox.Show("받는 사람을 입력하세요.", "알림",
+                    System.Windows.MessageBoxButton.OK, System.Windows.MessageBoxImage.Warning);
+                ToTextBox.Focus();
+                return;
             }
 
-            var success = await _viewModel.SendMailAsync();
-
-            if (success)
+            if (string.IsNullOrWhiteSpace(_viewModel.Subject))
             {
-                Log4.Info($"메일 발송 완료: {_viewModel.Subject}");
-                _mailSent = true;
+                var result = System.Windows.MessageBox.Show("제목이 비어있습니다. 계속 보내시겠습니까?", "확인",
+                    System.Windows.MessageBoxButton.YesNo, System.Windows.MessageBoxImage.Question);
+                if (result != System.Windows.MessageBoxResult.Yes) return;
+            }
 
-                // 팔로업 날짜 저장 (발송 성공 시)
-                if (_pendingFollowUpDays > 0)
+            // 에디터에서 본문 가져오기
+            var body = await GetEditorContentAsync();
+            _viewModel.Body = body;
+
+            // 카운트다운 오버레이 표시
+            _viewModel.IsSending = true;
+            SendCountdownOverlay.Visibility = Visibility.Visible;
+            _countdownSeconds = 5;
+            CountdownProgressBar.Value = 5;
+            CountdownText.Text = $"{_countdownSeconds}초 후 발송됩니다";
+
+            // CancellationTokenSource 초기화
+            _viewModel.SendCts?.Cancel(); // 이전 CTS 취소
+            var cts = new System.Threading.CancellationTokenSource();
+            _viewModel.SendCts = cts;
+
+            // 카운트다운 타이머
+            _countdownTimer?.Stop();
+            _countdownTimer = new System.Windows.Threading.DispatcherTimer
+            {
+                Interval = TimeSpan.FromSeconds(1)
+            };
+            _countdownTimer.Tick += (s, args) =>
+            {
+                _countdownSeconds--;
+                CountdownProgressBar.Value = _countdownSeconds;
+                CountdownText.Text = _countdownSeconds > 0 ? $"{_countdownSeconds}초 후 발송됩니다" : "발송 중...";
+                if (_countdownSeconds <= 0)
+                    _countdownTimer.Stop();
+            };
+            _countdownTimer.Start();
+
+            try
+            {
+                // 5초 대기 (취소 가능)
+                await Task.Delay(5000, cts.Token);
+
+                // 카운트다운 완료 — 실제 발송
+                _countdownTimer?.Stop();
+                CountdownText.Text = "발송 중...";
+
+                // 팔로업 날짜 기록 (발송 성공 후 SentItems 동기화 시 적용 대기)
+                var followUpDays = GetFollowUpDays();
+                if (followUpDays > 0)
                 {
-                    var followUpDate = DateTime.UtcNow.AddDays(_pendingFollowUpDays);
-                    Log4.Info($"[ComposeWindow] 팔로업 등록: {followUpDate:yyyy-MM-dd} (+{_pendingFollowUpDays}일) — '{_viewModel.Subject}'");
-                    _ = SaveFollowUpAsync(_viewModel.Subject, _viewModel.To, followUpDate);
+                    _pendingFollowUpDays = followUpDays;
+                    Log4.Debug2($"[ComposeWindow] 팔로업 예약: +{followUpDays}일");
                 }
 
-                _closingConfirmed = true;
-                DialogResult = true;
-                Close();
+                var success = await _viewModel.SendMailAsync();
+
+                if (success)
+                {
+                    Log4.Info($"메일 발송 완료: {_viewModel.Subject}");
+                    _mailSent = true;
+
+                    // 팔로업 날짜 저장 (발송 성공 시)
+                    if (_pendingFollowUpDays > 0)
+                    {
+                        var followUpDate = DateTime.UtcNow.AddDays(_pendingFollowUpDays);
+                        Log4.Info($"[ComposeWindow] 팔로업 등록: {followUpDate:yyyy-MM-dd} (+{_pendingFollowUpDays}일) — '{_viewModel.Subject}'");
+                        _ = SaveFollowUpAsync(_viewModel.Subject, _viewModel.To, followUpDate);
+                    }
+
+                    _closingConfirmed = true;
+                    DialogResult = true;
+                    Close();
+                }
+                else
+                {
+                    System.Windows.MessageBox.Show("메일 발송에 실패했습니다.", "오류",
+                        System.Windows.MessageBoxButton.OK, System.Windows.MessageBoxImage.Error);
+                    HideCountdownOverlay();
+                }
             }
-            else
+            catch (System.Threading.Tasks.TaskCanceledException)
             {
-                System.Windows.MessageBox.Show("메일 발송에 실패했습니다.", "오류",
+                // 취소됨 — 오버레이 숨기기
+                Log4.Info("메일 발송이 취소되었습니다.");
+                HideCountdownOverlay();
+            }
+            catch (Exception ex)
+            {
+                Log4.Error($"메일 발송 실패: {ex.Message}");
+                System.Windows.MessageBox.Show($"메일 발송 실패: {ex.Message}", "오류",
                     System.Windows.MessageBoxButton.OK, System.Windows.MessageBoxImage.Error);
                 HideCountdownOverlay();
             }
         }
-        catch (System.Threading.Tasks.TaskCanceledException)
-        {
-            // 취소됨 — 오버레이 숨기기
-            Log4.Info("메일 발송이 취소되었습니다.");
-            HideCountdownOverlay();
-        }
         catch (Exception ex)
         {
-            Log4.Error($"메일 발송 실패: {ex.Message}");
-            System.Windows.MessageBox.Show($"메일 발송 실패: {ex.Message}", "오류",
-                System.Windows.MessageBoxButton.OK, System.Windows.MessageBoxImage.Error);
-            HideCountdownOverlay();
+            Log4.Error($"[ComposeWindow] SendButton_Click 실패: {ex.Message}\n{ex.StackTrace}");
         }
     }
 
@@ -917,55 +952,62 @@ public partial class ComposeWindow : FluentWindow
     /// </summary>
     private async void EmailTextBox_TextChanged(object sender, TextChangedEventArgs e)
     {
-        var textBox = sender as Wpf.Ui.Controls.TextBox;
-        if (textBox == null) return;
-
-        // 현재 입력 중인 텍스트 추출 (마지막 구분자 이후)
-        var text = textBox.Text ?? "";
-        var lastSeparator = Math.Max(text.LastIndexOf(';'), text.LastIndexOf(','));
-        var currentInput = text.Substring(lastSeparator + 1).Trim();
-
-        // 2자 미만이거나 이미 완성된 이메일이면 팝업 닫기
-        if (currentInput.Length < 2 || currentInput.Contains('@') || currentInput.Contains('<'))
-        {
-            ClosePopup();
-            return;
-        }
-
-        // 해당 TextBox에 맞는 Popup과 ListBox 설정
-        SetCurrentControls(textBox);
-
-        // 이전 검색 취소
-        _searchCts?.Cancel();
-        _searchCts = new CancellationTokenSource();
-
         try
         {
-            // 디바운싱 (300ms 대기)
-            await Task.Delay(300, _searchCts.Token);
+            var textBox = sender as Wpf.Ui.Controls.TextBox;
+            if (textBox == null) return;
 
-            // 연락처 검색
-            var suggestions = await SearchContactsAsync(currentInput);
+            // 현재 입력 중인 텍스트 추출 (마지막 구분자 이후)
+            var text = textBox.Text ?? "";
+            var lastSeparator = Math.Max(text.LastIndexOf(';'), text.LastIndexOf(','));
+            var currentInput = text.Substring(lastSeparator + 1).Trim();
 
-            if (_searchCts.Token.IsCancellationRequested)
-                return;
-
-            if (suggestions.Count == 0)
+            // 2자 미만이거나 이미 완성된 이메일이면 팝업 닫기
+            if (currentInput.Length < 2 || currentInput.Contains('@') || currentInput.Contains('<'))
             {
                 ClosePopup();
                 return;
             }
 
-            // Popup 표시
-            ShowSuggestionPopup(suggestions);
-        }
-        catch (TaskCanceledException)
-        {
-            // 취소됨 - 정상
+            // 해당 TextBox에 맞는 Popup과 ListBox 설정
+            SetCurrentControls(textBox);
+
+            // 이전 검색 취소
+            _searchCts?.Cancel();
+            _searchCts = new CancellationTokenSource();
+
+            try
+            {
+                // 디바운싱 (300ms 대기)
+                await Task.Delay(300, _searchCts.Token);
+
+                // 연락처 검색
+                var suggestions = await SearchContactsAsync(currentInput);
+
+                if (_searchCts.Token.IsCancellationRequested)
+                    return;
+
+                if (suggestions.Count == 0)
+                {
+                    ClosePopup();
+                    return;
+                }
+
+                // Popup 표시
+                ShowSuggestionPopup(suggestions);
+            }
+            catch (TaskCanceledException)
+            {
+                // 취소됨 - 정상
+            }
+            catch (Exception ex)
+            {
+                Log4.Warn($"자동완성 검색 실패: {ex.Message}");
+            }
         }
         catch (Exception ex)
         {
-            Log4.Warn($"자동완성 검색 실패: {ex.Message}");
+            Log4.Error($"[ComposeWindow] EmailTextBox_TextChanged 실패: {ex.Message}\n{ex.StackTrace}");
         }
     }
 
@@ -1200,25 +1242,32 @@ public partial class ComposeWindow : FluentWindow
     /// </summary>
     private async void ShowSuggestionPopup(List<ContactSuggestion> suggestions)
     {
-        if (_currentPopup == null || _currentListBox == null) return;
-
-        _suggestions = suggestions;
-        _currentListBox.ItemsSource = suggestions;
-        _currentListBox.SelectedIndex = 0;
-
-        _currentPopup.IsOpen = true;
-
-        // 비동기 프로필 사진 로딩 (팝업 표시 후 UI 차단 없이 로드)
-        if (_contactSearchService != null)
+        try
         {
-            try
+            if (_currentPopup == null || _currentListBox == null) return;
+
+            _suggestions = suggestions;
+            _currentListBox.ItemsSource = suggestions;
+            _currentListBox.SelectedIndex = 0;
+
+            _currentPopup.IsOpen = true;
+
+            // 비동기 프로필 사진 로딩 (팝업 표시 후 UI 차단 없이 로드)
+            if (_contactSearchService != null)
             {
-                await _contactSearchService.EnrichWithPhotosAsync(suggestions);
+                try
+                {
+                    await _contactSearchService.EnrichWithPhotosAsync(suggestions);
+                }
+                catch (Exception ex)
+                {
+                    Log4.Debug($"프로필 사진 로딩 실패 (무시): {ex.Message}");
+                }
             }
-            catch (Exception ex)
-            {
-                Log4.Debug($"프로필 사진 로딩 실패 (무시): {ex.Message}");
-            }
+        }
+        catch (Exception ex)
+        {
+            Log4.Error($"[ComposeWindow] ShowSuggestionPopup 실패: {ex.Message}\n{ex.StackTrace}");
         }
     }
 

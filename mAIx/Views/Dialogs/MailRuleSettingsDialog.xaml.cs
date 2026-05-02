@@ -178,86 +178,100 @@ public partial class MailRuleSettingsDialog : FluentWindow
 
     private async void DeleteButton_Click(object sender, RoutedEventArgs e)
     {
-        if (_selectedRule == null)
-        {
-            WpfMessageBox.Show("삭제할 규칙을 선택해주세요.", "알림",
-                WpfMessageBoxButton.OK, WpfMessageBoxImage.Information);
-            return;
-        }
-
-        var result = WpfMessageBox.Show(
-            $"'{_selectedRule.Name}' 규칙을 삭제하시겠습니까?",
-            "규칙 삭제",
-            WpfMessageBoxButton.YesNo,
-            WpfMessageBoxImage.Question);
-
-        if (result != WpfMessageBoxResult.Yes) return;
-
         try
         {
-            await _mailRuleService.DeleteRuleAsync(_selectedRule.Id);
-            Log4.Info($"[MailRuleSettingsDialog] 규칙 삭제: {_selectedRule.Name}");
-            await LoadRulesAsync();
-            ClearForm();
+            if (_selectedRule == null)
+            {
+                WpfMessageBox.Show("삭제할 규칙을 선택해주세요.", "알림",
+                    WpfMessageBoxButton.OK, WpfMessageBoxImage.Information);
+                return;
+            }
+
+            var result = WpfMessageBox.Show(
+                $"'{_selectedRule.Name}' 규칙을 삭제하시겠습니까?",
+                "규칙 삭제",
+                WpfMessageBoxButton.YesNo,
+                WpfMessageBoxImage.Question);
+
+            if (result != WpfMessageBoxResult.Yes) return;
+
+            try
+            {
+                await _mailRuleService.DeleteRuleAsync(_selectedRule.Id);
+                Log4.Info($"[MailRuleSettingsDialog] 규칙 삭제: {_selectedRule.Name}");
+                await LoadRulesAsync();
+                ClearForm();
+            }
+            catch (Exception ex)
+            {
+                Log4.Error($"[MailRuleSettingsDialog] 규칙 삭제 실패: {ex.Message}");
+                WpfMessageBox.Show($"규칙 삭제에 실패했습니다.\n{ex.Message}", "오류",
+                    WpfMessageBoxButton.OK, WpfMessageBoxImage.Error);
+            }
         }
-        catch (Exception ex)
+        catch (Exception exOuter)
         {
-            Log4.Error($"[MailRuleSettingsDialog] 규칙 삭제 실패: {ex.Message}");
-            WpfMessageBox.Show($"규칙 삭제에 실패했습니다.\n{ex.Message}", "오류",
-                WpfMessageBoxButton.OK, WpfMessageBoxImage.Error);
+            Log4.Error($"[MailRuleSettingsDialog] DeleteButton_Click 실패: {exOuter.Message}\n{exOuter.StackTrace}");
         }
     }
 
     private async void SaveRuleButton_Click(object sender, RoutedEventArgs e)
     {
-        // 유효성 검증
-        if (string.IsNullOrWhiteSpace(NameTextBox.Text))
-        {
-            WpfMessageBox.Show("규칙 이름을 입력해주세요.", "유효성 오류",
-                WpfMessageBoxButton.OK, WpfMessageBoxImage.Warning);
-            NameTextBox.Focus();
-            return;
-        }
-
-        var conditionType = GetSelectedTag(ConditionTypeComboBox);
-        var actionType = GetSelectedTag(ActionTypeComboBox);
-
-        if (string.IsNullOrEmpty(conditionType) || string.IsNullOrEmpty(actionType))
-        {
-            WpfMessageBox.Show("조건 타입과 액션 타입을 선택해주세요.", "유효성 오류",
-                WpfMessageBoxButton.OK, WpfMessageBoxImage.Warning);
-            return;
-        }
-
-        if (!int.TryParse(PriorityTextBox.Text, out int priority))
-            priority = 0;
-
-        var rule = _isNewRule
-            ? new MailRule()
-            : _selectedRule!.Rule;
-
-        rule.Name = NameTextBox.Text.Trim();
-        rule.ConditionType = conditionType;
-        rule.ConditionValue = string.IsNullOrWhiteSpace(ConditionValueTextBox.Text)
-            ? null : ConditionValueTextBox.Text.Trim();
-        rule.ActionType = actionType;
-        rule.ActionValue = string.IsNullOrWhiteSpace(ActionValueTextBox.Text)
-            ? null : ActionValueTextBox.Text.Trim();
-        rule.Priority = priority;
-        rule.IsEnabled = IsEnabledCheckBox.IsChecked == true;
-
         try
         {
-            await _mailRuleService.SaveRuleAsync(rule);
-            Log4.Info($"[MailRuleSettingsDialog] 규칙 저장: {rule.Name} (Id={rule.Id})");
-            await LoadRulesAsync();
-            UpdateStatus($"'{rule.Name}' 저장 완료");
+            // 유효성 검증
+            if (string.IsNullOrWhiteSpace(NameTextBox.Text))
+            {
+                WpfMessageBox.Show("규칙 이름을 입력해주세요.", "유효성 오류",
+                    WpfMessageBoxButton.OK, WpfMessageBoxImage.Warning);
+                NameTextBox.Focus();
+                return;
+            }
+
+            var conditionType = GetSelectedTag(ConditionTypeComboBox);
+            var actionType = GetSelectedTag(ActionTypeComboBox);
+
+            if (string.IsNullOrEmpty(conditionType) || string.IsNullOrEmpty(actionType))
+            {
+                WpfMessageBox.Show("조건 타입과 액션 타입을 선택해주세요.", "유효성 오류",
+                    WpfMessageBoxButton.OK, WpfMessageBoxImage.Warning);
+                return;
+            }
+
+            if (!int.TryParse(PriorityTextBox.Text, out int priority))
+                priority = 0;
+
+            var rule = _isNewRule
+                ? new MailRule()
+                : _selectedRule!.Rule;
+
+            rule.Name = NameTextBox.Text.Trim();
+            rule.ConditionType = conditionType;
+            rule.ConditionValue = string.IsNullOrWhiteSpace(ConditionValueTextBox.Text)
+                ? null : ConditionValueTextBox.Text.Trim();
+            rule.ActionType = actionType;
+            rule.ActionValue = string.IsNullOrWhiteSpace(ActionValueTextBox.Text)
+                ? null : ActionValueTextBox.Text.Trim();
+            rule.Priority = priority;
+            rule.IsEnabled = IsEnabledCheckBox.IsChecked == true;
+
+            try
+            {
+                await _mailRuleService.SaveRuleAsync(rule);
+                Log4.Info($"[MailRuleSettingsDialog] 규칙 저장: {rule.Name} (Id={rule.Id})");
+                await LoadRulesAsync();
+                UpdateStatus($"'{rule.Name}' 저장 완료");
+            }
+            catch (Exception ex)
+            {
+                Log4.Error($"[MailRuleSettingsDialog] 규칙 저장 실패: {ex.Message}");
+                WpfMessageBox.Show($"규칙 저장에 실패했습니다.\n{ex.Message}", "오류",
+                    WpfMessageBoxButton.OK, WpfMessageBoxImage.Error);
+            }
         }
-        catch (Exception ex)
+        catch (Exception exOuter)
         {
-            Log4.Error($"[MailRuleSettingsDialog] 규칙 저장 실패: {ex.Message}");
-            WpfMessageBox.Show($"규칙 저장에 실패했습니다.\n{ex.Message}", "오류",
-                WpfMessageBoxButton.OK, WpfMessageBoxImage.Error);
+            Log4.Error($"[MailRuleSettingsDialog] SaveRuleButton_Click 실패: {exOuter.Message}\n{exOuter.StackTrace}");
         }
     }
 

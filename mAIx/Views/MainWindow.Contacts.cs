@@ -73,26 +73,33 @@ namespace mAIx.Views
         /// </summary>
         private async void ShowContactsView()
         {
-            HideAllViews();
-
-            if (ContactsViewBorder != null) ContactsViewBorder.Visibility = Visibility.Visible;
-
-            // 첫 표시 시 초기화
-            if (_contactsViewModel == null)
+            try
             {
-                InitializeContactsView();
-            }
+                HideAllViews();
 
-            // 데이터 로드
-            if (_contactsViewModel != null && !_contactsViewModel.IsInitialized)
+                if (ContactsViewBorder != null) ContactsViewBorder.Visibility = Visibility.Visible;
+
+                // 첫 표시 시 초기화
+                if (_contactsViewModel == null)
+                {
+                    InitializeContactsView();
+                }
+
+                // 데이터 로드
+                if (_contactsViewModel != null && !_contactsViewModel.IsInitialized)
+                {
+                    await _contactsViewModel.InitializeCommand.ExecuteAsync(null);
+                }
+
+                _viewModel.StatusMessage = "연락처";
+                Services.Theme.ThemeService.Instance.ApplyFeatureTheme("contacts");
+
+                Log4.Info("연락처 뷰 표시 완료");
+            }
+            catch (Exception ex)
             {
-                await _contactsViewModel.InitializeCommand.ExecuteAsync(null);
+                Log4.Error($"[MainWindow] ShowContactsView 실패: {ex.Message}\n{ex.StackTrace}");
             }
-
-            _viewModel.StatusMessage = "연락처";
-            Services.Theme.ThemeService.Instance.ApplyFeatureTheme("contacts");
-
-            Log4.Info("연락처 뷰 표시 완료");
         }
 
         /// <summary>

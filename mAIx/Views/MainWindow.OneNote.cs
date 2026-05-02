@@ -36,32 +36,39 @@ namespace mAIx.Views
         /// </summary>
         private async void NavigateToBacklinkPage(BacklinkItem backlink)
         {
-            if (backlink == null || _oneNoteViewModel == null) return;
-
             try
             {
-                // 해당 페이지를 찾아 선택
-                foreach (var nb in _oneNoteViewModel.Notebooks)
+                if (backlink == null || _oneNoteViewModel == null) return;
+
+                try
                 {
-                    foreach (var section in nb.Sections)
+                    // 해당 페이지를 찾아 선택
+                    foreach (var nb in _oneNoteViewModel.Notebooks)
                     {
-                        foreach (var page in section.Pages)
+                        foreach (var section in nb.Sections)
                         {
-                            if (page.Id == backlink.PageId)
+                            foreach (var page in section.Pages)
                             {
-                                _oneNoteViewModel.SelectedNotebook = nb;
-                                _oneNoteViewModel.SelectedSection = section;
-                                _oneNoteViewModel.SelectedPage = page;
-                                Log4.Debug($"[OneNote] 백링크로 이동: {page.Title}");
-                                return;
+                                if (page.Id == backlink.PageId)
+                                {
+                                    _oneNoteViewModel.SelectedNotebook = nb;
+                                    _oneNoteViewModel.SelectedSection = section;
+                                    _oneNoteViewModel.SelectedPage = page;
+                                    Log4.Debug($"[OneNote] 백링크로 이동: {page.Title}");
+                                    return;
+                                }
                             }
                         }
                     }
                 }
+                catch (Exception ex)
+                {
+                    Log4.Warn($"[OneNote] 백링크 이동 실패: {ex.Message}");
+                }
             }
             catch (Exception ex)
             {
-                Log4.Warn($"[OneNote] 백링크 이동 실패: {ex.Message}");
+                Log4.Error($"[MainWindow] NavigateToBacklinkPage 실패: {ex.Message}\n{ex.StackTrace}");
             }
         }
 

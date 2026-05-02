@@ -54,35 +54,42 @@ namespace mAIx.Views
         /// </summary>
         private async void DeletePlannerBucketWithConfirmation(BucketViewModel bucket)
         {
-            if (bucket == null || _plannerViewModel == null) return;
-
-            var result = MessageBox.Show(
-                $"'{bucket.Name}' 버킷을 삭제하시겠습니까?\n버킷 내 작업도 함께 삭제됩니다.",
-                "버킷 삭제",
-                MessageBoxButton.YesNo,
-                MessageBoxImage.Warning);
-
-            if (result != MessageBoxResult.Yes) return;
-
             try
             {
-                if (!string.IsNullOrEmpty(bucket.ETag))
+                if (bucket == null || _plannerViewModel == null) return;
+
+                var result = MessageBox.Show(
+                    $"'{bucket.Name}' 버킷을 삭제하시겠습니까?\n버킷 내 작업도 함께 삭제됩니다.",
+                    "버킷 삭제",
+                    MessageBoxButton.YesNo,
+                    MessageBoxImage.Warning);
+
+                if (result != MessageBoxResult.Yes) return;
+
+                try
                 {
-                    var service = ((App)Application.Current).GetService<Services.Graph.GraphPlannerService>();
-                    if (service != null)
+                    if (!string.IsNullOrEmpty(bucket.ETag))
                     {
-                        var success = await service.DeleteBucketAsync(bucket.Id, bucket.ETag);
-                        if (success)
+                        var service = ((App)Application.Current).GetService<Services.Graph.GraphPlannerService>();
+                        if (service != null)
                         {
-                            _plannerViewModel.Buckets.Remove(bucket);
-                            Log4.Info($"[Planner] 버킷 삭제 완료: {bucket.Name}");
+                            var success = await service.DeleteBucketAsync(bucket.Id, bucket.ETag);
+                            if (success)
+                            {
+                                _plannerViewModel.Buckets.Remove(bucket);
+                                Log4.Info($"[Planner] 버킷 삭제 완료: {bucket.Name}");
+                            }
                         }
                     }
+                }
+                catch (Exception ex)
+                {
+                    Log4.Error($"[Planner] 버킷 삭제 실패: {ex.Message}");
                 }
             }
             catch (Exception ex)
             {
-                Log4.Error($"[Planner] 버킷 삭제 실패: {ex.Message}");
+                Log4.Error($"[MainWindow] DeletePlannerBucketWithConfirmation 실패: {ex.Message}\n{ex.StackTrace}");
             }
         }
 
@@ -91,26 +98,33 @@ namespace mAIx.Views
         /// </summary>
         private async void ShowPlannerTaskDetail(TaskItemViewModel task)
         {
-            if (task == null || _plannerViewModel == null) return;
-
             try
             {
-                var service = ((App)Application.Current).GetService<Services.Graph.GraphPlannerService>();
-                if (service != null)
+                if (task == null || _plannerViewModel == null) return;
+
+                try
                 {
-                    var details = await service.GetTaskDetailsAsync(task.Id);
-                    if (details != null)
+                    var service = ((App)Application.Current).GetService<Services.Graph.GraphPlannerService>();
+                    if (service != null)
                     {
-                        task.Notes = details.Description;
+                        var details = await service.GetTaskDetailsAsync(task.Id);
+                        if (details != null)
+                        {
+                            task.Notes = details.Description;
+                        }
                     }
                 }
+                catch (Exception ex)
+                {
+                    Log4.Warn($"[Planner] 작업 상세 로드 실패: {ex.Message}");
+                }
+
+                Log4.Debug($"[Planner] 작업 상세: {task.Title}");
             }
             catch (Exception ex)
             {
-                Log4.Warn($"[Planner] 작업 상세 로드 실패: {ex.Message}");
+                Log4.Error($"[MainWindow] ShowPlannerTaskDetail 실패: {ex.Message}\n{ex.StackTrace}");
             }
-
-            Log4.Debug($"[Planner] 작업 상세: {task.Title}");
         }
     }
 }

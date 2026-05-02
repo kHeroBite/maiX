@@ -649,6 +649,8 @@ public static class TinyMCEEditorService
     /// </summary>
     public static async void HandleLinkClick(string url, string fileName = "")
     {
+        try
+        {
         if (string.IsNullOrEmpty(url)) return;
 
         Log4.Debug($"[TinyMCE] 링크 클릭: {url}");
@@ -721,6 +723,11 @@ public static class TinyMCEEditorService
         catch (Exception ex)
         {
             Log4.Error($"[TinyMCE] 링크 열기 실패: {url} — {ex}");
+        }
+        }
+        catch (Exception ex)
+        {
+            Log4.Error($"[TinyMCEEditorService] HandleLinkClick 실패: {ex.Message}\n{ex.StackTrace}");
         }
     }
     /// </summary>

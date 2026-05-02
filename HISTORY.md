@@ -2,6 +2,49 @@
 
 > PROJECT.md 작업 이력 테이블의 상세 보완본
 
+## 2026-05-02: 동기화/UI블로킹 7차 — async void 외부 try-catch 전수 수정 (171건/20파일)
+
+**분류**: O3 Fast Path (oplan_normal → odev → otest → odone)
+**수정 파일**: 20개 (.commit_message.txt 제외 — `git status` 기준 21개)
+**수정 건수**: 171건 (패턴2 async void 외부 try-catch 170건 + 패턴4 Timer.Elapsed async lambda 1건)
+**커밋**: (odone_git 단계에서 갱신 예정)
+
+### 배경
+
+6차에서 8개 패턴 전수 조사를 마쳤으나 패턴3(async void 외부 try-catch)은 1차/5차/6차에서 표본 위주 처리만 수행 → 7차에서 전수조사 강제(L-382)로 170건 잔존 발견.
+MainWindow.xaml.cs 단독 116건(실측 150건) 거대 파일은 Batch를 분리해 처리.
+
+### 수정 분포 (주요 파일)
+
+| 파일 | 건수 | 비고 |
+|------|------|------|
+| MainWindow.xaml.cs | 116 | 거대 파일 — 별도 Batch 분리 |
+| MainWindow.OneNote.cs | ~10 | partial class |
+| MainWindow.Activity / Calls / Contacts / Planner / Todo / Teams 등 | ~25 | partial class |
+| Views/Dialogs/* (TaskEdit, EventEdit, ShareDialog, MailRule, VersionHistory) | ~10 | 다이얼로그 핸들러 |
+| Views/Compose / EmailView / Login / ApiSettings | ~6 | 메인 윈도우 외 |
+| Services/Editor/TinyMCEEditorService.cs | 1 | 패턴4 Timer.Elapsed lambda try-catch |
+| ViewModels/OneNoteViewModel.cs | 1 | 패턴4 Timer/PropertyChanged async lambda |
+| Dialogs/MeetingScheduleDialog.xaml.cs, App.xaml.cs | ~2 | 기타 |
+
+### 테스트 결과
+
+- 빌드: 성공 (CS 컴파일 에러 0건) ✅
+- 잔존 패턴2 위반: 0건 ✅
+- UI 테스트: PASS (앱 기동, REST API 200, 동기화 정상) ✅
+
+### 후속 과제
+
+- **패턴3 InvokeAsync(async lambda) 17건 잔존** — 별도 oralph 작업 권장 (L-379 적용 누락 잔존)
+
+### 교훈
+
+- **L-382**: 표본 수정 후 체계적 전수조사 필수 — 패턴 규칙(L-3xx) 등록 시 즉시 전수 batch 1회를 권장
+- 거대 파일(>1000줄, 매치 >50건)은 별도 Batch로 분리해 병렬화/회수 용이
+- Serilog/NLog 혼용 환경에서는 파일별 기존 로거 확인 후 적용 (일괄 `_log` 지시 금지)
+
+---
+
 ## 2026-05-02: 동기화/UI블로킹 6차 — 8개 패턴 전수 조사 + 잔존 7건 수정
 
 **분류**: O3 Fast Path (oplan_normal → odev → otest → odone)

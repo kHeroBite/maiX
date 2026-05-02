@@ -30,7 +30,14 @@ namespace mAIx.Views.Dialogs
 
         private async void Window_Loaded(object sender, RoutedEventArgs e)
         {
-            await LoadVersionsAsync();
+            try
+            {
+                await LoadVersionsAsync();
+            }
+            catch (Exception ex)
+            {
+                _log.Error(ex, "[VersionHistoryDialog] Window_Loaded 실패");
+            }
         }
 
         private async System.Threading.Tasks.Task LoadVersionsAsync()
@@ -72,40 +79,47 @@ namespace mAIx.Views.Dialogs
 
         private async void RestoreButton_Click(object sender, RoutedEventArgs e)
         {
-            if (sender is Wpf.Ui.Controls.Button btn && btn.Tag is string versionId)
+            try
             {
-                var result = MessageBox.Show(
-                    "이 버전으로 복원하시겠습니까?\n현재 버전은 새 버전으로 저장됩니다.",
-                    "버전 복원",
-                    MessageBoxButton.YesNo,
-                    MessageBoxImage.Question);
-
-                if (result == MessageBoxResult.Yes)
+                if (sender is Wpf.Ui.Controls.Button btn && btn.Tag is string versionId)
                 {
-                    try
+                    var result = MessageBox.Show(
+                        "이 버전으로 복원하시겠습니까?\n현재 버전은 새 버전으로 저장됩니다.",
+                        "버전 복원",
+                        MessageBoxButton.YesNo,
+                        MessageBoxImage.Question);
+
+                    if (result == MessageBoxResult.Yes)
                     {
-                        btn.IsEnabled = false;
-                        var success = await _oneDriveService.RestoreVersionAsync(_itemId, versionId);
-                        if (success)
+                        try
                         {
-                            _log.Information("버전 복원 완료: {VersionId}", versionId);
-                            await LoadVersionsAsync();
+                            btn.IsEnabled = false;
+                            var success = await _oneDriveService.RestoreVersionAsync(_itemId, versionId);
+                            if (success)
+                            {
+                                _log.Information("버전 복원 완료: {VersionId}", versionId);
+                                await LoadVersionsAsync();
+                            }
+                            else
+                            {
+                                MessageBox.Show("버전 복원에 실패했습니다.", "오류", MessageBoxButton.OK, MessageBoxImage.Error);
+                            }
                         }
-                        else
+                        catch (Exception ex)
                         {
-                            MessageBox.Show("버전 복원에 실패했습니다.", "오류", MessageBoxButton.OK, MessageBoxImage.Error);
+                            _log.Error(ex, "버전 복원 실패");
+                            MessageBox.Show($"복원 실패: {ex.Message}", "오류", MessageBoxButton.OK, MessageBoxImage.Error);
                         }
-                    }
-                    catch (Exception ex)
-                    {
-                        _log.Error(ex, "버전 복원 실패");
-                        MessageBox.Show($"복원 실패: {ex.Message}", "오류", MessageBoxButton.OK, MessageBoxImage.Error);
-                    }
-                    finally
-                    {
-                        btn.IsEnabled = true;
+                        finally
+                        {
+                            btn.IsEnabled = true;
+                        }
                     }
                 }
+            }
+            catch (Exception exOuter)
+            {
+                _log.Error(exOuter, "[VersionHistoryDialog] RestoreButton_Click 실패");
             }
         }
 

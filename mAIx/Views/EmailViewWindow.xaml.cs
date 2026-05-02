@@ -726,42 +726,49 @@ public partial class EmailViewWindow : FluentWindow
     /// <summary>AI 답장 버튼 클릭 — 톤 선택 후 ComposeWindow 열기</summary>
     private async void AiReplyButton_Click(object sender, RoutedEventArgs e)
     {
-        if (_aiMailService == null)
-        {
-            Log4.Warn("[EmailView] AiMailService 미등록 — AI 답장 불가");
-            return;
-        }
-
-        var tone = (ToneComboBox.SelectedItem as ComboBoxItem)?.Content?.ToString() ?? "정중";
-        AiReplyButton.IsEnabled = false;
-        AiReplyButton.Content = "생성 중...";
-
         try
         {
-            Log4.Debug($"[EmailView] AI 답장 초안 생성 시작 — Tone={tone}");
-            using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(60));
-            var draft = await _aiMailService.GenerateReplyDraftAsync(_email, tone, cts.Token);
+            if (_aiMailService == null)
+            {
+                Log4.Warn("[EmailView] AiMailService 미등록 — AI 답장 불가");
+                return;
+            }
 
-            var graphMailService = (App.Current as App)?.GraphMailService;
-            if (graphMailService == null) return;
+            var tone = (ToneComboBox.SelectedItem as ComboBoxItem)?.Content?.ToString() ?? "정중";
+            AiReplyButton.IsEnabled = false;
+            AiReplyButton.Content = "생성 중...";
 
-            var syncService = (App.Current as App)?.BackgroundSyncService;
-            var vm = new ComposeViewModel(graphMailService, syncService, null, ComposeMode.Reply, _email);
-            vm.InitialBody = draft + "\r\n\r\n" + vm.InitialBody;
+            try
+            {
+                Log4.Debug($"[EmailView] AI 답장 초안 생성 시작 — Tone={tone}");
+                using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(60));
+                var draft = await _aiMailService.GenerateReplyDraftAsync(_email, tone, cts.Token);
 
-            var composeWindow = new ComposeWindow(vm);
-            composeWindow.Owner = this;
-            composeWindow.Show();
-            Log4.Debug("[EmailView] AI 답장 초안 ComposeWindow 열림");
+                var graphMailService = (App.Current as App)?.GraphMailService;
+                if (graphMailService == null) return;
+
+                var syncService = (App.Current as App)?.BackgroundSyncService;
+                var vm = new ComposeViewModel(graphMailService, syncService, null, ComposeMode.Reply, _email);
+                vm.InitialBody = draft + "\r\n\r\n" + vm.InitialBody;
+
+                var composeWindow = new ComposeWindow(vm);
+                composeWindow.Owner = this;
+                composeWindow.Show();
+                Log4.Debug("[EmailView] AI 답장 초안 ComposeWindow 열림");
+            }
+            catch (Exception ex)
+            {
+                Log4.Error($"[EmailView] AI 답장 초안 생성 실패: {ex.Message}");
+            }
+            finally
+            {
+                AiReplyButton.IsEnabled = true;
+                AiReplyButton.Content = "AI 답장";
+            }
         }
         catch (Exception ex)
         {
-            Log4.Error($"[EmailView] AI 답장 초안 생성 실패: {ex.Message}");
-        }
-        finally
-        {
-            AiReplyButton.IsEnabled = true;
-            AiReplyButton.Content = "AI 답장";
+            Log4.Error($"[EmailViewWindow] AiReplyButton_Click 실패: {ex.Message}\n{ex.StackTrace}");
         }
     }
 
@@ -772,49 +779,56 @@ public partial class EmailViewWindow : FluentWindow
     /// <summary>읽어주기/중지 버튼 클릭</summary>
     private async void TtsButton_Click(object sender, RoutedEventArgs e)
     {
-        if (_ttsService == null)
-        {
-            Log4.Warn("[EmailView] TextToSpeechService 미등록");
-            return;
-        }
-
-        if (_ttsService.IsSpeaking)
-        {
-            _ttsCts?.Cancel();
-            _ttsService.Stop();
-            TtsButton.Content = "읽어주기";
-            Log4.Debug("[EmailView] TTS 중지");
-            return;
-        }
-
-        var text = _email.PreviewOrSummary ?? _email.Body ?? "";
-        if (string.IsNullOrWhiteSpace(text))
-        {
-            Log4.Warn("[EmailView] TTS 대상 텍스트 없음");
-            return;
-        }
-
-        TtsButton.Content = "중지";
-        _ttsCts = new CancellationTokenSource();
-
         try
         {
-            Log4.Debug("[EmailView] TTS 읽기 시작");
-            await _ttsService.SpeakAsync(text, _ttsCts.Token);
-        }
-        catch (OperationCanceledException)
-        {
-            Log4.Debug("[EmailView] TTS 취소됨");
+            if (_ttsService == null)
+            {
+                Log4.Warn("[EmailView] TextToSpeechService 미등록");
+                return;
+            }
+
+            if (_ttsService.IsSpeaking)
+            {
+                _ttsCts?.Cancel();
+                _ttsService.Stop();
+                TtsButton.Content = "읽어주기";
+                Log4.Debug("[EmailView] TTS 중지");
+                return;
+            }
+
+            var text = _email.PreviewOrSummary ?? _email.Body ?? "";
+            if (string.IsNullOrWhiteSpace(text))
+            {
+                Log4.Warn("[EmailView] TTS 대상 텍스트 없음");
+                return;
+            }
+
+            TtsButton.Content = "중지";
+            _ttsCts = new CancellationTokenSource();
+
+            try
+            {
+                Log4.Debug("[EmailView] TTS 읽기 시작");
+                await _ttsService.SpeakAsync(text, _ttsCts.Token);
+            }
+            catch (OperationCanceledException)
+            {
+                Log4.Debug("[EmailView] TTS 취소됨");
+            }
+            catch (Exception ex)
+            {
+                Log4.Error($"[EmailView] TTS 실패: {ex.Message}");
+            }
+            finally
+            {
+                TtsButton.Content = "읽어주기";
+                _ttsCts?.Dispose();
+                _ttsCts = null;
+            }
         }
         catch (Exception ex)
         {
-            Log4.Error($"[EmailView] TTS 실패: {ex.Message}");
-        }
-        finally
-        {
-            TtsButton.Content = "읽어주기";
-            _ttsCts?.Dispose();
-            _ttsCts = null;
+            Log4.Error($"[EmailViewWindow] TtsButton_Click 실패: {ex.Message}\n{ex.StackTrace}");
         }
     }
 
@@ -831,49 +845,56 @@ public partial class EmailViewWindow : FluentWindow
     /// <summary>스누즈 메뉴 항목 선택</summary>
     private async void SnoozeMenuItem_Click(object sender, RoutedEventArgs e)
     {
-        SnoozePopup.IsOpen = false;
-
-        if (sender is not System.Windows.Controls.MenuItem menuItem) return;
-        var tag = menuItem.Tag?.ToString() ?? "";
-
-        var now = DateTime.Now;
-        DateTime snoozedUntil = tag switch
-        {
-            "1h"         => now.AddHours(1),
-            "3h"         => now.AddHours(3),
-            "tomorrow"   => now.Date.AddDays(1).AddHours(9),
-            "nextmonday" => GetNextMonday(now).AddHours(9),
-            _            => now.AddHours(1)
-        };
-
-        _email.SnoozedUntil = snoozedUntil;
-
         try
         {
-            var dbFactory = (App.Current as App)?.GetService<IDbContextFactory<mAIxDbContext>>();
-            if (dbFactory != null)
-            {
-                using var ctx = dbFactory.CreateDbContext();
-                ctx.Emails.Update(_email);
-                await ctx.SaveChangesAsync();
-            }
+            SnoozePopup.IsOpen = false;
 
-            var label = tag switch
+            if (sender is not System.Windows.Controls.MenuItem menuItem) return;
+            var tag = menuItem.Tag?.ToString() ?? "";
+
+            var now = DateTime.Now;
+            DateTime snoozedUntil = tag switch
             {
-                "1h"         => "1시간",
-                "3h"         => "3시간",
-                "tomorrow"   => "내일 아침",
-                "nextmonday" => "다음 주 월요일",
-                _            => ""
+                "1h"         => now.AddHours(1),
+                "3h"         => now.AddHours(3),
+                "tomorrow"   => now.Date.AddDays(1).AddHours(9),
+                "nextmonday" => GetNextMonday(now).AddHours(9),
+                _            => now.AddHours(1)
             };
-            var msg = $"{label} 후 다시 알려드립니다 ({snoozedUntil:MM-dd HH:mm})";
-            Log4.Info($"[EmailView] 스누즈 설정: {msg}");
 
-            _toastService?.ShowNewMailNotification("스누즈 설정", msg, "");
+            _email.SnoozedUntil = snoozedUntil;
+
+            try
+            {
+                var dbFactory = (App.Current as App)?.GetService<IDbContextFactory<mAIxDbContext>>();
+                if (dbFactory != null)
+                {
+                    using var ctx = dbFactory.CreateDbContext();
+                    ctx.Emails.Update(_email);
+                    await ctx.SaveChangesAsync();
+                }
+
+                var label = tag switch
+                {
+                    "1h"         => "1시간",
+                    "3h"         => "3시간",
+                    "tomorrow"   => "내일 아침",
+                    "nextmonday" => "다음 주 월요일",
+                    _            => ""
+                };
+                var msg = $"{label} 후 다시 알려드립니다 ({snoozedUntil:MM-dd HH:mm})";
+                Log4.Info($"[EmailView] 스누즈 설정: {msg}");
+
+                _toastService?.ShowNewMailNotification("스누즈 설정", msg, "");
+            }
+            catch (Exception ex)
+            {
+                Log4.Error($"[EmailView] 스누즈 DB 저장 실패: {ex.Message}");
+            }
         }
         catch (Exception ex)
         {
-            Log4.Error($"[EmailView] 스누즈 DB 저장 실패: {ex.Message}");
+            Log4.Error($"[EmailViewWindow] SnoozeMenuItem_Click 실패: {ex.Message}\n{ex.StackTrace}");
         }
     }
 
@@ -891,58 +912,65 @@ public partial class EmailViewWindow : FluentWindow
     /// <summary>스레드 요약 패널 토글</summary>
     private async void ThreadSummaryButton_Click(object sender, RoutedEventArgs e)
     {
-        if (ThreadSummaryPanel.Visibility == Visibility.Visible)
-        {
-            ThreadSummaryPanel.Visibility = Visibility.Collapsed;
-            return;
-        }
-
-        ThreadSummaryPanel.Visibility = Visibility.Visible;
-
-        if (_threadSummaryLoaded) return;
-
-        if (_aiMailService == null)
-        {
-            ThreadSummaryText.Text = "AI 서비스를 사용할 수 없습니다.";
-            return;
-        }
-
-        ThreadSummaryLoading.Visibility = Visibility.Visible;
-        ThreadSummaryText.Text = "스레드를 분석하는 중...";
-
         try
         {
-            List<Email> threadEmails;
-            var dbFactory = (App.Current as App)?.GetService<IDbContextFactory<mAIxDbContext>>();
-            if (dbFactory != null && !string.IsNullOrEmpty(_email.ConversationId))
+            if (ThreadSummaryPanel.Visibility == Visibility.Visible)
             {
-                using var ctx = dbFactory.CreateDbContext();
-                threadEmails = await ctx.Emails
-                    .Where(e => e.ConversationId == _email.ConversationId)
-                    .OrderBy(e => e.ReceivedDateTime)
-                    .ToListAsync();
-            }
-            else
-            {
-                threadEmails = new List<Email> { _email };
+                ThreadSummaryPanel.Visibility = Visibility.Collapsed;
+                return;
             }
 
-            Log4.Debug($"[EmailView] 스레드 요약 — 메일 {threadEmails.Count}건");
+            ThreadSummaryPanel.Visibility = Visibility.Visible;
 
-            using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(60));
-            var summary = await _aiMailService.GenerateThreadSummaryAsync(threadEmails, cts.Token);
+            if (_threadSummaryLoaded) return;
 
-            ThreadSummaryText.Text = summary;
-            _threadSummaryLoaded = true;
+            if (_aiMailService == null)
+            {
+                ThreadSummaryText.Text = "AI 서비스를 사용할 수 없습니다.";
+                return;
+            }
+
+            ThreadSummaryLoading.Visibility = Visibility.Visible;
+            ThreadSummaryText.Text = "스레드를 분석하는 중...";
+
+            try
+            {
+                List<Email> threadEmails;
+                var dbFactory = (App.Current as App)?.GetService<IDbContextFactory<mAIxDbContext>>();
+                if (dbFactory != null && !string.IsNullOrEmpty(_email.ConversationId))
+                {
+                    using var ctx = dbFactory.CreateDbContext();
+                    threadEmails = await ctx.Emails
+                        .Where(e => e.ConversationId == _email.ConversationId)
+                        .OrderBy(e => e.ReceivedDateTime)
+                        .ToListAsync();
+                }
+                else
+                {
+                    threadEmails = new List<Email> { _email };
+                }
+
+                Log4.Debug($"[EmailView] 스레드 요약 — 메일 {threadEmails.Count}건");
+
+                using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(60));
+                var summary = await _aiMailService.GenerateThreadSummaryAsync(threadEmails, cts.Token);
+
+                ThreadSummaryText.Text = summary;
+                _threadSummaryLoaded = true;
+            }
+            catch (Exception ex)
+            {
+                Log4.Error($"[EmailView] 스레드 요약 실패: {ex.Message}");
+                ThreadSummaryText.Text = "요약 생성에 실패했습니다.";
+            }
+            finally
+            {
+                ThreadSummaryLoading.Visibility = Visibility.Collapsed;
+            }
         }
         catch (Exception ex)
         {
-            Log4.Error($"[EmailView] 스레드 요약 실패: {ex.Message}");
-            ThreadSummaryText.Text = "요약 생성에 실패했습니다.";
-        }
-        finally
-        {
-            ThreadSummaryLoading.Visibility = Visibility.Collapsed;
+            Log4.Error($"[EmailViewWindow] ThreadSummaryButton_Click 실패: {ex.Message}\n{ex.StackTrace}");
         }
     }
 
@@ -1010,134 +1038,155 @@ public partial class EmailViewWindow : FluentWindow
     /// <summary>첨부파일 클릭 — 다운로드 후 열기</summary>
     private async void Attachment_Click(object sender, MouseButtonEventArgs e)
     {
-        if (sender is not FrameworkElement element || element.DataContext is not AttachmentInfo info)
-            return;
-
-        if (_graphAuthService == null || string.IsNullOrEmpty(_email.EntryId))
-            return;
-
         try
         {
-            Log4.Debug($"[EmailView] 첨부파일 다운로드 시작: {info.Name}");
-
-            var client = _graphAuthService.GetGraphClient();
-            var attachment = await client.Me.Messages[_email.EntryId]
-                .Attachments[info.Id].GetAsync();
-
-            if (attachment is not FileAttachment fileAtt || fileAtt.ContentBytes == null)
-            {
-                Log4.Warn($"[EmailView] 첨부파일 콘텐츠를 가져올 수 없음: {info.Name}");
+            if (sender is not FrameworkElement element || element.DataContext is not AttachmentInfo info)
                 return;
-            }
 
-            // 임시 폴더에 저장
-            var tempDir = Path.Combine(Path.GetTempPath(), "MaiX", "attachments");
-            Directory.CreateDirectory(tempDir);
-            var filePath = Path.Combine(tempDir, info.Name);
+            if (_graphAuthService == null || string.IsNullOrEmpty(_email.EntryId))
+                return;
 
-            // 동일 파일명 충돌 방지
-            if (File.Exists(filePath))
+            try
             {
-                var nameWithoutExt = Path.GetFileNameWithoutExtension(info.Name);
-                var ext = Path.GetExtension(info.Name);
-                filePath = Path.Combine(tempDir, $"{nameWithoutExt}_{DateTime.Now:HHmmss}{ext}");
+                Log4.Debug($"[EmailView] 첨부파일 다운로드 시작: {info.Name}");
+
+                var client = _graphAuthService.GetGraphClient();
+                var attachment = await client.Me.Messages[_email.EntryId]
+                    .Attachments[info.Id].GetAsync();
+
+                if (attachment is not FileAttachment fileAtt || fileAtt.ContentBytes == null)
+                {
+                    Log4.Warn($"[EmailView] 첨부파일 콘텐츠를 가져올 수 없음: {info.Name}");
+                    return;
+                }
+
+                // 임시 폴더에 저장
+                var tempDir = Path.Combine(Path.GetTempPath(), "MaiX", "attachments");
+                Directory.CreateDirectory(tempDir);
+                var filePath = Path.Combine(tempDir, info.Name);
+
+                // 동일 파일명 충돌 방지
+                if (File.Exists(filePath))
+                {
+                    var nameWithoutExt = Path.GetFileNameWithoutExtension(info.Name);
+                    var ext = Path.GetExtension(info.Name);
+                    filePath = Path.Combine(tempDir, $"{nameWithoutExt}_{DateTime.Now:HHmmss}{ext}");
+                }
+
+                await File.WriteAllBytesAsync(filePath, fileAtt.ContentBytes);
+
+                // 기본 프로그램으로 열기
+                System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
+                {
+                    FileName = filePath,
+                    UseShellExecute = true
+                });
+
+                Log4.Info($"[EmailView] 첨부파일 열림: {filePath}");
             }
-
-            await File.WriteAllBytesAsync(filePath, fileAtt.ContentBytes);
-
-            // 기본 프로그램으로 열기
-            System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
+            catch (Exception ex)
             {
-                FileName = filePath,
-                UseShellExecute = true
-            });
-
-            Log4.Info($"[EmailView] 첨부파일 열림: {filePath}");
+                Log4.Error($"[EmailView] 첨부파일 다운로드/열기 실패: {ex.Message}");
+            }
         }
         catch (Exception ex)
         {
-            Log4.Error($"[EmailView] 첨부파일 다운로드/열기 실패: {ex.Message}");
+            Log4.Error($"[EmailViewWindow] Attachment_Click 실패: {ex.Message}\n{ex.StackTrace}");
         }
     }
 
     /// <summary>첨부파일 열기 버튼 클릭 — 다운로드 후 열기 (기존 클릭 동작과 동일)</summary>
     private async void AttachmentOpen_Click(object sender, RoutedEventArgs e)
     {
-        if (sender is not FrameworkElement element || element.DataContext is not AttachmentInfo info)
-            return;
-
-        if (_graphAuthService == null || string.IsNullOrEmpty(_email.EntryId))
-            return;
-
         try
         {
-            var client = _graphAuthService.GetGraphClient();
-            var attachment = await client.Me.Messages[_email.EntryId]
-                .Attachments[info.Id].GetAsync();
-
-            if (attachment is not FileAttachment fileAtt || fileAtt.ContentBytes == null)
+            if (sender is not FrameworkElement element || element.DataContext is not AttachmentInfo info)
                 return;
 
-            var tempDir = Path.Combine(Path.GetTempPath(), "MaiX", "attachments");
-            Directory.CreateDirectory(tempDir);
-            var filePath = Path.Combine(tempDir, info.Name);
+            if (_graphAuthService == null || string.IsNullOrEmpty(_email.EntryId))
+                return;
 
-            if (File.Exists(filePath))
+            try
             {
-                var nameWithoutExt = Path.GetFileNameWithoutExtension(info.Name);
-                var ext = Path.GetExtension(info.Name);
-                filePath = Path.Combine(tempDir, $"{nameWithoutExt}_{DateTime.Now:HHmmss}{ext}");
+                var client = _graphAuthService.GetGraphClient();
+                var attachment = await client.Me.Messages[_email.EntryId]
+                    .Attachments[info.Id].GetAsync();
+
+                if (attachment is not FileAttachment fileAtt || fileAtt.ContentBytes == null)
+                    return;
+
+                var tempDir = Path.Combine(Path.GetTempPath(), "MaiX", "attachments");
+                Directory.CreateDirectory(tempDir);
+                var filePath = Path.Combine(tempDir, info.Name);
+
+                if (File.Exists(filePath))
+                {
+                    var nameWithoutExt = Path.GetFileNameWithoutExtension(info.Name);
+                    var ext = Path.GetExtension(info.Name);
+                    filePath = Path.Combine(tempDir, $"{nameWithoutExt}_{DateTime.Now:HHmmss}{ext}");
+                }
+
+                await File.WriteAllBytesAsync(filePath, fileAtt.ContentBytes);
+                System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
+                {
+                    FileName = filePath,
+                    UseShellExecute = true
+                });
+                Log4.Info($"[EmailView] 첨부파일 열림: {filePath}");
             }
-
-            await File.WriteAllBytesAsync(filePath, fileAtt.ContentBytes);
-            System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
+            catch (Exception ex)
             {
-                FileName = filePath,
-                UseShellExecute = true
-            });
-            Log4.Info($"[EmailView] 첨부파일 열림: {filePath}");
+                Log4.Error($"[EmailView] 첨부파일 열기 실패: {ex.Message}");
+            }
         }
         catch (Exception ex)
         {
-            Log4.Error($"[EmailView] 첨부파일 열기 실패: {ex.Message}");
+            Log4.Error($"[EmailViewWindow] AttachmentOpen_Click 실패: {ex.Message}\n{ex.StackTrace}");
         }
     }
 
     /// <summary>첨부파일 다운로드 버튼 클릭 — SaveFileDialog로 저장</summary>
     private async void AttachmentDownload_Click(object sender, RoutedEventArgs e)
     {
-        if (sender is not FrameworkElement element || element.DataContext is not AttachmentInfo info)
-            return;
-
-        if (_graphAuthService == null || string.IsNullOrEmpty(_email.EntryId))
-            return;
-
         try
         {
-            var saveDialog = new Microsoft.Win32.SaveFileDialog
-            {
-                FileName = info.Name,
-                Filter = "모든 파일 (*.*)|*.*"
-            };
-
-            if (saveDialog.ShowDialog() != true) return;
-
-            var client = _graphAuthService.GetGraphClient();
-            var attachment = await client.Me.Messages[_email.EntryId]
-                .Attachments[info.Id].GetAsync();
-
-            if (attachment is not FileAttachment fileAtt || fileAtt.ContentBytes == null)
-            {
-                Log4.Warn($"[EmailView] 첨부파일 콘텐츠 없음: {info.Name}");
+            if (sender is not FrameworkElement element || element.DataContext is not AttachmentInfo info)
                 return;
-            }
 
-            await File.WriteAllBytesAsync(saveDialog.FileName, fileAtt.ContentBytes);
-            Log4.Info($"[EmailView] 첨부파일 저장됨: {saveDialog.FileName}");
+            if (_graphAuthService == null || string.IsNullOrEmpty(_email.EntryId))
+                return;
+
+            try
+            {
+                var saveDialog = new Microsoft.Win32.SaveFileDialog
+                {
+                    FileName = info.Name,
+                    Filter = "모든 파일 (*.*)|*.*"
+                };
+
+                if (saveDialog.ShowDialog() != true) return;
+
+                var client = _graphAuthService.GetGraphClient();
+                var attachment = await client.Me.Messages[_email.EntryId]
+                    .Attachments[info.Id].GetAsync();
+
+                if (attachment is not FileAttachment fileAtt || fileAtt.ContentBytes == null)
+                {
+                    Log4.Warn($"[EmailView] 첨부파일 콘텐츠 없음: {info.Name}");
+                    return;
+                }
+
+                await File.WriteAllBytesAsync(saveDialog.FileName, fileAtt.ContentBytes);
+                Log4.Info($"[EmailView] 첨부파일 저장됨: {saveDialog.FileName}");
+            }
+            catch (Exception ex)
+            {
+                Log4.Error($"[EmailView] 첨부파일 다운로드 실패: {ex.Message}");
+            }
         }
         catch (Exception ex)
         {
-            Log4.Error($"[EmailView] 첨부파일 다운로드 실패: {ex.Message}");
+            Log4.Error($"[EmailViewWindow] AttachmentDownload_Click 실패: {ex.Message}\n{ex.StackTrace}");
         }
     }
 

@@ -2781,6 +2781,8 @@ public partial class OneNoteViewModel : ViewModelBase
     /// </summary>
     private async void OnRealtimeAudioChunk(byte[] audioData, TimeSpan chunkStartTime)
     {
+        try
+        {
         if (_realtimeSTTCts == null || _realtimeSTTCts.IsCancellationRequested)
             return;
 
@@ -2802,6 +2804,11 @@ public partial class OneNoteViewModel : ViewModelBase
         catch (Exception ex)
         {
             Log4.Error($"[녹음] ★ 실시간 청크 처리 실패: {ex.Message}");
+        }
+        }
+        catch (Exception ex)
+        {
+            Log4.Error($"[OneNoteViewModel] OnRealtimeAudioChunk 실패: {ex.Message}\n{ex.StackTrace}");
         }
     }
 
@@ -3921,17 +3928,24 @@ public partial class OneNoteViewModel : ViewModelBase
             _autoSaveTimer = new System.Timers.Timer(AutoSaveDelayMs);
             _autoSaveTimer.Elapsed += async (s, e) =>
             {
-                _autoSaveTimer?.Stop();
                 try
                 {
-                    // InvokeAsync(async lambda)는 inner async 예외를 소실시키므로 Task 경유로 수정
-                    await (System.Windows.Application.Current?.Dispatcher.InvokeAsync(() =>
-                        SaveAsync()
-                    ).Task.Unwrap() ?? Task.CompletedTask).ConfigureAwait(false);
+                    _autoSaveTimer?.Stop();
+                    try
+                    {
+                        // InvokeAsync(async lambda)는 inner async 예외를 소실시키므로 Task 경유로 수정
+                        await (System.Windows.Application.Current?.Dispatcher.InvokeAsync(() =>
+                            SaveAsync()
+                        ).Task.Unwrap() ?? Task.CompletedTask).ConfigureAwait(false);
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.Error(ex, "[OneNote] 자동저장 Dispatcher 처리 중 오류");
+                    }
                 }
                 catch (Exception ex)
                 {
-                    _logger.Error(ex, "[OneNote] 자동저장 Dispatcher 처리 중 오류");
+                    _logger.Error(ex, "[OneNoteViewModel] 자동저장 타이머 실패");
                 }
             };
             _autoSaveTimer.AutoReset = false;

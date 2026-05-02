@@ -116,17 +116,24 @@ public partial class TaskEditDialog : FluentWindow
     /// </summary>
     private async void Window_Loaded(object sender, RoutedEventArgs e)
     {
-        // TinyMCE 초기화
-        await InitializeTinyMCEAsync();
+        try
+        {
+            // TinyMCE 초기화
+            await InitializeTinyMCEAsync();
 
-        // 상세 데이터 로드 (체크리스트, 첨부, 댓글)
-        await LoadTaskDetailsAsync();
+            // 상세 데이터 로드 (체크리스트, 첨부, 댓글)
+            await LoadTaskDetailsAsync();
 
-        UpdateStatus($"마지막 수정: {_task.CreatedDateTime:yyyy-MM-dd HH:mm}");
+            UpdateStatus($"마지막 수정: {_task.CreatedDateTime:yyyy-MM-dd HH:mm}");
 
-        // 모든 초기화 완료 후 변경 추적 활성화
-        _isInitialized = true;
-        _hasChanges = false;
+            // 모든 초기화 완료 후 변경 추적 활성화
+            _isInitialized = true;
+            _hasChanges = false;
+        }
+        catch (Exception ex)
+        {
+            Log4.Error($"[TaskEditDialog] Window_Loaded 실패: {ex.Message}\n{ex.StackTrace}");
+        }
     }
 
     /// <summary>
@@ -238,7 +245,14 @@ public partial class TaskEditDialog : FluentWindow
     /// </summary>
     private async void NotesWebView_Drop(object sender, System.Windows.DragEventArgs e)
     {
-        await Services.Editor.TinyMCEEditorService.HandleDropAsync(NotesWebView, e);
+        try
+        {
+            await Services.Editor.TinyMCEEditorService.HandleDropAsync(NotesWebView, e);
+        }
+        catch (Exception ex)
+        {
+            Log4.Error($"[TaskEditDialog] NotesWebView_Drop 실패: {ex.Message}\n{ex.StackTrace}");
+        }
     }
 
     /// <summary>
@@ -602,7 +616,14 @@ public partial class TaskEditDialog : FluentWindow
 
     private async void SaveButton_Click(object sender, RoutedEventArgs e)
     {
-        await SaveChangesAsync();
+        try
+        {
+            await SaveChangesAsync();
+        }
+        catch (Exception ex)
+        {
+            Log4.Error($"[TaskEditDialog] SaveButton_Click 실패: {ex.Message}\n{ex.StackTrace}");
+        }
     }
 
     private async Task SaveChangesAsync()
@@ -749,27 +770,34 @@ public partial class TaskEditDialog : FluentWindow
 
     private async void DeleteButton_Click(object sender, RoutedEventArgs e)
     {
-        var result = System.Windows.MessageBox.Show(
-            $"'{_task.Title}' 작업을 삭제하시겠습니까?\n이 작업은 되돌릴 수 없습니다.",
-            "작업 삭제",
-            System.Windows.MessageBoxButton.YesNo,
-            System.Windows.MessageBoxImage.Warning);
-
-        if (result == System.Windows.MessageBoxResult.Yes)
+        try
         {
-            try
+            var result = System.Windows.MessageBox.Show(
+                $"'{_task.Title}' 작업을 삭제하시겠습니까?\n이 작업은 되돌릴 수 없습니다.",
+                "작업 삭제",
+                System.Windows.MessageBoxButton.YesNo,
+                System.Windows.MessageBoxImage.Warning);
+
+            if (result == System.Windows.MessageBoxResult.Yes)
             {
-                await _plannerService.DeleteTaskAsync(_task.Id, _task.ETag ?? "");
-                IsDeleted = true;
-                _hasChanges = false;
-                Log4.Info($"[TaskEditDialog] 작업 삭제됨: {_task.Title}");
-                Close();
+                try
+                {
+                    await _plannerService.DeleteTaskAsync(_task.Id, _task.ETag ?? "");
+                    IsDeleted = true;
+                    _hasChanges = false;
+                    Log4.Info($"[TaskEditDialog] 작업 삭제됨: {_task.Title}");
+                    Close();
+                }
+                catch (Exception ex)
+                {
+                    Log4.Error($"[TaskEditDialog] 삭제 실패: {ex.Message}");
+                    System.Windows.MessageBox.Show($"삭제 중 오류가 발생했습니다:\n{ex.Message}", "오류", System.Windows.MessageBoxButton.OK, System.Windows.MessageBoxImage.Error);
+                }
             }
-            catch (Exception ex)
-            {
-                Log4.Error($"[TaskEditDialog] 삭제 실패: {ex.Message}");
-                System.Windows.MessageBox.Show($"삭제 중 오류가 발생했습니다:\n{ex.Message}", "오류", System.Windows.MessageBoxButton.OK, System.Windows.MessageBoxImage.Error);
-            }
+        }
+        catch (Exception ex)
+        {
+            Log4.Error($"[TaskEditDialog] DeleteButton_Click 실패: {ex.Message}\n{ex.StackTrace}");
         }
     }
 
@@ -787,15 +815,29 @@ public partial class TaskEditDialog : FluentWindow
 
     private async void NewChecklistItemTextBox_KeyDown(object sender, KeyEventArgs e)
     {
-        if (e.Key == Key.Enter && !string.IsNullOrWhiteSpace(NewChecklistItemTextBox.Text))
+        try
         {
-            await AddChecklistItemAsync();
+            if (e.Key == Key.Enter && !string.IsNullOrWhiteSpace(NewChecklistItemTextBox.Text))
+            {
+                await AddChecklistItemAsync();
+            }
+        }
+        catch (Exception ex)
+        {
+            Log4.Error($"[TaskEditDialog] NewChecklistItemTextBox_KeyDown 실패: {ex.Message}\n{ex.StackTrace}");
         }
     }
 
     private async void AddChecklistItem_Click(object sender, RoutedEventArgs e)
     {
-        await AddChecklistItemAsync();
+        try
+        {
+            await AddChecklistItemAsync();
+        }
+        catch (Exception ex)
+        {
+            Log4.Error($"[TaskEditDialog] AddChecklistItem_Click 실패: {ex.Message}\n{ex.StackTrace}");
+        }
     }
 
     private async Task AddChecklistItemAsync()
@@ -871,27 +913,35 @@ public partial class TaskEditDialog : FluentWindow
 
     private async void AddAttachment_Click(object sender, RoutedEventArgs e)
     {
-        var dialog = new OpenFileDialog
+        try
         {
-            Title = "첨부 파일 선택",
-            Filter = "모든 파일 (*.*)|*.*",
-            Multiselect = true
-        };
-
-        if (dialog.ShowDialog() == true)
-        {
-            foreach (var filePath in dialog.FileNames)
+            var dialog = new OpenFileDialog
             {
-                try
+                Title = "첨부 파일 선택",
+                Filter = "모든 파일 (*.*)|*.*",
+                Multiselect = true
+            };
+
+            if (dialog.ShowDialog() == true)
+            {
+                foreach (var filePath in dialog.FileNames)
                 {
-                    // OneDrive에 업로드 후 참조 추가 (추후 구현)
-                    UpdateStatus($"파일 업로드 기능은 추후 지원 예정입니다: {System.IO.Path.GetFileName(filePath)}");
-                }
-                catch (Exception ex)
-                {
-                    Log4.Error($"[TaskEditDialog] 파일 업로드 실패: {ex.Message}");
+                    try
+                    {
+                        // OneDrive에 업로드 후 참조 추가 (추후 구현)
+                        UpdateStatus($"파일 업로드 기능은 추후 지원 예정입니다: {System.IO.Path.GetFileName(filePath)}");
+                    }
+                    catch (Exception ex)
+                    {
+                        Log4.Error($"[TaskEditDialog] 파일 업로드 실패: {ex.Message}");
+                    }
                 }
             }
+            await Task.CompletedTask;
+        }
+        catch (Exception ex)
+        {
+            Log4.Error($"[TaskEditDialog] AddAttachment_Click 실패: {ex.Message}\n{ex.StackTrace}");
         }
     }
 
@@ -943,15 +993,29 @@ public partial class TaskEditDialog : FluentWindow
 
     private async void NewCommentTextBox_KeyDown(object sender, KeyEventArgs e)
     {
-        if (e.Key == Key.Enter && (Keyboard.Modifiers & ModifierKeys.Control) == ModifierKeys.Control)
+        try
         {
-            await AddCommentAsync();
+            if (e.Key == Key.Enter && (Keyboard.Modifiers & ModifierKeys.Control) == ModifierKeys.Control)
+            {
+                await AddCommentAsync();
+            }
+        }
+        catch (Exception ex)
+        {
+            Log4.Error($"[TaskEditDialog] NewCommentTextBox_KeyDown 실패: {ex.Message}\n{ex.StackTrace}");
         }
     }
 
     private async void AddComment_Click(object sender, RoutedEventArgs e)
     {
-        await AddCommentAsync();
+        try
+        {
+            await AddCommentAsync();
+        }
+        catch (Exception ex)
+        {
+            Log4.Error($"[TaskEditDialog] AddComment_Click 실패: {ex.Message}\n{ex.StackTrace}");
+        }
     }
 
     private async Task AddCommentAsync()
