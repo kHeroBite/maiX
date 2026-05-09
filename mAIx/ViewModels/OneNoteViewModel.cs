@@ -2491,7 +2491,8 @@ public partial class OneNoteViewModel : ViewModelBase
                     IsRecording = false;
                     IsRecordingPaused = false;
                     Log4.Error($"[녹음] ★ 녹음 오류: {error}");
-                    _ = StopRealtimeSTT();
+                    // (제거됨) Jarvis 서버 STT — OpenAI로 전환
+                    _ = StopOpenAiServicesAsync();
                 });
             };
 
@@ -2511,11 +2512,16 @@ public partial class OneNoteViewModel : ViewModelBase
             _segmentsAfterDiarization = null;
             _lastSummarySegmentCount = 0;
 
-            // AI 분석 활성화 시 실시간 STT 시작
+            // AI 분석 활성화 시 OpenAI STT 오디오 청크 이벤트 연결
+            // (제거됨) Jarvis 서버 STT — OpenAI로 전환
             Log4.Info($"[녹음] ★ IsAIAnalysisEnabled: {IsAIAnalysisEnabled}");
             if (IsAIAnalysisEnabled)
             {
-                await StartRealtimeSTT();
+                // 중복 등록 방지: 먼저 제거 후 등록
+                _recordingService.RealtimeAudioChunkReady -= OnRealtimeAudioChunkForOpenAi;
+                _recordingService.RealtimeAudioChunkReady += OnRealtimeAudioChunkForOpenAi;
+                _recordingService.RealtimeEnabled = true;
+                _recordingService.RealtimeChunkSeconds = App.Settings?.OaiRecording?.ChunkSeconds ?? 10;
             }
 
             // 현재 선택된 페이지 ID와 연결 (있으면)
@@ -2533,7 +2539,7 @@ public partial class OneNoteViewModel : ViewModelBase
         {
             Log4.Error($"[녹음] ★ 녹음 시작 실패: {ex.Message}");
             IsRecording = false;
-            await StopRealtimeSTT();
+            await StopOpenAiServicesAsync();
             throw;  // MainWindow catch 블록으로 전파 → UpdateRecordingUI(false) 실행
         }
     }
@@ -2626,6 +2632,13 @@ public partial class OneNoteViewModel : ViewModelBase
     {
         try
         {
+            // OpenAI 오디오 청크 핸들러 해제 + RealtimeEnabled 정리
+            if (_recordingService != null)
+            {
+                _recordingService.RealtimeAudioChunkReady -= OnRealtimeAudioChunkForOpenAi;
+                _recordingService.RealtimeEnabled = false;
+            }
+
             if (IsRealtimeDiarizationEnabled)
             {
                 if (_transcribeSttService != null)
@@ -2812,7 +2825,7 @@ public partial class OneNoteViewModel : ViewModelBase
             RecordingVolume = 0;
 
             // 실시간 STT 정리
-            _ = StopRealtimeSTT();
+            // (제거됨) Jarvis 서버 STT — OpenAI로 전환
             // OpenAI AI 서비스 정리 (최종 요약 포함)
             _ = StopOpenAiServicesAsync();
 
@@ -3157,6 +3170,31 @@ public partial class OneNoteViewModel : ViewModelBase
         catch (Exception ex)
         {
             Log4.Error($"[OneNoteViewModel] OnRealtimeAudioChunk 실패: {ex.Message}\n{ex.StackTrace}");
+        }
+    }
+
+    /// <summary>
+    /// 실시간 오디오 청크를 OpenAI STT 서비스로 전송
+    /// (Jarvis 서버 STT 대체 — IsRealtimeDiarizationEnabled 분기로 모드 선택)
+    /// </summary>
+    private async void OnRealtimeAudioChunkForOpenAi(byte[] audioData, TimeSpan chunkStartTime)
+    {
+        try
+        {
+            if (IsRealtimeDiarizationEnabled)
+            {
+                if (_transcribeSttService != null)
+                    await _transcribeSttService.ProcessAudioChunkAsync(audioData, chunkStartTime).ConfigureAwait(false);
+            }
+            else
+            {
+                if (_realtimeSttService != null)
+                    await _realtimeSttService.SendAudioChunkAsync(audioData, chunkStartTime).ConfigureAwait(false);
+            }
+        }
+        catch (Exception ex)
+        {
+            Log4.Error($"[OpenAi] OnRealtimeAudioChunkForOpenAi 실패: {ex.Message}");
         }
     }
 
@@ -3525,8 +3563,9 @@ public partial class OneNoteViewModel : ViewModelBase
             RecordingDuration = TimeSpan.Zero;
             RecordingVolume = 0;
 
-            // 실시간 STT 정리
-            _ = StopRealtimeSTT();
+            // (제거됨) Jarvis 서버 STT — OpenAI로 전환
+            // OpenAI AI 서비스 정리 (핸들러 해제 포함)
+            _ = StopOpenAiServicesAsync();
 
             // 실시간 STT 결과를 STTSegments로 복사
             STTSegments.Clear();

@@ -329,7 +329,7 @@
                 <Border x:Name="OaiRecordingBorder" Margin="0,0,0,12" Padding="16"
                         Background="{DynamicResource ControlFillColorDefaultBrush}"
                         CornerRadius="8">
-                    <Expander IsExpanded="False">
+                    <Expander IsExpanded="True">
                         <Expander.Header>
                             <StackPanel Orientation="Horizontal">
                                 <TextBlock Text="🎙" FontSize="18" Margin="0,0,8,0"/>

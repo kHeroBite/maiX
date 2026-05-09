@@ -1124,6 +1124,33 @@
 - **재발방지**: ItemsPanel 동적 변경 시 VisualTreeHelper 사용 또는 ViewModel 바인딩 방식 사용. LoadContent() 직접 호출 금지
 - **Level**: 2 (WPF 패턴 오류 — 반복 가능)
 
+### L-390: 팝업 창과 동적 패널 혼동 — XAML 정적 추가가 사용자에게 도달하지 않는 패턴 (2026-05-10)
+- **증상**: odev가 ApiSettingsWindow.xaml에 OaiRecording 섹션을 정적으로 추가했으나, 사용자 메뉴에서 해당 팝업으로 진입하는 경로가 없어 실제 화면에 표시 안 됨. 실제 설정 화면은 ShowAiProviderSettings() 동적 패널이었음
+- **원인**: WPF 앱에는 정적 XAML(팝업 창)과 동적 패널(코드에서 생성되는 패널) 두 종류의 UI 진입점이 존재. XAML에 컨트롤을 추가했더라도 해당 윈도우를 여는 메뉴 바인딩이나 버튼이 없으면 사용자 도달 불가
+- **재발방지**: odev가 신규 UI 컨트롤 추가 시 반드시 해당 컨트롤/창으로 도달하는 사용자 진입 경로(메뉴 바인딩, Click 핸들러, ShowXxx 메서드 등)를 grep으로 확인 후 추가. 진입 경로가 없으면 동적 패널 또는 기존 화면에 통합 방식으로 검토
+- **연관**: L-391 (진입 경로 grep 검증)
+- **Level**: 2 (회귀 발생 — otest 1회 역라우팅 유발)
+
+### L-391: 신규 UI 추가 시 사용자 진입 경로 grep 검증 필수 (2026-05-10)
+- **증상**: odev가 신규 UI 섹션을 특정 윈도우에 추가한 후 otest에서 "사용자가 볼 수 없음" FAIL. 해당 윈도우를 호출하는 메뉴/버튼이 XAML에 연결되지 않은 상태였음
+- **원인**: odev가 구현 후 진입 경로 존재 여부를 grep으로 확인하지 않고 커밋
+- **재발방지**: odev 단계에서 신규 UI 추가 후 체크리스트:
+  1. `grep -r "XxxWindow\|ShowXxx\|MenuXxx_Click" --include="*.cs" --include="*.xaml"` 로 진입점 확인
+  2. 검색 결과 0건이면 진입 경로 미연결 — 수정 후 진행
+  3. 동적 패널(ShowAiProviderSettings 등)과 정적 팝업(ApiSettingsWindow 등) 분기 명확히 파악 후 올바른 위치에 추가
+- **연관**: L-390 (팝업 창과 동적 패널 혼동)
+- **Level**: 2 (프로세스 개선 — odev 체크리스트 강화)
+
+### L-392: otest UI 검증 = 코드 grep만으로 부족, 실제 사용자 진입 경로 추적 필수 (2026-05-10)
+- **증상**: otest Phase 2 코드 검증이 전체 PASS였으나 UI 검증에서 FAIL. XAML에 컨트롤이 존재하지만 사용자가 실제로 볼 수 없는 상황
+- **원인**: otest가 코드 grep(컨트롤 존재 여부)만 확인하고, 해당 컨트롤로 도달하는 사용자 흐름(진입 경로)을 검증하지 않음
+- **재발방지**: otest UI 검증 시 2단계 확인 필수:
+  1. 코드 grep: 컨트롤/섹션이 XAML/코드에 존재하는가
+  2. 진입 경로 grep: 해당 화면을 여는 메뉴 클릭/버튼/메서드가 실제 XAML 바인딩에 연결되어 있는가
+  - 2단계 PASS 조건: 사용자가 앱 실행 후 UI 동작만으로 해당 컨트롤에 도달 가능해야 함
+- **연관**: L-390, L-391
+- **Level**: 2 (테스트 프로세스 개선 — otest 체크리스트 강화)
+
 ## 반영 추적 테이블
 
 | 교훈 ID | 교훈 요약 | 반영 대상 | 반영 위치 | 반영일 | 검증 |
@@ -1158,3 +1185,6 @@
 | L-387 | 병렬 에이전트 using 블록 중복 충돌 — 동일 파일 선두 수정 시 중복 삽입 위험 | docs | LESSONS.md | 2026-05-09 | ✅ |
 | L-388 | 비동기 정리 함수 fire-and-forget 예외 소실 — StopXxx() 내부 try-catch 확인 필수 | docs | LESSONS.md + MEMORY.md | 2026-05-09 | ✅ |
 | L-389 | WPF ItemsPanel.LoadContent() 실제 패널 아님 — VisualTreeHelper 또는 바인딩 방식 사용 | docs | LESSONS.md + MEMORY.md | 2026-05-09 | ✅ |
+| L-390 | 팝업 창과 동적 패널 혼동 — XAML 정적 추가가 진입 경로 없으면 사용자 도달 불가 | docs | LESSONS.md | 2026-05-10 | ✅ |
+| L-391 | 신규 UI 추가 시 사용자 진입 경로 grep 검증 필수 — 진입점 없으면 FAIL | docs | LESSONS.md | 2026-05-10 | ✅ |
+| L-392 | otest UI 검증 = 코드 grep + 진입 경로 grep 2단계 필수 — 코드 존재 ≠ 사용자 도달 가능 | docs | LESSONS.md | 2026-05-10 | ✅ |

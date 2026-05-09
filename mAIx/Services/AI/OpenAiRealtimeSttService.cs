@@ -31,6 +31,12 @@ public interface IOpenAiRealtimeSttService : IDisposable
     Task StartAsync(CancellationToken cancellationToken = default);
 
     /// <summary>
+    /// PCM 16kHz mono 오디오 청크를 Realtime API로 전송
+    /// (AudioRecordingService.RealtimeAudioChunkReady에서 호출)
+    /// </summary>
+    Task SendAudioChunkAsync(byte[] pcmData, TimeSpan chunkStartTime);
+
+    /// <summary>
     /// STT 중지
     /// </summary>
     Task StopAsync();

@@ -2,6 +2,46 @@
 
 > PROJECT.md 작업 이력 테이블의 상세 보완본
 
+## 2026-05-10: OpenAI STT 화면 노출 + Jarvis→OpenAI 재배선 회귀 수정 (edb13708 후속)
+
+**분류**: O3 Normal (Fast mode)
+**범위**: 4개 파일 수정 (XAML 1 + Service 1 + ViewModel 1 + MainWindow.xaml.cs 1)
+**수정 건수**: ~450줄 변경 (ShowAiProviderSettings 동적 패널 ~250줄 + 기타)
+
+### 수정 1: OaiRecording 설정 섹션 화면 노출 안 됨 (회귀)
+- **원인**: odev-1이 ApiSettingsWindow.xaml 팝업에 OaiRecording 섹션을 추가했으나, 해당 팝업을 여는 메뉴 바인딩이 없어 사용자 도달 불가. 실제 설정 화면은 MainWindow.ShowAiProviderSettings() 동적 패널임
+- **수정 (odev-2)**: ShowAiProviderSettings() 동적 패널에 OaiRecording 섹션 추가
+  - 음성 모델 2슬롯 (Realtime용, Transcription용)
+  - LLM 모델 4슬롯 (누적요약, 주제어, 검색, 회의록)
+  - 누적요약주기/청크길이 ComboBox
+  - 프리셋 버튼 4개
+- **ApiSettingsWindow OaiRecordingBorder**: 사용자 진입 경로 없으므로 수정 없이 보존
+
+### 수정 2: 녹음 시 OpenAI STT 미연결 (회귀)
+- **원인**: OpenAI 서비스 StartAsync만 호출, RealtimeAudioChunkReady 이벤트 미연결
+- **수정 (odev-1)**:
+  - `IOpenAiRealtimeSttService.SendAudioChunkAsync` 인터페이스 시그니처 추가
+  - `OneNoteViewModel`: `RealtimeAudioChunkReady` → `OnRealtimeAudioChunkForOpenAi` 이벤트 연결
+  - `IsRealtimeDiarizationEnabled` 분기로 OpenAI Realtime/Transcribe 적절한 메서드 호출
+  - 기존 Jarvis STT 호출(`StartRealtimeSTT`/`StopRealtimeSTT`) 비활성화 (ServerWebSocketSpeechService 클래스 보존)
+  - `StopOpenAiServicesAsync` 정리 보강 (L-388 fire-and-forget 방지)
+
+### 테스트 결과
+- otest Phase 1 (빌드/기동): PASS
+- otest Phase 2 (코드 검증): PASS (11/11)
+- otest UI 검증: 1회 역라우팅 (ApiSettingsWindow 팝업 → ShowAiProviderSettings 동적 패널로 수정) → PASS
+- 최종: PASS
+
+### 신규 교훈
+- **L-390**: 팝업 창과 동적 패널 혼동 — XAML 정적 추가 시 진입 경로 없으면 사용자 도달 불가
+- **L-391**: 신규 UI 추가 시 사용자 진입 경로 grep 검증 필수
+- **L-392**: otest UI 검증 = 코드 grep + 진입 경로 grep 2단계 필수
+
+### 다음 작업 후보
+- Jarvis STT 전체(172.10.74.2:18989)를 GPT 음성모델로 교체 (사용자 요청 — 별도 /ok로 처리 권장)
+
+---
+
 ## 2026-05-03: 메일 본문 사라짐 회귀 수정 — c1fe1264 보강: ReplaceEmails 가드 범위 확장 + finally 안전망
 
 **분류**: O3 Normal (Fast mode)

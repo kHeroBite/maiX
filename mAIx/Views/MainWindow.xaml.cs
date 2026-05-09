@@ -19307,6 +19307,9 @@ public partial class MainWindow : FluentWindow
         CreateProviderExpanderSection("LMStudio", aiSettings.LMStudio, aiSettings.DefaultProvider == "LMStudio",
             GetLMStudioModels(), isLocal: true);
 
+        // 녹음 STT/LLM 설정 섹션
+        CreateOaiRecordingSectionDynamic();
+
         // 고급 설정 섹션
         CreateAdvancedSettingsSection();
     }
@@ -19887,6 +19890,266 @@ public partial class MainWindow : FluentWindow
     private void CreateAdvancedSettingsSection()
     {
         // 더 이상 사용하지 않음 - 각 Provider 내에 고급 설정 Expander로 이동
+    }
+
+    /// <summary>
+    /// 녹음 STT/LLM 설정 섹션 동적 생성
+    /// </summary>
+    private void CreateOaiRecordingSectionDynamic()
+    {
+        if (SettingsContentPanel == null) return;
+
+        var rec = App.Settings.OaiRecording;
+
+        // 섹션 헤더
+        SettingsContentPanel.Children.Add(CreateSettingsSectionHeader("🎙 녹음 STT/LLM 설정"));
+
+        // ── 음성 모델 그룹 ──────────────────────────────────────────────
+        var sttGroup = CreateSettingsGroupBorder();
+        var sttStack = new StackPanel();
+
+        sttStack.Children.Add(CreateSettingsLabel("음성 모델"));
+
+        // 실시간 STT 모델
+        var realtimeRow = new Grid { Margin = new Thickness(0, 0, 0, 8) };
+        realtimeRow.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(180) });
+        realtimeRow.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        var realtimeLabel = new System.Windows.Controls.TextBlock
+        {
+            Text = "실시간 STT 모델",
+            FontSize = 13,
+            VerticalAlignment = VerticalAlignment.Center,
+            Margin = new Thickness(0, 0, 8, 0)
+        };
+        Grid.SetColumn(realtimeLabel, 0);
+        realtimeRow.Children.Add(realtimeLabel);
+        var realtimeBox = new Wpf.Ui.Controls.TextBox
+        {
+            Text = rec.RealtimeSttModel,
+            PlaceholderText = "gpt-4o-realtime-preview"
+        };
+        realtimeBox.TextChanged += (s, e) => { rec.RealtimeSttModel = realtimeBox.Text; App.Settings.SaveAll(); };
+        Grid.SetColumn(realtimeBox, 1);
+        realtimeRow.Children.Add(realtimeBox);
+        sttStack.Children.Add(realtimeRow);
+
+        // 화자분리 STT 모델
+        var transcribeRow = new Grid { Margin = new Thickness(0, 0, 0, 8) };
+        transcribeRow.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(180) });
+        transcribeRow.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        var transcribeLabel = new System.Windows.Controls.TextBlock
+        {
+            Text = "화자분리 STT 모델",
+            FontSize = 13,
+            VerticalAlignment = VerticalAlignment.Center,
+            Margin = new Thickness(0, 0, 8, 0)
+        };
+        Grid.SetColumn(transcribeLabel, 0);
+        transcribeRow.Children.Add(transcribeLabel);
+        var transcribeBox = new Wpf.Ui.Controls.TextBox
+        {
+            Text = rec.TranscribeSttModel,
+            PlaceholderText = "gpt-4o-transcribe"
+        };
+        transcribeBox.TextChanged += (s, e) => { rec.TranscribeSttModel = transcribeBox.Text; App.Settings.SaveAll(); };
+        Grid.SetColumn(transcribeBox, 1);
+        transcribeRow.Children.Add(transcribeBox);
+        sttStack.Children.Add(transcribeRow);
+
+        sttGroup.Child = sttStack;
+        SettingsContentPanel.Children.Add(sttGroup);
+
+        // ── LLM 모델 그룹 ────────────────────────────────────────────────
+        var llmGroup = CreateSettingsGroupBorder();
+        var llmStack = new StackPanel();
+
+        llmStack.Children.Add(CreateSettingsLabel("LLM 모델"));
+
+        var llmRows = new[]
+        {
+            ("주제어 추출", "gpt-4o-mini", rec.KeywordExtractModel,
+                new Action<string>(v => { rec.KeywordExtractModel = v; App.Settings.SaveAll(); })),
+            ("1분 요약", "gpt-4o-mini", rec.MinuteSummaryModel,
+                new Action<string>(v => { rec.MinuteSummaryModel = v; App.Settings.SaveAll(); })),
+            ("누적 요약", "gpt-4o-mini", rec.CumulativeSummaryModel,
+                new Action<string>(v => { rec.CumulativeSummaryModel = v; App.Settings.SaveAll(); })),
+            ("최종 요약", "gpt-4o", rec.FinalSummaryModel,
+                new Action<string>(v => { rec.FinalSummaryModel = v; App.Settings.SaveAll(); })),
+        };
+
+        foreach (var (label, placeholder, value, setter) in llmRows)
+        {
+            var row = new Grid { Margin = new Thickness(0, 0, 0, 8) };
+            row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(180) });
+            row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+            var lbl = new System.Windows.Controls.TextBlock
+            {
+                Text = label,
+                FontSize = 13,
+                VerticalAlignment = VerticalAlignment.Center,
+                Margin = new Thickness(0, 0, 8, 0)
+            };
+            Grid.SetColumn(lbl, 0);
+            row.Children.Add(lbl);
+            var capturedSetter = setter;
+            var box = new Wpf.Ui.Controls.TextBox
+            {
+                Text = value,
+                PlaceholderText = placeholder
+            };
+            box.TextChanged += (s, e) => capturedSetter(box.Text);
+            Grid.SetColumn(box, 1);
+            row.Children.Add(box);
+            llmStack.Children.Add(row);
+        }
+
+        llmGroup.Child = llmStack;
+        SettingsContentPanel.Children.Add(llmGroup);
+
+        // ── 주기 / 청크 그룹 ─────────────────────────────────────────────
+        var timingGroup = CreateSettingsGroupBorder();
+        var timingStack = new StackPanel();
+
+        timingStack.Children.Add(CreateSettingsLabel("주기 / 청크 설정"));
+
+        // 누적요약 주기
+        var intervalRow = new Grid { Margin = new Thickness(0, 0, 0, 8) };
+        intervalRow.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(180) });
+        intervalRow.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        var intervalLabel = new System.Windows.Controls.TextBlock
+        {
+            Text = "누적요약 주기",
+            FontSize = 13,
+            VerticalAlignment = VerticalAlignment.Center,
+            Margin = new Thickness(0, 0, 8, 0)
+        };
+        Grid.SetColumn(intervalLabel, 0);
+        intervalRow.Children.Add(intervalLabel);
+        var intervalCombo = new ComboBox { Margin = new Thickness(0) };
+        var intervalOptions = new[] { (3, "3분"), (5, "5분"), (10, "10분"), (15, "15분") };
+        foreach (var (mins, text) in intervalOptions)
+            intervalCombo.Items.Add(new ComboBoxItem { Content = text, Tag = mins });
+        intervalCombo.SelectedIndex = intervalOptions.ToList().FindIndex(o => o.Item1 == rec.CumulativeSummaryIntervalMinutes);
+        if (intervalCombo.SelectedIndex < 0) intervalCombo.SelectedIndex = 1;
+        intervalCombo.SelectionChanged += (s, e) =>
+        {
+            try
+            {
+                if (intervalCombo.SelectedItem is ComboBoxItem ci && ci.Tag is int v)
+                { rec.CumulativeSummaryIntervalMinutes = v; App.Settings.SaveAll(); }
+            }
+            catch (Exception ex) { Log4.Error($"[MainWindow] 누적요약 주기 변경 실패: {ex}"); }
+        };
+        Grid.SetColumn(intervalCombo, 1);
+        intervalRow.Children.Add(intervalCombo);
+        timingStack.Children.Add(intervalRow);
+
+        // 청크 길이
+        var chunkRow = new Grid { Margin = new Thickness(0, 0, 0, 0) };
+        chunkRow.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(180) });
+        chunkRow.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        var chunkLabel = new System.Windows.Controls.TextBlock
+        {
+            Text = "청크 길이",
+            FontSize = 13,
+            VerticalAlignment = VerticalAlignment.Center,
+            Margin = new Thickness(0, 0, 8, 0)
+        };
+        Grid.SetColumn(chunkLabel, 0);
+        chunkRow.Children.Add(chunkLabel);
+        var chunkCombo = new ComboBox { Margin = new Thickness(0) };
+        var chunkOptions = new[] { (5, "5초"), (10, "10초"), (15, "15초") };
+        foreach (var (secs, text) in chunkOptions)
+            chunkCombo.Items.Add(new ComboBoxItem { Content = text, Tag = secs });
+        chunkCombo.SelectedIndex = chunkOptions.ToList().FindIndex(o => o.Item1 == rec.ChunkSeconds);
+        if (chunkCombo.SelectedIndex < 0) chunkCombo.SelectedIndex = 1;
+        chunkCombo.SelectionChanged += (s, e) =>
+        {
+            try
+            {
+                if (chunkCombo.SelectedItem is ComboBoxItem ci && ci.Tag is int v)
+                { rec.ChunkSeconds = v; App.Settings.SaveAll(); }
+            }
+            catch (Exception ex) { Log4.Error($"[MainWindow] 청크 길이 변경 실패: {ex}"); }
+        };
+        Grid.SetColumn(chunkCombo, 1);
+        chunkRow.Children.Add(chunkCombo);
+        timingStack.Children.Add(chunkRow);
+
+        timingGroup.Child = timingStack;
+        SettingsContentPanel.Children.Add(timingGroup);
+
+        // ── 프리셋 그룹 ──────────────────────────────────────────────────
+        var presetGroup = CreateSettingsGroupBorder();
+        var presetStack = new StackPanel();
+
+        presetStack.Children.Add(CreateSettingsLabel("프리셋"));
+        presetStack.Children.Add(CreateSettingsDescription("모델을 일괄 변경합니다. 사용자정의는 현재 값을 유지합니다."));
+
+        var presetBtnPanel = new WrapPanel { Margin = new Thickness(0, 8, 0, 0), Orientation = Orientation.Horizontal };
+
+        var presets = new[]
+        {
+            ("저비용형", "lowcost",
+                "gpt-4o-realtime-preview", "gpt-4o-transcribe",
+                "gpt-4o-mini", "gpt-4o-mini", "gpt-4o-mini", "gpt-4o-mini"),
+            ("품질형", "quality",
+                "gpt-4o-realtime-preview", "gpt-4o-transcribe",
+                "gpt-4o-mini", "gpt-4o-mini", "gpt-4o-mini", "gpt-4o"),
+            ("스트리밍형", "streaming",
+                "gpt-4o-realtime-preview", "gpt-4o-transcribe",
+                "gpt-4o-mini", "gpt-4o-mini", "gpt-4o-mini", "gpt-4o"),
+            ("사용자정의", "custom",
+                rec.RealtimeSttModel, rec.TranscribeSttModel,
+                rec.KeywordExtractModel, rec.MinuteSummaryModel,
+                rec.CumulativeSummaryModel, rec.FinalSummaryModel),
+        };
+
+        foreach (var (label, presetKey, rtModel, trModel, kwModel, minModel, cumModel, finModel) in presets)
+        {
+            var capturedLabel = label;
+            var capturedKey = presetKey;
+            var capturedRt = rtModel; var capturedTr = trModel;
+            var capturedKw = kwModel; var capturedMin = minModel;
+            var capturedCum = cumModel; var capturedFin = finModel;
+
+            var btn = new Wpf.Ui.Controls.Button
+            {
+                Content = capturedLabel,
+                Appearance = rec.ActivePreset == capturedKey
+                    ? Wpf.Ui.Controls.ControlAppearance.Primary
+                    : Wpf.Ui.Controls.ControlAppearance.Secondary,
+                Margin = new Thickness(0, 0, 8, 4),
+                Padding = new Thickness(16, 6, 16, 6)
+            };
+            btn.Click += (s, e) =>
+            {
+                try
+                {
+                    rec.RealtimeSttModel = capturedRt;
+                    rec.TranscribeSttModel = capturedTr;
+                    rec.KeywordExtractModel = capturedKw;
+                    rec.MinuteSummaryModel = capturedMin;
+                    rec.CumulativeSummaryModel = capturedCum;
+                    rec.FinalSummaryModel = capturedFin;
+                    rec.ActivePreset = capturedKey;
+                    App.Settings.SaveAll();
+                    // 변경 내용을 반영하기 위해 섹션 재표시 (Clear 후 재생성)
+                    SettingsContentPanel?.Children.Clear();
+                    ShowAiProviderSettings();
+                    Log4.Info($"[MainWindow] OaiRecording 프리셋 적용: {capturedLabel}");
+                }
+                catch (Exception ex)
+                {
+                    Log4.Error($"[MainWindow] OaiRecording 프리셋 적용 실패: {ex}");
+                }
+            };
+            presetBtnPanel.Children.Add(btn);
+        }
+
+        presetStack.Children.Add(presetBtnPanel);
+        presetGroup.Child = presetStack;
+        SettingsContentPanel.Children.Add(presetGroup);
     }
 
     /// <summary>
