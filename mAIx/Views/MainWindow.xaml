@@ -6853,9 +6853,11 @@
                                 <Border x:Name="OneNoteRecordingContentPanel" Visibility="Collapsed">
                                     <Grid>
                                         <Grid.ColumnDefinitions>
-                                            <ColumnDefinition Width="*" MinWidth="300"/>
+                                            <ColumnDefinition Width="*" MinWidth="250"/>
                                             <ColumnDefinition Width="4"/>
-                                            <ColumnDefinition Width="*" MinWidth="300"/>
+                                            <ColumnDefinition Width="300" MinWidth="160"/>
+                                            <ColumnDefinition Width="4"/>
+                                            <ColumnDefinition Width="280" MinWidth="200"/>
                                         </Grid.ColumnDefinitions>
 
                                         <!-- 좌측: STT 결과 -->
@@ -6995,129 +6997,294 @@
                                             </Grid>
                                         </Border>
 
-                                        <!-- GridSplitter -->
+                                        <!-- GridSplitter (Col1) -->
                                         <GridSplitter Grid.Column="1" Width="4"
                                                       HorizontalAlignment="Stretch"
                                                       Background="Transparent" Cursor="SizeWE"/>
 
-                                        <!-- 우측: AI 요약 -->
-                                        <Border Grid.Column="2" Padding="16">
+                                        <!-- 중간: 주제어 네비게이션 패널 (Col2) -->
+                                        <Border Grid.Column="2"
+                                                BorderBrush="{DynamicResource ControlElevationBorderBrush}"
+                                                BorderThickness="0,0,1,0">
                                             <Grid>
                                                 <Grid.RowDefinitions>
                                                     <RowDefinition Height="Auto"/>
                                                     <RowDefinition Height="*"/>
                                                 </Grid.RowDefinitions>
 
-                                                <!-- 요약 헤더 -->
-                                                <Grid Grid.Row="0" Margin="0,0,0,12">
+                                                <!-- 헤더: 주제어 네비게이션 + 방향 토글 -->
+                                                <Grid Grid.Row="0" Margin="12,10,12,8">
                                                     <Grid.ColumnDefinitions>
                                                         <ColumnDefinition Width="*"/>
                                                         <ColumnDefinition Width="Auto"/>
                                                     </Grid.ColumnDefinitions>
                                                     <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-                                                        <ui:SymbolIcon Symbol="Sparkle24" FontSize="18" Margin="0,0,8,0" VerticalAlignment="Center"/>
-                                                        <TextBlock Text="AI 요약" FontSize="15" FontWeight="SemiBold" VerticalAlignment="Center"/>
-                                                        <!-- 진행 중 표시기 -->
-                                                        <ui:ProgressRing x:Name="OneNoteSummaryProgress" Width="16" Height="16" Margin="8,0,0,0" IsIndeterminate="True" Visibility="Collapsed"/>
-                                                        <TextBlock x:Name="OneNoteSummaryProgressText" Text="" FontSize="12" Margin="8,0,0,0"
-                                                                   Foreground="{DynamicResource TextFillColorSecondaryBrush}" VerticalAlignment="Center"/>
+                                                        <ui:SymbolIcon Symbol="TextBulletListLtr24" FontSize="16" Margin="0,0,6,0" VerticalAlignment="Center"/>
+                                                        <TextBlock Text="주제어 네비게이션" FontSize="13" FontWeight="SemiBold" VerticalAlignment="Center"/>
                                                     </StackPanel>
-                                                    <!-- AI 요약 버튼 -->
-                                                    <ui:Button x:Name="OneNoteTabRunSummaryButton"
-                                                               Grid.Column="1"
-                                                               Content="AI 요약"
-                                                               Icon="{ui:SymbolIcon Sparkle24}"
-                                                               Appearance="Secondary"
-                                                               FontSize="11"
-                                                               Padding="10,5"
-                                                               Click="OneNoteTabRunSummary_Click"/>
+                                                    <ToggleButton x:Name="OneNoteTopicNavOrientationToggle"
+                                                                  Grid.Column="1"
+                                                                  Width="28" Height="28" Padding="0"
+                                                                  ToolTip="가로/세로 방향 전환"
+                                                                  Click="OneNoteTopicNavOrientationToggle_Click">
+                                                        <ui:SymbolIcon Symbol="ArrowRotateClockwise24" FontSize="14"/>
+                                                    </ToggleButton>
                                                 </Grid>
 
-                                                <!-- 요약 콘텐츠 -->
-                                                <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto">
-                                                    <Grid>
-                                                        <!-- 빈 상태 -->
-                                                        <TextBlock x:Name="OneNoteSummaryEmptyText" Text="AI 요약이 없습니다."
-                                                                   Foreground="{DynamicResource TextFillColorTertiaryBrush}"
-                                                                   VerticalAlignment="Center" HorizontalAlignment="Center"/>
-
-                                                        <!-- 요약 결과 -->
-                                                        <StackPanel x:Name="OneNoteSummaryContent" Visibility="Collapsed">
-                                                            <!-- 회의 제목 (맨 위에 표시) -->
-                                                            <Border x:Name="OneNoteSummaryTitlePanel" Padding="16" CornerRadius="8" Margin="0,0,20,12"
-                                                                    Background="{DynamicResource AccentFillColorDefaultBrush}" Visibility="Collapsed">
-                                                                <TextBlock x:Name="OneNoteSummaryTitleTextBlock"
-                                                                           TextWrapping="Wrap" FontSize="15" FontWeight="Bold"
-                                                                           Foreground="White" TextAlignment="Center"/>
-                                                            </Border>
-
-                                                            <!-- 요약 텍스트 -->
-                                                            <Border Padding="14" CornerRadius="8" Margin="0,0,0,12"
-                                                                    Background="{DynamicResource ControlFillColorDefaultBrush}">
-                                                                <StackPanel>
-                                                                    <TextBlock Text="요약" FontWeight="SemiBold" FontSize="12" Margin="0,0,0,8"/>
-                                                                    <TextBlock x:Name="OneNoteSummaryText"
-                                                                               TextWrapping="Wrap" FontSize="13" LineHeight="20"/>
-                                                                </StackPanel>
-                                                            </Border>
-
-                                                            <!-- 핵심 포인트 -->
-                                                            <Border x:Name="OneNoteKeyPointsPanel" Padding="14" CornerRadius="8" Margin="0,0,0,12"
-                                                                    Background="{DynamicResource ControlFillColorDefaultBrush}" Visibility="Collapsed">
-                                                                <StackPanel>
-                                                                    <TextBlock Text="핵심 포인트" FontWeight="SemiBold" FontSize="12" Margin="0,0,0,8"/>
-                                                                    <ItemsControl x:Name="OneNoteKeyPointsList">
-                                                                        <ItemsControl.ItemTemplate>
-                                                                            <DataTemplate>
-                                                                                <Border Padding="10" Margin="0,0,0,6" CornerRadius="6"
-                                                                                        Background="{DynamicResource ControlFillColorSecondaryBrush}">
-                                                                                    <TextBlock Text="{Binding}" TextWrapping="Wrap" FontSize="12"/>
-                                                                                </Border>
-                                                                            </DataTemplate>
-                                                                        </ItemsControl.ItemTemplate>
-                                                                    </ItemsControl>
-                                                                </StackPanel>
-                                                            </Border>
-
-                                                            <!-- 액션 아이템 -->
-                                                            <Border x:Name="OneNoteActionItemsPanel" Padding="14" CornerRadius="8" Margin="0,0,20,0"
-                                                                    Background="{DynamicResource ControlFillColorDefaultBrush}" Visibility="Collapsed">
-                                                                <StackPanel>
-                                                                    <TextBlock Text="액션 아이템" FontWeight="SemiBold" FontSize="12" Margin="0,0,0,8"/>
-                                                                    <ItemsControl x:Name="OneNoteActionItemsList">
-                                                                        <ItemsControl.ItemTemplate>
-                                                                            <DataTemplate>
-                                                                                <Border Padding="8,6" Margin="0,0,0,6" CornerRadius="6"
-                                                                                        Background="{DynamicResource ControlFillColorSecondaryBrush}">
-                                                                                    <Grid>
-                                                                                        <Grid.ColumnDefinitions>
-                                                                                            <ColumnDefinition Width="*"/>
-                                                                                            <ColumnDefinition Width="Auto"/>
-                                                                                        </Grid.ColumnDefinitions>
-                                                                                        <TextBlock Grid.Column="0" Text="{Binding Description}"
-                                                                                                   TextWrapping="Wrap" FontSize="12"
-                                                                                                   VerticalAlignment="Center" Margin="0,0,8,0"/>
-                                                                                        <ui:Button Grid.Column="1" x:Name="AddToTodoButton"
-                                                                                                   Appearance="{Binding IsAddedToTodo, Converter={StaticResource BoolToAppearanceConverter}}"
-                                                                                                   ToolTip="{Binding IsAddedToTodo, Converter={StaticResource BoolToTodoTooltipConverter}}"
-                                                                                                   Padding="6,4" Loaded="AddToTodoButton_Loaded"
-                                                                                                   Click="AddToTodoButton_Click">
-                                                                                            <StackPanel Orientation="Horizontal">
-                                                                                                <ui:SymbolIcon Symbol="{Binding IsAddedToTodo, Converter={StaticResource BoolToTodoIconConverter}}" FontSize="14"/>
-                                                                                            </StackPanel>
-                                                                                        </ui:Button>
-                                                                                    </Grid>
-                                                                                </Border>
-                                                                            </DataTemplate>
-                                                                        </ItemsControl.ItemTemplate>
-                                                                    </ItemsControl>
-                                                                </StackPanel>
-                                                            </Border>
-                                                        </StackPanel>
-                                                    </Grid>
+                                                <!-- 주제어 카드 목록 -->
+                                                <ScrollViewer Grid.Row="1"
+                                                              VerticalScrollBarVisibility="Auto"
+                                                              HorizontalScrollBarVisibility="Auto"
+                                                              Padding="8,0,8,8">
+                                                    <ItemsControl x:Name="TopicSegmentsItemsControl"
+                                                                  ItemsSource="{Binding TopicSegments}">
+                                                        <ItemsControl.ItemsPanel>
+                                                            <ItemsPanelTemplate>
+                                                                <VirtualizingStackPanel Orientation="Vertical"/>
+                                                            </ItemsPanelTemplate>
+                                                        </ItemsControl.ItemsPanel>
+                                                        <ItemsControl.ItemTemplate>
+                                                            <DataTemplate>
+                                                                <Border Background="{Binding BackgroundColorHex, Converter={StaticResource HexToBrushConverter}}"
+                                                                        Padding="8" Margin="2" CornerRadius="4"
+                                                                        Cursor="Hand"
+                                                                        MouseLeftButtonDown="TopicSegment_Click">
+                                                                    <Border.ToolTip>
+                                                                        <ToolTip>
+                                                                            <TextBlock Text="{Binding ToolTipText}" TextWrapping="Wrap" MaxWidth="400"/>
+                                                                        </ToolTip>
+                                                                    </Border.ToolTip>
+                                                                    <StackPanel>
+                                                                        <TextBlock Text="{Binding TimeRangeDisplay}"
+                                                                                   FontSize="10"
+                                                                                   Foreground="{DynamicResource TextFillColorTertiaryBrush}"
+                                                                                   Margin="0,0,0,2"/>
+                                                                        <TextBlock Text="{Binding DisplayTitle}"
+                                                                                   FontSize="12" FontWeight="SemiBold"
+                                                                                   TextTrimming="CharacterEllipsis"/>
+                                                                    </StackPanel>
+                                                                </Border>
+                                                            </DataTemplate>
+                                                        </ItemsControl.ItemTemplate>
+                                                    </ItemsControl>
                                                 </ScrollViewer>
                                             </Grid>
                                         </Border>
+
+                                        <!-- GridSplitter (Col3) -->
+                                        <GridSplitter Grid.Column="3" Width="4"
+                                                      HorizontalAlignment="Stretch"
+                                                      Background="Transparent" Cursor="SizeWE"/>
+
+                                        <!-- 우측: 녹음옵션(상단) + AI 요약(하단) (Col4) -->
+                                        <Grid Grid.Column="4">
+                                            <Grid.RowDefinitions>
+                                                <RowDefinition Height="Auto" MinHeight="180"/>
+                                                <RowDefinition Height="*"/>
+                                            </Grid.RowDefinitions>
+
+                                            <!-- 우측 상단: 녹음 옵션 패널 (Row 0) -->
+                                            <Border Grid.Row="0" Padding="12,10"
+                                                    BorderBrush="{DynamicResource ControlElevationBorderBrush}"
+                                                    BorderThickness="0,0,0,1">
+                                                <StackPanel>
+                                                    <!-- 화자분리 체크박스 (★핵심) -->
+                                                    <CheckBox x:Name="OneNoteDiarizationModeCheckBox"
+                                                              Content="화자분리 (체크: 준실시간, 해제: 실시간)"
+                                                              IsChecked="{Binding IsRealtimeDiarizationEnabled, Mode=TwoWay}"
+                                                              IsEnabled="{Binding IsNotRecording}"
+                                                              FontSize="12" Margin="0,0,0,6"
+                                                              ToolTip="체크 시 약 10~15초 지연, 화자별 색상 표시. 해제 시 즉시 자막."/>
+
+                                                    <!-- 청크 길이 ComboBox (화자분리 ON 시 활성) -->
+                                                    <StackPanel Orientation="Horizontal" Margin="0,0,0,6"
+                                                                IsEnabled="{Binding IsRealtimeDiarizationEnabled}">
+                                                        <TextBlock Text="청크 길이(초)" FontSize="12" VerticalAlignment="Center" Margin="0,0,6,0"
+                                                                   Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
+                                                        <ComboBox x:Name="OneNoteChunkSecondsComboBox"
+                                                                  SelectedValue="{Binding ChunkSeconds, Mode=TwoWay}"
+                                                                  SelectedValuePath="Tag"
+                                                                  FontSize="12" Width="70">
+                                                            <ComboBoxItem Content="5" Tag="5"/>
+                                                            <ComboBoxItem Content="10" Tag="10"/>
+                                                            <ComboBoxItem Content="15" Tag="15"/>
+                                                        </ComboBox>
+                                                    </StackPanel>
+
+                                                    <!-- 누적요약 주기 ComboBox -->
+                                                    <StackPanel Orientation="Horizontal" Margin="0,0,0,10">
+                                                        <TextBlock Text="누적요약 주기(분)" FontSize="12" VerticalAlignment="Center" Margin="0,0,6,0"
+                                                                   Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
+                                                        <ComboBox x:Name="OneNoteCumulativeIntervalComboBox"
+                                                                  SelectedValue="{Binding CumulativeIntervalMinutes, Mode=TwoWay}"
+                                                                  SelectedValuePath="Tag"
+                                                                  FontSize="12" Width="60">
+                                                            <ComboBoxItem Content="3" Tag="3"/>
+                                                            <ComboBoxItem Content="5" Tag="5"/>
+                                                            <ComboBoxItem Content="10" Tag="10"/>
+                                                            <ComboBoxItem Content="15" Tag="15"/>
+                                                        </ComboBox>
+                                                    </StackPanel>
+
+                                                    <!-- 종료 버튼 -->
+                                                    <ui:Button x:Name="OneNoteRecordingStopButton"
+                                                               Content="종료 (최종 요약)"
+                                                               Icon="{ui:SymbolIcon Stop24}"
+                                                               Appearance="Danger"
+                                                               FontSize="12"
+                                                               HorizontalAlignment="Stretch"
+                                                               IsEnabled="{Binding IsRecording}"
+                                                               Click="OnRecordingStop_Click"/>
+                                                </StackPanel>
+                                            </Border>
+
+                                            <!-- 우측 하단: AI 요약 패널 (Row 1) -->
+                                            <Border Grid.Row="1" Padding="12,8">
+                                                <Grid>
+                                                    <Grid.RowDefinitions>
+                                                        <RowDefinition Height="Auto"/>
+                                                        <RowDefinition Height="*"/>
+                                                    </Grid.RowDefinitions>
+
+                                                    <!-- 요약 헤더 -->
+                                                    <Grid Grid.Row="0" Margin="0,0,0,8">
+                                                        <Grid.ColumnDefinitions>
+                                                            <ColumnDefinition Width="*"/>
+                                                            <ColumnDefinition Width="Auto"/>
+                                                        </Grid.ColumnDefinitions>
+                                                        <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                                                            <ui:SymbolIcon Symbol="Sparkle24" FontSize="16" Margin="0,0,6,0" VerticalAlignment="Center"/>
+                                                            <TextBlock Text="AI 요약" FontSize="13" FontWeight="SemiBold" VerticalAlignment="Center"/>
+                                                            <!-- 진행 중 표시기 -->
+                                                            <ui:ProgressRing x:Name="OneNoteSummaryProgress" Width="16" Height="16" Margin="6,0,0,0" IsIndeterminate="True" Visibility="Collapsed"/>
+                                                            <TextBlock x:Name="OneNoteSummaryProgressText" Text="" FontSize="12" Margin="6,0,0,0"
+                                                                       Foreground="{DynamicResource TextFillColorSecondaryBrush}" VerticalAlignment="Center"/>
+                                                        </StackPanel>
+                                                        <!-- AI 요약 버튼 -->
+                                                        <ui:Button x:Name="OneNoteTabRunSummaryButton"
+                                                                   Grid.Column="1"
+                                                                   Content="AI 요약"
+                                                                   Icon="{ui:SymbolIcon Sparkle24}"
+                                                                   Appearance="Secondary"
+                                                                   FontSize="11"
+                                                                   Padding="8,4"
+                                                                   Click="OneNoteTabRunSummary_Click"/>
+                                                    </Grid>
+
+                                                    <!-- 요약 콘텐츠 -->
+                                                    <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto">
+                                                        <StackPanel>
+                                                            <!-- 1분 요약 카운트 -->
+                                                            <TextBlock Text="{Binding MinuteSummaryCount, StringFormat='1분 요약: {0}회'}"
+                                                                       FontSize="11"
+                                                                       Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                                                                       Margin="0,0,0,6"
+                                                                       Visibility="{Binding IsRecording, Converter={StaticResource BoolToVisibilityConverter}}"/>
+
+                                                            <!-- 누적 요약 -->
+                                                            <Border Padding="10" CornerRadius="6" Margin="0,0,0,8"
+                                                                    Background="{DynamicResource ControlFillColorDefaultBrush}"
+                                                                    Visibility="{Binding CumulativeSummaryText, Converter={StaticResource NullToVisibilityConverter}}">
+                                                                <StackPanel>
+                                                                    <TextBlock Text="누적 요약" FontWeight="SemiBold" FontSize="11" Margin="0,0,0,4"/>
+                                                                    <TextBlock Text="{Binding CumulativeSummaryText}"
+                                                                               TextWrapping="Wrap" FontSize="12"/>
+                                                                </StackPanel>
+                                                            </Border>
+
+                                                            <!-- 최종 요약 -->
+                                                            <Border Padding="10" CornerRadius="6" Margin="0,0,0,8"
+                                                                    Background="{DynamicResource AccentFillColorTertiaryBrush}"
+                                                                    Visibility="{Binding HasFinalSummary, Converter={StaticResource BoolToVisibilityConverter}}">
+                                                                <StackPanel>
+                                                                    <TextBlock Text="최종 요약" FontWeight="SemiBold" FontSize="11" Margin="0,0,0,4"/>
+                                                                    <TextBlock Text="{Binding FinalSummaryText}"
+                                                                               TextWrapping="Wrap" FontSize="12"/>
+                                                                </StackPanel>
+                                                            </Border>
+
+                                                            <!-- 기존 AI 요약 결과 -->
+                                                            <TextBlock x:Name="OneNoteSummaryEmptyText" Text="AI 요약이 없습니다."
+                                                                       Foreground="{DynamicResource TextFillColorTertiaryBrush}"
+                                                                       HorizontalAlignment="Center" Margin="0,8,0,0"/>
+
+                                                            <StackPanel x:Name="OneNoteSummaryContent" Visibility="Collapsed">
+                                                                <!-- 회의 제목 -->
+                                                                <Border x:Name="OneNoteSummaryTitlePanel" Padding="14" CornerRadius="8" Margin="0,0,0,8"
+                                                                        Background="{DynamicResource AccentFillColorDefaultBrush}" Visibility="Collapsed">
+                                                                    <TextBlock x:Name="OneNoteSummaryTitleTextBlock"
+                                                                               TextWrapping="Wrap" FontSize="14" FontWeight="Bold"
+                                                                               Foreground="White" TextAlignment="Center"/>
+                                                                </Border>
+
+                                                                <!-- 요약 텍스트 -->
+                                                                <Border Padding="12" CornerRadius="6" Margin="0,0,0,8"
+                                                                        Background="{DynamicResource ControlFillColorDefaultBrush}">
+                                                                    <StackPanel>
+                                                                        <TextBlock Text="요약" FontWeight="SemiBold" FontSize="11" Margin="0,0,0,6"/>
+                                                                        <TextBlock x:Name="OneNoteSummaryText"
+                                                                                   TextWrapping="Wrap" FontSize="12" LineHeight="18"/>
+                                                                    </StackPanel>
+                                                                </Border>
+
+                                                                <!-- 핵심 포인트 -->
+                                                                <Border x:Name="OneNoteKeyPointsPanel" Padding="12" CornerRadius="6" Margin="0,0,0,8"
+                                                                        Background="{DynamicResource ControlFillColorDefaultBrush}" Visibility="Collapsed">
+                                                                    <StackPanel>
+                                                                        <TextBlock Text="핵심 포인트" FontWeight="SemiBold" FontSize="11" Margin="0,0,0,6"/>
+                                                                        <ItemsControl x:Name="OneNoteKeyPointsList">
+                                                                            <ItemsControl.ItemTemplate>
+                                                                                <DataTemplate>
+                                                                                    <Border Padding="8" Margin="0,0,0,4" CornerRadius="4"
+                                                                                            Background="{DynamicResource ControlFillColorSecondaryBrush}">
+                                                                                        <TextBlock Text="{Binding}" TextWrapping="Wrap" FontSize="11"/>
+                                                                                    </Border>
+                                                                                </DataTemplate>
+                                                                            </ItemsControl.ItemTemplate>
+                                                                        </ItemsControl>
+                                                                    </StackPanel>
+                                                                </Border>
+
+                                                                <!-- 액션 아이템 -->
+                                                                <Border x:Name="OneNoteActionItemsPanel" Padding="12" CornerRadius="6" Margin="0,0,0,0"
+                                                                        Background="{DynamicResource ControlFillColorDefaultBrush}" Visibility="Collapsed">
+                                                                    <StackPanel>
+                                                                        <TextBlock Text="액션 아이템" FontWeight="SemiBold" FontSize="11" Margin="0,0,0,6"/>
+                                                                        <ItemsControl x:Name="OneNoteActionItemsList">
+                                                                            <ItemsControl.ItemTemplate>
+                                                                                <DataTemplate>
+                                                                                    <Border Padding="8,6" Margin="0,0,0,4" CornerRadius="4"
+                                                                                            Background="{DynamicResource ControlFillColorSecondaryBrush}">
+                                                                                        <Grid>
+                                                                                            <Grid.ColumnDefinitions>
+                                                                                                <ColumnDefinition Width="*"/>
+                                                                                                <ColumnDefinition Width="Auto"/>
+                                                                                            </Grid.ColumnDefinitions>
+                                                                                            <TextBlock Grid.Column="0" Text="{Binding Description}"
+                                                                                                       TextWrapping="Wrap" FontSize="11"
+                                                                                                       VerticalAlignment="Center" Margin="0,0,6,0"/>
+                                                                                            <ui:Button Grid.Column="1" x:Name="AddToTodoButton"
+                                                                                                       Appearance="{Binding IsAddedToTodo, Converter={StaticResource BoolToAppearanceConverter}}"
+                                                                                                       ToolTip="{Binding IsAddedToTodo, Converter={StaticResource BoolToTodoTooltipConverter}}"
+                                                                                                       Padding="6,4" Loaded="AddToTodoButton_Loaded"
+                                                                                                       Click="AddToTodoButton_Click">
+                                                                                                <StackPanel Orientation="Horizontal">
+                                                                                                    <ui:SymbolIcon Symbol="{Binding IsAddedToTodo, Converter={StaticResource BoolToTodoIconConverter}}" FontSize="14"/>
+                                                                                                </StackPanel>
+                                                                                            </ui:Button>
+                                                                                        </Grid>
+                                                                                    </Border>
+                                                                                </DataTemplate>
+                                                                            </ItemsControl.ItemTemplate>
+                                                                        </ItemsControl>
+                                                                    </StackPanel>
+                                                                </Border>
+                                                            </StackPanel>
+                                                        </StackPanel>
+                                                    </ScrollViewer>
+                                                </Grid>
+                                            </Border>
+                                        </Grid>
                                     </Grid>
                                 </Border>
 

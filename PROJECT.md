@@ -329,6 +329,22 @@ Models:
 
   - 파일명: CommandPaletteItem.cs (신규 — 2026-04-09 Phase4)
     역할: 커맨드 팔레트 아이템 (UI 모델)
+
+  - 파일명: OpenAiRecordingSettings.cs (신규 — 2026-05-09)
+    경로: Models/Settings/
+    역할: OpenAI 녹음 STT/LLM 설정 (XML 직렬화), oai_recording.xml 영속화
+    속성: RealtimeSttModel, TranscribeSttModel, KeywordExtractModel, MinuteSummaryModel, CumulativeSummaryModel, FinalSummaryModel, CumulativeSummaryIntervalMinutes, ChunkSeconds, ActivePreset, TopicNavOrientation
+
+  - 파일명: TopicSegment.cs (신규 — 2026-05-09)
+    경로: Models/
+    역할: 주제어 세그먼트 모델 (PastelPalette 8색, INotifyPropertyChanged)
+    속성: Id, StartTime, EndTime, Keywords, DisplayTitle, SummaryPreview, BackgroundColorHex
+    computed: KeywordsDisplay, TimeRangeDisplay, ToolTipText
+
+  - 파일명: MinuteSummaryEntry.cs (신규 — 2026-05-09)
+    경로: Models/
+    역할: 1분 요약 엔트리 (순번/시간범위/요약 텍스트/생성시각)
+    속성: Index, StartTime, EndTime, SummaryText, CreatedAt
 ```
 
 ### 5. Services (비즈니스 로직)
@@ -372,6 +388,31 @@ AI_Services:
 
   - 파일명: RecordingSummaryService.cs
     역할: 오디오 녹음 요약 서비스
+
+  - 파일명: OpenAiRealtimeSttService.cs
+    역할: OpenAI Realtime API WebSocket 기반 실시간 STT 서비스 (화자분리 OFF 모드)
+    인터페이스: IOpenAiRealtimeSttService
+    이벤트: TranscriptSegmentReceived
+
+  - 파일명: OpenAiTranscribeSttService.cs
+    역할: OpenAI Transcription API 청크 기반 STT 서비스 (화자분리 ON 모드, Jaccard dedup)
+    인터페이스: IOpenAiTranscribeSttService
+    이벤트: TranscriptSegmentReceived
+
+  - 파일명: TopicExtractorService.cs
+    역할: 12초 PeriodicTimer 기반 주제어 추출 + Jaccard 세그먼트 분기
+    인터페이스: ITopicExtractorService
+    이벤트: TopicSegmentAdded, TopicSegmentUpdated
+
+  - 파일명: MinuteSummaryService.cs
+    역할: 60초 PeriodicTimer 기반 1분 요약 생성 + 디스크 JSON 저장
+    인터페이스: IMinuteSummaryService
+    이벤트: MinuteSummaryCreated
+
+  - 파일명: CumulativeSummaryService.cs
+    역할: 설정 주기 PeriodicTimer 기반 누적 요약 + 압축 갱신 모드 + 최종 요약
+    인터페이스: ICumulativeSummaryService
+    이벤트: CumulativeSummaryUpdated
 ```
 
 #### 5.2 Services/Analysis (이메일 분석)
@@ -720,6 +761,7 @@ Converters:
   - BoolToFontWeightConverter.cs: bool → FontWeight
   - StringToInitialConverter.cs: 문자열 → 이니셜
   - AiCategoryToBadgeConverter.cs: AI 카테고리 문자열 → 배지 색상/텍스트 (긴급/액션/FYI/일반) [신규 2026-03-29]
+  - HexToBrushConverter.cs: 16진 색상 문자열 → SolidColorBrush 변환기 (TopicSegment 배경색 바인딩용) [신규 2026-05-09]
 ```
 
 ## 핵심 종속성

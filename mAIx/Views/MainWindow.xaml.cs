@@ -14014,7 +14014,7 @@ public partial class MainWindow : FluentWindow
                 var oneNoteService = scope.ServiceProvider.GetService<GraphOneNoteService>();
                 if (oneNoteService != null)
                 {
-                    _oneNoteViewModel = new OneNoteViewModel(oneNoteService);
+                    _oneNoteViewModel = new OneNoteViewModel(oneNoteService, scope.ServiceProvider);
 
                     // 녹음 완료 후 새 파일 선택 이벤트 핸들러
                     _oneNoteViewModel.NewRecordingSelected += async (newRecording) =>

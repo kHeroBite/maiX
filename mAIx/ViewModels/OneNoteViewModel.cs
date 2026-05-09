@@ -7,10 +7,12 @@ using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Graph.Models;
 using mAIx.Controls;
 using mAIx.Models;
 using mAIx.Utils;
+using mAIx.Services.AI;
 using mAIx.Services.Graph;
 using Newtonsoft.Json;
 using Serilog;
@@ -192,6 +194,18 @@ public partial class OneNoteViewModel : ViewModelBase
     /// </summary>
     private static readonly string RecordingsDir = Path.Combine(
         Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "mAIx", "recordings");
+
+    /// <summary>
+    /// DI 서비스 프로바이더
+    /// </summary>
+    private IServiceProvider? _serviceProvider;
+
+    // ─── OpenAI STT/AI 서비스 (IServiceProvider에서 lazy resolve) ─────────
+    private IOpenAiRealtimeSttService? _realtimeSttService;
+    private IOpenAiTranscribeSttService? _transcribeSttService;
+    private ITopicExtractorService? _topicExtractorService;
+    private IMinuteSummaryService? _minuteSummaryService;
+    private ICumulativeSummaryService? _cumulativeSummaryService;
 
     /// <summary>
     /// 녹음 서비스
@@ -432,6 +446,7 @@ public partial class OneNoteViewModel : ViewModelBase
     /// </summary>
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(RecordingStatusText))]
+    [NotifyPropertyChangedFor(nameof(IsNotRecording))]
     private bool _isRecording;
 
     /// <summary>
@@ -472,6 +487,67 @@ public partial class OneNoteViewModel : ViewModelBase
     }
 
     /// <summary>
+    /// 녹음 중이 아닌 여부 (체크박스/ComboBox 활성화 바인딩)
+    /// </summary>
+    public bool IsNotRecording => !IsRecording;
+
+    /// <summary>
+    /// 최종 요약 존재 여부
+    /// </summary>
+    public bool HasFinalSummary => !string.IsNullOrEmpty(FinalSummaryText);
+
+    // ─── 주제어 네비게이션 / 실시간 AI 요약 프로퍼티 ──────────────────────
+
+    /// <summary>
+    /// 주제어 세그먼트 컬렉션 (실시간 추가)
+    /// </summary>
+    [ObservableProperty]
+    private System.Collections.ObjectModel.ObservableCollection<Models.TopicSegment> _topicSegments = new();
+
+    /// <summary>
+    /// 누적 요약 텍스트
+    /// </summary>
+    [ObservableProperty]
+    private string _cumulativeSummaryText = string.Empty;
+
+    /// <summary>
+    /// 최종 요약 텍스트
+    /// </summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasFinalSummary))]
+    private string _finalSummaryText = string.Empty;
+
+    /// <summary>
+    /// 화자분리(준실시간) 모드 사용 여부 (체크 시 TranscribeSTT, 해제 시 RealtimeSTT)
+    /// </summary>
+    [ObservableProperty]
+    private bool _isRealtimeDiarizationEnabled;
+
+    /// <summary>
+    /// 오디오 청크 길이 (초)
+    /// </summary>
+    [ObservableProperty]
+    private int _chunkSeconds = 10;
+
+    /// <summary>
+    /// 누적 요약 주기 (분)
+    /// </summary>
+    [ObservableProperty]
+    private int _cumulativeIntervalMinutes = 5;
+
+    /// <summary>
+    /// 주제어 네비게이션 패널 방향 (Horizontal / Vertical)
+    /// </summary>
+    [ObservableProperty]
+    private string _topicNavOrientation = "Horizontal";
+
+    /// <summary>
+    /// 1분 요약 생성 횟수
+    /// </summary>
+    [ObservableProperty]
+    private int _minuteSummaryCount;
+
+    /// <summary>
     /// 선택된 노트북이 있는지 여부
     /// </summary>
     public bool HasSelectedNotebook => SelectedNotebook != null;
@@ -486,10 +562,20 @@ public partial class OneNoteViewModel : ViewModelBase
     /// </summary>
     public bool HasSelectedPage => SelectedPage != null;
 
-    public OneNoteViewModel(GraphOneNoteService oneNoteService)
+    public OneNoteViewModel(GraphOneNoteService oneNoteService, IServiceProvider? serviceProvider = null)
     {
         _oneNoteService = oneNoteService ?? throw new ArgumentNullException(nameof(oneNoteService));
         _logger = Log.ForContext<OneNoteViewModel>();
+        _serviceProvider = serviceProvider;
+
+        // OaiRecording 설정값으로 초기값 동기화
+        var oaiSettings = App.Settings?.OaiRecording;
+        if (oaiSettings != null)
+        {
+            _chunkSeconds = oaiSettings.ChunkSeconds;
+            _cumulativeIntervalMinutes = oaiSettings.CumulativeSummaryIntervalMinutes;
+            _topicNavOrientation = oaiSettings.TopicNavOrientation ?? "Horizontal";
+        }
 
         // 녹음 목록에 새 파일 추가 시 자동 선택
         _currentPageRecordings.CollectionChanged += OnCurrentPageRecordingsChanged;
@@ -2436,9 +2522,12 @@ public partial class OneNoteViewModel : ViewModelBase
             var pageId = SelectedPage?.Id;
             await _recordingService.StartRecordingAsync(pageId, App.Settings?.UserPreferences?.PreferredMicrophoneDeviceId);
 
+            // ─── OpenAI AI 서비스 시작 ───────────────────────────────────────
+            await StartOpenAiServicesAsync();
+
             IsRecording = true;
             IsRecordingPaused = false;
-            Log4.Info($"[녹음] ★ 녹음 시작됨 (페이지: {pageId ?? "없음"}, 실시간 STT: {IsAIAnalysisEnabled})");
+            Log4.Info($"[녹음] ★ 녹음 시작됨 (페이지: {pageId ?? "없음"}, 실시간 STT: {IsAIAnalysisEnabled}, 화자분리모드: {IsRealtimeDiarizationEnabled})");
         }
         catch (Exception ex)
         {
@@ -2446,6 +2535,263 @@ public partial class OneNoteViewModel : ViewModelBase
             IsRecording = false;
             await StopRealtimeSTT();
             throw;  // MainWindow catch 블록으로 전파 → UpdateRecordingUI(false) 실행
+        }
+    }
+
+    /// <summary>
+    /// OpenAI AI 서비스 시작 (StartRecordingAsync 내부에서 호출)
+    /// </summary>
+    private async Task StartOpenAiServicesAsync()
+    {
+        if (_serviceProvider == null)
+        {
+            Log4.Warn("[녹음] IServiceProvider 미주입 — OpenAI AI 서비스 스킵");
+            return;
+        }
+
+        try
+        {
+            // 누적/1분 요약 초기화
+            TopicSegments.Clear();
+            CumulativeSummaryText = string.Empty;
+            FinalSummaryText = string.Empty;
+            MinuteSummaryCount = 0;
+
+            // 서비스 resolve
+            _realtimeSttService = _serviceProvider.GetService<IOpenAiRealtimeSttService>();
+            _transcribeSttService = _serviceProvider.GetService<IOpenAiTranscribeSttService>();
+            _topicExtractorService = _serviceProvider.GetService<ITopicExtractorService>();
+            _minuteSummaryService = _serviceProvider.GetService<IMinuteSummaryService>();
+            _cumulativeSummaryService = _serviceProvider.GetService<ICumulativeSummaryService>();
+
+            // 이벤트 구독
+            if (IsRealtimeDiarizationEnabled)
+            {
+                if (_transcribeSttService != null)
+                    _transcribeSttService.TranscriptSegmentReceived += OnSttTranscriptSegmentReceived;
+            }
+            else
+            {
+                if (_realtimeSttService != null)
+                    _realtimeSttService.TranscriptSegmentReceived += OnSttTranscriptSegmentReceived;
+            }
+
+            if (_topicExtractorService != null)
+            {
+                _topicExtractorService.TopicSegmentAdded += OnTopicSegmentAdded;
+                _topicExtractorService.TopicSegmentUpdated += OnTopicSegmentUpdated;
+            }
+
+            if (_minuteSummaryService != null)
+            {
+                _minuteSummaryService.MinuteSummaryCreated += OnMinuteSummaryCreated;
+            }
+
+            if (_cumulativeSummaryService != null)
+            {
+                _cumulativeSummaryService.CumulativeSummaryUpdated += OnCumulativeSummaryUpdated;
+            }
+
+            // 서비스 시작
+            if (IsRealtimeDiarizationEnabled)
+            {
+                if (_transcribeSttService != null)
+                    await _transcribeSttService.StartAsync();
+            }
+            else
+            {
+                if (_realtimeSttService != null)
+                    await _realtimeSttService.StartAsync();
+            }
+
+            if (_topicExtractorService != null)
+                await _topicExtractorService.StartAsync();
+            if (_minuteSummaryService != null)
+                await _minuteSummaryService.StartAsync();
+            if (_cumulativeSummaryService != null)
+                await _cumulativeSummaryService.StartAsync();
+
+            Log4.Info($"[녹음] OpenAI 서비스 시작 완료 (화자분리모드: {IsRealtimeDiarizationEnabled})");
+        }
+        catch (Exception ex)
+        {
+            Log4.Warn($"[녹음] OpenAI 서비스 시작 실패 (기존 STT 계속): {ex.Message}");
+        }
+    }
+
+    /// <summary>
+    /// OpenAI AI 서비스 중지 (StopRecordingAsync 내부에서 호출)
+    /// </summary>
+    private async Task StopOpenAiServicesAsync()
+    {
+        try
+        {
+            if (IsRealtimeDiarizationEnabled)
+            {
+                if (_transcribeSttService != null)
+                    _transcribeSttService.TranscriptSegmentReceived -= OnSttTranscriptSegmentReceived;
+            }
+            else
+            {
+                if (_realtimeSttService != null)
+                    _realtimeSttService.TranscriptSegmentReceived -= OnSttTranscriptSegmentReceived;
+            }
+
+            if (_topicExtractorService != null)
+            {
+                _topicExtractorService.TopicSegmentAdded -= OnTopicSegmentAdded;
+                _topicExtractorService.TopicSegmentUpdated -= OnTopicSegmentUpdated;
+                await _topicExtractorService.StopAsync();
+            }
+
+            if (_minuteSummaryService != null)
+            {
+                _minuteSummaryService.MinuteSummaryCreated -= OnMinuteSummaryCreated;
+                await _minuteSummaryService.StopAsync();
+            }
+
+            if (_cumulativeSummaryService != null)
+            {
+                _cumulativeSummaryService.CumulativeSummaryUpdated -= OnCumulativeSummaryUpdated;
+                await _cumulativeSummaryService.StopAsync();
+
+                // 최종 요약 생성
+                try
+                {
+                    var finalText = await _cumulativeSummaryService.FinalSummarizeAsync();
+                    FinalSummaryText = finalText ?? string.Empty;
+                    Log4.Info($"[녹음] 최종 요약 생성 완료: {FinalSummaryText.Length}자");
+                }
+                catch (Exception ex)
+                {
+                    Log4.Warn($"[녹음] 최종 요약 생성 실패: {ex.Message}");
+                }
+            }
+
+            if (IsRealtimeDiarizationEnabled && _transcribeSttService != null)
+                await _transcribeSttService.StopAsync();
+            else if (_realtimeSttService != null)
+                await _realtimeSttService.StopAsync();
+
+            Log4.Info("[녹음] OpenAI 서비스 중지 완료");
+        }
+        catch (Exception ex)
+        {
+            Log4.Warn($"[녹음] OpenAI 서비스 중지 실패: {ex.Message}");
+        }
+    }
+
+    // ─── OpenAI 서비스 이벤트 핸들러 ──────────────────────────────────────
+
+    // 이벤트 핸들러 — 실제 인터페이스 시그니처에 맞춤
+    // IOpenAiRealtimeSttService/IOpenAiTranscribeSttService: Action<TimeSpan, string>
+    // ITopicExtractorService: Action<TopicSegment>
+    // IMinuteSummaryService: Action<MinuteSummaryEntry>
+    // ICumulativeSummaryService: Action<string>
+
+    private async void OnSttTranscriptSegmentReceived(TimeSpan startTime, string text)
+    {
+        try
+        {
+            // 기존 LiveSTTSegments 표시 (Dispatcher 필요 — null 가능 체인 분리)
+            var dispatcher = System.Windows.Application.Current?.Dispatcher;
+            if (dispatcher != null)
+            {
+                await dispatcher.InvokeAsync(() =>
+                {
+                    var segment = new Models.TranscriptSegment
+                    {
+                        Speaker = "화자",
+                        Text = text,
+                        StartTime = startTime,
+                        EndTime = startTime
+                    };
+                    LiveSTTSegments.Add(segment);
+                }).Task.ConfigureAwait(false);
+            }
+
+            // TopicExtractor / MinuteSummary에 텍스트 전달
+            if (_topicExtractorService != null)
+            {
+                try { await _topicExtractorService.AddTranscriptAsync(text, startTime).ConfigureAwait(false); }
+                catch (Exception ex) { Log4.Warn($"[녹음] TopicExtractor 추가 실패: {ex.Message}"); }
+            }
+
+            if (_minuteSummaryService != null)
+            {
+                try { await _minuteSummaryService.AddTranscriptAsync(text).ConfigureAwait(false); }
+                catch (Exception ex) { Log4.Warn($"[녹음] MinuteSummary 추가 실패: {ex.Message}"); }
+            }
+        }
+        catch (Exception ex)
+        {
+            Log4.Error($"[녹음] OnSttTranscriptSegmentReceived 처리 실패: {ex.Message}");
+        }
+    }
+
+    private async void OnTopicSegmentAdded(TopicSegment segment)
+    {
+        try
+        {
+            var dispatcher = System.Windows.Application.Current?.Dispatcher;
+            if (dispatcher != null)
+            {
+                await dispatcher.InvokeAsync(() =>
+                {
+                    TopicSegments.Add(segment);
+                    Log4.Info($"[녹음] 주제어 세그먼트 추가: {segment.DisplayTitle}");
+                }).Task.ConfigureAwait(false);
+            }
+        }
+        catch (Exception ex)
+        {
+            Log4.Error($"[녹음] OnTopicSegmentAdded 처리 실패: {ex.Message}");
+        }
+    }
+
+    private void OnTopicSegmentUpdated(TopicSegment segment)
+    {
+        // INotifyPropertyChanged로 자동 갱신됨 — 별도 UI 업데이트 불필요
+        Log4.Debug($"[녹음] 주제어 세그먼트 갱신: {segment.Id} — {segment.DisplayTitle}");
+    }
+
+    private async void OnMinuteSummaryCreated(MinuteSummaryEntry entry)
+    {
+        try
+        {
+            var dispatcher = System.Windows.Application.Current?.Dispatcher;
+            if (dispatcher != null)
+            {
+                await dispatcher.InvokeAsync(() =>
+                {
+                    MinuteSummaryCount++;
+                    Log4.Info($"[녹음] 1분 요약 생성 #{MinuteSummaryCount}");
+                }).Task.ConfigureAwait(false);
+            }
+        }
+        catch (Exception ex)
+        {
+            Log4.Error($"[녹음] OnMinuteSummaryCreated 처리 실패: {ex.Message}");
+        }
+    }
+
+    private async void OnCumulativeSummaryUpdated(string text)
+    {
+        try
+        {
+            var dispatcher = System.Windows.Application.Current?.Dispatcher;
+            if (dispatcher != null)
+            {
+                await dispatcher.InvokeAsync(() =>
+                {
+                    CumulativeSummaryText = text ?? string.Empty;
+                    Log4.Info($"[녹음] 누적 요약 갱신: {CumulativeSummaryText.Length}자");
+                }).Task.ConfigureAwait(false);
+            }
+        }
+        catch (Exception ex)
+        {
+            Log4.Error($"[녹음] OnCumulativeSummaryUpdated 처리 실패: {ex.Message}");
         }
     }
 
@@ -2467,6 +2813,8 @@ public partial class OneNoteViewModel : ViewModelBase
 
             // 실시간 STT 정리
             _ = StopRealtimeSTT();
+            // OpenAI AI 서비스 정리 (최종 요약 포함)
+            _ = StopOpenAiServicesAsync();
 
             // 실시간 STT 결과를 STTSegments로 복사 (중복 방지를 위해 먼저 클리어)
             STTSegments.Clear();

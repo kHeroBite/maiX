@@ -1,0 +1,261 @@
+// OpenAI Realtime API WebSocket 기반 실시간 STT 서비스 (화자분리 OFF 모드)
+using System;
+using System.Collections.Generic;
+using System.Net.Http;
+using System.Net.Http.Headers;
+using System.Net.WebSockets;
+using System.Text;
+using System.Text.Json;
+using System.Threading;
+using System.Threading.Tasks;
+using mAIx.Models;
+using mAIx.Models.Settings;
+using mAIx.Services.Storage;
+using NLog;
+
+namespace mAIx.Services.AI;
+
+/// <summary>
+/// 실시간 STT 서비스 인터페이스 (WebSocket 기반)
+/// </summary>
+public interface IOpenAiRealtimeSttService : IDisposable
+{
+    /// <summary>
+    /// STT 전사 세그먼트 수신 이벤트 (시간, 텍스트)
+    /// </summary>
+    event Action<TimeSpan, string>? TranscriptSegmentReceived;
+
+    /// <summary>
+    /// STT 시작
+    /// </summary>
+    Task StartAsync(CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// STT 중지
+    /// </summary>
+    Task StopAsync();
+}
+
+/// <summary>
+/// OpenAI Realtime API WebSocket 연결을 통한 실시간 STT 서비스
+/// </summary>
+public sealed class OpenAiRealtimeSttService : IOpenAiRealtimeSttService
+{
+    private static readonly Logger _log = LogManager.GetCurrentClassLogger();
+
+    private readonly AppSettingsManager _settings;
+    private ClientWebSocket? _ws;
+    private CancellationTokenSource? _cts;
+    private Task? _receiveTask;
+    private bool _disposed;
+
+    // PCM 16kHz mono 기준 bytes/sec
+    private const int BytesPerSecond = 16000 * 2;
+
+    /// <inheritdoc/>
+    public event Action<TimeSpan, string>? TranscriptSegmentReceived;
+
+    public OpenAiRealtimeSttService(AppSettingsManager settings)
+    {
+        _settings = settings ?? throw new ArgumentNullException(nameof(settings));
+    }
+
+    /// <inheritdoc/>
+    public async Task StartAsync(CancellationToken cancellationToken = default)
+    {
+        if (_ws != null)
+        {
+            _log.Warn("[RealtimeSTT] 이미 실행 중 — StartAsync 무시");
+            return;
+        }
+
+        var apiKey = _settings.AIProviders?.OpenAI?.ApiKey ?? string.Empty;
+        var model = _settings.OaiRecording.RealtimeSttModel;
+
+        _log.Info("[RealtimeSTT] 연결 시작: model={Model}", model);
+
+        _cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        _ws = new ClientWebSocket();
+        _ws.Options.SetRequestHeader("Authorization", $"Bearer {apiKey}");
+        _ws.Options.SetRequestHeader("OpenAI-Beta", "realtime=v1");
+
+        var uri = new Uri($"wss://api.openai.com/v1/realtime?model={Uri.EscapeDataString(model)}");
+
+        try
+        {
+            await _ws.ConnectAsync(uri, _cts.Token).ConfigureAwait(false);
+            _log.Info("[RealtimeSTT] WebSocket 연결 성공");
+        }
+        catch (Exception ex)
+        {
+            _log.Error(ex, "[RealtimeSTT] WebSocket 연결 실패");
+            Cleanup();
+            throw;
+        }
+
+        _receiveTask = ReceiveLoopAsync(_cts.Token);
+    }
+
+    /// <summary>
+    /// PCM 16kHz mono 바이트 배열을 Realtime API로 전송
+    /// </summary>
+    /// <param name="pcmData">PCM 16kHz mono 원시 바이트</param>
+    /// <param name="chunkStartTime">청크 시작 시각 (녹음 기준 상대 시간)</param>
+    public async Task SendAudioChunkAsync(byte[] pcmData, TimeSpan chunkStartTime)
+    {
+        if (_ws == null || _ws.State != WebSocketState.Open) return;
+
+        try
+        {
+            var base64Audio = Convert.ToBase64String(pcmData);
+            var message = JsonSerializer.Serialize(new
+            {
+                type = "input_audio_buffer.append",
+                audio = base64Audio
+            });
+            var bytes = Encoding.UTF8.GetBytes(message);
+            await _ws.SendAsync(new ArraySegment<byte>(bytes), WebSocketMessageType.Text, true, _cts?.Token ?? CancellationToken.None).ConfigureAwait(false);
+        }
+        catch (Exception ex)
+        {
+            _log.Error(ex, "[RealtimeSTT] 오디오 청크 전송 실패");
+        }
+    }
+
+    /// <inheritdoc/>
+    public async Task StopAsync()
+    {
+        if (_ws == null) return;
+
+        _log.Info("[RealtimeSTT] 중지 시작");
+
+        try
+        {
+            if (_ws.State == WebSocketState.Open)
+            {
+                // 버퍼 커밋 + 응답 요청
+                await SendJsonAsync(new { type = "input_audio_buffer.commit" }).ConfigureAwait(false);
+                await SendJsonAsync(new { type = "response.create" }).ConfigureAwait(false);
+
+                // Close handshake
+                await _ws.CloseAsync(WebSocketCloseStatus.NormalClosure, "stop", CancellationToken.None).ConfigureAwait(false);
+            }
+        }
+        catch (Exception ex)
+        {
+            _log.Warn(ex, "[RealtimeSTT] 종료 중 오류 (무시)");
+        }
+        finally
+        {
+            _cts?.Cancel();
+            if (_receiveTask != null)
+            {
+                try { await _receiveTask.ConfigureAwait(false); } catch { /* 취소 예외 무시 */ }
+            }
+            Cleanup();
+        }
+    }
+
+    private async Task ReceiveLoopAsync(CancellationToken ct)
+    {
+        var buffer = new byte[8192];
+        var messageBuffer = new List<byte>();
+
+        try
+        {
+            while (!ct.IsCancellationRequested && _ws?.State == WebSocketState.Open)
+            {
+                WebSocketReceiveResult result;
+                try
+                {
+                    result = await _ws.ReceiveAsync(new ArraySegment<byte>(buffer), ct).ConfigureAwait(false);
+                }
+                catch (OperationCanceledException)
+                {
+                    break;
+                }
+
+                if (result.MessageType == WebSocketMessageType.Close)
+                {
+                    _log.Info("[RealtimeSTT] 서버에서 연결 종료");
+                    break;
+                }
+
+                messageBuffer.AddRange(new ArraySegment<byte>(buffer, 0, result.Count));
+
+                if (result.EndOfMessage)
+                {
+                    var json = Encoding.UTF8.GetString(messageBuffer.ToArray());
+                    messageBuffer.Clear();
+                    ProcessMessage(json);
+                }
+            }
+        }
+        catch (Exception ex) when (!ct.IsCancellationRequested)
+        {
+            _log.Error(ex, "[RealtimeSTT] 수신 루프 오류");
+        }
+
+        _log.Info("[RealtimeSTT] 수신 루프 종료");
+    }
+
+    private void ProcessMessage(string json)
+    {
+        try
+        {
+            using var doc = JsonDocument.Parse(json);
+            var root = doc.RootElement;
+
+            if (!root.TryGetProperty("type", out var typeProp)) return;
+            var type = typeProp.GetString();
+
+            // response.audio_transcript.delta → 부분 전사 텍스트
+            if (type == "response.audio_transcript.delta")
+            {
+                if (root.TryGetProperty("delta", out var delta))
+                {
+                    var text = delta.GetString() ?? string.Empty;
+                    if (!string.IsNullOrEmpty(text))
+                    {
+                        // 시간 추정: 이벤트 기반으로 현재 시각 사용
+                        var ts = TimeSpan.Zero;
+                        if (root.TryGetProperty("item_id", out _) && root.TryGetProperty("audio_end_ms", out var endMs))
+                        {
+                            ts = TimeSpan.FromMilliseconds(endMs.GetDouble());
+                        }
+                        TranscriptSegmentReceived?.Invoke(ts, text);
+                    }
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            _log.Warn(ex, "[RealtimeSTT] 메시지 파싱 실패: {Json}", json.Length > 200 ? json[..200] : json);
+        }
+    }
+
+    private async Task SendJsonAsync(object payload)
+    {
+        if (_ws == null || _ws.State != WebSocketState.Open) return;
+        var json = JsonSerializer.Serialize(payload);
+        var bytes = Encoding.UTF8.GetBytes(json);
+        await _ws.SendAsync(new ArraySegment<byte>(bytes), WebSocketMessageType.Text, true, CancellationToken.None).ConfigureAwait(false);
+    }
+
+    private void Cleanup()
+    {
+        _ws?.Dispose();
+        _ws = null;
+        _cts?.Dispose();
+        _cts = null;
+        _receiveTask = null;
+    }
+
+    public void Dispose()
+    {
+        if (_disposed) return;
+        _disposed = true;
+        _cts?.Cancel();
+        Cleanup();
+    }
+}

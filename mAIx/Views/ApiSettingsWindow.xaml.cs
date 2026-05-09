@@ -134,6 +134,9 @@ public partial class ApiSettingsWindow : FluentWindow
             TinyMCEStatusText.Foreground = new SolidColorBrush(Colors.LimeGreen);
         }
 
+        // 녹음 STT/LLM 설정 로드
+        LoadOaiRecordingSettings();
+
         UpdateSaveButtonState();
         Log4.Debug("[ApiSettingsWindow] 설정 로드 완료");
     }
@@ -700,7 +703,168 @@ public partial class ApiSettingsWindow : FluentWindow
         }
 
         _settingsManager.SaveAIProviders();
+
+        // 녹음 STT/LLM 설정 저장
+        SaveOaiRecordingSettings();
+
         Log4.Info("[ApiSettingsWindow] API 설정 저장 완료");
+    }
+
+    #endregion
+
+    #region 녹음 STT/LLM 설정
+
+    /// <summary>
+    /// 녹음 STT/LLM 설정 로드
+    /// </summary>
+    private void LoadOaiRecordingSettings()
+    {
+        var rec = _settingsManager.OaiRecording;
+
+        RealtimeSttModelTextBox.Text = rec.RealtimeSttModel;
+        TranscribeSttModelTextBox.Text = rec.TranscribeSttModel;
+        KeywordExtractModelTextBox.Text = rec.KeywordExtractModel;
+        MinuteSummaryModelTextBox.Text = rec.MinuteSummaryModel;
+        CumulativeSummaryModelTextBox.Text = rec.CumulativeSummaryModel;
+        FinalSummaryModelTextBox.Text = rec.FinalSummaryModel;
+
+        // 누적요약 주기 ComboBox 선택
+        foreach (ComboBoxItem item in CumulativeIntervalComboBox.Items)
+        {
+            if (item.Tag?.ToString() == rec.CumulativeSummaryIntervalMinutes.ToString())
+            {
+                CumulativeIntervalComboBox.SelectedItem = item;
+                break;
+            }
+        }
+        if (CumulativeIntervalComboBox.SelectedItem == null)
+            CumulativeIntervalComboBox.SelectedIndex = 1; // 기본 5분
+
+        // 청크 길이 ComboBox 선택
+        foreach (ComboBoxItem item in ChunkSecondsComboBox.Items)
+        {
+            if (item.Tag?.ToString() == rec.ChunkSeconds.ToString())
+            {
+                ChunkSecondsComboBox.SelectedItem = item;
+                break;
+            }
+        }
+        if (ChunkSecondsComboBox.SelectedItem == null)
+            ChunkSecondsComboBox.SelectedIndex = 1; // 기본 10초
+    }
+
+    /// <summary>
+    /// 녹음 STT/LLM 설정 저장
+    /// </summary>
+    private void SaveOaiRecordingSettings()
+    {
+        var rec = _settingsManager.OaiRecording;
+
+        rec.RealtimeSttModel = RealtimeSttModelTextBox.Text?.Trim() ?? rec.RealtimeSttModel;
+        rec.TranscribeSttModel = TranscribeSttModelTextBox.Text?.Trim() ?? rec.TranscribeSttModel;
+        rec.KeywordExtractModel = KeywordExtractModelTextBox.Text?.Trim() ?? rec.KeywordExtractModel;
+        rec.MinuteSummaryModel = MinuteSummaryModelTextBox.Text?.Trim() ?? rec.MinuteSummaryModel;
+        rec.CumulativeSummaryModel = CumulativeSummaryModelTextBox.Text?.Trim() ?? rec.CumulativeSummaryModel;
+        rec.FinalSummaryModel = FinalSummaryModelTextBox.Text?.Trim() ?? rec.FinalSummaryModel;
+
+        if (CumulativeIntervalComboBox.SelectedItem is ComboBoxItem intervalItem
+            && int.TryParse(intervalItem.Tag?.ToString(), out int interval))
+        {
+            rec.CumulativeSummaryIntervalMinutes = interval;
+        }
+
+        if (ChunkSecondsComboBox.SelectedItem is ComboBoxItem chunkItem
+            && int.TryParse(chunkItem.Tag?.ToString(), out int chunk))
+        {
+            rec.ChunkSeconds = chunk;
+        }
+
+        _settingsManager.SaveAll();
+        Log4.Debug("[ApiSettingsWindow] 녹음 STT/LLM 설정 저장 완료");
+    }
+
+    // ─── 프리셋 버튼 핸들러 ─────────────────────────────────────────────
+
+    /// <summary>
+    /// 저비용형 프리셋 — 모든 모델 gpt-4o-mini 계열
+    /// </summary>
+    private void PresetLowCostButton_Click(object sender, RoutedEventArgs e)
+    {
+        try
+        {
+            RealtimeSttModelTextBox.Text = "gpt-4o-mini-transcribe";
+            TranscribeSttModelTextBox.Text = "gpt-4o-mini-transcribe";
+            KeywordExtractModelTextBox.Text = "gpt-4o-mini";
+            MinuteSummaryModelTextBox.Text = "gpt-4o-mini";
+            CumulativeSummaryModelTextBox.Text = "gpt-4o-mini";
+            FinalSummaryModelTextBox.Text = "gpt-4o-mini";
+            _settingsManager.OaiRecording.ActivePreset = "lowcost";
+            Log4.Debug("[ApiSettingsWindow] 저비용형 프리셋 적용");
+        }
+        catch (Exception ex)
+        {
+            Log4.Error($"[ApiSettingsWindow] PresetLowCostButton_Click 실패: {ex.Message}\n{ex.StackTrace}");
+        }
+    }
+
+    /// <summary>
+    /// 품질형 프리셋 — STT 고품질, LLM mini, 최종 gpt-4o
+    /// </summary>
+    private void PresetQualityButton_Click(object sender, RoutedEventArgs e)
+    {
+        try
+        {
+            RealtimeSttModelTextBox.Text = "gpt-4o-transcribe";
+            TranscribeSttModelTextBox.Text = "gpt-4o-transcribe";
+            KeywordExtractModelTextBox.Text = "gpt-4o-mini";
+            MinuteSummaryModelTextBox.Text = "gpt-4o-mini";
+            CumulativeSummaryModelTextBox.Text = "gpt-4o-mini";
+            FinalSummaryModelTextBox.Text = "gpt-4o";
+            _settingsManager.OaiRecording.ActivePreset = "quality";
+            Log4.Debug("[ApiSettingsWindow] 품질형 프리셋 적용");
+        }
+        catch (Exception ex)
+        {
+            Log4.Error($"[ApiSettingsWindow] PresetQualityButton_Click 실패: {ex.Message}\n{ex.StackTrace}");
+        }
+    }
+
+    /// <summary>
+    /// 스트리밍형 프리셋 — 실시간 STT, LLM mini, 최종 gpt-4o
+    /// </summary>
+    private void PresetStreamingButton_Click(object sender, RoutedEventArgs e)
+    {
+        try
+        {
+            RealtimeSttModelTextBox.Text = "gpt-4o-realtime-preview";
+            TranscribeSttModelTextBox.Text = "gpt-4o-transcribe";
+            KeywordExtractModelTextBox.Text = "gpt-4o-mini";
+            MinuteSummaryModelTextBox.Text = "gpt-4o-mini";
+            CumulativeSummaryModelTextBox.Text = "gpt-4o-mini";
+            FinalSummaryModelTextBox.Text = "gpt-4o";
+            _settingsManager.OaiRecording.ActivePreset = "streaming";
+            Log4.Debug("[ApiSettingsWindow] 스트리밍형 프리셋 적용");
+        }
+        catch (Exception ex)
+        {
+            Log4.Error($"[ApiSettingsWindow] PresetStreamingButton_Click 실패: {ex.Message}\n{ex.StackTrace}");
+        }
+    }
+
+    /// <summary>
+    /// 사용자정의 프리셋 — 현재 값 유지, ActivePreset=custom
+    /// </summary>
+    private void PresetCustomButton_Click(object sender, RoutedEventArgs e)
+    {
+        try
+        {
+            _settingsManager.OaiRecording.ActivePreset = "custom";
+            Log4.Debug("[ApiSettingsWindow] 사용자정의 프리셋 선택");
+        }
+        catch (Exception ex)
+        {
+            Log4.Error($"[ApiSettingsWindow] PresetCustomButton_Click 실패: {ex.Message}\n{ex.StackTrace}");
+        }
     }
 
     #endregion

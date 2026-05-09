@@ -325,6 +325,166 @@
                     </Expander>
                 </Border>
 
+                <!-- 🎙 녹음 STT/LLM 설정 -->
+                <Border x:Name="OaiRecordingBorder" Margin="0,0,0,12" Padding="16"
+                        Background="{DynamicResource ControlFillColorDefaultBrush}"
+                        CornerRadius="8">
+                    <Expander IsExpanded="False">
+                        <Expander.Header>
+                            <StackPanel Orientation="Horizontal">
+                                <TextBlock Text="🎙" FontSize="18" Margin="0,0,8,0"/>
+                                <TextBlock Text="녹음 STT/LLM 설정" FontWeight="SemiBold" FontSize="14"/>
+                            </StackPanel>
+                        </Expander.Header>
+                        <StackPanel Margin="0,12,0,0">
+
+                            <!-- 음성 모델 섹션 -->
+                            <TextBlock Text="음성 모델" FontWeight="SemiBold" FontSize="12"
+                                       Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                                       Margin="0,0,0,8"/>
+
+                            <!-- 실시간 STT 모델 -->
+                            <Grid Margin="0,0,0,8">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="130"/>
+                                    <ColumnDefinition Width="*"/>
+                                </Grid.ColumnDefinitions>
+                                <TextBlock Text="실시간 STT 모델" VerticalAlignment="Center" FontSize="12"/>
+                                <ui:TextBox x:Name="RealtimeSttModelTextBox" Grid.Column="1"
+                                           AutomationProperties.AutomationId="RealtimeSttModelTextBox"
+                                           PlaceholderText="gpt-4o-realtime-preview"/>
+                            </Grid>
+
+                            <!-- 화자분리 STT 모델 -->
+                            <Grid Margin="0,0,0,16">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="130"/>
+                                    <ColumnDefinition Width="*"/>
+                                </Grid.ColumnDefinitions>
+                                <TextBlock Text="화자분리 STT 모델" VerticalAlignment="Center" FontSize="12"/>
+                                <ui:TextBox x:Name="TranscribeSttModelTextBox" Grid.Column="1"
+                                           AutomationProperties.AutomationId="TranscribeSttModelTextBox"
+                                           PlaceholderText="gpt-4o-transcribe"/>
+                            </Grid>
+
+                            <!-- LLM 모델 섹션 -->
+                            <TextBlock Text="LLM 모델" FontWeight="SemiBold" FontSize="12"
+                                       Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                                       Margin="0,0,0,8"/>
+
+                            <!-- 주제어 추출 모델 -->
+                            <Grid Margin="0,0,0,8">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="130"/>
+                                    <ColumnDefinition Width="*"/>
+                                </Grid.ColumnDefinitions>
+                                <TextBlock Text="주제어 추출" VerticalAlignment="Center" FontSize="12"/>
+                                <ui:TextBox x:Name="KeywordExtractModelTextBox" Grid.Column="1"
+                                           AutomationProperties.AutomationId="KeywordExtractModelTextBox"
+                                           PlaceholderText="gpt-4o-mini"/>
+                            </Grid>
+
+                            <!-- 1분 요약 모델 -->
+                            <Grid Margin="0,0,0,8">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="130"/>
+                                    <ColumnDefinition Width="*"/>
+                                </Grid.ColumnDefinitions>
+                                <TextBlock Text="1분 요약" VerticalAlignment="Center" FontSize="12"/>
+                                <ui:TextBox x:Name="MinuteSummaryModelTextBox" Grid.Column="1"
+                                           AutomationProperties.AutomationId="MinuteSummaryModelTextBox"
+                                           PlaceholderText="gpt-4o-mini"/>
+                            </Grid>
+
+                            <!-- 누적 요약 모델 -->
+                            <Grid Margin="0,0,0,8">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="130"/>
+                                    <ColumnDefinition Width="*"/>
+                                </Grid.ColumnDefinitions>
+                                <TextBlock Text="누적 요약" VerticalAlignment="Center" FontSize="12"/>
+                                <ui:TextBox x:Name="CumulativeSummaryModelTextBox" Grid.Column="1"
+                                           AutomationProperties.AutomationId="CumulativeSummaryModelTextBox"
+                                           PlaceholderText="gpt-4o-mini"/>
+                            </Grid>
+
+                            <!-- 최종 요약 모델 -->
+                            <Grid Margin="0,0,0,16">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="130"/>
+                                    <ColumnDefinition Width="*"/>
+                                </Grid.ColumnDefinitions>
+                                <TextBlock Text="최종 요약" VerticalAlignment="Center" FontSize="12"/>
+                                <ui:TextBox x:Name="FinalSummaryModelTextBox" Grid.Column="1"
+                                           AutomationProperties.AutomationId="FinalSummaryModelTextBox"
+                                           PlaceholderText="gpt-4o"/>
+                            </Grid>
+
+                            <!-- 주기/청크 설정 섹션 -->
+                            <TextBlock Text="주기 / 청크 설정" FontWeight="SemiBold" FontSize="12"
+                                       Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                                       Margin="0,0,0,8"/>
+
+                            <!-- 누적 요약 주기 -->
+                            <Grid Margin="0,0,0,8">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="130"/>
+                                    <ColumnDefinition Width="*"/>
+                                </Grid.ColumnDefinitions>
+                                <TextBlock Text="누적요약 주기" VerticalAlignment="Center" FontSize="12"/>
+                                <ComboBox x:Name="CumulativeIntervalComboBox" Grid.Column="1"
+                                          AutomationProperties.AutomationId="CumulativeIntervalComboBox"
+                                          Width="160" HorizontalAlignment="Left">
+                                    <ComboBoxItem Content="3분" Tag="3"/>
+                                    <ComboBoxItem Content="5분" Tag="5"/>
+                                    <ComboBoxItem Content="10분" Tag="10"/>
+                                    <ComboBoxItem Content="15분" Tag="15"/>
+                                </ComboBox>
+                            </Grid>
+
+                            <!-- 청크 길이 -->
+                            <Grid Margin="0,0,0,16">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="130"/>
+                                    <ColumnDefinition Width="*"/>
+                                </Grid.ColumnDefinitions>
+                                <TextBlock Text="청크 길이" VerticalAlignment="Center" FontSize="12"/>
+                                <ComboBox x:Name="ChunkSecondsComboBox" Grid.Column="1"
+                                          AutomationProperties.AutomationId="ChunkSecondsComboBox"
+                                          Width="160" HorizontalAlignment="Left">
+                                    <ComboBoxItem Content="5초" Tag="5"/>
+                                    <ComboBoxItem Content="10초" Tag="10"/>
+                                    <ComboBoxItem Content="15초" Tag="15"/>
+                                </ComboBox>
+                            </Grid>
+
+                            <!-- 프리셋 버튼 -->
+                            <TextBlock Text="모델 프리셋" FontWeight="SemiBold" FontSize="12"
+                                       Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                                       Margin="0,0,0,8"/>
+                            <StackPanel Orientation="Horizontal">
+                                <ui:Button x:Name="PresetLowCostButton"
+                                           AutomationProperties.AutomationId="PresetLowCostButton"
+                                           Content="저비용형" Margin="0,0,8,0"
+                                           Click="PresetLowCostButton_Click"/>
+                                <ui:Button x:Name="PresetQualityButton"
+                                           AutomationProperties.AutomationId="PresetQualityButton"
+                                           Content="품질형" Margin="0,0,8,0"
+                                           Click="PresetQualityButton_Click"/>
+                                <ui:Button x:Name="PresetStreamingButton"
+                                           AutomationProperties.AutomationId="PresetStreamingButton"
+                                           Content="스트리밍형" Margin="0,0,8,0"
+                                           Click="PresetStreamingButton_Click"/>
+                                <ui:Button x:Name="PresetCustomButton"
+                                           AutomationProperties.AutomationId="PresetCustomButton"
+                                           Content="사용자정의"
+                                           Click="PresetCustomButton_Click"/>
+                            </StackPanel>
+
+                        </StackPanel>
+                    </Expander>
+                </Border>
+
                 <!-- TinyMCE 에디터 설정 -->
                 <Border x:Name="TinyMCEBorder" Margin="0,0,0,12" Padding="16"
                         Background="{DynamicResource ControlFillColorDefaultBrush}"

@@ -1096,6 +1096,34 @@
 - **연관**: 없음 (신규 영역)
 - **Level**: 1 (인프라 교훈 — hook 통합 환경에서 자주 재현)
 
+### L-387: 병렬 에이전트 using 블록 충돌 — 동일 파일 선두 수정 시 중복 삽입 위험 (2026-05-09)
+- **증상**: Wave 2 병렬 에이전트(odev-A + odev-C)가 동일 파일 선두(using 블록)를 각각 수정 → `using System;` 중복 선언
+- **영향**: C# 컴파일러가 허용하나 코드 품질 저하. IDE 경고 유발
+- **재발방지**: odone_cleanup에서 `grep -c "^using System;" 파일` 로 중복 using 전수 확인 필수
+- **Level**: 1 (단순 충돌, odone_cleanup에서 해결)
+
+### L-388: 비동기 정리 함수 fire-and-forget 패턴 주의 (2026-05-09)
+- **증상**: `_ = StopOpenAiServicesAsync()` 패턴 — 정리 함수 내부 예외가 소실됨
+- **원인**: L-379 fire-and-forget 규칙은 InvokeAsync(async lambda)에 특화되어 있으나, 일반 Task 메서드도 동일 위험
+- **재발방지**: 정리/종료 함수(StopXxx/CloseXxx/DisposeXxx)를 fire-and-forget으로 호출할 때 내부 try-catch 필수 확인. `_ = Method()` 패턴 발견 시 내부 catch 유무 검증
+- **연관**: L-379 (InvokeAsync async lambda 예외 소실)
+- **Level**: 2 (반복 패턴 가능성 — 서비스 정리 코드에서 반복 출현)
+
+### L-389: WPF ItemsPanel.LoadContent() — 실제 Visual Tree 패널 아님 (2026-05-09)
+- **증상**: `ItemsControl.ItemsPanel.LoadContent()`로 반환된 패널의 Orientation을 변경해도 UI에 반영 안 됨
+- **원인**: ItemsPanelTemplate.LoadContent()는 새 인스턴스를 반환 (실제 렌더링된 VirtualizingStackPanel 아님)
+- **올바른 방법**:
+  ```csharp
+  // ✅ 올바른 방법 1: ViewModel 바인딩 (ItemsPanel DataTemplate에 Orientation 바인딩)
+  // XAML: <ItemsPanelTemplate><VirtualizingStackPanel Orientation="{Binding TopicNavOrientation, Converter=...}"/></ItemsPanelTemplate>
+
+  // ✅ 올바른 방법 2: VisualTreeHelper로 실제 패널 탐색
+  var panel = VisualTreeHelper.GetChild(itemsControl, 0) as VirtualizingStackPanel;
+  if (panel != null) panel.Orientation = newOrientation;
+  ```
+- **재발방지**: ItemsPanel 동적 변경 시 VisualTreeHelper 사용 또는 ViewModel 바인딩 방식 사용. LoadContent() 직접 호출 금지
+- **Level**: 2 (WPF 패턴 오류 — 반복 가능)
+
 ## 반영 추적 테이블
 
 | 교훈 ID | 교훈 요약 | 반영 대상 | 반영 위치 | 반영일 | 검증 |
@@ -1127,3 +1155,6 @@
 | L-384 | SESSION_DIR 이중 경로 — `$HOME/.claude/session-env` vs `/tmp/cc-{프로젝트UUID}/session-env`, evidence 마커는 hook이 참조하는 CLAUDE_CONFIG_DIR 경로에 정확히 생성 필수 | docs | LESSONS.md | 2026-05-02 | ✅ |
 | L-385 | WPF ListBox + ObservableCollection.Clear+Add + 2-way 바인딩 패턴 — SelectedItem=null write-back으로 리딩 페인 Collapsed (사용자 관점: 메일 닫힘) | docs+code | LESSONS.md + MEMORY.md + MainViewModel.cs ReplaceEmails preserveSelection | 2026-05-03 | ✅ |
 | L-386 | preserveSelection 가드 범위 오류 — Clear 시점부터 복원 완료까지 전체 guardScope 감싸기 필수, 복원 시점만 가드 ON하면 본문 빈 채 잔류 | docs+code | LESSONS.md + MEMORY.md + MainViewModel.cs ReplaceEmails guardScope 패턴 | 2026-05-03 | ✅ |
+| L-387 | 병렬 에이전트 using 블록 중복 충돌 — 동일 파일 선두 수정 시 중복 삽입 위험 | docs | LESSONS.md | 2026-05-09 | ✅ |
+| L-388 | 비동기 정리 함수 fire-and-forget 예외 소실 — StopXxx() 내부 try-catch 확인 필수 | docs | LESSONS.md + MEMORY.md | 2026-05-09 | ✅ |
+| L-389 | WPF ItemsPanel.LoadContent() 실제 패널 아님 — VisualTreeHelper 또는 바인딩 방식 사용 | docs | LESSONS.md + MEMORY.md | 2026-05-09 | ✅ |

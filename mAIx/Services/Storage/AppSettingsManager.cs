@@ -21,6 +21,7 @@ public class AppSettingsManager
     private readonly XmlSettingsService<LoggingSettings> _loggingService;
     private readonly XmlSettingsService<UserPreferencesSettings> _userPreferencesService;
     private readonly XmlSettingsService<SignatureSettings> _signatureService;
+    private readonly XmlSettingsService<OpenAiRecordingSettings> _oaiRecordingService;
 
     /// <summary>
     /// 로그인 + Azure AD 설정
@@ -62,6 +63,11 @@ public class AppSettingsManager
     /// </summary>
     public SignatureSettings Signature { get; private set; } = new();
 
+    /// <summary>
+    /// OpenAI 녹음 STT/LLM 설정
+    /// </summary>
+    public OpenAiRecordingSettings OaiRecording { get; private set; } = new();
+
     public AppSettingsManager()
     {
         _loginService = new XmlSettingsService<LoginSettings>("autologin.xml");
@@ -72,6 +78,7 @@ public class AppSettingsManager
         _loggingService = new XmlSettingsService<LoggingSettings>("logging.xml");
         _userPreferencesService = new XmlSettingsService<UserPreferencesSettings>("preferences.xml");
         _signatureService = new XmlSettingsService<SignatureSettings>("signature.xml");
+        _oaiRecordingService = new XmlSettingsService<OpenAiRecordingSettings>("oai_recording.xml");
     }
 
     /// <summary>
@@ -92,6 +99,7 @@ public class AppSettingsManager
             Logging = _loggingService.Load();
             UserPreferences = _userPreferencesService.Load();
             Signature = _signatureService.Load();
+            OaiRecording = _oaiRecordingService.Load();
 
             Log4.Info("[AppSettingsManager] 모든 설정 로드 완료");
         }
@@ -118,6 +126,7 @@ public class AppSettingsManager
             _loggingService.Save(Logging);
             _userPreferencesService.Save(UserPreferences);
             _signatureService.Save(Signature);
+            _oaiRecordingService.Save(OaiRecording);
 
             Log4.Info("[AppSettingsManager] 모든 설정 저장 완료");
         }

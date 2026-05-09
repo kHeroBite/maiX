@@ -198,10 +198,17 @@ public partial class App : Application
         // XML 설정 매니저 등록
         services.AddSingleton(Settings);
         services.AddSingleton(Settings.AIProviders);
+        services.AddSingleton(Settings.OaiRecording);
         services.AddSingleton(Settings.Notification);
         services.AddSingleton(Settings.Sync);
         services.AddSingleton(Settings.Database);
         services.AddSingleton(Settings.Logging);
+
+        services.AddSingleton<IOpenAiRealtimeSttService, OpenAiRealtimeSttService>();
+        services.AddSingleton<IOpenAiTranscribeSttService, OpenAiTranscribeSttService>();
+        services.AddSingleton<ITopicExtractorService, TopicExtractorService>();
+        services.AddSingleton<IMinuteSummaryService, MinuteSummaryService>();
+        services.AddSingleton<ICumulativeSummaryService, CumulativeSummaryService>();
 
         // DbContext 등록 (SQLite) - Factory 패턴 사용
         services.AddDbContextFactory<mAIxDbContext>(options =>

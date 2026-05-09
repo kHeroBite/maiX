@@ -1276,3 +1276,29 @@ ConfigureAwait(false)를 Service 레이어 전체에 적용하여 스레드 컨�
   - "초기 메일 동기화 시작 (lazy)" → "완료 (lazy)"
   - "초기 캘린더 동기화 시작 (lazy)" → "완료 (lazy)"
   - "초기 채팅 동기화 시작 (lazy)" → "완료 (lazy)"
+
+---
+
+## 2026-05-09: 실시간 STT + 1분 요약 + 주제어 네비게이션 + OpenAI 설정 신규 (O4)
+
+### 작업 내용
+- **실시간 STT 서비스 2종**: OpenAiRealtimeSttService (WebSocket 기반), OpenAiTranscribeSttService (청크+오버랩+Jaccard dedup)
+- **AI 서비스 3종**: TopicExtractorService (12초 PeriodicTimer + Jaccard), MinuteSummaryService (60초 PeriodicTimer + 디스크 저장), CumulativeSummaryService (설정 주기 + 압축 갱신 + 최종 요약)
+- **설정 화면**: ApiSettingsWindow에 OaiRecordingBorder 섹션 추가 (STT 2슬롯 + LLM 4슬롯 + 누적주기 + 프리셋 4종)
+- **UI 재구성**: OneNoteRecordingContentPanel 3-컬럼 레이아웃 (실시간STT / 주제어네비 / 옵션+요약)
+- **주제어 카드**: TopicSegment PastelPalette 8색, HexToBrushConverter, ToolTip 바인딩
+- **화자분리 토글**: 체크박스로 RealtimeSTT ↔ TranscribeSTT 모드 전환
+- **DI 등록**: App.xaml.cs에 6건 AddSingleton (OpenAiRecordingSettings + 5개 서비스)
+
+### 주요 변경 파일
+- 신규 9파일: `OpenAiRecordingSettings.cs`, `TopicSegment.cs`, `MinuteSummaryEntry.cs`, `HexToBrushConverter.cs`, `OpenAiRealtimeSttService.cs`, `OpenAiTranscribeSttService.cs`, `TopicExtractorService.cs`, `MinuteSummaryService.cs`, `CumulativeSummaryService.cs`
+- 수정 8파일: `AppSettingsManager.cs`, `ApiSettingsWindow.xaml/cs`, `MainWindow.xaml`, `MainWindow.OneNote.cs`, `MainWindow.xaml.cs`, `OneNoteViewModel.cs`, `App.xaml/cs`
+
+### 테스트 결과 (otest O4 — 3단계 PASS)
+- 빌드: 성공 (오류 0건) ✅
+- Sprint Contract 34/34 PASS ✅
+- 헬스체크 healthy ✅
+
+### 미완성 항목 (의도된 placeholder — Sprint Contract 외)
+- TopicSegment_Click SeekTo 기능 (타임스탬프 seek 미구현 — 향후 확장)
+- StartOpenAiServicesAsync RecordingService 이벤트 연결 미구현
