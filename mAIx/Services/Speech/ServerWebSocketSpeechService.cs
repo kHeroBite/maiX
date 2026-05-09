@@ -25,9 +25,11 @@ public record SttChunkResult(string Text, int ChunkId, float Confidence, int Lat
 public record DiarizeChunkResult(string Speaker, float Start, float End, int ChunkId);
 
 /// <summary>
-/// Jarvis 음성 서버 WebSocket 클라이언트
-/// 실시간 STT/TTS 스트리밍 처리
+/// [Obsolete] Jarvis 음성 서버 WebSocket 클라이언트 — OpenAI 서비스로 전환 완료
+/// 모든 STT 호출처는 IOpenAiRealtimeSttService / IOpenAiTranscribeSttService로 전환됨
+/// 파일 삭제는 별도 정리 작업에서 수행
 /// </summary>
+[Obsolete("Jarvis WebSocket STT는 OpenAI 서비스로 완전 교체되었습니다. IOpenAiRealtimeSttService 또는 IOpenAiTranscribeSttService를 사용하세요.", error: false)]
 public class ServerWebSocketSpeechService : IDisposable
 {
     private ClientWebSocket? _sttWebSocket;

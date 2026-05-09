@@ -1,107 +1,68 @@
+// TTS 재생 서비스 — OpenAI TTS 백엔드 위임 (Jarvis 서버 모드 제거)
 using System;
-using System.IO;
 using System.Threading;
 using System.Threading.Tasks;
-using mAIx.Models;
-using NAudio.Wave;
+using mAIx.Services.AI;
+using NLog;
 
 namespace mAIx.Services.Speech;
 
 /// <summary>
-/// TTS 재생 서비스 — 서버/클라이언트 모드 지원
+/// TTS 재생 서비스 — IOpenAiTtsService에 위임
 /// </summary>
 public class TextToSpeechService : IDisposable
 {
-    private WaveOutEvent? _waveOut;
-    private WaveFileReader? _waveReader;
-    private MemoryStream? _audioStream;
-    private CancellationTokenSource? _cts;
+    private static readonly Logger _log = LogManager.GetCurrentClassLogger();
+
+    private readonly IOpenAiTtsService _ttsService;
     private bool _disposed;
 
+    public TextToSpeechService(IOpenAiTtsService ttsService)
+    {
+        _ttsService = ttsService ?? throw new ArgumentNullException(nameof(ttsService));
+    }
+
     /// <summary>현재 재생 중 여부</summary>
-    public bool IsSpeaking => _waveOut?.PlaybackState == PlaybackState.Playing;
+    public bool IsSpeaking => _ttsService.IsSpeaking;
 
     /// <summary>텍스트를 음성으로 재생</summary>
     public async Task SpeakAsync(string text, CancellationToken ct = default)
     {
-        var prefs = App.Settings?.UserPreferences;
-        if (prefs?.TtsMode != "server")
-        {
-            Utils.Log4.Warn("[TTS] 클라이언트 모드 미구현 — 스킵");
-            return;
-        }
+        if (_disposed) return;
 
         try
         {
-            // 기존 재생 중지
-            Stop();
-
-            _cts = CancellationTokenSource.CreateLinkedTokenSource(ct);
-
-            // 서버에서 WAV 데이터 수신
-            using var serverSvc = new ServerSpeechService(prefs.SpeechServerUrl, prefs);
-            var wavBytes = await serverSvc.SynthesizeAsync(text, 0, _cts.Token).ConfigureAwait(false);
-
-            if (_cts.Token.IsCancellationRequested) return;
-
-            // NAudio로 재생
-            _audioStream = new MemoryStream(wavBytes);
-            _waveReader = new WaveFileReader(_audioStream);
-            _waveOut = new WaveOutEvent();
-
-            var tcs = new TaskCompletionSource<bool>();
-            _waveOut.PlaybackStopped += (_, _) => tcs.TrySetResult(true);
-
-            _waveOut.Init(_waveReader);
-            _waveOut.Play();
-
-            // 취소 시 재생 중지
-            using var reg = _cts.Token.Register(() =>
-            {
-                _waveOut?.Stop();
-            });
-
-            await tcs.Task;
-            Utils.Log4.Info("[TTS] 서버 모드 재생 완료");
+            _log.Debug("[TTS] SpeakAsync 시작 — len={Len}", text?.Length ?? 0);
+            await _ttsService.SpeakAsync(text ?? string.Empty, ct).ConfigureAwait(false);
         }
         catch (OperationCanceledException)
         {
-            Utils.Log4.Info("[TTS] 재생 취소됨");
+            _log.Info("[TTS] SpeakAsync 취소됨");
         }
         catch (Exception ex)
         {
-            Utils.Log4.Error($"[TTS] 재생 실패: {ex.Message}");
+            _log.Error(ex, "[TTS] SpeakAsync 실패");
         }
     }
 
     /// <summary>현재 재생 중지</summary>
     public void Stop()
     {
-        if (_waveOut?.PlaybackState == PlaybackState.Playing)
+        if (_disposed) return;
+        try
         {
-            _waveOut.Stop();
+            _ttsService.Stop();
         }
-
-        _cts?.Cancel();
-        CleanupPlayback();
-    }
-
-    private void CleanupPlayback()
-    {
-        _waveOut?.Dispose();
-        _waveOut = null;
-        _waveReader?.Dispose();
-        _waveReader = null;
-        _audioStream?.Dispose();
-        _audioStream = null;
-        _cts?.Dispose();
-        _cts = null;
+        catch (Exception ex)
+        {
+            _log.Warn(ex, "[TTS] Stop 중 오류");
+        }
     }
 
     public void Dispose()
     {
         if (_disposed) return;
-        Stop();
         _disposed = true;
+        // IOpenAiTtsService는 DI 컨테이너가 수명 관리 — 직접 Dispose 금지
     }
 }

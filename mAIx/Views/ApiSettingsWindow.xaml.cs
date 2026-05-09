@@ -751,6 +751,19 @@ public partial class ApiSettingsWindow : FluentWindow
         }
         if (ChunkSecondsComboBox.SelectedItem == null)
             ChunkSecondsComboBox.SelectedIndex = 1; // 기본 10초
+
+        // TTS 설정 로드
+        TtsModelTextBox.Text = rec.TtsModel;
+        foreach (ComboBoxItem item in TtsVoiceComboBox.Items)
+        {
+            if (item.Tag?.ToString() == rec.TtsVoice)
+            {
+                TtsVoiceComboBox.SelectedItem = item;
+                break;
+            }
+        }
+        if (TtsVoiceComboBox.SelectedItem == null)
+            TtsVoiceComboBox.SelectedIndex = 0; // 기본 alloy
     }
 
     /// <summary>
@@ -778,6 +791,12 @@ public partial class ApiSettingsWindow : FluentWindow
         {
             rec.ChunkSeconds = chunk;
         }
+
+        // TTS 설정 저장
+        if (!string.IsNullOrWhiteSpace(TtsModelTextBox.Text))
+            rec.TtsModel = TtsModelTextBox.Text.Trim();
+        if (TtsVoiceComboBox.SelectedItem is ComboBoxItem voiceItem)
+            rec.TtsVoice = voiceItem.Tag?.ToString() ?? rec.TtsVoice;
 
         _settingsManager.SaveAll();
         Log4.Debug("[ApiSettingsWindow] 녹음 STT/LLM 설정 저장 완료");

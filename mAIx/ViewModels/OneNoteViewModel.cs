@@ -218,9 +218,11 @@ public partial class OneNoteViewModel : ViewModelBase
     private CancellationTokenSource? _realtimeSTTCts;
 
     /// <summary>
-    /// 서버 모드 WebSocket STT 서비스
+    /// [Obsolete] 서버 모드 WebSocket STT 서비스 — OpenAI 경로로 전환됨
     /// </summary>
+#pragma warning disable CS0618 // Obsolete 필드 보존 (Surgical — 삭제는 별도 정리 작업)
     private Services.Speech.ServerWebSocketSpeechService? _serverWsSpeech;
+#pragma warning restore CS0618
 
     /// <summary>
     /// 수동 STT 분석 취소 토큰
@@ -3012,52 +3014,16 @@ public partial class OneNoteViewModel : ViewModelBase
 
         try
         {
-        Log4.Info("[녹음] ★ 실시간 STT 시작");
+        Log4.Info("[녹음] ★ 실시간 STT 시작 (OpenAI 경로)");
 
         var oldRealtimeCts = _realtimeSTTCts;
         _realtimeSTTCts = new CancellationTokenSource();
         oldRealtimeCts?.Cancel();
         oldRealtimeCts?.Dispose();
 
-
-        // 서버 WebSocket STT 연결
-        try
-        {
-            var serverUrl = App.Settings?.UserPreferences?.SpeechServerUrl;
-            var sttModel = App.Settings?.UserPreferences?.ServerSttModel;
-            Log4.Info($"[녹음] ★ 서버 STT 시작 (URL: {serverUrl}, 모델: {sttModel})");
-
-            _serverWsSpeech?.Dispose();
-            _serverWsSpeech = new Services.Speech.ServerWebSocketSpeechService();
-
-            // 이벤트 구독: 청크 결과 수신 시 LiveSTTSegments에 추가
-            _serverWsSpeech.SttChunkReceived += OnServerSttChunkReceived;
-            _serverWsSpeech.ErrorOccurred += error => Log4.Error($"[녹음] ★ 서버 STT 오류: {error}");
-
-            // STT WebSocket 연결 (/ws/stt) + 모델 로딩 대기
-            var model = string.IsNullOrWhiteSpace(sttModel) ? "small" : sttModel;
-            await _serverWsSpeech.ConnectSttAsync(serverUrl, model, App.Settings?.UserPreferences?.WsEndpointStt ?? "/ws/stt", _realtimeSTTCts.Token);
-
-            // STT 세션 시작
-            await _serverWsSpeech.StartSttSessionAsync(model, 16000, 1, 16, _realtimeSTTCts.Token);
-
-            Log4.Info("[녹음] ★ 서버 STT 세션 시작 완료");
-        }
-        catch (Exception ex)
-        {
-            Log4.Error($"[녹음] ★ 서버 STT 연결 실패: {ex.Message}");
-            _serverWsSpeech?.Dispose();
-            _serverWsSpeech = null;
-            return;
-        }
-
         // 실시간 모드 활성화 (설정된 청크 간격 사용)
         _recordingService.RealtimeEnabled = true;
         _recordingService.RealtimeChunkSeconds = _sttChunkIntervalSeconds;
-
-        // 이벤트 중복 등록 방지: 먼저 해제 후 등록
-        _recordingService.RealtimeAudioChunkReady -= OnRealtimeAudioChunk;
-        _recordingService.RealtimeAudioChunkReady += OnRealtimeAudioChunk;
 
         // 실시간 요약 업데이트 타이머 (설정된 간격 사용)
         _realtimeSummaryTimer?.Stop();
@@ -3100,36 +3066,13 @@ public partial class OneNoteViewModel : ViewModelBase
         _realtimeSummaryTimer = null;
 
 
-        // 서버 모드 정리
-        if (_serverWsSpeech != null)
-        {
-            try
-            {
-                if (_serverWsSpeech.IsSttConnected)
-                {
-                    await _serverWsSpeech.StopSttSessionAsync();
-                }
-                await _serverWsSpeech.DisconnectAsync();
-            }
-            catch (Exception ex)
-            {
-                Log4.Error($"[녹음] ★ 서버 STT 종료 오류: {ex.Message}");
-            }
-            finally
-            {
-                _serverWsSpeech.SttChunkReceived -= OnServerSttChunkReceived;
-                _serverWsSpeech.Dispose();
-                _serverWsSpeech = null;
-            }
-        }
-
+        // OpenAI 경로: _realtimeSTTCts 취소만으로 STT 서비스 정리됨
         if (_recordingService != null)
         {
             _recordingService.RealtimeEnabled = false;
-            _recordingService.RealtimeAudioChunkReady -= OnRealtimeAudioChunk;
         }
 
-        _logger.Information("[녹음] 실시간 STT 모드 비활성화");
+        _logger.Information("[녹음] 실시간 STT 모드 비활성화 (OpenAI 경로)");
         }
         catch (Exception ex)
         {
@@ -3138,38 +3081,20 @@ public partial class OneNoteViewModel : ViewModelBase
     }
 
     /// <summary>
-    /// 실시간 오디오 청크 처리
+    /// [Obsolete] Jarvis 서버 STT 오디오 청크 핸들러 — OpenAI 경로로 전환됨
+    /// 실제 경로: OnRealtimeAudioChunkForOpenAi
     /// </summary>
+    [Obsolete("Jarvis 서버 STT 경로. OnRealtimeAudioChunkForOpenAi를 사용하세요.", error: false)]
     private async void OnRealtimeAudioChunk(byte[] audioData, TimeSpan chunkStartTime)
     {
         try
         {
-        if (_realtimeSTTCts == null || _realtimeSTTCts.IsCancellationRequested)
-            return;
-
-        try
-        {
-            Log4.Info($"[녹음] ★ 실시간 청크 수신: {chunkStartTime:mm\\:ss}, {audioData.Length} bytes");
-
-            // 서버에 직접 오디오 전송 (STT WebSocket)
-            if (_serverWsSpeech?.IsSttConnected == true)
-            {
-                await _serverWsSpeech.SendAudioChunkAsync(audioData, _realtimeSTTCts.Token);
-                Log4.Info($"[녹음] ★ 서버 청크 전송 완료 ({audioData.Length} bytes)");
-            }
-        }
-        catch (OperationCanceledException)
-        {
-            // 취소됨 - 무시
+            Log4.Warn($"[녹음] OnRealtimeAudioChunk 호출됨 — Obsolete Jarvis 경로 ({audioData.Length} bytes). OnRealtimeAudioChunkForOpenAi를 사용하세요.");
+            await Task.CompletedTask.ConfigureAwait(false);
         }
         catch (Exception ex)
         {
-            Log4.Error($"[녹음] ★ 실시간 청크 처리 실패: {ex.Message}");
-        }
-        }
-        catch (Exception ex)
-        {
-            Log4.Error($"[OneNoteViewModel] OnRealtimeAudioChunk 실패: {ex.Message}\n{ex.StackTrace}");
+            Log4.Error($"[OneNoteViewModel] OnRealtimeAudioChunk 실패: {ex.Message}");
         }
     }
 

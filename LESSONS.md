@@ -1151,6 +1151,49 @@
 - **연관**: L-390, L-391
 - **Level**: 2 (테스트 프로세스 개선 — otest 체크리스트 강화)
 
+### L-393: hook 차단 기준은 tool_name 기반이어야 함 — message 본문 키워드 매칭은 false positive 유발 (2026-05-10)
+- **증상**: ui_test_guard.sh가 SendMessage 도구 호출 시 message 본문의 키워드(RETEST 등)를 검사하여 의도치 않게 차단(false positive). 실제로는 block 대상이 아닌 일반 통신 메시지도 차단됨
+- **원인**: hook이 tool_name 대신 message 본문만을 기준으로 차단 여부를 판단. 의미론적으로 동일한 키워드가 다른 맥락(진행 보고, 팀 통신 등)에서도 출현 가능
+- **재발방지**: hook 차단 기준은 tool_name(또는 input.command 등 구조적 필드)을 1차 기준으로 사용. message 본문 기반 키워드 필터링은 false positive 위험이 높으므로 반드시 tool_name과 함께 AND 조건으로만 사용. 옵션 B 패턴(message 필드 비어있지 않으면 통과) 적용
+- **연관**: ui_test_guard.sh 옵션 B
+- **Level**: 2 (hook 설계 원칙)
+
+### L-394: 이벤트 기반 컴포넌트 E2E 검증 — Reflection 트리거 헬퍼 효과적 (2026-05-10)
+- **증상**: RealtimeAudioChunkReady 이벤트처럼 실제 하드웨어(마이크)나 외부 서비스(OpenAI)에 의존하는 이벤트는 otest 환경에서 실제 트리거 불가능
+- **해결**: DebugPcmInjectHelper 헬퍼 클래스로 Reflection을 통해 이벤트를 강제 발화(fire). 실제 서비스 의존 없이 이벤트 핸들러 경로 전체를 E2E 검증 가능
+- **패턴**:
+  ```csharp
+  // Reflection으로 private 이벤트 강제 발화
+  var eventField = typeof(TService).GetField("RealtimeAudioChunkReady", BindingFlags.NonPublic | BindingFlags.Instance);
+  var handler = (EventHandler<byte[]>)eventField.GetValue(service);
+  handler?.Invoke(service, fakeChunk);
+  ```
+- **재발방지**: 외부 의존성 있는 이벤트 기반 E2E 검증 시 Debug 전용 Inject 헬퍼 패턴 먼저 검토. 헬퍼는 `Services/Audio/Debug{Name}InjectHelper.cs` 위치에 생성
+- **Level**: 2 (테스트 패턴 — 재사용 가능)
+
+### L-395: PowerShell UIAutomation ScrollPattern.Scroll(LargeIncrement) — 스크롤 영역 컨트롤 접근 (2026-05-10)
+- **증상**: FlaUI/UIAutomation으로 WPF 앱의 스크롤 영역 내 컨트롤에 접근 시 스크롤이 안 된 상태에서 컨트롤 탐색 실패
+- **해결**: `ScrollPattern.Scroll(ScrollAmount.LargeIncrement)` 호출 후 컨트롤 재탐색
+- **패턴**:
+  ```powershell
+  $scrollEl = $window.FindFirstDescendant($cf.ByControlType([FlaUI.Core.Definitions.ControlType]::ScrollBar))
+  $scrollPattern = $scrollEl.Patterns.Scroll.Pattern
+  $scrollPattern.Scroll([FlaUI.Core.Definitions.ScrollAmount]::LargeIncrement, [FlaUI.Core.Definitions.ScrollAmount]::NoAmount)
+  Start-Sleep -Milliseconds 300
+  # 이후 컨트롤 재탐색
+  ```
+- **Level**: 1 (UIAutomation 테크닉 — WPF 스크롤 영역 접근 시 참고)
+
+### L-396: otest 마커 mtime 갱신 미보장 — file_write 후 overwrite=true 필수, 실패 시 강제 재생성 (2026-05-10)
+- **증상**: otest 완료 후 `evidence/otest_done` 마커가 존재하지만 mtime이 갱신되지 않아 otest_done_guard.sh가 "stale marker" 차단 → otest가 PASS인데도 odone 진입 불가
+- **원인**: file_write 시 overwrite=true 미지정 또는 파일 내용이 동일한 경우 파일시스템 캐시로 인해 mtime 미갱신
+- **재발방지**:
+  1. 마커 파일 갱신 시 항상 `overwrite=true` + 현재 타임스탬프를 content에 포함 (동일 내용 방지)
+  2. guard 차단 시 `file_delete → file_write` 강제 재생성 패턴으로 우회
+  3. otest_done 마커 내용 형식: `PASS {ISO8601_TIMESTAMP}` (매번 내용 변경 보장)
+- **연관**: otest_done_guard.sh
+- **Level**: 2 (인프라 교훈 — otest→odone 전환 시 반복 가능)
+
 ## 반영 추적 테이블
 
 | 교훈 ID | 교훈 요약 | 반영 대상 | 반영 위치 | 반영일 | 검증 |
@@ -1188,3 +1231,7 @@
 | L-390 | 팝업 창과 동적 패널 혼동 — XAML 정적 추가가 진입 경로 없으면 사용자 도달 불가 | docs | LESSONS.md | 2026-05-10 | ✅ |
 | L-391 | 신규 UI 추가 시 사용자 진입 경로 grep 검증 필수 — 진입점 없으면 FAIL | docs | LESSONS.md | 2026-05-10 | ✅ |
 | L-392 | otest UI 검증 = 코드 grep + 진입 경로 grep 2단계 필수 — 코드 존재 ≠ 사용자 도달 가능 | docs | LESSONS.md | 2026-05-10 | ✅ |
+| L-393 | hook 차단 기준은 tool_name 기반 — message 본문 키워드 매칭은 false positive 위험 | docs+hook | LESSONS.md + ui_test_guard.sh 옵션 B | 2026-05-10 | ✅ |
+| L-394 | 이벤트 기반 E2E 검증 — Reflection 트리거 헬퍼(DebugPcmInjectHelper) 패턴 효과적 | docs | LESSONS.md | 2026-05-10 | ✅ |
+| L-395 | PowerShell UIAutomation ScrollPattern.Scroll(LargeIncrement) — 스크롤 영역 컨트롤 접근 | docs | LESSONS.md | 2026-05-10 | ✅ |
+| L-396 | otest 마커 mtime 미갱신 — file_write overwrite=true + 타임스탬프 내용 필수, 실패 시 강제 재생성 | docs | LESSONS.md | 2026-05-10 | ✅ |

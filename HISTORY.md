@@ -2,6 +2,44 @@
 
 > PROJECT.md 작업 이력 테이블의 상세 보완본
 
+## 2026-05-10: Jarvis STT/TTS 완전 제거 + OpenAI 전체 교체 + hook 옵션B 재발방지 (oralph 1/5)
+
+**분류**: O4 Heavy (Full mode)
+**oralph 반복**: 1/5 (max_iterations=5)
+**otest 결과**: 13/13 PASS (UIAutomation 스크린샷 + grep + hook 시뮬레이션)
+**범위**: 신규 2 + 수정 9 + hook 1 + changelog 1 = 약 13파일
+
+### 작업 1: Jarvis STT/TTS → OpenAI 완전 교체
+
+- **신규**: `OpenAiTtsService.cs` — POST /v1/audio/speech, NAudio MP3 재생
+- **신규**: `DebugPcmInjectHelper.cs` — E2E 가짜 PCM Reflection 트리거 헬퍼
+- **수정**: `OpenAiRecordingSettings.cs` — TtsModel("tts-1"), TtsVoice("alloy") 슬롯 추가
+- **수정**: `TextToSpeechService.cs` — Jarvis 의존 완전 제거, OpenAI 전면 교체
+- **수정**: `OneNoteViewModel.cs` — `_serverWsSpeech` 비활성화(필드 보존, [Obsolete])
+- **수정**: `ServerWebSocketSpeechService.cs` — [Obsolete] 처리
+- **수정**: `MainWindow.xaml.cs` — L7942 TranscribeFileWithOpenAiAsync 교체, L21279 "서버 (Jarvis)" 라디오 제거
+- **수정**: `ApiSettingsWindow.xaml` + `ApiSettingsWindow.xaml.cs` — TTS UI 슬롯 추가
+- **수정**: `App.xaml.cs` — `IOpenAiTtsService` DI 등록
+
+### 작업 2: hook 옵션 B 재발방지
+
+- **수정**: `~/.claude/hooks/ui_test_guard.sh` — tool_input.message 비어있지 않으면 통과 (false positive 차단)
+- **기록**: `~/.claude/settings_changelog.md` — hook 변경 이력 추가
+
+### 작업 3: 가짜 PCM E2E 검증
+
+- `DebugPcmInjectHelper.InjectFakeChunk()` → `RealtimeAudioChunkReady` 이벤트 Reflection 트리거
+- PowerShell UIAutomation + 스크린샷 검증 (TTS 슬롯 표시, Jarvis 라디오 제거 확인)
+
+### 신규 교훈
+
+- **L-393**: hook 차단 기준은 tool_name 기반이어야 함 — message 본문 키워드 매칭은 false positive
+- **L-394**: Reflection 트리거 헬퍼(DebugPcmInjectHelper)로 하드웨어 의존 이벤트 E2E 검증 가능
+- **L-395**: PowerShell UIAutomation ScrollPattern.Scroll(LargeIncrement)로 스크롤 영역 접근
+- **L-396**: otest 마커 mtime 미갱신 → file_write overwrite=true + 타임스탬프 필수
+
+---
+
 ## 2026-05-10: OpenAI STT 화면 노출 + Jarvis→OpenAI 재배선 회귀 수정 (edb13708 후속)
 
 **분류**: O3 Normal (Fast mode)

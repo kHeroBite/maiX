@@ -481,6 +481,42 @@
                                            Click="PresetCustomButton_Click"/>
                             </StackPanel>
 
+                            <!-- TTS 설정 섹션 -->
+                            <TextBlock Text="TTS (음성 합성) 설정" FontWeight="SemiBold" FontSize="12"
+                                       Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                                       Margin="0,16,0,8"/>
+
+                            <!-- TTS 모델 -->
+                            <Grid Margin="0,0,0,8">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="130"/>
+                                    <ColumnDefinition Width="*"/>
+                                </Grid.ColumnDefinitions>
+                                <TextBlock Text="TTS 모델" VerticalAlignment="Center" FontSize="12"/>
+                                <ui:TextBox x:Name="TtsModelTextBox" Grid.Column="1"
+                                           AutomationProperties.AutomationId="TtsModelTextBox"
+                                           PlaceholderText="tts-1"/>
+                            </Grid>
+
+                            <!-- TTS 음성 -->
+                            <Grid Margin="0,0,0,8">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="130"/>
+                                    <ColumnDefinition Width="*"/>
+                                </Grid.ColumnDefinitions>
+                                <TextBlock Text="TTS 음성" VerticalAlignment="Center" FontSize="12"/>
+                                <ComboBox x:Name="TtsVoiceComboBox" Grid.Column="1"
+                                          AutomationProperties.AutomationId="TtsVoiceComboBox"
+                                          Width="160" HorizontalAlignment="Left">
+                                    <ComboBoxItem Content="alloy" Tag="alloy"/>
+                                    <ComboBoxItem Content="echo" Tag="echo"/>
+                                    <ComboBoxItem Content="fable" Tag="fable"/>
+                                    <ComboBoxItem Content="onyx" Tag="onyx"/>
+                                    <ComboBoxItem Content="nova" Tag="nova"/>
+                                    <ComboBoxItem Content="shimmer" Tag="shimmer"/>
+                                </ComboBox>
+                            </Grid>
+
                         </StackPanel>
                     </Expander>
                 </Border>

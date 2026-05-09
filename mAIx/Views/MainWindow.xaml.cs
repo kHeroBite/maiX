@@ -7939,22 +7939,22 @@ public partial class MainWindow : FluentWindow
 
         try
         {
-            var serverUrl = App.Settings?.UserPreferences?.SpeechServerUrl ?? "http://172.10.74.2:18989";
-            Log4.Debug($"[OneNote] 서버 STT 분석 시작: {serverUrl}");
-            using var serverSpeech = new Services.Speech.ServerSpeechService(serverUrl);
-            var transcriptResult = await serverSpeech.TranscribeFileAsync(recording.FilePath);
-            Log4.Debug("[OneNote] 서버 STT 분석 완료");
+            // OpenAI Transcriptions API 활용 (Jarvis 서버 STT 제거)
+            Log4.Debug("[OneNote] OpenAI Transcriptions API STT 분석 시작");
+            var apiKey = App.Settings?.AIProviders?.OpenAI?.ApiKey ?? string.Empty;
+            var baseUrl = App.Settings?.AIProviders?.OpenAI?.BaseUrl ?? "https://api.openai.com/v1";
+            var transcribeModel = App.Settings?.OaiRecording?.TranscribeSttModel ?? "gpt-4o-transcribe";
+            var transcriptJson = await TranscribeFileWithOpenAiAsync(recording.FilePath, apiKey, baseUrl, transcribeModel);
+            Log4.Debug("[OneNote] OpenAI STT 분석 완료");
 
             // 결과를 녹음에 저장
-            if (transcriptResult?.Segments != null)
+            if (!string.IsNullOrEmpty(transcriptJson))
             {
                 // STT 결과를 JSON 파일로 저장 후 STTResultPath 설정
                 var sttPath = System.IO.Path.Combine(
                     System.IO.Path.GetDirectoryName(recording.FilePath) ?? "",
                     System.IO.Path.GetFileNameWithoutExtension(recording.FilePath) + "_stt.json");
-                var json = System.Text.Json.JsonSerializer.Serialize(transcriptResult,
-                    new System.Text.Json.JsonSerializerOptions { WriteIndented = true });
-                await System.IO.File.WriteAllTextAsync(sttPath, json);
+                await System.IO.File.WriteAllTextAsync(sttPath, transcriptJson);
                 recording.STTResultPath = sttPath;
             }
 
@@ -7985,6 +7985,58 @@ public partial class MainWindow : FluentWindow
                 OneNoteSTTProgressPanel.Visibility = Visibility.Collapsed;
             }
         }
+    }
+
+    /// <summary>
+    /// OpenAI /v1/audio/transcriptions API를 사용해 녹음 파일을 STT 분석 (Jarvis 서버 STT 대체)
+    /// </summary>
+    private static async System.Threading.Tasks.Task<string?> TranscribeFileWithOpenAiAsync(
+        string filePath, string apiKey, string baseUrl, string model)
+    {
+        if (string.IsNullOrWhiteSpace(apiKey))
+        {
+            Log4.Warn("[OneNote] OpenAI API 키 미설정 — TranscribeFileWithOpenAiAsync 스킵");
+            return null;
+        }
+
+        using var http = new System.Net.Http.HttpClient();
+        http.DefaultRequestHeaders.Authorization =
+            new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", apiKey);
+
+        var url = baseUrl.TrimEnd('/') + "/audio/transcriptions";
+        var fileBytes = await System.IO.File.ReadAllBytesAsync(filePath).ConfigureAwait(false);
+        var ext = System.IO.Path.GetExtension(filePath).TrimStart('.').ToLowerInvariant();
+        var mimeType = ext switch
+        {
+            "mp3" => "audio/mpeg",
+            "wav" => "audio/wav",
+            "m4a" => "audio/mp4",
+            "webm" => "audio/webm",
+            _ => "audio/mpeg"
+        };
+
+        using var form = new System.Net.Http.MultipartFormDataContent();
+        var audioContent = new System.Net.Http.ByteArrayContent(fileBytes);
+        audioContent.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue(mimeType);
+        form.Add(audioContent, "file", System.IO.Path.GetFileName(filePath));
+        form.Add(new System.Net.Http.StringContent(model), "model");
+        form.Add(new System.Net.Http.StringContent("verbose_json"), "response_format");
+        form.Add(new System.Net.Http.StringContent("segment"), "timestamp_granularities[]");
+        form.Add(new System.Net.Http.StringContent("ko"), "language");
+
+        Log4.Debug($"[OneNote] OpenAI Transcriptions API 요청: {url}, model={model}");
+        var response = await http.PostAsync(url, form).ConfigureAwait(false);
+
+        if (!response.IsSuccessStatusCode)
+        {
+            var err = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
+            Log4.Error($"[OneNote] Transcriptions API 오류 {response.StatusCode}: {(err.Length > 200 ? err[..200] : err)}");
+            return null;
+        }
+
+        var json = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
+        Log4.Debug($"[OneNote] Transcriptions API 응답 수신 — {json.Length}chars");
+        return json;
     }
 
     /// <summary>
@@ -19959,6 +20011,70 @@ public partial class MainWindow : FluentWindow
         sttGroup.Child = sttStack;
         SettingsContentPanel.Children.Add(sttGroup);
 
+        // ── TTS 설정 그룹 ────────────────────────────────────────────────
+        var ttsSettingsGroup = CreateSettingsGroupBorder();
+        var ttsSettingsStack = new StackPanel();
+
+        ttsSettingsStack.Children.Add(CreateSettingsLabel("TTS (음성 합성) 설정"));
+
+        // TTS 모델
+        var ttsModelRow = new Grid { Margin = new Thickness(0, 0, 0, 8) };
+        ttsModelRow.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(180) });
+        ttsModelRow.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        var ttsModelLabel = new System.Windows.Controls.TextBlock
+        {
+            Text = "TTS 모델",
+            FontSize = 13,
+            VerticalAlignment = VerticalAlignment.Center,
+            Margin = new Thickness(0, 0, 8, 0)
+        };
+        Grid.SetColumn(ttsModelLabel, 0);
+        ttsModelRow.Children.Add(ttsModelLabel);
+        var ttsModelBox = new Wpf.Ui.Controls.TextBox
+        {
+            Text = rec.TtsModel,
+            PlaceholderText = "tts-1"
+        };
+        ttsModelBox.TextChanged += (s, e) => { rec.TtsModel = ttsModelBox.Text; App.Settings.SaveAll(); };
+        Grid.SetColumn(ttsModelBox, 1);
+        ttsModelRow.Children.Add(ttsModelBox);
+        ttsSettingsStack.Children.Add(ttsModelRow);
+
+        // TTS 음성
+        var ttsVoiceRow = new Grid { Margin = new Thickness(0, 0, 0, 0) };
+        ttsVoiceRow.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(180) });
+        ttsVoiceRow.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        var ttsVoiceLabel = new System.Windows.Controls.TextBlock
+        {
+            Text = "TTS 음성",
+            FontSize = 13,
+            VerticalAlignment = VerticalAlignment.Center,
+            Margin = new Thickness(0, 0, 8, 0)
+        };
+        Grid.SetColumn(ttsVoiceLabel, 0);
+        ttsVoiceRow.Children.Add(ttsVoiceLabel);
+        var ttsVoiceCombo = new ComboBox { Margin = new Thickness(0) };
+        var ttsVoiceOptions = new[] { "alloy", "echo", "fable", "onyx", "nova", "shimmer" };
+        foreach (var voice in ttsVoiceOptions)
+            ttsVoiceCombo.Items.Add(new ComboBoxItem { Content = voice, Tag = voice });
+        var ttsVoiceIdx = Array.IndexOf(ttsVoiceOptions, rec.TtsVoice);
+        ttsVoiceCombo.SelectedIndex = ttsVoiceIdx >= 0 ? ttsVoiceIdx : 0;
+        ttsVoiceCombo.SelectionChanged += (s, e) =>
+        {
+            try
+            {
+                if (ttsVoiceCombo.SelectedItem is ComboBoxItem ci && ci.Tag is string v)
+                { rec.TtsVoice = v; App.Settings.SaveAll(); }
+            }
+            catch (Exception ex) { Log4.Error($"[MainWindow] TTS 음성 변경 실패: {ex}"); }
+        };
+        Grid.SetColumn(ttsVoiceCombo, 1);
+        ttsVoiceRow.Children.Add(ttsVoiceCombo);
+        ttsSettingsStack.Children.Add(ttsVoiceRow);
+
+        ttsSettingsGroup.Child = ttsSettingsStack;
+        SettingsContentPanel.Children.Add(ttsSettingsGroup);
+
         // ── LLM 모델 그룹 ────────────────────────────────────────────────
         var llmGroup = CreateSettingsGroupBorder();
         var llmStack = new StackPanel();
@@ -21263,95 +21379,15 @@ public partial class MainWindow : FluentWindow
         var ttsGroup = CreateSettingsGroupBorder();
         var ttsStack = new StackPanel { Margin = new Thickness(16) };
         ttsStack.Children.Add(CreateSettingsLabel("TTS (음성 합성) 모드"));
-
-        var ttsPanel = new WrapPanel { Margin = new Thickness(0, 8, 0, 0) };
-        var ttsClientRadio = new System.Windows.Controls.RadioButton
+        ttsStack.Children.Add(new System.Windows.Controls.TextBlock
         {
-            Content = "클라이언트 (로컬)",
-            GroupName = "TtsMode",
-            IsChecked = false,
-            IsEnabled = false,
-            Margin = new Thickness(0, 0, 16, 0),
-            VerticalContentAlignment = VerticalAlignment.Center
-        };
-        var ttsServerRadio = new System.Windows.Controls.RadioButton
-        {
-            Content = "서버 (Jarvis)",
-            GroupName = "TtsMode",
-            IsChecked = true,
-            IsEnabled = false,
-            VerticalContentAlignment = VerticalAlignment.Center
-        };
-        ttsPanel.Children.Add(ttsClientRadio);
-        ttsPanel.Children.Add(ttsServerRadio);
-        ttsStack.Children.Add(ttsPanel);
-        ttsGroup.Child = ttsStack;
-        SettingsContentPanel.Children.Add(ttsGroup);
-
-        // === TTS 옵션 그룹 ===
-        var ttsOptsGroup = CreateSettingsGroupBorder();
-        var ttsOptsStack = new StackPanel { Margin = new Thickness(16) };
-        ttsOptsStack.Children.Add(CreateSettingsLabel("TTS 옵션"));
-        ttsOptsStack.Children.Add(new System.Windows.Controls.TextBlock
-        {
-            Text = "음성 합성 서버의 현재 설정값입니다.",
+            Text = "OpenAI TTS API 사용 (tts-1, tts-1-hd)",
             FontSize = 12,
             Foreground = (Brush)FindResource("TextFillColorSecondaryBrush"),
-            Margin = new Thickness(0, 4, 0, 8)
+            Margin = new Thickness(0, 8, 0, 0)
         });
-        var ttsCurrentEngineVal = AddServerOptionRow(ttsOptsStack, "현재 엔진", "조회 중...");
-        var ttsReadyEnginesVal = AddServerOptionRow(ttsOptsStack, "Ready 엔진", "조회 중...");
-        var ttsEngineDeviceVal = AddServerOptionRow(ttsOptsStack, "디바이스", "조회 중...");
-        ttsOptsGroup.Child = ttsOptsStack;
-        SettingsContentPanel.Children.Add(ttsOptsGroup);
-
-        // TTS 서버 API 비동기 조회
-        _ = Task.Run(async () =>
-        {
-            try
-            {
-                var serverUrl = prefs.SpeechServerUrl;
-                if (string.IsNullOrWhiteSpace(serverUrl)) return;
-
-                using var svc = new mAIx.Services.Speech.ServerSpeechService(serverUrl, prefs);
-                var fullStatusTask = svc.GetFullModelStatusAsync();
-                var enginesTask = svc.GetTtsEnginesAsync();
-                await Task.WhenAll(fullStatusTask, enginesTask);
-
-                var fullStatus = fullStatusTask.Result;
-                var engines = enginesTask.Result;
-
-                await Dispatcher.InvokeAsync(() =>
-                {
-                    var currentEngine = fullStatus?.Tts?.CurrentEngine ?? engines?.Active ?? "서버 미연결";
-                    ttsCurrentEngineVal.Text = currentEngine;
-
-                    var readyEngines = fullStatus?.Tts?.ReadyEngines;
-                    ttsReadyEnginesVal.Text = readyEngines != null && readyEngines.Count > 0
-                        ? string.Join(", ", readyEngines) : "서버 미연결";
-
-                    // 현재 엔진의 디바이스 정보
-                    if (engines?.Details != null && !string.IsNullOrEmpty(currentEngine)
-                        && engines.Details.TryGetValue(currentEngine, out var detail))
-                    {
-                        ttsEngineDeviceVal.Text = detail.Device ?? "알 수 없음";
-                    }
-                    else
-                    {
-                        ttsEngineDeviceVal.Text = "서버 미연결";
-                    }
-                });
-            }
-            catch
-            {
-                await Dispatcher.InvokeAsync(() =>
-                {
-                    ttsCurrentEngineVal.Text = "서버 미연결";
-                    ttsReadyEnginesVal.Text = "서버 미연결";
-                    ttsEngineDeviceVal.Text = "서버 미연결";
-                });
-            }
-        });
+        ttsGroup.Child = ttsStack;
+        SettingsContentPanel.Children.Add(ttsGroup);
 
         // === 저장 버튼 ===
         var saveBtn = new Wpf.Ui.Controls.Button
@@ -21400,7 +21436,6 @@ public partial class MainWindow : FluentWindow
                 if (prefs == null) return;
                 prefs.SpeechServerUrl = string.IsNullOrWhiteSpace(urlBox.Text)
                     ? "http://172.10.74.2:18989" : urlBox.Text.Trim();
-                prefs.TtsMode = "server"; // TTS 모드는 항상 서버로 고정
 
                 // STT 분석 주기 저장
                 if (sttIntervalComboBox.SelectedItem is System.Windows.Controls.ComboBoxItem sttItem && sttItem.Tag is float sttVal)

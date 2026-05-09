@@ -70,4 +70,16 @@ public class OpenAiRecordingSettings
     /// </summary>
     [XmlElement("TopicNavOrientation")]
     public string TopicNavOrientation { get; set; } = "Horizontal";
+
+    /// <summary>
+    /// TTS 모델 (tts-1, tts-1-hd)
+    /// </summary>
+    [XmlElement("TtsModel")]
+    public string TtsModel { get; set; } = "tts-1";
+
+    /// <summary>
+    /// TTS 음성 (alloy, echo, fable, onyx, nova, shimmer)
+    /// </summary>
+    [XmlElement("TtsVoice")]
+    public string TtsVoice { get; set; } = "alloy";
 }
