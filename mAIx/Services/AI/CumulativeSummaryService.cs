@@ -10,6 +10,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using mAIx.Models;
 using mAIx.Models.Settings;
+using mAIx.Services.AI.Testing;
 using mAIx.Services.Storage;
 using NLog;
 
@@ -114,7 +115,12 @@ public sealed class CumulativeSummaryService : ICumulativeSummaryService
 
     private async Task RunTimerLoopAsync(int intervalMinutes, CancellationToken ct)
     {
-        using var timer = new PeriodicTimer(TimeSpan.FromMinutes(intervalMinutes));
+        // DebugTimerScale: 1.0=정상, 0.1=10배 빠름 — 환경변수 MAIX_DEBUG_TIMER_SCALE 우선
+        var envScale = Environment.GetEnvironmentVariable("MAIX_DEBUG_TIMER_SCALE");
+        var timerScale = double.TryParse(envScale, out var parsed) ? parsed : _settings.OaiRecording.DebugTimerScale;
+        var scaledMinutes = Math.Max(1.0 / 60.0, intervalMinutes * timerScale); // 최소 1초
+        _log.Debug("[CumulativeSummary] PeriodicTimer 주기={Min:F2}분 (scale={Scale})", scaledMinutes, timerScale);
+        using var timer = new PeriodicTimer(TimeSpan.FromMinutes(scaledMinutes));
         try
         {
             while (await timer.WaitForNextTickAsync(ct).ConfigureAwait(false))
@@ -136,6 +142,15 @@ public sealed class CumulativeSummaryService : ICumulativeSummaryService
     {
         try
         {
+            // Mock 분기 — EnableMock=true 시 실호출 없이 mock 누적 요약 반환
+            if (MockOpenAiResponseInjector.TryHandleCumulativeSummary(out var mockSummary))
+            {
+                lock (_summaryLock) { _cumulativeSummary = mockSummary; }
+                CumulativeSummaryUpdated?.Invoke(mockSummary);
+                _log.Info("[CumulativeSummary] Mock 누적 요약 완료: {Text}", mockSummary);
+                return;
+            }
+
             // 직전 N분간 1분 요약 엔트리 수집 (원문 STT 미사용)
             var allEntries = await _minuteSummaryService.GetAllMinuteSummariesAsync().ConfigureAwait(false);
             var cutoff = DateTime.Now - TimeSpan.FromMinutes(intervalMinutes);
@@ -259,6 +274,13 @@ public sealed class CumulativeSummaryService : ICumulativeSummaryService
     public async Task<string> FinalSummarizeAsync()
     {
         _log.Info("[CumulativeSummary] 최종 요약 생성 시작");
+
+        // Mock 분기 — EnableMock=true 시 실호출 없이 mock 최종 요약 반환
+        if (MockOpenAiResponseInjector.TryHandleFinalSummary(out var mockFinal))
+        {
+            _log.Info("[CumulativeSummary] Mock 최종 요약 완료: {Text}", mockFinal);
+            return mockFinal;
+        }
 
         try
         {

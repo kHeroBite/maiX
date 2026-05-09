@@ -2,6 +2,48 @@
 
 > PROJECT.md 작업 이력 테이블의 상세 보완본
 
+## 2026-05-10: oralph iter2 — mock OpenAI + 시간단축 + E2E harness 추가 (oralph 2/5)
+
+**분류**: O4 Heavy (Full mode)
+**oralph 반복**: 2/5 (max_iterations=5)
+**otest 결과**: 13/13 PASS (mock 환경 + UIAutomation 스크린샷)
+**범위**: 신규 2 + 수정 7 = 9파일
+
+### 작업 1: MockOpenAiResponseInjector (신규)
+
+- **신규**: `mAIx/Services/AI/Testing/MockOpenAiResponseInjector.cs` — 5개 OpenAI 서비스 mock 분기 인터셉터 (default off)
+  - `Enable()` / `Disable()` + 서비스별 mock 응답 설정
+  - production 영향 없음 (IsEnabled=false 기본)
+
+### 작업 2: RecordingE2ETestHarness (신규)
+
+- **신규**: `mAIx/Tests/Helpers/RecordingE2ETestHarness.cs` — `RunFullScenarioAsync` one-shot E2E 진입점
+  - mock 환경 + UIAutomation 스크린샷 통합
+
+### 작업 3: 기존 서비스 mock 분기 + DebugTimerScale 적용
+
+- **수정**: `mAIx/Services/Audio/DebugPcmInjectHelper.cs` — `GetTestAudioBuffer` + `InjectFakeChunkSequenceAsync` 추가
+- **수정**: `mAIx/Models/Settings/OpenAiRecordingSettings.cs` — `DebugTimerScale` 프로퍼티 (default 1.0)
+- **수정**: `mAIx/Services/AI/OpenAiRealtimeSttService.cs` — Mock 분기 (SendAudioChunkAsync)
+- **수정**: `mAIx/Services/AI/OpenAiTranscribeSttService.cs` — Mock 분기 (ProcessAudioChunkAsync)
+- **수정**: `mAIx/Services/AI/OpenAiTtsService.cs` — Mock 분기 (SynthesizeAsync)
+- **수정**: `mAIx/Services/AI/MinuteSummaryService.cs` — Mock 분기 + DebugTimerScale 적용 (60초→6초)
+- **수정**: `mAIx/Services/AI/CumulativeSummaryService.cs` — Mock 분기 + DebugTimerScale 적용 (5분→30초)
+
+### 테스트 결과
+
+- otest Phase 1 (빌드/기동): PASS
+- otest Phase 2 (mock + E2E): PASS (13/13)
+- evidence/e2e_results.json 산출
+
+### 신규 교훈
+
+- **L-397**: Mock 인터셉터 + 시간 단축 timer 패턴 — 비용/대기 한계가 있는 외부 API E2E 검증 시 효과적
+- **L-398**: oralph 반복 검증 시 미검증 항목은 mock 환경 구축으로 해결 가능 (iter1→iter2)
+- **L-399**: production 영향 없는 디버그 플래그(default false/1.0)로 Mock/시간단축 환경 격리
+
+---
+
 ## 2026-05-10: Jarvis STT/TTS 완전 제거 + OpenAI 전체 교체 + hook 옵션B 재발방지 (oralph 1/5)
 
 **분류**: O4 Heavy (Full mode)

@@ -10,6 +10,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using mAIx.Models;
 using mAIx.Models.Settings;
+using mAIx.Services.AI.Testing;
 using mAIx.Services.Storage;
 using NLog;
 
@@ -109,6 +110,11 @@ public sealed class OpenAiRealtimeSttService : IOpenAiRealtimeSttService
     /// <param name="chunkStartTime">청크 시작 시각 (녹음 기준 상대 시간)</param>
     public async Task SendAudioChunkAsync(byte[] pcmData, TimeSpan chunkStartTime)
     {
+        // Mock 분기 — EnableMock=true 시 실호출 없이 즉시 반환
+        if (MockOpenAiResponseInjector.TryHandleRealtimeSttChunk(chunkStartTime, (t, text) =>
+                TranscriptSegmentReceived?.Invoke(t, text)))
+            return;
+
         if (_ws == null || _ws.State != WebSocketState.Open) return;
 
         try

@@ -333,7 +333,8 @@ Models:
   - 파일명: OpenAiRecordingSettings.cs (신규 — 2026-05-09)
     경로: Models/Settings/
     역할: OpenAI 녹음 STT/LLM 설정 (XML 직렬화), oai_recording.xml 영속화
-    속성: RealtimeSttModel, TranscribeSttModel, KeywordExtractModel, MinuteSummaryModel, CumulativeSummaryModel, FinalSummaryModel, CumulativeSummaryIntervalMinutes, ChunkSeconds, ActivePreset, TopicNavOrientation
+    속성: RealtimeSttModel, TranscribeSttModel, KeywordExtractModel, MinuteSummaryModel, CumulativeSummaryModel, FinalSummaryModel, CumulativeSummaryIntervalMinutes, ChunkSeconds, ActivePreset, TopicNavOrientation, DebugTimerScale
+    변경_2026-05-10: DebugTimerScale 프로퍼티 추가 (default 1.0, 테스트 시 단축 스케일 적용)
 
   - 파일명: TopicSegment.cs (신규 — 2026-05-09)
     경로: Models/
@@ -413,7 +414,38 @@ AI_Services:
     역할: 설정 주기 PeriodicTimer 기반 누적 요약 + 압축 갱신 모드 + 최종 요약
     인터페이스: ICumulativeSummaryService
     이벤트: CumulativeSummaryUpdated
+    변경_2026-05-10: Mock 분기 + DebugTimerScale 적용 (기본 1.0, 테스트 시 0.1)
+
+  - 파일명: MinuteSummaryService.cs (변경)
+    역할: 60초 PeriodicTimer 기반 1분 요약 생성 + 디스크 JSON 저장
+    변경_2026-05-10: Mock 분기 + DebugTimerScale 적용 (60초→6초 등 스케일 조정 가능)
+
+  - 파일명: OpenAiRealtimeSttService.cs (변경)
+    역할: OpenAI Realtime API WebSocket 기반 실시간 STT 서비스 (화자분리 OFF 모드)
+    변경_2026-05-10: SendAudioChunkAsync Mock 분기 추가
+
+  - 파일명: OpenAiTranscribeSttService.cs (변경)
+    역할: OpenAI Transcription API 청크 기반 STT 서비스 (화자분리 ON 모드, Jaccard dedup)
+    변경_2026-05-10: ProcessAudioChunkAsync Mock 분기 추가
+
+  - 파일명: OpenAiTtsService.cs (변경)
+    역할: OpenAI TTS API POST /v1/audio/speech, NAudio MP3 재생
+    변경_2026-05-10: SynthesizeAsync Mock 분기 추가
+
+Services/AI/Testing/:
+  - 파일명: MockOpenAiResponseInjector.cs (신규 — 2026-05-10)
+    경로: Services/AI/Testing/
+    역할: 5개 OpenAI 서비스 mock 응답 인터셉터 (IsEnabled=false 기본 — production 영향 0)
+    기능: Enable()/Disable() 토글, 서비스별 mock 응답 설정
+    연관: L-397, L-399
 ```
+
+Tests/Helpers/:
+```yaml
+  - 파일명: RecordingE2ETestHarness.cs (신규 — 2026-05-10)
+    경로: Tests/Helpers/
+    역할: RunFullScenarioAsync one-shot E2E 진입점 (mock 환경 + UIAutomation 스크린샷 통합)
+    연관: MockOpenAiResponseInjector, DebugPcmInjectHelper, L-397, L-398
 
 #### 5.2 Services/Analysis (이메일 분석)
 
@@ -696,6 +728,11 @@ Audio_Services:
   - 파일명: MicrophoneTestService.cs
     경로: Services/Audio/
     역할: 마이크 테스트 전용 서비스 (장치 열거, 실시간 모니터링, 테스트 녹음/재생, 볼륨 조절)
+
+  - 파일명: DebugPcmInjectHelper.cs (변경 — 2026-05-10)
+    경로: Services/Audio/
+    역할: E2E 가짜 PCM 스트림 Reflection 트리거 헬퍼
+    변경_2026-05-10: GetTestAudioBuffer + InjectFakeChunkSequenceAsync 메서드 추가
 ```
 
 #### 5.8 Services/Speech (음성 인식/합성)

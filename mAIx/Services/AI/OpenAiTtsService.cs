@@ -8,6 +8,7 @@ using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 using mAIx.Models.Settings;
+using mAIx.Services.AI.Testing;
 using mAIx.Services.Storage;
 using NAudio.Wave;
 using NLog;
@@ -61,6 +62,10 @@ public sealed class OpenAiTtsService : IOpenAiTtsService
     public async Task<byte[]> SynthesizeAsync(string text, CancellationToken ct = default)
     {
         ObjectDisposedException.ThrowIf(_disposed, this);
+
+        // Mock 분기 — EnableMock=true 시 실호출 없이 즉시 반환
+        if (MockOpenAiResponseInjector.TryHandleTtsSynthesize(text, out var mockResult))
+            return mockResult;
 
         var apiKey = _settings.AIProviders?.OpenAI?.ApiKey ?? string.Empty;
         if (string.IsNullOrWhiteSpace(apiKey))

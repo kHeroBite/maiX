@@ -1194,6 +1194,32 @@
 - **연관**: otest_done_guard.sh
 - **Level**: 2 (인프라 교훈 — otest→odone 전환 시 반복 가능)
 
+### L-397: Mock 인터셉터 + 시간 단축 timer 패턴 — 외부 API E2E 검증 (2026-05-10)
+
+- **문제**: OpenAI API는 비용/대기 한계로 E2E 자동 반복 검증이 불가능했음
+- **해결**: `MockOpenAiResponseInjector` 인터셉터로 각 서비스 mock 분기 + `DebugTimerScale`로 타이머 주기 단축 (60초→6초, 5분→30초)
+- **효과**: 실제 API 호출 없이 E2E 시나리오 13/13 PASS 검증 가능
+- **패턴**: `IsEnabled=false` 기본값으로 production 영향 0 유지
+- **연관**: RecordingE2ETestHarness, DebugPcmInjectHelper, L-394
+- **Level**: 2 (반복 적용 가치 있는 E2E 패턴)
+
+### L-398: oralph 반복 검증에서 미검증 항목은 mock 환경 구축으로 해결 (2026-05-10)
+
+- **문제**: oralph iter1에서 외부 API 의존 항목은 실제 검증 불가 → 13/13 PASS 달성 불가
+- **해결**: iter2에서 mock 환경(MockOpenAiResponseInjector + RecordingE2ETestHarness) 구축 후 13/13 PASS
+- **교훈**: oralph 미달 항목이 "API 비용/대기" 한계일 때 → mock 환경 구축이 올바른 접근법
+- **패턴**: iter1 → "mock 구축 결정(A)" → iter2 PASS → 완수
+- **Level**: 2 (oralph 워크플로우 교훈)
+
+### L-399: production 영향 없는 디버그 플래그로 mock/시간단축 환경 격리 (2026-05-10)
+
+- **원칙**: 디버그/테스트 헬퍼는 production 코드에 포함하되 default off 플래그로 완전 격리
+  - `MockOpenAiResponseInjector.IsEnabled = false` (기본) → mock 분기 진입 불가
+  - `OpenAiRecordingSettings.DebugTimerScale = 1.0` (기본) → 타이머 주기 변경 없음
+- **장점**: 별도 빌드 구성(DEBUG/RELEASE) 불필요, production 코드 경로와 분리
+- **주의**: default 값 변경 시 반드시 HISTORY.md에 기록 (실수 운영 방지)
+- **Level**: 1 (참고용 설계 패턴)
+
 ## 반영 추적 테이블
 
 | 교훈 ID | 교훈 요약 | 반영 대상 | 반영 위치 | 반영일 | 검증 |
@@ -1235,3 +1261,6 @@
 | L-394 | 이벤트 기반 E2E 검증 — Reflection 트리거 헬퍼(DebugPcmInjectHelper) 패턴 효과적 | docs | LESSONS.md | 2026-05-10 | ✅ |
 | L-395 | PowerShell UIAutomation ScrollPattern.Scroll(LargeIncrement) — 스크롤 영역 컨트롤 접근 | docs | LESSONS.md | 2026-05-10 | ✅ |
 | L-396 | otest 마커 mtime 미갱신 — file_write overwrite=true + 타임스탬프 내용 필수, 실패 시 강제 재생성 | docs | LESSONS.md | 2026-05-10 | ✅ |
+| L-397 | Mock 인터셉터 + 시간 단축 timer 패턴 — 외부 API E2E 검증 시 비용/대기 없이 전수 검증 | docs | LESSONS.md | 2026-05-10 | ✅ |
+| L-398 | oralph 미달 항목이 API 한계일 때 → mock 환경 구축 후 iter 재실행 패턴 | docs | LESSONS.md | 2026-05-10 | ✅ |
+| L-399 | production 영향 없는 디버그 플래그(default false/1.0)로 mock/시간단축 환경 격리 | docs | LESSONS.md | 2026-05-10 | ✅ |

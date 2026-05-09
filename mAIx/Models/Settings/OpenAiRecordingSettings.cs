@@ -82,4 +82,12 @@ public class OpenAiRecordingSettings
     /// </summary>
     [XmlElement("TtsVoice")]
     public string TtsVoice { get; set; } = "alloy";
+
+    /// <summary>
+    /// 디버그 타이머 배율 (기본 1.0 = 정상 속도, 0.1 = 10배 빠름).
+    /// 환경변수 MAIX_DEBUG_TIMER_SCALE이 설정된 경우 해당 값이 우선 적용됨.
+    /// production에서는 1.0 유지.
+    /// </summary>
+    [XmlElement("DebugTimerScale")]
+    public double DebugTimerScale { get; set; } = 1.0;
 }

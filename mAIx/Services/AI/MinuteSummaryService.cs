@@ -10,6 +10,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using mAIx.Models;
 using mAIx.Models.Settings;
+using mAIx.Services.AI.Testing;
 using mAIx.Services.Storage;
 using NLog;
 
@@ -149,7 +150,12 @@ public sealed class MinuteSummaryService : IMinuteSummaryService
     private async Task RunTimerLoopAsync(CancellationToken ct)
     {
         _lastStartedAt = DateTime.Now;
-        using var timer = new PeriodicTimer(TimeSpan.FromSeconds(60));
+        // DebugTimerScale: 1.0=정상(60초), 0.1=10배 빠름(6초) — 환경변수 MAIX_DEBUG_TIMER_SCALE 우선
+        var envScale = Environment.GetEnvironmentVariable("MAIX_DEBUG_TIMER_SCALE");
+        var timerScale = double.TryParse(envScale, out var parsed) ? parsed : _settings.OaiRecording.DebugTimerScale;
+        var timerInterval = TimeSpan.FromSeconds(Math.Max(1.0, 60.0 * timerScale));
+        _log.Debug("[MinuteSummary] PeriodicTimer 주기={Interval}s (scale={Scale})", timerInterval.TotalSeconds, timerScale);
+        using var timer = new PeriodicTimer(timerInterval);
         try
         {
             while (await timer.WaitForNextTickAsync(ct).ConfigureAwait(false))
@@ -186,6 +192,23 @@ public sealed class MinuteSummaryService : IMinuteSummaryService
         await _summarySemaphore.WaitAsync(ct).ConfigureAwait(false);
         try
         {
+            // Mock 분기 — EnableMock=true 시 실호출 없이 mock 요약 반환
+            if (MockOpenAiResponseInjector.TryHandleMinuteSummary(out var mockSummary))
+            {
+                var mockEntry = new MinuteSummaryEntry
+                {
+                    Index = _entryIndex++,
+                    StartTime = startTime,
+                    EndTime = endTime,
+                    SummaryText = mockSummary,
+                    CreatedAt = DateTime.Now
+                };
+                lock (_bufferLock) { _entries.Add(mockEntry); }
+                MinuteSummaryCreated?.Invoke(mockEntry);
+                _log.Info("[MinuteSummary] Mock 1분 요약 완료: {Text}", mockSummary);
+                return;
+            }
+
             var combinedText = string.Join(" ", texts);
             var model = _settings.OaiRecording.MinuteSummaryModel;
             var baseUrl = (_settings.AIProviders?.OpenAI?.BaseUrl ?? "https://api.openai.com/v1").TrimEnd('/');

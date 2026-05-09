@@ -9,6 +9,7 @@ using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 using mAIx.Models.Settings;
+using mAIx.Services.AI.Testing;
 using mAIx.Services.Storage;
 using NLog;
 
@@ -105,6 +106,11 @@ public sealed class OpenAiTranscribeSttService : IOpenAiTranscribeSttService
     public async Task ProcessAudioChunkAsync(byte[] pcmData, TimeSpan chunkStartTime)
     {
         if (!_running || _cts == null || _cts.IsCancellationRequested) return;
+
+        // Mock 분기 — EnableMock=true 시 실호출 없이 즉시 반환
+        if (MockOpenAiResponseInjector.TryHandleTranscribeSttChunk(chunkStartTime, (t, text) =>
+                TranscriptSegmentReceived?.Invoke(t, text)))
+            return;
 
         try
         {
