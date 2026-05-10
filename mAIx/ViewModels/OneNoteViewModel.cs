@@ -1871,11 +1871,23 @@ public partial class OneNoteViewModel : ViewModelBase
     /// </summary>
     partial void OnTranscriptionModelChanged(string value)
     {
-        if (App.Settings?.OaiRecording != null && !string.IsNullOrWhiteSpace(value))
+        Log4.Info($"[옵션:디버그] OnTranscriptionModelChanged 진입 value='{value}' App.Settings={(App.Settings == null ? "null" : "OK")}");
+        try
         {
-            App.Settings.OaiRecording.TranscriptionModel = value;
-            App.Settings.SaveAll();
-            Log4.Info($"[옵션] TranscriptionModel 저장 완료: {value}");
+            if (App.Settings?.OaiRecording != null && !string.IsNullOrWhiteSpace(value))
+            {
+                App.Settings.OaiRecording.TranscriptionModel = value;
+                App.Settings.SaveAll();
+                Log4.Info($"[옵션] TranscriptionModel 저장 완료: {value}");
+            }
+            else
+            {
+                Log4.Warn($"[옵션:디버그] TranscriptionModel 저장 스킵 — Settings null 또는 빈 value");
+            }
+        }
+        catch (Exception ex)
+        {
+            Log4.Error($"[옵션:디버그] TranscriptionModel 저장 예외: {ex}");
         }
     }
 
@@ -1884,11 +1896,19 @@ public partial class OneNoteViewModel : ViewModelBase
     /// </summary>
     partial void OnIsServerVadEnabledChanged(bool value)
     {
-        if (App.Settings?.OaiRecording != null)
+        Log4.Info($"[옵션:디버그] OnIsServerVadEnabledChanged 진입 value={value}");
+        try
         {
-            App.Settings.OaiRecording.ServerVadEnabled = value;
-            App.Settings.SaveAll();
-            Log4.Info($"[옵션] ServerVadEnabled 저장 완료: {value}");
+            if (App.Settings?.OaiRecording != null)
+            {
+                App.Settings.OaiRecording.ServerVadEnabled = value;
+                App.Settings.SaveAll();
+                Log4.Info($"[옵션] ServerVadEnabled 저장 완료: {value}");
+            }
+        }
+        catch (Exception ex)
+        {
+            Log4.Error($"[옵션:디버그] ServerVadEnabled 저장 예외: {ex}");
         }
     }
 
@@ -1897,15 +1917,27 @@ public partial class OneNoteViewModel : ViewModelBase
     /// </summary>
     partial void OnChunkSecondsChanged(int value)
     {
-        if (App.Settings?.OaiRecording != null)
+        Log4.Info($"[옵션:디버그] OnChunkSecondsChanged 진입 value={value} App.Settings={(App.Settings == null ? "null" : "OK")} Oai={(App.Settings?.OaiRecording == null ? "null" : "OK")} _recordingService={(_recordingService == null ? "null" : "OK")}");
+        try
         {
-            App.Settings.OaiRecording.ChunkSeconds = value;
-            App.Settings.SaveAll();
-            if (_recordingService != null)
+            if (App.Settings?.OaiRecording != null)
             {
-                _recordingService.RealtimeChunkSeconds = value;
+                App.Settings.OaiRecording.ChunkSeconds = value;
+                App.Settings.SaveAll();
+                if (_recordingService != null)
+                {
+                    _recordingService.RealtimeChunkSeconds = value;
+                }
+                Log4.Info($"[옵션] ChunkSeconds 저장 완료: {value}초");
             }
-            Log4.Info($"[옵션] ChunkSeconds 저장 완료: {value}초");
+            else
+            {
+                Log4.Warn($"[옵션:디버그] ChunkSeconds 저장 실패 — App.Settings 또는 OaiRecording null");
+            }
+        }
+        catch (Exception ex)
+        {
+            Log4.Error($"[옵션:디버그] ChunkSeconds 저장 예외: {ex}");
         }
     }
 

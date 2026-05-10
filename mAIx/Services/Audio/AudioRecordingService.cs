@@ -108,7 +108,12 @@ public class AudioRecordingService : IDisposable
     public float RealtimeChunkSeconds
     {
         get => _realtimeChunkSeconds;
-        set => _realtimeChunkSeconds = Math.Max(0.1f, Math.Min(60f, value)); // 0.1~60초 범위
+        set
+        {
+            var clamped = Math.Max(0.1f, Math.Min(60f, value));
+            Log4.Info($"[AudioRecording] RealtimeChunkSeconds setter — input={value} clamped={clamped} (이전={_realtimeChunkSeconds})");
+            _realtimeChunkSeconds = clamped;
+        }
     }
 
     /// <summary>

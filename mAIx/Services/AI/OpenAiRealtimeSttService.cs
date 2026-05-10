@@ -313,7 +313,7 @@ public sealed class OpenAiRealtimeSttService : IOpenAiRealtimeSttService
                 {
                     var json = Encoding.UTF8.GetString(messageBuffer.ToArray());
                     messageBuffer.Clear();
-                    _log.Debug($"[OpenAi-Realtime] WS 수신 — type={result.MessageType}, snippet={(json?.Length > 0 ? json.Substring(0, Math.Min(120, json.Length)) : "(empty)")}");
+                    _log.Debug($"[OpenAi-Realtime] WS 수신 RAW ({json?.Length ?? 0}자) — {json}");
                     ProcessMessage(json);
                 }
             }
@@ -389,17 +389,19 @@ public sealed class OpenAiRealtimeSttService : IOpenAiRealtimeSttService
                     var deltaText = deltaProp.GetString() ?? string.Empty;
                     if (!string.IsNullOrEmpty(deltaText))
                     {
-                        // 옵션 C: 마지막 delta로부터 N초 이상 경과 시 새 카드 시작 (한 문장 단위 누적)
                         var now = DateTime.Now;
                         var sinceLastDelta = (now - _lastDeltaAt).TotalSeconds;
-                        if (_currentSpeechItemId == null || sinceLastDelta >= SilenceCardThresholdSec)
+                        var prevItemId = _currentSpeechItemId;
+                        var isNewCard = (_currentSpeechItemId == null || sinceLastDelta >= SilenceCardThresholdSec);
+                        if (isNewCard)
                         {
                             _currentSpeechItemId = $"card_{now.Ticks}";
                         }
                         _lastDeltaAt = now;
-                        var itemId = _currentSpeechItemId;
+                        var itemId = _currentSpeechItemId!;
                         var accum = _deltaBuffers.AddOrUpdate(itemId, deltaText, (_, prev) => prev + deltaText);
                         var ts = TimeSpan.FromMilliseconds(_lastSpeechStartedMs);
+                        _log.Info($"[OpenAi-Realtime] delta — text='{deltaText}' itemId={itemId} sinceLastDelta={sinceLastDelta:F2}s isNewCard={isNewCard} prevItemId={prevItemId} accum_len={accum.Length}");
                         TranscriptSegmentUpdated?.Invoke(itemId, ts, accum);
                     }
                 }
