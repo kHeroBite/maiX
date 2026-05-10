@@ -8344,8 +8344,9 @@
                                                                       SelectedValuePath="Tag"
                                                                       FontSize="12" Width="220"
                                                                       ToolTip="gpt-4o-mini-transcribe/gpt-4o-transcribe는 음절 단위 streaming 지원. whisper-1은 발화 종료 후 일괄 전사.">
-                                                                <ComboBoxItem Content="gpt-4o-mini-transcribe (실시간)" Tag="gpt-4o-mini-transcribe"/>
-                                                                <ComboBoxItem Content="gpt-4o-transcribe (실시간 고품질)" Tag="gpt-4o-transcribe"/>
+                                                                <ComboBoxItem Content="gpt-realtime-whisper (음절 streaming, $0.017/분)" Tag="gpt-realtime-whisper"/>
+                                                                <ComboBoxItem Content="gpt-4o-mini-transcribe (chunk delta)" Tag="gpt-4o-mini-transcribe"/>
+                                                                <ComboBoxItem Content="gpt-4o-transcribe (chunk delta 고품질)" Tag="gpt-4o-transcribe"/>
                                                                 <ComboBoxItem Content="whisper-1 (일괄)" Tag="whisper-1"/>
                                                             </ComboBox>
                                                         </StackPanel>

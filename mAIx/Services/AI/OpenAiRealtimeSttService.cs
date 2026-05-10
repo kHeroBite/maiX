@@ -161,7 +161,7 @@ public sealed class OpenAiRealtimeSttService : IOpenAiRealtimeSttService
                 input_audio_format = "pcm16",
                 input_audio_transcription = new
                 {
-                    model = string.IsNullOrWhiteSpace(_settings.OaiRecording.TranscriptionModel) ? "gpt-4o-mini-transcribe" : _settings.OaiRecording.TranscriptionModel,
+                    model = string.IsNullOrWhiteSpace(_settings.OaiRecording.TranscriptionModel) ? "gpt-realtime-whisper" : _settings.OaiRecording.TranscriptionModel,
                     language = sttLang,
                     prompt = sttPrompt
                 },
