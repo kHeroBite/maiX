@@ -1526,3 +1526,27 @@ ConfigureAwait(false)를 Service 레이어 전체에 적용하여 스레드 컨�
 ### 미완성 항목 (의도된 placeholder — Sprint Contract 외)
 - TopicSegment_Click SeekTo 기능 (타임스탬프 seek 미구현 — 향후 확장)
 - StartOpenAiServicesAsync RecordingService 이벤트 연결 미구현
+
+---
+
+## 2026-05-10: OpenAI Realtime STT sample rate 통일 — 16kHz → 24kHz (O3)
+
+### 작업 내용
+- **Root cause 확인**: session.update 발송 + audio chunk 24회 전송 정상이나 server_vad `speech_started` 이벤트 0건. 원인은 `AudioRecordingService`가 16kHz 출력하는 데 OpenAI 서버가 24kHz로 해석 → 음성 약 1.5배 가속 → VAD 임계값 미달.
+- **AudioRecordingService**: `_outputFormat` SampleRate 16000→24000, BytesPerSecond 32000→48000
+- **OpenAiRealtimeSttService**: `BytesPerSecond` 상수 32000→48000 (청크 크기 계산 정확성)
+- **OpenAiTranscribeSttService**: `BuildWavStream` WAV 헤더 SampleRate 16000→24000, BytesPerSecond 32000→48000
+- **RecordingE2ETestHarness**: 주석 내 16000 참조 24000으로 갱신
+- **영향도 분석**: `_outputFormat.AverageBytesPerSecond` 동적 참조 코드는 자동 반영. 다른 STT 서비스 영향 없음.
+
+### 주요 변경 파일
+- `mAIx/Services/Audio/AudioRecordingService.cs`
+- `mAIx/Services/AI/OpenAiRealtimeSttService.cs`
+- `mAIx/Services/AI/OpenAiTranscribeSttService.cs`
+- `mAIx/Tests/Helpers/RecordingE2ETestHarness.cs`
+
+### 테스트 결과 (otest Fast Path o3)
+- 빌드: 성공 (오류 0건) ✅
+- mAIx PID 43404 정상 실행 ✅
+- NLog 채널 활성 ✅
+- 사용자 녹음 검증 대기 중 (server_vad speech_started 이벤트 수신 확인 필요)

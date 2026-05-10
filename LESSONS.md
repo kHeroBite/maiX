@@ -1340,6 +1340,25 @@
 - **심각도**: 중간 (UX 개선)
 - **Level**: 1 (기술 참조)
 
+### L-411: OpenAI Realtime API input audio는 반드시 24kHz pcm16 (2026-05-10)
+
+- **문제**: `input_audio_format: {encoding: "pcm16"}` 설정은 sample rate 필드가 없음. OpenAI 서버 기본값은 24kHz. 16kHz 데이터를 24kHz로 해석하면 음성이 약 1.5배 가속 → server_vad 임계값(음량·패턴) 미달 → `speech_started` 이벤트 0건 발화.
+- **증상**: session.update 발송 + audio chunk 24회 전송 정상이나 server_vad `speech_started` 이벤트 완전 침묵.
+- **해결**: `AudioRecordingService._outputFormat` SampleRate 16000→24000, BytesPerSecond 32000→48000. `OpenAiRealtimeSttService.BytesPerSecond` 상수 32000→48000. `OpenAiTranscribeSttService.BuildWavStream` WAV 헤더 SampleRate 16000→24000 + BytesPerSecond 32000→48000.
+- **교훈**: Realtime API STT 사용 시 input audio는 반드시 **24kHz pcm16 16bit mono**로 출력. 송신 측 sample rate를 24kHz로 통일해야 server_vad가 정상 작동.
+- **재발방지**: Realtime API 신규 통합 시 `AudioRecordingService` 출력 포맷의 SampleRate/BytesPerSecond를 24kHz 기준으로 명시 검증 필수.
+- **심각도**: 높음 (server_vad 완전 불능)
+- **Level**: 2 (MEMORY.md 기록 권장)
+
+### L-412: sample rate 변경의 광범위 영향도 전수 조사 필수 (2026-05-10)
+
+- **문제**: sample rate 상수 변경은 청크 크기 계산·WAV 헤더·BytesPerSecond·리샘플링 ratio·다른 STT 서비스 호환성 등 광범위하게 영향. `_outputFormat.AverageBytesPerSecond`를 동적 참조하면 자동 반영되나, 하드코딩된 `32000` 등은 별도 갱신 필요.
+- **해결**: `grep "16000\\|32000\\|SampleRate" **/*.cs`로 전수 조사 후 영향 파일 4개 일괄 조정.
+- **교훈**: sample rate 변경 시 반드시 하드코딩 상수 전수 grep 후 갱신. 다른 STT 서비스(Whisper local, VOSK 등) 호환성 영향도 평가 필수.
+- **재발방지**: sample rate 변경 PR 리뷰 시 `grep "16000\|32000\|SampleRate"` 결과를 변경 파일 목록과 교차 검증.
+- **심각도**: 중간 (잠재적 버그 파급)
+- **Level**: 1 (기술 참조)
+
 ## 반영 추적 테이블
 
 | 교훈 ID | 교훈 요약 | 반영 대상 | 반영 위치 | 반영일 | 검증 |
@@ -1395,3 +1414,5 @@
 | L-408 | 자기코드 맹점 — 출력 채널→빌드갱신→분기미진입→코드로직 순서로 의심 필수 | docs | LESSONS.md + MEMORY.md | 2026-05-10 | ✅ |
 | L-409 | OpenAI Realtime API session.update 필수 — WebSocket 연결만으로 STT 응답 수신 불가 | docs | LESSONS.md | 2026-05-10 | ✅ |
 | L-410 | server_vad로 묵음 구간 자동 가시화 — speech_started/stopped 이벤트로 정확한 구간 계산 | docs | LESSONS.md | 2026-05-10 | ✅ |
+| L-411 | OpenAI Realtime API input audio 24kHz 강제 — 16kHz 전송 시 음성 가속 + server_vad 임계 미달 | docs+code | LESSONS.md + AudioRecordingService/OpenAiRealtimeSttService/OpenAiTranscribeSttService | 2026-05-10 | ✅ |
+| L-412 | sample rate 변경 시 하드코딩 상수 전수 grep 조사 필수 — BytesPerSecond/WAV 헤더 일괄 갱신 | docs | LESSONS.md | 2026-05-10 | ✅ |

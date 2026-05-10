@@ -32,7 +32,7 @@ public interface IOpenAiRealtimeSttService : IDisposable
     Task StartAsync(CancellationToken cancellationToken = default);
 
     /// <summary>
-    /// PCM 16kHz mono 오디오 청크를 Realtime API로 전송
+    /// PCM 24kHz mono 오디오 청크를 Realtime API로 전송
     /// (AudioRecordingService.RealtimeAudioChunkReady에서 호출)
     /// </summary>
     Task SendAudioChunkAsync(byte[] pcmData, TimeSpan chunkStartTime);
@@ -58,8 +58,8 @@ public sealed class OpenAiRealtimeSttService : IOpenAiRealtimeSttService
     private double _lastSpeechStartedMs = 0;
     private double _lastSpeechStoppedMs = 0;
 
-    // PCM 16kHz mono 기준 bytes/sec
-    private const int BytesPerSecond = 16000 * 2;
+    // PCM 24kHz mono 기준 bytes/sec
+    private const int BytesPerSecond = 24000 * 2;
 
     /// <inheritdoc/>
     public event Action<TimeSpan, string>? TranscriptSegmentReceived;
@@ -122,9 +122,9 @@ public sealed class OpenAiRealtimeSttService : IOpenAiRealtimeSttService
     }
 
     /// <summary>
-    /// PCM 16kHz mono 바이트 배열을 Realtime API로 전송
+    /// PCM 24kHz mono 바이트 배열을 Realtime API로 전송
     /// </summary>
-    /// <param name="pcmData">PCM 16kHz mono 원시 바이트</param>
+    /// <param name="pcmData">PCM 24kHz mono 원시 바이트</param>
     /// <param name="chunkStartTime">청크 시작 시각 (녹음 기준 상대 시간)</param>
     public async Task SendAudioChunkAsync(byte[] pcmData, TimeSpan chunkStartTime)
     {

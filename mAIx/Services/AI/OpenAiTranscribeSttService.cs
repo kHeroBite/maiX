@@ -57,8 +57,8 @@ public sealed class OpenAiTranscribeSttService : IOpenAiTranscribeSttService
 
     // 오버랩 dedup용: 직전 전사 텍스트 끝 50자
     private string _prevTailText = string.Empty;
-    // PCM 16kHz mono: bytes/sec
-    private const int BytesPerSecond = 32000;
+    // PCM 24kHz mono: bytes/sec
+    private const int BytesPerSecond = 48000;
     // WAV 헤더 크기
     private const int WavHeaderBytes = 44;
 
@@ -248,14 +248,14 @@ public sealed class OpenAiTranscribeSttService : IOpenAiTranscribeSttService
     }
 
     /// <summary>
-    /// PCM 16kHz 16bit mono → WAV 메모리 스트림 변환
+    /// PCM 24kHz 16bit mono → WAV 메모리 스트림 변환
     /// </summary>
     private static MemoryStream BuildWavStream(byte[] pcmData)
     {
         var ms = new MemoryStream();
         using var writer = new BinaryWriter(ms, System.Text.Encoding.UTF8, leaveOpen: true);
 
-        int sampleRate = 16000;
+        int sampleRate = 24000;
         short channels = 1;
         short bitsPerSample = 16;
         int byteRate = sampleRate * channels * bitsPerSample / 8;

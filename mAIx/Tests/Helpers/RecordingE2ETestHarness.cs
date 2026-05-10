@@ -67,7 +67,7 @@ public sealed class RecordingE2ETestHarness
             await Check(8, "가짜 PCM 생성 (GetTestAudioBuffer)", () =>
             {
                 var pcm = DebugPcmInjectHelper.GetTestAudioBuffer();
-                var ok = pcm != null && pcm.Length == 16000 * 2; // 1초 16kHz 16bit
+                var ok = pcm != null && pcm.Length == 16000 * 2; // 1초 16kHz 16bit (DebugPcmInjectHelper 기본값 — 디버그 전용, 파이프라인 미영향)
                 return ok ? CheckResult.Pass($"PCM 크기={pcm!.Length}B") : CheckResult.Fail("PCM 크기 불일치");
             });
 

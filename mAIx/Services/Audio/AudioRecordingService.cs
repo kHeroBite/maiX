@@ -25,8 +25,8 @@ public class AudioRecordingService : IDisposable
 
     // 캡처 장치 원본 포맷 (float/PCM 판별용)
     private WaveFormat? _captureFormat;
-    // 파일 저장용 포맷 (16kHz 16bit mono — STT 최적)
-    private static readonly WaveFormat _outputFormat = new(16000, 16, 1);
+    // 파일 저장용 포맷 (24kHz 16bit mono — STT 최적)
+    private static readonly WaveFormat _outputFormat = new(24000, 16, 1);
 
     // 실시간 STT용 버퍼
     private List<byte> _realtimeBuffer = new();
@@ -428,7 +428,7 @@ public class AudioRecordingService : IDisposable
                 monoSamples = floatSamples;
             }
 
-            // 3) 리샘플링: 캡처 SampleRate → 16kHz (선형 보간)
+            // 3) 리샘플링: 캡처 SampleRate → 24kHz (선형 보간)
             float[] resampledSamples;
             int captureSampleRate = _captureFormat.SampleRate;
             if (captureSampleRate != _outputFormat.SampleRate)
@@ -460,7 +460,7 @@ public class AudioRecordingService : IDisposable
                 pcmBuffer[i * 2 + 1] = (byte)((pcmSample >> 8) & 0xFF);
             }
 
-            // 5) 파일에 쓰기 (16kHz 16bit mono PCM)
+            // 5) 파일에 쓰기 (24kHz 16bit mono PCM)
             _writer.Write(pcmBuffer, 0, pcmBuffer.Length);
 
             // 6) 실시간 STT용 버퍼링 (변환된 PCM 데이터 사용)
@@ -470,7 +470,7 @@ public class AudioRecordingService : IDisposable
                 {
                     _realtimeBuffer.AddRange(pcmBuffer);
 
-                    // 청크 크기 계산: 16000Hz * 2bytes * 1ch = 32000 bytes/sec
+                    // 청크 크기 계산: 24000Hz * 2bytes * 1ch = 48000 bytes/sec
                     var bytesPerSecond = _outputFormat.AverageBytesPerSecond;
                     var chunkSizeBytes = (int)(bytesPerSecond * _realtimeChunkSeconds);
 
