@@ -553,7 +553,7 @@ public partial class OneNoteViewModel : ViewModelBase
     /// STT input_audio_transcription 모델 (gpt-realtime-whisper / gpt-4o-mini-transcribe / gpt-4o-transcribe / whisper-1)
     /// </summary>
     [ObservableProperty]
-    private string _transcriptionModel = "gpt-realtime-whisper";
+    private string _transcriptionModel = "gpt-4o-mini-transcribe";
 
     /// <summary>
     /// OpenAI server_vad 자동 발화 감지 사용 여부 (해제 시 녹음 종료 시점 일괄 전사)
@@ -610,7 +610,7 @@ public partial class OneNoteViewModel : ViewModelBase
             _topicNavOrientation = oaiSettings.TopicNavOrientation ?? "Horizontal";
             _isAutoFinalSummary = oaiSettings.AutoFinalSummary;
             _isEnableTypoFix = oaiSettings.EnableTypoFix;
-            _transcriptionModel = string.IsNullOrWhiteSpace(oaiSettings.TranscriptionModel) ? "gpt-realtime-whisper" : oaiSettings.TranscriptionModel;
+            _transcriptionModel = string.IsNullOrWhiteSpace(oaiSettings.TranscriptionModel) ? "gpt-4o-mini-transcribe" : oaiSettings.TranscriptionModel;
             _isServerVadEnabled = oaiSettings.ServerVadEnabled;
         }
 

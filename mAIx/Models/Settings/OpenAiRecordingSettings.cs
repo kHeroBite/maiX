@@ -115,9 +115,9 @@ public class OpenAiRecordingSettings
     [XmlElement("TypoFixModel")]
     public string TypoFixModel { get; set; } = "gpt-4o-mini";
 
-    /// <summary>STT input_audio_transcription 모델 (gpt-realtime-whisper / gpt-4o-mini-transcribe / gpt-4o-transcribe / whisper-1). 기본 gpt-realtime-whisper (음절 단위 진짜 streaming, $0.017/분)</summary>
+    /// <summary>STT input_audio_transcription 모델. 검증 결과 gpt-realtime-whisper는 conversation API에서 transcript 미발송 → 기본 gpt-4o-mini-transcribe 회귀.</summary>
     [XmlElement("TranscriptionModel")]
-    public string TranscriptionModel { get; set; } = "gpt-realtime-whisper";
+    public string TranscriptionModel { get; set; } = "gpt-4o-mini-transcribe";
 
     /// <summary>OpenAI server_vad 사용 여부 (true: 자동 발화 감지, false: 수동 종료 시 일괄 전사). 기본 true.</summary>
     [XmlElement("ServerVadEnabled")]
