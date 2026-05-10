@@ -8332,6 +8332,21 @@
                                                                   IsChecked="{Binding IsEnableTypoFix, Mode=TwoWay}"
                                                                   FontSize="12" Margin="0,0,0,4"
                                                                   ToolTip="체크 시 STT 결과를 GPT-4o-mini로 후처리하여 한국어 오타/맞춤법을 보정합니다. 추가 LLM 호출이 발생합니다."/>
+
+                                                        <!-- Row 18: STT 모델 선택 (실시간 streaming 음절 단위) -->
+                                                        <StackPanel Grid.Row="18" Grid.ColumnSpan="3" Orientation="Horizontal" Margin="0,4,0,4">
+                                                            <TextBlock Text="STT 모델" FontSize="12" VerticalAlignment="Center" Margin="0,0,8,0"
+                                                                       Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
+                                                            <ComboBox x:Name="OneNoteSttModelComboBox"
+                                                                      SelectedValue="{Binding TranscriptionModel, Mode=TwoWay}"
+                                                                      SelectedValuePath="Tag"
+                                                                      FontSize="12" Width="220"
+                                                                      ToolTip="gpt-4o-mini-transcribe/gpt-4o-transcribe는 음절 단위 streaming 지원. whisper-1은 발화 종료 후 일괄 전사.">
+                                                                <ComboBoxItem Content="gpt-4o-mini-transcribe (실시간)" Tag="gpt-4o-mini-transcribe"/>
+                                                                <ComboBoxItem Content="gpt-4o-transcribe (실시간 고품질)" Tag="gpt-4o-transcribe"/>
+                                                                <ComboBoxItem Content="whisper-1 (일괄)" Tag="whisper-1"/>
+                                                            </ComboBox>
+                                                        </StackPanel>
                                                     </Grid>
                                                 </Border>
                                             </Grid>

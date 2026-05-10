@@ -22,9 +22,19 @@ namespace mAIx.Services.AI;
 public interface IOpenAiRealtimeSttService : IDisposable
 {
     /// <summary>
-    /// STT 전사 세그먼트 수신 이벤트 (시간, 텍스트)
+    /// STT 전사 세그먼트 수신 이벤트 (시간, 텍스트) — 신규 항목 추가용
     /// </summary>
     event Action<TimeSpan, string>? TranscriptSegmentReceived;
+
+    /// <summary>
+    /// STT 항목 갱신 이벤트 (itemId, 시간, 누적/최종 텍스트) — delta 누적 + completed 보정 시 기존 itemId 항목 교체용
+    /// </summary>
+    event Action<string, TimeSpan, string>? TranscriptSegmentUpdated;
+
+    /// <summary>
+    /// STT 항목 제거 이벤트 (itemId) — hallucination 차단 시 누적된 delta 항목 제거용
+    /// </summary>
+    event Action<string>? TranscriptSegmentRemoved;
 
     /// <summary>
     /// STT 시작
@@ -91,6 +101,13 @@ public sealed class OpenAiRealtimeSttService : IOpenAiRealtimeSttService
 
     /// <inheritdoc/>
     public event Action<TimeSpan, string>? TranscriptSegmentReceived;
+    /// <inheritdoc/>
+    public event Action<string, TimeSpan, string>? TranscriptSegmentUpdated;
+    /// <inheritdoc/>
+    public event Action<string>? TranscriptSegmentRemoved;
+
+    // delta 누적 버퍼 (item_id → 누적 텍스트)
+    private readonly System.Collections.Concurrent.ConcurrentDictionary<string, string> _deltaBuffers = new();
 
     public OpenAiRealtimeSttService(AppSettingsManager settings)
     {
@@ -144,7 +161,7 @@ public sealed class OpenAiRealtimeSttService : IOpenAiRealtimeSttService
                 input_audio_format = "pcm16",
                 input_audio_transcription = new
                 {
-                    model = "whisper-1",
+                    model = string.IsNullOrWhiteSpace(_settings.OaiRecording.TranscriptionModel) ? "gpt-4o-mini-transcribe" : _settings.OaiRecording.TranscriptionModel,
                     language = sttLang,
                     prompt = sttPrompt
                 },
@@ -364,14 +381,18 @@ public sealed class OpenAiRealtimeSttService : IOpenAiRealtimeSttService
             }
             else if (type == "conversation.item.input_audio_transcription.delta")
             {
-                // 발화 중 부분 transcript 점진 표시 (whisper-1은 미지원일 수 있으나 호환성 유지)
+                // 발화 중 부분 transcript 점진 표시 — gpt-4o-mini-transcribe/gpt-4o-transcribe에서 음절 단위 streaming
                 if (root.TryGetProperty("delta", out var deltaProp))
                 {
                     var deltaText = deltaProp.GetString() ?? string.Empty;
-                    if (!string.IsNullOrEmpty(deltaText) && !IsHallucination(deltaText))
+                    if (!string.IsNullOrEmpty(deltaText))
                     {
+                        var itemId = root.TryGetProperty("item_id", out var idProp) ? (idProp.GetString() ?? string.Empty) : string.Empty;
+                        if (string.IsNullOrEmpty(itemId)) itemId = $"speech_{_lastSpeechStartedMs}";
+                        var accum = _deltaBuffers.AddOrUpdate(itemId, deltaText, (_, prev) => prev + deltaText);
                         var ts = TimeSpan.FromMilliseconds(_lastSpeechStartedMs);
-                        TranscriptSegmentReceived?.Invoke(ts, deltaText);
+                        // Updated 단일 호출 — UI에서 itemId 없으면 신규 추가, 있으면 텍스트 교체
+                        TranscriptSegmentUpdated?.Invoke(itemId, ts, accum);
                     }
                 }
             }
@@ -380,16 +401,29 @@ public sealed class OpenAiRealtimeSttService : IOpenAiRealtimeSttService
                 if (root.TryGetProperty("transcript", out var tr))
                 {
                     var text = tr.GetString() ?? string.Empty;
+                    var itemId = root.TryGetProperty("item_id", out var idProp) ? (idProp.GetString() ?? string.Empty) : string.Empty;
+                    if (string.IsNullOrEmpty(itemId)) itemId = $"speech_{_lastSpeechStartedMs}";
                     if (!string.IsNullOrEmpty(text))
                     {
-                        // Whisper hallucination 블랙리스트 차단 (YouTube 자막 학습 잔재 등)
+                        // hallucination 차단 — 누적된 delta 항목도 제거
                         if (IsHallucination(text))
                         {
                             _log.Warn($"[OpenAi-Realtime] hallucination 차단 — text={text.Substring(0, Math.Min(80, text.Length))}");
+                            _deltaBuffers.TryRemove(itemId, out _);
+                            TranscriptSegmentRemoved?.Invoke(itemId);
                             return;
                         }
                         var ts = TimeSpan.FromMilliseconds(_lastSpeechStartedMs);
-                        TranscriptSegmentReceived?.Invoke(ts, text);
+                        // delta가 한 번이라도 도착했으면 Updated로 final 교체, 아니면 Received로 신규 추가
+                        if (_deltaBuffers.ContainsKey(itemId))
+                        {
+                            TranscriptSegmentUpdated?.Invoke(itemId, ts, text);
+                        }
+                        else
+                        {
+                            TranscriptSegmentReceived?.Invoke(ts, text);
+                        }
+                        _deltaBuffers.TryRemove(itemId, out _);
                         _log.Info($"[OpenAi-Realtime] transcription.completed — text={text.Substring(0, Math.Min(50, text.Length))}");
 
                         // 옵션: GPT-4o-mini로 오타 후처리 (EnableTypoFix=true 시) — fire-and-forget

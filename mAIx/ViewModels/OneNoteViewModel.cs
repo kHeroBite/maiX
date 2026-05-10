@@ -550,6 +550,12 @@ public partial class OneNoteViewModel : ViewModelBase
     private bool _isEnableTypoFix = false;
 
     /// <summary>
+    /// STT input_audio_transcription 모델 (whisper-1 / gpt-4o-mini-transcribe / gpt-4o-transcribe)
+    /// </summary>
+    [ObservableProperty]
+    private string _transcriptionModel = "gpt-4o-mini-transcribe";
+
+    /// <summary>
     /// 주제어 추출 최소 단위 (초)
     /// </summary>
     [ObservableProperty]
@@ -598,6 +604,7 @@ public partial class OneNoteViewModel : ViewModelBase
             _topicNavOrientation = oaiSettings.TopicNavOrientation ?? "Horizontal";
             _isAutoFinalSummary = oaiSettings.AutoFinalSummary;
             _isEnableTypoFix = oaiSettings.EnableTypoFix;
+            _transcriptionModel = string.IsNullOrWhiteSpace(oaiSettings.TranscriptionModel) ? "gpt-4o-mini-transcribe" : oaiSettings.TranscriptionModel;
         }
 
         // 녹음 목록에 새 파일 추가 시 자동 선택
@@ -1853,6 +1860,18 @@ public partial class OneNoteViewModel : ViewModelBase
     }
 
     /// <summary>
+    /// STT 모델 변경 시 영구 저장 (whisper-1 / gpt-4o-mini-transcribe / gpt-4o-transcribe)
+    /// </summary>
+    partial void OnTranscriptionModelChanged(string value)
+    {
+        if (App.Settings?.OaiRecording != null && !string.IsNullOrWhiteSpace(value))
+        {
+            App.Settings.OaiRecording.TranscriptionModel = value;
+            App.Settings.SaveAll();
+        }
+    }
+
+    /// <summary>
     /// 선택된 녹음의 STT/요약 결과를 수동으로 로드 (UI에서 직접 호출용)
     /// </summary>
     public void LoadSelectedRecordingResults()
@@ -2630,7 +2649,11 @@ public partial class OneNoteViewModel : ViewModelBase
             else
             {
                 if (_realtimeSttService != null)
+                {
                     _realtimeSttService.TranscriptSegmentReceived += OnSttTranscriptSegmentReceived;
+                    _realtimeSttService.TranscriptSegmentUpdated += OnSttTranscriptSegmentUpdated;
+                    _realtimeSttService.TranscriptSegmentRemoved += OnSttTranscriptSegmentRemoved;
+                }
             }
 
             if (_topicExtractorService != null)
@@ -2700,7 +2723,11 @@ public partial class OneNoteViewModel : ViewModelBase
             else
             {
                 if (_realtimeSttService != null)
+                {
                     _realtimeSttService.TranscriptSegmentReceived -= OnSttTranscriptSegmentReceived;
+                    _realtimeSttService.TranscriptSegmentUpdated -= OnSttTranscriptSegmentUpdated;
+                    _realtimeSttService.TranscriptSegmentRemoved -= OnSttTranscriptSegmentRemoved;
+                }
             }
 
             if (_topicExtractorService != null)
@@ -2799,6 +2826,81 @@ public partial class OneNoteViewModel : ViewModelBase
         catch (Exception ex)
         {
             Log4.Error($"[녹음] OnSttTranscriptSegmentReceived 처리 실패: {ex.Message}");
+        }
+    }
+
+    /// <summary>
+    /// delta 누적 + completed Replace — itemId 기반 LiveSTTSegments 항목 교체 (없으면 신규 추가)
+    /// </summary>
+    private async void OnSttTranscriptSegmentUpdated(string itemId, TimeSpan startTime, string text)
+    {
+        try
+        {
+            var dispatcher = System.Windows.Application.Current?.Dispatcher;
+            if (dispatcher == null) return;
+            await dispatcher.InvokeAsync(() =>
+            {
+                Models.TranscriptSegment? existing = null;
+                foreach (var seg in LiveSTTSegments)
+                {
+                    if (seg.ItemId == itemId) { existing = seg; break; }
+                }
+                if (existing != null)
+                {
+                    existing.Text = text;
+                    existing.EndTime = startTime;
+                    // ObservableCollection은 Property 변경을 감지 못하므로 강제 갱신: Replace
+                    var idx = LiveSTTSegments.IndexOf(existing);
+                    LiveSTTSegments[idx] = new Models.TranscriptSegment
+                    {
+                        ItemId = itemId,
+                        Speaker = existing.Speaker,
+                        Text = text,
+                        StartTime = existing.StartTime,
+                        EndTime = startTime
+                    };
+                }
+                else
+                {
+                    LiveSTTSegments.Add(new Models.TranscriptSegment
+                    {
+                        ItemId = itemId,
+                        Speaker = "화자",
+                        Text = text,
+                        StartTime = startTime,
+                        EndTime = startTime
+                    });
+                }
+            }).Task.ConfigureAwait(false);
+        }
+        catch (Exception ex)
+        {
+            Log4.Error($"[녹음] OnSttTranscriptSegmentUpdated 실패: {ex.Message}");
+        }
+    }
+
+    /// <summary>
+    /// hallucination 차단 시 누적된 itemId 항목 제거
+    /// </summary>
+    private async void OnSttTranscriptSegmentRemoved(string itemId)
+    {
+        try
+        {
+            var dispatcher = System.Windows.Application.Current?.Dispatcher;
+            if (dispatcher == null) return;
+            await dispatcher.InvokeAsync(() =>
+            {
+                Models.TranscriptSegment? existing = null;
+                foreach (var seg in LiveSTTSegments)
+                {
+                    if (seg.ItemId == itemId) { existing = seg; break; }
+                }
+                if (existing != null) LiveSTTSegments.Remove(existing);
+            }).Task.ConfigureAwait(false);
+        }
+        catch (Exception ex)
+        {
+            Log4.Error($"[녹음] OnSttTranscriptSegmentRemoved 실패: {ex.Message}");
         }
     }
 

@@ -114,4 +114,8 @@ public class OpenAiRecordingSettings
     /// <summary>오타 수정 모델 (기본 gpt-4o-mini)</summary>
     [XmlElement("TypoFixModel")]
     public string TypoFixModel { get; set; } = "gpt-4o-mini";
+
+    /// <summary>STT input_audio_transcription 모델 (whisper-1 / gpt-4o-mini-transcribe / gpt-4o-transcribe). 기본 gpt-4o-mini-transcribe (delta streaming 지원)</summary>
+    [XmlElement("TranscriptionModel")]
+    public string TranscriptionModel { get; set; } = "gpt-4o-mini-transcribe";
 }

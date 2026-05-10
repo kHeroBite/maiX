@@ -39,6 +39,11 @@ public class TranscriptSegment
     public int ChunkId { get; set; }
 
     /// <summary>
+    /// OpenAI Realtime item_id — delta 누적 + completed Replace 매칭용 (delta-streaming 모델 전용)
+    /// </summary>
+    public string? ItemId { get; set; }
+
+    /// <summary>
     /// 시간 범위 표시 (예: "00:05 - 00:12")
     /// </summary>
     public string TimeRange => $"{StartTime:mm\\:ss} - {EndTime:mm\\:ss}";
