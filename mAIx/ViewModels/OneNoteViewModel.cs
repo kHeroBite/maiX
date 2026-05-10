@@ -538,6 +538,12 @@ public partial class OneNoteViewModel : ViewModelBase
     private int _cumulativeIntervalMinutes = 5;
 
     /// <summary>
+    /// 주제어 추출 최소 단위 (초)
+    /// </summary>
+    [ObservableProperty]
+    private int _topicExtractorIntervalSec = 12;
+
+    /// <summary>
     /// 주제어 네비게이션 패널 방향 (Horizontal / Vertical)
     /// </summary>
     [ObservableProperty]
@@ -576,6 +582,7 @@ public partial class OneNoteViewModel : ViewModelBase
         {
             _chunkSeconds = oaiSettings.ChunkSeconds;
             _cumulativeIntervalMinutes = oaiSettings.CumulativeSummaryIntervalMinutes;
+            _topicExtractorIntervalSec = oaiSettings.TopicExtractorIntervalSec;
             _topicNavOrientation = oaiSettings.TopicNavOrientation ?? "Horizontal";
         }
 

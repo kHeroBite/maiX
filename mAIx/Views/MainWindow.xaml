@@ -7,6 +7,7 @@
         xmlns:wv2="clr-namespace:Microsoft.Web.WebView2.Wpf;assembly=Microsoft.Web.WebView2.Wpf"
         xmlns:local="clr-namespace:mAIx.Views"
         xmlns:controls="clr-namespace:mAIx.Controls"
+        xmlns:sys="clr-namespace:System;assembly=mscorlib"
         xmlns:teamsControls="clr-namespace:mAIx.Controls.Teams"
         xmlns:vm="clr-namespace:mAIx.ViewModels"
         mc:Ignorable="d"
@@ -6887,19 +6888,8 @@
                                                         <Ellipse x:Name="OneNoteSTTLiveIndicator" Width="8" Height="8" Fill="#10B981" Margin="8,0,4,0" VerticalAlignment="Center" Visibility="Collapsed"/>
                                                         <TextBlock x:Name="OneNoteSTTLiveText" Text="실시간" FontSize="11" Foreground="#10B981" VerticalAlignment="Center" Visibility="Collapsed"/>
                                                     </StackPanel>
-                                                    <!-- 버튼 그룹 (화자분리 토글 + STT 분석) -->
+                                                    <!-- 버튼 그룹 (STT 분석) -->
                                                     <StackPanel Grid.Column="1" Orientation="Horizontal">
-                                                        <!-- 화자분리 전/후 토글 버튼 -->
-                                                        <ui:Button x:Name="OneNoteDiarizationToggleButton"
-                                                                   Content="화자분리 전"
-                                                                   Icon="{ui:SymbolIcon People24}"
-                                                                   Appearance="Secondary"
-                                                                   FontSize="11"
-                                                                   Padding="10,5"
-                                                                   Margin="0,0,8,0"
-                                                                   Visibility="Collapsed"
-                                                                   ToolTip="화자분리 적용 전/후 비교"
-                                                                   Click="OneNoteDiarizationToggle_Click"/>
                                                         <!-- STT 분석 버튼 (녹음탭의 모델 설정 사용) -->
                                                         <ui:Button x:Name="OneNoteTabRunSTTButton"
                                                                    Content="STT 분석"
@@ -8223,6 +8213,9 @@
                                                             <RowDefinition Height="Auto"/>
                                                             <RowDefinition Height="Auto"/>
                                                             <RowDefinition Height="Auto"/>
+                                                            <RowDefinition Height="Auto"/>
+                                                            <RowDefinition Height="Auto"/>
+                                                            <RowDefinition Height="Auto"/>
                                                         </Grid.RowDefinitions>
 
                                                         <!-- 첫 번째 줄: STT on/off -->
@@ -8289,6 +8282,25 @@
                                                                   FontSize="12" Margin="0,0,0,0"
                                                                   Checked="OneNotePostSummary_Changed"
                                                                   Unchecked="OneNotePostSummary_Changed"/>
+
+                                                        <Separator Grid.Row="8" Grid.ColumnSpan="3" Margin="0,8" />
+                                                        <TextBlock Grid.Row="9" Grid.ColumnSpan="3" Text="주제어 추출 최소 단위(초)" FontSize="12" Margin="0,4,0,2" />
+                                                        <ComboBox Grid.Row="10" Grid.ColumnSpan="3" x:Name="OneNoteTopicIntervalComboBox"
+                                                                  SelectedValue="{Binding TopicExtractorIntervalSec, Mode=TwoWay}"
+                                                                  SelectedValuePath="Tag" Margin="0,0,0,4">
+                                                            <ComboBoxItem Content="12초 (기본)">
+                                                                <ComboBoxItem.Tag><sys:Int32>12</sys:Int32></ComboBoxItem.Tag>
+                                                            </ComboBoxItem>
+                                                            <ComboBoxItem Content="30초">
+                                                                <ComboBoxItem.Tag><sys:Int32>30</sys:Int32></ComboBoxItem.Tag>
+                                                            </ComboBoxItem>
+                                                            <ComboBoxItem Content="60초">
+                                                                <ComboBoxItem.Tag><sys:Int32>60</sys:Int32></ComboBoxItem.Tag>
+                                                            </ComboBoxItem>
+                                                            <ComboBoxItem Content="120초">
+                                                                <ComboBoxItem.Tag><sys:Int32>120</sys:Int32></ComboBoxItem.Tag>
+                                                            </ComboBoxItem>
+                                                        </ComboBox>
                                                     </Grid>
                                                 </Border>
                                             </Grid>

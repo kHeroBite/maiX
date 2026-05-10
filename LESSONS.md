@@ -1359,6 +1359,33 @@
 - **심각도**: 중간 (잠재적 버그 파급)
 - **Level**: 1 (기술 참조)
 
+### L-413: PeriodicTimer + Task 라이브 모니터링 패턴 (2026-05-10)
+
+- **문제**: 클라이언트 측 묵음 추적 구현 시 `Timer.Elapsed += async (s, e) => { ... }` 패턴을 쓰면 L-380 async lambda 예외 소실 위험 + CancellationToken 연동 불편.
+- **해결**: `PeriodicTimer` + `WaitForNextTickAsync(CancellationToken)` + `Task.Run` 조합으로 백그라운드 모니터링 Task 구성. `OperationCanceledException`은 정상 종료 경로로 처리.
+- **교훈**: 백그라운드 주기 모니터링 Task는 `Timer.Elapsed` 이벤트 대신 `PeriodicTimer + WaitForNextTickAsync` 패턴 사용. CancellationToken으로 종료를 깔끔하게 보장.
+- **재발방지**: 새 모니터링 Task 구현 시 `new System.Threading.PeriodicTimer(TimeSpan)` + `await timer.WaitForNextTickAsync(ct)` 패턴을 기본으로 채택.
+- **심각도**: 낮음 (패턴 개선)
+- **Level**: 1 (기술 참조)
+
+### L-414: WPF ComboBox int 바인딩 — sys:Int32 Tag 명시 필수 (2026-05-10)
+
+- **문제**: `<ComboBoxItem Tag="12">` (string)를 `SelectedValue="{Binding IntProperty}"` (int)에 바인딩하면 타입 불일치로 `SelectedValue`가 null 반환되어 바인딩 무효화.
+- **해결**: `xmlns:sys="clr-namespace:System;assembly=mscorlib"` 선언 후 `<ComboBoxItem.Tag><sys:Int32>12</sys:Int32></ComboBoxItem.Tag>` 형식으로 Tag를 실제 int 타입으로 명시.
+- **교훈**: ComboBox `SelectedValue`를 int/double 프로퍼티에 바인딩 시 `sys:Int32`/`sys:Double`로 Tag 타입을 명시해야 바인딩이 정상 작동.
+- **재발방지**: numeric 프로퍼티 바인딩 ComboBox 작성 시 string Tag 패턴 사용 금지. `sys:Int32` 네임스페이스 선언 + 타입 명시 패턴 표준화.
+- **심각도**: 중간 (바인딩 silent fail)
+- **Level**: 1 (기술 참조)
+
+### L-415: 사용자 목표 집중 — 고정 주기 매직 넘버 의문 제기 (2026-05-10)
+
+- **문제**: 기존 코드에 `60`(초), `5분` 등 고정 주기 매직 넘버가 있었음. 사용자 목표 "실시간 주제어 네비게이션"과 불일치했으나 무비판적으로 유지.
+- **해결**: `TopicExtractorIntervalSec` 동적 설정으로 전환 + 옵션탭 ComboBox(12/30/60/120초) 제공. 사용자가 원하는 최소 단위로 변경 가능.
+- **교훈**: 기존 코드의 매직 넘버/고정 주기를 발견하면 사용자 실제 목표와 일치하는지 의문을 제기하라. YAGNI: 명시 요구된 항목만 동적화, 나머지는 별도 작업으로 분리.
+- **재발방지**: 구현 전 "이 상수가 사용자 목표에 맞는가?" 질문을 체크리스트에 추가. 고정 주기 코드는 동적 설정 전환 여부를 oplan 단계에서 평가.
+- **심각도**: 중간 (UX 목표 불일치)
+- **Level**: 1 (기술 참조)
+
 ## 반영 추적 테이블
 
 | 교훈 ID | 교훈 요약 | 반영 대상 | 반영 위치 | 반영일 | 검증 |
@@ -1416,3 +1443,6 @@
 | L-410 | server_vad로 묵음 구간 자동 가시화 — speech_started/stopped 이벤트로 정확한 구간 계산 | docs | LESSONS.md | 2026-05-10 | ✅ |
 | L-411 | OpenAI Realtime API input audio 24kHz 강제 — 16kHz 전송 시 음성 가속 + server_vad 임계 미달 | docs+code | LESSONS.md + AudioRecordingService/OpenAiRealtimeSttService/OpenAiTranscribeSttService | 2026-05-10 | ✅ |
 | L-412 | sample rate 변경 시 하드코딩 상수 전수 grep 조사 필수 — BytesPerSecond/WAV 헤더 일괄 갱신 | docs | LESSONS.md | 2026-05-10 | ✅ |
+| L-413 | PeriodicTimer + Task 라이브 모니터링 패턴 — Timer.Elapsed(async lambda) 대신 PeriodicTimer + WaitForNextTickAsync + CancellationToken 사용. 외부 try-catch + OperationCanceledException 정상 종료 보장. | docs+code | LESSONS.md + OpenAiRealtimeSttService.cs | 2026-05-10 | ✅ |
+| L-414 | WPF ComboBox int 바인딩 — ComboBoxItem.Tag="N"(string)을 int 프로퍼티에 SelectedValue 바인딩 시 null 반환. sys:Int32 Tag 명시(`<ComboBoxItem.Tag><sys:Int32>N</sys:Int32></ComboBoxItem.Tag>`) 필수. numeric 바인딩에는 sys:Int32/sys:Double 타입 명시 패턴 사용. | docs+code | LESSONS.md + MainWindow.xaml | 2026-05-10 | ✅ |
+| L-415 | 사용자 목표 집중 — 고정 주기(60초/5분) 매직 넘버를 발견하면 사용자 실제 목표와 일치 여부 의문 제기. YAGNI: 명시 요구된 항목만 동적화, 나머지는 별도 작업으로 분리. 재발방지: 기존 코드 매직 넘버 발견 시 목표 정합성 확인 후 수정. | docs | LESSONS.md | 2026-05-10 | ✅ |

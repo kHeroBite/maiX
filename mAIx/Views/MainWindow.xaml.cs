@@ -7772,26 +7772,6 @@ public partial class MainWindow : FluentWindow
     }
 
     /// <summary>
-    /// 화자분리 전/후 토글 버튼 클릭
-    /// </summary>
-    private bool _showingBeforeDiarization = false;
-    private void OneNoteDiarizationToggle_Click(object sender, RoutedEventArgs e)
-    {
-        if (_oneNoteViewModel == null) return;
-
-        _showingBeforeDiarization = !_showingBeforeDiarization;
-        _oneNoteViewModel.ToggleDiarizationView(_showingBeforeDiarization);
-
-        // 버튼 텍스트 업데이트
-        OneNoteDiarizationToggleButton.Content = _showingBeforeDiarization ? "화자분리 후" : "화자분리 전";
-        OneNoteDiarizationToggleButton.Appearance = _showingBeforeDiarization
-            ? Wpf.Ui.Controls.ControlAppearance.Primary
-            : Wpf.Ui.Controls.ControlAppearance.Secondary;
-
-        Log4.Debug($"[OneNote] 화자분리 토글: {(_showingBeforeDiarization ? "전" : "후")} 표시");
-    }
-
-    /// <summary>
     /// 녹음내용 탭 AI 요약 버튼 클릭
     /// </summary>
     private async void OneNoteTabRunSummary_Click(object sender, RoutedEventArgs e)
@@ -8073,29 +8053,6 @@ public partial class MainWindow : FluentWindow
             Log4.Warn("[OneNote] UpdateSTTButtonState: SelectedRecording is null");
         }
 
-        // 화자분리 토글 버튼 가시성 업데이트 (STT 완료 후)
-        if (!isRunning && _oneNoteViewModel != null)
-        {
-            UpdateDiarizationToggleVisibility();
-        }
-    }
-
-    /// <summary>
-    /// 화자분리 토글 버튼 가시성 업데이트
-    /// </summary>
-    private void UpdateDiarizationToggleVisibility()
-    {
-        if (OneNoteDiarizationToggleButton != null && _oneNoteViewModel != null)
-        {
-            OneNoteDiarizationToggleButton.Visibility = _oneNoteViewModel.HasDiarizationComparison
-                ? Visibility.Visible
-                : Visibility.Collapsed;
-
-            // 상태 초기화
-            _showingBeforeDiarization = false;
-            OneNoteDiarizationToggleButton.Content = "화자분리 전";
-            OneNoteDiarizationToggleButton.Appearance = Wpf.Ui.Controls.ControlAppearance.Secondary;
-        }
     }
 
     /// <summary>
@@ -14303,15 +14260,6 @@ public partial class MainWindow : FluentWindow
                                 {
                                     Log4.Debug($"[MainWindow] CurrentSummary 변경 - UI 업데이트");
                                     UpdateSummaryContentPanel();
-                                });
-                            }
-                            // 화자분리 전/후 비교 데이터 변경 시 토글 버튼 가시성 업데이트
-                            else if (e.PropertyName == nameof(OneNoteViewModel.HasDiarizationComparison))
-                            {
-                                await Dispatcher.InvokeAsync(() =>
-                                {
-                                    Log4.Debug($"[MainWindow] HasDiarizationComparison 변경 - 토글 버튼 업데이트");
-                                    UpdateDiarizationToggleVisibility();
                                 });
                             }
                         }

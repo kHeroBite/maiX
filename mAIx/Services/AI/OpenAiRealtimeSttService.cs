@@ -57,6 +57,9 @@ public sealed class OpenAiRealtimeSttService : IOpenAiRealtimeSttService
     private bool _disposed;
     private double _lastSpeechStartedMs = 0;
     private double _lastSpeechStoppedMs = 0;
+    private DateTime? _silenceStartedAt = null;
+    private double _lastSilenceMarkerSec = 0;
+    private Task? _silenceMonitorTask = null;
 
     // PCM 24kHz mono 기준 bytes/sec
     private const int BytesPerSecond = 24000 * 2;
@@ -118,6 +121,9 @@ public sealed class OpenAiRealtimeSttService : IOpenAiRealtimeSttService
         }).ConfigureAwait(false);
         _log.Info("[OpenAi-Realtime] session.update 발송 — modalities=text, VAD=server_vad, transcription=whisper-1");
 
+        _silenceStartedAt = DateTime.Now;
+        _lastSilenceMarkerSec = 0;
+        _silenceMonitorTask = SilenceMonitorLoopAsync(_cts.Token);
         _receiveTask = ReceiveLoopAsync(_cts.Token);
     }
 
@@ -182,13 +188,42 @@ public sealed class OpenAiRealtimeSttService : IOpenAiRealtimeSttService
         }
         finally
         {
+            _silenceStartedAt = null;
             _cts?.Cancel();
             if (_receiveTask != null)
             {
                 try { await _receiveTask.ConfigureAwait(false); } catch { /* 취소 예외 무시 */ }
             }
+            if (_silenceMonitorTask != null)
+            {
+                try { await _silenceMonitorTask.ConfigureAwait(false); } catch { /* 취소 예외 무시 */ }
+            }
             Cleanup();
         }
+    }
+
+    private async Task SilenceMonitorLoopAsync(CancellationToken ct)
+    {
+        const double thresholdSec = 10.0;
+        try
+        {
+            using var timer = new PeriodicTimer(TimeSpan.FromSeconds(5));
+            while (await timer.WaitForNextTickAsync(ct).ConfigureAwait(false))
+            {
+                if (_silenceStartedAt == null) continue;
+                var elapsed = (DateTime.Now - _silenceStartedAt.Value).TotalSeconds;
+                if (elapsed >= thresholdSec && elapsed - _lastSilenceMarkerSec >= thresholdSec)
+                {
+                    var ts = TimeSpan.FromMilliseconds(_lastSpeechStoppedMs);
+                    try { TranscriptSegmentReceived?.Invoke(ts, $"[묵음 {elapsed:F0}초]"); }
+                    catch (Exception ex) { _log.Warn(ex, "[OpenAi-Realtime] 묵음 마커 발화 실패"); }
+                    _lastSilenceMarkerSec = elapsed;
+                    _log.Info($"[OpenAi-Realtime] 클라이언트 묵음 마커 발화 — elapsed={elapsed:F1}s");
+                }
+            }
+        }
+        catch (OperationCanceledException) { /* 정상 종료 */ }
+        catch (Exception ex) { _log.Error(ex, "[OpenAi-Realtime] 묵음 모니터 루프 오류"); }
     }
 
     private async Task ReceiveLoopAsync(CancellationToken ct)
@@ -267,13 +302,15 @@ public sealed class OpenAiRealtimeSttService : IOpenAiRealtimeSttService
             {
                 var startMs = root.TryGetProperty("audio_start_ms", out var sMs) ? sMs.GetDouble() : 0;
                 _lastSpeechStartedMs = startMs;
+                _silenceStartedAt = null;
+                _lastSilenceMarkerSec = 0;
                 _log.Info($"[OpenAi-Realtime] speech_started — audio_start_ms={startMs}");
 
-                // 묵음 구간 표시: 직전 speech_stopped 이후 시간 차이가 1초 이상이면 발화
+                // 묵음 구간 표시: 직전 speech_stopped 이후 시간 차이가 10초 이상이면 발화
                 if (_lastSpeechStoppedMs > 0)
                 {
                     var silenceSec = (startMs - _lastSpeechStoppedMs) / 1000.0;
-                    if (silenceSec >= 1.0)
+                    if (silenceSec >= 10.0)
                     {
                         var ts = TimeSpan.FromMilliseconds(_lastSpeechStoppedMs);
                         TranscriptSegmentReceived?.Invoke(ts, $"[묵음 {silenceSec:F1}초]");
@@ -284,6 +321,7 @@ public sealed class OpenAiRealtimeSttService : IOpenAiRealtimeSttService
             {
                 var endMs = root.TryGetProperty("audio_end_ms", out var eMs) ? eMs.GetDouble() : 0;
                 _lastSpeechStoppedMs = endMs;
+                _silenceStartedAt = DateTime.Now;
                 _log.Info($"[OpenAi-Realtime] speech_stopped — audio_end_ms={endMs}");
             }
             else if (type == "conversation.item.input_audio_transcription.completed")
@@ -325,6 +363,7 @@ public sealed class OpenAiRealtimeSttService : IOpenAiRealtimeSttService
         _cts?.Dispose();
         _cts = null;
         _receiveTask = null;
+        _silenceMonitorTask = null;
     }
 
     public void Dispose()

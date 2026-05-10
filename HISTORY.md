@@ -2,6 +2,17 @@
 
 > PROJECT.md 작업 이력 테이블의 상세 보완본
 
+## 2026-05-10: STT 묵음 추적 + 주제어 동적 주기 + 화자분리 토글 정리 (o3 — 6파일 통합)
+
+**분류**: O3 Normal
+**otest 결과**: 빌드 PASS (오류 0) + mAIx PID 47012 실행 + NLog 채널 활성 + 신규 키워드 컴파일 검증
+**범위**: 수정 6파일 (+82/-72줄)
+**내용**:
+- **작업 A** (OpenAiRealtimeSttService.cs +43줄): 클라이언트 측 묵음 추적 PeriodicTimer 5초 주기 + 10초 침묵 임계 + 구간별 `[클라이언트 묵음 감지: NNs]` 마커. 무음 녹음 시 server_vad가 speech 이벤트 미발화하여 시스템 작동 여부 확인 불가했던 UX 문제 해결.
+- **작업 B** (MainWindow.xaml/.cs -62줄): 주제어 네비게이션 우측의 `OneNoteDiarizationToggleButton` 및 핸들러/필드 제거. 화자분리 옵션을 옵션탭 `OneNoteDiarizationModeCheckBox`로 단일화.
+- **작업 C** (OpenAiRecordingSettings + TopicExtractorService + OneNoteViewModel + MainWindow.xaml +30줄): `TopicExtractorIntervalSec` 필드 추가(기본값 12), `TopicExtractorService` 동적 주기 전환, 옵션탭 ComboBox(12/30/60/120초) + `sys:Int32` Tag로 int 바인딩 정합성 확보.
+**교훈**: L-413 (PeriodicTimer 라이브 모니터링), L-414 (sys:Int32 Tag 필수), L-415 (사용자 목표 집중)
+
 ## 2026-05-10: OpenAI Realtime STT 활성화 — session.update + server_vad + whisper-1 + 묵음 구간 표시 (o3)
 
 **분류**: O3 Normal

@@ -69,8 +69,7 @@ public sealed class TopicExtractorService : ITopicExtractorService
     private readonly List<TopicSegment> _segments = new();
     private int _nextSegmentId = 0;
 
-    // 추출 주기: 12초 (10~15초 사이)
-    private static readonly TimeSpan ExtractInterval = TimeSpan.FromSeconds(12);
+    // 추출 주기: 설정값 기반 동적 주기 (StartAsync에서 결정)
 
     /// <inheritdoc/>
     public event Action<TopicSegment>? TopicSegmentAdded;
@@ -101,8 +100,9 @@ public sealed class TopicExtractorService : ITopicExtractorService
         }
         _cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         _running = true;
-        _timerTask = RunTimerLoopAsync(_cts.Token);
-        _log.Info("[TopicExtractor] 시작 (interval={Interval}s, model={Model})", ExtractInterval.TotalSeconds, _settings.OaiRecording.KeywordExtractModel);
+        var intervalSec = Math.Max(5.0, _settings.OaiRecording.TopicExtractorIntervalSec);
+        _log.Info($"[TopicExtractor] 시작 (interval={intervalSec}s, model={_settings.OaiRecording.KeywordExtractModel})");
+        _timerTask = RunTimerLoopAsync(_cts.Token, TimeSpan.FromSeconds(intervalSec));
         return Task.CompletedTask;
     }
 
@@ -129,9 +129,9 @@ public sealed class TopicExtractorService : ITopicExtractorService
         return Task.CompletedTask;
     }
 
-    private async Task RunTimerLoopAsync(CancellationToken ct)
+    private async Task RunTimerLoopAsync(CancellationToken ct, TimeSpan interval)
     {
-        using var timer = new PeriodicTimer(ExtractInterval);
+        using var timer = new PeriodicTimer(interval);
         try
         {
             while (await timer.WaitForNextTickAsync(ct).ConfigureAwait(false))

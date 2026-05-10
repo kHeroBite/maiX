@@ -83,6 +83,10 @@ public class OpenAiRecordingSettings
     [XmlElement("TtsVoice")]
     public string TtsVoice { get; set; } = "alloy";
 
+    /// <summary>주제어 추출 최소 단위 (초, 기본 12)</summary>
+    [XmlElement("TopicExtractorIntervalSec")]
+    public int TopicExtractorIntervalSec { get; set; } = 12;
+
     /// <summary>
     /// 디버그 타이머 배율 (기본 1.0 = 정상 속도, 0.1 = 10배 빠름).
     /// 환경변수 MAIX_DEBUG_TIMER_SCALE이 설정된 경우 해당 값이 우선 적용됨.
