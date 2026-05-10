@@ -6181,6 +6181,17 @@ public partial class MainWindow : FluentWindow
         // 콘텐츠 전환
         OneNoteRecordTabContent.Visibility = Visibility.Collapsed;
         OneNoteOptionsTabContent.Visibility = Visibility.Visible;
+
+        // OneNoteViewModel을 옵션탭 컨테이너의 DataContext로 명시 할당 (메인 DataContext=MainViewModel과 분리)
+        if (_oneNoteViewModel != null)
+        {
+            OneNoteOptionsTabContent.DataContext = _oneNoteViewModel;
+            Log4.Info($"[옵션탭] DataContext 할당 완료 — ChunkSeconds={_oneNoteViewModel.ChunkSeconds}, TranscriptionModel={_oneNoteViewModel.TranscriptionModel}, IsServerVadEnabled={_oneNoteViewModel.IsServerVadEnabled}");
+        }
+        else
+        {
+            Log4.Warn("[옵션탭] _oneNoteViewModel이 null — DataContext 할당 스킵");
+        }
     }
 
     /// <summary>
@@ -7185,9 +7196,13 @@ public partial class MainWindow : FluentWindow
         OneNoteRecordingContentPanel.Visibility = Visibility.Visible;
         OneNoteAnalysisContentPanel.Visibility = Visibility.Collapsed;
 
-        // ViewModel 상태 업데이트
+        // OneNoteViewModel을 녹음 콘텐츠 패널의 DataContext로 명시 할당 (좌측 STT/주제어/AI 요약 영역 바인딩 활성화)
         if (_oneNoteViewModel != null)
+        {
+            OneNoteRecordingContentPanel.DataContext = _oneNoteViewModel;
             _oneNoteViewModel.ActiveContentTab = "recording";
+            Log4.Info($"[녹음탭] DataContext 할당 완료 — _oneNoteViewModel 설정");
+        }
     }
 
     /// <summary>
