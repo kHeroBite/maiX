@@ -14062,11 +14062,12 @@ public partial class MainWindow : FluentWindow
             // OneNoteViewModel 초기화
             try
             {
-                using var scope = ((App)Application.Current).ServiceProvider.CreateScope();
+                var rootProvider = ((App)Application.Current).ServiceProvider;
+                using var scope = rootProvider.CreateScope();
                 var oneNoteService = scope.ServiceProvider.GetService<GraphOneNoteService>();
                 if (oneNoteService != null)
                 {
-                    _oneNoteViewModel = new OneNoteViewModel(oneNoteService, scope.ServiceProvider);
+                    _oneNoteViewModel = new OneNoteViewModel(oneNoteService, rootProvider);  // ★ Singleton resolve용 root
 
                     // 녹음 완료 후 새 파일 선택 이벤트 핸들러
                     _oneNoteViewModel.NewRecordingSelected += async (newRecording) =>

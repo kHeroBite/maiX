@@ -1220,6 +1220,33 @@
 - **주의**: default 값 변경 시 반드시 HISTORY.md에 기록 (실수 운영 방지)
 - **Level**: 1 (참고용 설계 패턴)
 
+### L-400: silent failure 진단 시 catch 블록에서 ex 전체 객체 로깅 필수 (2026-05-10)
+
+- **문제**: catch 블록에서 `ex.Message`만 로깅 → ObjectDisposedException 등 위치 식별 불가 (스택트레이스 소실)
+- **근본원인**: `_log.Error(ex.Message, ...)` 패턴은 스택트레이스/내부예외를 누락하여 silent failure의 위치와 원인을 숨김
+- **해결**: `_log.Error(ex, "메시지")` 패턴 사용 — NLog/Serilog 모두 첫 인수에 Exception 객체 전달 시 전체 스택트레이스 기록
+- **교훈**: silent failure 진단은 catch 블록 로깅 패턴 전수 확인부터 시작하라. ex.Message만 찍으면 증거가 없다.
+- **심각도**: 높음 (진단 불가 → 장기 방치)
+- **Level**: 2 (MEMORY.md 검토 권장)
+
+### L-401: DI ServiceProvider scope 생명주기 — using var scope dispose 후 ViewModel이 그 Provider 참조하면 resolve 실패 (2026-05-10)
+
+- **문제**: `using var scope = _serviceProvider.CreateScope(); new ViewModel(scope.ServiceProvider)` 패턴에서 scope 블록 종료 후 ViewModel이 dispose된 scope의 ServiceProvider로 Singleton 서비스 resolve 시 ObjectDisposedException 또는 silent skip 발생
+- **근본원인**: `scope.ServiceProvider`는 scope lifetime 동안만 유효. scope dispose 후 호출 시 ObjectDisposedException 발생하나 catch 블록에서 삼킴 → STT 등 서비스 미동작
+- **해결**: Singleton 서비스는 root ServiceProvider(`_serviceProvider`, IServiceProvider)에서 직접 resolve. scope는 Scoped/Transient 서비스 전용으로 사용
+- **패턴**: `new ViewModel(_serviceProvider)` (root provider) 또는 `scope.ServiceProvider.GetRequiredService<ISingleton>()` 후 scope 해제 전에 서비스 꺼내기
+- **심각도**: 높음 (런타임 STT 미동작 — silent failure 유발)
+- **Level**: 2 (MEMORY.md 검토 권장)
+
+### L-402: 외부 진입점 없는 테스트 헬퍼는 REST endpoint 또는 디버그 메뉴와 동시 추가 권장 (2026-05-10)
+
+- **문제**: `RealRecordingTestHarness.cs` 신규 헬퍼 클래스를 만들었으나 진입점(메뉴, API, 버튼)이 없어 otest에서 자동 호출 불가 — 사용자 직접 검증 의존
+- **근본원인**: 헬퍼 클래스만 추가하고 UI/API 진입점 연결 생략 → 자동화 불가, 수동 검증 필수
+- **해결 방향**: 실호출 테스트 헬퍼 추가 시 동시에 디버그 메뉴 항목 또는 REST POST `/api/test/real-stt` 엔드포인트 연결 권장
+- **교훈**: 테스트 헬퍼의 가치는 실제로 호출 가능할 때 비로소 실현된다 (L-391 연관: 진입 경로 없으면 FAIL)
+- **심각도**: 낮음
+- **Level**: 1 (참고용)
+
 ## 반영 추적 테이블
 
 | 교훈 ID | 교훈 요약 | 반영 대상 | 반영 위치 | 반영일 | 검증 |
@@ -1264,3 +1291,6 @@
 | L-397 | Mock 인터셉터 + 시간 단축 timer 패턴 — 외부 API E2E 검증 시 비용/대기 없이 전수 검증 | docs | LESSONS.md | 2026-05-10 | ✅ |
 | L-398 | oralph 미달 항목이 API 한계일 때 → mock 환경 구축 후 iter 재실행 패턴 | docs | LESSONS.md | 2026-05-10 | ✅ |
 | L-399 | production 영향 없는 디버그 플래그(default false/1.0)로 mock/시간단축 환경 격리 | docs | LESSONS.md | 2026-05-10 | ✅ |
+| L-400 | silent failure 진단 시 catch 블록에서 ex 전체 객체(스택트레이스) 로깅 필수 — ex.Message만 불충분 | docs | LESSONS.md | 2026-05-10 | ✅ |
+| L-401 | DI scope dispose 후 ViewModel이 그 Provider 참조 시 Singleton resolve 실패 — root provider 전달 필수 | docs | LESSONS.md | 2026-05-10 | ✅ |
+| L-402 | 외부 진입점 없는 테스트 헬퍼 — REST endpoint/디버그 메뉴 동시 추가 권장 | docs | LESSONS.md | 2026-05-10 | ✅ |

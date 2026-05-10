@@ -2571,6 +2571,7 @@ public partial class OneNoteViewModel : ViewModelBase
             _topicExtractorService = _serviceProvider.GetService<ITopicExtractorService>();
             _minuteSummaryService = _serviceProvider.GetService<IMinuteSummaryService>();
             _cumulativeSummaryService = _serviceProvider.GetService<ICumulativeSummaryService>();
+            Log4.Info($"[녹음] DI resolve — realtime={_realtimeSttService != null}, transcribe={_transcribeSttService != null}, topic={_topicExtractorService != null}, minute={_minuteSummaryService != null}, cumulative={_cumulativeSummaryService != null}");
 
             // 이벤트 구독
             if (IsRealtimeDiarizationEnabled)
@@ -2623,7 +2624,7 @@ public partial class OneNoteViewModel : ViewModelBase
         }
         catch (Exception ex)
         {
-            Log4.Warn($"[녹음] OpenAI 서비스 시작 실패 (기존 STT 계속): {ex.Message}");
+            Log4.Warn($"[녹음] OpenAI 서비스 시작 실패 (기존 STT 계속): {ex}");
         }
     }
 
@@ -3104,6 +3105,7 @@ public partial class OneNoteViewModel : ViewModelBase
     /// </summary>
     private async void OnRealtimeAudioChunkForOpenAi(byte[] audioData, TimeSpan chunkStartTime)
     {
+        Log4.Debug($"[OpenAi] 청크 진입: {audioData.Length} bytes, t={chunkStartTime}, diarization={IsRealtimeDiarizationEnabled}, realtimeStt={_realtimeSttService != null}, transcribeStt={_transcribeSttService != null}");
         try
         {
             if (IsRealtimeDiarizationEnabled)

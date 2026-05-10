@@ -447,6 +447,13 @@ Tests/Helpers/:
     역할: RunFullScenarioAsync one-shot E2E 진입점 (mock 환경 + UIAutomation 스크린샷 통합)
     연관: MockOpenAiResponseInjector, DebugPcmInjectHelper, L-397, L-398
 
+  - 파일명: RealRecordingTestHarness.cs (신규 — 2026-05-10)
+    경로: Tests/Helpers/
+    역할: 사용자 실제 녹음 WAV → OpenAI Transcribe 실호출 테스트 헬퍼 (mock 비활성화)
+    기능: NAudio WaveFileReader + 16kHz mono + 1초 청크 전송, evidence/real_recording_stt_result.txt 저장
+    주의: 진입점(REST endpoint/디버그 메뉴) 미연결 — 사용자 직접 호출로 검증
+    연관: MockOpenAiResponseInjector(EnableMock=false), L-402
+
 #### 5.2 Services/Analysis (이메일 분석)
 
 ```yaml

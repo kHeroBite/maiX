@@ -2,6 +2,42 @@
 
 > PROJECT.md 작업 이력 테이블의 상세 보완본
 
+## 2026-05-10: OpenAI STT silent failure 수정 — scope dispose 근본원인 확정 (odebug + o3)
+
+**분류**: O3 Normal
+**otest 결과**: 11/13 PASS, 2 SKIP (실호출 진입점 부재 — 사용자 직접 녹음 검증 필요)
+**범위**: 수정 2 + 신규 1 = 3파일
+
+### 작업 1: MainWindow.xaml.cs L14064~14070 — scope dispose 회피
+
+- **수정**: `mAIx/Views/MainWindow.xaml.cs` — `LoadOneNoteNotebooksAsync` 내 ViewModel 생성 시 root ServiceProvider 전달
+  - 기존: `new OneNoteViewModel(scope.ServiceProvider, ...)` → scope 블록 종료 후 dispose된 Provider로 Singleton resolve 실패
+  - 수정: `using var scope = ...` + `_serviceProvider` (root) 전달 → Singleton 5개 OpenAI 서비스 안전 resolve
+  - 효과: STT silent skip 회귀 수정 (ObjectDisposedException이 catch 블록에서 삼켜지던 문제 해소)
+
+### 작업 2: OneNoteViewModel.cs 진단 로그 3곳 추가
+
+- **수정**: `mAIx/ViewModels/OneNoteViewModel.cs`
+  - L3108: `OnRealtimeAudioChunkForOpenAi` 진입 Debug 로그 (청크/모드/서비스 null 상태)
+  - L2574: `StartOpenAiServicesAsync` DI resolve 결과 Info 로그 (5개 서비스 null 여부)
+  - L2627: catch 블록에서 `ex.Message` → `ex` 전체 객체 로깅으로 변경 (스택트레이스 보존)
+
+### 작업 3: Tests/Helpers/RealRecordingTestHarness.cs 신규 (~151줄)
+
+- **신규**: `mAIx/Tests/Helpers/RealRecordingTestHarness.cs` — 사용자 실제 녹음 WAV → OpenAI Transcribe 실호출 테스트 헬퍼
+  - `MockOpenAiResponseInjector.EnableMock = false` 명시 (실 API 호출)
+  - NAudio WaveFileReader + 16kHz mono + 1초 청크 전송
+  - `evidence/real_recording_stt_result.txt` 저장
+  - ⚠️ 진입점(REST endpoint/디버그 메뉴) 미연결 — 사용자 직접 코드 호출로 검증 필요
+
+### 신규 교훈
+
+- **L-400**: silent failure 진단 시 catch 블록에서 ex 전체 객체 로깅 필수 (스택트레이스 없으면 위치 식별 불가)
+- **L-401**: DI scope dispose 후 ViewModel이 그 Provider 참조하면 Singleton resolve 실패 — root provider 전달 필수
+- **L-402**: 외부 진입점 없는 테스트 헬퍼 — REST endpoint/디버그 메뉴 동시 추가 권장 (L-391 연관)
+
+---
+
 ## 2026-05-10: oralph iter2 — mock OpenAI + 시간단축 + E2E harness 추가 (oralph 2/5)
 
 **분류**: O4 Heavy (Full mode)
