@@ -1405,6 +1405,17 @@ public partial class MainWindow : FluentWindow
             // 채팅 데이터 자동 로드 (BackgroundSyncService 초기 동기화보다 MainWindow 생성이 늦기 때문에 직접 로드)
             await LoadChatsOnStartupAsync();
 
+            // STT 미니맵 ↔ 주제어 네비게이션 양방향 스크롤 동기화 연결
+            try
+            {
+                OneNoteSTTMinimap?.Attach(OneNoteSTTScrollViewer, OneNoteTopicNavScrollViewer);
+                Log4.Debug("[MainWindow] STT 미니맵 Attach 완료");
+            }
+            catch (Exception ex)
+            {
+                Log4.Warn($"[MainWindow] STT 미니맵 Attach 실패: {ex.Message}");
+            }
+
             Log4.Debug("MainWindow_Loaded 완료");
         }
         catch (Exception ex)

@@ -6932,8 +6932,13 @@
                                                     </Border>
                                                 </Grid>
 
-                                                <!-- STT 세그먼트 목록 -->
-                                                <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto">
+                                                <!-- STT 세그먼트 목록 (좌측 ScrollViewer + 우측 VS 미니맵) -->
+                                                <Grid Grid.Row="1">
+                                                    <Grid.ColumnDefinitions>
+                                                        <ColumnDefinition Width="*"/>
+                                                        <ColumnDefinition Width="Auto"/>
+                                                    </Grid.ColumnDefinitions>
+                                                    <ScrollViewer x:Name="OneNoteSTTScrollViewer" Grid.Column="0" VerticalScrollBarVisibility="Auto">
                                                     <Grid>
                                                         <!-- 빈 상태 -->
                                                         <TextBlock x:Name="OneNoteSTTEmptyText" Text="STT 분석 결과가 없습니다."
@@ -6984,6 +6989,9 @@
                                                         </ItemsControl>
                                                     </Grid>
                                                 </ScrollViewer>
+                                                    <!-- VS2022 스타일 미니맵 — STT 컨텐츠 축소 미리보기 + Y 좌표 양방향 스크롤 -->
+                                                    <controls:MinimapScrollPanel x:Name="OneNoteSTTMinimap" Grid.Column="1" Width="80"/>
+                                                </Grid>
                                             </Grid>
                                         </Border>
 
@@ -7022,7 +7030,7 @@
                                                 </Grid>
 
                                                 <!-- 주제어 카드 목록 -->
-                                                <ScrollViewer Grid.Row="1"
+                                                <ScrollViewer x:Name="OneNoteTopicNavScrollViewer" Grid.Row="1"
                                                               VerticalScrollBarVisibility="Auto"
                                                               HorizontalScrollBarVisibility="Auto"
                                                               Padding="8,0,8,8">
