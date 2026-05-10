@@ -7078,15 +7078,7 @@
                                                     BorderBrush="{DynamicResource ControlElevationBorderBrush}"
                                                     BorderThickness="0,0,0,1">
                                                 <StackPanel>
-                                                    <!-- 종료 버튼 -->
-                                                    <ui:Button x:Name="OneNoteRecordingStopButton"
-                                                               Content="종료 (최종 요약)"
-                                                               Icon="{ui:SymbolIcon Stop24}"
-                                                               Appearance="Danger"
-                                                               FontSize="12"
-                                                               HorizontalAlignment="Stretch"
-                                                               IsEnabled="{Binding IsRecording}"
-                                                               Click="OnRecordingStop_Click"/>
+                                                    <!-- 종료 버튼 제거됨: 녹음 시작/종료 토글이 다른 위치에 있음 -->
                                                 </StackPanel>
                                             </Border>
 
@@ -7106,16 +7098,16 @@
                                                         </Grid.ColumnDefinitions>
                                                         <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
                                                             <ui:SymbolIcon Symbol="Sparkle24" FontSize="16" Margin="0,0,6,0" VerticalAlignment="Center"/>
-                                                            <TextBlock Text="AI 요약" FontSize="13" FontWeight="SemiBold" VerticalAlignment="Center"/>
+                                                            <TextBlock Text="최종요약" FontSize="13" FontWeight="SemiBold" VerticalAlignment="Center"/>
                                                             <!-- 진행 중 표시기 -->
                                                             <ui:ProgressRing x:Name="OneNoteSummaryProgress" Width="16" Height="16" Margin="6,0,0,0" IsIndeterminate="True" Visibility="Collapsed"/>
                                                             <TextBlock x:Name="OneNoteSummaryProgressText" Text="" FontSize="12" Margin="6,0,0,0"
                                                                        Foreground="{DynamicResource TextFillColorSecondaryBrush}" VerticalAlignment="Center"/>
                                                         </StackPanel>
-                                                        <!-- AI 요약 버튼 -->
+                                                        <!-- 최종요약 버튼 -->
                                                         <ui:Button x:Name="OneNoteTabRunSummaryButton"
                                                                    Grid.Column="1"
-                                                                   Content="AI 요약"
+                                                                   Content="최종요약"
                                                                    Icon="{ui:SymbolIcon Sparkle24}"
                                                                    Appearance="Secondary"
                                                                    FontSize="11"
@@ -8183,6 +8175,7 @@
                                                             <RowDefinition Height="Auto"/>
                                                             <RowDefinition Height="Auto"/>
                                                             <RowDefinition Height="Auto"/>
+                                                            <RowDefinition Height="Auto"/>
                                                         </Grid.RowDefinitions>
 
                                                         <!-- 첫 번째 줄: STT on/off -->
@@ -8292,7 +8285,11 @@
                                                             <ComboBox x:Name="OneNoteChunkSecondsComboBox"
                                                                       SelectedValue="{Binding ChunkSeconds, Mode=TwoWay}"
                                                                       SelectedValuePath="Tag"
-                                                                      FontSize="12" Width="70">
+                                                                      FontSize="12" Width="70"
+                                                                      ToolTip="값이 작을수록 STT 반응이 빠르나 네트워크 호출이 잦습니다 (기본 3초 권장).">
+                                                                <ComboBoxItem Content="1" Tag="1"/>
+                                                                <ComboBoxItem Content="2" Tag="2"/>
+                                                                <ComboBoxItem Content="3" Tag="3"/>
                                                                 <ComboBoxItem Content="5" Tag="5"/>
                                                                 <ComboBoxItem Content="10" Tag="10"/>
                                                                 <ComboBoxItem Content="15" Tag="15"/>
@@ -8320,6 +8317,13 @@
                                                                   IsChecked="{Binding IsAutoFinalSummary, Mode=TwoWay}"
                                                                   FontSize="12" Margin="0,0,0,4"
                                                                   ToolTip="체크 시 녹음 종료 후 최종 요약을 자동 실행합니다. 해제 시 수동 클릭 대기 상태가 됩니다."/>
+
+                                                        <!-- Row 17: 오타 수정 후처리 (신규) -->
+                                                        <CheckBox Grid.Row="17" Grid.ColumnSpan="3"
+                                                                  Content="오타 수정 (GPT-4o-mini 후처리)"
+                                                                  IsChecked="{Binding IsEnableTypoFix, Mode=TwoWay}"
+                                                                  FontSize="12" Margin="0,0,0,4"
+                                                                  ToolTip="체크 시 STT 결과를 GPT-4o-mini로 후처리하여 한국어 오타/맞춤법을 보정합니다. 추가 LLM 호출이 발생합니다."/>
                                                     </Grid>
                                                 </Border>
                                             </Grid>

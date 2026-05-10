@@ -98,4 +98,20 @@ public class OpenAiRecordingSettings
     /// <summary>녹음 종료 시 최종 요약 자동 실행 여부 (기본 false — 옵트인)</summary>
     [XmlElement("AutoFinalSummary")]
     public bool AutoFinalSummary { get; set; } = false;
+
+    /// <summary>STT 언어 코드 (Whisper input_audio_transcription.language, 기본 ko)</summary>
+    [XmlElement("SttLanguage")]
+    public string SttLanguage { get; set; } = "ko";
+
+    /// <summary>STT prompt — 도메인 사전/문맥 힌트 (한국어 기본 사전)</summary>
+    [XmlElement("SttPrompt")]
+    public string SttPrompt { get; set; } = "한국어 회의 녹음입니다. 자연스러운 한국어 문장으로 전사하세요. 일상 대화, 업무 회의, IT 용어가 포함될 수 있습니다.";
+
+    /// <summary>transcript 오타 수정 후처리 활성화 (GPT-4o-mini, 기본 false 옵트인)</summary>
+    [XmlElement("EnableTypoFix")]
+    public bool EnableTypoFix { get; set; } = false;
+
+    /// <summary>오타 수정 모델 (기본 gpt-4o-mini)</summary>
+    [XmlElement("TypoFixModel")]
+    public string TypoFixModel { get; set; } = "gpt-4o-mini";
 }

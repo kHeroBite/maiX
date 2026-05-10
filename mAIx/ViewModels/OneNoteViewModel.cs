@@ -544,6 +544,12 @@ public partial class OneNoteViewModel : ViewModelBase
     private bool _isAutoFinalSummary = false;
 
     /// <summary>
+    /// STT 오타 수정 후처리 활성화 (GPT-4o-mini, 옵트인, 기본 false)
+    /// </summary>
+    [ObservableProperty]
+    private bool _isEnableTypoFix = false;
+
+    /// <summary>
     /// 주제어 추출 최소 단위 (초)
     /// </summary>
     [ObservableProperty]
@@ -591,6 +597,7 @@ public partial class OneNoteViewModel : ViewModelBase
             _topicExtractorIntervalSec = oaiSettings.TopicExtractorIntervalSec;
             _topicNavOrientation = oaiSettings.TopicNavOrientation ?? "Horizontal";
             _isAutoFinalSummary = oaiSettings.AutoFinalSummary;
+            _isEnableTypoFix = oaiSettings.EnableTypoFix;
         }
 
         // 녹음 목록에 새 파일 추가 시 자동 선택
@@ -1829,6 +1836,18 @@ public partial class OneNoteViewModel : ViewModelBase
         if (App.Settings?.OaiRecording != null)
         {
             App.Settings.OaiRecording.AutoFinalSummary = value;
+            App.Settings.SaveAll();
+        }
+    }
+
+    /// <summary>
+    /// 오타 수정 후처리 ON/OFF 변경 시 설정 저장
+    /// </summary>
+    partial void OnIsEnableTypoFixChanged(bool value)
+    {
+        if (App.Settings?.OaiRecording != null)
+        {
+            App.Settings.OaiRecording.EnableTypoFix = value;
             App.Settings.SaveAll();
         }
     }

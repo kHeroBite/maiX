@@ -107,7 +107,9 @@ public sealed class OpenAiRealtimeSttService : IOpenAiRealtimeSttService
             throw;
         }
 
-        // session.update 발송 — STT 전용 모드 활성화 (modalities=text + server VAD + whisper-1)
+        // session.update 발송 — STT 전용 모드 활성화 (modalities=text + server VAD + 한국어 특화)
+        var sttLang = string.IsNullOrWhiteSpace(_settings.OaiRecording.SttLanguage) ? "ko" : _settings.OaiRecording.SttLanguage;
+        var sttPrompt = _settings.OaiRecording.SttPrompt ?? string.Empty;
         await SendJsonAsync(new
         {
             type = "session.update",
@@ -115,11 +117,16 @@ public sealed class OpenAiRealtimeSttService : IOpenAiRealtimeSttService
             {
                 modalities = new[] { "text" },
                 input_audio_format = "pcm16",
-                input_audio_transcription = new { model = "whisper-1" },
+                input_audio_transcription = new
+                {
+                    model = "whisper-1",
+                    language = sttLang,
+                    prompt = sttPrompt
+                },
                 turn_detection = new { type = "server_vad" }
             }
         }).ConfigureAwait(false);
-        _log.Info("[OpenAi-Realtime] session.update 발송 — modalities=text, VAD=server_vad, transcription=whisper-1");
+        _log.Info($"[OpenAi-Realtime] session.update 발송 — modalities=text, VAD=server_vad, whisper-1, language={sttLang}, prompt={sttPrompt.Length}자");
 
         _silenceStartedAt = DateTime.Now;
         _lastSilenceMarkerSec = 0;
@@ -334,6 +341,24 @@ public sealed class OpenAiRealtimeSttService : IOpenAiRealtimeSttService
                         var ts = TimeSpan.FromMilliseconds(_lastSpeechStartedMs);
                         TranscriptSegmentReceived?.Invoke(ts, text);
                         _log.Info($"[OpenAi-Realtime] transcription.completed — text={text.Substring(0, Math.Min(50, text.Length))}");
+
+                        // 옵션: GPT-4o-mini로 오타 후처리 (EnableTypoFix=true 시) — fire-and-forget
+                        if (_settings.OaiRecording.EnableTypoFix)
+                        {
+                            _ = Task.Run(async () =>
+                            {
+                                try
+                                {
+                                    var fixedText = await FixTypoAsync(text).ConfigureAwait(false);
+                                    if (!string.IsNullOrEmpty(fixedText) && fixedText != text)
+                                    {
+                                        TranscriptSegmentReceived?.Invoke(ts, $"[보정] {fixedText}");
+                                        _log.Info($"[OpenAi-Realtime] 오타 후처리 완료 — {text.Length}자 → {fixedText.Length}자");
+                                    }
+                                }
+                                catch (Exception ex) { _log.Warn(ex, "[OpenAi-Realtime] 오타 후처리 실패"); }
+                            });
+                        }
                     }
                 }
             }
@@ -354,6 +379,52 @@ public sealed class OpenAiRealtimeSttService : IOpenAiRealtimeSttService
         var json = JsonSerializer.Serialize(payload);
         var bytes = Encoding.UTF8.GetBytes(json);
         await _ws.SendAsync(new ArraySegment<byte>(bytes), WebSocketMessageType.Text, true, CancellationToken.None).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// GPT-4o-mini로 transcript 오타/맞춤법 보정 (한국어 특화)
+    /// </summary>
+    private async Task<string> FixTypoAsync(string transcript)
+    {
+        var apiKey = _settings.AIProviders?.OpenAI?.ApiKey ?? string.Empty;
+        if (string.IsNullOrWhiteSpace(apiKey) || string.IsNullOrWhiteSpace(transcript))
+            return transcript;
+
+        var model = _settings.OaiRecording.TypoFixModel ?? "gpt-4o-mini";
+        var baseUrl = (_settings.AIProviders?.OpenAI?.BaseUrl ?? "https://api.openai.com/v1").TrimEnd('/');
+        var url = baseUrl + "/chat/completions";
+
+        var systemPrompt = "당신은 한국어 STT 전사 결과를 자연스러운 한국어로 보정하는 도우미입니다. 다음 규칙을 지키세요: 1) 의미를 절대 바꾸지 마세요. 2) 명백한 오타/맞춤법 오류만 수정. 3) 띄어쓰기를 자연스럽게 정리. 4) 문장 부호를 적절히 추가. 5) 결과 텍스트만 반환 (설명 없이).";
+        var payload = new
+        {
+            model = model,
+            messages = new object[]
+            {
+                new { role = "system", content = systemPrompt },
+                new { role = "user", content = transcript }
+            },
+            temperature = 0.0,
+            max_tokens = Math.Max(64, transcript.Length * 2)
+        };
+
+        using var http = new HttpClient { Timeout = TimeSpan.FromSeconds(15) };
+        http.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", apiKey);
+        var json = JsonSerializer.Serialize(payload);
+        using var content = new StringContent(json, Encoding.UTF8, "application/json");
+        using var resp = await http.PostAsync(url, content).ConfigureAwait(false);
+        if (!resp.IsSuccessStatusCode)
+        {
+            _log.Warn($"[OpenAi-Realtime] FixTypoAsync HTTP {(int)resp.StatusCode} {resp.ReasonPhrase}");
+            return transcript;
+        }
+        var body = await resp.Content.ReadAsStringAsync().ConfigureAwait(false);
+        using var doc = JsonDocument.Parse(body);
+        var fixedText = doc.RootElement
+            .GetProperty("choices")[0]
+            .GetProperty("message")
+            .GetProperty("content")
+            .GetString() ?? transcript;
+        return fixedText.Trim();
     }
 
     private void Cleanup()
