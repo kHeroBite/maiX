@@ -71,9 +71,10 @@ public sealed class OpenAiRealtimeSttService : IOpenAiRealtimeSttService
     private double _lastSilenceMarkerSec = 0;
     private Task? _silenceMonitorTask = null;
 
-    // 옵션 A: speech_started ↔ 다음 speech_started 사이의 모든 delta를 같은 itemId로 누적
-    // OpenAI gpt-realtime-whisper가 음절별로 다른 item_id를 부여하는 문제 회피
+    // 옵션 C: N초 침묵 기반 카드 분할 — delta 도착 사이 간격이 N초 이상이면 새 itemId 생성
     private string? _currentSpeechItemId = null;
+    private DateTime _lastDeltaAt = DateTime.MinValue;
+    private const double SilenceCardThresholdSec = 2.0; // 2초 침묵 시 새 카드
 
     // PCM 24kHz mono 기준 bytes/sec
     private const int BytesPerSecond = 24000 * 2;
@@ -359,9 +360,8 @@ public sealed class OpenAiRealtimeSttService : IOpenAiRealtimeSttService
                 _lastSpeechStartedMs = startMs;
                 _silenceStartedAt = null;
                 _lastSilenceMarkerSec = 0;
-                // 옵션 A: 새 발화 시작 = 새 itemId (다음 speech_started까지 모든 delta 누적)
-                _currentSpeechItemId = $"speech_{startMs}";
-                _log.Info($"[OpenAi-Realtime] speech_started — audio_start_ms={startMs}, currentItemId={_currentSpeechItemId}");
+                // 옵션 C: itemId는 delta 도착 시 N초 침묵 기반으로 결정 (speech_started에서 변경 안 함)
+                _log.Info($"[OpenAi-Realtime] speech_started — audio_start_ms={startMs}");
 
                 // 묵음 구간 표시: 직전 speech_stopped 이후 시간 차이가 10초 이상이면 발화
                 if (_lastSpeechStoppedMs > 0)
@@ -389,9 +389,15 @@ public sealed class OpenAiRealtimeSttService : IOpenAiRealtimeSttService
                     var deltaText = deltaProp.GetString() ?? string.Empty;
                     if (!string.IsNullOrEmpty(deltaText))
                     {
-                        // 옵션 A: OpenAI item_id 무시 + speech_started 기반 _currentSpeechItemId 사용
-                        // → 한 발화의 모든 delta가 한 카드에 점진 누적됨
-                        var itemId = _currentSpeechItemId ?? $"speech_{_lastSpeechStartedMs}";
+                        // 옵션 C: 마지막 delta로부터 N초 이상 경과 시 새 카드 시작 (한 문장 단위 누적)
+                        var now = DateTime.Now;
+                        var sinceLastDelta = (now - _lastDeltaAt).TotalSeconds;
+                        if (_currentSpeechItemId == null || sinceLastDelta >= SilenceCardThresholdSec)
+                        {
+                            _currentSpeechItemId = $"card_{now.Ticks}";
+                        }
+                        _lastDeltaAt = now;
+                        var itemId = _currentSpeechItemId;
                         var accum = _deltaBuffers.AddOrUpdate(itemId, deltaText, (_, prev) => prev + deltaText);
                         var ts = TimeSpan.FromMilliseconds(_lastSpeechStartedMs);
                         TranscriptSegmentUpdated?.Invoke(itemId, ts, accum);
@@ -403,8 +409,9 @@ public sealed class OpenAiRealtimeSttService : IOpenAiRealtimeSttService
                 if (root.TryGetProperty("transcript", out var tr))
                 {
                     var text = tr.GetString() ?? string.Empty;
-                    // 옵션 A: OpenAI item_id 무시 + _currentSpeechItemId 사용 (delta와 매칭)
-                    var itemId = _currentSpeechItemId ?? $"speech_{_lastSpeechStartedMs}";
+                    // 옵션 C: 현재 카드의 itemId 사용 (delta와 매칭) + _lastDeltaAt 갱신
+                    _lastDeltaAt = DateTime.Now;
+                    var itemId = _currentSpeechItemId ?? $"card_{DateTime.Now.Ticks}";
                     if (!string.IsNullOrEmpty(text))
                     {
                         // hallucination 차단 — 누적된 delta 항목도 제거

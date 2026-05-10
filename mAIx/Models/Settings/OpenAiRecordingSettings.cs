@@ -57,7 +57,7 @@ public class OpenAiRecordingSettings
     /// 오디오 청크 길이 (초 단위)
     /// </summary>
     [XmlElement("ChunkSeconds")]
-    public int ChunkSeconds { get; set; } = 10;
+    public int ChunkSeconds { get; set; } = 1;
 
     /// <summary>
     /// 활성 프리셋 이름 (custom/lowcost/quality/streaming)

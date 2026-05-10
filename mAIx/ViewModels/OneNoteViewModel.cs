@@ -247,7 +247,7 @@ public partial class OneNoteViewModel : ViewModelBase
     /// <summary>
     /// STT 청크 간격 (초), 기본 30초
     /// </summary>
-    private float _sttChunkIntervalSeconds = 30f;
+    private float _sttChunkIntervalSeconds = 1f;
 
     /// <summary>
     /// 요약 업데이트 간격 (초), 기본 30초
@@ -529,7 +529,7 @@ public partial class OneNoteViewModel : ViewModelBase
     /// 오디오 청크 길이 (초)
     /// </summary>
     [ObservableProperty]
-    private int _chunkSeconds = 10;
+    private int _chunkSeconds = 1;
 
     /// <summary>
     /// 누적 요약 주기 (분)
@@ -1893,6 +1893,36 @@ public partial class OneNoteViewModel : ViewModelBase
     }
 
     /// <summary>
+    /// 청크 길이(초) 변경 시 영구 저장 + 실행 중 녹음에 즉시 반영
+    /// </summary>
+    partial void OnChunkSecondsChanged(int value)
+    {
+        if (App.Settings?.OaiRecording != null)
+        {
+            App.Settings.OaiRecording.ChunkSeconds = value;
+            App.Settings.SaveAll();
+            if (_recordingService != null)
+            {
+                _recordingService.RealtimeChunkSeconds = value;
+            }
+            Log4.Info($"[옵션] ChunkSeconds 저장 완료: {value}초");
+        }
+    }
+
+    /// <summary>
+    /// 누적 요약 주기(분) 변경 시 영구 저장
+    /// </summary>
+    partial void OnCumulativeIntervalMinutesChanged(int value)
+    {
+        if (App.Settings?.OaiRecording != null)
+        {
+            App.Settings.OaiRecording.CumulativeSummaryIntervalMinutes = value;
+            App.Settings.SaveAll();
+            Log4.Info($"[옵션] CumulativeIntervalMinutes 저장 완료: {value}분");
+        }
+    }
+
+    /// <summary>
     /// 선택된 녹음의 STT/요약 결과를 수동으로 로드 (UI에서 직접 호출용)
     /// </summary>
     public void LoadSelectedRecordingResults()
@@ -2609,7 +2639,7 @@ public partial class OneNoteViewModel : ViewModelBase
                 _recordingService.RealtimeAudioChunkReady -= OnRealtimeAudioChunkForOpenAi;
                 _recordingService.RealtimeAudioChunkReady += OnRealtimeAudioChunkForOpenAi;
                 _recordingService.RealtimeEnabled = true;
-                _recordingService.RealtimeChunkSeconds = App.Settings?.OaiRecording?.ChunkSeconds ?? 10;
+                _recordingService.RealtimeChunkSeconds = App.Settings?.OaiRecording?.ChunkSeconds ?? 1;
             }
 
             // 현재 선택된 페이지 ID와 연결 (있으면)
