@@ -90,6 +90,13 @@
     </None>
   </ItemGroup>
 
+  <!-- NLog.config 파일을 출력 디렉토리에 복사 -->
+  <ItemGroup>
+    <None Update="NLog.config">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+  </ItemGroup>
+
   <!-- Assets 리소스 -->
   <ItemGroup>
     <Resource Include="Assets\icon.png" />

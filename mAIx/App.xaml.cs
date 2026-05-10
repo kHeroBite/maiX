@@ -7,6 +7,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Serilog;
 using Serilog.Events;
+using NLog;
 using mAIx.Data;
 using mAIx.Models.Settings;
 using mAIx.Services;
@@ -135,6 +136,10 @@ public partial class App : Application
 
         // Serilog 설정
         ConfigureSerilog();
+
+        // NLog 설정 로드 (출력 디렉토리의 NLog.config 자동 검색)
+        NLog.LogManager.Setup().LoadConfigurationFromFile("NLog.config", optional: true);
+        NLog.LogManager.GetCurrentClassLogger().Info("NLog 초기화 완료 — Serilog와 병행 작동");
 
         // Host 빌더 구성 (IConfiguration 없이)
         _host = Host.CreateDefaultBuilder()

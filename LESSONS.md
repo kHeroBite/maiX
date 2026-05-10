@@ -1288,6 +1288,38 @@
 - **심각도**: 낮음
 - **Level**: 1 (참고용)
 
+### L-406: NLog 표준 정책의 함정 — 출력 채널(config) 검증 없이 라이브러리 표준화는 silent drop 초래 (2026-05-10)
+
+- **문제**: L-296에서 'MaiX 모든 레이어에서 NLog 표준 로거 사용 필수'로 규정했으나 정작 NLog.config 자체가 없어서 8개 클래스의 모든 NLog 로그가 silent drop되어 왔음. 5회 STT 디버깅 시도에서도 NLog 출력이 전혀 나오지 않아 근본 원인 추적 불가였음.
+- **근본원인**: 로거 라이브러리 표준화(NLog 채택 규칙 제정) 시 출력 채널(NLog.config) 검증 누락. 코드에서 Logger를 사용하는 것과 그 Logger 출력이 실제 파일에 도달하는 것은 별개임.
+- **해결**: NLog.config 신규 생성 + mAIx.csproj CopyToOutputDirectory 등록 + App.xaml.cs LogManager.Setup() 호출.
+- **교훈**: 신규 로거 라이브러리 추가/표준화 시 출력 파일에 1줄이 실제로 찍히는지 즉시 검증 필수. NLog.config + CopyToOutputDirectory + LogManager.Setup() 3요소는 영구 보존해야 함.
+- **재발방지**: 로거 정책 제정 체크리스트에 "출력 파일 실제 생성 확인" 단계 추가.
+- **심각도**: 높음 (5회 디버깅 시도 전부 측정 불가)
+- **Level**: 2 (인지 — MEMORY 반영)
+
+### L-407: NLog 4.7+ Setup() extension method — using NLog; 없으면 LoadConfigurationFromFile 컴파일 오류 (2026-05-10)
+
+- **문제**: `NLog.LogManager.Setup()` 체인에서 `.LoadConfigurationFromFile()`이 extension method라 `using NLog;` 없이는 컴파일 오류 발생. Fully qualified name(`NLog.LogManager.Setup()`)으로 첫 메서드는 호출 가능하나 extension method 체인은 using 없으면 CS1061 오류.
+- **근본원인**: Extension method는 네임스페이스 using 없이는 메서드 확장 대상을 찾지 못함. Fully qualified name과 extension method 해석은 다른 메커니즘.
+- **해결**: `using NLog;` 추가.
+- **교훈**: NLog 4.7+ Setup() 패턴 사용 시 반드시 `using NLog;` 필수. Fully qualified name 시도로 우회 불가.
+- **심각도**: 낮음
+- **Level**: 1 (참고용)
+
+### L-408: 자기코드 맹점 — 출력 채널 우선 의심 순서 (2026-05-10)
+
+- **문제**: OpenAI Realtime STT silent failure를 5회 시도하면서 매번 코드 로직(scope dispose, 분기 미진입, API 호출 오류)만 의심하고 출력 채널(NLog.config 부재)을 의심하지 않음. 진단 로그 22줄을 추가했음에도 아무것도 보이지 않았던 이유는 NLog.config 자체가 없었기 때문.
+- **근본원인**: "자기가 작성한 코드"에 대한 확증 편향 — 코드 로직이 맞다고 전제하고 출력 인프라를 후순위로 의심.
+- **해결**: NLog.config 존재 여부 확인 후 즉시 해결.
+- **교훈**: 자기 분석/수정 코드의 출력이 안 보일 때 의심 순서는 반드시 다음을 따른다.
+  1. **출력 채널** (라우팅/target/level filter/config 부재)
+  2. **빌드 갱신 누락** (실행 중인 바이너리가 구버전)
+  3. **분기 미진입** (조건문/이벤트 핸들러 연결 누락)
+  4. **코드 로직** (마지막으로 의심)
+- **심각도**: 높음 (5회 반복 실패)
+- **Level**: 2 (인지 — MEMORY 반영)
+
 ## 반영 추적 테이블
 
 | 교훈 ID | 교훈 요약 | 반영 대상 | 반영 위치 | 반영일 | 검증 |
@@ -1338,3 +1370,6 @@
 | L-403 | silent failure 진단 로그 발화 0건 → 호출 경로 자체 단절 가설 전환 필수 (진단 로그가 도달 불가한 영역) | docs | LESSONS.md | 2026-05-10 | ✅ |
 | L-404 | 호출 경로 추적 로그 패턴 — 진입점부터 말단까지 Layer별 7곳 표시 후 끊김 지점 식별 | docs | LESSONS.md | 2026-05-10 | ✅ |
 | L-405 | API key 로그 출력 시 Substring(0,7)+"***"+길이 fallback ("(short_or_empty)") 안전 마스킹 패턴 | docs | LESSONS.md | 2026-05-10 | ✅ |
+| L-406 | NLog 표준 정책의 함정 — NLog.config 부재 시 모든 로그 silent drop (L-296 후속) | docs | LESSONS.md + MEMORY.md | 2026-05-10 | ✅ |
+| L-407 | NLog Setup() extension method — using NLog; 없으면 LoadConfigurationFromFile 컴파일 오류 | docs | LESSONS.md | 2026-05-10 | ✅ |
+| L-408 | 자기코드 맹점 — 출력 채널→빌드갱신→분기미진입→코드로직 순서로 의심 필수 | docs | LESSONS.md + MEMORY.md | 2026-05-10 | ✅ |

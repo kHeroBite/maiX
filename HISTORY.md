@@ -2,6 +2,28 @@
 
 > PROJECT.md 작업 이력 테이블의 상세 보완본
 
+## 2026-05-10: NLog config 통합 활성화 — OpenAI 서비스 silent drop 해결 (o3)
+
+**분류**: O3 Normal
+**otest 결과**: 빌드 OK + nlog-2026-05-10.log 정상 생성 + "NLog 초기화 완료" 메시지 확인 + GraphTeamsService/ChannelPlannerControl 등 다른 NLog 클래스 라우팅 정상 확인
+**범위**: 수정 3파일 (NLog.config 신규 + mAIx.csproj + App.xaml.cs)
+
+### 배경
+
+L-296(NLog 표준 정책)에 따라 8개 클래스가 NLog Logger를 사용하고 있었으나 NLog.config 자체가 없어 모든 NLog 출력이 silent drop되어 왔음. OpenAI Realtime STT silent failure 디버깅 5회 시도 중 매번 NLog 로그를 볼 수 없었던 근본 원인.
+
+### 적용 내용
+
+1. **NLog.config 신규 생성**: 콘솔/파일 target 설정 (nlog-${shortdate}.log, UTF-8, keepFileOpen=true)
+2. **mAIx.csproj**: NLog.config CopyToOutputDirectory=Always 등록
+3. **App.xaml.cs**: `using NLog;` 추가 + `LogManager.Setup().LoadConfigurationFromFile("NLog.config")` 호출
+
+### 교훈
+
+L-406: 로거 표준화 시 출력 채널(config) 검증 필수 — 코드에서 Logger 사용 ≠ 파일 도달
+L-407: NLog Setup() extension method는 using NLog; 없으면 컴파일 오류
+L-408: 자기코드 맹점 — 출력 채널 우선 의심 순서 정립
+
 ## 2026-05-10: OpenAI STT silent failure 깊은 진단 로그 22줄 추가 (o3)
 
 **분류**: O3 Normal
