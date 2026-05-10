@@ -151,13 +151,13 @@ public sealed class OpenAiRealtimeSttService : IOpenAiRealtimeSttService
                 turn_detection = new
                 {
                     type = "server_vad",
-                    threshold = 0.7,             // 기본 0.5 → 0.7 (덜 민감, 노이즈 hallucination 감소)
+                    threshold = 0.7,             // 기본 0.5 → 0.7 (노이즈 hallucination 감소)
                     prefix_padding_ms = 300,
-                    silence_duration_ms = 800    // 발화 종료 감지 침묵 800ms (기본 500)
+                    silence_duration_ms = 300    // 800 → 300: 발화 종료 빠른 감지 → transcript 즉시 도착
                 }
             }
         }).ConfigureAwait(false);
-        _log.Info($"[OpenAi-Realtime] session.update 발송 — VAD=server_vad(thr=0.7,sil=800ms), whisper-1, language={sttLang}, prompt={sttPrompt.Length}자");
+        _log.Info($"[OpenAi-Realtime] session.update 발송 — VAD=server_vad(thr=0.7,sil=300ms), whisper-1, language={sttLang}, prompt={sttPrompt.Length}자");
 
         _silenceStartedAt = DateTime.Now;
         _lastSilenceMarkerSec = 0;
@@ -361,6 +361,19 @@ public sealed class OpenAiRealtimeSttService : IOpenAiRealtimeSttService
                 _lastSpeechStoppedMs = endMs;
                 _silenceStartedAt = DateTime.Now;
                 _log.Info($"[OpenAi-Realtime] speech_stopped — audio_end_ms={endMs}");
+            }
+            else if (type == "conversation.item.input_audio_transcription.delta")
+            {
+                // 발화 중 부분 transcript 점진 표시 (whisper-1은 미지원일 수 있으나 호환성 유지)
+                if (root.TryGetProperty("delta", out var deltaProp))
+                {
+                    var deltaText = deltaProp.GetString() ?? string.Empty;
+                    if (!string.IsNullOrEmpty(deltaText) && !IsHallucination(deltaText))
+                    {
+                        var ts = TimeSpan.FromMilliseconds(_lastSpeechStartedMs);
+                        TranscriptSegmentReceived?.Invoke(ts, deltaText);
+                    }
+                }
             }
             else if (type == "conversation.item.input_audio_transcription.completed")
             {
