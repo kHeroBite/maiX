@@ -55,6 +55,8 @@ public sealed class OpenAiRealtimeSttService : IOpenAiRealtimeSttService
     private CancellationTokenSource? _cts;
     private Task? _receiveTask;
     private bool _disposed;
+    private double _lastSpeechStartedMs = 0;
+    private double _lastSpeechStoppedMs = 0;
 
     // PCM 16kHz mono 기준 bytes/sec
     private const int BytesPerSecond = 16000 * 2;
@@ -101,6 +103,20 @@ public sealed class OpenAiRealtimeSttService : IOpenAiRealtimeSttService
             Cleanup();
             throw;
         }
+
+        // session.update 발송 — STT 전용 모드 활성화 (modalities=text + server VAD + whisper-1)
+        await SendJsonAsync(new
+        {
+            type = "session.update",
+            session = new
+            {
+                modalities = new[] { "text" },
+                input_audio_format = "pcm16",
+                input_audio_transcription = new { model = "whisper-1" },
+                turn_detection = new { type = "server_vad" }
+            }
+        }).ConfigureAwait(false);
+        _log.Info("[OpenAi-Realtime] session.update 발송 — modalities=text, VAD=server_vad, transcription=whisper-1");
 
         _receiveTask = ReceiveLoopAsync(_cts.Token);
     }
@@ -246,6 +262,46 @@ public sealed class OpenAiRealtimeSttService : IOpenAiRealtimeSttService
                         TranscriptSegmentReceived?.Invoke(ts, text);
                     }
                 }
+            }
+            else if (type == "input_audio_buffer.speech_started")
+            {
+                var startMs = root.TryGetProperty("audio_start_ms", out var sMs) ? sMs.GetDouble() : 0;
+                _lastSpeechStartedMs = startMs;
+                _log.Info($"[OpenAi-Realtime] speech_started — audio_start_ms={startMs}");
+
+                // 묵음 구간 표시: 직전 speech_stopped 이후 시간 차이가 1초 이상이면 발화
+                if (_lastSpeechStoppedMs > 0)
+                {
+                    var silenceSec = (startMs - _lastSpeechStoppedMs) / 1000.0;
+                    if (silenceSec >= 1.0)
+                    {
+                        var ts = TimeSpan.FromMilliseconds(_lastSpeechStoppedMs);
+                        TranscriptSegmentReceived?.Invoke(ts, $"[묵음 {silenceSec:F1}초]");
+                    }
+                }
+            }
+            else if (type == "input_audio_buffer.speech_stopped")
+            {
+                var endMs = root.TryGetProperty("audio_end_ms", out var eMs) ? eMs.GetDouble() : 0;
+                _lastSpeechStoppedMs = endMs;
+                _log.Info($"[OpenAi-Realtime] speech_stopped — audio_end_ms={endMs}");
+            }
+            else if (type == "conversation.item.input_audio_transcription.completed")
+            {
+                if (root.TryGetProperty("transcript", out var tr))
+                {
+                    var text = tr.GetString() ?? string.Empty;
+                    if (!string.IsNullOrEmpty(text))
+                    {
+                        var ts = TimeSpan.FromMilliseconds(_lastSpeechStartedMs);
+                        TranscriptSegmentReceived?.Invoke(ts, text);
+                        _log.Info($"[OpenAi-Realtime] transcription.completed — text={text.Substring(0, Math.Min(50, text.Length))}");
+                    }
+                }
+            }
+            else if (type == "conversation.item.input_audio_transcription.failed")
+            {
+                _log.Warn($"[OpenAi-Realtime] transcription.failed — json={json.Substring(0, Math.Min(200, json.Length))}");
             }
         }
         catch (Exception ex)

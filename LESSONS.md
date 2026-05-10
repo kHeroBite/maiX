@@ -1320,6 +1320,26 @@
 - **심각도**: 높음 (5회 반복 실패)
 - **Level**: 2 (인지 — MEMORY 반영)
 
+### L-409: OpenAI Realtime API session.update 필수 (2026-05-10)
+
+- **문제**: WebSocket 연결 + audio chunk 전송만으로는 STT transcript 이벤트가 0건. 서버가 audio를 받아도 기본 설정에서 transcription이 비활성화되어 있어 응답 없음.
+- **근본원인**: Realtime API의 기본 modalities는 `["text", "audio"]`이나, `input_audio_transcription`을 명시하지 않으면 STT가 비활성화됨. `session.update` 발송 없이는 서버가 transcription 이벤트를 생성하지 않음.
+- **해결**: `StartAsync()` 직후 `session.update` 메시지로 `modalities=["text"]` + `input_audio_transcription={model:"whisper-1"}` + `turn_detection={type:"server_vad"}` 명시.
+- **교훈**: Realtime API 사용 시 `session.update` 발송은 연결 직후 필수 절차. context7 명세(`/openai/openai-realtime-api-beta`) 1순위 참조.
+- **재발방지**: Realtime WebSocket 연결 후 STT 미응답 시 `session.update` 발송 여부를 첫 번째로 확인.
+- **심각도**: 높음 (STT 기능 전체 불동작)
+- **Level**: 2 (인지 — Realtime API 필수 프로토콜)
+
+### L-410: server_vad로 묵음 구간 자동 가시화 (2026-05-10)
+
+- **문제**: 클라이언트 VAD로는 묵음 구간 타임스탬프를 정확히 계산하기 어려움. 네트워크 지연과 버퍼 누적으로 실제 묵음 시점과 이벤트 시점이 어긋남.
+- **해결**: `turn_detection: {type: "server_vad"}` 설정 시 서버가 발화 시작/종료를 자동 감지. `input_audio_buffer.speech_started`의 `audio_start_ms`와 `input_audio_buffer.speech_stopped`의 `audio_end_ms`로 정확한 묵음 구간(ms 단위) 계산 가능.
+- **구현**: `_speechStartMs` 기록 → `speech_stopped` 이벤트에서 `(audio_end_ms - _speechStartMs) / 1000.0` 계산 → 1초 이상일 때만 `[묵음 N.N초]` 마커 발화.
+- **교훈**: 음성 STT에 묵음 표시 필요 시 server_vad가 클라이언트 VAD보다 정확. 1초 미만 묵음은 노이즈로 간주하여 표시 생략.
+- **재발방지**: 묵음 구간 가시화 필요 시 `server_vad` + `speech_started/stopped` 이벤트 조합 우선 채택.
+- **심각도**: 중간 (UX 개선)
+- **Level**: 1 (기술 참조)
+
 ## 반영 추적 테이블
 
 | 교훈 ID | 교훈 요약 | 반영 대상 | 반영 위치 | 반영일 | 검증 |
@@ -1373,3 +1393,5 @@
 | L-406 | NLog 표준 정책의 함정 — NLog.config 부재 시 모든 로그 silent drop (L-296 후속) | docs | LESSONS.md + MEMORY.md | 2026-05-10 | ✅ |
 | L-407 | NLog Setup() extension method — using NLog; 없으면 LoadConfigurationFromFile 컴파일 오류 | docs | LESSONS.md | 2026-05-10 | ✅ |
 | L-408 | 자기코드 맹점 — 출력 채널→빌드갱신→분기미진입→코드로직 순서로 의심 필수 | docs | LESSONS.md + MEMORY.md | 2026-05-10 | ✅ |
+| L-409 | OpenAI Realtime API session.update 필수 — WebSocket 연결만으로 STT 응답 수신 불가 | docs | LESSONS.md | 2026-05-10 | ✅ |
+| L-410 | server_vad로 묵음 구간 자동 가시화 — speech_started/stopped 이벤트로 정확한 구간 계산 | docs | LESSONS.md | 2026-05-10 | ✅ |

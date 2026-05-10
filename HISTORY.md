@@ -2,6 +2,18 @@
 
 > PROJECT.md 작업 이력 테이블의 상세 보완본
 
+## 2026-05-10: OpenAI Realtime STT 활성화 — session.update + server_vad + whisper-1 + 묵음 구간 표시 (o3)
+
+**분류**: O3 Normal
+**otest 결과**: 빌드 PASS + strings 검증 5개 키워드 모두 컴파일 확인 + mAIx PID 27548 실행 중
+**범위**: 수정 1파일 (OpenAiRealtimeSttService.cs +56줄)
+**내용**:
+- `StartAsync()` 직후 `session.update` 발송 — `modalities=["text"]` + `input_audio_transcription={model:"whisper-1"}` + `turn_detection={type:"server_vad"}` 활성화
+- `ProcessMessage()`에 4개 이벤트 분기 추가: `input_audio_buffer.speech_started`, `input_audio_buffer.speech_stopped`, `conversation.item.input_audio_transcription.completed`, `conversation.item.input_audio_transcription.failed`
+- 묵음 1초 이상 시 `[묵음 N.N초]` 마커를 `TranscriptSegmentReceived`로 발화하여 UI 표시
+- 배경: WebSocket/SendAudioChunk 인프라 정상 확인 후 session.update 미발송 + VAD 미설정 문제 발견 → 옵션 A 적용
+**교훈**: L-409 (Realtime API session.update 필수), L-410 (server_vad 묵음 가시화)
+
 ## 2026-05-10: NLog config 통합 활성화 — OpenAI 서비스 silent drop 해결 (o3)
 
 **분류**: O3 Normal
