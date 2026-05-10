@@ -117,8 +117,12 @@ public sealed class OpenAiRealtimeSttService : IOpenAiRealtimeSttService
                 TranscriptSegmentReceived?.Invoke(t, text)))
             return;
 
-        _log.Debug($"[OpenAi-Realtime] SendAudioChunkAsync — bytes={pcmData.Length}, ws.State={_ws?.State}");
-        if (_ws == null || _ws.State != WebSocketState.Open) return;
+        _log.Info($"[OpenAi-Realtime] SendAudioChunkAsync 진입 — bytes={pcmData.Length}, ws={(_ws == null ? "null" : _ws.State.ToString())}");
+        if (_ws == null || _ws.State != WebSocketState.Open)
+        {
+            _log.Warn($"[OpenAi-Realtime] SendAudioChunkAsync silent return — _ws={(_ws == null ? "null" : _ws.State.ToString())}");
+            return;
+        }
 
         try
         {

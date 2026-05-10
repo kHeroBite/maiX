@@ -2628,6 +2628,8 @@ public partial class OneNoteViewModel : ViewModelBase
         catch (Exception ex)
         {
             Log4.Warn($"[녹음] OpenAI 서비스 시작 실패 (기존 STT 계속): {ex}");
+            // ★ 실패 후 각 서비스 인스턴스 상태 로깅 (특히 _realtimeSttService가 살아있어도 _ws가 죽어있으면 silent return)
+            Log4.Warn($"[녹음] OpenAI 서비스 상태 — realtime={_realtimeSttService != null}, transcribe={_transcribeSttService != null}, topic={_topicExtractorService != null}, minute={_minuteSummaryService != null}, cumulative={_cumulativeSummaryService != null}");
         }
     }
 
