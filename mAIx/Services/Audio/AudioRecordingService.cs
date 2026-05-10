@@ -483,6 +483,7 @@ public class AudioRecordingService : IDisposable
                         _realtimeBuffer.Clear();
 
                         Log4.Debug($"[녹음] 실시간 청크 준비: {chunkStartTime}, {chunkData.Length} bytes");
+                        Log4.Debug($"[Audio] RealtimeAudioChunkReady invoke — subscribers={RealtimeAudioChunkReady?.GetInvocationList()?.Length ?? 0}, chunkSize={chunkData.Length}");
                         RealtimeAudioChunkReady?.Invoke(chunkData, chunkStartTime);
                     }
                 }
@@ -512,6 +513,7 @@ public class AudioRecordingService : IDisposable
                     var chunkStartTime = TimeSpan.FromSeconds((double)_totalBytesProcessed / bytesPerSecond);
 
                     Log4.Debug($"[녹음] 실시간 최종 청크 처리: {chunkStartTime}, {chunkData.Length} bytes");
+                    Log4.Debug($"[Audio] RealtimeAudioChunkReady invoke (최종) — subscribers={RealtimeAudioChunkReady?.GetInvocationList()?.Length ?? 0}, chunkSize={chunkData.Length}");
                     RealtimeAudioChunkReady?.Invoke(chunkData, chunkStartTime);
                 }
             }

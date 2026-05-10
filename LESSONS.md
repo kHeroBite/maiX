@@ -1247,6 +1247,47 @@
 - **심각도**: 낮음
 - **Level**: 1 (참고용)
 
+### L-403: silent failure 진단 로그 발화 0건 → 호출 경로 자체 단절 가설 전환 (2026-05-10)
+
+- **문제**: OpenAI STT silent failure 진단 로그 3곳을 추가했으나 사용자 추가 녹음 4회 후에도 신규 로그 발화 0건 확인
+- **근본원인**: 진단 로그를 추가한 위치가 이미 도달 불가한 영역이었음 — 호출 경로 자체가 그 위치 이전에 단절
+- **해결 방향**: 발화 0건 확인 즉시 "더 깊은 곳에 진단 로그" 전략을 버리고 "호출 경로 진입점부터 역추적" 전략으로 전환
+- **교훈**: silent failure 진단 로그가 발화 0건이면 → 호출 경로 자체 단절 가설로 전환 (이전 진단 로그가 도달하지 못하는 영역)
+- **심각도**: 중간
+- **Level**: 2 (패턴 등록)
+
+### L-404: 호출 경로 추적 로그 패턴 — Layer별 7곳 진입 표시 (2026-05-10)
+
+- **문제**: 단일 지점 진단 로그로는 끊김 위치 식별 불가 — 여러 시도 후에도 정확한 단절 지점 미확정
+- **해결 방향**: 진입점(UI 클릭)부터 말단(HTTP/WS 송수신)까지 7곳에 동시 진단 로그 삽입
+  ```
+  Layer 1 — UI 클릭 핸들러 진입 (MainWindow)
+  Layer 2 — ViewModel 메서드 진입 + null 체크 결과
+  Layer 3 — 서비스 StartAsync 진입 + 연결 상태
+  Layer 4 — AudioRecordingService invoke subscribers 수
+  Layer 5 — STT 서비스 수신 데이터 길이
+  Layer 6 — 외부 API 송신 직전 (HTTP POST / WS Send)
+  Layer 7 — 외부 API 응답 수신 snippet
+  ```
+- **교훈**: 호출 경로 추적 로그 패턴 — 진입점부터 말단까지 Layer별 7곳 표시 후 끊김 지점 식별 (Layer별 진단 템플릿 응용)
+- **심각도**: 낮음
+- **Level**: 1 (참고용)
+
+### L-405: API key 로그 출력 안전 마스킹 패턴 (2026-05-10)
+
+- **문제**: API key 전체를 로그에 출력하면 보안 위험, null/빈 문자열 처리 누락 시 예외 발생
+- **해결 방향**: 안전 마스킹 패턴 표준화
+  ```csharp
+  // ✅ 올바른 패턴
+  var keyMask = !string.IsNullOrEmpty(apiKey) && apiKey.Length >= 7
+      ? apiKey.Substring(0, 7) + "***"
+      : "(short_or_empty)";
+  _log.Info($"[진단] API key prefix: {keyMask}");
+  ```
+- **교훈**: API key 로그 출력 시 `Substring(0,7)+"***"` + 길이 fallback `"(short_or_empty)"` 안전 마스킹 패턴 필수
+- **심각도**: 낮음
+- **Level**: 1 (참고용)
+
 ## 반영 추적 테이블
 
 | 교훈 ID | 교훈 요약 | 반영 대상 | 반영 위치 | 반영일 | 검증 |
@@ -1294,3 +1335,6 @@
 | L-400 | silent failure 진단 시 catch 블록에서 ex 전체 객체(스택트레이스) 로깅 필수 — ex.Message만 불충분 | docs | LESSONS.md | 2026-05-10 | ✅ |
 | L-401 | DI scope dispose 후 ViewModel이 그 Provider 참조 시 Singleton resolve 실패 — root provider 전달 필수 | docs | LESSONS.md | 2026-05-10 | ✅ |
 | L-402 | 외부 진입점 없는 테스트 헬퍼 — REST endpoint/디버그 메뉴 동시 추가 권장 | docs | LESSONS.md | 2026-05-10 | ✅ |
+| L-403 | silent failure 진단 로그 발화 0건 → 호출 경로 자체 단절 가설 전환 필수 (진단 로그가 도달 불가한 영역) | docs | LESSONS.md | 2026-05-10 | ✅ |
+| L-404 | 호출 경로 추적 로그 패턴 — 진입점부터 말단까지 Layer별 7곳 표시 후 끊김 지점 식별 | docs | LESSONS.md | 2026-05-10 | ✅ |
+| L-405 | API key 로그 출력 시 Substring(0,7)+"***"+길이 fallback ("(short_or_empty)") 안전 마스킹 패턴 | docs | LESSONS.md | 2026-05-10 | ✅ |

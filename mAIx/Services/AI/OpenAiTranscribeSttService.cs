@@ -105,6 +105,7 @@ public sealed class OpenAiTranscribeSttService : IOpenAiTranscribeSttService
     /// <inheritdoc/>
     public async Task ProcessAudioChunkAsync(byte[] pcmData, TimeSpan chunkStartTime)
     {
+        _log.Info($"[OpenAi-Transcribe] ProcessAudioChunkAsync — bytes={pcmData.Length}, time={chunkStartTime}");
         if (!_running || _cts == null || _cts.IsCancellationRequested) return;
 
         // Mock 분기 — EnableMock=true 시 실호출 없이 즉시 반환
@@ -130,6 +131,7 @@ public sealed class OpenAiTranscribeSttService : IOpenAiTranscribeSttService
             content.Add(new StringContent("ko"), "language");
 
             _log.Debug("[TranscribeSTT] API 요청: {Url}, chunk={Bytes}B", url, pcmData.Length);
+            _log.Info($"[OpenAi-Transcribe] POST /v1/audio/transcriptions — model={model}, contentLength={wavStream.Length}");
 
             var response = await _httpClient.PostAsync(url, content, _cts.Token).ConfigureAwait(false);
 
@@ -141,6 +143,7 @@ public sealed class OpenAiTranscribeSttService : IOpenAiTranscribeSttService
             }
 
             var json = await response.Content.ReadAsStringAsync(_cts.Token).ConfigureAwait(false);
+            _log.Info($"[OpenAi-Transcribe] 응답 — status={response.StatusCode}, body_length={json?.Length ?? 0}, snippet={(json?.Length > 0 ? json.Substring(0, Math.Min(200, json.Length)) : "(empty)")}");
             ProcessTranscriptionResponse(json, chunkStartTime);
         }
         catch (OperationCanceledException)

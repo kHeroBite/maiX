@@ -2459,6 +2459,7 @@ public partial class OneNoteViewModel : ViewModelBase
         if (IsRecording) return;
 
         Log4.Info("[녹음] ★ 녹음 시작 요청");
+        Log4.Info($"[녹음] StartRecordingAsync 진입 — IsAutoSTTEnabled={IsAutoSTTEnabled}, IsRealtimeDiarizationEnabled={IsRealtimeDiarizationEnabled}, _serviceProvider={_serviceProvider != null}");
 
         try
         {
@@ -2531,7 +2532,9 @@ public partial class OneNoteViewModel : ViewModelBase
             await _recordingService.StartRecordingAsync(pageId, App.Settings?.UserPreferences?.PreferredMicrophoneDeviceId);
 
             // ─── OpenAI AI 서비스 시작 ───────────────────────────────────────
+            Log4.Info("[녹음] StartOpenAiServicesAsync 호출 시도");
             await StartOpenAiServicesAsync();
+            Log4.Info("[녹음] StartOpenAiServicesAsync 호출 완료");
 
             IsRecording = true;
             IsRecordingPaused = false;

@@ -2,6 +2,40 @@
 
 > PROJECT.md 작업 이력 테이블의 상세 보완본
 
+## 2026-05-10: OpenAI STT silent failure 깊은 진단 로그 22줄 추가 (o3)
+
+**분류**: O3 Normal
+**otest 결과**: 빌드 OK + mAIx PID 재기동 + 22줄 grep 검증 완료
+**범위**: 수정 6파일 (진단 로그 22줄)
+
+### 배경
+
+직전 커밋 d83c3d09에서 진단 로그 3곳 추가했으나 사용자 추가 녹음 4회 후에도 신규 로그 발화 0건.
+silent failure가 더 깊은 층(호출 경로 자체 단절)에 있음을 확인 → 7개 Layer별 진단 로그 전면 재배치.
+
+### 추가 진단 로그 22줄 (7곳)
+
+1. **App.xaml.cs L488**: `[NLog 검증]` 채널 정상성 확인 로그
+2. **MainWindow.xaml.cs** `OneNoteRecordStart_Click`: 진입 + null 체크 + 호출 직전 (3줄)
+3. **OneNoteViewModel.cs**: `StartRecordingAsync` 진입 가드 변수 + `StartOpenAiServicesAsync` 호출 직전/직후 (3줄)
+4. **AudioRecordingService.cs** L486/L515: `RealtimeAudioChunkReady` invoke subscribers 수 (2줄)
+5. **OpenAiRealtimeSttService.cs**: StartAsync model+key 마스킹 + WS state + SendAudio + 수신 snippet (4~6줄)
+6. **OpenAiTranscribeSttService.cs**: `ProcessAudioChunkAsync` + POST + 응답 snippet (3~5줄)
+
+### 확인 사항
+
+- `StartOpenAiServicesAsync` 호출은 `OneNoteViewModel.cs` L2534에 정상 존재 (구조적 누락 가설 기각)
+- API key 마스킹: `Substring(0,7)+"***"` + 빈 값 fallback `"(short_or_empty)"` 안전 패턴 적용
+- 실제 끊김 지점은 사용자 재녹음 + 로그 분석으로 확정 예정
+
+### 신규 교훈
+
+- **L-403**: silent failure 진단 로그 발화 0건 → 호출 경로 자체 단절 가설 전환 필수
+- **L-404**: 호출 경로 추적 로그 패턴 — Layer별 7곳 표시 후 끊김 지점 식별
+- **L-405**: API key 로그 마스킹 안전 패턴 (`Substring(0,7)+"***"` + fallback)
+
+---
+
 ## 2026-05-10: OpenAI STT silent failure 수정 — scope dispose 근본원인 확정 (odebug + o3)
 
 **분류**: O3 Normal

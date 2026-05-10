@@ -80,6 +80,7 @@ public sealed class OpenAiRealtimeSttService : IOpenAiRealtimeSttService
         var model = _settings.OaiRecording.RealtimeSttModel;
 
         _log.Info("[RealtimeSTT] 연결 시작: model={Model}", model);
+        _log.Info($"[OpenAi-Realtime] StartAsync — model={model}, key={(apiKey?.Length >= 7 ? apiKey.Substring(0, 7) : "(short_or_empty)")}***");
 
         _cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         _ws = new ClientWebSocket();
@@ -92,6 +93,7 @@ public sealed class OpenAiRealtimeSttService : IOpenAiRealtimeSttService
         {
             await _ws.ConnectAsync(uri, _cts.Token).ConfigureAwait(false);
             _log.Info("[RealtimeSTT] WebSocket 연결 성공");
+            _log.Info($"[OpenAi-Realtime] WebSocket 연결 결과 — state={_ws?.State}");
         }
         catch (Exception ex)
         {
@@ -115,6 +117,7 @@ public sealed class OpenAiRealtimeSttService : IOpenAiRealtimeSttService
                 TranscriptSegmentReceived?.Invoke(t, text)))
             return;
 
+        _log.Debug($"[OpenAi-Realtime] SendAudioChunkAsync — bytes={pcmData.Length}, ws.State={_ws?.State}");
         if (_ws == null || _ws.State != WebSocketState.Open) return;
 
         try
@@ -199,6 +202,7 @@ public sealed class OpenAiRealtimeSttService : IOpenAiRealtimeSttService
                 {
                     var json = Encoding.UTF8.GetString(messageBuffer.ToArray());
                     messageBuffer.Clear();
+                    _log.Debug($"[OpenAi-Realtime] WS 수신 — type={result.MessageType}, snippet={(json?.Length > 0 ? json.Substring(0, Math.Min(120, json.Length)) : "(empty)")}");
                     ProcessMessage(json);
                 }
             }

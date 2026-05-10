@@ -485,6 +485,7 @@ public partial class App : Application
         Services.Theme.RenderModeService.Instance.LoadSavedRenderMode(gpuModeOverride);
 
         Log4.Info("========== mAIx 앱 시작 (빌드: 2026-01-26 20:48) ==========");
+        Log4.Info("[NLog 검증] 이 라인이 mAIx-20260510.log에 보이면 NLog 정상 출력 중");
         Log4.Debug("OnStartup 시작");
         await _host.StartAsync();
         Log4.Debug("Host 시작 완료");

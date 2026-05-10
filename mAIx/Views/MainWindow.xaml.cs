@@ -6177,9 +6177,14 @@ public partial class MainWindow : FluentWindow
     /// </summary>
     private async void OneNoteRecordStart_Click(object sender, RoutedEventArgs e)
     {
+        Log4.Info($"[녹음] OneNoteRecordStart_Click — _oneNoteViewModel={_oneNoteViewModel != null}, SelectedPage={_oneNoteViewModel?.SelectedPage != null}");
         try
         {
-            if (_oneNoteViewModel == null) return;
+            if (_oneNoteViewModel == null)
+            {
+                Log4.Warn("[녹음] _oneNoteViewModel null — silent return");
+                return;
+            }
 
             if (_oneNoteViewModel.IsRecording)
             {
@@ -6214,6 +6219,7 @@ public partial class MainWindow : FluentWindow
                 // 녹음 시작
                 try
                 {
+                    Log4.Info("[녹음] _oneNoteViewModel.StartRecordingAsync 호출 시도");
                     await _oneNoteViewModel.StartRecordingAsync();
                     await UpdateRecordingUI(true);
 
