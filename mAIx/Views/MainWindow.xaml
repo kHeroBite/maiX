@@ -8156,10 +8156,11 @@
                                                     </StackPanel>
                                                 </StackPanel>
 
-                                                <!-- 옵션 탭 콘텐츠 (기본 숨김) -->
+                                                <!-- 옵션 탭 콘텐츠 (기본 숨김) — ScrollViewer로 감싸 항목 많을 때 스크롤 가능 -->
                                                 <Border x:Name="OneNoteOptionsTabContent" Grid.Row="1" Visibility="Collapsed"
                                                         Padding="10,8"
                                                         VerticalAlignment="Stretch">
+                                                    <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
                                                     <Grid>
                                                         <Grid.ColumnDefinitions>
                                                             <ColumnDefinition Width="Auto"/>
@@ -8167,6 +8168,7 @@
                                                             <ColumnDefinition Width="*"/>
                                                         </Grid.ColumnDefinitions>
                                                         <Grid.RowDefinitions>
+                                                            <RowDefinition Height="Auto"/>
                                                             <RowDefinition Height="Auto"/>
                                                             <RowDefinition Height="Auto"/>
                                                             <RowDefinition Height="Auto"/>
@@ -8347,7 +8349,15 @@
                                                                 <ComboBoxItem Content="whisper-1 (일괄)" Tag="whisper-1"/>
                                                             </ComboBox>
                                                         </StackPanel>
+
+                                                        <!-- Row 19: VAD 활성화 (체크박스) -->
+                                                        <CheckBox Grid.Row="19" Grid.ColumnSpan="3"
+                                                                  Content="server_vad 자동 발화 감지 (해제: 녹음 종료 시 일괄 전사)"
+                                                                  IsChecked="{Binding IsServerVadEnabled, Mode=TwoWay}"
+                                                                  FontSize="12" Margin="0,4,0,4"
+                                                                  ToolTip="체크 시 OpenAI 서버 VAD가 자동으로 발화 시작/종료를 감지하여 transcript 도착. 해제 시 녹음 종료 시점에 한 번만 transcript 도착(지연 큼). 권장: 체크."/>
                                                     </Grid>
+                                                    </ScrollViewer>
                                                 </Border>
                                             </Grid>
                                         </Border>

@@ -118,4 +118,8 @@ public class OpenAiRecordingSettings
     /// <summary>STT input_audio_transcription 모델 (whisper-1 / gpt-4o-mini-transcribe / gpt-4o-transcribe). 기본 gpt-4o-mini-transcribe (delta streaming 지원)</summary>
     [XmlElement("TranscriptionModel")]
     public string TranscriptionModel { get; set; } = "gpt-4o-mini-transcribe";
+
+    /// <summary>OpenAI server_vad 사용 여부 (true: 자동 발화 감지, false: 수동 종료 시 일괄 전사). 기본 true.</summary>
+    [XmlElement("ServerVadEnabled")]
+    public bool ServerVadEnabled { get; set; } = true;
 }

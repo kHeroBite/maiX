@@ -556,6 +556,12 @@ public partial class OneNoteViewModel : ViewModelBase
     private string _transcriptionModel = "gpt-4o-mini-transcribe";
 
     /// <summary>
+    /// OpenAI server_vad 자동 발화 감지 사용 여부 (해제 시 녹음 종료 시점 일괄 전사)
+    /// </summary>
+    [ObservableProperty]
+    private bool _isServerVadEnabled = true;
+
+    /// <summary>
     /// 주제어 추출 최소 단위 (초)
     /// </summary>
     [ObservableProperty]
@@ -605,6 +611,7 @@ public partial class OneNoteViewModel : ViewModelBase
             _isAutoFinalSummary = oaiSettings.AutoFinalSummary;
             _isEnableTypoFix = oaiSettings.EnableTypoFix;
             _transcriptionModel = string.IsNullOrWhiteSpace(oaiSettings.TranscriptionModel) ? "gpt-4o-mini-transcribe" : oaiSettings.TranscriptionModel;
+            _isServerVadEnabled = oaiSettings.ServerVadEnabled;
         }
 
         // 녹음 목록에 새 파일 추가 시 자동 선택
@@ -1868,6 +1875,20 @@ public partial class OneNoteViewModel : ViewModelBase
         {
             App.Settings.OaiRecording.TranscriptionModel = value;
             App.Settings.SaveAll();
+            Log4.Info($"[옵션] TranscriptionModel 저장 완료: {value}");
+        }
+    }
+
+    /// <summary>
+    /// server_vad 사용 여부 변경 시 영구 저장
+    /// </summary>
+    partial void OnIsServerVadEnabledChanged(bool value)
+    {
+        if (App.Settings?.OaiRecording != null)
+        {
+            App.Settings.OaiRecording.ServerVadEnabled = value;
+            App.Settings.SaveAll();
+            Log4.Info($"[옵션] ServerVadEnabled 저장 완료: {value}");
         }
     }
 
