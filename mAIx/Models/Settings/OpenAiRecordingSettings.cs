@@ -94,4 +94,8 @@ public class OpenAiRecordingSettings
     /// </summary>
     [XmlElement("DebugTimerScale")]
     public double DebugTimerScale { get; set; } = 1.0;
+
+    /// <summary>녹음 종료 시 최종 요약 자동 실행 여부 (기본 false — 옵트인)</summary>
+    [XmlElement("AutoFinalSummary")]
+    public bool AutoFinalSummary { get; set; } = false;
 }

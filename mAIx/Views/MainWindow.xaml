@@ -7078,44 +7078,6 @@
                                                     BorderBrush="{DynamicResource ControlElevationBorderBrush}"
                                                     BorderThickness="0,0,0,1">
                                                 <StackPanel>
-                                                    <!-- 화자분리 체크박스 (★핵심) -->
-                                                    <CheckBox x:Name="OneNoteDiarizationModeCheckBox"
-                                                              Content="화자분리 (체크: 준실시간, 해제: 실시간)"
-                                                              IsChecked="{Binding IsRealtimeDiarizationEnabled, Mode=TwoWay}"
-                                                              IsEnabled="{Binding IsNotRecording}"
-                                                              FontSize="12" Margin="0,0,0,6"
-                                                              ToolTip="체크 시 약 10~15초 지연, 화자별 색상 표시. 해제 시 즉시 자막."/>
-
-                                                    <!-- 청크 길이 ComboBox (화자분리 ON 시 활성) -->
-                                                    <StackPanel Orientation="Horizontal" Margin="0,0,0,6"
-                                                                IsEnabled="{Binding IsRealtimeDiarizationEnabled}">
-                                                        <TextBlock Text="청크 길이(초)" FontSize="12" VerticalAlignment="Center" Margin="0,0,6,0"
-                                                                   Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
-                                                        <ComboBox x:Name="OneNoteChunkSecondsComboBox"
-                                                                  SelectedValue="{Binding ChunkSeconds, Mode=TwoWay}"
-                                                                  SelectedValuePath="Tag"
-                                                                  FontSize="12" Width="70">
-                                                            <ComboBoxItem Content="5" Tag="5"/>
-                                                            <ComboBoxItem Content="10" Tag="10"/>
-                                                            <ComboBoxItem Content="15" Tag="15"/>
-                                                        </ComboBox>
-                                                    </StackPanel>
-
-                                                    <!-- 누적요약 주기 ComboBox -->
-                                                    <StackPanel Orientation="Horizontal" Margin="0,0,0,10">
-                                                        <TextBlock Text="누적요약 주기(분)" FontSize="12" VerticalAlignment="Center" Margin="0,0,6,0"
-                                                                   Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
-                                                        <ComboBox x:Name="OneNoteCumulativeIntervalComboBox"
-                                                                  SelectedValue="{Binding CumulativeIntervalMinutes, Mode=TwoWay}"
-                                                                  SelectedValuePath="Tag"
-                                                                  FontSize="12" Width="60">
-                                                            <ComboBoxItem Content="3" Tag="3"/>
-                                                            <ComboBoxItem Content="5" Tag="5"/>
-                                                            <ComboBoxItem Content="10" Tag="10"/>
-                                                            <ComboBoxItem Content="15" Tag="15"/>
-                                                        </ComboBox>
-                                                    </StackPanel>
-
                                                     <!-- 종료 버튼 -->
                                                     <ui:Button x:Name="OneNoteRecordingStopButton"
                                                                Content="종료 (최종 요약)"
@@ -8216,6 +8178,11 @@
                                                             <RowDefinition Height="Auto"/>
                                                             <RowDefinition Height="Auto"/>
                                                             <RowDefinition Height="Auto"/>
+                                                            <RowDefinition Height="Auto"/>
+                                                            <RowDefinition Height="Auto"/>
+                                                            <RowDefinition Height="Auto"/>
+                                                            <RowDefinition Height="Auto"/>
+                                                            <RowDefinition Height="Auto"/>
                                                         </Grid.RowDefinitions>
 
                                                         <!-- 첫 번째 줄: STT on/off -->
@@ -8301,6 +8268,58 @@
                                                                 <ComboBoxItem.Tag><sys:Int32>120</sys:Int32></ComboBoxItem.Tag>
                                                             </ComboBoxItem>
                                                         </ComboBox>
+
+                                                        <!-- Row 11: 구분선 -->
+                                                        <Separator Grid.Row="11" Grid.ColumnSpan="3" Margin="0,8,0,4" />
+
+                                                        <!-- Row 12: 실시간 녹음 설정 헤더 -->
+                                                        <TextBlock Grid.Row="12" Grid.ColumnSpan="3" Text="실시간 녹음 설정" FontSize="12" FontWeight="SemiBold"
+                                                                   Margin="0,0,0,6" />
+
+                                                        <!-- Row 13: 화자분리 모드 (좌측에서 이동) -->
+                                                        <CheckBox x:Name="OneNoteDiarizationModeCheckBox" Grid.Row="13" Grid.ColumnSpan="3"
+                                                                  Content="화자분리 (체크: 준실시간, 해제: 실시간)"
+                                                                  IsChecked="{Binding IsRealtimeDiarizationEnabled, Mode=TwoWay}"
+                                                                  IsEnabled="{Binding IsNotRecording}"
+                                                                  FontSize="12" Margin="0,0,0,4"
+                                                                  ToolTip="체크 시 약 10~15초 지연, 화자별 색상 표시. 해제 시 즉시 자막."/>
+
+                                                        <!-- Row 14: 청크 길이 (좌측에서 이동) -->
+                                                        <StackPanel Grid.Row="14" Grid.ColumnSpan="3" Orientation="Horizontal" Margin="0,0,0,4"
+                                                                    IsEnabled="{Binding IsRealtimeDiarizationEnabled}">
+                                                            <TextBlock Text="청크 길이(초)" FontSize="12" VerticalAlignment="Center" Margin="0,0,6,0"
+                                                                       Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
+                                                            <ComboBox x:Name="OneNoteChunkSecondsComboBox"
+                                                                      SelectedValue="{Binding ChunkSeconds, Mode=TwoWay}"
+                                                                      SelectedValuePath="Tag"
+                                                                      FontSize="12" Width="70">
+                                                                <ComboBoxItem Content="5" Tag="5"/>
+                                                                <ComboBoxItem Content="10" Tag="10"/>
+                                                                <ComboBoxItem Content="15" Tag="15"/>
+                                                            </ComboBox>
+                                                        </StackPanel>
+
+                                                        <!-- Row 15: 누적요약 주기 (좌측에서 이동) -->
+                                                        <StackPanel Grid.Row="15" Grid.ColumnSpan="3" Orientation="Horizontal" Margin="0,0,0,4">
+                                                            <TextBlock Text="누적요약 주기(분)" FontSize="12" VerticalAlignment="Center" Margin="0,0,6,0"
+                                                                       Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
+                                                            <ComboBox x:Name="OneNoteCumulativeIntervalComboBox"
+                                                                      SelectedValue="{Binding CumulativeIntervalMinutes, Mode=TwoWay}"
+                                                                      SelectedValuePath="Tag"
+                                                                      FontSize="12" Width="60">
+                                                                <ComboBoxItem Content="3" Tag="3"/>
+                                                                <ComboBoxItem Content="5" Tag="5"/>
+                                                                <ComboBoxItem Content="10" Tag="10"/>
+                                                                <ComboBoxItem Content="15" Tag="15"/>
+                                                            </ComboBox>
+                                                        </StackPanel>
+
+                                                        <!-- Row 16: 최종요약 자동 (신규) -->
+                                                        <CheckBox Grid.Row="16" Grid.ColumnSpan="3"
+                                                                  Content="최종요약 자동 (녹음 종료 시 자동 실행)"
+                                                                  IsChecked="{Binding IsAutoFinalSummary, Mode=TwoWay}"
+                                                                  FontSize="12" Margin="0,0,0,4"
+                                                                  ToolTip="체크 시 녹음 종료 후 최종 요약을 자동 실행합니다. 해제 시 수동 클릭 대기 상태가 됩니다."/>
                                                     </Grid>
                                                 </Border>
                                             </Grid>

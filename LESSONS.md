@@ -1386,6 +1386,24 @@
 - **심각도**: 중간 (UX 목표 불일치)
 - **Level**: 1 (기술 참조)
 
+### L-416: UI 옵션 분산 시 단일 출처 원칙 (2026-05-10)
+
+- **문제**: 화자분리모드/청크길이/누적요약주기 3옵션이 좌측 녹음 패널 + 우측 옵션탭 두 군데에 분산. 사용자 혼란 + x:Name 충돌 위험 + 중복 바인딩 관리 부담.
+- **해결**: 좌측 3옵션을 우측 옵션탭으로 완전 이동. 좌→우 이동 시 한 번의 Edit으로 좌측 제거 + 우측 추가를 동시 처리.
+- **교훈**: 동일 기능 옵션은 한 위치에만 존재해야 한다. 좌/우 패널 분산은 유지보수 비용을 배로 증가시킨다.
+- **재발방지**: UI 옵션 추가 시 단일 위치 원칙. 기존 분산 발견 시 통합 작업으로 처리. 옵션 이동 시 반드시 x:Name 충돌을 grep으로 전수 확인.
+- **심각도**: 중간 (UX 혼란)
+- **Level**: 1 (기술 참조)
+
+### L-417: 옵트인 정책 — 신규 자동 기능 기본 false (2026-05-10)
+
+- **문제**: "체크박스로 선택 시 자동" 요구 = 옵트인 의도임에도 기본값을 true로 설정하면 기존 사용자에게 의도치 않은 동작 변화 유발.
+- **해결**: `AutoFinalSummary` 기본값 `false` 설정. XML에 키 없으면 기본 false → 기존 사용자 동작 유지(하위 호환).
+- **교훈**: 신규 자동 기능의 기본값은 반드시 false(옵트인). 사용자가 "체크박스" 또는 "선택 시"로 표현하면 옵트인 의도로 해석하라.
+- **재발방지**: 신규 자동 기능 추가 시 기본값 false 필수. 기본 true 설정은 오직 사용자가 "기본으로 켜져있어야 한다"고 명시한 경우에만 허용.
+- **심각도**: 중간 (기존 사용자 동작 변화)
+- **Level**: 1 (기술 참조)
+
 ## 반영 추적 테이블
 
 | 교훈 ID | 교훈 요약 | 반영 대상 | 반영 위치 | 반영일 | 검증 |
@@ -1446,3 +1464,5 @@
 | L-413 | PeriodicTimer + Task 라이브 모니터링 패턴 — Timer.Elapsed(async lambda) 대신 PeriodicTimer + WaitForNextTickAsync + CancellationToken 사용. 외부 try-catch + OperationCanceledException 정상 종료 보장. | docs+code | LESSONS.md + OpenAiRealtimeSttService.cs | 2026-05-10 | ✅ |
 | L-414 | WPF ComboBox int 바인딩 — ComboBoxItem.Tag="N"(string)을 int 프로퍼티에 SelectedValue 바인딩 시 null 반환. sys:Int32 Tag 명시(`<ComboBoxItem.Tag><sys:Int32>N</sys:Int32></ComboBoxItem.Tag>`) 필수. numeric 바인딩에는 sys:Int32/sys:Double 타입 명시 패턴 사용. | docs+code | LESSONS.md + MainWindow.xaml | 2026-05-10 | ✅ |
 | L-415 | 사용자 목표 집중 — 고정 주기(60초/5분) 매직 넘버를 발견하면 사용자 실제 목표와 일치 여부 의문 제기. YAGNI: 명시 요구된 항목만 동적화, 나머지는 별도 작업으로 분리. 재발방지: 기존 코드 매직 넘버 발견 시 목표 정합성 확인 후 수정. | docs | LESSONS.md | 2026-05-10 | ✅ |
+| L-416 | UI 옵션 분산 시 단일 출처 원칙 — 동일 기능 옵션이 좌/우 패널에 분산되면 사용자 혼란 + x:Name 충돌 위험. 좌→우 이동 시 한 번의 Edit으로 동시 처리(좌측 제거 + 우측 추가). 재발방지: UI 옵션 추가 시 단일 위치 원칙. 기존 분산 발견 시 통합 작업으로 처리. | docs+code | LESSONS.md + MainWindow.xaml (화자분리/청크/요약주기 → 옵션탭) | 2026-05-10 | ✅ |
+| L-417 | 옵트인 정책 — 신규 자동 기능 기본 false (옵트인) 필수. 기본 true는 기존 사용자에게 의도치 않은 동작 변화 유발. XML에 키 없으면 기본 false → 기존 동작 유지(하위 호환). 재발방지: 신규 자동 기능 추가 시 반드시 기본값 false로 설정. | docs+code | LESSONS.md + OpenAiRecordingSettings.AutoFinalSummary (기본 false) | 2026-05-10 | ✅ |

@@ -2,6 +2,17 @@
 
 > PROJECT.md 작업 이력 테이블의 상세 보완본
 
+## 2026-05-10: OneNote 옵션 통합 — 좌측 3옵션 → 우측 옵션탭 이동 + 최종요약 자동 옵트인 (o3 — 3파일)
+
+**분류**: O3 Normal
+**otest 결과**: 빌드 PASS (오류 0) + mAIx 실행 + AutoFinalSummary/IsAutoFinalSummary/OnIsAutoFinalSummaryChanged 컴파일 검증 완료
+**범위**: 수정 3파일 (+94/-45줄)
+**내용**:
+- **작업 A** (MainWindow.xaml -45줄 이동 +신규): 좌측 녹음 패널의 화자분리모드/청크길이/누적요약주기 3옵션을 우측 옵션탭으로 완전 이동. 좌측 잔존: AI 요약 결과 + 종료 버튼만. 신규 "최종요약 자동" CheckBox 추가.
+- **작업 B** (OpenAiRecordingSettings.cs): `AutoFinalSummary` 프로퍼티 추가 (기본 false — 옵트인). XML 저장 지원.
+- **작업 C** (OneNoteViewModel.cs): `IsAutoFinalSummary` 바인딩 프로퍼티 + `OnIsAutoFinalSummaryChanged` 핸들러 구현. 체크 시 녹음 종료 후 자동 최종요약 생성, 해제 시 수동 종료 버튼 대기.
+**교훈**: L-416 (UI 옵션 단일 출처 원칙), L-417 (옵트인 정책 — 신규 자동 기능 기본 false)
+
 ## 2026-05-10: STT 묵음 추적 + 주제어 동적 주기 + 화자분리 토글 정리 (o3 — 6파일 통합)
 
 **분류**: O3 Normal

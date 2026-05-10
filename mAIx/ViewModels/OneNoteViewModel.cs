@@ -538,6 +538,12 @@ public partial class OneNoteViewModel : ViewModelBase
     private int _cumulativeIntervalMinutes = 5;
 
     /// <summary>
+    /// 녹음 종료 시 최종 요약 자동 실행 여부 (옵트인, 기본 false)
+    /// </summary>
+    [ObservableProperty]
+    private bool _isAutoFinalSummary = false;
+
+    /// <summary>
     /// 주제어 추출 최소 단위 (초)
     /// </summary>
     [ObservableProperty]
@@ -584,6 +590,7 @@ public partial class OneNoteViewModel : ViewModelBase
             _cumulativeIntervalMinutes = oaiSettings.CumulativeSummaryIntervalMinutes;
             _topicExtractorIntervalSec = oaiSettings.TopicExtractorIntervalSec;
             _topicNavOrientation = oaiSettings.TopicNavOrientation ?? "Horizontal";
+            _isAutoFinalSummary = oaiSettings.AutoFinalSummary;
         }
 
         // 녹음 목록에 새 파일 추가 시 자동 선택
@@ -1815,6 +1822,18 @@ public partial class OneNoteViewModel : ViewModelBase
     }
 
     /// <summary>
+    /// 최종 요약 자동 실행 여부 변경 시 설정 저장
+    /// </summary>
+    partial void OnIsAutoFinalSummaryChanged(bool value)
+    {
+        if (App.Settings?.OaiRecording != null)
+        {
+            App.Settings.OaiRecording.AutoFinalSummary = value;
+            App.Settings.SaveAll();
+        }
+    }
+
+    /// <summary>
     /// 선택된 녹음의 STT/요약 결과를 수동으로 로드 (UI에서 직접 호출용)
     /// </summary>
     public void LoadSelectedRecordingResults()
@@ -2683,16 +2702,23 @@ public partial class OneNoteViewModel : ViewModelBase
                 _cumulativeSummaryService.CumulativeSummaryUpdated -= OnCumulativeSummaryUpdated;
                 await _cumulativeSummaryService.StopAsync();
 
-                // 최종 요약 생성
-                try
+                // 최종 요약 생성 (IsAutoFinalSummary=true 시 자동 실행, false 시 수동 클릭 대기)
+                if (IsAutoFinalSummary)
                 {
-                    var finalText = await _cumulativeSummaryService.FinalSummarizeAsync();
-                    FinalSummaryText = finalText ?? string.Empty;
-                    Log4.Info($"[녹음] 최종 요약 생성 완료: {FinalSummaryText.Length}자");
+                    try
+                    {
+                        var finalText = await _cumulativeSummaryService.FinalSummarizeAsync();
+                        FinalSummaryText = finalText ?? string.Empty;
+                        Log4.Info($"[녹음] 최종 요약 생성 완료: {FinalSummaryText.Length}자");
+                    }
+                    catch (Exception ex)
+                    {
+                        Log4.Warn($"[녹음] 최종 요약 생성 실패: {ex.Message}");
+                    }
                 }
-                catch (Exception ex)
+                else
                 {
-                    Log4.Warn($"[녹음] 최종 요약 생성 실패: {ex.Message}");
+                    Log4.Info("[녹음] 최종 요약 자동 실행 OFF — 수동 클릭 대기");
                 }
             }
 
