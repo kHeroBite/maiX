@@ -64,6 +64,31 @@ public sealed class OpenAiRealtimeSttService : IOpenAiRealtimeSttService
     // PCM 24kHz mono 기준 bytes/sec
     private const int BytesPerSecond = 24000 * 2;
 
+    // Whisper 한국어 hallucination 블랙리스트 (YouTube 자막 학습 잔재)
+    private static readonly System.Text.RegularExpressions.Regex[] _hallucinationPatterns = new[]
+    {
+        new System.Text.RegularExpressions.Regex(@"구독.*좋아요.*댓글", System.Text.RegularExpressions.RegexOptions.Compiled),
+        new System.Text.RegularExpressions.Regex(@"구독.*과.*좋아요", System.Text.RegularExpressions.RegexOptions.Compiled),
+        new System.Text.RegularExpressions.Regex(@"좋아요.*구독", System.Text.RegularExpressions.RegexOptions.Compiled),
+        new System.Text.RegularExpressions.Regex(@"한국어.*자막.*도움", System.Text.RegularExpressions.RegexOptions.Compiled),
+        new System.Text.RegularExpressions.Regex(@"매주.*업로드", System.Text.RegularExpressions.RegexOptions.Compiled),
+        new System.Text.RegularExpressions.Regex(@"시청해.*감사", System.Text.RegularExpressions.RegexOptions.Compiled),
+        new System.Text.RegularExpressions.Regex(@"알림.*설정", System.Text.RegularExpressions.RegexOptions.Compiled),
+        new System.Text.RegularExpressions.Regex(@"채널.*구독", System.Text.RegularExpressions.RegexOptions.Compiled),
+        new System.Text.RegularExpressions.Regex(@"댓글.*부탁", System.Text.RegularExpressions.RegexOptions.Compiled),
+        new System.Text.RegularExpressions.Regex(@"영상.*보러", System.Text.RegularExpressions.RegexOptions.Compiled),
+    };
+
+    private static bool IsHallucination(string text)
+    {
+        if (string.IsNullOrWhiteSpace(text)) return false;
+        foreach (var pattern in _hallucinationPatterns)
+        {
+            if (pattern.IsMatch(text)) return true;
+        }
+        return false;
+    }
+
     /// <inheritdoc/>
     public event Action<TimeSpan, string>? TranscriptSegmentReceived;
 
@@ -123,10 +148,16 @@ public sealed class OpenAiRealtimeSttService : IOpenAiRealtimeSttService
                     language = sttLang,
                     prompt = sttPrompt
                 },
-                turn_detection = new { type = "server_vad" }
+                turn_detection = new
+                {
+                    type = "server_vad",
+                    threshold = 0.7,             // 기본 0.5 → 0.7 (덜 민감, 노이즈 hallucination 감소)
+                    prefix_padding_ms = 300,
+                    silence_duration_ms = 800    // 발화 종료 감지 침묵 800ms (기본 500)
+                }
             }
         }).ConfigureAwait(false);
-        _log.Info($"[OpenAi-Realtime] session.update 발송 — modalities=text, VAD=server_vad, whisper-1, language={sttLang}, prompt={sttPrompt.Length}자");
+        _log.Info($"[OpenAi-Realtime] session.update 발송 — VAD=server_vad(thr=0.7,sil=800ms), whisper-1, language={sttLang}, prompt={sttPrompt.Length}자");
 
         _silenceStartedAt = DateTime.Now;
         _lastSilenceMarkerSec = 0;
@@ -338,6 +369,12 @@ public sealed class OpenAiRealtimeSttService : IOpenAiRealtimeSttService
                     var text = tr.GetString() ?? string.Empty;
                     if (!string.IsNullOrEmpty(text))
                     {
+                        // Whisper hallucination 블랙리스트 차단 (YouTube 자막 학습 잔재 등)
+                        if (IsHallucination(text))
+                        {
+                            _log.Warn($"[OpenAi-Realtime] hallucination 차단 — text={text.Substring(0, Math.Min(80, text.Length))}");
+                            return;
+                        }
                         var ts = TimeSpan.FromMilliseconds(_lastSpeechStartedMs);
                         TranscriptSegmentReceived?.Invoke(ts, text);
                         _log.Info($"[OpenAi-Realtime] transcription.completed — text={text.Substring(0, Math.Min(50, text.Length))}");
