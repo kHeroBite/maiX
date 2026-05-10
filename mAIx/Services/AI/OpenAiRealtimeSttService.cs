@@ -71,6 +71,10 @@ public sealed class OpenAiRealtimeSttService : IOpenAiRealtimeSttService
     private double _lastSilenceMarkerSec = 0;
     private Task? _silenceMonitorTask = null;
 
+    // 옵션 A: speech_started ↔ 다음 speech_started 사이의 모든 delta를 같은 itemId로 누적
+    // OpenAI gpt-realtime-whisper가 음절별로 다른 item_id를 부여하는 문제 회피
+    private string? _currentSpeechItemId = null;
+
     // PCM 24kHz mono 기준 bytes/sec
     private const int BytesPerSecond = 24000 * 2;
 
@@ -355,7 +359,9 @@ public sealed class OpenAiRealtimeSttService : IOpenAiRealtimeSttService
                 _lastSpeechStartedMs = startMs;
                 _silenceStartedAt = null;
                 _lastSilenceMarkerSec = 0;
-                _log.Info($"[OpenAi-Realtime] speech_started — audio_start_ms={startMs}");
+                // 옵션 A: 새 발화 시작 = 새 itemId (다음 speech_started까지 모든 delta 누적)
+                _currentSpeechItemId = $"speech_{startMs}";
+                _log.Info($"[OpenAi-Realtime] speech_started — audio_start_ms={startMs}, currentItemId={_currentSpeechItemId}");
 
                 // 묵음 구간 표시: 직전 speech_stopped 이후 시간 차이가 10초 이상이면 발화
                 if (_lastSpeechStoppedMs > 0)
@@ -383,11 +389,11 @@ public sealed class OpenAiRealtimeSttService : IOpenAiRealtimeSttService
                     var deltaText = deltaProp.GetString() ?? string.Empty;
                     if (!string.IsNullOrEmpty(deltaText))
                     {
-                        var itemId = root.TryGetProperty("item_id", out var idProp) ? (idProp.GetString() ?? string.Empty) : string.Empty;
-                        if (string.IsNullOrEmpty(itemId)) itemId = $"speech_{_lastSpeechStartedMs}";
+                        // 옵션 A: OpenAI item_id 무시 + speech_started 기반 _currentSpeechItemId 사용
+                        // → 한 발화의 모든 delta가 한 카드에 점진 누적됨
+                        var itemId = _currentSpeechItemId ?? $"speech_{_lastSpeechStartedMs}";
                         var accum = _deltaBuffers.AddOrUpdate(itemId, deltaText, (_, prev) => prev + deltaText);
                         var ts = TimeSpan.FromMilliseconds(_lastSpeechStartedMs);
-                        // Updated 단일 호출 — UI에서 itemId 없으면 신규 추가, 있으면 텍스트 교체
                         TranscriptSegmentUpdated?.Invoke(itemId, ts, accum);
                     }
                 }
@@ -397,8 +403,8 @@ public sealed class OpenAiRealtimeSttService : IOpenAiRealtimeSttService
                 if (root.TryGetProperty("transcript", out var tr))
                 {
                     var text = tr.GetString() ?? string.Empty;
-                    var itemId = root.TryGetProperty("item_id", out var idProp) ? (idProp.GetString() ?? string.Empty) : string.Empty;
-                    if (string.IsNullOrEmpty(itemId)) itemId = $"speech_{_lastSpeechStartedMs}";
+                    // 옵션 A: OpenAI item_id 무시 + _currentSpeechItemId 사용 (delta와 매칭)
+                    var itemId = _currentSpeechItemId ?? $"speech_{_lastSpeechStartedMs}";
                     if (!string.IsNullOrEmpty(text))
                     {
                         // hallucination 차단 — 누적된 delta 항목도 제거
