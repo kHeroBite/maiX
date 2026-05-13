@@ -7,6 +7,7 @@
         xmlns:wv2="clr-namespace:Microsoft.Web.WebView2.Wpf;assembly=Microsoft.Web.WebView2.Wpf"
         xmlns:local="clr-namespace:mAIx.Views"
         xmlns:controls="clr-namespace:mAIx.Controls"
+        xmlns:utils="clr-namespace:mAIx.Utilities"
         xmlns:sys="clr-namespace:System;assembly=mscorlib"
         xmlns:teamsControls="clr-namespace:mAIx.Controls.Teams"
         xmlns:vm="clr-namespace:mAIx.ViewModels"
@@ -6979,8 +6980,10 @@
                                                                                                Margin="8,0,0,0" FontSize="10"
                                                                                                Foreground="{DynamicResource TextFillColorTertiaryBrush}"/>
                                                                                 </StackPanel>
-                                                                                <TextBlock Text="{Binding Text}"
-                                                                                           TextWrapping="Wrap" FontSize="13"/>
+                                                                                <TextBlock TextWrapping="Wrap" FontSize="13"
+                                                                                           utils:HighlightTextBehavior.Text="{Binding Text}"
+                                                                                           utils:HighlightTextBehavior.Keywords="{Binding DataContext.AllTopicKeywords, RelativeSource={RelativeSource AncestorType=ItemsControl}}"
+                                                                                           utils:HighlightTextBehavior.IsEnabled="{Binding DataContext.IsKeywordHighlightEnabled, RelativeSource={RelativeSource AncestorType=ItemsControl}}"/>
                                                                             </StackPanel>
                                                                         </Grid>
                                                                     </Border>
@@ -7001,7 +7004,7 @@
                                                       Background="Transparent" Cursor="SizeWE"/>
 
                                         <!-- 중간: 주제어 네비게이션 패널 (Col2) -->
-                                        <Border Grid.Column="2"
+                                        <Border Grid.Column="2" Padding="16"
                                                 BorderBrush="{DynamicResource ControlElevationBorderBrush}"
                                                 BorderThickness="0,0,1,0">
                                             <Grid>
@@ -7010,62 +7013,100 @@
                                                     <RowDefinition Height="*"/>
                                                 </Grid.RowDefinitions>
 
-                                                <!-- 헤더: 주제어 네비게이션 + 방향 토글 -->
-                                                <Grid Grid.Row="0" Margin="12,10,12,8">
+                                                <!-- 헤더: 핵심요약 네비게이션 + 방향 토글 (STT 헤더와 폰트/아이콘 크기 일치 — 하단 정렬용) -->
+                                                <Grid Grid.Row="0" Margin="0,0,0,12">
                                                     <Grid.ColumnDefinitions>
                                                         <ColumnDefinition Width="*"/>
                                                         <ColumnDefinition Width="Auto"/>
                                                     </Grid.ColumnDefinitions>
                                                     <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-                                                        <ui:SymbolIcon Symbol="TextBulletListLtr24" FontSize="16" Margin="0,0,6,0" VerticalAlignment="Center"/>
-                                                        <TextBlock Text="주제어 네비게이션" FontSize="13" FontWeight="SemiBold" VerticalAlignment="Center"/>
+                                                        <ui:SymbolIcon Symbol="TextBulletListLtr24" FontSize="18" Margin="0,0,8,0" VerticalAlignment="Center"/>
+                                                        <TextBlock Text="핵심요약 네비게이션" FontSize="15" FontWeight="SemiBold" VerticalAlignment="Center"/>
                                                     </StackPanel>
                                                     <ToggleButton x:Name="OneNoteTopicNavOrientationToggle"
                                                                   Grid.Column="1"
-                                                                  Width="28" Height="28" Padding="0"
+                                                                  Padding="10,5"
                                                                   ToolTip="가로/세로 방향 전환"
                                                                   Click="OneNoteTopicNavOrientationToggle_Click">
                                                         <ui:SymbolIcon Symbol="ArrowRotateClockwise24" FontSize="14"/>
                                                     </ToggleButton>
                                                 </Grid>
 
-                                                <!-- 주제어 카드 목록 -->
-                                                <ScrollViewer x:Name="OneNoteTopicNavScrollViewer" Grid.Row="1"
-                                                              VerticalScrollBarVisibility="Auto"
-                                                              HorizontalScrollBarVisibility="Auto"
-                                                              Padding="8,0,8,8">
-                                                    <ItemsControl x:Name="TopicSegmentsItemsControl"
+                                                <!-- 주제어 카드 목록 — 전체 맵 모드 (항상 0초~현재까지 가득 차게 비례 배치, 스크롤 없음) -->
+                                                <Grid x:Name="OneNoteTopicNavScrollViewer" Grid.Row="1"
+                                                      ClipToBounds="True">
+                                                    <Grid.ColumnDefinitions>
+                                                        <ColumnDefinition Width="38"/>
+                                                        <ColumnDefinition Width="*"/>
+                                                    </Grid.ColumnDefinitions>
+
+                                                    <!-- 시간축 (0초 ~ 현재까지) — 패널 좌측 마커 -->
+                                                    <Grid Grid.Column="0" Margin="0,0,2,0">
+                                                        <TextBlock Text="00:00" FontSize="9"
+                                                                   Foreground="{DynamicResource TextFillColorTertiaryBrush}"
+                                                                   VerticalAlignment="Top" HorizontalAlignment="Right"
+                                                                   Margin="0,2,2,0"/>
+                                                        <TextBlock Text="{Binding OneNoteRecordingTime.Text, ElementName=OneNoteRecordingTime, FallbackValue='--:--'}"
+                                                                   FontSize="9" FontWeight="SemiBold"
+                                                                   Foreground="{DynamicResource AccentTextFillColorPrimaryBrush}"
+                                                                   VerticalAlignment="Bottom" HorizontalAlignment="Right"
+                                                                   Margin="0,0,2,2"/>
+                                                        <!-- 세로 가이드 라인 -->
+                                                        <Rectangle Width="1" Fill="{DynamicResource ControlElevationBorderBrush}"
+                                                                   HorizontalAlignment="Right" VerticalAlignment="Stretch"
+                                                                   Margin="0,12,0,12"/>
+                                                    </Grid>
+
+                                                    <ItemsControl Grid.Column="1" x:Name="TopicSegmentsItemsControl"
                                                                   ItemsSource="{Binding TopicSegments}">
                                                         <ItemsControl.ItemsPanel>
                                                             <ItemsPanelTemplate>
-                                                                <VirtualizingStackPanel Orientation="Vertical"/>
+                                                                <StackPanel Orientation="Vertical"/>
                                                             </ItemsPanelTemplate>
                                                         </ItemsControl.ItemsPanel>
                                                         <ItemsControl.ItemTemplate>
                                                             <DataTemplate>
                                                                 <Border Background="{Binding BackgroundColorHex, Converter={StaticResource HexToBrushConverter}}"
-                                                                        Padding="8" Margin="2" CornerRadius="4"
+                                                                        Padding="6,2" Margin="0,0,0,1" CornerRadius="2"
                                                                         Cursor="Hand"
-                                                                        MouseLeftButtonDown="TopicSegment_Click">
+                                                                        MouseLeftButtonDown="TopicSegment_Click"
+                                                                        VerticalAlignment="Stretch">
+                                                                    <Border.Height>
+                                                                        <MultiBinding Converter="{StaticResource TopicSegmentProportionalHeightConverter}">
+                                                                            <Binding Path="StartTime"/>
+                                                                            <Binding Path="EndTime"/>
+                                                                            <Binding Path="ItemsSource" RelativeSource="{RelativeSource AncestorType=ItemsControl}"/>
+                                                                            <Binding Path="ActualHeight" ElementName="OneNoteTopicNavScrollViewer"/>
+                                                                        </MultiBinding>
+                                                                    </Border.Height>
                                                                     <Border.ToolTip>
                                                                         <ToolTip>
                                                                             <TextBlock Text="{Binding ToolTipText}" TextWrapping="Wrap" MaxWidth="400"/>
                                                                         </ToolTip>
                                                                     </Border.ToolTip>
-                                                                    <StackPanel>
-                                                                        <TextBlock Text="{Binding TimeRangeDisplay}"
+                                                                    <Grid>
+                                                                        <Grid.ColumnDefinitions>
+                                                                            <ColumnDefinition Width="Auto"/>
+                                                                            <ColumnDefinition Width="*"/>
+                                                                        </Grid.ColumnDefinitions>
+                                                                        <!-- 좌측: 시간 범위 (가독성 확보용 시간 표시) -->
+                                                                        <TextBlock Grid.Column="0" Text="{Binding TimeRangeDisplay}"
                                                                                    FontSize="10"
-                                                                                   Foreground="{DynamicResource TextFillColorTertiaryBrush}"
-                                                                                   Margin="0,0,0,2"/>
-                                                                        <TextBlock Text="{Binding DisplayTitle}"
-                                                                                   FontSize="12" FontWeight="SemiBold"
-                                                                                   TextTrimming="CharacterEllipsis"/>
-                                                                    </StackPanel>
+                                                                                   Foreground="{Binding BackgroundColorHex, Converter={StaticResource HexToReadableForegroundConverter}, ConverterParameter=Tertiary}"
+                                                                                   VerticalAlignment="Top"
+                                                                                   Margin="0,0,6,0"/>
+                                                                        <!-- 우측: 주제 제목 -->
+                                                                        <TextBlock Grid.Column="1" Text="{Binding BodyDisplay}"
+                                                                                   FontSize="11" FontWeight="SemiBold"
+                                                                                   Foreground="{Binding BackgroundColorHex, Converter={StaticResource HexToReadableForegroundConverter}}"
+                                                                                   TextTrimming="CharacterEllipsis"
+                                                                                   VerticalAlignment="Top"/>
+                                                                    </Grid>
                                                                 </Border>
                                                             </DataTemplate>
                                                         </ItemsControl.ItemTemplate>
                                                     </ItemsControl>
-                                                </ScrollViewer>
+                                                </Grid>
                                             </Grid>
                                         </Border>
 
@@ -7124,41 +7165,85 @@
                                                     </Grid>
 
                                                     <!-- 요약 콘텐츠 -->
-                                                    <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto">
-                                                        <StackPanel>
-                                                            <!-- 1분 요약 카운트 -->
-                                                            <TextBlock Text="{Binding MinuteSummaryCount, StringFormat='1분 요약: {0}회'}"
-                                                                       FontSize="11"
+                                                    <Grid Grid.Row="1">
+                                                        <Grid.RowDefinitions>
+                                                            <RowDefinition Height="Auto"/>
+                                                            <RowDefinition Height="*"/>
+                                                        </Grid.RowDefinitions>
+
+                                                        <!-- 요약 영역 탭 헤더 -->
+                                                        <StackPanel Grid.Row="0" Orientation="Horizontal" Margin="0,0,0,8">
+                                                            <Border x:Name="OneNoteRealtimeSummaryTab"
+                                                                    Background="{DynamicResource ApplicationBackgroundBrush}"
+                                                                    BorderBrush="{DynamicResource ControlElevationBorderBrush}"
+                                                                    BorderThickness="1" CornerRadius="4" Padding="10,5"
+                                                                    Cursor="Hand" MouseDown="OneNoteRealtimeSummaryTab_Click">
+                                                                <TextBlock Text="실시간 요약" FontSize="12" FontWeight="Medium"/>
+                                                            </Border>
+                                                            <Border x:Name="OneNoteFullSummaryTab"
+                                                                    Background="Transparent" BorderThickness="0"
+                                                                    CornerRadius="4" Padding="10,5" Margin="4,0,0,0"
+                                                                    Cursor="Hand" MouseDown="OneNoteFullSummaryTab_Click">
+                                                                <TextBlock x:Name="OneNoteFullSummaryTabText" Text="전체 요약" FontSize="12"
+                                                                           Foreground="{DynamicResource TextFillColorTertiaryBrush}"/>
+                                                            </Border>
+                                                            <TextBlock Text="{Binding MinuteSummaryCount, StringFormat=' ({0}회)'}"
+                                                                       FontSize="11" VerticalAlignment="Center"
                                                                        Foreground="{DynamicResource TextFillColorSecondaryBrush}"
-                                                                       Margin="0,0,0,6"
+                                                                       Margin="6,0,0,0"
                                                                        Visibility="{Binding IsRecording, Converter={StaticResource BoolToVisibilityConverter}}"/>
+                                                        </StackPanel>
 
-                                                            <!-- 누적 요약 -->
-                                                            <Border Padding="10" CornerRadius="6" Margin="0,0,0,8"
-                                                                    Background="{DynamicResource ControlFillColorDefaultBrush}"
-                                                                    Visibility="{Binding CumulativeSummaryText, Converter={StaticResource NullToVisibilityConverter}}">
-                                                                <StackPanel>
-                                                                    <TextBlock Text="누적 요약" FontWeight="SemiBold" FontSize="11" Margin="0,0,0,4"/>
-                                                                    <TextBlock Text="{Binding CumulativeSummaryText}"
-                                                                               TextWrapping="Wrap" FontSize="12"/>
-                                                                </StackPanel>
-                                                            </Border>
+                                                        <!-- 실시간 요약 탭 콘텐츠 -->
+                                                        <ScrollViewer x:Name="OneNoteRealtimeSummaryContent" Grid.Row="1"
+                                                                      VerticalScrollBarVisibility="Auto" Visibility="Visible">
+                                                            <ItemsControl ItemsSource="{Binding MinuteSummaries}">
+                                                                <ItemsControl.ItemTemplate>
+                                                                    <DataTemplate>
+                                                                        <Border Padding="8" CornerRadius="6" Margin="0,0,0,6"
+                                                                                Background="{DynamicResource ControlFillColorDefaultBrush}"
+                                                                                BorderBrush="{DynamicResource ControlElevationBorderBrush}"
+                                                                                BorderThickness="1">
+                                                                            <StackPanel>
+                                                                                <TextBlock Text="{Binding TimeRangeDisplay}"
+                                                                                           FontSize="10" FontWeight="SemiBold"
+                                                                                           Foreground="{DynamicResource AccentTextFillColorPrimaryBrush}"
+                                                                                           Margin="0,0,0,4"/>
+                                                                                <TextBlock Text="{Binding SummaryText}"
+                                                                                           TextWrapping="Wrap" FontSize="12"/>
+                                                                            </StackPanel>
+                                                                        </Border>
+                                                                    </DataTemplate>
+                                                                </ItemsControl.ItemTemplate>
+                                                            </ItemsControl>
+                                                        </ScrollViewer>
 
-                                                            <!-- 최종 요약 -->
-                                                            <Border Padding="10" CornerRadius="6" Margin="0,0,0,8"
-                                                                    Background="{DynamicResource AccentFillColorTertiaryBrush}"
-                                                                    Visibility="{Binding HasFinalSummary, Converter={StaticResource BoolToVisibilityConverter}}">
-                                                                <StackPanel>
-                                                                    <TextBlock Text="최종 요약" FontWeight="SemiBold" FontSize="11" Margin="0,0,0,4"/>
-                                                                    <TextBlock Text="{Binding FinalSummaryText}"
-                                                                               TextWrapping="Wrap" FontSize="12"/>
-                                                                </StackPanel>
-                                                            </Border>
-
-                                                            <!-- 기존 AI 요약 결과 -->
-                                                            <TextBlock x:Name="OneNoteSummaryEmptyText" Text="AI 요약이 없습니다."
-                                                                       Foreground="{DynamicResource TextFillColorTertiaryBrush}"
-                                                                       HorizontalAlignment="Center" Margin="0,8,0,0"/>
+                                                        <!-- 전체 요약 탭 콘텐츠 (기본 숨김) -->
+                                                        <ScrollViewer x:Name="OneNoteFullSummaryContent" Grid.Row="1"
+                                                                      VerticalScrollBarVisibility="Auto" Visibility="Collapsed">
+                                                            <StackPanel>
+                                                                <Border Padding="10" CornerRadius="6" Margin="0,0,0,8"
+                                                                        Background="{DynamicResource ControlFillColorDefaultBrush}"
+                                                                        Visibility="{Binding CumulativeSummaryText, Converter={StaticResource NullToVisibilityConverter}}">
+                                                                    <StackPanel>
+                                                                        <TextBlock Text="누적 요약" FontWeight="SemiBold" FontSize="11" Margin="0,0,0,4"/>
+                                                                        <TextBlock Text="{Binding CumulativeSummaryText}"
+                                                                                   TextWrapping="Wrap" FontSize="12"/>
+                                                                    </StackPanel>
+                                                                </Border>
+                                                                <Border Padding="10" CornerRadius="6" Margin="0,0,0,8"
+                                                                        Background="{DynamicResource AccentFillColorTertiaryBrush}"
+                                                                        Visibility="{Binding HasFinalSummary, Converter={StaticResource BoolToVisibilityConverter}}">
+                                                                    <StackPanel>
+                                                                        <TextBlock Text="최종 요약 (후처리)" FontWeight="SemiBold" FontSize="11" Margin="0,0,0,4"/>
+                                                                        <TextBlock Text="{Binding FinalSummaryText}"
+                                                                                   TextWrapping="Wrap" FontSize="12"/>
+                                                                    </StackPanel>
+                                                                </Border>
+                                                                <TextBlock x:Name="OneNoteSummaryEmptyText" Text="후처리 요약이 없습니다. 녹음 종료 후 최종요약 버튼을 클릭하세요."
+                                                                           Foreground="{DynamicResource TextFillColorTertiaryBrush}"
+                                                                           TextWrapping="Wrap"
+                                                                           HorizontalAlignment="Center" Margin="0,8,0,0"/>
 
                                                             <StackPanel x:Name="OneNoteSummaryContent" Visibility="Collapsed">
                                                                 <!-- 회의 제목 -->
@@ -7234,6 +7319,9 @@
                                                             </StackPanel>
                                                         </StackPanel>
                                                     </ScrollViewer>
+                                                    <!-- /OneNoteFullSummaryContent ScrollViewer -->
+                                                </Grid>
+                                                <!-- /요약 영역 outer Grid (실시간/전체 탭 컨테이너) -->
                                                 </Grid>
                                             </Border>
                                         </Grid>
@@ -8066,43 +8154,17 @@
                             <Grid>
                                 <!-- 녹음 탭 -->
                                 <Border x:Name="OneNoteAIRecordPanel" Visibility="Visible" Padding="12">
-                                    <StackPanel>
-                                        <!-- 녹음 컨트롤 -->
+                                    <Grid>
+                                        <Grid.RowDefinitions>
+                                            <RowDefinition Height="Auto"/>
+                                            <RowDefinition Height="*"/>
+                                        </Grid.RowDefinitions>
+                                        <!-- Row 0: 녹음 컨트롤 + 후처리 상태 (상단 영역) -->
+                                        <StackPanel Grid.Row="0">
+                                        <!-- 녹음 컨트롤 (서브탭 제거 — 항상 표시) -->
                                         <Border Background="{DynamicResource ControlFillColorDefaultBrush}"
                                                 CornerRadius="8" Padding="16" Margin="0,0,0,16">
-                                            <Grid>
-                                                <Grid.RowDefinitions>
-                                                    <RowDefinition Height="Auto"/>
-                                                    <RowDefinition Height="Auto"/>
-                                                </Grid.RowDefinitions>
-
-                                                <!-- 탭 헤더 -->
-                                                <StackPanel Grid.Row="0" Orientation="Horizontal" Margin="0,0,0,12">
-                                                    <Border x:Name="OneNoteRecordTab"
-                                                            Background="{DynamicResource ApplicationBackgroundBrush}"
-                                                            BorderBrush="{DynamicResource ControlElevationBorderBrush}"
-                                                            BorderThickness="1" CornerRadius="4" Padding="12,6"
-                                                            Cursor="Hand" MouseDown="OneNoteRecordTab_Click">
-                                                        <StackPanel Orientation="Horizontal">
-                                                            <ui:SymbolIcon x:Name="OneNoteRecordTabIcon" Symbol="Mic24" FontSize="14"/>
-                                                            <TextBlock x:Name="OneNoteRecordTabText" Text="녹음" FontSize="12" FontWeight="Medium" Margin="6,0,0,0"/>
-                                                        </StackPanel>
-                                                    </Border>
-                                                    <Border x:Name="OneNoteOptionsTab"
-                                                            Background="Transparent" BorderThickness="0"
-                                                            CornerRadius="4" Padding="12,6" Margin="4,0,0,0"
-                                                            Cursor="Hand" MouseDown="OneNoteOptionsTab_Click">
-                                                        <StackPanel Orientation="Horizontal">
-                                                            <ui:SymbolIcon x:Name="OneNoteOptionsTabIcon" Symbol="Settings24" FontSize="14"
-                                                                           Foreground="{DynamicResource TextFillColorTertiaryBrush}"/>
-                                                            <TextBlock x:Name="OneNoteOptionsTabText" Text="옵션" FontSize="12" Margin="6,0,0,0"
-                                                                       Foreground="{DynamicResource TextFillColorTertiaryBrush}"/>
-                                                        </StackPanel>
-                                                    </Border>
-                                                </StackPanel>
-
-                                                <!-- 녹음 탭 콘텐츠 (기본 표시) -->
-                                                <StackPanel x:Name="OneNoteRecordTabContent" Grid.Row="1" MinHeight="130">
+                                            <StackPanel x:Name="OneNoteRecordTabContent" MinHeight="130">
                                                     <!-- 녹음 상태 표시 -->
                                                     <TextBlock x:Name="OneNoteRecordingStatus"
                                                                Text="대기 중"
@@ -8155,398 +8217,473 @@
                                                                    Click="OneNoteRecordCancel_Click"/>
                                                     </StackPanel>
                                                 </StackPanel>
-
-                                                <!-- 옵션 탭 콘텐츠 (기본 숨김) — ScrollViewer로 감싸 항목 많을 때 스크롤 가능 -->
-                                                <Border x:Name="OneNoteOptionsTabContent" Grid.Row="1" Visibility="Collapsed"
-                                                        Padding="10,8"
-                                                        VerticalAlignment="Stretch">
-                                                    <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
-                                                    <Grid>
-                                                        <Grid.ColumnDefinitions>
-                                                            <ColumnDefinition Width="Auto"/>
-                                                            <ColumnDefinition Width="Auto"/>
-                                                            <ColumnDefinition Width="*"/>
-                                                        </Grid.ColumnDefinitions>
-                                                        <Grid.RowDefinitions>
-                                                            <RowDefinition Height="Auto"/>
-                                                            <RowDefinition Height="Auto"/>
-                                                            <RowDefinition Height="Auto"/>
-                                                            <RowDefinition Height="Auto"/>
-                                                            <RowDefinition Height="Auto"/>
-                                                            <RowDefinition Height="Auto"/>
-                                                            <RowDefinition Height="Auto"/>
-                                                            <RowDefinition Height="Auto"/>
-                                                            <RowDefinition Height="Auto"/>
-                                                            <RowDefinition Height="Auto"/>
-                                                            <RowDefinition Height="Auto"/>
-                                                            <RowDefinition Height="Auto"/>
-                                                            <RowDefinition Height="Auto"/>
-                                                            <RowDefinition Height="Auto"/>
-                                                            <RowDefinition Height="Auto"/>
-                                                            <RowDefinition Height="Auto"/>
-                                                            <RowDefinition Height="Auto"/>
-                                                            <RowDefinition Height="Auto"/>
-                                                        </Grid.RowDefinitions>
-
-                                                        <!-- 첫 번째 줄: STT on/off -->
-                                                        <ToggleButton x:Name="OneNoteAutoSTTToggle" Grid.Row="0" Grid.Column="0"
-                                                                      IsChecked="True"
-                                                                      ToolTip="자동 STT 분석 (녹음 시 실시간 음성인식)"
-                                                                      Width="24" Height="24"
-                                                                      Padding="0" Margin="0,0,6,6"
-                                                                      Click="OneNoteAutoSTTToggle_Click">
-                                                            <ui:SymbolIcon Symbol="Mic16" FontSize="12" Foreground="#333333"/>
-                                                        </ToggleButton>
-                                                        <TextBlock Grid.Row="0" Grid.Column="1" Grid.ColumnSpan="2" Text="STT" FontSize="12" FontWeight="SemiBold"
-                                                                   VerticalAlignment="Center" Margin="0,0,8,6"
-                                                                   Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
-
-                                                        <!-- 화자분리 on/off (독립 옵션) -->
-                                                        <CheckBox x:Name="OneNoteDiarizationCheckBox" Grid.Row="1" Grid.ColumnSpan="3"
-                                                                  Content="화자분리"
-                                                                  ToolTip="후처리 STT 시 화자분리 적용"
-                                                                  FontSize="12" Margin="0,0,0,6"
-                                                                  Checked="OneNoteDiarization_Changed"
-                                                                  Unchecked="OneNoteDiarization_Changed"/>
-
-                                                        <!-- 두 번째 줄: 요약 on/off -->
-                                                        <ToggleButton x:Name="OneNoteAutoSummaryToggle" Grid.Row="2" Grid.Column="0"
-                                                                      IsChecked="True"
-                                                                      ToolTip="자동 요약 (STT 결과를 AI로 요약)"
-                                                                      Width="24" Height="24"
-                                                                      Padding="0" Margin="0,0,6,0"
-                                                                      Click="OneNoteAutoSummaryToggle_Click">
-                                                            <ui:SymbolIcon Symbol="Sparkle16" FontSize="12" Foreground="#333333"/>
-                                                        </ToggleButton>
-                                                        <TextBlock Grid.Row="2" Grid.Column="1" Grid.ColumnSpan="2" Text="요약" FontSize="12" FontWeight="SemiBold"
-                                                                   VerticalAlignment="Center" Margin="0,0,8,0"
-                                                                   Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
-
-                                                        <!-- 구분선 -->
-                                                        <Separator Grid.Row="3" Grid.ColumnSpan="3" Margin="0,8,0,4"/>
-
-                                                        <!-- 후처리 섹션 헤더 -->
-                                                        <TextBlock Grid.Row="4" Grid.ColumnSpan="3" Text="자동 후처리" FontSize="12" FontWeight="SemiBold"
-                                                                   Foreground="{DynamicResource TextFillColorSecondaryBrush}" Margin="0,0,0,6"/>
-
-                                                        <!-- STT 후처리 체크박스 -->
-                                                        <CheckBox x:Name="OneNotePostSTTCheckBox" Grid.Row="5" Grid.ColumnSpan="3"
-                                                                  Content="STT 후처리"
-                                                                  ToolTip="녹음 완료 후 전체 파일 STT 처리"
-                                                                  FontSize="12" Margin="0,0,0,4"
-                                                                  Checked="OneNotePostSTT_Changed"
-                                                                  Unchecked="OneNotePostSTT_Changed"/>
-
-                                                        <!-- 화자분리 후처리 체크박스 -->
-                                                        <CheckBox x:Name="OneNotePostDiarizationCheckBox" Grid.Row="6" Grid.ColumnSpan="3"
-                                                                  Content="화자분리 후처리"
-                                                                  ToolTip="sherpa-onnx 모델로 정밀 화자분리 수행"
-                                                                  FontSize="12" Margin="0,0,0,4"
-                                                                  Checked="OneNotePostDiarization_Changed"
-                                                                  Unchecked="OneNotePostDiarization_Changed"/>
-
-                                                        <!-- 요약 후처리 체크박스 -->
-                                                        <CheckBox x:Name="OneNotePostSummaryCheckBox" Grid.Row="7" Grid.ColumnSpan="3"
-                                                                  Content="요약 후처리"
-                                                                  ToolTip="STT 결과로 전체 요약 생성 (STT 후처리 필요)"
-                                                                  FontSize="12" Margin="0,0,0,0"
-                                                                  Checked="OneNotePostSummary_Changed"
-                                                                  Unchecked="OneNotePostSummary_Changed"/>
-
-                                                        <Separator Grid.Row="8" Grid.ColumnSpan="3" Margin="0,8" />
-                                                        <TextBlock Grid.Row="9" Grid.ColumnSpan="3" Text="주제어 추출 최소 단위(초)" FontSize="12" Margin="0,4,0,2" />
-                                                        <ComboBox Grid.Row="10" Grid.ColumnSpan="3" x:Name="OneNoteTopicIntervalComboBox"
-                                                                  SelectedValue="{Binding TopicExtractorIntervalSec, Mode=TwoWay}"
-                                                                  SelectedValuePath="Tag" Margin="0,0,0,4">
-                                                            <ComboBoxItem Content="12초 (기본)">
-                                                                <ComboBoxItem.Tag><sys:Int32>12</sys:Int32></ComboBoxItem.Tag>
-                                                            </ComboBoxItem>
-                                                            <ComboBoxItem Content="30초">
-                                                                <ComboBoxItem.Tag><sys:Int32>30</sys:Int32></ComboBoxItem.Tag>
-                                                            </ComboBoxItem>
-                                                            <ComboBoxItem Content="60초">
-                                                                <ComboBoxItem.Tag><sys:Int32>60</sys:Int32></ComboBoxItem.Tag>
-                                                            </ComboBoxItem>
-                                                            <ComboBoxItem Content="120초">
-                                                                <ComboBoxItem.Tag><sys:Int32>120</sys:Int32></ComboBoxItem.Tag>
-                                                            </ComboBoxItem>
-                                                        </ComboBox>
-
-                                                        <!-- Row 11: 구분선 -->
-                                                        <Separator Grid.Row="11" Grid.ColumnSpan="3" Margin="0,8,0,4" />
-
-                                                        <!-- Row 12: 실시간 녹음 설정 헤더 -->
-                                                        <TextBlock Grid.Row="12" Grid.ColumnSpan="3" Text="실시간 녹음 설정" FontSize="12" FontWeight="SemiBold"
-                                                                   Margin="0,0,0,6" />
-
-                                                        <!-- Row 13: 화자분리 모드 (좌측에서 이동) -->
-                                                        <CheckBox x:Name="OneNoteDiarizationModeCheckBox" Grid.Row="13" Grid.ColumnSpan="3"
-                                                                  Content="화자분리 (체크: 준실시간, 해제: 실시간)"
-                                                                  IsChecked="{Binding IsRealtimeDiarizationEnabled, Mode=TwoWay}"
-                                                                  IsEnabled="{Binding IsNotRecording}"
-                                                                  FontSize="12" Margin="0,0,0,4"
-                                                                  ToolTip="체크 시 약 10~15초 지연, 화자별 색상 표시. 해제 시 즉시 자막."/>
-
-                                                        <!-- Row 14: 청크 길이 (좌측에서 이동) -->
-                                                        <StackPanel Grid.Row="14" Grid.ColumnSpan="3" Orientation="Horizontal" Margin="0,0,0,4"
-                                                                    IsEnabled="{Binding IsRealtimeDiarizationEnabled}">
-                                                            <TextBlock Text="청크 길이(초)" FontSize="12" VerticalAlignment="Center" Margin="0,0,6,0"
-                                                                       Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
-                                                            <ComboBox x:Name="OneNoteChunkSecondsComboBox"
-                                                                      SelectedValue="{Binding ChunkSeconds, Mode=TwoWay}"
-                                                                      SelectedValuePath="Tag"
-                                                                      FontSize="12" Width="70"
-                                                                      ToolTip="값이 작을수록 STT 반응이 빠르나 네트워크 호출이 잦습니다 (기본 3초 권장).">
-                                                                <ComboBoxItem Content="1" Tag="1"/>
-                                                                <ComboBoxItem Content="2" Tag="2"/>
-                                                                <ComboBoxItem Content="3" Tag="3"/>
-                                                                <ComboBoxItem Content="5" Tag="5"/>
-                                                                <ComboBoxItem Content="10" Tag="10"/>
-                                                                <ComboBoxItem Content="15" Tag="15"/>
-                                                            </ComboBox>
-                                                        </StackPanel>
-
-                                                        <!-- Row 15: 누적요약 주기 (좌측에서 이동) -->
-                                                        <StackPanel Grid.Row="15" Grid.ColumnSpan="3" Orientation="Horizontal" Margin="0,0,0,4">
-                                                            <TextBlock Text="누적요약 주기(분)" FontSize="12" VerticalAlignment="Center" Margin="0,0,6,0"
-                                                                       Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
-                                                            <ComboBox x:Name="OneNoteCumulativeIntervalComboBox"
-                                                                      SelectedValue="{Binding CumulativeIntervalMinutes, Mode=TwoWay}"
-                                                                      SelectedValuePath="Tag"
-                                                                      FontSize="12" Width="60">
-                                                                <ComboBoxItem Content="3" Tag="3"/>
-                                                                <ComboBoxItem Content="5" Tag="5"/>
-                                                                <ComboBoxItem Content="10" Tag="10"/>
-                                                                <ComboBoxItem Content="15" Tag="15"/>
-                                                            </ComboBox>
-                                                        </StackPanel>
-
-                                                        <!-- Row 16: 최종요약 자동 (신규) -->
-                                                        <CheckBox Grid.Row="16" Grid.ColumnSpan="3"
-                                                                  Content="최종요약 자동 (녹음 종료 시 자동 실행)"
-                                                                  IsChecked="{Binding IsAutoFinalSummary, Mode=TwoWay}"
-                                                                  FontSize="12" Margin="0,0,0,4"
-                                                                  ToolTip="체크 시 녹음 종료 후 최종 요약을 자동 실행합니다. 해제 시 수동 클릭 대기 상태가 됩니다."/>
-
-                                                        <!-- Row 17: 오타 수정 후처리 (신규) -->
-                                                        <CheckBox Grid.Row="17" Grid.ColumnSpan="3"
-                                                                  Content="오타 수정 (GPT-4o-mini 후처리)"
-                                                                  IsChecked="{Binding IsEnableTypoFix, Mode=TwoWay}"
-                                                                  FontSize="12" Margin="0,0,0,4"
-                                                                  ToolTip="체크 시 STT 결과를 GPT-4o-mini로 후처리하여 한국어 오타/맞춤법을 보정합니다. 추가 LLM 호출이 발생합니다."/>
-
-                                                        <!-- Row 18: STT 모델 선택 (실시간 streaming 음절 단위) -->
-                                                        <StackPanel Grid.Row="18" Grid.ColumnSpan="3" Orientation="Horizontal" Margin="0,4,0,4">
-                                                            <TextBlock Text="STT 모델" FontSize="12" VerticalAlignment="Center" Margin="0,0,8,0"
-                                                                       Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
-                                                            <ComboBox x:Name="OneNoteSttModelComboBox"
-                                                                      SelectedValue="{Binding TranscriptionModel, Mode=TwoWay}"
-                                                                      SelectedValuePath="Tag"
-                                                                      FontSize="12" Width="220"
-                                                                      ToolTip="gpt-4o-mini-transcribe/gpt-4o-transcribe는 음절 단위 streaming 지원. whisper-1은 발화 종료 후 일괄 전사.">
-                                                                <ComboBoxItem Content="gpt-4o-mini-transcribe (권장 — 발화 후 ~0.5초)" Tag="gpt-4o-mini-transcribe"/>
-                                                                <ComboBoxItem Content="gpt-4o-transcribe (고품질, 발화 후 ~0.5초)" Tag="gpt-4o-transcribe"/>
-                                                                <ComboBoxItem Content="whisper-1 (구형, 일괄)" Tag="whisper-1"/>
-                                                                <ComboBoxItem Content="gpt-realtime-whisper (conversation API에서 미작동)" Tag="gpt-realtime-whisper"/>
-                                                            </ComboBox>
-                                                        </StackPanel>
-
-                                                        <!-- Row 19: VAD 활성화 (체크박스) -->
-                                                        <CheckBox Grid.Row="19" Grid.ColumnSpan="3"
-                                                                  Content="server_vad 자동 발화 감지 (해제: 녹음 종료 시 일괄 전사)"
-                                                                  IsChecked="{Binding IsServerVadEnabled, Mode=TwoWay}"
-                                                                  FontSize="12" Margin="0,4,0,4"
-                                                                  ToolTip="체크 시 OpenAI 서버 VAD가 자동으로 발화 시작/종료를 감지하여 transcript 도착. 해제 시 녹음 종료 시점에 한 번만 transcript 도착(지연 큼). 권장: 체크."/>
-                                                    </Grid>
-                                                    </ScrollViewer>
-                                                </Border>
-                                            </Grid>
                                         </Border>
 
-                                        <!-- 후처리 상태 표시 -->
+                                        <!-- 후처리 상태 표시 (Row 0 — 상단) -->
                                         <TextBlock x:Name="OneNotePostProcessingStatusText"
                                                    Text="{Binding PostProcessingStatus}"
                                                    Visibility="{Binding IsPostProcessing, Converter={StaticResource BoolToVisibilityConverter}}"
                                                    Foreground="#FF8C00"
                                                    FontSize="12" FontWeight="SemiBold"
                                                    Margin="0,0,0,4"/>
+                                        </StackPanel>
+                                        <!-- /Row 0 StackPanel -->
 
-                                        <!-- 녹음 파일 목록 헤더 -->
-                                        <Grid Margin="0,0,0,8">
-                                            <Grid.ColumnDefinitions>
-                                                <ColumnDefinition Width="*"/>
-                                                <ColumnDefinition Width="Auto"/>
-                                            </Grid.ColumnDefinitions>
-                                            <TextBlock Text="녹음 파일" FontWeight="SemiBold" FontSize="12"
-                                                       VerticalAlignment="Center"/>
-                                            <ui:Button Grid.Column="1"
-                                                       Icon="{ui:SymbolIcon ArrowSync24}"
-                                                       Appearance="Transparent"
-                                                       ToolTip="새로고침"
-                                                       Padding="4"
-                                                       Click="OneNoteRecordingsRefresh_Click"/>
-                                        </Grid>
+                                        <!-- Row 1: 탭 전환 (녹음 파일 / 옵션) -->
+                                        <Grid Grid.Row="1" Margin="0,8,0,0">
+                                            <Grid.RowDefinitions>
+                                                <RowDefinition Height="Auto"/>
+                                                <RowDefinition Height="*"/>
+                                            </Grid.RowDefinitions>
 
-                                        <!-- 녹음 파일 목록 (선택 가능) -->
-                                        <ListBox x:Name="OneNoteRecordingsList"
-                                                 Background="Transparent"
-                                                 BorderThickness="0"
-                                                 SelectedItem="{Binding SelectedRecording, Mode=TwoWay}"
-                                                 PreviewMouseLeftButtonDown="OneNoteRecordingsList_PreviewMouseLeftButtonDown"
-                                                 SelectionChanged="OneNoteRecordingsList_SelectionChanged">
-                                            <ListBox.ItemContainerStyle>
-                                                <Style TargetType="ListBoxItem">
-                                                    <Setter Property="Focusable" Value="False"/>
-                                                    <Setter Property="Padding" Value="0"/>
-                                                    <Setter Property="Margin" Value="0,0,0,6"/>
-                                                    <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
-                                                    <Setter Property="Template">
-                                                        <Setter.Value>
-                                                            <ControlTemplate TargetType="ListBoxItem">
-                                                                <Border x:Name="Border"
-                                                                        Background="{DynamicResource ControlFillColorDefaultBrush}"
-                                                                        CornerRadius="6" Padding="10"
-                                                                        BorderBrush="{DynamicResource ControlElevationBorderBrush}"
-                                                                        BorderThickness="1"
-                                                                        Cursor="Hand">
-                                                                    <ContentPresenter/>
-                                                                </Border>
-                                                                <ControlTemplate.Triggers>
-                                                                    <Trigger Property="IsSelected" Value="True">
-                                                                        <Setter TargetName="Border" Property="BorderBrush"
-                                                                                Value="{DynamicResource SystemAccentColorBrush}"/>
-                                                                        <Setter TargetName="Border" Property="BorderThickness" Value="2"/>
-                                                                        <Setter TargetName="Border" Property="Background"
-                                                                                Value="{DynamicResource ControlFillColorSecondaryBrush}"/>
-                                                                    </Trigger>
-                                                                    <Trigger Property="IsMouseOver" Value="True">
-                                                                        <Setter TargetName="Border" Property="Background"
-                                                                                Value="{DynamicResource ControlFillColorSecondaryBrush}"/>
-                                                                    </Trigger>
-                                                                </ControlTemplate.Triggers>
-                                                            </ControlTemplate>
-                                                        </Setter.Value>
-                                                    </Setter>
-                                                </Style>
-                                            </ListBox.ItemContainerStyle>
-                                            <ListBox.ItemTemplate>
-                                                <DataTemplate>
-                                                        <StackPanel>
-                                                            <!-- 상단: 파일 정보 -->
-                                                            <StackPanel ToolTip="{Binding FileName}">
-                                                                <TextBlock Text="{Binding DisplayName}"
-                                                                           FontSize="12" FontWeight="Medium"/>
-                                                                <StackPanel Orientation="Horizontal" Margin="0,4,0,0">
-                                                                    <TextBlock Text="{Binding DurationDisplay}"
-                                                                               FontSize="11"
+                                            <!-- Row 0: 탭 헤더 -->
+                                            <StackPanel Grid.Row="0" Orientation="Horizontal" Margin="0,0,0,8">
+                                                <Border x:Name="OneNoteRecordingsTabHeader"
+                                                        Background="{DynamicResource ApplicationBackgroundBrush}"
+                                                        BorderBrush="{DynamicResource ControlElevationBorderBrush}"
+                                                        BorderThickness="1" CornerRadius="4" Padding="12,6"
+                                                        Cursor="Hand" MouseDown="OneNoteRecordingsTab_Click">
+                                                    <StackPanel Orientation="Horizontal">
+                                                        <ui:SymbolIcon x:Name="OneNoteRecordingsTabIcon" Symbol="DocumentText24" FontSize="14"/>
+                                                        <TextBlock x:Name="OneNoteRecordingsTabText" Text="녹음 파일" FontSize="12" FontWeight="Medium" Margin="6,0,0,0"/>
+                                                    </StackPanel>
+                                                </Border>
+                                                <Border x:Name="OneNoteOptionsTabHeader"
+                                                        Background="Transparent" BorderThickness="0"
+                                                        CornerRadius="4" Padding="12,6" Margin="4,0,0,0"
+                                                        Cursor="Hand" MouseDown="OneNoteOptionsTab2_Click">
+                                                    <StackPanel Orientation="Horizontal">
+                                                        <ui:SymbolIcon x:Name="OneNoteOptionsTabHeaderIcon" Symbol="Settings24" FontSize="14"
+                                                                       Foreground="{DynamicResource TextFillColorTertiaryBrush}"/>
+                                                        <TextBlock x:Name="OneNoteOptionsTabHeaderText" Text="옵션" FontSize="12" Margin="6,0,0,0"
+                                                                   Foreground="{DynamicResource TextFillColorTertiaryBrush}"/>
+                                                    </StackPanel>
+                                                </Border>
+                                            </StackPanel>
+
+                                            <!-- Row 1: 탭 콘텐츠 (녹음파일 / 옵션 겹침) -->
+                                            <!-- 녹음 파일 패널 (기본 활성) -->
+                                            <Border Grid.Row="1" x:Name="OneNoteRecordingsLeftPanel" Visibility="Visible" Padding="0">
+                                                <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+                                                    <StackPanel x:Name="OneNoteRecordingsLeftStack">
+                                                        <!-- 녹음 파일 목록 헤더 -->
+                                                        <Grid Margin="0,0,0,8">
+                                                            <Grid.ColumnDefinitions>
+                                                                <ColumnDefinition Width="*"/>
+                                                                <ColumnDefinition Width="Auto"/>
+                                                            </Grid.ColumnDefinitions>
+                                                            <TextBlock Text="녹음 파일" FontWeight="SemiBold" FontSize="12"
+                                                                       VerticalAlignment="Center"/>
+                                                            <ui:Button Grid.Column="1"
+                                                                       Icon="{ui:SymbolIcon ArrowSync24}"
+                                                                       Appearance="Transparent"
+                                                                       ToolTip="새로고침"
+                                                                       Padding="4"
+                                                                       Click="OneNoteRecordingsRefresh_Click"/>
+                                                        </Grid>
+
+                                                        <!-- 녹음 파일 목록 (선택 가능) -->
+                                                        <ListBox x:Name="OneNoteRecordingsList"
+                                                                 Background="Transparent"
+                                                                 BorderThickness="0"
+                                                                 SelectedItem="{Binding SelectedRecording, Mode=TwoWay}"
+                                                                 PreviewMouseLeftButtonDown="OneNoteRecordingsList_PreviewMouseLeftButtonDown"
+                                                                 SelectionChanged="OneNoteRecordingsList_SelectionChanged">
+                                                            <ListBox.ItemContainerStyle>
+                                                                <Style TargetType="ListBoxItem">
+                                                                    <Setter Property="Focusable" Value="False"/>
+                                                                    <Setter Property="Padding" Value="0"/>
+                                                                    <Setter Property="Margin" Value="0,0,0,6"/>
+                                                                    <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
+                                                                    <Setter Property="Template">
+                                                                        <Setter.Value>
+                                                                            <ControlTemplate TargetType="ListBoxItem">
+                                                                                <Border x:Name="Border"
+                                                                                        Background="{DynamicResource ControlFillColorDefaultBrush}"
+                                                                                        CornerRadius="6" Padding="10"
+                                                                                        BorderBrush="{DynamicResource ControlElevationBorderBrush}"
+                                                                                        BorderThickness="1"
+                                                                                        Cursor="Hand">
+                                                                                    <ContentPresenter/>
+                                                                                </Border>
+                                                                                <ControlTemplate.Triggers>
+                                                                                    <Trigger Property="IsSelected" Value="True">
+                                                                                        <Setter TargetName="Border" Property="BorderBrush"
+                                                                                                Value="{DynamicResource SystemAccentColorBrush}"/>
+                                                                                        <Setter TargetName="Border" Property="BorderThickness" Value="2"/>
+                                                                                        <Setter TargetName="Border" Property="Background"
+                                                                                                Value="{DynamicResource ControlFillColorSecondaryBrush}"/>
+                                                                                    </Trigger>
+                                                                                    <Trigger Property="IsMouseOver" Value="True">
+                                                                                        <Setter TargetName="Border" Property="Background"
+                                                                                                Value="{DynamicResource ControlFillColorSecondaryBrush}"/>
+                                                                                    </Trigger>
+                                                                                </ControlTemplate.Triggers>
+                                                                            </ControlTemplate>
+                                                                        </Setter.Value>
+                                                                    </Setter>
+                                                                </Style>
+                                                            </ListBox.ItemContainerStyle>
+                                                            <ListBox.ItemTemplate>
+                                                                <DataTemplate>
+                                                                        <StackPanel>
+                                                                            <!-- 상단: 파일 정보 -->
+                                                                            <StackPanel ToolTip="{Binding FileName}">
+                                                                                <TextBlock Text="{Binding DisplayName}"
+                                                                                           FontSize="12" FontWeight="Medium"/>
+                                                                                <StackPanel Orientation="Horizontal" Margin="0,4,0,0">
+                                                                                    <TextBlock Text="{Binding DurationDisplay}"
+                                                                                               FontSize="11"
+                                                                                               Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
+                                                                                    <!-- STT/요약 상태 표시 -->
+                                                                                    <TextBlock Text=" · STT"
+                                                                                               FontSize="11"
+                                                                                               Foreground="{DynamicResource SystemFillColorSuccessBrush}"
+                                                                                               Visibility="{Binding HasSTT, Converter={StaticResource BoolToVisibilityConverter}}"/>
+                                                                                    <TextBlock Text=" · 요약"
+                                                                                               FontSize="11"
+                                                                                               Foreground="{DynamicResource SystemFillColorSuccessBrush}"
+                                                                                               Visibility="{Binding HasSummary, Converter={StaticResource BoolToVisibilityConverter}}"/>
+                                                                                </StackPanel>
+                                                                            </StackPanel>
+
+                                                                            <!-- 중간: 플레이어 컨트롤 -->
+                                                                            <Grid Margin="0,8,0,0">
+                                                                                <Grid.ColumnDefinitions>
+                                                                                    <ColumnDefinition Width="Auto"/>
+                                                                                    <ColumnDefinition Width="*"/>
+                                                                                </Grid.ColumnDefinitions>
+
+                                                                                <!-- 재생/일시정지 -->
+                                                                                <Button Grid.Column="0"
+                                                                                        Background="{DynamicResource SystemAccentColorBrush}"
+                                                                                        Foreground="White"
+                                                                                        ToolTip="재생/일시정지"
+                                                                                        Padding="4"
+                                                                                        Width="32" Height="32"
+                                                                                        Tag="{Binding}"
+                                                                                        Click="OneNoteRecordingPlay_Click">
+                                                                                    <ui:SymbolIcon Symbol="{Binding IsPlaying, Converter={StaticResource BoolToPlayPauseIconConverter}, FallbackValue=Play24}"/>
+                                                                                </Button>
+
+                                                                                <!-- 진행 바 및 시간 -->
+                                                                                <StackPanel Grid.Column="1" Margin="8,0" VerticalAlignment="Center">
+                                                                                    <Slider x:Name="RecordingProgressSlider"
+                                                                                            Minimum="0"
+                                                                                            Maximum="{Binding Duration.TotalSeconds}"
+                                                                                            Value="{Binding CurrentPosition.TotalSeconds, Mode=OneWay}"
+                                                                                            Height="16"
+                                                                                            Tag="{Binding}"
+                                                                                            IsMoveToPointEnabled="True"
+                                                                                            Thumb.DragCompleted="RecordingProgressSlider_DragCompleted"
+                                                                                            PreviewMouseLeftButtonUp="RecordingProgressSlider_PreviewMouseUp"/>
+                                                                                    <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
+                                                                                        <TextBlock Text="{Binding CurrentPositionDisplay}"
+                                                                                                   FontSize="10"
+                                                                                                   Foreground="{DynamicResource TextFillColorTertiaryBrush}"/>
+                                                                                        <TextBlock Text=" / "
+                                                                                                   FontSize="10"
+                                                                                                   Foreground="{DynamicResource TextFillColorTertiaryBrush}"/>
+                                                                                        <TextBlock Text="{Binding DurationDisplay}"
+                                                                                                   FontSize="10"
+                                                                                                   Foreground="{DynamicResource TextFillColorTertiaryBrush}"/>
+                                                                                    </StackPanel>
+                                                                                </StackPanel>
+                                                                            </Grid>
+
+                                                                            <!-- 하단: STT분석, 요약, 삭제 버튼 -->
+                                                                            <Grid Margin="0,8,0,0">
+                                                                                <Grid.ColumnDefinitions>
+                                                                                    <ColumnDefinition Width="*"/>
+                                                                                    <ColumnDefinition Width="Auto"/>
+                                                                                </Grid.ColumnDefinitions>
+
+                                                                                <!-- STT분석, 요약 버튼 -->
+                                                                                <StackPanel Orientation="Horizontal">
+                                                                                    <ui:Button Content="{Binding STTButtonContent}"
+                                                                                               Icon="{ui:SymbolIcon Mic24}"
+                                                                                               Appearance="{Binding IsSTTInProgress, Converter={StaticResource BoolToAppearanceConverter}}"
+                                                                                               FontSize="11"
+                                                                                               Padding="8,4"
+                                                                                               Margin="0,0,6,0"
+                                                                                               Tag="{Binding}"
+                                                                                               Click="OneNoteRecordingRunSTT_Click"/>
+                                                                                    <ui:Button Content="{Binding SummaryButtonContent}"
+                                                                                               Icon="{ui:SymbolIcon Sparkle24}"
+                                                                                               Appearance="{Binding IsSummaryInProgress, Converter={StaticResource BoolToAppearanceConverter}}"
+                                                                                               FontSize="11"
+                                                                                               Padding="8,4"
+                                                                                               Tag="{Binding}"
+                                                                                               Click="OneNoteRecordingRunSummary_Click"/>
+                                                                                </StackPanel>
+
+                                                                                <!-- 삭제 버튼 -->
+                                                                                <ui:Button Grid.Column="1"
+                                                                                           Icon="{ui:SymbolIcon Delete24}"
+                                                                                           Appearance="Transparent"
+                                                                                           ToolTip="삭제"
+                                                                                           Padding="4"
+                                                                                           Tag="{Binding}"
+                                                                                           Click="OneNoteRecordingDelete_Click"/>
+                                                                            </Grid>
+                                                                        </StackPanel>
+                                                                </DataTemplate>
+                                                            </ListBox.ItemTemplate>
+                                                        </ListBox>
+
+                                                        <!-- 녹음 파일 없을 때 -->
+                                                        <TextBlock x:Name="OneNoteNoRecordingsText"
+                                                                   Text="녹음 파일이 없습니다"
+                                                                   Foreground="{DynamicResource TextFillColorTertiaryBrush}"
+                                                                   FontSize="12"
+                                                                   HorizontalAlignment="Center"
+                                                                   Margin="0,20,0,0"
+                                                                   Visibility="Collapsed"/>
+                                                    </StackPanel>
+                                                </ScrollViewer>
+                                            </Border>
+
+                                            <!-- 옵션 패널 (기본 숨김) -->
+                                            <Border Grid.Row="1" x:Name="OneNoteOptionsTabContent" Visibility="Collapsed"
+                                                Padding="10,8"
+                                                VerticalAlignment="Stretch">
+                                                <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+                                                    <StackPanel>
+                                                        <!-- ╔════ STT 그룹 ════╗ -->
+                                                        <Border Background="{DynamicResource ControlFillColorDefaultBrush}"
+                                                                CornerRadius="6" Padding="10" Margin="0,0,0,12"
+                                                                BorderBrush="{DynamicResource ControlElevationBorderBrush}"
+                                                                BorderThickness="1">
+                                                            <StackPanel>
+                                                                <StackPanel Orientation="Horizontal" Margin="0,0,0,8">
+                                                                    <ui:SymbolIcon Symbol="Mic24" FontSize="14" Margin="0,0,6,0"
+                                                                                   Foreground="{DynamicResource AccentTextFillColorPrimaryBrush}"/>
+                                                                    <TextBlock Text="STT (음성 인식)" FontWeight="SemiBold" FontSize="13"
+                                                                               Foreground="{DynamicResource AccentTextFillColorPrimaryBrush}"
+                                                                               VerticalAlignment="Center"/>
+                                                                </StackPanel>
+                                                                <StackPanel Orientation="Horizontal" Margin="0,0,0,4">
+                                                                    <ToggleButton x:Name="OneNoteAutoSTTToggle" IsChecked="True"
+                                                                                  ToolTip="자동 STT 분석 (녹음 시 실시간 음성인식)"
+                                                                                  Width="24" Height="24" Padding="0" Margin="0,0,6,0"
+                                                                                  Click="OneNoteAutoSTTToggle_Click">
+                                                                        <ui:SymbolIcon Symbol="Mic16" FontSize="12" Foreground="#333333"/>
+                                                                    </ToggleButton>
+                                                                    <TextBlock Text="실시간 STT" FontSize="12" FontWeight="SemiBold"
+                                                                               VerticalAlignment="Center"/>
+                                                                </StackPanel>
+                                                                <CheckBox x:Name="OneNoteDiarizationModeCheckBox"
+                                                                          Content="화자분리 (체크: 준실시간 화자별 색상, 해제: 즉시 자막)"
+                                                                          IsChecked="{Binding IsRealtimeDiarizationEnabled, Mode=TwoWay}"
+                                                                          IsEnabled="{Binding IsNotRecording}"
+                                                                          FontSize="12" Margin="0,0,0,4"
+                                                                          ToolTip="체크 시 약 10~15초 지연, 화자별 색상 표시. 해제 시 즉시 자막."/>
+                                                                <StackPanel Orientation="Horizontal" Margin="0,4,0,4">
+                                                                    <TextBlock Text="STT 모델" FontSize="12" VerticalAlignment="Center" Margin="0,0,8,0"
                                                                                Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
-                                                                    <!-- STT/요약 상태 표시 -->
-                                                                    <TextBlock Text=" · STT"
-                                                                               FontSize="11"
-                                                                               Foreground="{DynamicResource SystemFillColorSuccessBrush}"
-                                                                               Visibility="{Binding HasSTT, Converter={StaticResource BoolToVisibilityConverter}}"/>
-                                                                    <TextBlock Text=" · 요약"
-                                                                               FontSize="11"
-                                                                               Foreground="{DynamicResource SystemFillColorSuccessBrush}"
-                                                                               Visibility="{Binding HasSummary, Converter={StaticResource BoolToVisibilityConverter}}"/>
+                                                                    <ComboBox x:Name="OneNoteSttModelComboBox"
+                                                                              SelectedValue="{Binding TranscriptionModel, Mode=TwoWay}"
+                                                                              SelectedValuePath="Tag"
+                                                                              FontSize="12" Width="220">
+                                                                        <ComboBoxItem Content="gpt-4o-mini-transcribe (권장)" Tag="gpt-4o-mini-transcribe"/>
+                                                                        <ComboBoxItem Content="gpt-4o-transcribe (고품질)" Tag="gpt-4o-transcribe"/>
+                                                                        <ComboBoxItem Content="whisper-1 (구형, 일괄)" Tag="whisper-1"/>
+                                                                    </ComboBox>
                                                                 </StackPanel>
+                                                                <StackPanel Orientation="Horizontal" Margin="0,0,0,4"
+                                                                            ToolTip="오디오 청크 단위(초). 화자분리(준실시간) 모드에서 STT API 호출 단위로 사용. 일반 실시간 STT는 server_vad 기반이라 영향 없음.">
+                                                                    <TextBlock Text="청크 길이(초)" FontSize="12" VerticalAlignment="Center" Margin="0,0,6,0"
+                                                                               Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
+                                                                    <ComboBox x:Name="OneNoteChunkSecondsComboBox"
+                                                                              SelectedValue="{Binding ChunkSeconds, Mode=TwoWay}"
+                                                                              SelectedValuePath="Tag"
+                                                                              FontSize="12" Width="70">
+                                                                        <ComboBoxItem Content="1" Tag="1"/>
+                                                                        <ComboBoxItem Content="2" Tag="2"/>
+                                                                        <ComboBoxItem Content="3" Tag="3"/>
+                                                                        <ComboBoxItem Content="5" Tag="5"/>
+                                                                        <ComboBoxItem Content="10" Tag="10"/>
+                                                                        <ComboBoxItem Content="15" Tag="15"/>
+                                                                    </ComboBox>
+                                                                </StackPanel>
+                                                                <!-- 청크 오버랩(초) — 청크 경계에서 단어 끊김 방지 -->
+                                                                <StackPanel Orientation="Horizontal" Margin="0,0,0,4"
+                                                                            ToolTip="청크 경계에서 단어가 끊기지 않도록 직전 청크의 마지막 N초를 다음 청크에 포함합니다. 화자분리 모드에서 의미 있음.">
+                                                                    <TextBlock Text="청크 오버랩(초)" FontSize="12" VerticalAlignment="Center" Margin="0,0,6,0"
+                                                                               Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
+                                                                    <ComboBox SelectedValue="{Binding ChunkOverlapSeconds, Mode=TwoWay}"
+                                                                              SelectedValuePath="Tag"
+                                                                              FontSize="12" Width="100">
+                                                                        <ComboBoxItem Content="0">
+                                                                            <ComboBoxItem.Tag><sys:Double>0</sys:Double></ComboBoxItem.Tag>
+                                                                        </ComboBoxItem>
+                                                                        <ComboBoxItem Content="0.3">
+                                                                            <ComboBoxItem.Tag><sys:Double>0.3</sys:Double></ComboBoxItem.Tag>
+                                                                        </ComboBoxItem>
+                                                                        <ComboBoxItem Content="0.5 (기본)">
+                                                                            <ComboBoxItem.Tag><sys:Double>0.5</sys:Double></ComboBoxItem.Tag>
+                                                                        </ComboBoxItem>
+                                                                        <ComboBoxItem Content="1.0">
+                                                                            <ComboBoxItem.Tag><sys:Double>1.0</sys:Double></ComboBoxItem.Tag>
+                                                                        </ComboBoxItem>
+                                                                    </ComboBox>
+                                                                </StackPanel>
+                                                                <CheckBox Content="server_vad 자동 발화 감지 (해제: 녹음 종료 시 일괄 전사)"
+                                                                          IsChecked="{Binding IsServerVadEnabled, Mode=TwoWay}"
+                                                                          FontSize="12" Margin="0,4,0,4"
+                                                                          ToolTip="권장: 체크."/>
+                                                                <CheckBox Content="주제 키워드 하이라이트 표시 (STT 화면)"
+                                                                          IsChecked="{Binding IsKeywordHighlightEnabled, Mode=TwoWay}"
+                                                                          FontSize="12" Margin="0,0,0,4"
+                                                                          ToolTip="STT 화면에서 주제어 키워드를 노란 형광펜으로 표시."/>
+                                                                <Separator Margin="0,8,0,4"/>
+                                                                <TextBlock Text="STT 후처리 (녹음 종료 후)"
+                                                                           FontSize="12" FontWeight="SemiBold"
+                                                                           Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                                                                           Margin="0,0,0,6"/>
+                                                                <CheckBox x:Name="OneNotePostSTTCheckBox"
+                                                                          Content="STT 후처리 (녹음 완료 후 전체 파일 STT)"
+                                                                          FontSize="12" Margin="0,0,0,4"
+                                                                          Checked="OneNotePostSTT_Changed"
+                                                                          Unchecked="OneNotePostSTT_Changed"/>
+                                                                <CheckBox x:Name="OneNotePostDiarizationCheckBox"
+                                                                          Content="화자분리 후처리 (sherpa-onnx 정밀 화자분리)"
+                                                                          FontSize="12" Margin="0,0,0,4"
+                                                                          Checked="OneNotePostDiarization_Changed"
+                                                                          Unchecked="OneNotePostDiarization_Changed"/>
+                                                                <CheckBox Content="오타 수정 (GPT-4o-mini 실시간 후처리)"
+                                                                          IsChecked="{Binding IsEnableTypoFix, Mode=TwoWay}"
+                                                                          FontSize="12" Margin="0,0,0,0"
+                                                                          ToolTip="실시간 STT 각 발화 완료 시 GPT-4o-mini로 즉시 한국어 오타/맞춤법 보정. &quot;[보정] 텍스트&quot; 형식으로 별도 카드 추가됨. 추가 LLM 호출 비용 발생."/>
                                                             </StackPanel>
+                                                        </Border>
 
-                                                            <!-- 중간: 플레이어 컨트롤 -->
-                                                            <Grid Margin="0,8,0,0">
-                                                                <Grid.ColumnDefinitions>
-                                                                    <ColumnDefinition Width="Auto"/>
-                                                                    <ColumnDefinition Width="*"/>
-                                                                </Grid.ColumnDefinitions>
-
-                                                                <!-- 재생/일시정지 -->
-                                                                <Button Grid.Column="0"
-                                                                        Background="{DynamicResource SystemAccentColorBrush}"
-                                                                        Foreground="White"
-                                                                        ToolTip="재생/일시정지"
-                                                                        Padding="4"
-                                                                        Width="32" Height="32"
-                                                                        Tag="{Binding}"
-                                                                        Click="OneNoteRecordingPlay_Click">
-                                                                    <ui:SymbolIcon Symbol="{Binding IsPlaying, Converter={StaticResource BoolToPlayPauseIconConverter}, FallbackValue=Play24}"/>
-                                                                </Button>
-
-                                                                <!-- 진행 바 및 시간 -->
-                                                                <StackPanel Grid.Column="1" Margin="8,0" VerticalAlignment="Center">
-                                                                    <Slider x:Name="RecordingProgressSlider"
-                                                                            Minimum="0"
-                                                                            Maximum="{Binding Duration.TotalSeconds}"
-                                                                            Value="{Binding CurrentPosition.TotalSeconds, Mode=OneWay}"
-                                                                            Height="16"
-                                                                            Tag="{Binding}"
-                                                                            IsMoveToPointEnabled="True"
-                                                                            Thumb.DragCompleted="RecordingProgressSlider_DragCompleted"
-                                                                            PreviewMouseLeftButtonUp="RecordingProgressSlider_PreviewMouseUp"/>
-                                                                    <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
-                                                                        <TextBlock Text="{Binding CurrentPositionDisplay}"
-                                                                                   FontSize="10"
-                                                                                   Foreground="{DynamicResource TextFillColorTertiaryBrush}"/>
-                                                                        <TextBlock Text=" / "
-                                                                                   FontSize="10"
-                                                                                   Foreground="{DynamicResource TextFillColorTertiaryBrush}"/>
-                                                                        <TextBlock Text="{Binding DurationDisplay}"
-                                                                                   FontSize="10"
-                                                                                   Foreground="{DynamicResource TextFillColorTertiaryBrush}"/>
-                                                                    </StackPanel>
+                                                        <!-- ╔════ 요약 그룹 ════╗ -->
+                                                        <Border Background="{DynamicResource ControlFillColorDefaultBrush}"
+                                                                CornerRadius="6" Padding="10" Margin="0,0,0,12"
+                                                                BorderBrush="{DynamicResource ControlElevationBorderBrush}"
+                                                                BorderThickness="1">
+                                                            <StackPanel>
+                                                                <StackPanel Orientation="Horizontal" Margin="0,0,0,8">
+                                                                    <ui:SymbolIcon Symbol="Sparkle24" FontSize="14" Margin="0,0,6,0"
+                                                                                   Foreground="{DynamicResource AccentTextFillColorPrimaryBrush}"/>
+                                                                    <TextBlock Text="요약" FontWeight="SemiBold" FontSize="13"
+                                                                               Foreground="{DynamicResource AccentTextFillColorPrimaryBrush}"
+                                                                               VerticalAlignment="Center"/>
                                                                 </StackPanel>
-                                                            </Grid>
-
-                                                            <!-- 하단: STT분석, 요약, 삭제 버튼 -->
-                                                            <Grid Margin="0,8,0,0">
-                                                                <Grid.ColumnDefinitions>
-                                                                    <ColumnDefinition Width="*"/>
-                                                                    <ColumnDefinition Width="Auto"/>
-                                                                </Grid.ColumnDefinitions>
-
-                                                                <!-- STT분석, 요약 버튼 -->
-                                                                <StackPanel Orientation="Horizontal">
-                                                                    <ui:Button Content="{Binding STTButtonContent}"
-                                                                               Icon="{ui:SymbolIcon Mic24}"
-                                                                               Appearance="{Binding IsSTTInProgress, Converter={StaticResource BoolToAppearanceConverter}}"
-                                                                               FontSize="11"
-                                                                               Padding="8,4"
-                                                                               Margin="0,0,6,0"
-                                                                               Tag="{Binding}"
-                                                                               Click="OneNoteRecordingRunSTT_Click"/>
-                                                                    <ui:Button Content="{Binding SummaryButtonContent}"
-                                                                               Icon="{ui:SymbolIcon Sparkle24}"
-                                                                               Appearance="{Binding IsSummaryInProgress, Converter={StaticResource BoolToAppearanceConverter}}"
-                                                                               FontSize="11"
-                                                                               Padding="8,4"
-                                                                               Tag="{Binding}"
-                                                                               Click="OneNoteRecordingRunSummary_Click"/>
+                                                                <StackPanel Orientation="Horizontal" Margin="0,0,0,4"
+                                                                            ToolTip="옵션 주기마다 PeriodicTimer로 직전 시간 동안의 STT 텍스트를 LLM에 전송하여 요약을 생성합니다.">
+                                                                    <ToggleButton x:Name="OneNoteAutoSummaryToggle" IsChecked="True"
+                                                                                  ToolTip="자동 요약 (STT 결과를 AI로 요약)"
+                                                                                  Width="24" Height="24" Padding="0" Margin="0,0,6,0"
+                                                                                  Click="OneNoteAutoSummaryToggle_Click">
+                                                                        <ui:SymbolIcon Symbol="Sparkle16" FontSize="12" Foreground="#333333"/>
+                                                                    </ToggleButton>
+                                                                    <TextBlock Text="실시간 요약" FontSize="12" FontWeight="SemiBold"
+                                                                               VerticalAlignment="Center"/>
                                                                 </StackPanel>
-
-                                                                <!-- 삭제 버튼 -->
-                                                                <ui:Button Grid.Column="1"
-                                                                           Icon="{ui:SymbolIcon Delete24}"
-                                                                           Appearance="Transparent"
-                                                                           ToolTip="삭제"
-                                                                           Padding="4"
-                                                                           Tag="{Binding}"
-                                                                           Click="OneNoteRecordingDelete_Click"/>
-                                                            </Grid>
-                                                        </StackPanel>
-                                                </DataTemplate>
-                                            </ListBox.ItemTemplate>
-                                        </ListBox>
-
-                                        <!-- 녹음 파일 없을 때 -->
-                                        <TextBlock x:Name="OneNoteNoRecordingsText"
-                                                   Text="녹음 파일이 없습니다"
-                                                   Foreground="{DynamicResource TextFillColorTertiaryBrush}"
-                                                   FontSize="12"
-                                                   HorizontalAlignment="Center"
-                                                   Margin="0,20,0,0"
-                                                   Visibility="Collapsed"/>
-
-                                    </StackPanel>
+                                                                <StackPanel Orientation="Horizontal" Margin="0,4,0,4"
+                                                                            ToolTip="실시간 요약 + 핵심주제 추출을 이 주기로 실행합니다. 기본 60초. 짧을수록 빈번한 LLM 호출 + 비용 증가. 다음 녹음부터 적용.">
+                                                                    <TextBlock Text="요약·핵심주제 주기(초):" FontSize="12" VerticalAlignment="Center" Margin="0,0,6,0"
+                                                                               Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
+                                                                    <ComboBox SelectedValue="{Binding ProcessingIntervalSeconds, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                                                              SelectedValuePath="Tag"
+                                                                              FontSize="12" Width="80">
+                                                                        <ComboBoxItem Content="30초">
+                                                                            <ComboBoxItem.Tag><sys:Int32>30</sys:Int32></ComboBoxItem.Tag>
+                                                                        </ComboBoxItem>
+                                                                        <ComboBoxItem Content="60초 (기본)">
+                                                                            <ComboBoxItem.Tag><sys:Int32>60</sys:Int32></ComboBoxItem.Tag>
+                                                                        </ComboBoxItem>
+                                                                        <ComboBoxItem Content="90초">
+                                                                            <ComboBoxItem.Tag><sys:Int32>90</sys:Int32></ComboBoxItem.Tag>
+                                                                        </ComboBoxItem>
+                                                                        <ComboBoxItem Content="120초">
+                                                                            <ComboBoxItem.Tag><sys:Int32>120</sys:Int32></ComboBoxItem.Tag>
+                                                                        </ComboBoxItem>
+                                                                    </ComboBox>
+                                                                </StackPanel>
+                                                                <StackPanel Orientation="Horizontal" Margin="0,4,0,4">
+                                                                    <TextBlock Text="누적요약 주기(분)" FontSize="12" VerticalAlignment="Center" Margin="0,0,6,0"
+                                                                               Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
+                                                                    <ComboBox x:Name="OneNoteCumulativeIntervalComboBox"
+                                                                              SelectedValue="{Binding CumulativeIntervalMinutes, Mode=TwoWay}"
+                                                                              SelectedValuePath="Tag"
+                                                                              FontSize="12" Width="60">
+                                                                        <ComboBoxItem Content="3" Tag="3"/>
+                                                                        <ComboBoxItem Content="5" Tag="5"/>
+                                                                        <ComboBoxItem Content="10" Tag="10"/>
+                                                                        <ComboBoxItem Content="15" Tag="15"/>
+                                                                    </ComboBox>
+                                                                </StackPanel>
+                                                                <StackPanel Orientation="Horizontal" Margin="0,0,0,4"
+                                                                            ToolTip="60초 단위 1분 요약 LLM 모델">
+                                                                    <TextBlock Text="실시간요약 모델" FontSize="12" VerticalAlignment="Center" Margin="0,0,8,0"
+                                                                               Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
+                                                                    <ComboBox SelectedValue="{Binding MinuteSummaryModel, Mode=TwoWay}"
+                                                                              SelectedValuePath="Tag"
+                                                                              FontSize="12" Width="180">
+                                                                        <ComboBoxItem Content="gpt-4o-mini (저비용·빠름)" Tag="gpt-4o-mini"/>
+                                                                        <ComboBoxItem Content="gpt-4o (고품질)" Tag="gpt-4o"/>
+                                                                    </ComboBox>
+                                                                </StackPanel>
+                                                                <StackPanel Orientation="Horizontal" Margin="0,0,0,4"
+                                                                            ToolTip="누적요약 주기마다 1분 요약들을 합쳐 더 큰 단위로 재요약하는 LLM 모델">
+                                                                    <TextBlock Text="누적요약 모델" FontSize="12" VerticalAlignment="Center" Margin="0,0,8,0"
+                                                                               Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
+                                                                    <ComboBox SelectedValue="{Binding CumulativeSummaryModel, Mode=TwoWay}"
+                                                                              SelectedValuePath="Tag"
+                                                                              FontSize="12" Width="180">
+                                                                        <ComboBoxItem Content="gpt-4o-mini (저비용·빠름)" Tag="gpt-4o-mini"/>
+                                                                        <ComboBoxItem Content="gpt-4o (고품질)" Tag="gpt-4o"/>
+                                                                    </ComboBox>
+                                                                </StackPanel>
+                                                                <StackPanel Orientation="Horizontal" Margin="0,0,0,4"
+                                                                            ToolTip="녹음 종료 시 전체 통합 요약을 생성하는 LLM 모델">
+                                                                    <TextBlock Text="최종요약 모델" FontSize="12" VerticalAlignment="Center" Margin="0,0,8,0"
+                                                                               Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
+                                                                    <ComboBox SelectedValue="{Binding FinalSummaryModel, Mode=TwoWay}"
+                                                                              SelectedValuePath="Tag"
+                                                                              FontSize="12" Width="180">
+                                                                        <ComboBoxItem Content="gpt-4o (권장 — 고품질)" Tag="gpt-4o"/>
+                                                                        <ComboBoxItem Content="gpt-4o-mini (저비용)" Tag="gpt-4o-mini"/>
+                                                                    </ComboBox>
+                                                                </StackPanel>
+                                                                <Separator Margin="0,8,0,4"/>
+                                                                <TextBlock Text="요약 후처리"
+                                                                           FontSize="12" FontWeight="SemiBold"
+                                                                           Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                                                                           Margin="0,0,0,6"/>
+                                                                <CheckBox x:Name="OneNotePostSummaryCheckBox"
+                                                                          Content="요약 후처리 (STT 후처리 결과로 전체 요약)"
+                                                                          FontSize="12" Margin="0,0,0,4"
+                                                                          ToolTip="STT 후처리 활성화 필요 (입력 데이터로 사용). STT 후처리 미체크 시 자동 비활성화 + 해제됩니다."
+                                                                          Checked="OneNotePostSummary_Changed"
+                                                                          Unchecked="OneNotePostSummary_Changed"/>
+                                                                <CheckBox Content="최종요약 자동 (녹음 종료 시 자동 실행)"
+                                                                          IsChecked="{Binding IsAutoFinalSummary, Mode=TwoWay}"
+                                                                          FontSize="12" Margin="0,0,0,0"
+                                                                          ToolTip="체크 시 녹음 종료 후 최종 요약 자동 실행."/>
+                                                            </StackPanel>
+                                                        </Border>
+                                                    </StackPanel>
+                                                </ScrollViewer>
+                                            </Border>
+                                            <!-- /Col 2 OneNoteOptionsTabContent -->
+                                        </Grid>
+                                        <!-- /Row 1 좌우분할 Grid -->
+                                    </Grid>
+                                    <!-- /외곽 Grid (OneNoteAIRecordPanel 자식) -->
                                 </Border>
+                                <!-- /OneNoteAIRecordPanel -->
+
+                                <!-- (구) Legacy 영역 — 모든 콘텐츠 OneNoteRecordingsLeftStack으로 이동 완료 -->
+                                <StackPanel x:Name="OneNoteUnusedLegacyHost" Visibility="Collapsed">
+                                        <TextBlock Text="(empty)" Visibility="Collapsed"/>
+                                </StackPanel>
+
+                                <!-- DELETE_START: 옛 dead 콘텐츠 (x:Name 충돌 제거 필요) -->
+                                <!-- /OneNoteUnusedLegacyHost (Legacy 잔류 영역) -->
 
                                 <!-- STT 탭 -->
                                 <Border x:Name="OneNoteAISTTPanel" Visibility="Collapsed" Padding="12">

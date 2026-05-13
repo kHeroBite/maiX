@@ -1551,6 +1551,27 @@ ConfigureAwait(false)를 Service 레이어 전체에 적용하여 스레드 컨�
 
 ---
 
+## 2026-05-13: 요약 주기 통합 — ProcessingIntervalSeconds 단일 옵션 + 핵심요약 그루핑 (O3)
+
+### 작업 내용
+- **OpenAiRecordingSettings.cs**: `TopicExtractorIntervalSec` 제거 + `MinuteSummaryIntervalSeconds` → `ProcessingIntervalSeconds` rename (기본 60초)
+- **MinuteSummaryService.cs**: `ProcessingIntervalSeconds` 참조 갱신 (분리된 주기 설정 제거)
+- **TopicExtractorService.cs**: PeriodicTimer 주기를 `ProcessingIntervalSeconds` 로 통일 + `ConsolidateTopicsIfNeededAsync` 신규 구현 (count > 10 LLM 그루핑 평가 / count > 20 강제 실행, 8~12개 목표) + `TopicSegmentsConsolidated` 이벤트 추가
+- **OneNoteViewModel.cs**: 분리된 인터벌 필드 통합 + `OnTopicSegmentsConsolidated` 핸들러 + 구독/해제 등록
+- **MainWindow.xaml**: 두 개의 ComboBox(실시간 요약 주기 + 핵심주제 주기) → "요약·핵심주제 주기(초)" 단일 ComboBox 통합
+
+### 주요 변경 파일
+- `mAIx/Models/Settings/OpenAiRecordingSettings.cs`
+- `mAIx/Services/AI/MinuteSummaryService.cs`
+- `mAIx/Services/AI/TopicExtractorService.cs`
+- `mAIx/ViewModels/OneNoteViewModel.cs`
+- `mAIx/Views/MainWindow.xaml`
+
+### 테스트 결과 (otest Fast Path o3)
+- 빌드: 성공 (CS 에러 0건) ✅
+- 정적 검증 5/5 PASS ✅
+- MEMORY.md 규칙 (L-369/374/377/385) 준수 확인 ✅
+
 ## 2026-05-10: OpenAI Realtime STT sample rate 통일 — 16kHz → 24kHz (O3)
 
 ### 작업 내용

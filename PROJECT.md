@@ -333,8 +333,9 @@ Models:
   - 파일명: OpenAiRecordingSettings.cs (신규 — 2026-05-09)
     경로: Models/Settings/
     역할: OpenAI 녹음 STT/LLM 설정 (XML 직렬화), oai_recording.xml 영속화
-    속성: RealtimeSttModel, TranscribeSttModel, KeywordExtractModel, MinuteSummaryModel, CumulativeSummaryModel, FinalSummaryModel, CumulativeSummaryIntervalMinutes, ChunkSeconds, ActivePreset, TopicNavOrientation, DebugTimerScale
+    속성: RealtimeSttModel, TranscribeSttModel, KeywordExtractModel, MinuteSummaryModel, CumulativeSummaryModel, FinalSummaryModel, CumulativeSummaryIntervalMinutes, ChunkSeconds, ActivePreset, TopicNavOrientation, DebugTimerScale, ProcessingIntervalSeconds
     변경_2026-05-10: DebugTimerScale 프로퍼티 추가 (default 1.0, 테스트 시 단축 스케일 적용)
+    변경_2026-05-13: TopicExtractorIntervalSec 제거 + MinuteSummaryIntervalSeconds → ProcessingIntervalSeconds rename (기본 60초, 실시간 요약/핵심주제 추출 공용)
 
   - 파일명: TopicSegment.cs (신규 — 2026-05-09)
     경로: Models/
@@ -401,14 +402,16 @@ AI_Services:
     이벤트: TranscriptSegmentReceived
 
   - 파일명: TopicExtractorService.cs
-    역할: 12초 PeriodicTimer 기반 주제어 추출 + Jaccard 세그먼트 분기
+    역할: ProcessingIntervalSeconds PeriodicTimer 기반 주제어 추출 + Jaccard 세그먼트 분기 + 핵심주제 그루핑
     인터페이스: ITopicExtractorService
-    이벤트: TopicSegmentAdded, TopicSegmentUpdated
+    이벤트: TopicSegmentAdded, TopicSegmentUpdated, TopicSegmentsConsolidated
+    변경_2026-05-13: 주기를 ProcessingIntervalSeconds로 통일 + ConsolidateTopicsIfNeededAsync 신규 (count>10 LLM 그루핑/count>20 강제, 상한 20개/권장 10개)
 
   - 파일명: MinuteSummaryService.cs
-    역할: 60초 PeriodicTimer 기반 1분 요약 생성 + 디스크 JSON 저장
+    역할: ProcessingIntervalSeconds PeriodicTimer 기반 1분 요약 생성 + 디스크 JSON 저장
     인터페이스: IMinuteSummaryService
     이벤트: MinuteSummaryCreated
+    변경_2026-05-13: ProcessingIntervalSeconds 단일 옵션 사용 (별도 주기 설정 제거)
 
   - 파일명: CumulativeSummaryService.cs
     역할: 설정 주기 PeriodicTimer 기반 누적 요약 + 압축 갱신 모드 + 최종 요약

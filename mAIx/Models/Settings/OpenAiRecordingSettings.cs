@@ -83,10 +83,6 @@ public class OpenAiRecordingSettings
     [XmlElement("TtsVoice")]
     public string TtsVoice { get; set; } = "alloy";
 
-    /// <summary>주제어 추출 최소 단위 (초, 기본 12)</summary>
-    [XmlElement("TopicExtractorIntervalSec")]
-    public int TopicExtractorIntervalSec { get; set; } = 12;
-
     /// <summary>
     /// 디버그 타이머 배율 (기본 1.0 = 정상 속도, 0.1 = 10배 빠름).
     /// 환경변수 MAIX_DEBUG_TIMER_SCALE이 설정된 경우 해당 값이 우선 적용됨.
@@ -122,4 +118,16 @@ public class OpenAiRecordingSettings
     /// <summary>OpenAI server_vad 사용 여부 (true: 자동 발화 감지, false: 수동 종료 시 일괄 전사). 기본 true.</summary>
     [XmlElement("ServerVadEnabled")]
     public bool ServerVadEnabled { get; set; } = true;
+
+    /// <summary>STT 화면에서 주제어 키워드를 하이라이트로 표시할지 여부. 기본 true.</summary>
+    [XmlElement("KeywordHighlightEnabled")]
+    public bool KeywordHighlightEnabled { get; set; } = true;
+
+    /// <summary>처리 주기 (초 단위). 실시간 요약 + 핵심주제 추출 + 그루핑 평가를 모두 이 주기로 실행. 기본 60초.</summary>
+    [XmlElement("ProcessingIntervalSeconds")]
+    public int ProcessingIntervalSeconds { get; set; } = 60;
+
+    /// <summary>청크 오버랩 (초). 청크 경계에서 단어 끊김 방지 — 화자분리 모드에서 의미 있음. 기본 0.5초.</summary>
+    [XmlElement("ChunkOverlapSeconds")]
+    public double ChunkOverlapSeconds { get; set; } = 0.5;
 }

@@ -150,11 +150,12 @@ public sealed class MinuteSummaryService : IMinuteSummaryService
     private async Task RunTimerLoopAsync(CancellationToken ct)
     {
         _lastStartedAt = DateTime.Now;
-        // DebugTimerScale: 1.0=정상(60초), 0.1=10배 빠름(6초) — 환경변수 MAIX_DEBUG_TIMER_SCALE 우선
+        // 옵션 패널 ProcessingIntervalSeconds (기본 60초) × DebugTimerScale
         var envScale = Environment.GetEnvironmentVariable("MAIX_DEBUG_TIMER_SCALE");
         var timerScale = double.TryParse(envScale, out var parsed) ? parsed : _settings.OaiRecording.DebugTimerScale;
-        var timerInterval = TimeSpan.FromSeconds(Math.Max(1.0, 60.0 * timerScale));
-        _log.Debug("[MinuteSummary] PeriodicTimer 주기={Interval}s (scale={Scale})", timerInterval.TotalSeconds, timerScale);
+        var baseSeconds = Math.Max(5, _settings.OaiRecording.ProcessingIntervalSeconds);
+        var timerInterval = TimeSpan.FromSeconds(Math.Max(1.0, baseSeconds * timerScale));
+        _log.Info("[MinuteSummary] PeriodicTimer 주기={Interval}s (옵션={Base}s, scale={Scale})", timerInterval.TotalSeconds, baseSeconds, timerScale);
         using var timer = new PeriodicTimer(timerInterval);
         try
         {
