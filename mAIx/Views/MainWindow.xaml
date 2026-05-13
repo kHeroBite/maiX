@@ -7032,32 +7032,11 @@
                                                     </ToggleButton>
                                                 </Grid>
 
-                                                <!-- 주제어 카드 목록 — 전체 맵 모드 (항상 0초~현재까지 가득 차게 비례 배치, 스크롤 없음) -->
-                                                <Grid x:Name="OneNoteTopicNavScrollViewer" Grid.Row="1"
-                                                      ClipToBounds="True">
-                                                    <Grid.ColumnDefinitions>
-                                                        <ColumnDefinition Width="38"/>
-                                                        <ColumnDefinition Width="*"/>
-                                                    </Grid.ColumnDefinitions>
-
-                                                    <!-- 시간축 (0초 ~ 현재까지) — 패널 좌측 마커 -->
-                                                    <Grid Grid.Column="0" Margin="0,0,2,0">
-                                                        <TextBlock Text="00:00" FontSize="9"
-                                                                   Foreground="{DynamicResource TextFillColorTertiaryBrush}"
-                                                                   VerticalAlignment="Top" HorizontalAlignment="Right"
-                                                                   Margin="0,2,2,0"/>
-                                                        <TextBlock Text="{Binding OneNoteRecordingTime.Text, ElementName=OneNoteRecordingTime, FallbackValue='--:--'}"
-                                                                   FontSize="9" FontWeight="SemiBold"
-                                                                   Foreground="{DynamicResource AccentTextFillColorPrimaryBrush}"
-                                                                   VerticalAlignment="Bottom" HorizontalAlignment="Right"
-                                                                   Margin="0,0,2,2"/>
-                                                        <!-- 세로 가이드 라인 -->
-                                                        <Rectangle Width="1" Fill="{DynamicResource ControlElevationBorderBrush}"
-                                                                   HorizontalAlignment="Right" VerticalAlignment="Stretch"
-                                                                   Margin="0,12,0,12"/>
-                                                    </Grid>
-
-                                                    <ItemsControl Grid.Column="1" x:Name="TopicSegmentsItemsControl"
+                                                <!-- 대화 네비게이션 카드 목록 — 실시간 요약 기반 스크롤 카드 -->
+                                                <ScrollViewer Grid.Row="1"
+                                                              VerticalScrollBarVisibility="Auto"
+                                                              HorizontalScrollBarVisibility="Disabled">
+                                                    <ItemsControl x:Name="TopicSegmentsItemsControl"
                                                                   ItemsSource="{Binding TopicSegments}">
                                                         <ItemsControl.ItemsPanel>
                                                             <ItemsPanelTemplate>
@@ -7067,46 +7046,37 @@
                                                         <ItemsControl.ItemTemplate>
                                                             <DataTemplate>
                                                                 <Border Background="{Binding BackgroundColorHex, Converter={StaticResource HexToBrushConverter}}"
-                                                                        Padding="6,2" Margin="0,0,0,1" CornerRadius="2"
+                                                                        MinHeight="60" Padding="8,6" Margin="0,0,0,4" CornerRadius="6"
                                                                         Cursor="Hand"
-                                                                        MouseLeftButtonDown="TopicSegment_Click"
-                                                                        VerticalAlignment="Stretch">
-                                                                    <Border.Height>
-                                                                        <MultiBinding Converter="{StaticResource TopicSegmentProportionalHeightConverter}">
-                                                                            <Binding Path="StartTime"/>
-                                                                            <Binding Path="EndTime"/>
-                                                                            <Binding Path="ItemsSource" RelativeSource="{RelativeSource AncestorType=ItemsControl}"/>
-                                                                            <Binding Path="ActualHeight" ElementName="OneNoteTopicNavScrollViewer"/>
-                                                                        </MultiBinding>
-                                                                    </Border.Height>
+                                                                        MouseLeftButtonDown="TopicSegment_Click">
                                                                     <Border.ToolTip>
                                                                         <ToolTip>
                                                                             <TextBlock Text="{Binding ToolTipText}" TextWrapping="Wrap" MaxWidth="400"/>
                                                                         </ToolTip>
                                                                     </Border.ToolTip>
                                                                     <Grid>
-                                                                        <Grid.ColumnDefinitions>
-                                                                            <ColumnDefinition Width="Auto"/>
-                                                                            <ColumnDefinition Width="*"/>
-                                                                        </Grid.ColumnDefinitions>
-                                                                        <!-- 좌측: 시간 범위 (가독성 확보용 시간 표시) -->
-                                                                        <TextBlock Grid.Column="0" Text="{Binding TimeRangeDisplay}"
+                                                                        <Grid.RowDefinitions>
+                                                                            <RowDefinition Height="Auto"/>
+                                                                            <RowDefinition Height="*"/>
+                                                                        </Grid.RowDefinitions>
+                                                                        <!-- 상단: 시간 범위 -->
+                                                                        <TextBlock Grid.Row="0" Text="{Binding TimeRangeDisplay}"
                                                                                    FontSize="10"
                                                                                    Foreground="{Binding BackgroundColorHex, Converter={StaticResource HexToReadableForegroundConverter}, ConverterParameter=Tertiary}"
-                                                                                   VerticalAlignment="Top"
-                                                                                   Margin="0,0,6,0"/>
-                                                                        <!-- 우측: 주제 제목 -->
-                                                                        <TextBlock Grid.Column="1" Text="{Binding BodyDisplay}"
+                                                                                   Margin="0,0,0,3"/>
+                                                                        <!-- 하단: 핵심키워드/핵심맥락 -->
+                                                                        <TextBlock Grid.Row="1" Text="{Binding BodyDisplay}"
                                                                                    FontSize="11" FontWeight="SemiBold"
                                                                                    Foreground="{Binding BackgroundColorHex, Converter={StaticResource HexToReadableForegroundConverter}}"
-                                                                                   TextTrimming="CharacterEllipsis"
-                                                                                   VerticalAlignment="Top"/>
+                                                                                   TextWrapping="Wrap"
+                                                                                   MaxHeight="48"
+                                                                                   TextTrimming="CharacterEllipsis"/>
                                                                     </Grid>
                                                                 </Border>
                                                             </DataTemplate>
                                                         </ItemsControl.ItemTemplate>
                                                     </ItemsControl>
-                                                </Grid>
+                                                </ScrollViewer>
                                             </Grid>
                                         </Border>
 

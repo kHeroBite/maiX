@@ -335,7 +335,8 @@ Models:
     역할: OpenAI 녹음 STT/LLM 설정 (XML 직렬화), oai_recording.xml 영속화
     속성: RealtimeSttModel, TranscribeSttModel, KeywordExtractModel, MinuteSummaryModel, CumulativeSummaryModel, FinalSummaryModel, CumulativeSummaryIntervalMinutes, ChunkSeconds, ActivePreset, TopicNavOrientation, DebugTimerScale, ProcessingIntervalSeconds
     변경_2026-05-10: DebugTimerScale 프로퍼티 추가 (default 1.0, 테스트 시 단축 스케일 적용)
-    변경_2026-05-13: TopicExtractorIntervalSec 제거 + MinuteSummaryIntervalSeconds → ProcessingIntervalSeconds rename (기본 60초, 실시간 요약/핵심주제 추출 공용)
+    변경_2026-05-13a: TopicExtractorIntervalSec 제거 + MinuteSummaryIntervalSeconds → ProcessingIntervalSeconds rename (기본 60초, 실시간 요약/핵심주제 추출 공용)
+    변경_2026-05-13b: TopicNavOrientation 제거 (TopicExtractorService 삭제로 불필요)
 
   - 파일명: TopicSegment.cs (신규 — 2026-05-09)
     경로: Models/
@@ -400,12 +401,6 @@ AI_Services:
     역할: OpenAI Transcription API 청크 기반 STT 서비스 (화자분리 ON 모드, Jaccard dedup)
     인터페이스: IOpenAiTranscribeSttService
     이벤트: TranscriptSegmentReceived
-
-  - 파일명: TopicExtractorService.cs
-    역할: ProcessingIntervalSeconds PeriodicTimer 기반 주제어 추출 + Jaccard 세그먼트 분기 + 핵심주제 그루핑
-    인터페이스: ITopicExtractorService
-    이벤트: TopicSegmentAdded, TopicSegmentUpdated, TopicSegmentsConsolidated
-    변경_2026-05-13: 주기를 ProcessingIntervalSeconds로 통일 + ConsolidateTopicsIfNeededAsync 신규 (count>10 LLM 그루핑/count>20 강제, 상한 20개/권장 10개)
 
   - 파일명: MinuteSummaryService.cs
     역할: ProcessingIntervalSeconds PeriodicTimer 기반 1분 요약 생성 + 디스크 JSON 저장
@@ -809,6 +804,7 @@ Converters:
   - StringToInitialConverter.cs: 문자열 → 이니셜
   - AiCategoryToBadgeConverter.cs: AI 카테고리 문자열 → 배지 색상/텍스트 (긴급/액션/FYI/일반) [신규 2026-03-29]
   - HexToBrushConverter.cs: 16진 색상 문자열 → SolidColorBrush 변환기 (TopicSegment 배경색 바인딩용) [신규 2026-05-09]
+  - HexToReadableForegroundConverter.cs: 배경 색상 기반 전경색(흰/검) 자동 계산 변환기 [신규 2026-05-13]
 ```
 
 ## 핵심 종속성

@@ -1,21 +1,24 @@
-🔧 동기화/UI블로킹 6차 — 8개 패턴 전수조사 잔존 7건 수정 (L-376/L-377/L-380) by claude-sonnet-4-6
+🔀 refactor: 핵심요약 네비게이션 재설계 — TopicExtractorService 제거 + MinuteSummary 콜백 변환 by claude-opus-4-7
 
-LESSONS L-369/L-372/L-374/L-376/L-377/L-379/L-380의 적용 누락분 7건을
-8개 패턴 전수 조사로 발견 후 일괄 수정.
+## 변경 내용
 
-수정 내역:
-- GraphOneNoteService.cs:2782 — `using var semaphore = new SemaphoreSlim(10);` (L-376)
-- EmailAnalyzer.cs — IDisposable 구현 + Dispose() 메서드 신규 (`_semaphore?.Dispose()`) (L-376)
-- MainWindow.xaml.cs — 4개 람다 이벤트 핸들러 외부 try-catch 보강 (L-377/L-380)
-  - 17444 mailResyncButton.Click — IsEnabled/Content 사전 설정을 try 안으로 이동
-  - 17932 saveBtn.Click(프롬프트) — null guard + Template/IsEnabled 할당을 try 안으로 이동
-  - 20320 testBtn.Click — connStatus.Text/IsEnabled 사전 설정을 try 안으로 이동
-  - 20349 saveBtn.Click(TTS) — try-catch 신규 추가 (기존 catch 부재)
+### 삭제 (2개 파일)
+- `mAIx/Services/AI/TopicExtractorService.cs`: PeriodicTimer 기반 주제어 추출 서비스 전체 삭제
+- `mAIx/Converters/TopicSegmentProportionalHeightConverter.cs`: 비례높이 컨버터 삭제 (미추적 파일)
 
-검증:
-- dotnet build exit 0, 오류 0건, 경고 214건(전부 사전 존재 — 회귀 없음)
-- otest sprint_contract 6/6 PASS
+### 수정 (6개 파일)
+- `mAIx/App.xaml`: TopicSegmentProportionalHeightConverter 리소스 등록 제거
+- `mAIx/App.xaml.cs`: ITopicExtractorService DI 등록 제거
+- `mAIx/ViewModels/OneNoteViewModel.cs`: TopicExtractor 구독/해제/메서드 제거 + OnMinuteSummaryCreated에서 MinuteSummaryEntry → TopicSegment 직접 변환 삽입
+- `mAIx/Views/MainWindow.xaml`: 핵심요약 네비게이션 영역 재작성 (비례높이 → ScrollViewer+StackPanel 고정 카드 구조)
+- `mAIx/Services/AI/MinuteSummaryService.cs`: PeriodicTimer 로그 강화 + _running 완화 + ToString verbatim 수정 (직전 conv 미커밋 보존)
+- `mAIx/Services/AI/OpenAiRealtimeSttService.cs`: endTime 시그니처 추가 (직전 conv 미커밋 보존)
 
-🤖 Generated with [Claude Code](https://claude.com/claude-code) (claude-sonnet-4-6)
+## 설계 변경
+- 이전: TopicExtractorService가 독립 PeriodicTimer로 실행 → 핵심주제 추출
+- 이후: MinuteSummaryCreated 콜백에서 MinuteSummaryEntry → TopicSegment 직접 변환
+- 효과: 서비스 1개 제거, DI 단순화, 이벤트 경로 단축, 구조 명확화
+
+🤖 Generated with [Claude Code](https://claude.com/claude-code) (claude-opus-4-7)
 
 Co-Authored-By: Claude <noreply@anthropic.com>

@@ -212,7 +212,6 @@ public partial class App : Application
         services.AddSingleton<IOpenAiRealtimeSttService, OpenAiRealtimeSttService>();
         services.AddSingleton<IOpenAiTranscribeSttService, OpenAiTranscribeSttService>();
         services.AddSingleton<IOpenAiTtsService, OpenAiTtsService>();
-        services.AddSingleton<ITopicExtractorService, TopicExtractorService>();
         services.AddSingleton<IMinuteSummaryService, MinuteSummaryService>();
         services.AddSingleton<ICumulativeSummaryService, CumulativeSummaryService>();
 

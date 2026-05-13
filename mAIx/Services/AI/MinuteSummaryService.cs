@@ -127,7 +127,9 @@ public sealed class MinuteSummaryService : IMinuteSummaryService
     /// <inheritdoc/>
     public Task AddTranscriptAsync(string text)
     {
-        if (!_running || string.IsNullOrWhiteSpace(text)) return Task.CompletedTask;
+        _log.Debug("[MinuteSummary] AddTranscriptAsync 진입 — text length={Len}, _running={Running}", text?.Length ?? 0, _running);
+        if (_disposed) return Task.CompletedTask;
+        if (string.IsNullOrWhiteSpace(text)) return Task.CompletedTask;
         lock (_bufferLock)
         {
             _currentMinuteBuffer.Add(text);
@@ -222,7 +224,7 @@ public sealed class MinuteSummaryService : IMinuteSummaryService
             var url = baseUrl + "/chat/completions";
 
             var prompt = $"""
-                다음은 녹음 전사 텍스트 (구간: {startTime:mm\\:ss} ~ {endTime:mm\\:ss}) 입니다.
+                다음은 녹음 전사 텍스트 (구간: {startTime.ToString(@"mm\:ss")} ~ {endTime.ToString(@"mm\:ss")}) 입니다.
 
                 [전사 텍스트]
                 {combinedText}

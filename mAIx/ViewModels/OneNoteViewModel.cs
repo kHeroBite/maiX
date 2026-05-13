@@ -203,7 +203,6 @@ public partial class OneNoteViewModel : ViewModelBase
     // ─── OpenAI STT/AI 서비스 (IServiceProvider에서 lazy resolve) ─────────
     private IOpenAiRealtimeSttService? _realtimeSttService;
     private IOpenAiTranscribeSttService? _transcribeSttService;
-    private ITopicExtractorService? _topicExtractorService;
     private IMinuteSummaryService? _minuteSummaryService;
     private ICumulativeSummaryService? _cumulativeSummaryService;
 
@@ -2828,10 +2827,9 @@ public partial class OneNoteViewModel : ViewModelBase
             // 서비스 resolve
             _realtimeSttService = _serviceProvider.GetService<IOpenAiRealtimeSttService>();
             _transcribeSttService = _serviceProvider.GetService<IOpenAiTranscribeSttService>();
-            _topicExtractorService = _serviceProvider.GetService<ITopicExtractorService>();
             _minuteSummaryService = _serviceProvider.GetService<IMinuteSummaryService>();
             _cumulativeSummaryService = _serviceProvider.GetService<ICumulativeSummaryService>();
-            Log4.Info($"[녹음] DI resolve — realtime={_realtimeSttService != null}, transcribe={_transcribeSttService != null}, topic={_topicExtractorService != null}, minute={_minuteSummaryService != null}, cumulative={_cumulativeSummaryService != null}");
+            Log4.Info($"[녹음] DI resolve — realtime={_realtimeSttService != null}, transcribe={_transcribeSttService != null}, minute={_minuteSummaryService != null}, cumulative={_cumulativeSummaryService != null}");
 
             // 이벤트 구독
             if (IsRealtimeDiarizationEnabled)
@@ -2847,13 +2845,6 @@ public partial class OneNoteViewModel : ViewModelBase
                     _realtimeSttService.TranscriptSegmentUpdated += OnSttTranscriptSegmentUpdated;
                     _realtimeSttService.TranscriptSegmentRemoved += OnSttTranscriptSegmentRemoved;
                 }
-            }
-
-            if (_topicExtractorService != null)
-            {
-                _topicExtractorService.TopicSegmentAdded += OnTopicSegmentAdded;
-                _topicExtractorService.TopicSegmentUpdated += OnTopicSegmentUpdated;
-                _topicExtractorService.TopicSegmentsConsolidated += OnTopicSegmentsConsolidated;
             }
 
             if (_minuteSummaryService != null)
@@ -2878,8 +2869,6 @@ public partial class OneNoteViewModel : ViewModelBase
                     await _realtimeSttService.StartAsync();
             }
 
-            if (_topicExtractorService != null)
-                await _topicExtractorService.StartAsync();
             if (_minuteSummaryService != null)
                 await _minuteSummaryService.StartAsync();
             if (_cumulativeSummaryService != null)
@@ -2891,7 +2880,7 @@ public partial class OneNoteViewModel : ViewModelBase
         {
             Log4.Warn($"[녹음] OpenAI 서비스 시작 실패 (기존 STT 계속): {ex}");
             // ★ 실패 후 각 서비스 인스턴스 상태 로깅 (특히 _realtimeSttService가 살아있어도 _ws가 죽어있으면 silent return)
-            Log4.Warn($"[녹음] OpenAI 서비스 상태 — realtime={_realtimeSttService != null}, transcribe={_transcribeSttService != null}, topic={_topicExtractorService != null}, minute={_minuteSummaryService != null}, cumulative={_cumulativeSummaryService != null}");
+            Log4.Warn($"[녹음] OpenAI 서비스 상태 — realtime={_realtimeSttService != null}, transcribe={_transcribeSttService != null}, minute={_minuteSummaryService != null}, cumulative={_cumulativeSummaryService != null}");
         }
     }
 
@@ -2922,14 +2911,6 @@ public partial class OneNoteViewModel : ViewModelBase
                     _realtimeSttService.TranscriptSegmentUpdated -= OnSttTranscriptSegmentUpdated;
                     _realtimeSttService.TranscriptSegmentRemoved -= OnSttTranscriptSegmentRemoved;
                 }
-            }
-
-            if (_topicExtractorService != null)
-            {
-                _topicExtractorService.TopicSegmentAdded -= OnTopicSegmentAdded;
-                _topicExtractorService.TopicSegmentUpdated -= OnTopicSegmentUpdated;
-                _topicExtractorService.TopicSegmentsConsolidated -= OnTopicSegmentsConsolidated;
-                await _topicExtractorService.StopAsync();
             }
 
             if (_minuteSummaryService != null)
@@ -2980,7 +2961,6 @@ public partial class OneNoteViewModel : ViewModelBase
 
     // 이벤트 핸들러 — 실제 인터페이스 시그니처에 맞춤
     // IOpenAiRealtimeSttService/IOpenAiTranscribeSttService: Action<TimeSpan, string>
-    // ITopicExtractorService: Action<TopicSegment>
     // IMinuteSummaryService: Action<MinuteSummaryEntry>
     // ICumulativeSummaryService: Action<string>
 
@@ -2989,16 +2969,9 @@ public partial class OneNoteViewModel : ViewModelBase
         try
         {
             // ★ LiveSTTSegments.Add는 OnSttTranscriptSegmentUpdated에서 처리 (delta+completed itemId 매칭)
-            //   Received는 TopicExtractor/MinuteSummary에 텍스트 전달 전용 (텍스트 통계용)
+            //   Received는 MinuteSummary에 텍스트 전달 전용 (텍스트 통계용)
             //   이전: Received가 LiveSTTSegments.Add도 했으나 Updated와 중복 카드 발생 → Add 제거
-            Log4.Info($"[녹음] STT 텍스트 통계 전달 — text='{text.Substring(0, Math.Min(40, text.Length))}' (TopicExtractor + MinuteSummary)");
-
-            // TopicExtractor / MinuteSummary에 텍스트 전달
-            if (_topicExtractorService != null)
-            {
-                try { await _topicExtractorService.AddTranscriptAsync(text, startTime).ConfigureAwait(false); }
-                catch (Exception ex) { Log4.Warn($"[녹음] TopicExtractor 추가 실패: {ex.Message}"); }
-            }
+            Log4.Info($"[녹음] STT 텍스트 통계 전달 — text='{text.Substring(0, Math.Min(40, text.Length))}' (MinuteSummary)");
 
             if (_minuteSummaryService != null)
             {
@@ -3015,8 +2988,10 @@ public partial class OneNoteViewModel : ViewModelBase
     /// <summary>
     /// delta 누적 + completed Replace — itemId 기반 LiveSTTSegments 항목 교체 (없으면 신규 추가)
     /// </summary>
-    private async void OnSttTranscriptSegmentUpdated(string itemId, TimeSpan startTime, string text)
+    private async void OnSttTranscriptSegmentUpdated(string itemId, TimeSpan startTime, TimeSpan endTime, string text)
     {
+        // 짧은 세그먼트 최소 1초 보장
+        if (endTime <= startTime) endTime = startTime.Add(TimeSpan.FromSeconds(1));
         try
         {
             var dispatcher = System.Windows.Application.Current?.Dispatcher;
@@ -3031,7 +3006,7 @@ public partial class OneNoteViewModel : ViewModelBase
                 if (existing != null)
                 {
                     existing.Text = text;
-                    existing.EndTime = startTime;
+                    existing.EndTime = endTime;
                     // ObservableCollection은 Property 변경을 감지 못하므로 강제 갱신: Replace
                     var idx = LiveSTTSegments.IndexOf(existing);
                     LiveSTTSegments[idx] = new Models.TranscriptSegment
@@ -3040,7 +3015,7 @@ public partial class OneNoteViewModel : ViewModelBase
                         Speaker = existing.Speaker,
                         Text = text,
                         StartTime = existing.StartTime,
-                        EndTime = startTime
+                        EndTime = endTime
                     };
                 }
                 else
@@ -3051,7 +3026,7 @@ public partial class OneNoteViewModel : ViewModelBase
                         Speaker = "화자",
                         Text = text,
                         StartTime = startTime,
-                        EndTime = startTime
+                        EndTime = endTime
                     });
                 }
             }).Task.ConfigureAwait(false);
@@ -3087,84 +3062,6 @@ public partial class OneNoteViewModel : ViewModelBase
         }
     }
 
-    private async void OnTopicSegmentAdded(TopicSegment segment)
-    {
-        try
-        {
-            var dispatcher = System.Windows.Application.Current?.Dispatcher;
-            if (dispatcher != null)
-            {
-                await dispatcher.InvokeAsync(() =>
-                {
-                    TopicSegments.Add(segment);
-                    OnPropertyChanged(nameof(AllTopicKeywords));
-                    // ★ 새 세그먼트 추가로 총 녹음 시간 변경 → 기존 카드들의 비례 Height 재계산 강제
-                    RefreshTopicSegmentHeights();
-                    Log4.Info($"[녹음] 주제어 세그먼트 추가: {segment.DisplayTitle}");
-                }).Task.ConfigureAwait(false);
-            }
-        }
-        catch (Exception ex)
-        {
-            Log4.Error($"[녹음] OnTopicSegmentAdded 처리 실패: {ex.Message}");
-        }
-    }
-
-    private async void OnTopicSegmentUpdated(TopicSegment segment)
-    {
-        OnPropertyChanged(nameof(AllTopicKeywords));
-        // 갱신(EndTime 연장)도 비례 Height 영향 → 기존 카드들 재계산
-        try
-        {
-            var dispatcher = System.Windows.Application.Current?.Dispatcher;
-            if (dispatcher != null)
-            {
-                await dispatcher.InvokeAsync(RefreshTopicSegmentHeights).Task.ConfigureAwait(false);
-            }
-        }
-        catch { }
-        Log4.Debug($"[녹음] 주제어 세그먼트 갱신: {segment.Id} — {segment.DisplayTitle}");
-    }
-
-    private async void OnTopicSegmentsConsolidated(IReadOnlyList<TopicSegment> newList)
-    {
-        try
-        {
-            var dispatcher = System.Windows.Application.Current?.Dispatcher;
-            if (dispatcher != null)
-            {
-                await dispatcher.InvokeAsync(() =>
-                {
-                    // L-385/386 준수: preserveSelection 패턴 (selection write-back 방지)
-                    // TopicSegments는 현재 SelectedTopicSegment 미존재 → Clear+Add 단순 교체
-                    TopicSegments.Clear();
-                    foreach (var seg in newList)
-                        TopicSegments.Add(seg);
-                    OnPropertyChanged(nameof(AllTopicKeywords));
-                    RefreshTopicSegmentHeights();
-                    Log4.Info($"[녹음] 주제어 세그먼트 통합 완료: {newList.Count}개");
-                }).Task.ConfigureAwait(false);
-            }
-        }
-        catch (Exception ex)
-        {
-            Log4.Error($"[녹음] OnTopicSegmentsConsolidated 핸들러 실패: {ex.Message}");
-        }
-    }
-
-    /// <summary>
-    /// TopicSegments 변경 시 기존 모든 세그먼트의 EndTime PropertyChanged 강제 발화 → 비례 Height MultiBinding 재계산.
-    /// MultiBinding은 컬렉션 reference 변경 시에만 trigger되므로, 항목 추가만으로는 기존 카드 Height 재계산 안 됨.
-    /// </summary>
-    private void RefreshTopicSegmentHeights()
-    {
-        foreach (var seg in TopicSegments)
-        {
-            // EndTime PropertyChanged 강제 발화 → MultiBinding 재계산 trigger
-            seg.RaisePropertyChanged(nameof(TopicSegment.EndTime));
-        }
-    }
-
     private async void OnMinuteSummaryCreated(MinuteSummaryEntry entry)
     {
         try
@@ -3176,7 +3073,24 @@ public partial class OneNoteViewModel : ViewModelBase
                 {
                     MinuteSummaryCount++;
                     MinuteSummaries.Add(entry);
-                    Log4.Info($"[녹음] 1분 요약 생성 #{MinuteSummaryCount} — {entry.SummaryText.Length}자");
+
+                    // 실시간 요약 → 대화 네비게이션 TopicSegment 변환
+                    var palette = Models.TopicSegment.GetPaletteForCurrentTheme();
+                    var navSegment = new Models.TopicSegment
+                    {
+                        Id = MinuteSummaryCount - 1,
+                        StartTime = entry.StartTime,
+                        EndTime = entry.EndTime,
+                        DisplayTitle = entry.TimeRangeDisplay,
+                        SummaryPreview = entry.SummaryText.Length <= 100
+                            ? entry.SummaryText
+                            : entry.SummaryText.Substring(0, 100),
+                        BackgroundColorHex = palette[(MinuteSummaryCount - 1) % palette.Length],
+                    };
+                    TopicSegments.Add(navSegment);
+                    OnPropertyChanged(nameof(AllTopicKeywords));
+
+                    Log4.Info($"[녹음] 1분 요약 생성 #{MinuteSummaryCount} — {entry.SummaryText.Length}자, 네비게이션 카드 추가: {navSegment.DisplayTitle}");
                 }).Task.ConfigureAwait(false);
             }
         }

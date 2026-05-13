@@ -1551,6 +1551,27 @@ ConfigureAwait(false)를 Service 레이어 전체에 적용하여 스레드 컨�
 
 ---
 
+## 2026-05-13: 핵심요약 네비게이션 재설계 — TopicExtractorService 제거 + MinuteSummary 콜백 변환 (O3 — 8파일)
+
+### 작업 내용
+- **TopicExtractorService.cs**: 전체 삭제 (PeriodicTimer 기반 주제어 추출 서비스 제거)
+- **Converters/TopicSegmentProportionalHeightConverter.cs**: 전체 삭제 (비례높이 컨버터 제거)
+- **App.xaml**: `TopicSegmentProportionalHeightConverter` 리소스 등록 제거
+- **App.xaml.cs**: `ITopicExtractorService` DI 등록 제거
+- **ViewModels/OneNoteViewModel.cs**: TopicExtractor 구독/해제/메서드 제거 + `OnMinuteSummaryCreated`에서 MinuteSummaryEntry → TopicSegment 직접 변환 삽입 (약 100줄 제거 + 20줄 추가)
+- **Views/MainWindow.xaml**: 핵심요약 네비게이션 영역 재작성 — 비례높이 컨버터 기반 → ScrollViewer + StackPanel 고정 카드 구조
+- **Services/AI/MinuteSummaryService.cs**: PeriodicTimer 로그 강화 + `_running` 완화 + ToString verbatim 수정 (직전 conv 미커밋 보존)
+- **Services/AI/OpenAiRealtimeSttService.cs**: endTime 시그니처 추가 (직전 conv 미커밋 보존)
+
+### 설계 변경 요약
+- 이전: TopicExtractorService가 독립 주기(ProcessingIntervalSeconds)로 실행 → 핵심주제 추출
+- 이후: MinuteSummaryService가 발화할 때마다 OnMinuteSummaryCreated 콜백에서 MinuteSummaryEntry → TopicSegment 직접 변환
+- 장점: 서비스 1개 제거, DI 단순화, 이벤트 경로 단축
+
+### 테스트 결과
+- 빌드: 성공 (오류 0건) ✅
+- 역라우팅: 0회 (1회 사이클 완료) ✅
+
 ## 2026-05-13: 요약 주기 통합 — ProcessingIntervalSeconds 단일 옵션 + 핵심요약 그루핑 (O3)
 
 ### 작업 내용

@@ -27,9 +27,9 @@ public interface IOpenAiRealtimeSttService : IDisposable
     event Action<TimeSpan, string>? TranscriptSegmentReceived;
 
     /// <summary>
-    /// STT 항목 갱신 이벤트 (itemId, 시간, 누적/최종 텍스트) — delta 누적 + completed 보정 시 기존 itemId 항목 교체용
+    /// STT 항목 갱신 이벤트 (itemId, startTime, endTime, 누적/최종 텍스트) — delta 누적 + completed 보정 시 기존 itemId 항목 교체용
     /// </summary>
-    event Action<string, TimeSpan, string>? TranscriptSegmentUpdated;
+    event Action<string, TimeSpan, TimeSpan, string>? TranscriptSegmentUpdated;
 
     /// <summary>
     /// STT 항목 제거 이벤트 (itemId) — hallucination 차단 시 누적된 delta 항목 제거용
@@ -107,7 +107,7 @@ public sealed class OpenAiRealtimeSttService : IOpenAiRealtimeSttService
     /// <inheritdoc/>
     public event Action<TimeSpan, string>? TranscriptSegmentReceived;
     /// <inheritdoc/>
-    public event Action<string, TimeSpan, string>? TranscriptSegmentUpdated;
+    public event Action<string, TimeSpan, TimeSpan, string>? TranscriptSegmentUpdated;
     /// <inheritdoc/>
     public event Action<string>? TranscriptSegmentRemoved;
 
@@ -396,8 +396,9 @@ public sealed class OpenAiRealtimeSttService : IOpenAiRealtimeSttService
                         _lastDeltaAt = DateTime.Now;
                         _currentSpeechItemId = openAiItemId;
                         var ts = TimeSpan.FromMilliseconds(_lastSpeechStartedMs);
+                        var tsEnd = TimeSpan.FromMilliseconds(_lastSpeechStoppedMs > 0 ? _lastSpeechStoppedMs : _lastSpeechStartedMs);
                         _log.Info($"[OpenAi-Realtime] delta — text='{deltaText}' openAiItemId={openAiItemId} accum_len={accum.Length}");
-                        TranscriptSegmentUpdated?.Invoke(openAiItemId, ts, accum);
+                        TranscriptSegmentUpdated?.Invoke(openAiItemId, ts, tsEnd, accum);
                     }
                 }
             }
@@ -421,10 +422,11 @@ public sealed class OpenAiRealtimeSttService : IOpenAiRealtimeSttService
                             return;
                         }
                         var ts = TimeSpan.FromMilliseconds(_lastSpeechStartedMs);
+                        var tsEnd = TimeSpan.FromMilliseconds(_lastSpeechStoppedMs > 0 ? _lastSpeechStoppedMs : _lastSpeechStartedMs);
                         // delta가 도착했으면 LiveSTT UI는 Updated로 final 교체 (itemId 매칭 in-place)
                         if (_deltaBuffers.ContainsKey(itemId))
                         {
-                            TranscriptSegmentUpdated?.Invoke(itemId, ts, text);
+                            TranscriptSegmentUpdated?.Invoke(itemId, ts, tsEnd, text);
                         }
                         // ★ TopicExtractor/MinuteSummary 전달은 항상 Received로 한 번 더 발화 (delta 유무 무관)
                         // 이유: Updated 핸들러는 LiveSTTSegments UI만 갱신하므로 텍스트 통계 누락 방지
