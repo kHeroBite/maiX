@@ -7117,22 +7117,9 @@
 
                                         <!-- 우측: 녹음옵션(상단) + AI 요약(하단) (Col4) -->
                                         <Grid Grid.Column="4">
-                                            <Grid.RowDefinitions>
-                                                <RowDefinition Height="Auto" MinHeight="180"/>
-                                                <RowDefinition Height="*"/>
-                                            </Grid.RowDefinitions>
 
-                                            <!-- 우측 상단: 녹음 옵션 패널 (Row 0) -->
-                                            <Border Grid.Row="0" Padding="12,10"
-                                                    BorderBrush="{DynamicResource ControlElevationBorderBrush}"
-                                                    BorderThickness="0,0,0,1">
-                                                <StackPanel>
-                                                    <!-- 종료 버튼 제거됨: 녹음 시작/종료 토글이 다른 위치에 있음 -->
-                                                </StackPanel>
-                                            </Border>
-
-                                            <!-- 우측 하단: AI 요약 패널 (Row 1) -->
-                                            <Border Grid.Row="1" Padding="12,8">
+                                            <!-- 우측: AI 요약 패널 -->
+                                            <Border Padding="12,8">
                                                 <Grid>
                                                     <Grid.RowDefinitions>
                                                         <RowDefinition Height="Auto"/>
@@ -7147,16 +7134,16 @@
                                                         </Grid.ColumnDefinitions>
                                                         <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
                                                             <ui:SymbolIcon Symbol="Sparkle24" FontSize="16" Margin="0,0,6,0" VerticalAlignment="Center"/>
-                                                            <TextBlock Text="최종요약" FontSize="13" FontWeight="SemiBold" VerticalAlignment="Center"/>
+                                                            <TextBlock Text="요약" FontSize="13" FontWeight="SemiBold" VerticalAlignment="Center"/>
                                                             <!-- 진행 중 표시기 -->
                                                             <ui:ProgressRing x:Name="OneNoteSummaryProgress" Width="16" Height="16" Margin="6,0,0,0" IsIndeterminate="True" Visibility="Collapsed"/>
                                                             <TextBlock x:Name="OneNoteSummaryProgressText" Text="" FontSize="12" Margin="6,0,0,0"
                                                                        Foreground="{DynamicResource TextFillColorSecondaryBrush}" VerticalAlignment="Center"/>
                                                         </StackPanel>
-                                                        <!-- 최종요약 버튼 -->
+                                                        <!-- 요약 버튼 -->
                                                         <ui:Button x:Name="OneNoteTabRunSummaryButton"
                                                                    Grid.Column="1"
-                                                                   Content="최종요약"
+                                                                   Content="요약"
                                                                    Icon="{ui:SymbolIcon Sparkle24}"
                                                                    Appearance="Secondary"
                                                                    FontSize="11"
@@ -7240,7 +7227,7 @@
                                                                                    TextWrapping="Wrap" FontSize="12"/>
                                                                     </StackPanel>
                                                                 </Border>
-                                                                <TextBlock x:Name="OneNoteSummaryEmptyText" Text="후처리 요약이 없습니다. 녹음 종료 후 최종요약 버튼을 클릭하세요."
+                                                                <TextBlock x:Name="OneNoteSummaryEmptyText" Text="후처리 요약이 없습니다. 녹음 종료 후 요약 버튼을 클릭하세요."
                                                                            Foreground="{DynamicResource TextFillColorTertiaryBrush}"
                                                                            TextWrapping="Wrap"
                                                                            HorizontalAlignment="Center" Margin="0,8,0,0"/>

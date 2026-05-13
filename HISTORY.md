@@ -1572,6 +1572,36 @@ ConfigureAwait(false)를 Service 레이어 전체에 적용하여 스레드 컨�
 - 정적 검증 5/5 PASS ✅
 - MEMORY.md 규칙 (L-369/374/377/385) 준수 확인 ✅
 
+## 2026-05-13: 실시간 요약 dead code 제거 + MinuteSummaryService 로그 강화 (O3 — 4파일)
+
+### 배경
+- 사용자가 "실시간 요약이 0건, 핵심요약 1건만 보임" 보고
+- 1차 oplan이 `_realtimeSummaryTimer` dead code 경로를 핵심 수정 대상으로 오판 → 역라우팅 1회
+- odebug 진단: `StartRealtimeSTT()` 어디서도 호출 안 됨 + `MinuteSummaryService` 단일 경로가 실제 동작
+
+### 작업 내용
+- **OneNoteViewModel.cs**: dead code 270줄 제거
+  - 제거 필드 4개: `_realtimeSTTCts`, `_realtimeSummaryTimer`, `_lastSummarySegmentCount`, `_summaryIntervalSeconds`
+  - 제거 함수 5개: `StartRealtimeSTT()`, `StopRealtimeSTT()`, `UpdateRealtimeSummaryAsync()`, `BuildRealtimeSummaryPrompt()`, `SetSummaryInterval()`
+  - 보존: `[ObservableProperty] _isRealtimeSummaryInProgress` (MainWindow.xaml.cs L7623 참조)
+- **MinuteSummaryService.cs**: PeriodicTimer 발화 로그 3건 추가
+  - `[MinuteSummary] PeriodicTimer 틱 — buffer={Count}개` (매 tick 발화 가시화)
+  - `[MinuteSummary] PeriodicTimer 스킵 — STT 버퍼 없음` (버퍼 비어 skip 시)
+  - `[MinuteSummary] SummarizeMinuteAsync 시작 — segments={Count}` (요약 시작 시)
+- **MainWindow.xaml.cs**: `SetSummaryInterval()` 호출부 2곳 제거 (L8919, L8923) — 컴파일 오류 해결
+- **MainWindow.xaml**: 빈 `Border` 제거 + `"최종요약"` → `"요약"` 레이블 변경 + Row 0 제거
+
+### 테스트 결과 (otest-2 런타임 포함)
+- 빌드: 성공 (오류 0건, 경고 224개) ✅
+- AC-001~AC-008 전항목 PASS ✅
+- 런타임 검증: 18:47:41 PeriodicTimer 첫 발화, 18:48~18:52 5회 연속 발화 확인 ✅
+
+### 주요 변경 파일
+- `mAIx/ViewModels/OneNoteViewModel.cs`
+- `mAIx/Services/AI/MinuteSummaryService.cs`
+- `mAIx/Views/MainWindow.xaml.cs`
+- `mAIx/Views/MainWindow.xaml`
+
 ## 2026-05-10: OpenAI Realtime STT sample rate 통일 — 16kHz → 24kHz (O3)
 
 ### 작업 내용

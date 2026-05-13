@@ -213,11 +213,6 @@ public partial class OneNoteViewModel : ViewModelBase
     private Services.Audio.AudioRecordingService? _recordingService;
 
     /// <summary>
-    /// 실시간 STT 취소 토큰
-    /// </summary>
-    private CancellationTokenSource? _realtimeSTTCts;
-
-    /// <summary>
     /// [Obsolete] 서버 모드 WebSocket STT 서비스 — OpenAI 경로로 전환됨
     /// </summary>
 #pragma warning disable CS0618 // Obsolete 필드 보존 (Surgical — 삭제는 별도 정리 작업)
@@ -235,24 +230,9 @@ public partial class OneNoteViewModel : ViewModelBase
     private CancellationTokenSource? _manualSummaryCts;
 
     /// <summary>
-    /// 실시간 요약 업데이트 타이머
-    /// </summary>
-    private System.Timers.Timer? _realtimeSummaryTimer;
-
-    /// <summary>
-    /// 실시간 요약 마지막 업데이트 세그먼트 수
-    /// </summary>
-    private int _lastSummarySegmentCount = 0;
-
-    /// <summary>
     /// STT 청크 간격 (초), 기본 30초
     /// </summary>
     private float _sttChunkIntervalSeconds = 1f;
-
-    /// <summary>
-    /// 요약 업데이트 간격 (초), 기본 30초
-    /// </summary>
-    private int _summaryIntervalSeconds = 30;
 
     /// <summary>
     /// 오디오 플레이어 서비스
@@ -2789,7 +2769,6 @@ public partial class OneNoteViewModel : ViewModelBase
             _liveSegmentsBeforeDiarization = null;
             _segmentsBeforeDiarization = null;
             _segmentsAfterDiarization = null;
-            _lastSummarySegmentCount = 0;
 
             // AI 분석 활성화 시 OpenAI STT 오디오 청크 이벤트 연결
             // (제거됨) Jarvis 서버 STT — OpenAI로 전환
@@ -3423,81 +3402,6 @@ public partial class OneNoteViewModel : ViewModelBase
     }
 
     /// <summary>
-    /// 실시간 STT 시작
-    /// </summary>
-    private async Task StartRealtimeSTT()
-    {
-        if (_recordingService == null) return;
-
-        try
-        {
-        Log4.Info("[녹음] ★ 실시간 STT 시작 (OpenAI 경로)");
-
-        var oldRealtimeCts = _realtimeSTTCts;
-        _realtimeSTTCts = new CancellationTokenSource();
-        oldRealtimeCts?.Cancel();
-        oldRealtimeCts?.Dispose();
-
-        // 실시간 모드 활성화 (설정된 청크 간격 사용)
-        _recordingService.RealtimeEnabled = true;
-        _recordingService.RealtimeChunkSeconds = _sttChunkIntervalSeconds;
-
-        // 실시간 요약 업데이트 타이머 (설정된 간격 사용)
-        _realtimeSummaryTimer?.Stop();
-        _realtimeSummaryTimer?.Dispose();
-        _realtimeSummaryTimer = new System.Timers.Timer(_summaryIntervalSeconds * 1000);
-        _realtimeSummaryTimer.Elapsed += async (s, e) =>
-        {
-            try
-            {
-                await UpdateRealtimeSummaryAsync();
-            }
-            catch (Exception ex)
-            {
-                Log4.Error($"[녹음] 실시간 요약 타이머 처리 중 오류: {ex.Message}\n{ex.StackTrace}");
-            }
-        };
-        _realtimeSummaryTimer.Start();
-
-        Log4.Info($"[녹음] ★ 실시간 STT 모드 활성화 (STT: {_sttChunkIntervalSeconds}초, 요약: {_summaryIntervalSeconds}초)");
-        }
-        catch (Exception ex)
-        {
-            Log4.Error($"[녹음] ★ StartRealtimeSTT 실패: {ex.Message}");
-        }
-    }
-
-    /// <summary>
-    /// 실시간 STT 중지
-    /// </summary>
-    private async Task StopRealtimeSTT()
-    {
-        try
-        {
-        _realtimeSTTCts?.Cancel();
-        _realtimeSTTCts?.Dispose();
-        _realtimeSTTCts = null;
-
-        _realtimeSummaryTimer?.Stop();
-        _realtimeSummaryTimer?.Dispose();
-        _realtimeSummaryTimer = null;
-
-
-        // OpenAI 경로: _realtimeSTTCts 취소만으로 STT 서비스 정리됨
-        if (_recordingService != null)
-        {
-            _recordingService.RealtimeEnabled = false;
-        }
-
-        _logger.Information("[녹음] 실시간 STT 모드 비활성화 (OpenAI 경로)");
-        }
-        catch (Exception ex)
-        {
-            Log4.Error($"[녹음] ★ StopRealtimeSTT 실패: {ex.Message}");
-        }
-    }
-
-    /// <summary>
     /// [Obsolete] Jarvis 서버 STT 오디오 청크 핸들러 — OpenAI 경로로 전환됨
     /// 실제 경로: OnRealtimeAudioChunkForOpenAi
     /// </summary>
@@ -3593,188 +3497,6 @@ public partial class OneNoteViewModel : ViewModelBase
             }
             Log4.Debug2($"[녹음] 화자분리: {result.Speaker} ({result.Start:F1}s~{result.End:F1}s, ChunkId: {result.ChunkId})");
         });
-    }
-
-    /// <summary>
-    /// 실시간 요약 업데이트
-    /// </summary>
-    private async Task UpdateRealtimeSummaryAsync()
-    {
-        Log4.Info($"[녹음] ★ 실시간 요약 타이머 발동 - CTS: {_realtimeSTTCts != null}, 세그먼트: {LiveSTTSegments.Count}, 마지막: {_lastSummarySegmentCount}");
-
-        if (_realtimeSTTCts == null || _realtimeSTTCts.IsCancellationRequested)
-        {
-            Log4.Info("[녹음] ★ 실시간 요약 스킵 - CTS 취소됨");
-            return;
-        }
-
-        // 새 세그먼트가 없으면 스킵
-        if (LiveSTTSegments.Count <= _lastSummarySegmentCount)
-        {
-            Log4.Info($"[녹음] ★ 실시간 요약 스킵 - 새 세그먼트 없음 ({LiveSTTSegments.Count} <= {_lastSummarySegmentCount})");
-            return;
-        }
-
-        try
-        {
-            // 실시간 요약 진행 중 표시
-            await System.Windows.Application.Current?.Dispatcher.InvokeAsync(() =>
-            {
-                IsRealtimeSummaryInProgress = true;
-            });
-
-            var segmentsCopy = System.Windows.Application.Current != null
-                ? await System.Windows.Application.Current.Dispatcher.InvokeAsync(() => LiveSTTSegments.ToList())
-                : new List<Models.TranscriptSegment>();
-
-            if (segmentsCopy == null || segmentsCopy.Count == 0)
-            {
-                Log4.Info("[녹음] ★ 실시간 요약 스킵 - 세그먼트 복사 실패");
-                return;
-            }
-
-            // 전체 텍스트 추출
-            var fullText = string.Join(" ", segmentsCopy.Select(s => s.Text));
-            Log4.Info($"[녹음] ★ 실시간 요약 - 텍스트 길이: {fullText.Length}자");
-
-            if (string.IsNullOrWhiteSpace(fullText) || fullText.Length < 50)
-            {
-                Log4.Info($"[녹음] ★ 실시간 요약 스킵 - 텍스트 너무 짧음 ({fullText.Length}자 < 50자)");
-                return;
-            }
-
-            var speakers = segmentsCopy.Select(s => s.Speaker).Distinct().ToList();
-            var duration = segmentsCopy.LastOrDefault()?.EndTime ?? TimeSpan.Zero;
-
-            Log4.Info($"[녹음] ★ 실시간 요약 시작: {segmentsCopy.Count}개 세그먼트, {fullText.Length}자");
-
-            // AI 요약 시도
-            var aiService = (System.Windows.Application.Current as App)?.GetService<Services.AI.AIService>();
-            string summaryText;
-
-            // 요약 결과 변수
-            string titleText = "실시간 녹음";
-            string summaryTextParsed = string.Empty;
-            var keyPoints = new List<string>();
-            var actionItems = new List<Models.ActionItem>();
-            string modelName = "Local-Realtime";
-
-            if (aiService?.CurrentProvider != null)
-            {
-                Log4.Info($"[녹음] ★ AI 요약 요청 중: {aiService.CurrentProviderName}");
-                modelName = aiService.CurrentProviderName;
-                var prompt = BuildRealtimeSummaryPrompt(fullText, speakers, duration);
-                var response = await aiService.CompleteAsync(prompt);
-
-                if (!string.IsNullOrEmpty(response))
-                {
-                    Log4.Info($"[녹음] ★ AI 요약 응답: {response.Length}자");
-                    // JSON 응답 파싱 (일반 요약과 동일한 방식)
-                    ParseAISummaryResponse(response, out titleText, out summaryTextParsed, out keyPoints, out actionItems);
-                    Log4.Info($"[녹음] ★ 파싱된 제목: '{titleText}', 요약: {summaryTextParsed?.Length ?? 0}자, 핵심포인트: {keyPoints.Count}개, 액션아이템: {actionItems.Count}개");
-
-                    // 파싱 실패 시 로컬 요약으로 대체
-                    if (string.IsNullOrEmpty(summaryTextParsed))
-                    {
-                        summaryTextParsed = response;
-                    }
-                }
-                else
-                {
-                    Log4.Info("[녹음] ★ AI 응답 없음, 로컬 요약 사용");
-                    summaryTextParsed = GenerateLocalSummary(fullText, speakers, duration);
-                }
-            }
-            else
-            {
-                Log4.Info("[녹음] ★ AI Provider 없음, 로컬 요약 사용");
-                summaryTextParsed = GenerateLocalSummary(fullText, speakers, duration);
-            }
-
-            // RecordingSummary 객체 생성 (일반 요약과 동일한 구조)
-            var realtimeSummary = new Models.RecordingSummary
-            {
-                AudioFilePath = "",  // 실시간 녹음 중이므로 아직 파일 경로 없음
-                CreatedAt = DateTime.Now,
-                Title = titleText,
-                Summary = summaryTextParsed,
-                KeyPoints = keyPoints,
-                ActionItems = actionItems,
-                Participants = speakers,
-                RecordingType = DetectRecordingType(fullText, speakers),
-                ModelName = modelName,
-                SourceSTTPath = ""
-            };
-
-            await System.Windows.Application.Current?.Dispatcher.InvokeAsync(() =>
-            {
-                LiveSummaryText = summaryTextParsed;
-                CurrentSummary = realtimeSummary;  // UI에 구조화된 요약 표시
-                _lastSummarySegmentCount = segmentsCopy.Count;
-            });
-
-            Log4.Info($"[녹음] ★ 실시간 요약 완료: 제목='{titleText}', 요약={summaryTextParsed?.Length ?? 0}자, 핵심포인트={keyPoints.Count}개");
-        }
-        catch (Exception ex)
-        {
-            Log4.Error($"[녹음] ★ 실시간 요약 실패: {ex.Message}");
-        }
-        finally
-        {
-            // 실시간 요약 진행 완료
-            await System.Windows.Application.Current?.Dispatcher.InvokeAsync(() =>
-            {
-                IsRealtimeSummaryInProgress = false;
-            });
-        }
-    }
-
-    /// <summary>
-    /// 실시간 요약 프롬프트 생성
-    /// </summary>
-    private string BuildRealtimeSummaryPrompt(string fullText, List<string> speakers, TimeSpan duration)
-    {
-        // 전사 내용이 너무 길면 앞부분과 뒷부분 위주로 요약용 텍스트 생성
-        var summaryText = fullText;
-        if (fullText.Length > 10000)
-        {
-            // 실시간이므로 더 짧게 제한
-            summaryText = fullText.Substring(0, 5000) +
-                "\n\n... [중간 내용 생략] ...\n\n" +
-                fullText.Substring(fullText.Length - 4000);
-        }
-
-        return $@"당신은 한국어 회의록 요약 전문가입니다. 아래는 현재 진행 중인 녹음의 실시간 음성 인식 결과입니다. 현재까지의 내용을 정확하게 추출하세요.
-
-## 녹음 정보
-- 경과 시간: {duration:mm\:ss}
-- 참여자 수: {speakers.Count}명
-
-## 전사 내용
-{summaryText}
-
-## 중요 지침
-- 전사 내용에 실제로 언급된 내용만 추출하세요.
-- '>> 사이렌', '감사합니다' 같은 노이즈/인사말은 무시하세요.
-- 구체적인 날짜, 회사명, 프로젝트명, 업무 내용을 정확히 추출하세요.
-- 진행 중인 녹음이므로 결론이 없을 수 있습니다. 현재까지 논의된 내용 위주로 요약하세요.
-
-## 응답 형식 (JSON)
-{{
-  ""title"": ""회의/대화 주제를 나타내는 10~20자 제목 (예: 'Q2 마케팅 전략 회의', '프로젝트 진행상황 논의')"",
-  ""summary"": ""현재까지의 핵심 내용을 2~4문장으로 요약. 누가 무엇을 논의하고 있는지 구체적으로 작성"",
-  ""keyPoints"": [
-    ""현재까지 논의된 구체적 사실/내용 1"",
-    ""현재까지 논의된 구체적 사실/내용 2"",
-    ""현재까지 논의된 구체적 사실/내용 3""
-  ],
-  ""actionItems"": [
-    {{""description"": ""언급된 할 일"", ""assignee"": ""담당자명 또는 null"", ""dueDate"": ""기한 또는 null"", ""priority"": ""높음/중간/낮음""}}
-  ],
-  ""recordingType"": ""회의/강의/인터뷰/브레인스토밍/일상대화/전화통화""
-}}
-
-반드시 위 JSON 형식으로만 응답하세요. 마크다운이나 설명 없이 순수 JSON만 출력하세요.";
     }
 
     /// <summary>
@@ -4830,23 +4552,6 @@ public partial class OneNoteViewModel : ViewModelBase
         if (_recordingService != null && IsRecording)
         {
             _recordingService.RealtimeChunkSeconds = _sttChunkIntervalSeconds;
-        }
-    }
-
-    /// <summary>
-    /// 요약 업데이트 간격 설정 (초 단위)
-    /// </summary>
-    public void SetSummaryInterval(int seconds)
-    {
-        _summaryIntervalSeconds = Math.Max(10, Math.Min(600, seconds));
-        Log4.Info($"[녹음] 요약 간격 설정: {_summaryIntervalSeconds}초");
-
-        // 녹음 중이고 타이머가 실행 중이면 타이머 재설정
-        if (_realtimeSummaryTimer != null && IsRecording)
-        {
-            _realtimeSummaryTimer.Stop();
-            _realtimeSummaryTimer.Interval = _summaryIntervalSeconds * 1000;
-            _realtimeSummaryTimer.Start();
         }
     }
 

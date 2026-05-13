@@ -8910,17 +8910,12 @@ public partial class MainWindow : FluentWindow
                 _oneNoteViewModel?.SetSTTChunkInterval(prefs?.STTIntervalSeconds ?? 15f);
             }
 
-            // 요약 주기 — UserPreferences에서 ViewModel으로 직접 전달
+            // 요약 주기 — UserPreferences에서 ProcessingIntervalSeconds 단일 옵션으로 관리 (SetSummaryInterval 제거됨)
             if (root.TryGetProperty("SummaryIntervalSeconds", out var summaryIntervalProp))
             {
                 var intervalSeconds = summaryIntervalProp.GetInt32();
                 Log4.Debug($"[OneNote] 요약 주기 설정: {intervalSeconds}초");
                 if (prefs != null) prefs.SummaryIntervalSeconds = intervalSeconds;
-                _oneNoteViewModel?.SetSummaryInterval(intervalSeconds);
-            }
-            else
-            {
-                _oneNoteViewModel?.SetSummaryInterval(prefs?.SummaryIntervalSeconds ?? 30);
             }
 
             // 후처리 설정 로드

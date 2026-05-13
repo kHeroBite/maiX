@@ -166,7 +166,12 @@ public sealed class MinuteSummaryService : IMinuteSummaryService
 
                 lock (_bufferLock)
                 {
-                    if (_currentMinuteBuffer.Count == 0) continue;
+                    _log.Debug("[MinuteSummary] PeriodicTimer 틱 — buffer={Count}개", _currentMinuteBuffer.Count);
+                    if (_currentMinuteBuffer.Count == 0)
+                    {
+                        _log.Info("[MinuteSummary] PeriodicTimer 스킵 — STT 버퍼 없음 (아직 텍스트 미수신)");
+                        continue;
+                    }
                     snapshot = new List<string>(_currentMinuteBuffer);
                     _currentMinuteBuffer.Clear();
                     startTime = _minuteStartTime;
@@ -175,6 +180,7 @@ public sealed class MinuteSummaryService : IMinuteSummaryService
                     _lastStartedAt = DateTime.Now;
                 }
 
+                _log.Info("[MinuteSummary] SummarizeMinuteAsync 시작 — segments={Count}", snapshot.Count);
                 await SummarizeMinuteAsync(snapshot, startTime, endTime, ct).ConfigureAwait(false);
             }
         }

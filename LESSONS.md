@@ -1404,6 +1404,33 @@
 - **심각도**: 중간 (기존 사용자 동작 변화)
 - **Level**: 1 (기술 참조)
 
+### L-418: MinuteSummaryService 장기 동작 서비스 주기 발화 로그 필수 (2026-05-13)
+
+- **문제**: MinuteSummaryService PeriodicTimer가 발화하는지 로그가 없어서 odebug 진단 시 "0건"으로 보임 → 타이머 미시작 or 정상 시작인지 판별 불가.
+- **해결**: RunTimerLoopAsync 내에 매 tick 발화 로그(`[MinuteSummary] PeriodicTimer 틱 — buffer={Count}개`), 스킵 로그, 요약 시작 로그 3건 추가.
+- **교훈**: 주기적 동작(PeriodicTimer/Timer/cron 등)을 포함하는 장기 동작 서비스는 반드시 tick 단위 발화 로그를 남겨야 한다. 로그 없으면 외부에서 동작 여부 판별 불가.
+- **재발방지**: 새로운 PeriodicTimer/Timer.Elapsed 기반 서비스 구현 시 tick 발화 로그 필수. code review 시 주기 서비스 grep 후 로그 존재 여부 확인.
+- **심각도**: 중간
+- **Level**: 1 (기술 참조)
+
+### L-419: oplan 코드 분석 시 정의부+호출부 동시 확인 필수 — dead code 오분류 방지 (2026-05-13)
+
+- **문제**: 1차 oplan이 `_realtimeSummaryTimer` 정의부만 grep으로 확인하고 호출부(`StartRealtimeSTT()`)를 미검증. 실제로는 `StartRealtimeSTT()`가 어디서도 호출되지 않아 타이머 자체가 시작 안 됨(dead code). oplan은 이를 핵심 수정 대상으로 오판 → odev-1 잘못된 수정 → otest-1 PASS → 사용자 "실시간 요약 0건" 확인 → 역라우팅.
+- **해결**: 2차 oplan에서 `StartRealtimeSTT()` 호출부 미존재 확인 후 dead code로 올바르게 분류 → dead code 제거 + `MinuteSummaryService` 단일 경로 강화.
+- **교훈**: oplan이 함수/필드를 분석할 때 정의부(`new Timer()`, 필드 선언)만 확인하는 것으로 불충분하다. 그 함수/필드가 실제 실행 경로에 포함되는지(= 어디서 호출되는지) 반드시 함께 확인해야 한다. `find_referencing_symbols` 또는 `grep -n '호출할 함수명'`으로 호출부 존재 여부를 확인하라.
+- **재발방지**: oplan 단계에서 핵심 경로 분석 시 정의부 확인 후 반드시 호출부도 grep. 호출부 0건이면 dead code 가능성 높음 → 사용자에게 dead code 가능성 보고 후 판단 요청.
+- **심각도**: 중간 (역라우팅 1회 유발)
+- **Level**: 2 (LESSONS.md + MEMORY.md)
+
+### L-420: otest 런타임 발화 검증 누락 금지 — PeriodicTimer/주기적 동작 수정 시 필수 (2026-05-13)
+
+- **문제**: 1차 otest acceptance_criteria가 grep 정적 검증 위주로만 작성됨. `MinuteSummaryService` PeriodicTimer가 실제 60초마다 발화하는지 런타임 로그 확인 항목이 없었음. 정적 검증만으로 PASS → 사용자가 실제 환경에서 "핵심요약 1건만" 발견.
+- **해결**: 2차 otest에서 런타임 검증 추가 — 18:47:41 PeriodicTimer 첫 발화, 18:48~18:52 5회 연속 발화 확인.
+- **교훈**: oplan acceptance_criteria 작성 시 PeriodicTimer/Timer/cron 등 주기적 동작이 수정 범위에 포함되면 반드시 런타임 발화 검증 항목을 추가해야 한다. 단순 "코드 존재 여부 grep"만으로는 실제 동작을 보장할 수 없다.
+- **재발방지**: otest Phase 2 검증 시 주기적 동작 수정이 있으면 `acceptance_criteria`에 런타임 발화 검증 항목(로그 확인/실시간 모니터링) 필수 포함. 정적 grep만으로 PASS 불가.
+- **심각도**: 중간 (역라우팅 유발)
+- **Level**: 2 (LESSONS.md + MEMORY.md)
+
 ## 반영 추적 테이블
 
 | 교훈 ID | 교훈 요약 | 반영 대상 | 반영 위치 | 반영일 | 검증 |
@@ -1466,3 +1493,6 @@
 | L-415 | 사용자 목표 집중 — 고정 주기(60초/5분) 매직 넘버를 발견하면 사용자 실제 목표와 일치 여부 의문 제기. YAGNI: 명시 요구된 항목만 동적화, 나머지는 별도 작업으로 분리. 재발방지: 기존 코드 매직 넘버 발견 시 목표 정합성 확인 후 수정. | docs | LESSONS.md | 2026-05-10 | ✅ |
 | L-416 | UI 옵션 분산 시 단일 출처 원칙 — 동일 기능 옵션이 좌/우 패널에 분산되면 사용자 혼란 + x:Name 충돌 위험. 좌→우 이동 시 한 번의 Edit으로 동시 처리(좌측 제거 + 우측 추가). 재발방지: UI 옵션 추가 시 단일 위치 원칙. 기존 분산 발견 시 통합 작업으로 처리. | docs+code | LESSONS.md + MainWindow.xaml (화자분리/청크/요약주기 → 옵션탭) | 2026-05-10 | ✅ |
 | L-417 | 옵트인 정책 — 신규 자동 기능 기본 false (옵트인) 필수. 기본 true는 기존 사용자에게 의도치 않은 동작 변화 유발. XML에 키 없으면 기본 false → 기존 동작 유지(하위 호환). 재발방지: 신규 자동 기능 추가 시 반드시 기본값 false로 설정. | docs+code | LESSONS.md + OpenAiRecordingSettings.AutoFinalSummary (기본 false) | 2026-05-10 | ✅ |
+| L-418 | MinuteSummaryService 장기 동작 서비스 주기 발화 로그 필수 — PeriodicTimer tick 단위 발화 로그 없으면 외부에서 동작 여부 판별 불가. | docs | LESSONS.md | 2026-05-13 | ✅ |
+| L-419 | oplan 코드 분석 시 정의부+호출부 동시 확인 필수 — 정의부만 확인하면 dead code를 핵심 경로로 오분류. find_referencing_symbols 또는 grep으로 호출부 존재 여부 반드시 확인. | docs | LESSONS.md + MEMORY.md | 2026-05-13 | ✅ |
+| L-420 | otest 런타임 발화 검증 누락 금지 — PeriodicTimer/Timer 등 주기적 동작 수정 시 acceptance_criteria에 런타임 발화 로그 확인 항목 필수. 정적 grep만으로 PASS 불가. | docs | LESSONS.md + MEMORY.md | 2026-05-13 | ✅ |
