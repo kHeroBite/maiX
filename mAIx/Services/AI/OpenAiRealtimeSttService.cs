@@ -157,12 +157,14 @@ public sealed class OpenAiRealtimeSttService : IOpenAiRealtimeSttService
         // session.update 발송 — STT 전용 모드 활성화 (modalities=text + server VAD + 한국어 특화)
         var sttLang = string.IsNullOrWhiteSpace(_settings.OaiRecording.SttLanguage) ? "ko" : _settings.OaiRecording.SttLanguage;
         var sttPrompt = _settings.OaiRecording.SttPrompt ?? string.Empty;
+        // STT 전용 모드: instructions로 AI 응답 생성 명시적 차단 + turn_detection.create_response=false로 자동 응답 차단
         await SendJsonAsync(new
         {
             type = "session.update",
             session = new
             {
                 modalities = new[] { "text" },
+                instructions = "You are a transcription-only service. Do NOT generate any responses, answers, or text outputs. Only transcribe the user's audio input.",
                 input_audio_format = "pcm16",
                 input_audio_transcription = new
                 {
@@ -171,7 +173,7 @@ public sealed class OpenAiRealtimeSttService : IOpenAiRealtimeSttService
                     prompt = sttPrompt
                 },
                 turn_detection = _settings.OaiRecording.ServerVadEnabled
-                    ? (object)new { type = "server_vad", threshold = 0.7, prefix_padding_ms = 300, silence_duration_ms = 300 }
+                    ? (object)new { type = "server_vad", threshold = 0.7, prefix_padding_ms = 300, silence_duration_ms = 300, create_response = false, interrupt_response = false }
                     : null
             }
         }).ConfigureAwait(false);
@@ -383,26 +385,19 @@ public sealed class OpenAiRealtimeSttService : IOpenAiRealtimeSttService
             }
             else if (type == "conversation.item.input_audio_transcription.delta")
             {
-                // 발화 중 부분 transcript 점진 표시 — gpt-4o-mini-transcribe/gpt-4o-transcribe에서 음절 단위 streaming
+                // 발화 중 부분 transcript 점진 표시 — OpenAI item_id를 그대로 사용하여 비동기 매칭 어긋남 방지
                 if (root.TryGetProperty("delta", out var deltaProp))
                 {
                     var deltaText = deltaProp.GetString() ?? string.Empty;
-                    if (!string.IsNullOrEmpty(deltaText))
+                    var openAiItemId = root.TryGetProperty("item_id", out var idProp) ? (idProp.GetString() ?? string.Empty) : string.Empty;
+                    if (!string.IsNullOrEmpty(deltaText) && !string.IsNullOrEmpty(openAiItemId))
                     {
-                        var now = DateTime.Now;
-                        var sinceLastDelta = (now - _lastDeltaAt).TotalSeconds;
-                        var prevItemId = _currentSpeechItemId;
-                        var isNewCard = (_currentSpeechItemId == null || sinceLastDelta >= SilenceCardThresholdSec);
-                        if (isNewCard)
-                        {
-                            _currentSpeechItemId = $"card_{now.Ticks}";
-                        }
-                        _lastDeltaAt = now;
-                        var itemId = _currentSpeechItemId!;
-                        var accum = _deltaBuffers.AddOrUpdate(itemId, deltaText, (_, prev) => prev + deltaText);
+                        var accum = _deltaBuffers.AddOrUpdate(openAiItemId, deltaText, (_, prev) => prev + deltaText);
+                        _lastDeltaAt = DateTime.Now;
+                        _currentSpeechItemId = openAiItemId;
                         var ts = TimeSpan.FromMilliseconds(_lastSpeechStartedMs);
-                        _log.Info($"[OpenAi-Realtime] delta — text='{deltaText}' itemId={itemId} sinceLastDelta={sinceLastDelta:F2}s isNewCard={isNewCard} prevItemId={prevItemId} accum_len={accum.Length}");
-                        TranscriptSegmentUpdated?.Invoke(itemId, ts, accum);
+                        _log.Info($"[OpenAi-Realtime] delta — text='{deltaText}' openAiItemId={openAiItemId} accum_len={accum.Length}");
+                        TranscriptSegmentUpdated?.Invoke(openAiItemId, ts, accum);
                     }
                 }
             }
@@ -411,9 +406,10 @@ public sealed class OpenAiRealtimeSttService : IOpenAiRealtimeSttService
                 if (root.TryGetProperty("transcript", out var tr))
                 {
                     var text = tr.GetString() ?? string.Empty;
-                    // 옵션 C: 현재 카드의 itemId 사용 (delta와 매칭) + _lastDeltaAt 갱신
+                    // OpenAI item_id를 그대로 사용 (delta와 정확히 매칭 — 비동기 어긋남 차단)
+                    var openAiItemId = root.TryGetProperty("item_id", out var idProp) ? (idProp.GetString() ?? string.Empty) : string.Empty;
+                    var itemId = !string.IsNullOrEmpty(openAiItemId) ? openAiItemId : $"item_fallback_{DateTime.Now.Ticks}";
                     _lastDeltaAt = DateTime.Now;
-                    var itemId = _currentSpeechItemId ?? $"card_{DateTime.Now.Ticks}";
                     if (!string.IsNullOrEmpty(text))
                     {
                         // hallucination 차단 — 누적된 delta 항목도 제거
@@ -425,15 +421,14 @@ public sealed class OpenAiRealtimeSttService : IOpenAiRealtimeSttService
                             return;
                         }
                         var ts = TimeSpan.FromMilliseconds(_lastSpeechStartedMs);
-                        // delta가 한 번이라도 도착했으면 Updated로 final 교체, 아니면 Received로 신규 추가
+                        // delta가 도착했으면 LiveSTT UI는 Updated로 final 교체 (itemId 매칭 in-place)
                         if (_deltaBuffers.ContainsKey(itemId))
                         {
                             TranscriptSegmentUpdated?.Invoke(itemId, ts, text);
                         }
-                        else
-                        {
-                            TranscriptSegmentReceived?.Invoke(ts, text);
-                        }
+                        // ★ TopicExtractor/MinuteSummary 전달은 항상 Received로 한 번 더 발화 (delta 유무 무관)
+                        // 이유: Updated 핸들러는 LiveSTTSegments UI만 갱신하므로 텍스트 통계 누락 방지
+                        TranscriptSegmentReceived?.Invoke(ts, text);
                         _deltaBuffers.TryRemove(itemId, out _);
                         _log.Info($"[OpenAi-Realtime] transcription.completed — text={text.Substring(0, Math.Min(50, text.Length))}");
 

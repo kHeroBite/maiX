@@ -12,13 +12,38 @@ namespace mAIx.Models;
 public class TopicSegment : INotifyPropertyChanged
 {
     /// <summary>
-    /// 8색 파스텔 팔레트 (인접 세그먼트 충돌 회피용 — TopicExtractorService가 사용)
+    /// 8색 파스텔 팔레트 — 라이트 모드용 (밝은 파스텔 + 검정 글자)
     /// </summary>
     public static readonly string[] PastelPalette = new[]
     {
         "#E3F2FD", "#FFF3E0", "#E8F5E9", "#FCE4EC",
         "#F3E5F5", "#FFF9C4", "#E0F7FA", "#EFEBE9"
     };
+
+    /// <summary>
+    /// 8색 다크 팔레트 — 다크 모드용 (저명도 + 흰 글자 가독성 확보)
+    /// </summary>
+    public static readonly string[] DarkPalette = new[]
+    {
+        "#1E3A5F", "#5C3A1E", "#1E4D2C", "#5C2E40",
+        "#3F2A4D", "#5C4D1E", "#1E4D55", "#3D332E"
+    };
+
+    /// <summary>
+    /// 현재 테마에 맞는 팔레트 반환 (다크/라이트 자동 선택)
+    /// </summary>
+    public static string[] GetPaletteForCurrentTheme()
+    {
+        try
+        {
+            var theme = Wpf.Ui.Appearance.ApplicationThemeManager.GetAppTheme();
+            return theme == Wpf.Ui.Appearance.ApplicationTheme.Dark ? DarkPalette : PastelPalette;
+        }
+        catch
+        {
+            return PastelPalette;
+        }
+    }
 
     private int _id;
     private TimeSpan _startTime;
@@ -61,7 +86,7 @@ public class TopicSegment : INotifyPropertyChanged
     public List<string> Keywords
     {
         get => _keywords;
-        set { _keywords = value; OnPropertyChanged(); OnPropertyChanged(nameof(KeywordsDisplay)); OnPropertyChanged(nameof(ToolTipText)); }
+        set { _keywords = value; OnPropertyChanged(); OnPropertyChanged(nameof(KeywordsDisplay)); OnPropertyChanged(nameof(ToolTipText)); OnPropertyChanged(nameof(BodyDisplay)); }
     }
 
     /// <summary>
@@ -70,16 +95,16 @@ public class TopicSegment : INotifyPropertyChanged
     public string DisplayTitle
     {
         get => _displayTitle;
-        set { _displayTitle = value; OnPropertyChanged(); OnPropertyChanged(nameof(ToolTipText)); }
+        set { _displayTitle = value; OnPropertyChanged(); OnPropertyChanged(nameof(ToolTipText)); OnPropertyChanged(nameof(BodyDisplay)); }
     }
 
     /// <summary>
-    /// 1분 요약 미리보기 (ToolTip에 표시)
+    /// 핵심요약 1줄 (카드 본문 + ToolTip에 표시)
     /// </summary>
     public string SummaryPreview
     {
         get => _summaryPreview;
-        set { _summaryPreview = value; OnPropertyChanged(); OnPropertyChanged(nameof(ToolTipText)); }
+        set { _summaryPreview = value; OnPropertyChanged(); OnPropertyChanged(nameof(ToolTipText)); OnPropertyChanged(nameof(BodyDisplay)); }
     }
 
     /// <summary>
@@ -106,10 +131,16 @@ public class TopicSegment : INotifyPropertyChanged
         $"{StartTime:mm\\:ss} ~ {EndTime:mm\\:ss}";
 
     /// <summary>
+    /// 카드 본문 표시 — 핵심요약(우선) 또는 키워드 fallback
+    /// </summary>
+    public string BodyDisplay =>
+        !string.IsNullOrWhiteSpace(SummaryPreview) ? SummaryPreview : DisplayTitle;
+
+    /// <summary>
     /// 마우스오버 ToolTip 전체 텍스트
     /// </summary>
     public string ToolTipText =>
-        $"[{DisplayTitle}]\n{TimeRangeDisplay}\n주제어: {KeywordsDisplay}\n{SummaryPreview}";
+        $"[{DisplayTitle}]\n{TimeRangeDisplay}\n핵심요약: {SummaryPreview}\n키워드: {KeywordsDisplay}";
 
     // ─── INotifyPropertyChanged ─────────────────────────────────────────
 
@@ -117,4 +148,11 @@ public class TopicSegment : INotifyPropertyChanged
 
     protected void OnPropertyChanged([CallerMemberName] string? name = null)
         => PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(name));
+
+    /// <summary>
+    /// 외부에서 강제로 PropertyChanged 발화 (MultiBinding 재계산 trigger용).
+    /// 새 세그먼트 추가로 총 녹음 시간 변경 시 기존 카드들의 비례 Height 재계산에 사용.
+    /// </summary>
+    public void RaisePropertyChanged(string propertyName)
+        => PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));
 }

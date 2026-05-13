@@ -52,10 +52,16 @@ public partial class MinimapScrollPanel : UserControl
 
     private void OnLoaded(object sender, RoutedEventArgs e)
     {
-        // 1초마다 미니맵 재렌더링 (STT 항목 추가 반영)
-        _refreshTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(1) };
-        _refreshTimer.Tick += (_, _) => UpdateMinimap();
+        // 0.5초마다 미니맵 재렌더링 + viewport 인디케이터 동기화 (race 최소화)
+        _refreshTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(500) };
+        _refreshTimer.Tick += (_, _) =>
+        {
+            UpdateMinimap();
+            UpdateViewportIndicator(); // tick마다 인디케이터도 강제 동기화
+        };
         _refreshTimer.Start();
+        // SizeChanged 시에도 인디케이터 재계산 (미니맵 패널 리사이즈 대응)
+        SizeChanged += (_, _) => UpdateViewportIndicator();
     }
 
     private void OnUnloaded(object sender, RoutedEventArgs e)
@@ -66,7 +72,8 @@ public partial class MinimapScrollPanel : UserControl
     }
 
     /// <summary>
-    /// source ScrollViewer 컨텐츠를 RenderTargetBitmap으로 축소 렌더링하여 미니맵 이미지로 표시
+    /// source ScrollViewer 컨텐츠를 RenderTargetBitmap으로 축소 렌더링하여 미니맵 이미지로 표시.
+    /// Measure/Arrange 강제 호출은 race를 유발하므로 제거 — VirtualizingStackPanel의 자체 layout 결과 사용.
     /// </summary>
     private void UpdateMinimap()
     {
@@ -74,20 +81,22 @@ public partial class MinimapScrollPanel : UserControl
         if (_sourceScroll.ExtentWidth <= 0 || _sourceScroll.ExtentHeight <= 0) return;
         try
         {
-            // ScrollViewer 내부 컨텐츠 전체를 캡처 — Content는 일반적으로 ItemsControl
             var content = _sourceScroll.Content as UIElement;
             if (content == null) return;
 
-            // Layout 강제 갱신
-            content.Measure(new Size(_sourceScroll.ExtentWidth, double.PositiveInfinity));
-            content.Arrange(new Rect(0, 0, _sourceScroll.ExtentWidth, _sourceScroll.ExtentHeight));
+            // ★ Measure/Arrange 강제 호출 제거 — ScrollViewer가 이미 layout 완료한 상태 그대로 캡처
+            //   (force layout이 ScrollableHeight 동적 변경 → ScrollChanged race 유발 → viewport 인디케이터 미스매치)
+            var w = (int)Math.Max(1, content.RenderSize.Width);
+            var h = (int)Math.Max(1, content.RenderSize.Height);
+            if (w <= 1 || h <= 1) return;
 
-            var w = (int)Math.Max(1, _sourceScroll.ExtentWidth);
-            var h = (int)Math.Max(1, _sourceScroll.ExtentHeight);
             var rtb = new RenderTargetBitmap(w, h, 96, 96, PixelFormats.Pbgra32);
             rtb.Render(content);
             rtb.Freeze();
             MinimapImage.Source = rtb;
+
+            // 미니맵 갱신 직후 viewport 인디케이터도 즉시 동기화 (race 차단)
+            UpdateViewportIndicator();
         }
         catch
         {
@@ -115,15 +124,24 @@ public partial class MinimapScrollPanel : UserControl
     private void UpdateViewportIndicator()
     {
         if (_sourceScroll == null || ActualHeight <= 0) return;
-        if (_sourceScroll.ExtentHeight <= 0) { ViewportIndicator.Visibility = Visibility.Collapsed; return; }
+        var extent = _sourceScroll.ExtentHeight;
+        var viewport = _sourceScroll.ViewportHeight;
+        if (extent <= 0 || viewport <= 0)
+        {
+            ViewportIndicator.Visibility = Visibility.Collapsed;
+            return;
+        }
         ViewportIndicator.Visibility = Visibility.Visible;
         var minimapHeight = ActualHeight;
-        var ratio = _sourceScroll.VerticalOffset / _sourceScroll.ExtentHeight;
-        var sizeRatio = _sourceScroll.ViewportHeight / _sourceScroll.ExtentHeight;
-        var top = ratio * minimapHeight;
-        var height = Math.Max(20, sizeRatio * minimapHeight);
-        ViewportIndicator.Margin = new Thickness(0, top, 0, 0);
-        ViewportIndicator.Height = height;
+        // viewport가 콘텐츠 전체를 차지하는 비율로 인디케이터 높이 결정
+        var sizeRatio = Math.Min(1.0, viewport / extent);
+        var indicatorHeight = Math.Max(20, sizeRatio * minimapHeight);
+        // Top 위치: VerticalOffset 비율 (ExtentHeight - ViewportHeight = ScrollableHeight 분모 사용)
+        var scrollable = Math.Max(1, extent - viewport);
+        var topRatio = Math.Max(0, Math.Min(1, _sourceScroll.VerticalOffset / scrollable));
+        var maxTop = Math.Max(0, minimapHeight - indicatorHeight);
+        ViewportIndicator.Margin = new Thickness(0, topRatio * maxTop, 0, 0);
+        ViewportIndicator.Height = indicatorHeight;
     }
 
     /// <summary>

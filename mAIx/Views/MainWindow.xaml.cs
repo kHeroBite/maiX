@@ -1408,7 +1408,8 @@ public partial class MainWindow : FluentWindow
             // STT 미니맵 ↔ 주제어 네비게이션 양방향 스크롤 동기화 연결
             try
             {
-                OneNoteSTTMinimap?.Attach(OneNoteSTTScrollViewer, OneNoteTopicNavScrollViewer);
+                // 주제어 네비게이션은 ScrollViewer가 아닌 전체 맵 모드(Grid)로 변경됨 → sync 동기화 불필요
+                OneNoteSTTMinimap?.Attach(OneNoteSTTScrollViewer, null);
                 Log4.Debug("[MainWindow] STT 미니맵 Attach 완료");
             }
             catch (Exception ex)
@@ -6138,59 +6139,105 @@ public partial class MainWindow : FluentWindow
     }
 
     /// <summary>
-    /// 녹음 탭 클릭 - 녹음 컨트롤 표시
+    /// (Legacy — XAML에서 호출 안 됨, 시그니처만 유지)
     /// </summary>
     private void OneNoteRecordTab_Click(object sender, MouseButtonEventArgs e)
     {
-        // 녹음 탭 활성화
-        OneNoteRecordTab.Background = (Brush)FindResource("ApplicationBackgroundBrush");
-        OneNoteRecordTab.BorderBrush = (Brush)FindResource("ControlElevationBorderBrush");
-        OneNoteRecordTab.BorderThickness = new Thickness(1);
-        OneNoteRecordTabIcon.ClearValue(Wpf.Ui.Controls.SymbolIcon.ForegroundProperty);
-        OneNoteRecordTabText.ClearValue(System.Windows.Controls.TextBlock.ForegroundProperty);
+    }
 
-        // 옵션 탭 비활성화
-        OneNoteOptionsTab.Background = Brushes.Transparent;
-        OneNoteOptionsTab.BorderThickness = new Thickness(0);
-        OneNoteOptionsTabIcon.Foreground = (Brush)FindResource("TextFillColorTertiaryBrush");
-        OneNoteOptionsTabText.Foreground = (Brush)FindResource("TextFillColorTertiaryBrush");
+    /// <summary>
+    /// (Legacy — XAML에서 호출 안 됨, 시그니처만 유지)
+    /// </summary>
+    private void OneNoteOptionsTab_Click(object sender, MouseButtonEventArgs e)
+    {
+    }
 
-        // 콘텐츠 전환
-        OneNoteRecordTabContent.Visibility = Visibility.Visible;
-        OneNoteOptionsTabContent.Visibility = Visibility.Collapsed;
+    /// <summary>
+    /// 녹음 파일 탭 클릭 - 녹음 파일 목록 표시
+    /// </summary>
+    private void OneNoteRecordingsTab_Click(object sender, MouseButtonEventArgs e)
+    {
+        ActivateRecordingsTab();
     }
 
     /// <summary>
     /// 옵션 탭 클릭 - STT/요약 설정 표시
     /// </summary>
-    private void OneNoteOptionsTab_Click(object sender, MouseButtonEventArgs e)
+    private void OneNoteOptionsTab2_Click(object sender, MouseButtonEventArgs e)
     {
-        // 옵션 탭 활성화
-        OneNoteOptionsTab.Background = (Brush)FindResource("ApplicationBackgroundBrush");
-        OneNoteOptionsTab.BorderBrush = (Brush)FindResource("ControlElevationBorderBrush");
-        OneNoteOptionsTab.BorderThickness = new Thickness(1);
-        OneNoteOptionsTabIcon.ClearValue(Wpf.Ui.Controls.SymbolIcon.ForegroundProperty);
-        OneNoteOptionsTabText.ClearValue(System.Windows.Controls.TextBlock.ForegroundProperty);
+        ActivateOptionsTab();
+    }
 
-        // 녹음 탭 비활성화
-        OneNoteRecordTab.Background = Brushes.Transparent;
-        OneNoteRecordTab.BorderThickness = new Thickness(0);
-        OneNoteRecordTabIcon.Foreground = (Brush)FindResource("TextFillColorTertiaryBrush");
-        OneNoteRecordTabText.Foreground = (Brush)FindResource("TextFillColorTertiaryBrush");
+    /// <summary>요약 영역 — 실시간 요약 탭 클릭</summary>
+    private void OneNoteRealtimeSummaryTab_Click(object sender, MouseButtonEventArgs e)
+    {
+        OneNoteRealtimeSummaryTab.Background = (Brush)FindResource("ApplicationBackgroundBrush");
+        OneNoteRealtimeSummaryTab.BorderBrush = (Brush)FindResource("ControlElevationBorderBrush");
+        OneNoteRealtimeSummaryTab.BorderThickness = new Thickness(1);
+        OneNoteFullSummaryTab.Background = Brushes.Transparent;
+        OneNoteFullSummaryTab.BorderThickness = new Thickness(0);
+        OneNoteFullSummaryTabText.Foreground = (Brush)FindResource("TextFillColorTertiaryBrush");
+        OneNoteRealtimeSummaryContent.Visibility = Visibility.Visible;
+        OneNoteFullSummaryContent.Visibility = Visibility.Collapsed;
+    }
+
+    /// <summary>요약 영역 — 전체 요약 탭 클릭</summary>
+    private void OneNoteFullSummaryTab_Click(object sender, MouseButtonEventArgs e)
+    {
+        OneNoteFullSummaryTab.Background = (Brush)FindResource("ApplicationBackgroundBrush");
+        OneNoteFullSummaryTab.BorderBrush = (Brush)FindResource("ControlElevationBorderBrush");
+        OneNoteFullSummaryTab.BorderThickness = new Thickness(1);
+        OneNoteFullSummaryTabText.ClearValue(System.Windows.Controls.TextBlock.ForegroundProperty);
+        OneNoteRealtimeSummaryTab.Background = Brushes.Transparent;
+        OneNoteRealtimeSummaryTab.BorderThickness = new Thickness(0);
+        OneNoteRealtimeSummaryContent.Visibility = Visibility.Collapsed;
+        OneNoteFullSummaryContent.Visibility = Visibility.Visible;
+    }
+
+    private void ActivateRecordingsTab()
+    {
+        // 녹음 파일 탭 활성화 (헤더)
+        OneNoteRecordingsTabHeader.Background = (Brush)FindResource("ApplicationBackgroundBrush");
+        OneNoteRecordingsTabHeader.BorderBrush = (Brush)FindResource("ControlElevationBorderBrush");
+        OneNoteRecordingsTabHeader.BorderThickness = new Thickness(1);
+        OneNoteRecordingsTabIcon.ClearValue(Wpf.Ui.Controls.SymbolIcon.ForegroundProperty);
+        OneNoteRecordingsTabText.ClearValue(System.Windows.Controls.TextBlock.ForegroundProperty);
+
+        // 옵션 탭 비활성화 (헤더)
+        OneNoteOptionsTabHeader.Background = Brushes.Transparent;
+        OneNoteOptionsTabHeader.BorderThickness = new Thickness(0);
+        OneNoteOptionsTabHeaderIcon.Foreground = (Brush)FindResource("TextFillColorTertiaryBrush");
+        OneNoteOptionsTabHeaderText.Foreground = (Brush)FindResource("TextFillColorTertiaryBrush");
 
         // 콘텐츠 전환
-        OneNoteRecordTabContent.Visibility = Visibility.Collapsed;
+        OneNoteRecordingsLeftPanel.Visibility = Visibility.Visible;
+        OneNoteOptionsTabContent.Visibility = Visibility.Collapsed;
+    }
+
+    private void ActivateOptionsTab()
+    {
+        // 옵션 탭 활성화 (헤더)
+        OneNoteOptionsTabHeader.Background = (Brush)FindResource("ApplicationBackgroundBrush");
+        OneNoteOptionsTabHeader.BorderBrush = (Brush)FindResource("ControlElevationBorderBrush");
+        OneNoteOptionsTabHeader.BorderThickness = new Thickness(1);
+        OneNoteOptionsTabHeaderIcon.ClearValue(Wpf.Ui.Controls.SymbolIcon.ForegroundProperty);
+        OneNoteOptionsTabHeaderText.ClearValue(System.Windows.Controls.TextBlock.ForegroundProperty);
+
+        // 녹음 파일 탭 비활성화 (헤더)
+        OneNoteRecordingsTabHeader.Background = Brushes.Transparent;
+        OneNoteRecordingsTabHeader.BorderThickness = new Thickness(0);
+        OneNoteRecordingsTabIcon.Foreground = (Brush)FindResource("TextFillColorTertiaryBrush");
+        OneNoteRecordingsTabText.ClearValue(System.Windows.Controls.TextBlock.ForegroundProperty);
+        OneNoteRecordingsTabText.Foreground = (Brush)FindResource("TextFillColorTertiaryBrush");
+
+        // 콘텐츠 전환
+        OneNoteRecordingsLeftPanel.Visibility = Visibility.Collapsed;
         OneNoteOptionsTabContent.Visibility = Visibility.Visible;
 
-        // OneNoteViewModel을 옵션탭 컨테이너의 DataContext로 명시 할당 (메인 DataContext=MainViewModel과 분리)
-        if (_oneNoteViewModel != null)
+        // OneNoteViewModel을 옵션 패널 DataContext로 명시 할당 (이미 OneNoteRecordingContentPanel에서도 할당)
+        if (_oneNoteViewModel != null && OneNoteOptionsTabContent.DataContext == null)
         {
             OneNoteOptionsTabContent.DataContext = _oneNoteViewModel;
-            Log4.Info($"[옵션탭] DataContext 할당 완료 — ChunkSeconds={_oneNoteViewModel.ChunkSeconds}, TranscriptionModel={_oneNoteViewModel.TranscriptionModel}, IsServerVadEnabled={_oneNoteViewModel.IsServerVadEnabled}");
-        }
-        else
-        {
-            Log4.Warn("[옵션탭] _oneNoteViewModel이 null — DataContext 할당 스킵");
         }
     }
 
@@ -7200,8 +7247,13 @@ public partial class MainWindow : FluentWindow
         if (_oneNoteViewModel != null)
         {
             OneNoteRecordingContentPanel.DataContext = _oneNoteViewModel;
+            // 옵션 패널도 동일 ViewModel로 바인딩 (서브탭 제거 후 항상 표시)
+            OneNoteOptionsTabContent.DataContext = _oneNoteViewModel;
+            // 주제어 네비게이션 ItemsControl 명시 할당 (TopicSegments 바인딩 보장)
+            if (TopicSegmentsItemsControl != null)
+                TopicSegmentsItemsControl.DataContext = _oneNoteViewModel;
             _oneNoteViewModel.ActiveContentTab = "recording";
-            Log4.Info($"[녹음탭] DataContext 할당 완료 — _oneNoteViewModel 설정");
+            Log4.Info($"[녹음탭] DataContext 할당 완료 — ChunkSeconds={_oneNoteViewModel.ChunkSeconds}, TranscriptionModel={_oneNoteViewModel.TranscriptionModel}, IsServerVadEnabled={_oneNoteViewModel.IsServerVadEnabled}");
         }
     }
 
@@ -7479,6 +7531,8 @@ public partial class MainWindow : FluentWindow
         {
             OneNoteSTTEmptyText.Visibility = Visibility.Collapsed;
             OneNoteSTTSegmentsList.Visibility = Visibility.Visible;
+            // ItemsSource 설정 + DataContext 명시 (HighlightTextBehavior가 RelativeSource로 ViewModel 접근)
+            OneNoteSTTSegmentsList.DataContext = _oneNoteViewModel;
             OneNoteSTTSegmentsList.ItemsSource = segmentsToShow;
             
             // 실시간 STT 중일 때 자동 스크롤
@@ -8763,16 +8817,6 @@ public partial class MainWindow : FluentWindow
     }
 
     /// <summary>
-    /// 화자분리 독립 체크박스 변경 (옵션 탭)
-    /// </summary>
-    private void OneNoteDiarization_Changed(object sender, RoutedEventArgs e)
-    {
-        if (_oneNoteViewModel == null) return;
-        _oneNoteViewModel.IsDiarizationEnabled = OneNoteDiarizationCheckBox.IsChecked == true;
-        SaveOneNoteRecordingSettings();
-    }
-
-    /// <summary>
     /// OneNote 녹음 설정 저장
     /// </summary>
     private void SaveOneNoteRecordingSettings()
@@ -8798,7 +8842,6 @@ public partial class MainWindow : FluentWindow
             {
                 STTIntervalSeconds = prefs?.STTIntervalSeconds ?? 15f,
                 SummaryIntervalSeconds = prefs?.SummaryIntervalSeconds ?? 30,
-                DiarizationEnabled = OneNoteDiarizationCheckBox.IsChecked == true,
                 PostSTTEnabled = OneNotePostSTTCheckBox.IsChecked == true,
                 PostSummaryEnabled = OneNotePostSummaryCheckBox.IsChecked == true,
                 PostDiarizationEnabled = OneNotePostDiarizationCheckBox.IsChecked == true
@@ -8900,12 +8943,7 @@ public partial class MainWindow : FluentWindow
                 OneNotePostDiarizationCheckBox.IsChecked = postDiar;
                 if (_oneNoteViewModel != null) _oneNoteViewModel.IsPostDiarizationEnabled = postDiar;
             }
-            if (root.TryGetProperty("DiarizationEnabled", out var diarProp))
-            {
-                var diar = diarProp.GetBoolean();
-                OneNoteDiarizationCheckBox.IsChecked = diar;
-                if (_oneNoteViewModel != null) _oneNoteViewModel.IsDiarizationEnabled = diar;
-            }
+            // (Legacy DiarizationEnabled JSON 필드 제거됨 — 분기 미사용 dead 옵션)
 
             Log4.Info($"[OneNote] 녹음 설정 로드 완료: STT주기={prefs?.STTIntervalSeconds ?? 15f}초, 요약주기={prefs?.SummaryIntervalSeconds ?? 30}초");
         }

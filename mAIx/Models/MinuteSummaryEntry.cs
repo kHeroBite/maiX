@@ -32,4 +32,10 @@ public class MinuteSummaryEntry
     /// 엔트리 생성 일시
     /// </summary>
     public DateTime CreatedAt { get; set; } = DateTime.Now;
+
+    /// <summary>
+    /// UI 표시용 시간 범위 (mm:ss ~ mm:ss)
+    /// </summary>
+    public string TimeRangeDisplay =>
+        $"{(int)StartTime.TotalMinutes:D2}:{StartTime.Seconds:D2} ~ {(int)EndTime.TotalMinutes:D2}:{EndTime.Seconds:D2}";
 }

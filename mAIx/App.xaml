@@ -70,6 +70,10 @@
             <converters:AiCategoryToBadgeConverter x:Key="AiCategoryToBadgeConverter"/>
             <!-- 주제어 네비게이션 배경색 컨버터 -->
             <converters:HexToBrushConverter x:Key="HexToBrushConverter"/>
+            <!-- 배경색 명도 기반 글자색 자동 컨버터 (라이트/다크 가독성 확보) -->
+            <converters:HexToReadableForegroundConverter x:Key="HexToReadableForegroundConverter"/>
+            <!-- 주제어 카드 비례 높이 컨버터 (전체 녹음 시간 기준 — 항상 패널에 가득 차게 표시) -->
+            <converters:TopicSegmentProportionalHeightConverter x:Key="TopicSegmentProportionalHeightConverter"/>
 
             <!-- ========== 밀도 모드 기본값 (Normal) ========== -->
             <Thickness x:Key="MailItemPadding">8,6,8,6</Thickness>

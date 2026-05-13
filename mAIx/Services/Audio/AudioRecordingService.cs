@@ -31,6 +31,7 @@ public class AudioRecordingService : IDisposable
     // 실시간 STT용 버퍼
     private List<byte> _realtimeBuffer = new();
     private float _realtimeChunkSeconds = 15f; // 15초 단위 청크
+    private float _realtimeOverlapSeconds = 0.5f; // 청크 오버랩 (단어 끊김 방지)
     private bool _realtimeEnabled = false;
     private int _totalBytesProcessed = 0;
     private readonly object _bufferLock = new();
@@ -113,6 +114,22 @@ public class AudioRecordingService : IDisposable
             var clamped = Math.Max(0.1f, Math.Min(60f, value));
             Log4.Info($"[AudioRecording] RealtimeChunkSeconds setter — input={value} clamped={clamped} (이전={_realtimeChunkSeconds})");
             _realtimeChunkSeconds = clamped;
+        }
+    }
+
+    /// <summary>
+    /// 청크 오버랩 (초) — 청크 경계에서 단어 끊김 방지. 다음 청크 시작에 직전 청크 마지막 N초를 포함.
+    /// </summary>
+    public float RealtimeOverlapSeconds
+    {
+        get => _realtimeOverlapSeconds;
+        set
+        {
+            // 오버랩은 청크의 절반을 넘지 않아야 함 + 0~3초 범위
+            var clamped = Math.Max(0f, Math.Min(3f, value));
+            if (clamped >= _realtimeChunkSeconds * 0.5f) clamped = _realtimeChunkSeconds * 0.5f;
+            Log4.Info($"[AudioRecording] RealtimeOverlapSeconds setter — input={value} clamped={clamped}");
+            _realtimeOverlapSeconds = clamped;
         }
     }
 
@@ -478,17 +495,31 @@ public class AudioRecordingService : IDisposable
                     // 청크 크기 계산: 24000Hz * 2bytes * 1ch = 48000 bytes/sec
                     var bytesPerSecond = _outputFormat.AverageBytesPerSecond;
                     var chunkSizeBytes = (int)(bytesPerSecond * _realtimeChunkSeconds);
+                    var overlapSizeBytes = (int)(bytesPerSecond * _realtimeOverlapSeconds);
 
                     if (_realtimeBuffer.Count >= chunkSizeBytes)
                     {
                         var chunkData = _realtimeBuffer.ToArray();
                         var chunkStartTime = TimeSpan.FromSeconds((double)_totalBytesProcessed / bytesPerSecond);
 
-                        _totalBytesProcessed += _realtimeBuffer.Count;
-                        _realtimeBuffer.Clear();
+                        // ★ 오버랩 처리: buffer의 마지막 overlapSizeBytes만 보존 → 다음 청크 시작에 포함
+                        //    청크 진행 시간은 (전체 청크 - 오버랩)만큼만 증가 (시간 중복 방지)
+                        if (overlapSizeBytes > 0 && overlapSizeBytes < chunkData.Length)
+                        {
+                            _totalBytesProcessed += chunkData.Length - overlapSizeBytes;
+                            // 마지막 overlapSizeBytes만 buffer에 보존
+                            var overlapBytes = new byte[overlapSizeBytes];
+                            Array.Copy(chunkData, chunkData.Length - overlapSizeBytes, overlapBytes, 0, overlapSizeBytes);
+                            _realtimeBuffer.Clear();
+                            _realtimeBuffer.AddRange(overlapBytes);
+                        }
+                        else
+                        {
+                            _totalBytesProcessed += chunkData.Length;
+                            _realtimeBuffer.Clear();
+                        }
 
-                        Log4.Debug($"[녹음] 실시간 청크 준비: {chunkStartTime}, {chunkData.Length} bytes");
-                        Log4.Debug($"[Audio] RealtimeAudioChunkReady invoke — subscribers={RealtimeAudioChunkReady?.GetInvocationList()?.Length ?? 0}, chunkSize={chunkData.Length}");
+                        Log4.Debug($"[녹음] 실시간 청크 준비: {chunkStartTime}, {chunkData.Length} bytes (overlap={overlapSizeBytes} bytes)");
                         RealtimeAudioChunkReady?.Invoke(chunkData, chunkStartTime);
                     }
                 }
