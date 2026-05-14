@@ -3098,6 +3098,7 @@ public partial class OneNoteViewModel : ViewModelBase
                         BackgroundColorHex = palette[(MinuteSummaryCount - 1) % palette.Length],
                     };
                     TopicSegments.Add(navSegment);
+                    TryMergeAdjacentTopics();
                     RecalculateTopicSegmentHeights();
                     RebuildTimelineTicks();
                     OnPropertyChanged(nameof(AllTopicKeywords));
@@ -3114,17 +3115,104 @@ public partial class OneNoteViewModel : ViewModelBase
 
     /// <summary>
     /// StackPanel 레이아웃용 시간 비례 DisplayHeight 재계산 — 패널 높이 대비 % 비례
+    /// 마지막 카드는 잔여 픽셀을 모두 흡수하여 합계 = PanelHeight 정확 보장
     /// </summary>
     private void RecalculateTopicSegmentHeights()
     {
         if (TopicSegments.Count == 0 || PanelHeight <= 0) return;
         var totalDuration = TopicSegments.Sum(s => Math.Max(1.0, (s.EndTime - s.StartTime).TotalSeconds));
         if (totalDuration <= 0) return;
-        foreach (var seg in TopicSegments)
+
+        double accumulated = 0;
+        for (int i = 0; i < TopicSegments.Count; i++)
         {
+            var seg = TopicSegments[i];
             var duration = Math.Max(1.0, (seg.EndTime - seg.StartTime).TotalSeconds);
-            seg.DisplayHeight = Math.Max(40.0, (duration / totalDuration) * PanelHeight);
+            double height;
+            if (i == TopicSegments.Count - 1)
+            {
+                // 마지막 카드는 잔여 픽셀 모두 흡수 (반올림 오차 방지)
+                height = PanelHeight - accumulated;
+            }
+            else
+            {
+                height = (duration / totalDuration) * PanelHeight;
+                accumulated += height;
+            }
+            seg.DisplayHeight = Math.Max(0.0, height);  // Min 40px 가드 제거
         }
+    }
+
+    private const int MAX_TOPIC_SEGMENTS = 20;
+
+    /// <summary>
+    /// 인접 중복 주제 병합 시도 — 5개 이하 skip, 6~20개 유사 주제 검사, 20개 초과 강제 병합
+    /// </summary>
+    private void TryMergeAdjacentTopics()
+    {
+        if (TopicSegments.Count <= 5) return;  // 5개 이하 통폐합 불필요
+
+        if (TopicSegments.Count > MAX_TOPIC_SEGMENTS)
+        {
+            ForceMergeBestPair();
+            return;
+        }
+
+        var mergedIndex = FindDuplicateAdjacent();
+        if (mergedIndex >= 0)
+            MergeAt(mergedIndex);
+    }
+
+    private int FindDuplicateAdjacent()
+    {
+        for (int i = 0; i < TopicSegments.Count - 1; i++)
+        {
+            if (IsSimilarTopic(TopicSegments[i].SummaryPreview ?? "", TopicSegments[i + 1].SummaryPreview ?? ""))
+                return i;
+        }
+        return -1;
+    }
+
+    private bool IsSimilarTopic(string a, string b)
+    {
+        if (string.IsNullOrWhiteSpace(a) || string.IsNullOrWhiteSpace(b)) return false;
+        if (a.Equals(b, StringComparison.OrdinalIgnoreCase)) return true;
+
+        var wordsA = a.Split(new[] { ' ', '\t' }, StringSplitOptions.RemoveEmptyEntries);
+        var wordsB = b.Split(new[] { ' ', '\t' }, StringSplitOptions.RemoveEmptyEntries);
+        if (wordsA.Length == 0 || wordsB.Length == 0) return false;
+
+        var intersection = wordsA.Intersect(wordsB, StringComparer.OrdinalIgnoreCase).Count();
+        var minLen = Math.Min(wordsA.Length, wordsB.Length);
+        return (double)intersection / minLen >= 0.6;
+    }
+
+    private void MergeAt(int firstIndex)
+    {
+        if (firstIndex < 0 || firstIndex >= TopicSegments.Count - 1) return;
+        var first = TopicSegments[firstIndex];
+        var second = TopicSegments[firstIndex + 1];
+        first.EndTime = second.EndTime;
+        // SummaryPreview는 첫째 유지 (단어 교집합이므로 더 정확한 첫째 토픽 보존)
+        TopicSegments.RemoveAt(firstIndex + 1);
+    }
+
+    private void ForceMergeBestPair()
+    {
+        if (TopicSegments.Count < 2) return;
+        int bestIdx = 0;
+        double bestSumDuration = double.MaxValue;
+        for (int i = 0; i < TopicSegments.Count - 1; i++)
+        {
+            var d1 = (TopicSegments[i].EndTime - TopicSegments[i].StartTime).TotalSeconds;
+            var d2 = (TopicSegments[i + 1].EndTime - TopicSegments[i + 1].StartTime).TotalSeconds;
+            if (d1 + d2 < bestSumDuration)
+            {
+                bestSumDuration = d1 + d2;
+                bestIdx = i;
+            }
+        }
+        MergeAt(bestIdx);
     }
 
     /// <summary>

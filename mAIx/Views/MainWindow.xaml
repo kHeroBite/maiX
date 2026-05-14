@@ -7033,12 +7033,10 @@
                                                 </Grid>
 
                                                 <!-- 대화 네비게이션 카드 목록 — StackPanel + DisplayHeight 바인딩 -->
-                                                <ScrollViewer x:Name="TopicNavScrollViewer"
-                                                              Grid.Row="1"
-                                                              VerticalScrollBarVisibility="Auto"
-                                                              HorizontalScrollBarVisibility="Disabled"
-                                                              SizeChanged="TopicNavScrollViewer_SizeChanged">
-                                                    <Grid>
+                                                <!-- ScrollViewer 제거 — 스크롤 금지 + 전체높이 맞춤 -->
+                                                <Grid x:Name="TopicNavContainer"
+                                                      Grid.Row="1"
+                                                      SizeChanged="TopicNavScrollViewer_SizeChanged">
                                                         <Grid.ColumnDefinitions>
                                                             <ColumnDefinition Width="52"/>
                                                             <ColumnDefinition Width="*"/>
@@ -7110,8 +7108,7 @@
                                                                 </DataTemplate>
                                                             </ItemsControl.ItemTemplate>
                                                         </ItemsControl>
-                                                    </Grid>
-                                                </ScrollViewer>
+                                                </Grid>
                                             </Grid>
                                         </Border>
 

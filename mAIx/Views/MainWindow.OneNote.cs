@@ -190,10 +190,13 @@ namespace mAIx.Views
         {
             try
             {
-                var sv = sender as ScrollViewer;
-                if (sv == null || _oneNoteViewModel == null) return;
-                var height = sv.ViewportHeight > 0 ? sv.ViewportHeight : e.NewSize.Height;
-                _oneNoteViewModel.SetPanelHeight(height);
+                if (_oneNoteViewModel == null) return;
+                // ScrollViewer 제거 후 FrameworkElement(Grid) 기반으로 변경
+                var height = e.NewSize.Height;
+                if (height <= 0 && sender is FrameworkElement fe)
+                    height = fe.ActualHeight;
+                if (height > 0)
+                    _oneNoteViewModel.SetPanelHeight(height);
             }
             catch (Exception ex)
             {

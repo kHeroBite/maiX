@@ -1689,3 +1689,26 @@ ConfigureAwait(false)를 Service 레이어 전체에 적용하여 스레드 컨�
 - mAIx PID 43404 정상 실행 ✅
 - NLog 채널 활성 ✅
 - 사용자 녹음 검증 대기 중 (server_vad speech_started 이벤트 수신 확인 필요)
+
+---
+
+## 2026-05-14: 핵심요약 네비게이션 5~20 카드 통폐합 + 스크롤 금지 (Min 40px 가드 제거)
+
+### 작업 내용
+- **RecalculateTopicSegmentHeights 재설계**: 고정 PixelsPerSecond 제거 → 패널 높이 대비 % 비례 방식으로 전환. Min 40px 가드 제거 (마지막 카드가 잔여 공간을 자연 흡수).
+- **RebuildTimelineTicks 신규**: 분 단위 TimelineTick 컬렉션 재생성. Canvas TopPx 절대 좌표 계산.
+- **SetPanelHeight 신규**: SizeChanged 이벤트에서 ViewModel에 높이 전달 → RecalculateTopicSegmentHeights + RebuildTimelineTicks 연동 갱신.
+- **TryMergeAdjacentTopics 외 5개 메서드 신규 추가**: 인접 토픽 병합 로직 (5~20자 주제어 통폐합).
+- **OnMinuteSummaryCreated 1줄 추가**: RebuildTimelineTicks() 호출 추가.
+- **MainWindow.xaml**: TopicNavScrollViewer x:Name 추가 + SizeChanged="TopicNavScrollViewer_SizeChanged" 이벤트 연결. TopicNavContainer Grid (타임라인 ruler + 카드 영역 2-column 레이아웃).
+- **MainWindow.OneNote.cs**: TopicNavScrollViewer_SizeChanged 핸들러 추가. ViewportHeight 우선 → e.NewSize.Height 폴백 패턴.
+
+### 주요 변경 파일
+- `mAIx/ViewModels/OneNoteViewModel.cs` (~70줄 추가/수정)
+- `mAIx/Views/MainWindow.xaml` (~40줄 수정)
+- `mAIx/Views/MainWindow.OneNote.cs` (~20줄 추가)
+
+### 테스트 결과 (otest Fast Path o3)
+- 빌드: 성공 (오류 0건) ✅
+- Phase 1~5 모두 ✅ (단일 사이클 PASS, 역라우팅 0회)
+- L-424 StackPanel 패턴 적용 확인 ✅
