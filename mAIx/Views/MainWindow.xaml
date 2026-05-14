@@ -11,6 +11,7 @@
         xmlns:sys="clr-namespace:System;assembly=mscorlib"
         xmlns:teamsControls="clr-namespace:mAIx.Controls.Teams"
         xmlns:vm="clr-namespace:mAIx.ViewModels"
+        xmlns:services="clr-namespace:mAIx.Services.AI"
         mc:Ignorable="d"
         Title="{Binding Title}"
         Height="800" Width="1400"
@@ -7188,16 +7189,32 @@
                                                                 <ItemsControl.ItemTemplate>
                                                                     <DataTemplate>
                                                                         <Border Padding="8" CornerRadius="6" Margin="0,0,0,4"
-                                                                                Background="{DynamicResource ControlFillColorDefaultBrush}"
+                                                                                Background="{Binding Sentiment.Score, Converter={StaticResource SentimentScoreToColorConverter}, FallbackValue='#F5F5F5'}"
                                                                                 BorderBrush="{DynamicResource ControlElevationBorderBrush}"
                                                                                 BorderThickness="1">
                                                                             <StackPanel>
-                                                                                <TextBlock Text="{Binding TimeRangeDisplay}"
-                                                                                           FontSize="10" FontWeight="SemiBold"
-                                                                                           Foreground="{DynamicResource AccentTextFillColorPrimaryBrush}"
-                                                                                           Margin="0,0,0,4"/>
+                                                                                <DockPanel Margin="0,0,0,4">
+                                                                                    <!-- 감성 점수% (오른쪽) -->
+                                                                                    <TextBlock DockPanel.Dock="Right"
+                                                                                               Text="{Binding Sentiment.Score, StringFormat='{}{0}%', FallbackValue=''}"
+                                                                                               FontSize="11"
+                                                                                               Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                                                                                               VerticalAlignment="Center"/>
+                                                                                    <!-- 감성 이모지 (오른쪽 옆) -->
+                                                                                    <TextBlock DockPanel.Dock="Right"
+                                                                                               Text="{Binding Sentiment.Emoji, FallbackValue=''}"
+                                                                                               FontSize="14"
+                                                                                               Margin="0,0,4,0"
+                                                                                               VerticalAlignment="Center"/>
+                                                                                    <!-- 시간 범위 (왼쪽) -->
+                                                                                    <TextBlock Text="{Binding TimeRangeDisplay}"
+                                                                                               FontSize="10" FontWeight="SemiBold"
+                                                                                               Foreground="{DynamicResource AccentTextFillColorPrimaryBrush}"
+                                                                                               VerticalAlignment="Center"/>
+                                                                                </DockPanel>
                                                                                 <TextBlock Text="{Binding SummaryText}"
-                                                                                           TextWrapping="Wrap" FontSize="12"/>
+                                                                                           TextWrapping="Wrap" FontSize="12"
+                                                                                           Foreground="#222222"/>
                                                                             </StackPanel>
                                                                         </Border>
                                                                     </DataTemplate>
@@ -8203,6 +8220,14 @@
                                                                    IsEnabled="False"
                                                                    Click="OneNoteRecordCancel_Click"/>
                                                     </StackPanel>
+
+                                                    <!-- 분당 추정 비용 미리보기 (모드/모델 변경 시 자동 갱신) -->
+                                                    <TextBlock Text="{Binding EstimatedCostPerMinuteDisplay}"
+                                                               FontSize="11"
+                                                               Foreground="{DynamicResource TextFillColorTertiaryBrush}"
+                                                               HorizontalAlignment="Center"
+                                                               Margin="0,4,0,0"
+                                                               ToolTip="현재 모드/모델 기준 분당 추정 OpenAI API 비용"/>
                                                 </StackPanel>
                                         </Border>
 
@@ -8613,6 +8638,48 @@
                                                                         <ComboBoxItem Content="gpt-4o (고품질)" Tag="gpt-4o"/>
                                                                     </ComboBox>
                                                                 </StackPanel>
+
+                                                                <!-- ─── Dual Pipeline 모드 (Legacy / Unified) ───── -->
+                                                                <Separator Margin="0,8,0,4"/>
+                                                                <TextBlock Text="실시간 처리 모드"
+                                                                           FontSize="12" FontWeight="SemiBold"
+                                                                           Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                                                                           Margin="0,0,0,6"/>
+                                                                <StackPanel Orientation="Horizontal" Margin="0,0,0,4"
+                                                                            ToolTip="Legacy: 별도 STT/요약/감성 모델 3개 사용. Unified: gpt-realtime 단일 WebSocket으로 동시 처리.">
+                                                                    <TextBlock Text="파이프라인 모드" FontSize="12" VerticalAlignment="Center" Margin="0,0,8,0"
+                                                                               Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
+                                                                    <ComboBox SelectedValue="{Binding AudioPipelineMode, Mode=TwoWay}"
+                                                                              SelectedValuePath="Tag"
+                                                                              FontSize="12" Width="220">
+                                                                        <ComboBoxItem Content="Legacy (별도 모델 3개)">
+                                                                            <ComboBoxItem.Tag>
+                                                                                <x:Static Member="services:AudioPipelineMode.Legacy"/>
+                                                                            </ComboBoxItem.Tag>
+                                                                        </ComboBoxItem>
+                                                                        <ComboBoxItem Content="Unified (gpt-realtime 단일)">
+                                                                            <ComboBoxItem.Tag>
+                                                                                <x:Static Member="services:AudioPipelineMode.Unified"/>
+                                                                            </ComboBoxItem.Tag>
+                                                                        </ComboBoxItem>
+                                                                    </ComboBox>
+                                                                </StackPanel>
+                                                                <StackPanel Orientation="Horizontal" Margin="0,0,0,4"
+                                                                            ToolTip="Unified 모드에서 사용할 gpt-realtime 계열 모델 (모드=Legacy 시 미사용)">
+                                                                    <TextBlock Text="Unified 모델" FontSize="12" VerticalAlignment="Center" Margin="0,0,8,0"
+                                                                               Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
+                                                                    <ComboBox SelectedValue="{Binding UnifiedRealtimeModel, Mode=TwoWay}"
+                                                                              SelectedValuePath="Tag"
+                                                                              FontSize="12" Width="220">
+                                                                        <ComboBoxItem Content="gpt-realtime (균형)" Tag="gpt-realtime"/>
+                                                                        <ComboBoxItem Content="gpt-realtime-2 (고품질)" Tag="gpt-realtime-2"/>
+                                                                        <ComboBoxItem Content="gpt-realtime-mini (저비용)" Tag="gpt-realtime-mini"/>
+                                                                    </ComboBox>
+                                                                </StackPanel>
+                                                                <CheckBox Content="감성 분석 표시 (1분 요약 카드에 점수+이모지)"
+                                                                          IsChecked="{Binding SentimentEnabled, Mode=TwoWay}"
+                                                                          FontSize="12" Margin="0,0,0,4"
+                                                                          ToolTip="끄면 1분 요약 카드에 감성 표시를 생략합니다. 모드 B(Unified)는 항상 함께 분석되어 약간 차이가 있을 수 있습니다."/>
                                                                 <StackPanel Orientation="Horizontal" Margin="0,0,0,4"
                                                                             ToolTip="누적요약 주기마다 1분 요약들을 합쳐 더 큰 단위로 재요약하는 LLM 모델">
                                                                     <TextBlock Text="누적요약 모델" FontSize="12" VerticalAlignment="Center" Margin="0,0,8,0"

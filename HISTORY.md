@@ -2,6 +2,63 @@
 
 > PROJECT.md 작업 이력 테이블의 상세 보완본
 
+## [2026-05-15] 음성 파이프라인 2모드 시스템 — Legacy/Unified + 감성 분석 + 자동 폴백 + 비용 표시 (O4 Full Path — 단일사이클 PASS)
+
+**분류**: O4 Full Path (Wave 기반 spawn 6 에이전트)
+**otest 결과**: AC 18/18 PASS, 빌드 OK, 코드규칙 OK ✅
+**범위**: 신규 10파일 + 수정 5파일 (~1110줄)
+**파이프라인 이력**: 단일 사이클 PASS (역라우팅 0회)
+
+### 변경 내용
+
+**신규 파일 (10개)**:
+1. `mAIx/Services/AI/AudioPipelineMode.cs` — enum (Legacy/Unified)
+2. `mAIx/Models/SentimentResult.cs` — 감성 분석 결과 모델 (Score 0~100 + Emoji + Label)
+3. `mAIx/Services/AI/IRealtimeAudioPipeline.cs` — 공통 인터페이스 + 이벤트 정의
+4. `mAIx/Services/AI/AudioPipelineFactory.cs` — 모드 → 구현체 인스턴스 + CreateLegacyFallback
+5. `mAIx/Services/AI/LegacyAudioPipeline.cs` (~150줄) — STT 전용 + 별도 요약 + Sentiment 호출
+6. `mAIx/Services/AI/UnifiedRealtimeAudioPipeline.cs` (~827줄) — gpt-realtime/-2/-mini 단일 WebSocket + out-of-band response.create + function_call
+7. `mAIx/Services/AI/SentimentAnalysisService.cs` — gpt-4o-mini 감성 분석 (Legacy 모드)
+8. `mAIx/Services/AI/CostEstimatorService.cs` — 모델별 분당 예상 비용 계산
+9. `mAIx/Services/AI/Helpers/HallucinationFilter.cs` — 환각 텍스트 필터링 헬퍼
+10. `mAIx/Converters/SentimentScoreToColorConverter.cs` — Score(0~100) → 그라데이션 색상
+
+**수정 파일 (5개)**:
+- `mAIx/Models/MinuteSummaryEntry.cs`: +Sentiment, +CreatedByMode 필드 추가
+- `mAIx/Models/RealtimeRecordingResult.cs`: +RecordedWithMode 필드 추가
+- `mAIx/Models/Settings/OpenAiRecordingSettings.cs`: +4 신규 필드 (모드 선택, 모델, 폴백 임계값)
+- `mAIx/ViewModels/OneNoteViewModel.cs`: `_audioPipeline` 필드 + Factory 호출 + `OnPipelineFallback` 이벤트 + UpdateCostDisplay + 3 partial 메서드
+- `mAIx/Views/MainWindow.xaml`: Settings 3컨트롤 + DataTemplate 감성 표시 + 비용 미리보기 UI
+- `mAIx/App.xaml` + `App.xaml.cs`: DI 5개 + Converter 등록
+
+### 핵심 해결 사항
+
+- 모드 A (Legacy) / 모드 B (Unified gpt-realtime-2) 둘 중 선택 가능
+- 두 모드 모두 1분 요약 시 감성 분석 동시 표시 (Score 0~100 + Emoji + 그라데이션 배경)
+- 즉시 모드 전환 (옵션 변경 직후) — 5단계 대칭 swap 구조
+- 시작 실패 시 자동 모드 A 폴백 + 3회 연속 에러 발생 시 모드 A로 swap
+- 녹음마다 분당 예상 비용 표시 (CostEstimatorService)
+
+### 아키텍처 패턴
+
+- **추상화 인터페이스 + 팩토리**: `IRealtimeAudioPipeline` + `AudioPipelineFactory` (L-440)
+- **Wave 기반 spawn 의존성 분리** (L-439):
+  - Wave1: enum + interface + Factory 시그니처 + Sentiment 모델
+  - Wave2: Legacy/Unified/Sentiment/Cost/Hallucination 5개 구현체 병렬 spawn
+  - Wave3: ViewModel + XAML + App.xaml 통합
+- **OpenAI Realtime API out-of-band 패턴** (L-441): `create_response=false` + `function_call` + `item_reference` 슬라이딩 윈도우(N=8)
+- **5단계 swap 대칭 구조** (L-442): Unsubscribe → DisposeAsync → Factory.New → Subscribe → StartAsync
+
+### 교훈
+
+- L-439: Wave 기반 의존성 spawn — 다파일 작업의 표준 패턴
+- L-440: 추상화 인터페이스+팩토리 도입 기준 — 동등 분기 모드 2개+
+- L-441: OpenAI Realtime API out-of-band response.create 패턴
+- L-442: 전략 swap 5단계 대칭 구조 — Unsubscribe→Dispose→New→Subscribe→Start
+- L-443: PeriodicTimer + WebSocket _sendLock SemaphoreSlim(1,1) 필수 (L-376 준수)
+
+---
+
 ## [2026-05-14] OneNote 페어링 표시 + 타임라인 + 미니맵 + 진행률 — 5개 버그 수정 (O3 Fast Path — 단일사이클 PASS)
 
 **분류**: O3 Fast Path

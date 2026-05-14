@@ -1,6 +1,7 @@
 // OpenAI 녹음 STT/LLM 설정 (음성 모델 2슬롯 + LLM 4슬롯 + 누적주기 + 레이아웃)
 using System;
 using System.Xml.Serialization;
+using mAIx.Services.AI;
 
 namespace mAIx.Models.Settings;
 
@@ -130,4 +131,20 @@ public class OpenAiRecordingSettings
     /// <summary>청크 오버랩 (초). 청크 경계에서 단어 끊김 방지 — 화자분리 모드에서 의미 있음. 기본 0.5초.</summary>
     [XmlElement("ChunkOverlapSeconds")]
     public double ChunkOverlapSeconds { get; set; } = 0.5;
+
+    /// <summary>오디오 파이프라인 처리 모드 (Legacy=별도 3모델 / Unified=gpt-realtime 단일). 기본 Legacy.</summary>
+    [XmlElement("AudioPipelineMode")]
+    public AudioPipelineMode AudioPipelineMode { get; set; } = AudioPipelineMode.Legacy;
+
+    /// <summary>Unified 모드에서 사용할 gpt-realtime 계열 모델 ID. 기본 gpt-realtime.</summary>
+    [XmlElement("UnifiedRealtimeModel")]
+    public string UnifiedRealtimeModel { get; set; } = "gpt-realtime";
+
+    /// <summary>1분 요약 시 감성 분석 표시 여부. 기본 true.</summary>
+    [XmlElement("SentimentEnabled")]
+    public bool SentimentEnabled { get; set; } = true;
+
+    /// <summary>Unified 모드에서 연속 에러 N회 시 Legacy로 자동 폴백하는 임계값. 기본 3회.</summary>
+    [XmlElement("UnifiedFallbackThreshold")]
+    public int UnifiedFallbackThreshold { get; set; } = 3;
 }

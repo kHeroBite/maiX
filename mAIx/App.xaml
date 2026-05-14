@@ -72,6 +72,8 @@
             <converters:HexToBrushConverter x:Key="HexToBrushConverter"/>
             <!-- 배경색 명도 기반 글자색 자동 컨버터 (라이트/다크 가독성 확보) -->
             <converters:HexToReadableForegroundConverter x:Key="HexToReadableForegroundConverter"/>
+            <!-- 감성 점수(0~100) → 그라데이션 색상 컨버터 (실시간요약 카드 배경) -->
+            <converters:SentimentScoreToColorConverter x:Key="SentimentScoreToColorConverter"/>
 
             <!-- ========== 밀도 모드 기본값 (Normal) ========== -->
             <Thickness x:Key="MailItemPadding">8,6,8,6</Thickness>

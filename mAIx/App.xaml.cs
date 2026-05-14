@@ -215,6 +215,13 @@ public partial class App : Application
         services.AddSingleton<IMinuteSummaryService, MinuteSummaryService>();
         services.AddSingleton<ICumulativeSummaryService, CumulativeSummaryService>();
 
+        // Dual Pipeline (Wave 3 통합) — Legacy/Unified 모드 추상화
+        services.AddSingleton<ISentimentAnalysisService, SentimentAnalysisService>();
+        services.AddSingleton<CostEstimatorService>();
+        services.AddTransient<LegacyAudioPipeline>();
+        services.AddTransient<UnifiedRealtimeAudioPipeline>();
+        services.AddSingleton<AudioPipelineFactory>();
+
         // DbContext 등록 (SQLite) - Factory 패턴 사용
         services.AddDbContextFactory<mAIxDbContext>(options =>
         {

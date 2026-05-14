@@ -1,6 +1,8 @@
 // 녹음 실시간 분석 결과 (핵심요약·실시간요약·누적요약) 페어링 저장 모델
 using System;
 using System.Collections.Generic;
+using System.Text.Json.Serialization;
+using mAIx.Services.AI;
 
 namespace mAIx.Models;
 
@@ -40,4 +42,10 @@ public class RealtimeRecordingResult
     /// 최종 전체 요약 텍스트
     /// </summary>
     public string FinalSummaryText { get; set; } = string.Empty;
+
+    /// <summary>
+    /// 녹음 시 사용된 파이프라인 모드 — null이면 구버전 파일 (하위 호환).
+    /// </summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public AudioPipelineMode? RecordedWithMode { get; set; }
 }
