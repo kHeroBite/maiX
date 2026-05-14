@@ -3082,12 +3082,11 @@ public partial class OneNoteViewModel : ViewModelBase
                         StartTime = entry.StartTime,
                         EndTime = entry.EndTime,
                         DisplayTitle = entry.TimeRangeDisplay,
-                        SummaryPreview = entry.SummaryText.Length <= 100
-                            ? entry.SummaryText
-                            : entry.SummaryText.Substring(0, 100),
+                        SummaryPreview = entry.Topic,
                         BackgroundColorHex = palette[(MinuteSummaryCount - 1) % palette.Length],
                     };
                     TopicSegments.Add(navSegment);
+                    RecalculateTopicSegmentHeights();
                     OnPropertyChanged(nameof(AllTopicKeywords));
 
                     Log4.Info($"[녹음] 1분 요약 생성 #{MinuteSummaryCount} — {entry.SummaryText.Length}자, 네비게이션 카드 추가: {navSegment.DisplayTitle}");
@@ -3097,6 +3096,21 @@ public partial class OneNoteViewModel : ViewModelBase
         catch (Exception ex)
         {
             Log4.Error($"[녹음] OnMinuteSummaryCreated 처리 실패: {ex.Message}");
+        }
+    }
+
+    /// <summary>
+    /// StackPanel 레이아웃용 시간 비례 DisplayHeight 재계산
+    /// </summary>
+    private void RecalculateTopicSegmentHeights()
+    {
+        if (TopicSegments.Count == 0) return;
+        // 60초당 90px 비례 (사용자 환경 패널 높이 고려한 적절한 상수)
+        const double PixelsPerSecond = 1.5;  // 60초 = 90px
+        foreach (var seg in TopicSegments)
+        {
+            var duration = Math.Max(1.0, (seg.EndTime - seg.StartTime).TotalSeconds);
+            seg.DisplayHeight = duration * PixelsPerSecond;
         }
     }
 

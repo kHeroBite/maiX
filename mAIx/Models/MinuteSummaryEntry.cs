@@ -29,6 +29,11 @@ public class MinuteSummaryEntry
     public string SummaryText { get; set; } = string.Empty;
 
     /// <summary>
+    /// 핵심요약 네비게이션 표시용 주제어 (5~20자, LLM JSON 응답에서 추출)
+    /// </summary>
+    public string Topic { get; set; } = string.Empty;
+
+    /// <summary>
     /// 엔트리 생성 일시
     /// </summary>
     public DateTime CreatedAt { get; set; } = DateTime.Now;

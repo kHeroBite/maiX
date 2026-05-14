@@ -52,6 +52,7 @@ public class TopicSegment : INotifyPropertyChanged
     private string _displayTitle = string.Empty;
     private string _summaryPreview = string.Empty;
     private string _backgroundColorHex = "#E3F2FD";
+    private double _displayHeight = 60;
 
     /// <summary>
     /// 세그먼트 고유 ID (0부터 시작)
@@ -114,6 +115,22 @@ public class TopicSegment : INotifyPropertyChanged
     {
         get => _backgroundColorHex;
         set { _backgroundColorHex = value; OnPropertyChanged(); }
+    }
+
+    /// <summary>
+    /// StackPanel 레이아웃에서 카드 픽셀 높이 (시간 비례 계산값)
+    /// </summary>
+    public double DisplayHeight
+    {
+        get => _displayHeight;
+        set
+        {
+            if (Math.Abs(_displayHeight - value) > 0.5)
+            {
+                _displayHeight = value;
+                RaisePropertyChanged(nameof(DisplayHeight));
+            }
+        }
     }
 
     // ─── 표시용 파생 프로퍼티 ───────────────────────────────────────────

@@ -57,17 +57,7 @@ namespace mAIx.Views
 
                 _oneNoteViewModel.TopicNavOrientation = newOrientation;
 
-                // ItemsPanel의 Orientation 동적 변경
-                if (TopicSegmentsItemsControl?.ItemsPanel != null)
-                {
-                    var stackPanel = TopicSegmentsItemsControl.ItemsPanel.LoadContent() as VirtualizingStackPanel;
-                    if (stackPanel != null)
-                    {
-                        stackPanel.Orientation = newOrientation == "Horizontal"
-                            ? Orientation.Horizontal
-                            : Orientation.Vertical;
-                    }
-                }
+                // 핵심요약 네비게이션은 시간 비례 Grid 레이아웃으로 변경됨 — Orientation 토글 불필요
 
                 // 설정 영구 저장
                 var oaiSettings = App.Settings?.OaiRecording;

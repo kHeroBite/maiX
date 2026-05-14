@@ -341,13 +341,15 @@ Models:
   - 파일명: TopicSegment.cs (신규 — 2026-05-09)
     경로: Models/
     역할: 주제어 세그먼트 모델 (PastelPalette 8색, INotifyPropertyChanged)
-    속성: Id, StartTime, EndTime, Keywords, DisplayTitle, SummaryPreview, BackgroundColorHex
+    속성: Id, StartTime, EndTime, Keywords, DisplayTitle, SummaryPreview, BackgroundColorHex, DisplayHeight
     computed: KeywordsDisplay, TimeRangeDisplay, ToolTipText
+    변경_2026-05-14: DisplayHeight 프로퍼티 추가 (기본 60px, 시간비례 재계산 대상 — StackPanel+DisplayHeight 패턴)
 
   - 파일명: MinuteSummaryEntry.cs (신규 — 2026-05-09)
     경로: Models/
-    역할: 1분 요약 엔트리 (순번/시간범위/요약 텍스트/생성시각)
-    속성: Index, StartTime, EndTime, SummaryText, CreatedAt
+    역할: 1분 요약 엔트리 (순번/시간범위/요약 텍스트/생성시각/주제어)
+    속성: Index, StartTime, EndTime, SummaryText, CreatedAt, Topic
+    변경_2026-05-14: Topic 필드 추가 (5~20자 주제어 저장, LLM JSON 응답 파싱)
 ```
 
 ### 5. Services (비즈니스 로직)
@@ -407,6 +409,7 @@ AI_Services:
     인터페이스: IMinuteSummaryService
     이벤트: MinuteSummaryCreated
     변경_2026-05-13: ProcessingIntervalSeconds 단일 옵션 사용 (별도 주기 설정 제거)
+    변경_2026-05-14: LLM 프롬프트 JSON 응답 추가 + ExtractSummaryAndTopic() 메서드 (summary+topic 동시 추출)
 
   - 파일명: CumulativeSummaryService.cs
     역할: 설정 주기 PeriodicTimer 기반 누적 요약 + 압축 갱신 모드 + 최종 요약

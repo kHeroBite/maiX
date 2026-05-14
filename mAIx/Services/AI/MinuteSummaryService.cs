@@ -223,20 +223,31 @@ public sealed class MinuteSummaryService : IMinuteSummaryService
             var baseUrl = (_settings.AIProviders?.OpenAI?.BaseUrl ?? "https://api.openai.com/v1").TrimEnd('/');
             var url = baseUrl + "/chat/completions";
 
-            var prompt = $"""
+            const string systemPrompt = """
+                반드시 다음 JSON 형식으로만 응답하라. 다른 설명/마크다운 금지.
+                {
+                  "summary": "30~150자 요약 텍스트",
+                  "topic": "5~20자 주제어 또는 주제맥락 (예: '하네스엔지니어링 설명', '바이브코딩의 미래에 대한 분석')"
+                }
+                """;
+
+            var userPrompt = $"""
                 다음은 녹음 전사 텍스트 (구간: {startTime.ToString(@"mm\:ss")} ~ {endTime.ToString(@"mm\:ss")}) 입니다.
 
                 [전사 텍스트]
                 {combinedText}
-
-                위 구간의 핵심 내용을 2~3문장으로 간략히 요약해 주세요.
                 """;
 
             var requestBody = new
             {
                 model,
-                messages = new[] { new { role = "user", content = prompt } },
-                max_completion_tokens = 256
+                messages = new object[]
+                {
+                    new { role = "system", content = systemPrompt },
+                    new { role = "user", content = userPrompt }
+                },
+                max_completion_tokens = 256,
+                response_format = new { type = "json_object" }
             };
 
             var json = JsonSerializer.Serialize(requestBody);
@@ -250,7 +261,8 @@ public sealed class MinuteSummaryService : IMinuteSummaryService
             }
 
             var respJson = await response.Content.ReadAsStringAsync(ct).ConfigureAwait(false);
-            var summaryText = ExtractSummaryText(respJson);
+            var llmContent = ExtractSummaryText(respJson);
+            var (summaryText, topic) = ExtractSummaryAndTopic(llmContent);
 
             if (string.IsNullOrWhiteSpace(summaryText)) return;
 
@@ -260,6 +272,7 @@ public sealed class MinuteSummaryService : IMinuteSummaryService
                 StartTime = startTime,
                 EndTime = endTime,
                 SummaryText = summaryText,
+                Topic = topic,
                 CreatedAt = DateTime.Now
             };
 
@@ -307,6 +320,45 @@ public sealed class MinuteSummaryService : IMinuteSummaryService
         }
         catch { /* 무시 */ }
         return string.Empty;
+    }
+
+    /// <summary>
+    /// LLM 응답 content 문자열에서 summary와 topic을 추출한다.
+    /// JSON 파싱 실패 시 summary=원문(150자), topic=summary앞20자 fallback.
+    /// </summary>
+    private static (string summary, string topic) ExtractSummaryAndTopic(string llmContent)
+    {
+        if (string.IsNullOrWhiteSpace(llmContent))
+            return (string.Empty, string.Empty);
+
+        try
+        {
+            using var doc = JsonDocument.Parse(llmContent);
+            var root = doc.RootElement;
+            var summary = root.TryGetProperty("summary", out var sumProp)
+                ? (sumProp.GetString() ?? string.Empty)
+                : string.Empty;
+            var topic = root.TryGetProperty("topic", out var topicProp)
+                ? (topicProp.GetString() ?? string.Empty)
+                : string.Empty;
+
+            // topic 길이 보정: 5자 미만이면 summary 앞 20자, 20자 초과면 앞 20자 truncate
+            topic = topic.Trim();
+            if (topic.Length < 5)
+                topic = summary.Trim().Length > 20 ? summary.Trim()[..20] : summary.Trim();
+            else if (topic.Length > 20)
+                topic = topic[..20];
+
+            return (summary, topic);
+        }
+        catch
+        {
+            // JSON 파싱 실패 — 원문 그대로 fallback
+            var fallbackSummary = llmContent.Length > 150 ? llmContent[..150] : llmContent;
+            var fallbackTopic = fallbackSummary.Trim();
+            fallbackTopic = fallbackTopic.Length > 20 ? fallbackTopic[..20] : fallbackTopic;
+            return (fallbackSummary, fallbackTopic);
+        }
     }
 
     private async Task SaveEntryToDiskAsync(MinuteSummaryEntry entry)

@@ -2,6 +2,30 @@
 
 > PROJECT.md 작업 이력 테이블의 상세 보완본
 
+## [2026-05-14] 핵심요약 네비게이션 시간비례 높이 + 주제어 + 실시간요약 누적 (옵션 B 안착)
+
+**분류**: O3 Normal
+**otest 결과**: 빌드 ✅ + UIAutomation Rect Y 분산(Y=206/Y=298) ✅ + 스크린샷 ✅
+**범위**: 수정 5파일 (~150줄 삭제 + 신규 패턴 적용)
+
+### 변경 내용
+- **TopicSegment.cs**: `DisplayHeight` 프로퍼티 추가 (기본 60px, 시간비례 재계산 대상)
+- **MinuteSummaryEntry.cs**: `Topic` 필드 추가 (5~20자 주제어 저장)
+- **MinuteSummaryService.cs**: LLM 프롬프트 JSON 응답 추가 + `ExtractSummaryAndTopic()` 메서드
+- **OneNoteViewModel.cs**: `SummaryPreview = entry.Topic` 매핑, `RecalculateTopicSegmentHeights()` 추가
+- **MainWindow.xaml**: Grid Star ItemsPanelTemplate 폐기 → StackPanel + `Height={Binding DisplayHeight}` 전환
+- **MainWindow.OneNote.cs**: `RebuildTopicSegmentRows`, `CollectionChanged` 핸들러, `ItemContainerGenerator` 우회 로직 ~150줄 삭제
+
+### 파이프라인 이력
+- 역라우팅 4회: Grid Star(odev-1~5) 실패 → 사용자 옵션 B 선택 → StackPanel(odev-6) PASS
+- 최종 PASS: 빌드 ✅, UIAutomation Rect Y 분산(Y=206/Y=298) ✅, 스크린샷 ✅
+
+### 교훈
+- L-424: WPF ItemsControl 가변높이 안티패턴(Grid) → 표준(StackPanel+DisplayHeight)
+- L-425: UIAutomation DataItem 검증 = 개수+Rect 분산 2단계 필수
+- L-426: UI '최신/단일' 표시 요구 모호 해석 주의
+- L-427: 역라우팅 2회 = 즉시 근본변경 옵션 제시
+
 ## 2026-05-10: OneNote 옵션 통합 — 좌측 3옵션 → 우측 옵션탭 이동 + 최종요약 자동 옵트인 (o3 — 3파일)
 
 **분류**: O3 Normal

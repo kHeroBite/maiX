@@ -1458,6 +1458,48 @@
 - **심각도**: 낮음 (긍정 사례 — 잘 된 패턴 기록)
 - **Level**: 1 (참고용)
 
+### L-424: WPF ItemsControl 가변 높이 — StackPanel+DisplayHeight 표준 패턴 (2026-05-14)
+
+ItemsControl에서 시간 비례/가변 높이가 필요할 때 ItemsPanelTemplate=Grid + 코드비하인드 RowDefinition 동적 생성 패턴은 안티패턴이다.
+3중 우회 (ItemContainerGenerator 비동기 + CollectionChanged 수동 구독 + Grid.SetRow 명령형)가 필요하며 WPF 내부 타이밍 문제로 신뢰성이 낮다.
+표준 패턴은 ItemsControl + ItemsPanelTemplate(StackPanel) + ItemTemplate(Border Height={Binding DisplayHeight})이다.
+ViewModel이 항목 추가 시 전체 DisplayHeight를 재계산하여 모델 프로퍼티에 저장한다.
+oplan 설계 단계에서 Grid ItemsPanelTemplate 패턴이 제안되면 즉시 기각하고 StackPanel+DisplayHeight로 전환한다.
+
+**재발방지**: oplan_normal/SKILL.md "WPF 레이아웃 설계 필수 규칙" 섹션 추가됨.
+
+### L-425: UIAutomation DataItem 검증 = 개수 + Rect 좌표 분산 2단계 필수 (2026-05-14)
+
+ItemsControl/ListBox 등 반복 컨트롤 검증 시 DataItem 개수 확인만으로 PASS 판정 불가.
+전체 DataItem이 동일 Rect(동일 Y 좌표)에 겹쳐 있으면 사용자에게는 1개만 보인다.
+개수 검증만으로는 WPF 레이아웃 겹침 버그를 감지하지 못한다.
+필수 2단계: (1) DataItem 개수 예상값 일치, (2) 각 DataItem BoundingRectangle.Y 값 분산 확인.
+전체 Y가 동일하면 FAIL — 즉시 역라우팅.
+
+**재발방지**: otest_winforms/SKILL.md "ItemsControl/반복 컨트롤 검증 필수 규칙" 섹션 추가됨.
+
+### L-426: UI '최신/단일' 표시 요구 해석 분기 — 모호 시 사용자 확인 필수 (2026-05-14)
+
+요구사항에 "단일", "최신", "마지막", "1건"이 포함될 때 2가지 해석이 가능하다.
+(A) 누적 유지 + 최신 강조: 이전 이력 유지, 최신 항목만 강조 또는 상단 표시.
+(B) 이전 완전 숨김: 최신 1건만 표시, 이전 항목 제거.
+oplan이 확인 없이 ContentControl 단일 표시(해석 B)로 구현 → 실제 의도는 누적 유지(해석 A) → 1차 역라우팅.
+모호 시 oplan 계획서에 2가지 해석을 명시하고 사용자 확인 후 진행.
+
+**재발방지**: oplan_normal/SKILL.md "UI 요구사항 해석 분기 규칙" 섹션 추가됨.
+
+### L-427: 동일 증상 역라우팅 2회 = 설계 한계 신호 — 즉시 근본변경 옵션 제시 (2026-05-14)
+
+동일 증상으로 역라우팅이 2회 발생하면 3번째 우회 시도는 금지한다.
+우회 방법(RaisePropertyChanged → Grid.SetRow → ItemContainerGenerator) 3차례 실패 후에야 사용자에게 옵션 제시 → 사용자 마찰 증가.
+2회 역라우팅 시 즉시 의무 절차:
+1. 기존 구조 한계 명시.
+2. 옵션 A(기존 구조 우회 지속)와 옵션 B(근본 설계 변경) 명시 제시.
+3. 사용자 결정 후 진행.
+L-421(동일 기능 2회 ok 미해결 시 재설계 권한 위임)의 역라우팅 단위 적용 강화.
+
+**재발방지**: oplan_normal/SKILL.md "역라우팅 반복 대응 규칙" 섹션 추가됨.
+
 ## 반영 추적 테이블
 
 | 교훈 ID | 교훈 요약 | 반영 대상 | 반영 위치 | 반영일 | 검증 |
@@ -1526,3 +1568,7 @@
 | L-421 | 부분 수정 한계 시 사용자에게 재설계 권한 위임 — 동일 기능 2회+ ok 미해결이면 oplan에서 "기존 구조 vs 재설계" 옵션 명시 제시. | docs | LESSONS.md | 2026-05-13 | ✅ |
 | L-422 | active 코드도 사용자 의도 미정렬이면 재설계 대상 — dead/alive 판정은 정적 분석 + 의도 정렬도 양쪽 기준. | docs | LESSONS.md | 2026-05-13 | ✅ |
 | L-423 | 이종 페르소나 병렬 odev — C#(BE)과 XAML(FE) 변경은 be-csharp + fe-designer 병렬 분리로 충돌 없이 효율적 완료. | docs | LESSONS.md | 2026-05-13 | ✅ |
+| L-424 | WPF ItemsControl 가변높이 — StackPanel+DisplayHeight 표준 패턴. ItemsPanelTemplate=Grid 안티패턴 기각 | docs+skill | LESSONS.md + oplan_normal/SKILL.md | 2026-05-14 | ✅ |
+| L-425 | UIAutomation DataItem 검증 = 개수 + Rect Y 좌표 분산 2단계 필수. 전체 동일 Y = 겹침 = FAIL | docs+skill | LESSONS.md + otest_winforms/SKILL.md | 2026-05-14 | ✅ |
+| L-426 | UI '최신/단일' 표시 요구 — 2가지 해석 분기(누적유지 vs 숨김) 모호 시 사용자 확인 필수 | docs+skill | LESSONS.md + oplan_normal/SKILL.md | 2026-05-14 | ✅ |
+| L-427 | 동일 증상 역라우팅 2회 = 설계 한계 신호. 3회째 우회 금지 + 즉시 근본변경 옵션 사용자 제시 | docs+skill | LESSONS.md + oplan_normal/SKILL.md | 2026-05-14 | ✅ |
