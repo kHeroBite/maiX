@@ -2,6 +2,39 @@
 
 > PROJECT.md 작업 이력 테이블의 상세 보완본
 
+## [2026-05-14] OneNote 페어링 일관성 회복 — 4개 버그 수정 (O3 Fast Path — 단일사이클 PASS)
+
+**분류**: O3 Fast Path
+**otest 결과**: 정적+논리+빌드+규칙 검증 4개 버그 전항목 PASS ✅
+**범위**: 신규 1파일 + 변경 3파일 (~100줄 추가)
+
+### 변경 내용
+- **Models/RealtimeRecordingResult.cs** (신규, ~30줄): 녹음파일 페어링 데이터 모델 — STT/요약 결과를 `.realtime.json`으로 영속화
+- **ViewModels/OneNoteViewModel.cs** (~100줄 추가):
+  - `PreserveSTTOnSelectionChange()` public 메서드 (SelectionChanged 경쟁 조건 방지)
+  - `SaveRealtimeRecordingResultAsync()` / `LoadRealtimeResultAsync()` (페어링 파일 저장/로드)
+  - `OnSelectedPageChanged` 5종 Clear 추가 (TopicSegments/MinuteSummaries/CumulativeSummaryText/FinalSummaryText/MinuteSummaryCount)
+- **Views/MainWindow.xaml** (1줄 삭제): OneNoteRecordingsList ItemContainerStyle 내 `Focusable=False` Setter 제거
+- **Views/MainWindow.xaml.cs** (~2줄 추가): `PreserveSTTOnSelectionChange()` 호출 연결
+
+### 해결한 버그 4개
+1. **버그1** (STT 사라짐): 녹음 중지 후 LoadOneNoteRecordings()가 SelectionChanged 발화 → `PreserveSTTOnSelectionChange()` 패턴으로 회피
+2. **버그2** (요약 잔류): 다른 노트 선택 시 이전 요약 데이터 잔류 → OnSelectedPageChanged 5종 Clear
+3. **버그3** (페어링 저장): 요약 데이터가 메모리에만 존재 → `RealtimeRecordingResult` + `.realtime.json` 영속화
+4. **버그4** (선택 안 됨): ListBoxItem Focusable=False Setter가 클릭 선택 차단 → Setter 삭제
+
+### 파이프라인 이력
+- 단일 사이클 PASS (역라우팅 0회)
+- 4개 독립 버그 동시 처리 — 오케스트레이션 패턴
+
+### 교훈
+- L-431: WPF ListBoxItem Focusable=False Setter → 클릭 선택 차단 패턴
+- L-432: PreserveXxxOnSelectionChange() 공개 메서드 패턴
+- L-433: 노트 전환 시 5종 Clear 필수
+- L-434: 메모리 전용 컬렉션 vs 영속화 데이터 분리 패턴
+
+---
+
 ## [2026-05-14] 핵심요약 네비게이션 좌측 타임라인 ruler + 패널 % 비례 분할 (O3 — 단일사이클 PASS)
 
 **분류**: O3 Fast Path

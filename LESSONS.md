@@ -1527,6 +1527,47 @@ L-424(WPF ItemsControl 가변높이 안티패턴 기각)가 직전 작업 완료
 **관련 패턴**: L-424(StackPanel 표준), L-425(DataItem Rect Y 분산 검증), L-427(역라우팅 2회 즉시 옵션 제시)
 **재발방지**: 해당 없음 (긍정 패턴 기록)
 
+### L-431: WPF ListBoxItem Focusable=False Setter가 클릭 선택 차단 (2026-05-14)
+
+- **문제**: ItemContainerStyle에 `<Setter Property="Focusable" Value="False"/>` 가 설정되어 있으면, ListBoxItem을 클릭해도 선택(IsSelected)이 정상 동작하지 않음
+- **근본 원인**: WPF ListBox는 포커스 이동을 통해 선택 상태를 처리하는데, Focusable=False이면 포커스가 이동 불가하여 선택 이벤트가 차단됨
+- **해결**: ItemContainerStyle에서 `Focusable=False` Setter 삭제
+- **재발방지**: ItemContainerStyle 코드 리뷰 시 `Focusable=False` 패턴 즉시 기각. WPF 선택이 안 되는 증상 발생 시 ItemContainerStyle Focusable 설정 먼저 확인
+- **Level**: 2 (반복 재현 위험 — ListBox 스타일링 시 흔한 실수)
+
+### L-432: PreserveXxxOnSelectionChange() 공개 메서드 패턴 — LoadCollection+SelectionChanged 경쟁 조건 회피 (2026-05-14)
+
+- **문제**: LoadOneNoteRecordings()에서 ObservableCollection을 재설정할 때 SelectionChanged 이벤트가 발화되어 STT 데이터가 Clear됨
+- **근본 원인**: WPF에서 ObservableCollection.Clear() → SelectedItem 변경 → SelectionChanged 자동 발화 → 핸들러가 STT/요약 데이터를 Clear
+- **해결**: `PreserveSTTOnSelectionChange()` public 메서드로 "다음 SelectionChanged는 Clear 스킵" 플래그를 설정, LoadCollection 직전에 호출
+- **패턴**: `PreserveXxxOnSelectionChange()` — 컬렉션 재로드 직전 호출하여 SelectionChanged 부작용 방지
+- **재발방지**: ObservableCollection 재설정(Clear+Add) 후 SelectionChanged 핸들러가 데이터를 Clear하는 패턴 발견 시 PreserveXxx 패턴 적용
+- **Level**: 2 (WPF 컬렉션 재설정 시 반복 재현 가능)
+
+### L-433: 노트/녹음파일 전환 시 5종 Clear 필수 (2026-05-14)
+
+- **문제**: 다른 OneNote 노트 또는 녹음파일로 전환 시 이전 노트의 핵심요약/실시간요약 데이터가 새 노트에 잔류
+- **근본 원인**: OnSelectedPageChanged 핸들러에서 요약 관련 컬렉션/필드를 초기화하지 않음
+- **해결**: OnSelectedPageChanged 양쪽 분기에 5종 Clear 추가
+  - TopicSegments.Clear()
+  - MinuteSummaries.Clear()
+  - CumulativeSummaryText = string.Empty
+  - FinalSummaryText = string.Empty
+  - MinuteSummaryCount = 0
+- **재발방지**: 노트/파일 전환 핸들러 구현 시 표시용 컬렉션/필드 전체 Clear 체크리스트 적용
+- **Level**: 2 (신규 요약 데이터 추가 시 반복 재현 위험)
+
+### L-434: 메모리 전용 컬렉션 vs 영속화 데이터 분리 — 녹음파일 페어링 패턴 (2026-05-14)
+
+- **문제**: 녹음 중 생성된 STT/요약 데이터가 녹음 중지 후 다른 파일 선택 시 소실. 앱 재시작 후 복원 불가
+- **근본 원인**: ObservableCollection은 메모리 전용 — 영속화 없이는 세션 간 데이터 유지 불가
+- **해결**: `RealtimeRecordingResult` 모델 신규 생성 + `.realtime.json` 파일로 영속화
+  - StopRecording → `SaveRealtimeRecordingResultAsync()` 호출
+  - 파일 선택 → `LoadRealtimeResultAsync()` 호출 후 컬렉션 복원
+- **페어링 패턴**: `{녹음파일명}.realtime.json` — 녹음파일과 동일 디렉토리에 동일 이름으로 페어링
+- **재발방지**: 녹음/분석 세션 데이터는 항상 영속화 파일 페어링 설계. 메모리 컬렉션 단독 사용 설계 감지 시 페어링 파일 추가 권고
+- **Level**: 2 (신규 데이터 타입 추가 시 반복 재현 위험)
+
 ## 반영 추적 테이블
 
 | 교훈 ID | 교훈 요약 | 반영 대상 | 반영 위치 | 반영일 | 검증 |
@@ -1602,3 +1643,7 @@ L-424(WPF ItemsControl 가변높이 안티패턴 기각)가 직전 작업 완료
 | L-428 | 교훈 즉시 등재 효과 — LESSONS 등재 직후 다음 사이클에서 즉각 활용 (L-424 StackPanel 패턴 역라우팅 0회 입증) | docs | LESSONS.md | 2026-05-14 | ✅ |
 | L-429 | '확인해보라' 요청 = 기존검증+신규요구 동시처리 패턴 — oplan에 검증 AC 항목 명시 후 단일 사이클 완료 | docs | LESSONS.md | 2026-05-14 | ✅ |
 | L-430 | odev 자체발견 프로퍼티 대체 — 계획서 Topic → 실제 SummaryPreview 자율 대체 (역라우팅 없이 완료). 코드 정합성 > 계획서 100% 준수 | docs | LESSONS.md | 2026-05-14 | ✅ |
+| L-431 | WPF ListBoxItem Focusable=False Setter가 클릭 선택 차단 — ItemContainerStyle에서 Focusable=False 제거 필수 | docs | LESSONS.md | 2026-05-14 | ✅ |
+| L-432 | PreserveXxxOnSelectionChange() 공개 메서드 패턴 — LoadCollection+SelectionChanged 경쟁 조건 회피 패턴 | docs | LESSONS.md | 2026-05-14 | ✅ |
+| L-433 | 노트/녹음 전환 시 5종 Clear 필수 — TopicSegments/MinuteSummaries/CumulativeSummaryText/FinalSummaryText/MinuteSummaryCount 모두 초기화 | docs | LESSONS.md | 2026-05-14 | ✅ |
+| L-434 | 메모리 전용 컬렉션 vs 영속화 데이터 분리 — 녹음파일 페어링 .realtime.json으로 영속화 후 Stop→Save/Load→LoadResults 패턴 | docs | LESSONS.md | 2026-05-14 | ✅ |

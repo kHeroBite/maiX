@@ -5584,6 +5584,7 @@ public partial class MainWindow : FluentWindow
                 if (matchingRecording != null)
                 {
                     Log4.Info($"[MainWindow] 이전 선택 녹음 복원: {matchingRecording.FileName}");
+                    _oneNoteViewModel.PreserveSTTOnSelectionChange(); // STT 메모리 결과 유지 (재로드 경쟁 조건 방지)
                     OneNoteRecordingsList.SelectedItem = matchingRecording;
                     _oneNoteViewModel.SelectedRecording = matchingRecording;
                     // STT/요약 로드가 완료될 때까지 대기

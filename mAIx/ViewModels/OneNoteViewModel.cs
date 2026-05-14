@@ -2075,6 +2075,15 @@ public partial class OneNoteViewModel : ViewModelBase
     }
 
     /// <summary>
+    /// 선택 변경 시 STT 데이터를 파일에서 재로드하지 않고 메모리 결과를 유지하도록 플래그 설정.
+    /// 외부(MainWindow.xaml.cs)에서 ListBox 선택 복원 전에 호출하여 STT 재로드 경쟁 조건을 방지.
+    /// </summary>
+    public void PreserveSTTOnSelectionChange()
+    {
+        _skipLoadSTTOnSelectionChange = true;
+    }
+
+    /// <summary>
     /// 선택된 녹음의 STT/요약 결과를 수동으로 로드 (UI에서 직접 호출용)
     /// </summary>
     public void LoadSelectedRecordingResults()
@@ -2092,6 +2101,7 @@ public partial class OneNoteViewModel : ViewModelBase
             _logger.Information("[OneNote] LoadSelectedRecordingResults 호출: {FileName}", SelectedRecording.FileName);
             _ = LoadSTTResultAsync(SelectedRecording);
             _ = LoadSummaryResultAsync(SelectedRecording);
+            _ = LoadRealtimeResultAsync(SelectedRecording);
         }
     }
 
@@ -3667,6 +3677,96 @@ public partial class OneNoteViewModel : ViewModelBase
     }
 
     /// <summary>
+    /// 실시간 분석 결과 페어링 저장 (핵심요약·1분요약·누적요약·전체요약 → .realtime.json)
+    /// </summary>
+    private async Task SaveRealtimeRecordingResultAsync(string audioFilePath)
+    {
+        try
+        {
+            var result = new Models.RealtimeRecordingResult
+            {
+                AudioFilePath = audioFilePath,
+                CreatedAt = DateTime.Now,
+                TopicSegments = TopicSegments.ToList(),
+                MinuteSummaries = MinuteSummaries.ToList(),
+                CumulativeSummaryText = CumulativeSummaryText,
+                FinalSummaryText = FinalSummaryText
+            };
+
+            var realtimePath = Path.ChangeExtension(audioFilePath, ".realtime.json");
+            var options = new STJ.JsonSerializerOptions
+            {
+                WriteIndented = true,
+                Encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping
+            };
+            var json = STJ.JsonSerializer.Serialize(result, options);
+            await File.WriteAllTextAsync(realtimePath, json, System.Text.Encoding.UTF8);
+
+            _logger.Information("[녹음] 실시간 분석 결과 페어링 저장: {Path} (TopicSegments={TopicCount}, MinuteSummaries={MinuteCount})",
+                realtimePath, result.TopicSegments.Count, result.MinuteSummaries.Count);
+        }
+        catch (Exception ex)
+        {
+            _logger.Error(ex, "[녹음] 실시간 분석 결과 페어링 저장 실패: {FilePath}", audioFilePath);
+        }
+    }
+
+    /// <summary>
+    /// 실시간 분석 결과 페어링 로드 (.realtime.json → 4개 컬렉션/문자열 교체)
+    /// </summary>
+    private async Task LoadRealtimeResultAsync(Models.RecordingInfo recording)
+    {
+        try
+        {
+            var realtimePath = Path.ChangeExtension(recording.FilePath, ".realtime.json");
+            if (!File.Exists(realtimePath))
+            {
+                // .realtime.json 없으면 컬렉션 초기화 (graceful)
+                await System.Windows.Application.Current.Dispatcher.InvokeAsync(() =>
+                {
+                    TopicSegments.Clear();
+                    MinuteSummaries.Clear();
+                    CumulativeSummaryText = string.Empty;
+                    FinalSummaryText = string.Empty;
+                    MinuteSummaryCount = 0;
+                }).Task.ConfigureAwait(false);
+                _logger.Information("[녹음] .realtime.json 없음 — 요약 컬렉션 초기화: {FileName}", recording.FileName);
+                return;
+            }
+
+            var json = await File.ReadAllTextAsync(realtimePath, System.Text.Encoding.UTF8).ConfigureAwait(false);
+            var result = STJ.JsonSerializer.Deserialize<Models.RealtimeRecordingResult>(json);
+            if (result == null)
+            {
+                _logger.Warning("[녹음] .realtime.json 역직렬화 실패 (null): {Path}", realtimePath);
+                return;
+            }
+
+            await System.Windows.Application.Current.Dispatcher.InvokeAsync(() =>
+            {
+                TopicSegments.Clear();
+                foreach (var seg in result.TopicSegments)
+                    TopicSegments.Add(seg);
+
+                MinuteSummaries.Clear();
+                foreach (var entry in result.MinuteSummaries)
+                    MinuteSummaries.Add(entry);
+                MinuteSummaryCount = result.MinuteSummaries.Count;
+
+                CumulativeSummaryText = result.CumulativeSummaryText;
+                FinalSummaryText = result.FinalSummaryText;
+            }).Task.ConfigureAwait(false);
+
+            _logger.Information("[녹음] .realtime.json 로드 완료: {FileName} (TopicSegments={TopicCount}, MinuteSummaries={MinuteCount})",
+                recording.FileName, result.TopicSegments.Count, result.MinuteSummaries.Count);
+        }
+        catch (Exception ex)
+        {
+            _logger.Error(ex, "[녹음] .realtime.json 로드 실패: {FileName}", recording.FileName);
+        }
+    }
+
+    /// <summary>
     /// 녹음 중지
     /// </summary>
     [RelayCommand]
@@ -3758,6 +3858,11 @@ public partial class OneNoteViewModel : ViewModelBase
                         if (!string.IsNullOrWhiteSpace(LiveSummaryText))
                         {
                             await SaveRealtimeSummaryAsync(filePath);
+                        }
+                        if (TopicSegments.Count > 0 || MinuteSummaries.Count > 0 ||
+                            !string.IsNullOrWhiteSpace(CumulativeSummaryText))
+                        {
+                            await SaveRealtimeRecordingResultAsync(filePath);
                         }
 
                         // 자동 후처리 실행 (UI 스레드에서 실행 — IsPostProcessing 등 UI 바인딩 프로퍼티 사용)
@@ -3874,6 +3979,11 @@ public partial class OneNoteViewModel : ViewModelBase
             _ = LoadPageContentAsync(newValue.Id);
 
             // 녹음 관련 데이터 초기화 (페이지 변경 시)
+            TopicSegments.Clear();
+            MinuteSummaries.Clear();
+            CumulativeSummaryText = string.Empty;
+            FinalSummaryText = string.Empty;
+            MinuteSummaryCount = 0;
             SelectedRecording = null;
             STTSegments.Clear();
             LiveSTTSegments.Clear();
@@ -3892,6 +4002,11 @@ public partial class OneNoteViewModel : ViewModelBase
             CurrentPageContent = null;
 
             // 녹음 관련 데이터 초기화 (페이지 삭제 또는 미선택 시)
+            TopicSegments.Clear();
+            MinuteSummaries.Clear();
+            CumulativeSummaryText = string.Empty;
+            FinalSummaryText = string.Empty;
+            MinuteSummaryCount = 0;
             SelectedRecording = null;
             STTSegments.Clear();
             LiveSTTSegments.Clear();
