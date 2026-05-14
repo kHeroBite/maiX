@@ -921,3 +921,17 @@ if (dialog.ShowDialog() == true)
 `MainWindow.xaml`에서 3가지 밀도: Comfortable(편안), Default(기본), Compact(촘촘).
 이메일 목록 행 높이와 패딩을 동적으로 조정.
 `UserPreferencesSettings.DisplayDensity` 열거형으로 관리.
+
+### 핵심요약 네비게이션 패널 (OneNote 탭)
+
+`MainWindow.xaml` TopicNavScrollViewer 영역. Grid 2-column 레이아웃.
+
+```
+[Col 0: 40px — 타임라인 Canvas ruler]  [Col 1: * — TopicSegment StackPanel]
+```
+
+- **타임라인 ruler**: `TimelineTick` 모델 리스트 → Canvas ItemsControl. `Canvas.Top` = `Position * ActualHeight`.
+- **TopicSegment 패널**: StackPanel ItemsPanelTemplate + `Border Height={Binding DisplayHeight}` (L-424 표준 패턴).
+- **% 비례 계산**: `OneNoteViewModel.SetPanelHeight(totalHeight)` → `RebuildTimelineTicks()` + `RecalculateTopicSegmentHeights()`.
+- **SizeChanged 연동**: `MainWindow.OneNote.cs`의 `TopicNavScrollViewer_SizeChanged`가 ViewScrollHeight → VM 전달.
+- **안티패턴 금지**: ItemsPanelTemplate=Grid + RowDefinition 동적 생성 (ItemContainerGenerator/Grid.SetRow 3중 우회 필요, 신뢰 불가 — L-424).

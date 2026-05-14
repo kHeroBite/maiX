@@ -1500,6 +1500,15 @@ L-421(동일 기능 2회 ok 미해결 시 재설계 권한 위임)의 역라우�
 
 **재발방지**: oplan_normal/SKILL.md "역라우팅 반복 대응 규칙" 섹션 추가됨.
 
+### L-428: 교훈 LESSONS 즉시 등재 효과 — 다음 사이클에서 직접 활용됨 (2026-05-14)
+
+L-424(WPF ItemsControl 가변높이 안티패턴 기각)가 직전 작업 완료 시 LESSONS.md에 등재되었고,
+이번 작업(타임라인 ruler + % 비례)에서 oplan-1이 처음부터 StackPanel+Canvas 조합을 설계하여 역라우팅 0회 달성.
+교훈은 등재 직후부터 다음 작업에 즉각 활용된다 — 교훈 등재 → 바로 다음 파이프라인 사이클에서 효과 측정 가능.
+
+**관련 패턴**: L-424(StackPanel 표준), L-425(DataItem Rect Y 분산 검증), L-427(역라우팅 2회 즉시 옵션 제시)
+**재발방지**: 해당 없음 (긍정 패턴 기록)
+
 ## 반영 추적 테이블
 
 | 교훈 ID | 교훈 요약 | 반영 대상 | 반영 위치 | 반영일 | 검증 |
@@ -1572,3 +1581,4 @@ L-421(동일 기능 2회 ok 미해결 시 재설계 권한 위임)의 역라우�
 | L-425 | UIAutomation DataItem 검증 = 개수 + Rect Y 좌표 분산 2단계 필수. 전체 동일 Y = 겹침 = FAIL | docs+skill | LESSONS.md + otest_winforms/SKILL.md | 2026-05-14 | ✅ |
 | L-426 | UI '최신/단일' 표시 요구 — 2가지 해석 분기(누적유지 vs 숨김) 모호 시 사용자 확인 필수 | docs+skill | LESSONS.md + oplan_normal/SKILL.md | 2026-05-14 | ✅ |
 | L-427 | 동일 증상 역라우팅 2회 = 설계 한계 신호. 3회째 우회 금지 + 즉시 근본변경 옵션 사용자 제시 | docs+skill | LESSONS.md + oplan_normal/SKILL.md | 2026-05-14 | ✅ |
+| L-428 | 교훈 즉시 등재 효과 — LESSONS 등재 직후 다음 사이클에서 즉각 활용 (L-424 StackPanel 패턴 역라우팅 0회 입증) | docs | LESSONS.md | 2026-05-14 | ✅ |

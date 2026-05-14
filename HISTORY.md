@@ -2,6 +2,27 @@
 
 > PROJECT.md 작업 이력 테이블의 상세 보완본
 
+## [2026-05-14] 핵심요약 네비게이션 좌측 타임라인 ruler + 패널 % 비례 분할 (O3 — 단일사이클 PASS)
+
+**분류**: O3 Fast Path
+**otest 결과**: 빌드 ✅ + Phase 1~5 전항목 PASS ✅
+**범위**: 신규 1파일 + 변경 3파일 (~130줄 추가)
+
+### 변경 내용
+- **Models/TimelineTick.cs** (신규): 타임라인 눈금 모델 (시각 레이블 + 위치 퍼센트 + 표시여부)
+- **ViewModels/OneNoteViewModel.cs**: `TimelineTicks` ObservableCollection + `SetPanelHeight()` + `RebuildTimelineTicks()` + % 비례 계산 (~60줄)
+- **Views/MainWindow.OneNote.cs**: `TopicNavScrollViewer_SizeChanged` 핸들러 (~20줄)
+- **Views/MainWindow.xaml**: Grid 2-column 레이아웃 + Canvas 타임라인 ruler (~40줄)
+
+### 파이프라인 이력
+- 단일 사이클 PASS (역라우팅 0회) — L-424 등재 효과로 Grid 안티패턴 회피 성공
+- L-424 직전 작업 등재 → 이번 oplan-1에서 즉시 StackPanel+Canvas 조합 설계 (안티패턴 회피)
+
+### 교훈
+- L-424 효과 입증: 직전 등재된 LESSONS 교훈이 다음 사이클에서 즉시 적용됨
+
+---
+
 ## [2026-05-14] 핵심요약 네비게이션 시간비례 높이 + 주제어 + 실시간요약 누적 (옵션 B 안착)
 
 **분류**: O3 Normal

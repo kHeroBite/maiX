@@ -182,5 +182,23 @@ namespace mAIx.Views
             if (_oneNoteViewModel == null) return;
             _oneNoteViewModel.FilterByTag(tag);
         }
+
+        /// <summary>
+        /// 핵심요약 네비게이션 스크롤뷰어 크기 변경 시 패널 높이를 ViewModel에 전달
+        /// </summary>
+        private void TopicNavScrollViewer_SizeChanged(object sender, SizeChangedEventArgs e)
+        {
+            try
+            {
+                var sv = sender as ScrollViewer;
+                if (sv == null || _oneNoteViewModel == null) return;
+                var height = sv.ViewportHeight > 0 ? sv.ViewportHeight : e.NewSize.Height;
+                _oneNoteViewModel.SetPanelHeight(height);
+            }
+            catch (Exception ex)
+            {
+                _oneNoteLog.Error(ex, "[OneNote] TopicNavScrollViewer_SizeChanged 실패");
+            }
+        }
     }
 }

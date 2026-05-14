@@ -7033,45 +7033,84 @@
                                                 </Grid>
 
                                                 <!-- 대화 네비게이션 카드 목록 — StackPanel + DisplayHeight 바인딩 -->
-                                                <ScrollViewer Grid.Row="1"
+                                                <ScrollViewer x:Name="TopicNavScrollViewer"
+                                                              Grid.Row="1"
                                                               VerticalScrollBarVisibility="Auto"
-                                                              HorizontalScrollBarVisibility="Disabled">
-                                                    <ItemsControl x:Name="TopicSegmentsItemsControl"
-                                                                  ItemsSource="{Binding TopicSegments}">
-                                                        <ItemsControl.ItemsPanel>
-                                                            <ItemsPanelTemplate>
-                                                                <StackPanel Orientation="Vertical"/>
-                                                            </ItemsPanelTemplate>
-                                                        </ItemsControl.ItemsPanel>
-                                                        <ItemsControl.ItemTemplate>
-                                                            <DataTemplate>
-                                                                <Border Height="{Binding DisplayHeight}"
-                                                                        Background="{Binding BackgroundColorHex, Converter={StaticResource HexToBrushConverter}}"
-                                                                        Padding="6,4" Margin="0,0,0,2" CornerRadius="4"
-                                                                        Cursor="Hand"
-                                                                        MouseLeftButtonDown="TopicSegment_Click">
-                                                                    <Border.ToolTip>
-                                                                        <ToolTip>
-                                                                            <TextBlock Text="{Binding ToolTipText}" TextWrapping="Wrap" MaxWidth="400"/>
-                                                                        </ToolTip>
-                                                                    </Border.ToolTip>
-                                                                    <StackPanel>
-                                                                        <!-- 시간 범위 -->
-                                                                        <TextBlock Text="{Binding TimeRangeDisplay}"
-                                                                                   FontSize="9"
-                                                                                   Foreground="{Binding BackgroundColorHex, Converter={StaticResource HexToReadableForegroundConverter}, ConverterParameter=Tertiary}"
-                                                                                   Margin="0,0,0,2"/>
-                                                                        <!-- 주제어/핵심맥락 (5~20자) -->
-                                                                        <TextBlock Text="{Binding BodyDisplay}"
-                                                                                   FontSize="11" FontWeight="SemiBold"
-                                                                                   Foreground="{Binding BackgroundColorHex, Converter={StaticResource HexToReadableForegroundConverter}}"
-                                                                                   TextWrapping="NoWrap"
-                                                                                   TextTrimming="CharacterEllipsis"/>
+                                                              HorizontalScrollBarVisibility="Disabled"
+                                                              SizeChanged="TopicNavScrollViewer_SizeChanged">
+                                                    <Grid>
+                                                        <Grid.ColumnDefinitions>
+                                                            <ColumnDefinition Width="52"/>
+                                                            <ColumnDefinition Width="*"/>
+                                                        </Grid.ColumnDefinitions>
+
+                                                        <!-- Column 0: 타임라인 눈금 (00:00부터 현재 진행시간까지) -->
+                                                        <ItemsControl Grid.Column="0"
+                                                                      ItemsSource="{Binding TimelineTicks}">
+                                                            <ItemsControl.ItemsPanel>
+                                                                <ItemsPanelTemplate>
+                                                                    <Canvas/>
+                                                                </ItemsPanelTemplate>
+                                                            </ItemsControl.ItemsPanel>
+                                                            <ItemsControl.ItemContainerStyle>
+                                                                <Style TargetType="ContentPresenter">
+                                                                    <Setter Property="Canvas.Top" Value="{Binding TopPx}"/>
+                                                                </Style>
+                                                            </ItemsControl.ItemContainerStyle>
+                                                            <ItemsControl.ItemTemplate>
+                                                                <DataTemplate>
+                                                                    <StackPanel Orientation="Horizontal" Width="52">
+                                                                        <TextBlock Text="{Binding Label}"
+                                                                                   Foreground="{DynamicResource TextFillColorTertiaryBrush}"
+                                                                                   FontSize="10" Width="32"
+                                                                                   VerticalAlignment="Top"/>
+                                                                        <Line X1="0" Y1="6" X2="20" Y2="6"
+                                                                              Stroke="{DynamicResource TextFillColorTertiaryBrush}"
+                                                                              StrokeThickness="1"/>
                                                                     </StackPanel>
-                                                                </Border>
-                                                            </DataTemplate>
-                                                        </ItemsControl.ItemTemplate>
-                                                    </ItemsControl>
+                                                                </DataTemplate>
+                                                            </ItemsControl.ItemTemplate>
+                                                        </ItemsControl>
+
+                                                        <!-- Column 1: 핵심요약 카드 목록 (시간 비례 높이) -->
+                                                        <ItemsControl Grid.Column="1"
+                                                                      x:Name="TopicSegmentsItemsControl"
+                                                                      ItemsSource="{Binding TopicSegments}">
+                                                            <ItemsControl.ItemsPanel>
+                                                                <ItemsPanelTemplate>
+                                                                    <StackPanel Orientation="Vertical"/>
+                                                                </ItemsPanelTemplate>
+                                                            </ItemsControl.ItemsPanel>
+                                                            <ItemsControl.ItemTemplate>
+                                                                <DataTemplate>
+                                                                    <Border Height="{Binding DisplayHeight}"
+                                                                            Background="{Binding BackgroundColorHex, Converter={StaticResource HexToBrushConverter}}"
+                                                                            Padding="6,4" Margin="0,0,0,2" CornerRadius="4"
+                                                                            Cursor="Hand"
+                                                                            MouseLeftButtonDown="TopicSegment_Click">
+                                                                        <Border.ToolTip>
+                                                                            <ToolTip>
+                                                                                <TextBlock Text="{Binding ToolTipText}" TextWrapping="Wrap" MaxWidth="400"/>
+                                                                            </ToolTip>
+                                                                        </Border.ToolTip>
+                                                                        <StackPanel>
+                                                                            <!-- 시간 범위 -->
+                                                                            <TextBlock Text="{Binding TimeRangeDisplay}"
+                                                                                       FontSize="9"
+                                                                                       Foreground="{Binding BackgroundColorHex, Converter={StaticResource HexToReadableForegroundConverter}, ConverterParameter=Tertiary}"
+                                                                                       Margin="0,0,0,2"/>
+                                                                            <!-- 주제어/핵심맥락 (5~20자) -->
+                                                                            <TextBlock Text="{Binding BodyDisplay}"
+                                                                                       FontSize="11" FontWeight="SemiBold"
+                                                                                       Foreground="{Binding BackgroundColorHex, Converter={StaticResource HexToReadableForegroundConverter}}"
+                                                                                       TextWrapping="NoWrap"
+                                                                                       TextTrimming="CharacterEllipsis"/>
+                                                                        </StackPanel>
+                                                                    </Border>
+                                                                </DataTemplate>
+                                                            </ItemsControl.ItemTemplate>
+                                                        </ItemsControl>
+                                                    </Grid>
                                                 </ScrollViewer>
                                             </Grid>
                                         </Border>

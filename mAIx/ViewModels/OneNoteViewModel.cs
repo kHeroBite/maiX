@@ -486,6 +486,18 @@ public partial class OneNoteViewModel : ViewModelBase
     private System.Collections.ObjectModel.ObservableCollection<Models.TopicSegment> _topicSegments = new();
 
     /// <summary>
+    /// 타임라인 눈금 컬렉션 (분 단위, Canvas 절대 좌표 배치용)
+    /// </summary>
+    private readonly System.Collections.ObjectModel.ObservableCollection<Models.TimelineTick> _timelineTicks = new();
+    public System.Collections.ObjectModel.ObservableCollection<Models.TimelineTick> TimelineTicks => _timelineTicks;
+
+    /// <summary>
+    /// 핵심요약 네비게이션 스크롤뷰어 뷰포트 높이 — SetPanelHeight로 갱신
+    /// </summary>
+    [ObservableProperty]
+    private double _panelHeight;
+
+    /// <summary>
     /// STT 화면 키워드 하이라이트용 — 모든 주제 세그먼트의 키워드 평탄화 합산
     /// </summary>
     public System.Collections.Generic.IEnumerable<string> AllTopicKeywords =>
@@ -3087,6 +3099,7 @@ public partial class OneNoteViewModel : ViewModelBase
                     };
                     TopicSegments.Add(navSegment);
                     RecalculateTopicSegmentHeights();
+                    RebuildTimelineTicks();
                     OnPropertyChanged(nameof(AllTopicKeywords));
 
                     Log4.Info($"[녹음] 1분 요약 생성 #{MinuteSummaryCount} — {entry.SummaryText.Length}자, 네비게이션 카드 추가: {navSegment.DisplayTitle}");
@@ -3100,18 +3113,54 @@ public partial class OneNoteViewModel : ViewModelBase
     }
 
     /// <summary>
-    /// StackPanel 레이아웃용 시간 비례 DisplayHeight 재계산
+    /// StackPanel 레이아웃용 시간 비례 DisplayHeight 재계산 — 패널 높이 대비 % 비례
     /// </summary>
     private void RecalculateTopicSegmentHeights()
     {
-        if (TopicSegments.Count == 0) return;
-        // 60초당 90px 비례 (사용자 환경 패널 높이 고려한 적절한 상수)
-        const double PixelsPerSecond = 1.5;  // 60초 = 90px
+        if (TopicSegments.Count == 0 || PanelHeight <= 0) return;
+        var totalDuration = TopicSegments.Sum(s => Math.Max(1.0, (s.EndTime - s.StartTime).TotalSeconds));
+        if (totalDuration <= 0) return;
         foreach (var seg in TopicSegments)
         {
             var duration = Math.Max(1.0, (seg.EndTime - seg.StartTime).TotalSeconds);
-            seg.DisplayHeight = duration * PixelsPerSecond;
+            seg.DisplayHeight = Math.Max(40.0, (duration / totalDuration) * PanelHeight);
         }
+    }
+
+    /// <summary>
+    /// 타임라인 눈금 재생성 — 분 단위, Canvas TopPx 절대 좌표 계산
+    /// </summary>
+    private void RebuildTimelineTicks()
+    {
+        _timelineTicks.Clear();
+        if (TopicSegments.Count == 0 || PanelHeight <= 0) return;
+        var totalDuration = TopicSegments.Sum(s => Math.Max(1.0, (s.EndTime - s.StartTime).TotalSeconds));
+        if (totalDuration <= 0) return;
+        var pixelsPerSecond = PanelHeight / totalDuration;
+
+        var endTime = TopicSegments[^1].EndTime;
+        var totalMinutes = (int)Math.Ceiling(endTime.TotalMinutes);
+        for (int m = 0; m <= totalMinutes; m++)
+        {
+            var t = TimeSpan.FromMinutes(m);
+            _timelineTicks.Add(new Models.TimelineTick
+            {
+                Time = t,
+                TopPx = t.TotalSeconds * pixelsPerSecond,
+                Label = $"{m}:00"
+            });
+        }
+    }
+
+    /// <summary>
+    /// 스크롤뷰어 뷰포트 높이 갱신 — 비례 재계산 + 눈금 재생성
+    /// </summary>
+    public void SetPanelHeight(double height)
+    {
+        if (Math.Abs(PanelHeight - height) < 1.0) return;
+        PanelHeight = height;
+        RecalculateTopicSegmentHeights();
+        RebuildTimelineTicks();
     }
 
     private async void OnCumulativeSummaryUpdated(string text)

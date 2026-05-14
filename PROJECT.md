@@ -350,6 +350,11 @@ Models:
     역할: 1분 요약 엔트리 (순번/시간범위/요약 텍스트/생성시각/주제어)
     속성: Index, StartTime, EndTime, SummaryText, CreatedAt, Topic
     변경_2026-05-14: Topic 필드 추가 (5~20자 주제어 저장, LLM JSON 응답 파싱)
+
+  - 파일명: TimelineTick.cs (신규 — 2026-05-14)
+    경로: Models/
+    역할: 좌측 타임라인 ruler 눈금 모델 (Canvas Canvas.Top % 비례 배치용)
+    속성: Label (시각 레이블 예: "0:00"), Position (0.0~1.0 상대 위치), IsVisible
 ```
 
 ### 5. Services (비즈니스 로직)
