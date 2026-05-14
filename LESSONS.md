@@ -1568,6 +1568,42 @@ L-424(WPF ItemsControl 가변높이 안티패턴 기각)가 직전 작업 완료
 - **재발방지**: 녹음/분석 세션 데이터는 항상 영속화 파일 페어링 설계. 메모리 컬렉션 단독 사용 설계 감지 시 페어링 파일 추가 권고
 - **Level**: 2 (신규 데이터 타입 추가 시 반복 재현 위험)
 
+### L-435: PreserveXxx 패턴 + 로드 페어 의무 — Preserve 호출 시 LoadXxx도 반드시 함께 호출 (2026-05-14)
+
+- **문제**: `PreserveSTTOnSelectionChange()` 호출 후 `LoadSelectedRecordingResults()` 누락 → STT 데이터 영구 표시 안 됨 (보존 의도와 반대 결과)
+- **근본 원인**: Preserve 메서드는 SelectionChanged 경쟁 조건만 회피, 데이터 로드는 호출자 책임 — 이 책임이 명시되지 않아 누락
+- **해결**: `LoadOneNoteRecordings()`에 `Preserve` 호출 직후 `LoadSelectedRecordingResults()` 명시 추가
+- **규칙**: `PreserveXxxOnSelectionChange()` 호출 시 반드시 `LoadXxxResults()` 쌍으로 호출 (보존 + 로드 = 페어)
+- **재발방지**: Preserve 메서드 코드 리뷰 시 호출부 grep → `LoadXxx` 쌍 호출 여부 확인 필수
+- **Level**: 2 (L-432 보강 — Preserve+Load 페어 의무 규칙 추가)
+
+### L-436: LoadRealtimeResultAsync는 데이터 로딩 전용 — UI 트리거(RebuildTimelineTicks)는 호출자 책임 (2026-05-14)
+
+- **문제**: `LoadRealtimeResultAsync()` 내부에서 `RebuildTimelineTicks()` 미호출 → 타임라인 틱 게이지 고정(기본값 표시)
+- **근본 원인**: 로드 메서드가 데이터 복원만 담당, UI 파생 계산은 별도 메서드 — 호출자가 연동 책임 미인지
+- **해결**: `LoadRealtimeResultAsync()` 양 경로(데이터 있음 / 없음) 말미에 `RebuildTimelineTicks()` 명시 추가
+- **규칙**: 데이터 로드 메서드 작성 시 "로드 후 파생 UI 계산이 필요한가?" 체크리스트 적용
+- **재발방지**: Load 메서드 구현 시 관련 Rebuild/Recalculate 연동 여부 설계 단계에서 명시
+- **Level**: 2 (신규 교훈 — 로드/UI 계산 분리 책임 패턴)
+
+### L-437: ObservableCollection.Count==0 early return은 이전 데이터 잔류 유발 — 기본값 명시 생성 패턴 (2026-05-14)
+
+- **문제**: `RebuildTimelineTicks()`에서 `Count==0`일 때 `return` → 이전 사이클 틱 데이터 잔류, 빈 타임라인 미표시
+- **근본 원인**: early return이 컬렉션 Clear를 건너뜀 → 전 페이지 틱 데이터 잔류
+- **해결**: `Count==0` 케이스에 `TimelineTicks.Clear()` + 기본 틱(0:00 / 1:00) 생성 후 return
+- **규칙**: 입력 데이터가 없을 때도 "UI 컬렉션 Clear + 기본값 표시"를 명시적으로 수행할 것
+- **재발방지**: Rebuild 메서드 early return 시 Clear 생략 여부 코드 리뷰 체크리스트 적용
+- **Level**: 2 (신규 교훈 — empty case 기본값 생성 패턴)
+
+### L-438: WPF Image Stretch=Uniform+VerticalAlignment=Top은 가로 콘텐츠 상단 압축 유발 — Fill+Stretch 표준 패턴 (2026-05-14)
+
+- **문제**: STT 미니맵 이미지가 상단에만 압축 표시 (하단 빈 공간 발생)
+- **근본 원인**: `Stretch="Uniform"` + `VerticalAlignment="Top"` 조합 → 가로 와이드 이미지가 원래 비율 유지하며 상단 정렬 → 하단 여백
+- **해결**: `Stretch="Fill"` + `HorizontalAlignment="Stretch"` + `VerticalAlignment="Stretch"` 로 전환
+- **규칙**: 패널 전체 영역을 채워야 하는 이미지는 `Fill+Stretch` 표준 패턴 사용. `Uniform+Top`은 원본 비율 보존 목적에만 사용
+- **재발방지**: Image Stretch 설정 시 "패널 전체 채움 vs 비율 보존" 의도 명시 후 패턴 선택
+- **Level**: 2 (신규 교훈 — WPF Image Stretch 패턴)
+
 ## 반영 추적 테이블
 
 | 교훈 ID | 교훈 요약 | 반영 대상 | 반영 위치 | 반영일 | 검증 |
@@ -1647,3 +1683,7 @@ L-424(WPF ItemsControl 가변높이 안티패턴 기각)가 직전 작업 완료
 | L-432 | PreserveXxxOnSelectionChange() 공개 메서드 패턴 — LoadCollection+SelectionChanged 경쟁 조건 회피 패턴 | docs | LESSONS.md | 2026-05-14 | ✅ |
 | L-433 | 노트/녹음 전환 시 5종 Clear 필수 — TopicSegments/MinuteSummaries/CumulativeSummaryText/FinalSummaryText/MinuteSummaryCount 모두 초기화 | docs | LESSONS.md | 2026-05-14 | ✅ |
 | L-434 | 메모리 전용 컬렉션 vs 영속화 데이터 분리 — 녹음파일 페어링 .realtime.json으로 영속화 후 Stop→Save/Load→LoadResults 패턴 | docs | LESSONS.md | 2026-05-14 | ✅ |
+| L-435 | PreserveXxx+LoadXxx 페어 의무 — Preserve 호출 후 LoadXxx 누락 시 STT 영구 미표시. Preserve+Load는 반드시 쌍으로 호출 | docs | LESSONS.md + MEMORY.md | 2026-05-14 | ✅ |
+| L-436 | LoadRealtimeResultAsync 데이터 로딩 전용 — RebuildTimelineTicks 등 UI 트리거는 호출자 책임으로 명시 | docs | LESSONS.md | 2026-05-14 | ✅ |
+| L-437 | ObservableCollection.Count==0 early return은 이전 데이터 잔류 — Clear + 기본값 명시 생성 패턴 필수 | docs | LESSONS.md | 2026-05-14 | ✅ |
+| L-438 | WPF Image Stretch=Uniform+VerticalAlignment=Top 상단 압축 유발 — Fill+Stretch 표준 패턴으로 전환 | docs | LESSONS.md + MEMORY.md | 2026-05-14 | ✅ |

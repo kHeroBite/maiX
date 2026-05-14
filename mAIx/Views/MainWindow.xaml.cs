@@ -5584,9 +5584,9 @@ public partial class MainWindow : FluentWindow
                 if (matchingRecording != null)
                 {
                     Log4.Info($"[MainWindow] 이전 선택 녹음 복원: {matchingRecording.FileName}");
-                    _oneNoteViewModel.PreserveSTTOnSelectionChange(); // STT 메모리 결과 유지 (재로드 경쟁 조건 방지)
                     OneNoteRecordingsList.SelectedItem = matchingRecording;
                     _oneNoteViewModel.SelectedRecording = matchingRecording;
+                    _oneNoteViewModel.LoadSelectedRecordingResults();
                     // STT/요약 로드가 완료될 때까지 대기
                     await Task.Delay(300);
                 }
@@ -8044,6 +8044,11 @@ public partial class MainWindow : FluentWindow
 
             // STT 분석 버튼 상태 복원
             UpdateSTTButtonState(false);
+
+            // 진행률 리셋
+            _oneNoteViewModel.SttProgress = 0.0;
+            if (OneNoteSTTProgressBar != null)
+                OneNoteSTTProgressBar.Value = 0;
 
             // 진행률 패널 숨김 (1초 후)
             await Task.Delay(1000);

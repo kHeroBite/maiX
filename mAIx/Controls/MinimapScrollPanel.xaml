@@ -11,10 +11,9 @@
     <Grid>
         <!-- 축소 렌더링 이미지 -->
         <Image x:Name="MinimapImage"
-               Stretch="Uniform"
-               StretchDirection="DownOnly"
-               HorizontalAlignment="Center"
-               VerticalAlignment="Top"/>
+               Stretch="Fill"
+               HorizontalAlignment="Stretch"
+               VerticalAlignment="Stretch"/>
         <!-- 현재 viewport 표시 사각형 -->
         <Border x:Name="ViewportIndicator"
                 BorderBrush="{DynamicResource AccentFillColorDefaultBrush}"

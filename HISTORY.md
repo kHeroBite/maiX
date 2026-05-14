@@ -2,6 +2,41 @@
 
 > PROJECT.md 작업 이력 테이블의 상세 보완본
 
+## [2026-05-14] OneNote 페어링 표시 + 타임라인 + 미니맵 + 진행률 — 5개 버그 수정 (O3 Fast Path — 단일사이클 PASS)
+
+**분류**: O3 Fast Path
+**otest 결과**: 정적+논리+빌드+규칙 검증 5개 버그 전항목 PASS ✅
+**범위**: 변경 3파일 (~28줄 추가/수정)
+
+### 변경 내용
+- **ViewModels/OneNoteViewModel.cs**:
+  - `LoadOneNoteRecordings()`에서 `PreserveSTTOnSelectionChange` 제거 + `LoadSelectedRecordingResults()` 명시 호출 (STT 영구 표시)
+  - `OnSelectedRecordingChanged()`에 `LoadRealtimeResultAsync()` 추가 (요약 표시)
+  - `StopRecording` Save 조건에 `FinalSummaryText` 추가
+  - `RebuildTimelineTicks()` Count==0 케이스에 기본 틱(0:00/1:00) 생성 추가
+  - `LoadRealtimeResultAsync()` 양 경로 말미에 `RebuildTimelineTicks()` 호출 추가
+  - STT finally 블록에 `SttProgress=0.0` 리셋 추가
+- **Views/MainWindow.xaml.cs**: STT finally 블록에 `Slider Value=0` 리셋 추가
+- **Controls/MinimapScrollPanel.xaml**: Image `Stretch="Fill"` + `HorizontalAlignment="Stretch"` + `VerticalAlignment="Stretch"` 전환
+
+### 해결한 버그 5개
+1. **버그1-A** (STT 일부만 보임): `LoadOneNoteRecordings`에서 `PreserveSTTOnSelectionChange` 제거 + `LoadSelectedRecordingResults()` 호출 — 영구 표시 보장
+2. **버그1-B** (요약 안 보임): `OnSelectedRecordingChanged`에 `LoadRealtimeResultAsync()` 추가 + `StopRecording` Save 조건 보완
+3. **버그1-C** (타임라인 게이지 고정): `RebuildTimelineTicks` Count==0 기본 틱 생성 + `LoadRealtimeResultAsync` 양 경로 말미 호출 추가
+4. **버그2** (미니맵 상단 압축): Image `Stretch=Fill+Stretch` 전환
+5. **버그5** (진행률 100% 고착): STT finally에서 `SttProgress=0.0` + `Slider Value=0` 리셋
+
+### 파이프라인 이력
+- 단일 사이클 PASS (역라우팅 0회)
+
+### 교훈
+- L-435: PreserveXxx+LoadXxx 페어 의무 (L-432 보강)
+- L-436: LoadRealtimeResultAsync 로딩 전용 — UI 트리거는 호출자 책임
+- L-437: Count==0 early return 이전 데이터 잔류 — 기본값 명시 생성 패턴
+- L-438: WPF Image Stretch=Uniform+Top 상단 압축 — Fill+Stretch 표준 패턴
+
+---
+
 ## [2026-05-14] OneNote 페어링 일관성 회복 — 4개 버그 수정 (O3 Fast Path — 단일사이클 PASS)
 
 **분류**: O3 Fast Path
