@@ -1,7 +1,5 @@
 // 1분 요약 엔트리 (내부 압축용 — 누적요약 입력 자료)
 using System;
-using System.Text.Json.Serialization;
-using mAIx.Services.AI;
 
 namespace mAIx.Models;
 
@@ -45,16 +43,4 @@ public class MinuteSummaryEntry
     /// </summary>
     public string TimeRangeDisplay =>
         $"{(int)StartTime.TotalMinutes:D2}:{StartTime.Seconds:D2} ~ {(int)EndTime.TotalMinutes:D2}:{EndTime.Seconds:D2}";
-
-    /// <summary>
-    /// 감성 분석 결과 — null이면 미분석 (UI 회색 표시). 직렬화 시 null이면 생략.
-    /// </summary>
-    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
-    public SentimentResult? Sentiment { get; set; }
-
-    /// <summary>
-    /// 생성한 파이프라인 모드 — 디버깅 및 향후 비교용. null이면 구버전 파일.
-    /// </summary>
-    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
-    public AudioPipelineMode? CreatedByMode { get; set; }
 }

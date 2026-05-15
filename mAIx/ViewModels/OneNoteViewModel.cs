@@ -206,9 +206,6 @@ public partial class OneNoteViewModel : ViewModelBase
     private IMinuteSummaryService? _minuteSummaryService;
     private ICumulativeSummaryService? _cumulativeSummaryService;
 
-    // ─── Dual Pipeline (Wave 3) — non-diarization 경로에서 Legacy/Unified 모드 추상화 ────
-    private mAIx.Services.AI.IRealtimeAudioPipeline? _audioPipeline;
-
     /// <summary>
     /// 녹음 서비스
     /// </summary>
@@ -568,30 +565,6 @@ public partial class OneNoteViewModel : ViewModelBase
     private string _minuteSummaryModel = "gpt-4o-mini";
 
     /// <summary>
-    /// 오디오 파이프라인 모드 (Legacy=별도 모델 3개 / Unified=gpt-realtime 단일)
-    /// </summary>
-    [ObservableProperty]
-    private mAIx.Services.AI.AudioPipelineMode _audioPipelineMode = mAIx.Services.AI.AudioPipelineMode.Legacy;
-
-    /// <summary>
-    /// Unified 모드에서 사용할 gpt-realtime 계열 모델 ID (gpt-realtime / gpt-realtime-2 / gpt-realtime-mini)
-    /// </summary>
-    [ObservableProperty]
-    private string _unifiedRealtimeModel = "gpt-realtime";
-
-    /// <summary>
-    /// 감성 분석 표시 ON/OFF (옵션 패널 CheckBox 바인딩)
-    /// </summary>
-    [ObservableProperty]
-    private bool _sentimentEnabled = true;
-
-    /// <summary>
-    /// 분당 추정 비용 표시 ("예상: $0.0050/분 (Unified)" 형식). 모드/모델 변경 시 자동 갱신.
-    /// </summary>
-    [ObservableProperty]
-    private string _estimatedCostPerMinuteDisplay = string.Empty;
-
-    /// <summary>
     /// 누적 요약 LLM 모델 — 옵션 패널 ComboBox 바인딩
     /// </summary>
     [ObservableProperty]
@@ -667,42 +640,10 @@ public partial class OneNoteViewModel : ViewModelBase
             _transcriptionModel = string.IsNullOrWhiteSpace(oaiSettings.TranscriptionModel) ? "gpt-4o-mini-transcribe" : oaiSettings.TranscriptionModel;
             _isServerVadEnabled = oaiSettings.ServerVadEnabled;
             _chunkOverlapSeconds = oaiSettings.ChunkOverlapSeconds;
-
-            // Dual Pipeline 설정 동기화
-            _audioPipelineMode = oaiSettings.AudioPipelineMode;
-            _unifiedRealtimeModel = string.IsNullOrWhiteSpace(oaiSettings.UnifiedRealtimeModel)
-                ? "gpt-realtime" : oaiSettings.UnifiedRealtimeModel;
-            _sentimentEnabled = oaiSettings.SentimentEnabled;
         }
-
-        // 비용 미리보기 초기 갱신
-        UpdateCostDisplay();
 
         // 녹음 목록에 새 파일 추가 시 자동 선택
         _currentPageRecordings.CollectionChanged += OnCurrentPageRecordingsChanged;
-    }
-
-    /// <summary>
-    /// 분당 추정 비용 미리보기 갱신 — 모드/모델 변경 시 호출.
-    /// </summary>
-    private void UpdateCostDisplay()
-    {
-        try
-        {
-            var estimator = _serviceProvider?.GetService<mAIx.Services.AI.CostEstimatorService>();
-            if (estimator == null)
-            {
-                // DI 미주입 환경(디자이너 등) — 빈 표시
-                EstimatedCostPerMinuteDisplay = string.Empty;
-                return;
-            }
-            EstimatedCostPerMinuteDisplay = estimator.FormatDisplay(AudioPipelineMode, UnifiedRealtimeModel);
-        }
-        catch (Exception ex)
-        {
-            Log4.Warn($"[옵션] UpdateCostDisplay 실패: {ex.Message}");
-            EstimatedCostPerMinuteDisplay = string.Empty;
-        }
     }
 
     // 녹음 완료 직후 플래그 (자동 선택용)
@@ -2015,53 +1956,6 @@ public partial class OneNoteViewModel : ViewModelBase
         catch (Exception ex) { Log4.Error($"[옵션] MinuteSummaryModel 저장 예외: {ex}"); }
     }
 
-    /// <summary>오디오 파이프라인 모드 변경 시 영구 저장 + 비용 미리보기 갱신</summary>
-    partial void OnAudioPipelineModeChanged(mAIx.Services.AI.AudioPipelineMode value)
-    {
-        try
-        {
-            if (App.Settings?.OaiRecording != null)
-            {
-                App.Settings.OaiRecording.AudioPipelineMode = value;
-                App.Settings.SaveAll();
-                Log4.Info($"[옵션] AudioPipelineMode 저장 완료: {value}");
-            }
-            UpdateCostDisplay();
-        }
-        catch (Exception ex) { Log4.Error($"[옵션] AudioPipelineMode 저장 예외: {ex}"); }
-    }
-
-    /// <summary>Unified 모델 변경 시 영구 저장 + 비용 미리보기 갱신</summary>
-    partial void OnUnifiedRealtimeModelChanged(string value)
-    {
-        try
-        {
-            if (App.Settings?.OaiRecording != null && !string.IsNullOrWhiteSpace(value))
-            {
-                App.Settings.OaiRecording.UnifiedRealtimeModel = value;
-                App.Settings.SaveAll();
-                Log4.Info($"[옵션] UnifiedRealtimeModel 저장 완료: {value}");
-            }
-            UpdateCostDisplay();
-        }
-        catch (Exception ex) { Log4.Error($"[옵션] UnifiedRealtimeModel 저장 예외: {ex}"); }
-    }
-
-    /// <summary>감성 분석 ON/OFF 변경 시 영구 저장</summary>
-    partial void OnSentimentEnabledChanged(bool value)
-    {
-        try
-        {
-            if (App.Settings?.OaiRecording != null)
-            {
-                App.Settings.OaiRecording.SentimentEnabled = value;
-                App.Settings.SaveAll();
-                Log4.Info($"[옵션] SentimentEnabled 저장 완료: {value}");
-            }
-        }
-        catch (Exception ex) { Log4.Error($"[옵션] SentimentEnabled 저장 예외: {ex}"); }
-    }
-
     /// <summary>누적 요약 모델 변경 시 영구 저장</summary>
     partial void OnCumulativeSummaryModelChanged(string value)
     {
@@ -2963,27 +2857,24 @@ public partial class OneNoteViewModel : ViewModelBase
             // 이벤트 구독
             if (IsRealtimeDiarizationEnabled)
             {
-                // 화자분리 모드는 기존 경로 유지 (Pipeline 미사용)
                 if (_transcribeSttService != null)
                     _transcribeSttService.TranscriptSegmentReceived += OnSttTranscriptSegmentReceived;
             }
             else
             {
-                // 비-화자분리 모드: Dual Pipeline (Legacy/Unified) 사용
-                var factory = _serviceProvider.GetService<mAIx.Services.AI.AudioPipelineFactory>();
-                if (factory != null)
+                if (_realtimeSttService != null)
                 {
-                    _audioPipeline = factory.Create();
-                    Log4.Info($"[녹음] AudioPipeline 생성 — 모드: {_audioPipeline.Mode}");
-                    SubscribePipelineEvents(_audioPipeline);
-                }
-                else
-                {
-                    Log4.Warn("[녹음] AudioPipelineFactory 미주입 — Pipeline 사용 불가");
+                    _realtimeSttService.TranscriptSegmentReceived += OnSttTranscriptSegmentReceived;
+                    _realtimeSttService.TranscriptSegmentUpdated += OnSttTranscriptSegmentUpdated;
+                    _realtimeSttService.TranscriptSegmentRemoved += OnSttTranscriptSegmentRemoved;
                 }
             }
 
-            // 누적 요약은 Pipeline과 무관하게 별도 운영
+            if (_minuteSummaryService != null)
+            {
+                _minuteSummaryService.MinuteSummaryCreated += OnMinuteSummaryCreated;
+            }
+
             if (_cumulativeSummaryService != null)
             {
                 _cumulativeSummaryService.CumulativeSummaryUpdated += OnCumulativeSummaryUpdated;
@@ -2997,128 +2888,23 @@ public partial class OneNoteViewModel : ViewModelBase
             }
             else
             {
-                // Pipeline 시작 — Unified 시작 실패 시 자동 Legacy 폴백
-                if (_audioPipeline != null)
-                {
-                    try
-                    {
-                        await _audioPipeline.StartAsync().ConfigureAwait(false);
-                    }
-                    catch (mAIx.Services.AI.UnifiedStartupException usEx)
-                    {
-                        Log4.Warn($"[녹음] Unified 시작 실패 — Legacy 폴백: {usEx.Message}");
-                        UnsubscribePipelineEvents(_audioPipeline);
-                        try { await _audioPipeline.DisposeAsync().ConfigureAwait(false); } catch { /* 무시 */ }
-
-                        var factory = _serviceProvider.GetService<mAIx.Services.AI.AudioPipelineFactory>();
-                        if (factory != null)
-                        {
-                            _audioPipeline = factory.CreateLegacyFallback();
-                            SubscribePipelineEvents(_audioPipeline);
-                            await _audioPipeline.StartAsync().ConfigureAwait(false);
-                            Log4.Info("[녹음] Legacy 폴백 파이프라인 시작 완료");
-                        }
-                    }
-                }
+                if (_realtimeSttService != null)
+                    await _realtimeSttService.StartAsync();
             }
 
+            if (_minuteSummaryService != null)
+                await _minuteSummaryService.StartAsync();
             if (_cumulativeSummaryService != null)
                 await _cumulativeSummaryService.StartAsync();
 
-            var pipelineModeText = _audioPipeline?.Mode.ToString() ?? "없음";
-            Log4.Info($"[녹음] OpenAI 서비스 시작 완료 (화자분리모드: {IsRealtimeDiarizationEnabled}, Pipeline={pipelineModeText})");
+            Log4.Info($"[녹음] OpenAI 서비스 시작 완료 (화자분리모드: {IsRealtimeDiarizationEnabled})");
         }
         catch (Exception ex)
         {
             Log4.Warn($"[녹음] OpenAI 서비스 시작 실패 (기존 STT 계속): {ex}");
             // ★ 실패 후 각 서비스 인스턴스 상태 로깅 (특히 _realtimeSttService가 살아있어도 _ws가 죽어있으면 silent return)
-            Log4.Warn($"[녹음] OpenAI 서비스 상태 — realtime={_realtimeSttService != null}, transcribe={_transcribeSttService != null}, minute={_minuteSummaryService != null}, cumulative={_cumulativeSummaryService != null}, pipeline={_audioPipeline != null}");
+            Log4.Warn($"[녹음] OpenAI 서비스 상태 — realtime={_realtimeSttService != null}, transcribe={_transcribeSttService != null}, minute={_minuteSummaryService != null}, cumulative={_cumulativeSummaryService != null}");
         }
-    }
-
-    /// <summary>
-    /// Pipeline 이벤트 6개 구독 — IRealtimeAudioPipeline 인터페이스 시그니처.
-    /// </summary>
-    private void SubscribePipelineEvents(mAIx.Services.AI.IRealtimeAudioPipeline pipeline)
-    {
-        pipeline.TranscriptSegmentReceived += OnSttTranscriptSegmentReceived;
-        pipeline.TranscriptSegmentUpdated += OnSttTranscriptSegmentUpdated;
-        pipeline.TranscriptSegmentRemoved += OnSttTranscriptSegmentRemoved;
-        pipeline.MinuteSummaryCreated += OnMinuteSummaryCreated;
-        pipeline.PipelineFallback += OnPipelineFallback;
-        pipeline.ErrorOccurred += OnPipelineErrorOccurred;
-    }
-
-    /// <summary>
-    /// Pipeline 이벤트 대칭 해제.
-    /// </summary>
-    private void UnsubscribePipelineEvents(mAIx.Services.AI.IRealtimeAudioPipeline pipeline)
-    {
-        pipeline.TranscriptSegmentReceived -= OnSttTranscriptSegmentReceived;
-        pipeline.TranscriptSegmentUpdated -= OnSttTranscriptSegmentUpdated;
-        pipeline.TranscriptSegmentRemoved -= OnSttTranscriptSegmentRemoved;
-        pipeline.MinuteSummaryCreated -= OnMinuteSummaryCreated;
-        pipeline.PipelineFallback -= OnPipelineFallback;
-        pipeline.ErrorOccurred -= OnPipelineErrorOccurred;
-    }
-
-    /// <summary>
-    /// Unified 모드 3회 연속 에러 → Legacy로 자동 폴백 (진행 중 폴백).
-    /// 누적 MinuteSummaries는 보존 (Clear 호출 안 함).
-    /// </summary>
-    private async void OnPipelineFallback(mAIx.Services.AI.AudioPipelineMode newMode)
-    {
-        // L-377/L-380 async void 핸들러는 외부 try-catch 필수
-        try
-        {
-            Log4.Warn($"[녹음] PipelineFallback 수신 — {newMode}로 자동 전환 (누적 데이터 보존)");
-
-            var dispatcher = System.Windows.Application.Current?.Dispatcher;
-            if (dispatcher != null)
-            {
-                await dispatcher.InvokeAsync(() =>
-                {
-                    // 상태 텍스트로 사용자에게 알림 (별도 토스트 인프라 미존재 — 로그+상태로 대체)
-                    Log4.Info("[녹음] Unified 모드 3회 연속 실패 → Legacy로 자동 전환됨");
-                }).Task.ConfigureAwait(false);
-            }
-
-            // 기존 Pipeline 정리
-            var old = _audioPipeline;
-            if (old != null)
-            {
-                UnsubscribePipelineEvents(old);
-                try { await old.StopAsync().ConfigureAwait(false); } catch (Exception ex) { Log4.Warn($"[녹음] 기존 Pipeline Stop 실패: {ex.Message}"); }
-                try { await old.DisposeAsync().ConfigureAwait(false); } catch (Exception ex) { Log4.Warn($"[녹음] 기존 Pipeline Dispose 실패: {ex.Message}"); }
-                _audioPipeline = null;
-            }
-
-            // 새 Legacy 인스턴스 생성 + 시작
-            var factory = _serviceProvider?.GetService<mAIx.Services.AI.AudioPipelineFactory>();
-            if (factory != null)
-            {
-                _audioPipeline = factory.CreateLegacyFallback();
-                SubscribePipelineEvents(_audioPipeline);
-                await _audioPipeline.StartAsync().ConfigureAwait(false);
-                Log4.Info("[녹음] Legacy 폴백 시작 완료");
-            }
-            else
-            {
-                Log4.Error("[녹음] AudioPipelineFactory 미주입 — Legacy 폴백 불가");
-            }
-        }
-        catch (Exception ex)
-        {
-            Log4.Error($"[녹음] OnPipelineFallback 처리 실패: {ex.Message}\n{ex.StackTrace}");
-        }
-    }
-
-    /// <summary>
-    /// Pipeline 에러 이벤트 핸들러 (UI 알림용 로그).
-    /// </summary>
-    private void OnPipelineErrorOccurred(string message)
-    {
-        Log4.Warn($"[녹음] Pipeline 에러: {message}");
     }
 
     /// <summary>
@@ -3142,14 +2928,18 @@ public partial class OneNoteViewModel : ViewModelBase
             }
             else
             {
-                // Pipeline 정리 (Legacy/Unified 통합 dispose)
-                if (_audioPipeline != null)
+                if (_realtimeSttService != null)
                 {
-                    UnsubscribePipelineEvents(_audioPipeline);
-                    try { await _audioPipeline.StopAsync().ConfigureAwait(false); } catch (Exception ex) { Log4.Warn($"[녹음] Pipeline Stop 실패: {ex.Message}"); }
-                    try { await _audioPipeline.DisposeAsync().ConfigureAwait(false); } catch (Exception ex) { Log4.Warn($"[녹음] Pipeline Dispose 실패: {ex.Message}"); }
-                    _audioPipeline = null;
+                    _realtimeSttService.TranscriptSegmentReceived -= OnSttTranscriptSegmentReceived;
+                    _realtimeSttService.TranscriptSegmentUpdated -= OnSttTranscriptSegmentUpdated;
+                    _realtimeSttService.TranscriptSegmentRemoved -= OnSttTranscriptSegmentRemoved;
                 }
+            }
+
+            if (_minuteSummaryService != null)
+            {
+                _minuteSummaryService.MinuteSummaryCreated -= OnMinuteSummaryCreated;
+                await _minuteSummaryService.StopAsync();
             }
 
             if (_cumulativeSummaryService != null)
@@ -3179,7 +2969,8 @@ public partial class OneNoteViewModel : ViewModelBase
 
             if (IsRealtimeDiarizationEnabled && _transcribeSttService != null)
                 await _transcribeSttService.StopAsync();
-            // 비-화자분리 모드: STT/요약 정리는 Pipeline.DisposeAsync에서 위임 처리 (위 _audioPipeline 정리 블록)
+            else if (_realtimeSttService != null)
+                await _realtimeSttService.StopAsync();
 
             Log4.Info("[녹음] OpenAI 서비스 중지 완료");
         }
@@ -3726,9 +3517,7 @@ public partial class OneNoteViewModel : ViewModelBase
     /// </summary>
     private async void OnRealtimeAudioChunkForOpenAi(byte[] audioData, TimeSpan chunkStartTime)
     {
-        var pipelineMode = _audioPipeline?.Mode.ToString() ?? "없음";
-        Log4.Debug($"[OpenAi] 청크 진입: {audioData.Length} bytes, t={chunkStartTime}, diarization={IsRealtimeDiarizationEnabled}, pipeline={pipelineMode}, transcribeStt={_transcribeSttService != null}");
-        // L-377/L-380 async void 핸들러 외부 try-catch
+        Log4.Debug($"[OpenAi] 청크 진입: {audioData.Length} bytes, t={chunkStartTime}, diarization={IsRealtimeDiarizationEnabled}, realtimeStt={_realtimeSttService != null}, transcribeStt={_transcribeSttService != null}");
         try
         {
             if (IsRealtimeDiarizationEnabled)
@@ -3738,9 +3527,8 @@ public partial class OneNoteViewModel : ViewModelBase
             }
             else
             {
-                // Dual Pipeline 경유 (Legacy/Unified 모드 추상화)
-                if (_audioPipeline != null)
-                    await _audioPipeline.SendAudioChunkAsync(audioData, chunkStartTime).ConfigureAwait(false);
+                if (_realtimeSttService != null)
+                    await _realtimeSttService.SendAudioChunkAsync(audioData, chunkStartTime).ConfigureAwait(false);
             }
         }
         catch (Exception ex)
@@ -3919,8 +3707,7 @@ public partial class OneNoteViewModel : ViewModelBase
                 TopicSegments = TopicSegments.ToList(),
                 MinuteSummaries = MinuteSummaries.ToList(),
                 CumulativeSummaryText = CumulativeSummaryText,
-                FinalSummaryText = FinalSummaryText,
-                RecordedWithMode = _audioPipeline?.Mode,  // Pipeline 사용 시 모드 기록 (null 허용 — 화자분리 모드)
+                FinalSummaryText = FinalSummaryText
             };
 
             var realtimePath = Path.ChangeExtension(audioFilePath, ".realtime.json");

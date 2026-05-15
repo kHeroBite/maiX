@@ -1604,59 +1604,6 @@ L-424(WPF ItemsControl 가변높이 안티패턴 기각)가 직전 작업 완료
 - **재발방지**: Image Stretch 설정 시 "패널 전체 채움 vs 비율 보존" 의도 명시 후 패턴 선택
 - **Level**: 2 (신규 교훈 — WPF Image Stretch 패턴)
 
-## L-439: Wave 기반 의존성 spawn — 인터페이스/타입 선행 → 구현체 병렬 → 통합 (2026-05-15)
-
-- **문제**: 다파일 코드 추가(5+ 파일) 시 단순 병렬 spawn은 인터페이스 미정 상태로 구현체끼리 시그니처 충돌 위험
-- **해결**: Wave 단계로 분할 — Wave1(타입/인터페이스/Factory 시그니처) → Wave2(구현체 병렬 spawn) → Wave3(호출자 통합)
-- **실증**: 음성 파이프라인 2모드 시스템 14파일 1110줄을 Wave 기반 spawn으로 역라우팅 0회 단일 사이클 완수
-  - Wave1: AudioPipelineMode + IRealtimeAudioPipeline + AudioPipelineFactory(시그니처) + SentimentResult 모델
-  - Wave2: LegacyAudioPipeline / UnifiedRealtimeAudioPipeline / SentimentAnalysisService / CostEstimatorService / HallucinationFilter 병렬
-  - Wave3: OneNoteViewModel + MainWindow.xaml + App.xaml 통합
-- **재발방지**: 신규 파일 5+ 시 oplan_deep 7단계(Wave 기반 spawn 설계)에서 Wave 분할 검토 의무
-- **Level**: 2 (다파일 작업의 표준 패턴화 — MEMORY.md 등재)
-
-## L-440: 추상화 인터페이스+팩토리 도입 기준 — 동등 분기 모드 2개+ 시 호출자 변경 최소화 (2026-05-15)
-
-- **문제**: 모드 분기(Legacy vs Unified, Local vs Remote 등)가 명확한데 호출자(ViewModel)에서 if/switch로 직접 분기하면 분기 코드 누수 + 모드 추가 시 수정 폭증
-- **해결**: 공통 인터페이스(IXxxPipeline) + Factory.Create(mode) 패턴 도입 → 호출자는 _field + Factory 호출 + 이벤트 구독만 보유
-- **실증**: IRealtimeAudioPipeline + AudioPipelineFactory 도입으로 ViewModel은 모드 enum을 모르고 동작 (Wave1에서 인터페이스 선행 → Wave3 통합 시 ViewModel 수정 최소화)
-- **재발방지**: 모드/전략 분기 2가지 이상일 때 oplan_deep에서 인터페이스+팩토리 패턴 우선 검토
-- **Level**: 2 (아키텍처 패턴 — MEMORY.md 등재)
-
-## L-441: OpenAI Realtime API out-of-band response.create 패턴 — 단일 WebSocket STT+분석 비용 절감 (2026-05-15)
-
-- **문제**: STT용 WebSocket과 분석용 ChatCompletion API 별도 사용 시 비용 2배 + 컨텍스트 동기화 부담
-- **해결**: 단일 WebSocket에서 out-of-band response.create 패턴 적용
-  - `session.update`: `create_response=false` (모델 자동 응답 비활성)
-  - `tools strict function_call`: 1분 요약+감성 분석 결과를 함수 호출 형식으로 강제
-  - `response.create`: `conversation=none` + `item_reference` 슬라이딩 윈도우(N=8) → 멀티턴 비용 절감 핵심
-- **실증**: UnifiedRealtimeAudioPipeline에서 STT(transcription only) + 분석(function_call)을 단일 WebSocket으로 동시 처리
-- **재발방지**: OpenAI Realtime API 통합 시 out-of-band 패턴 우선 검토 — 비용/지연 절감 핵심
-- **Level**: 2 (외부 API 통합 패턴 — MEMORY.md 등재)
-
-## L-442: 전략 swap 5단계 대칭 구조 — Unsubscribe→DisposeAsync→Factory.New→Subscribe→StartAsync (2026-05-15)
-
-- **문제**: 런타임 폴백 swap 시 이벤트 누수, 2중 구독, WebSocket 좀비 발생 위험
-- **해결**: 5단계 대칭 구조 강제
-  1. **Unsubscribe**: 기존 인스턴스의 모든 이벤트 핸들러 해제
-  2. **DisposeAsync**: 기존 인스턴스 비동기 정리 (WebSocket 종료, Timer Dispose 등)
-  3. **Factory.New**: 새 구현체 인스턴스 생성 (Factory 경유)
-  4. **Subscribe**: 새 인스턴스에 동일 이벤트 핸들러 등록
-  5. **StartAsync**: 새 인스턴스 시작
-- **실증**: UnifiedRealtimeAudioPipeline → LegacyAudioPipeline 자동 폴백 — PipelineFallback 이벤트 핸들러(OnPipelineFallback)가 5단계 순차 실행
-- **연관**: L-379 (InvokeAsync(async lambda) 예외 소실 주의) + L-376 (SemaphoreSlim IDisposable)
-- **재발방지**: 인터페이스 구현체 런타임 swap 모든 경로에 5단계 대칭 구조 강제
-- **Level**: 2 (런타임 swap 표준 패턴 — MEMORY.md 등재)
-
-## L-443: PeriodicTimer + WebSocket 결합 시 _sendLock SemaphoreSlim(1,1) 필수 (2026-05-15)
-
-- **문제**: 1분 주기 PeriodicTimer가 response.create 전송 + 별도 audio frame 전송이 동시 발생 시 WebSocket SendAsync 충돌 (ClientWebSocket InvalidOperationException)
-- **해결**: `private SemaphoreSlim _sendLock = new(1, 1);` 필드 보유 → 모든 SendAsync 직전 `await _sendLock.WaitAsync()` + `finally { _sendLock.Release(); }`
-- **L-376 준수**: SemaphoreSlim은 IDisposable이므로 Dispose() 메서드에서 `_sendLock?.Dispose()` 호출 필수
-- **실증**: UnifiedRealtimeAudioPipeline에서 1분 PeriodicTimer + audio frame 송신을 _sendLock으로 직렬화
-- **재발방지**: WebSocket 동시 송신 가능성 있는 모든 경로에 SemaphoreSlim 락 + L-376 IDisposable 패턴 강제
-- **Level**: 2 (멀티 송신 경로 표준 패턴 — MEMORY.md 등재)
-
 ## 반영 추적 테이블
 
 | 교훈 ID | 교훈 요약 | 반영 대상 | 반영 위치 | 반영일 | 검증 |
@@ -1740,8 +1687,3 @@ L-424(WPF ItemsControl 가변높이 안티패턴 기각)가 직전 작업 완료
 | L-436 | LoadRealtimeResultAsync 데이터 로딩 전용 — RebuildTimelineTicks 등 UI 트리거는 호출자 책임으로 명시 | docs | LESSONS.md | 2026-05-14 | ✅ |
 | L-437 | ObservableCollection.Count==0 early return은 이전 데이터 잔류 — Clear + 기본값 명시 생성 패턴 필수 | docs | LESSONS.md | 2026-05-14 | ✅ |
 | L-438 | WPF Image Stretch=Uniform+VerticalAlignment=Top 상단 압축 유발 — Fill+Stretch 표준 패턴으로 전환 | docs | LESSONS.md + MEMORY.md | 2026-05-14 | ✅ |
-| L-439 | Wave 기반 의존성 spawn — Wave1(타입/인터페이스) → Wave2(구현 병렬) → Wave3(통합). 14파일 1110줄 역라우팅 0회 입증 | docs+skill | LESSONS.md + MEMORY.md + oplan_deep/SKILL.md + oplan_normal/SKILL.md | 2026-05-15 | ✅ |
-| L-440 | 추상화 인터페이스+팩토리 도입 기준 — 동등 분기 모드 2개+ 시 호출자 변경 최소화 | docs+skill | LESSONS.md + MEMORY.md + oplan_deep/SKILL.md | 2026-05-15 | ✅ |
-| L-441 | OpenAI Realtime API out-of-band 패턴 — create_response=false + function_call + item_reference 슬라이딩 윈도우가 비용 절감 핵심 | docs | LESSONS.md + MEMORY.md | 2026-05-15 | ✅ |
-| L-442 | 전략 swap 5단계 대칭 구조 — Unsubscribe→DisposeAsync→Factory.New→Subscribe→StartAsync로 무중단 swap 보장 | docs+skill | LESSONS.md + MEMORY.md + odev/SKILL.md | 2026-05-15 | ✅ |
-| L-443 | PeriodicTimer + WebSocket 결합 시 _sendLock SemaphoreSlim(1,1) 필수 (L-376 IDisposable 패턴 준수) | docs+skill | LESSONS.md + MEMORY.md + odev/SKILL.md | 2026-05-15 | ✅ |
