@@ -137,9 +137,10 @@ public sealed class OpenAiRealtimeSttService : IOpenAiRealtimeSttService
         _cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         _ws = new ClientWebSocket();
         _ws.Options.SetRequestHeader("Authorization", $"Bearer {apiKey}");
-        _ws.Options.SetRequestHeader("OpenAI-Beta", "realtime=v1");
+        // OpenAI-Beta 헤더 제거 — GA transcription 모드에서 불필요 (구 preview 전용)
 
-        var uri = new Uri($"wss://api.openai.com/v1/realtime?model={Uri.EscapeDataString(model)}");
+        // GA transcription 모드 URL — model 파라미터 미허용, intent=transcription 고정
+        var uri = new Uri("wss://api.openai.com/v1/realtime?intent=transcription");
 
         try
         {
@@ -154,30 +155,39 @@ public sealed class OpenAiRealtimeSttService : IOpenAiRealtimeSttService
             throw;
         }
 
-        // session.update 발송 — STT 전용 모드 활성화 (modalities=text + server VAD + 한국어 특화)
+        // session.update 발송 — GA transcription nested 구조 (audio.input.* 경로)
         var sttLang = string.IsNullOrWhiteSpace(_settings.OaiRecording.SttLanguage) ? "ko" : _settings.OaiRecording.SttLanguage;
         var sttPrompt = _settings.OaiRecording.SttPrompt ?? string.Empty;
-        // STT 전용 모드: instructions로 AI 응답 생성 명시적 차단 + turn_detection.create_response=false로 자동 응답 차단
+        var transcriptionModel = string.IsNullOrWhiteSpace(_settings.OaiRecording.TranscriptionModel)
+            ? "gpt-4o-transcribe"
+            : _settings.OaiRecording.TranscriptionModel;
+
+        // GA shape: session.type="transcription" + audio.input.format/transcription/turn_detection nested
+        // ⚠️ format은 object 타입으로 우선 시도. OpenAI가 거부 시 string "pcm16" 폴백 필요 (TODO)
         await SendJsonAsync(new
         {
             type = "session.update",
             session = new
             {
-                modalities = new[] { "text" },
-                instructions = "You are a transcription-only service. Do NOT generate any responses, answers, or text outputs. Only transcribe the user's audio input.",
-                input_audio_format = "pcm16",
-                input_audio_transcription = new
+                type = "transcription",
+                audio = new
                 {
-                    model = string.IsNullOrWhiteSpace(_settings.OaiRecording.TranscriptionModel) ? "gpt-4o-mini-transcribe" : _settings.OaiRecording.TranscriptionModel,
-                    language = sttLang,
-                    prompt = sttPrompt
-                },
-                turn_detection = _settings.OaiRecording.ServerVadEnabled
-                    ? (object)new { type = "server_vad", threshold = 0.7, prefix_padding_ms = 300, silence_duration_ms = 300, create_response = false, interrupt_response = false }
-                    : null
+                    input = new
+                    {
+                        format = new { type = "pcm16", rate = 24000 },
+                        transcription = new
+                        {
+                            model = transcriptionModel,
+                            language = sttLang
+                        },
+                        turn_detection = _settings.OaiRecording.ServerVadEnabled
+                            ? (object)new { type = "server_vad", threshold = 0.5, prefix_padding_ms = 300, silence_duration_ms = 500 }
+                            : null
+                    }
+                }
             }
         }).ConfigureAwait(false);
-        _log.Info($"[OpenAi-Realtime] session.update 발송 — VAD={(_settings.OaiRecording.ServerVadEnabled ? "server_vad(thr=0.7,sil=300ms)" : "OFF (수동 commit)")}, model={(_settings.OaiRecording.TranscriptionModel ?? "(default)")}, language={sttLang}, prompt={sttPrompt.Length}자");
+        _log.Info($"[OpenAi-Realtime] session.update 발송 (GA transcription shape) — VAD={(_settings.OaiRecording.ServerVadEnabled ? "server_vad(thr=0.5,sil=500ms)" : "OFF (수동 commit)")}, transcriptionModel={transcriptionModel}, language={sttLang}, prompt={sttPrompt.Length}자");
 
         _silenceStartedAt = DateTime.Now;
         _lastSilenceMarkerSec = 0;
@@ -232,9 +242,8 @@ public sealed class OpenAiRealtimeSttService : IOpenAiRealtimeSttService
         {
             if (_ws.State == WebSocketState.Open)
             {
-                // 버퍼 커밋 + 응답 요청
+                // GA transcription 모드: response 자동 생성 — response.create 불필요 (제거됨)
                 await SendJsonAsync(new { type = "input_audio_buffer.commit" }).ConfigureAwait(false);
-                await SendJsonAsync(new { type = "response.create" }).ConfigureAwait(false);
 
                 // Close handshake
                 await _ws.CloseAsync(WebSocketCloseStatus.NormalClosure, "stop", CancellationToken.None).ConfigureAwait(false);
@@ -457,6 +466,15 @@ public sealed class OpenAiRealtimeSttService : IOpenAiRealtimeSttService
             else if (type == "conversation.item.input_audio_transcription.failed")
             {
                 _log.Warn($"[OpenAi-Realtime] transcription.failed — json={json.Substring(0, Math.Min(200, json.Length))}");
+            }
+            else if (type == "error")
+            {
+                var errorObj = root.GetProperty("error");
+                var code = errorObj.TryGetProperty("code", out var c) ? c.GetString() : "unknown";
+                var message = errorObj.TryGetProperty("message", out var m) ? m.GetString() : "no message";
+                _log.Error("[RealtimeSTT] OpenAI error 이벤트 수신 — code={Code}, message={Message}", code, message);
+                // 사용자 가시 알림 — TranscriptSegmentUpdated 이벤트로 에러 메시지 발행
+                TranscriptSegmentUpdated?.Invoke($"[STT 에러] {message}", TimeSpan.Zero, TimeSpan.Zero, "");
             }
         }
         catch (Exception ex)

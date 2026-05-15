@@ -1657,6 +1657,35 @@ L-424(WPF ItemsControl 가변높이 안티패턴 기각)가 직전 작업 완료
 - **재발방지**: WebSocket 동시 송신 가능성 있는 모든 경로에 SemaphoreSlim 락 + L-376 IDisposable 패턴 강제
 - **Level**: 2 (멀티 송신 경로 표준 패턴 — MEMORY.md 등재)
 
+## L-444: 외부 API Beta→GA 마이그레이션 4축 패턴 (2026-05-15)
+
+- **문제**: OpenAI가 2026-05-12 Realtime Beta API 폐기 → `beta_api_shape_disabled` 에러로 STT 완전 미작동
+- **근본원인**: Beta 전용 헤더(`OpenAI-Beta: realtime=v1`) + Beta 전용 URL + Beta 페이로드 shape 잔류
+- **GA 마이그레이션 4축 (순서 중요)**:
+  1. **Beta 헤더 제거**: `OpenAI-Beta: realtime=v1` 헤더 라인 삭제
+  2. **URL endpoint 변경**: `wss://api.openai.com/v1/realtime?model=...` → `wss://api.openai.com/v1/realtime?intent=transcription`
+  3. **페이로드 nested 재구조**: flat `session.input_audio_transcription.model` → nested `session.type=transcription` + `session.audio.input.format/transcription/turn_detection`
+  4. **이벤트명 매핑 확인**: `conversation.item.input_audio_transcription.completed` 등 GA 이벤트명 일치 여부 검증
+- **주의**: 4축 중 하나라도 누락 시 연결은 되나 STT 결과 미수신 상태가 됨 (silent failure)
+- **재발방지**: 외부 API deprecation 공지 정기 모니터링 + deprecation 일자 HISTORY.md 기록 습관화
+- **심각도**: 높음 (STT 완전 미작동)
+- **Level**: 2 (GA 마이그레이션 표준 패턴 — MEMORY.md 등재 권장)
+
+## L-445: WebSocket 외부 API 에러 silent close 방지 패턴 (2026-05-15)
+
+- **문제**: OpenAI WebSocket에서 `type=="error"` 메시지 수신 시 기존 코드가 아무 처리 없이 무시 → silent failure로 원인 진단 불가
+- **해결**: `type == "error"` 분기 신규 추가 → `_log.Error("{에러 전체 JSON}")` + `StatusChanged` 이벤트로 사용자 가시 알림 발행
+- **패턴 (fail-fast)**:
+  ```csharp
+  case "error":
+      _log.Error("[RealtimeSTT] 서버 에러: {Json}", json);
+      StatusChanged?.Invoke(this, new SttStatusEventArgs { Message = $"오류: {json}" });
+      break;
+  ```
+- **적용 원칙**: WebSocket 기반 외부 API 클라이언트에서 `type=="error"` 또는 동등 에러 응답을 반드시 NLog Error + 사용자 알림 2중 처리
+- **재발방지**: WebSocket 이벤트 핸들러 작성 시 error 타입 분기 유무를 코드 리뷰 체크리스트에 포함
+- **Level**: 2 (WebSocket 클라이언트 표준 패턴)
+
 ## 반영 추적 테이블
 
 | 교훈 ID | 교훈 요약 | 반영 대상 | 반영 위치 | 반영일 | 검증 |
@@ -1745,3 +1774,5 @@ L-424(WPF ItemsControl 가변높이 안티패턴 기각)가 직전 작업 완료
 | L-441 | OpenAI Realtime API out-of-band 패턴 — create_response=false + function_call + item_reference 슬라이딩 윈도우가 비용 절감 핵심 | docs | LESSONS.md + MEMORY.md | 2026-05-15 | ✅ |
 | L-442 | 전략 swap 5단계 대칭 구조 — Unsubscribe→DisposeAsync→Factory.New→Subscribe→StartAsync로 무중단 swap 보장 | docs+skill | LESSONS.md + MEMORY.md + odev/SKILL.md | 2026-05-15 | ✅ |
 | L-443 | PeriodicTimer + WebSocket 결합 시 _sendLock SemaphoreSlim(1,1) 필수 (L-376 IDisposable 패턴 준수) | docs+skill | LESSONS.md + MEMORY.md + odev/SKILL.md | 2026-05-15 | ✅ |
+| L-444 | 외부 API Beta→GA 마이그레이션 4축 — Beta 헤더 제거 + URL endpoint 변경 + 페이로드 nested 재구조 + 이벤트명 매핑 동시 적용 | docs | LESSONS.md + HISTORY.md | 2026-05-15 | ✅ |
+| L-445 | WebSocket 외부 에러 silent close 방지 — type=="error" 분기 추가 + NLog Error + 사용자 가시 알림 발행 (fail-fast 패턴) | docs+code | LESSONS.md + OpenAiRealtimeSttService.cs | 2026-05-15 | ✅ |

@@ -12,10 +12,11 @@ namespace mAIx.Models.Settings;
 public class OpenAiRecordingSettings
 {
     /// <summary>
-    /// 실시간 STT 모델 (WebSocket 기반)
+    /// 실시간 STT 모델 (WebSocket 기반) — GA transcription 모드 호환 모델.
+    /// 사용 가능: "gpt-realtime", "gpt-4o-transcribe" (2026-05 GA 기준)
     /// </summary>
     [XmlElement("RealtimeSttModel")]
-    public string RealtimeSttModel { get; set; } = "gpt-4o-realtime-preview";
+    public string RealtimeSttModel { get; set; } = "gpt-4o-transcribe";
 
     /// <summary>
     /// 화자분리 STT 모델 (청크 기반)

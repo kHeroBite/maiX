@@ -1810,6 +1810,39 @@ ConfigureAwait(false)를 Service 레이어 전체에 적용하여 스레드 컨�
 
 ---
 
+## 2026-05-15: OpenAI Realtime API Beta → GA 마이그레이션 (STT 복구)
+
+### 배경
+- OpenAI가 2026-05-12 Realtime Beta API 공식 폐기
+- 2026-05-15 `beta_api_shape_disabled` 에러 발생 → STT 완전 미작동
+
+### 작업 내용 (O3, Fast Path)
+- **OpenAI-Beta 헤더 제거**: `WebSocketRequestHeaders`에서 `OpenAI-Beta: realtime=v1` 라인 삭제
+- **URL 교체**: `wss://api.openai.com/v1/realtime?model=...` → `wss://api.openai.com/v1/realtime?intent=transcription`
+- **session.update GA nested 재구조**:
+  - `session.type = "transcription"`
+  - `session.audio.input.format = "pcm16"`
+  - `session.audio.input.transcription.model = {RealtimeSttModel}`
+  - `session.audio.input.turn_detection.type = "server_vad"`
+- **StopAsync `response.create` 삭제**: transcription 모드는 자동 응답으로 불필요
+- **type=="error" 분기 신규 추가**: NLog Error 로깅 + `StatusChanged` 이벤트로 사용자 가시 알림 (L-445)
+- **RealtimeSttModel 기본값 갱신**: `gpt-4o-mini-realtime-preview-2024-12-17` → `gpt-4o-transcribe` + docstring 보강
+
+### 주요 변경 파일
+- `mAIx/Services/AI/OpenAiRealtimeSttService.cs` (~60줄 변경)
+- `mAIx/Models/Settings/OpenAiRecordingSettings.cs` (~5줄: 기본값 + docstring)
+
+### 교훈 등재
+- L-444: 외부 API Beta→GA 마이그레이션 4축 패턴
+- L-445: WebSocket 외부 에러 silent close 방지 패턴
+
+### 테스트 결과 (otest Fast Path O3)
+- 빌드: 성공 (오류 0건) ✅
+- 10/10 acceptance_criteria PASS ✅
+- 런타임 STT 미트리거 (사용자 검증 권장)
+
+---
+
 ## 2026-05-14: 핵심요약 네비게이션 5~20 카드 통폐합 + 스크롤 금지 (Min 40px 가드 제거)
 
 ### 작업 내용
