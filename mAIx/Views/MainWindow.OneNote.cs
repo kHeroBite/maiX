@@ -43,7 +43,8 @@ namespace mAIx.Views
         }
 
         /// <summary>
-        /// 주제어 네비게이션 가로/세로 방향 토글
+        /// 대화 네비게이션 패널 도킹 위치 토글 (우측 ↔ 하단)
+        /// TopicNavOrientation: "Vertical" = 우측 도킹(기본), "Horizontal" = 하단 도킹
         /// </summary>
         private async void OneNoteTopicNavOrientationToggle_Click(object sender, RoutedEventArgs e)
         {
@@ -57,7 +58,8 @@ namespace mAIx.Views
 
                 _oneNoteViewModel.TopicNavOrientation = newOrientation;
 
-                // 핵심요약 네비게이션은 시간 비례 Grid 레이아웃으로 변경됨 — Orientation 토글 불필요
+                // 도킹 위치 재배치 (단일 Grid 재배치 — 마크업 복제 없음)
+                ApplyTopicNavDockLayout();
 
                 // 설정 영구 저장
                 var oaiSettings = App.Settings?.OaiRecording;
@@ -67,12 +69,118 @@ namespace mAIx.Views
                     App.Settings?.SaveAll();
                 }
 
-                _oneNoteLog.Info($"[OneNote] 주제어 네비게이션 방향 변경: {newOrientation}");
+                _oneNoteLog.Info($"[OneNote] 대화 네비게이션 도킹 위치 변경: {newOrientation} ({(newOrientation == "Horizontal" ? "하단" : "우측")} 도킹)");
                 await Task.CompletedTask;
             }
             catch (Exception ex)
             {
                 _oneNoteLog.Error(ex, "[OneNote] OneNoteTopicNavOrientationToggle_Click 처리 실패");
+            }
+        }
+
+        /// <summary>
+        /// 녹음내용 Grid 최초 로드 시 영속된 도킹 설정(TopicNavOrientation)을 반영
+        /// </summary>
+        private void OneNoteRecDockGrid_Loaded(object sender, RoutedEventArgs e)
+        {
+            try
+            {
+                ApplyTopicNavDockLayout();
+            }
+            catch (Exception ex)
+            {
+                _oneNoteLog.Error(ex, "[OneNote] OneNoteRecDockGrid_Loaded 처리 실패");
+            }
+        }
+
+        /// <summary>
+        /// 대화 네비게이션 패널 도킹 위치를 TopicNavOrientation에 따라 재배치한다.
+        /// 단일 Grid 재배치 방식 — STT/요약 패널 마크업 복제 없음 (L-389/L-424 준수: ItemsPanel 동적변경 없음).
+        ///  - Mode A(Vertical, 우측 도킹, 기본): 5컬럼 1행. STT=Col0 / 세로Split=Col1 / 대화네비=Col2 / 세로Split=Col3 / 요약=Col4
+        ///  - Mode B(Horizontal, 하단 도킹): Row0=상단(STT=Col0 / 세로Split=Col1 / 요약=Col2~Col4 전폭) / Row1=가로Split / Row2=대화네비 전폭
+        /// </summary>
+        private void ApplyTopicNavDockLayout()
+        {
+            try
+            {
+                if (_oneNoteViewModel == null) return;
+                if (OneNoteRecDockGrid == null) return;
+
+                bool isBottomDock = string.Equals(
+                    _oneNoteViewModel.TopicNavOrientation, "Horizontal", StringComparison.OrdinalIgnoreCase);
+
+                if (isBottomDock)
+                {
+                    // ===== Mode B: 하단 도킹 =====
+                    // 상단 행(STT + 요약)을 Row0에, 대화네비를 Row2 전폭에 배치
+                    OneNoteRecRow0.Height = new GridLength(1, GridUnitType.Star);   // 상단 STT/요약
+                    OneNoteRecRow1.Height = new GridLength(4);                       // 가로 Splitter
+                    OneNoteRecRow2.Height = new GridLength(220, GridUnitType.Pixel); // 하단 대화네비
+
+                    // STT: Row0 Col0 유지
+                    Grid.SetRow(OneNoteSTTPanel, 0);
+                    Grid.SetColumn(OneNoteSTTPanel, 0);
+                    Grid.SetColumnSpan(OneNoteSTTPanel, 1);
+
+                    // 세로 Splitter1(STT↔요약 사이): Row0 Col1 유지, 표시
+                    Grid.SetRow(OneNoteRecSplitter1, 0);
+                    OneNoteRecSplitter1.Visibility = Visibility.Visible;
+
+                    // 요약: Row0 Col2~Col4 전폭 (대화네비가 빠진 자리 흡수)
+                    Grid.SetRow(OneNoteSummaryPanel, 0);
+                    Grid.SetColumn(OneNoteSummaryPanel, 2);
+                    Grid.SetColumnSpan(OneNoteSummaryPanel, 3);
+
+                    // 세로 Splitter3: 하단 도킹에서는 불필요 → 숨김
+                    OneNoteRecSplitter3.Visibility = Visibility.Collapsed;
+
+                    // 가로 Splitter(Row1): 표시
+                    OneNoteRecSplitterBottom.Visibility = Visibility.Visible;
+
+                    // 대화네비: Row2 전폭(Col0~Col4)
+                    Grid.SetRow(OneNoteTopicNavPanel, 2);
+                    Grid.SetColumn(OneNoteTopicNavPanel, 0);
+                    Grid.SetColumnSpan(OneNoteTopicNavPanel, 5);
+                    OneNoteTopicNavPanel.BorderThickness = new Thickness(0, 1, 0, 0);
+                }
+                else
+                {
+                    // ===== Mode A: 우측 도킹 (기본) — 원본 5컬럼 1행 복원 =====
+                    OneNoteRecRow0.Height = new GridLength(1, GridUnitType.Star);
+                    OneNoteRecRow1.Height = new GridLength(0);
+                    OneNoteRecRow2.Height = new GridLength(0);
+
+                    // STT: Row0 Col0
+                    Grid.SetRow(OneNoteSTTPanel, 0);
+                    Grid.SetColumn(OneNoteSTTPanel, 0);
+                    Grid.SetColumnSpan(OneNoteSTTPanel, 1);
+
+                    // 세로 Splitter1: Row0 Col1, 표시
+                    Grid.SetRow(OneNoteRecSplitter1, 0);
+                    OneNoteRecSplitter1.Visibility = Visibility.Visible;
+
+                    // 대화네비: Row0 Col2
+                    Grid.SetRow(OneNoteTopicNavPanel, 0);
+                    Grid.SetColumn(OneNoteTopicNavPanel, 2);
+                    Grid.SetColumnSpan(OneNoteTopicNavPanel, 1);
+                    OneNoteTopicNavPanel.BorderThickness = new Thickness(0, 0, 1, 0);
+
+                    // 세로 Splitter3: Row0 Col3, 표시
+                    Grid.SetRow(OneNoteRecSplitter3, 0);
+                    OneNoteRecSplitter3.Visibility = Visibility.Visible;
+
+                    // 요약: Row0 Col4
+                    Grid.SetRow(OneNoteSummaryPanel, 0);
+                    Grid.SetColumn(OneNoteSummaryPanel, 4);
+                    Grid.SetColumnSpan(OneNoteSummaryPanel, 1);
+
+                    // 가로 Splitter: 숨김
+                    OneNoteRecSplitterBottom.Visibility = Visibility.Collapsed;
+                }
+            }
+            catch (Exception ex)
+            {
+                _oneNoteLog.Error(ex, "[OneNote] ApplyTopicNavDockLayout 처리 실패");
             }
         }
 

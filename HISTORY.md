@@ -2,6 +2,32 @@
 
 > PROJECT.md 작업 이력 테이블의 상세 보완본
 
+## [2026-05-17] OneNote 후속 4건 — 타임라인 보정/도킹 재설계/하이라이트 정밀화/전체묵음 (O3 Fast Path)
+
+**분류**: O3 Fast Path (lesson + docs + git)
+**otest 결과**: 정적/빌드/규칙 PASS (4건). 런타임은 사용자 녹음 검증 필요 (PASS-with-user-validation)
+**범위**: 수정 4파일
+**파이프라인 이력**: 단일 사이클
+**대화ID**: conv_177896717241
+
+### 변경 내용
+
+- **항목3-a** (타임라인 시간 텍스트 복원): Wave1 과도 제거 보정 — 타임라인 눈금 ItemsControl 통째 제거로 시간 텍스트(0:00)까지 소실. Line(--선) 요소만 제거, 시간 TextBlock 보존 (`MainWindow.xaml`)
+- **항목3-b** (대화네비 좌우 스크롤 금지): ScrollViewer `HorizontalScrollBarVisibility=Disabled` 적용 (`MainWindow.xaml`)
+- **항목5** (대화 네비게이션 패널 도킹 위치 토글): "카드 세로↔가로" 오해 정정 → 패널 자체 도킹 위치 이동(우측 기본 ↔ 하단, 작업표시줄식). 단일 Grid 코드비하인드 `Grid.SetRow/SetColumn` 재배치 패턴 — 마크업 복제 0 (`MainWindow.OneNote.cs`)
+- **항목7** (하이라이트 핵심키워드만): systemPrompt 품질 기준 강화(핵심 명사 2~5개) + `s.Length≥2` 가드 + `IsWordBoundary` 단어경계 매칭 동시 적용 (`MinuteSummaryService.cs`, `HighlightTextBehavior.cs`)
+- **항목10** (전체 묵음 시 "묵음"만 표시): `IsAllSilence()` 판정 → LLM 스킵 → "묵음" 고정 텍스트 엔트리 발행 (`MinuteSummaryService.cs`)
+
+**변경 파일 (4개)**: MainWindow.xaml, MainWindow.OneNote.cs, MinuteSummaryService.cs, HighlightTextBehavior.cs (신규)
+
+### 교훈 (L-454 ~ L-458)
+
+- L-454 이전 작업 과도 제거 보정 — DataTemplate 내 요소 단위 정밀 제거 필수
+- L-455 추상 UI 용어 의미체 확인 필수 — "토글"·"방향" oplan에서 A/B 형식 사전 확인
+- L-456 단일 Grid 코드비하인드 재배치 = 마크업 복제 0 도킹 패턴
+- L-457 하이라이트 정밀화 = LLM 프롬프트 품질 + 단어경계 양쪽 동시 적용
+- L-458 전체 묵음 분기 = LLM 스킵 + 기존 이벤트 경로 재사용 (UI 레이어 무수정)
+
 ## [2026-05-17] OneNote UI 정리 5건 + STT 버그 3건 (9개 작업, O4 Full Path — 단일사이클)
 
 **분류**: O4 Full Path (Wave 기반 spawn — Wave1 타입/인터페이스 → Wave2 구현 병렬 → Wave3 통합)

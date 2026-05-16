@@ -6,6 +6,7 @@ using System.Net.Http;
 using System.Net.Http.Headers;
 using System.Text;
 using System.Text.Json;
+using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
 using mAIx.Models;
@@ -218,6 +219,25 @@ public sealed class MinuteSummaryService : IMinuteSummaryService
                 return;
             }
 
+            // 전체 묵음 판정 — LLM 호출 스킵, "묵음" 엔트리 생성
+            if (IsAllSilence(texts))
+            {
+                _log.Info("[MinuteSummary] 전체 묵음 구간 감지 — LLM 스킵");
+                var silentEntry = new MinuteSummaryEntry
+                {
+                    Index = _entryIndex++,
+                    StartTime = startTime,
+                    EndTime = endTime,
+                    SummaryText = "묵음",
+                    Topic = "묵음",
+                    Keywords = new List<string>(),
+                    CreatedAt = DateTime.Now
+                };
+                lock (_bufferLock) { _entries.Add(silentEntry); }
+                MinuteSummaryCreated?.Invoke(silentEntry);
+                return;
+            }
+
             var combinedText = string.Join(" ", texts);
             var model = _settings.OaiRecording.MinuteSummaryModel;
             var baseUrl = (_settings.AIProviders?.OpenAI?.BaseUrl ?? "https://api.openai.com/v1").TrimEnd('/');
@@ -228,7 +248,7 @@ public sealed class MinuteSummaryService : IMinuteSummaryService
                 {
                   "summary": "30~150자 요약 텍스트",
                   "topic": "5~20자 주제어 또는 주제맥락 (예: '하네스엔지니어링 설명', '바이브코딩의 미래에 대한 분석')",
-                  "keywords": ["전사 텍스트에 실제로 등장한 핵심 단어/용어 3~8개 (전사 원문 표기 그대로, 1~10자, 중복 없이)"]
+                  "keywords": ["고유명사·전문용어·핵심명사만 3~5개 (전사 원문 표기 그대로, 2~10자). 조사·접속사·일반동사·1~2자 일반어·불용어(이것/그것/때문/정도 등) 제외. 진짜 핵심어만."]
                 }
                 """;
 
@@ -354,7 +374,7 @@ public sealed class MinuteSummaryService : IMinuteSummaryService
                 {
                     if (kw.ValueKind != JsonValueKind.String) continue;
                     var s = kw.GetString()?.Trim();
-                    if (!string.IsNullOrWhiteSpace(s) && s.Length <= 30 && !keywords.Contains(s))
+                    if (!string.IsNullOrWhiteSpace(s) && s.Length >= 2 && s.Length <= 30 && !keywords.Contains(s))
                         keywords.Add(s);
                 }
             }
@@ -376,6 +396,24 @@ public sealed class MinuteSummaryService : IMinuteSummaryService
             fallbackTopic = fallbackTopic.Length > 20 ? fallbackTopic[..20] : fallbackTopic;
             return (fallbackSummary, fallbackTopic, new List<string>());
         }
+    }
+
+    /// <summary>
+    /// texts 목록 전체가 "[묵음 N초]" / "[묵음 N.N초]" 마커만으로 구성된 경우 true.
+    /// 실발화 텍스트가 단 하나라도 있으면 false.
+    /// </summary>
+    private static bool IsAllSilence(IReadOnlyList<string> texts)
+    {
+        if (texts.Count == 0) return false;
+        foreach (var t in texts)
+        {
+            var trimmed = t?.Trim() ?? string.Empty;
+            // 묵음 마커 형식: "[묵음 N초]" 또는 "[묵음 N.N초]"
+            if (!Regex.IsMatch(
+                    trimmed, @"^\[묵음 [\d.]+초\]$"))
+                return false;
+        }
+        return true;
     }
 
     private async Task SaveEntryToDiskAsync(MinuteSummaryEntry entry)

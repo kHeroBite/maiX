@@ -6853,17 +6853,27 @@
 
                                 <!-- 녹음내용 패널 (읽기 모드, 좌우 분할) -->
                                 <Border x:Name="OneNoteRecordingContentPanel" Visibility="Collapsed">
-                                    <Grid>
+                                    <!-- 항목5: 대화 네비게이션 패널 도킹 위치 전환 (우측↔하단)
+                                         단일 Grid + 코드비하인드 재배치 (Grid.SetRow/SetColumn, 마크업 복제 0)
+                                         Mode A(우측 도킹, 기본): 5컬럼 1행 — STT/Split/대화네비/Split/요약
+                                         Mode B(하단 도킹): Row0=STT+Split+요약, Row1=가로 Split, Row2=대화네비 전폭
+                                         L-389/L-424 준수: ItemsPanel 동적변경 없음, Grid 정의는 정적 -->
+                                    <Grid x:Name="OneNoteRecDockGrid" Loaded="OneNoteRecDockGrid_Loaded">
                                         <Grid.ColumnDefinitions>
-                                            <ColumnDefinition Width="*" MinWidth="250"/>
-                                            <ColumnDefinition Width="4"/>
-                                            <ColumnDefinition Width="300" MinWidth="160"/>
-                                            <ColumnDefinition Width="4"/>
-                                            <ColumnDefinition Width="280" MinWidth="200"/>
+                                            <ColumnDefinition x:Name="OneNoteRecCol0" Width="*" MinWidth="250"/>
+                                            <ColumnDefinition x:Name="OneNoteRecCol1" Width="4"/>
+                                            <ColumnDefinition x:Name="OneNoteRecCol2" Width="300" MinWidth="160"/>
+                                            <ColumnDefinition x:Name="OneNoteRecCol3" Width="4"/>
+                                            <ColumnDefinition x:Name="OneNoteRecCol4" Width="280" MinWidth="200"/>
                                         </Grid.ColumnDefinitions>
+                                        <Grid.RowDefinitions>
+                                            <RowDefinition x:Name="OneNoteRecRow0" Height="*"/>
+                                            <RowDefinition x:Name="OneNoteRecRow1" Height="0"/>
+                                            <RowDefinition x:Name="OneNoteRecRow2" Height="0"/>
+                                        </Grid.RowDefinitions>
 
                                         <!-- 좌측: STT 결과 -->
-                                        <Border Grid.Column="0" Padding="16"
+                                        <Border x:Name="OneNoteSTTPanel" Grid.Column="0" Padding="16"
                                                 BorderBrush="{DynamicResource ControlElevationBorderBrush}"
                                                 BorderThickness="0,0,1,0">
                                             <Grid>
@@ -6980,13 +6990,13 @@
                                             </Grid>
                                         </Border>
 
-                                        <!-- GridSplitter (Col1) -->
-                                        <GridSplitter Grid.Column="1" Width="4"
+                                        <!-- GridSplitter (Col1, STT↔대화네비 — 우측 도킹 모드 전용) -->
+                                        <GridSplitter x:Name="OneNoteRecSplitter1" Grid.Column="1" Width="4"
                                                       HorizontalAlignment="Stretch"
                                                       Background="Transparent" Cursor="SizeWE"/>
 
-                                        <!-- 중간: 주제어 네비게이션 패널 (Col2) -->
-                                        <Border Grid.Column="2" Padding="16"
+                                        <!-- 중간: 대화 네비게이션 패널 (Col2 — 우측 도킹 / Mode B에서 Row2 전폭으로 재배치) -->
+                                        <Border x:Name="OneNoteTopicNavPanel" Grid.Column="2" Padding="16"
                                                 BorderBrush="{DynamicResource ControlElevationBorderBrush}"
                                                 BorderThickness="0,0,1,0">
                                             <Grid>
@@ -7008,68 +7018,64 @@
                                                     <ToggleButton x:Name="OneNoteTopicNavOrientationToggle"
                                                                   Grid.Column="1"
                                                                   Padding="10,5"
-                                                                  ToolTip="가로/세로 방향 전환"
+                                                                  ToolTip="우측/하단 도킹 전환"
                                                                   Click="OneNoteTopicNavOrientationToggle_Click">
                                                         <ui:SymbolIcon Symbol="ArrowRotateClockwise24" FontSize="14"/>
                                                     </ToggleButton>
                                                 </Grid>
 
-                                                <!-- 대화 네비게이션 카드 목록 — 세로/가로 레이아웃 토글 (TopicNavOrientation 바인딩, L-389/L-424 준수) -->
+                                                <!-- 대화 네비게이션 카드 목록 (세로 모드 — 우측 도킹 전용)
+                                                     항목3-a: Column0 타임라인 시간눈금(Label) 복원, Line(눈금 선) 제거
+                                                     항목3-b: 가로 스크롤바 금지(상하만 허용)
+                                                     L-389/L-424 준수: Canvas는 절대좌표 눈금 전용(정적), ItemsPanel 동적변경 아님 -->
                                                 <Grid x:Name="TopicSegmentsContainer"
                                                       Grid.Row="1"
                                                       SizeChanged="TopicNavScrollViewer_SizeChanged">
+                                                    <Grid.ColumnDefinitions>
+                                                        <ColumnDefinition Width="52"/>
+                                                        <ColumnDefinition Width="*"/>
+                                                    </Grid.ColumnDefinitions>
 
-                                                    <!-- 세로 레이아웃 (기본, 시간 비례 높이, StackPanel Vertical + DisplayHeight) -->
-                                                    <ItemsControl x:Name="TopicSegmentsItemsControl"
-                                                                  Visibility="{Binding TopicNavOrientation, Converter={StaticResource StringEqualsToVisibilityConverter}, ConverterParameter=Vertical}"
-                                                                  ItemsSource="{Binding TopicSegments}">
+                                                    <!-- Column 0: 타임라인 시간눈금 (00:00부터 현재 진행시간까지) — 시간 텍스트만, 선(Line) 제거 -->
+                                                    <ItemsControl Grid.Column="0"
+                                                                  ItemsSource="{Binding TimelineTicks}">
                                                         <ItemsControl.ItemsPanel>
                                                             <ItemsPanelTemplate>
-                                                                <StackPanel Orientation="Vertical"/>
+                                                                <Canvas/>
                                                             </ItemsPanelTemplate>
                                                         </ItemsControl.ItemsPanel>
+                                                        <ItemsControl.ItemContainerStyle>
+                                                            <Style TargetType="ContentPresenter">
+                                                                <Setter Property="Canvas.Top" Value="{Binding TopPx}"/>
+                                                            </Style>
+                                                        </ItemsControl.ItemContainerStyle>
                                                         <ItemsControl.ItemTemplate>
                                                             <DataTemplate>
-                                                                <Border Height="{Binding DisplayHeight}"
-                                                                        Background="{Binding BackgroundColorHex, Converter={StaticResource HexToBrushConverter}}"
-                                                                        Padding="6,4" Margin="0,0,0,2" CornerRadius="4"
-                                                                        Cursor="Hand"
-                                                                        MouseLeftButtonDown="TopicSegment_Click">
-                                                                    <Border.ToolTip>
-                                                                        <ToolTip>
-                                                                            <TextBlock Text="{Binding ToolTipText}" TextWrapping="Wrap" MaxWidth="400"/>
-                                                                        </ToolTip>
-                                                                    </Border.ToolTip>
-                                                                    <StackPanel>
-                                                                        <!-- 주제어/핵심맥락 (5~20자) -->
-                                                                        <TextBlock Text="{Binding BodyDisplay}"
-                                                                                   FontSize="11" FontWeight="SemiBold"
-                                                                                   Foreground="{Binding BackgroundColorHex, Converter={StaticResource HexToReadableForegroundConverter}}"
-                                                                                   TextWrapping="NoWrap"
-                                                                                   TextTrimming="CharacterEllipsis"/>
-                                                                    </StackPanel>
-                                                                </Border>
+                                                                <TextBlock Text="{Binding Label}"
+                                                                           Foreground="{DynamicResource TextFillColorTertiaryBrush}"
+                                                                           FontSize="10" Width="48"
+                                                                           VerticalAlignment="Top"/>
                                                             </DataTemplate>
                                                         </ItemsControl.ItemTemplate>
                                                     </ItemsControl>
 
-                                                    <!-- 가로 레이아웃 (가로로 길게, StackPanel Horizontal + DisplayWidth, 가로 스크롤) -->
-                                                    <ScrollViewer x:Name="TopicSegmentsHorizontalScroll"
-                                                                  Visibility="{Binding TopicNavOrientation, Converter={StaticResource StringEqualsToVisibilityConverter}, ConverterParameter=Horizontal}"
-                                                                  HorizontalScrollBarVisibility="Auto"
-                                                                  VerticalScrollBarVisibility="Disabled">
-                                                        <ItemsControl x:Name="TopicSegmentsItemsControlHorizontal"
+                                                    <!-- Column 1: 대화 네비게이션 카드 목록 (시간 비례 높이, StackPanel Vertical + DisplayHeight)
+                                                         항목3-b: ScrollViewer로 감싸 좌우 스크롤 금지(상하만 허용) -->
+                                                    <ScrollViewer Grid.Column="1"
+                                                                  HorizontalScrollBarVisibility="Disabled"
+                                                                  VerticalScrollBarVisibility="Auto">
+                                                        <ItemsControl x:Name="TopicSegmentsItemsControl"
                                                                       ItemsSource="{Binding TopicSegments}">
                                                             <ItemsControl.ItemsPanel>
                                                                 <ItemsPanelTemplate>
-                                                                    <StackPanel Orientation="Horizontal"/>
+                                                                    <StackPanel Orientation="Vertical"/>
                                                                 </ItemsPanelTemplate>
                                                             </ItemsControl.ItemsPanel>
                                                             <ItemsControl.ItemTemplate>
                                                                 <DataTemplate>
-                                                                    <Border Width="{Binding DisplayWidth}"
+                                                                    <Border Height="{Binding DisplayHeight}"
                                                                             Background="{Binding BackgroundColorHex, Converter={StaticResource HexToBrushConverter}}"
-                                                                            Padding="6,4" Margin="0,0,2,0" CornerRadius="4"
+                                                                            Padding="6,4" Margin="0,0,0,2" CornerRadius="4"
                                                                             Cursor="Hand"
                                                                             MouseLeftButtonDown="TopicSegment_Click">
                                                                         <Border.ToolTip>
@@ -7077,12 +7083,12 @@
                                                                                 <TextBlock Text="{Binding ToolTipText}" TextWrapping="Wrap" MaxWidth="400"/>
                                                                             </ToolTip>
                                                                         </Border.ToolTip>
-                                                                        <StackPanel VerticalAlignment="Center">
+                                                                        <StackPanel>
                                                                             <!-- 주제어/핵심맥락 (5~20자) -->
                                                                             <TextBlock Text="{Binding BodyDisplay}"
                                                                                        FontSize="11" FontWeight="SemiBold"
                                                                                        Foreground="{Binding BackgroundColorHex, Converter={StaticResource HexToReadableForegroundConverter}}"
-                                                                                       TextWrapping="Wrap"
+                                                                                       TextWrapping="NoWrap"
                                                                                        TextTrimming="CharacterEllipsis"/>
                                                                         </StackPanel>
                                                                     </Border>
@@ -7094,13 +7100,19 @@
                                             </Grid>
                                         </Border>
 
-                                        <!-- GridSplitter (Col3) -->
-                                        <GridSplitter Grid.Column="3" Width="4"
+                                        <!-- GridSplitter (Col3, 대화네비↔요약 — 우측 도킹 모드 전용) -->
+                                        <GridSplitter x:Name="OneNoteRecSplitter3" Grid.Column="3" Width="4"
                                                       HorizontalAlignment="Stretch"
                                                       Background="Transparent" Cursor="SizeWE"/>
 
-                                        <!-- 우측: 녹음옵션(상단) + AI 요약(하단) (Col4) -->
-                                        <Grid Grid.Column="4">
+                                        <!-- 가로 GridSplitter (Row1, 상단 STT/요약 ↔ 하단 대화네비 — 하단 도킹 모드 전용, 기본 숨김) -->
+                                        <GridSplitter x:Name="OneNoteRecSplitterBottom" Grid.Row="1" Grid.Column="0" Grid.ColumnSpan="5"
+                                                      Height="4" Visibility="Collapsed"
+                                                      VerticalAlignment="Stretch" HorizontalAlignment="Stretch"
+                                                      Background="Transparent" Cursor="SizeNS"/>
+
+                                        <!-- 우측: 녹음옵션(상단) + AI 요약(하단) (Col4 — Mode B에서 Col2로 재배치) -->
+                                        <Grid x:Name="OneNoteSummaryPanel" Grid.Column="4">
 
                                             <!-- 우측: AI 요약 패널 -->
                                             <Border Padding="12,8">
