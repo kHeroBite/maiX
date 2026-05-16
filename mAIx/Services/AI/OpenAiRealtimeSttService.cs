@@ -80,6 +80,11 @@ public sealed class OpenAiRealtimeSttService : IOpenAiRealtimeSttService
     private DateTime? _sessionUpdatedAt = null;
     private bool _speechActivityDetected = false;
 
+    // 회귀 감지: committed 횟수 vs completed 횟수 추적 (N회 committed 후 completed 0건 시 WARN)
+    private int _committedCount = 0;
+    private int _completedCount = 0;
+    private const int CommittedWarnThreshold = 3;
+
     // PCM 24kHz mono 기준 bytes/sec
     private const int BytesPerSecond = 24000 * 2;
 
@@ -163,7 +168,7 @@ public sealed class OpenAiRealtimeSttService : IOpenAiRealtimeSttService
         var sttLang = string.IsNullOrWhiteSpace(_settings.OaiRecording.SttLanguage) ? "ko" : _settings.OaiRecording.SttLanguage;
         var sttPrompt = _settings.OaiRecording.SttPrompt ?? string.Empty;
         var transcriptionModel = string.IsNullOrWhiteSpace(_settings.OaiRecording.TranscriptionModel)
-            ? "gpt-realtime-whisper"
+            ? "gpt-4o-transcribe"
             : _settings.OaiRecording.TranscriptionModel;
 
         // GA shape: session.type="transcription" + audio.input.format/transcription/turn_detection nested
@@ -182,11 +187,14 @@ public sealed class OpenAiRealtimeSttService : IOpenAiRealtimeSttService
                         transcription = new
                         {
                             model = transcriptionModel,
-                            language = sttLang
+                            language = sttLang,
+                            prompt = sttPrompt
                         },
-                        turn_detection = _settings.OaiRecording.ServerVadEnabled
-                            ? (object)new { type = "server_vad", threshold = 0.5, prefix_padding_ms = 300, silence_duration_ms = 500 }
-                            : null
+                        turn_detection = (transcriptionModel != null && transcriptionModel.Contains("whisper"))
+                            ? null
+                            : (_settings.OaiRecording.ServerVadEnabled
+                                ? (object)new { type = "server_vad", threshold = 0.5, prefix_padding_ms = 300, silence_duration_ms = 500 }
+                                : null)
                     }
                 }
             }
@@ -248,7 +256,13 @@ public sealed class OpenAiRealtimeSttService : IOpenAiRealtimeSttService
             if (_ws.State == WebSocketState.Open)
             {
                 // GA transcription 모드: response 자동 생성 — response.create 불필요 (제거됨)
-                await SendJsonAsync(new { type = "input_audio_buffer.commit" }).ConfigureAwait(false);
+                // server_vad 활성 시 OpenAI 자동 commit 수행 — 수동 commit은 더블 commit 유발 가능 (커뮤니티 권고)
+                var isWhisper = (_settings.OaiRecording.TranscriptionModel ?? string.Empty).Contains("whisper");
+                var useServerVad = _settings.OaiRecording.ServerVadEnabled && !isWhisper;
+                if (!useServerVad)
+                {
+                    await SendJsonAsync(new { type = "input_audio_buffer.commit" }).ConfigureAwait(false);
+                }
 
                 // Close handshake
                 await _ws.CloseAsync(WebSocketCloseStatus.NormalClosure, "stop", CancellationToken.None).ConfigureAwait(false);
@@ -397,6 +411,12 @@ public sealed class OpenAiRealtimeSttService : IOpenAiRealtimeSttService
                 _lastSpeechStoppedMs = endMs;
                 _silenceStartedAt = DateTime.Now;
                 _log.Info($"[OpenAi-Realtime] speech_stopped — audio_end_ms={endMs}");
+                // server_vad 자동 commit 발생 시점 추적 (committed 카운터 증가)
+                _committedCount++;
+                if (_committedCount >= CommittedWarnThreshold && _completedCount == 0)
+                {
+                    _log.Warn($"[RealtimeSTT] transcript 미수신 — committed {_committedCount}회 후 .completed 0건. transcription.prompt/모델권한/include 확인 필요");
+                }
             }
             else if (type == "conversation.item.input_audio_transcription.delta")
             {
@@ -447,6 +467,7 @@ public sealed class OpenAiRealtimeSttService : IOpenAiRealtimeSttService
                         // 이유: Updated 핸들러는 LiveSTTSegments UI만 갱신하므로 텍스트 통계 누락 방지
                         TranscriptSegmentReceived?.Invoke(ts, text);
                         _deltaBuffers.TryRemove(itemId, out _);
+                        _completedCount++;
                         _log.Info($"[OpenAi-Realtime] transcription.completed — text={text.Substring(0, Math.Min(50, text.Length))}");
 
                         // 옵션: GPT-4o-mini로 오타 후처리 (EnableTypoFix=true 시) — fire-and-forget
@@ -483,7 +504,7 @@ public sealed class OpenAiRealtimeSttService : IOpenAiRealtimeSttService
                 _ = Task.Delay(TimeSpan.FromSeconds(15)).ContinueWith(_ =>
                 {
                     if (!_speechActivityDetected && _sessionUpdatedAt == capturedAt)
-                        _log.Warn("[RealtimeSTT] 스트리밍 미활성 의심 — session.updated 후 15초간 speech 이벤트 0건. transcriptionModel 확인 필요 (gpt-realtime-whisper 권장)");
+                        _log.Warn("[RealtimeSTT] 스트리밍 미활성 의심 — session.updated 후 15초간 speech 이벤트 0건. transcriptionModel 확인 필요 (gpt-4o-transcribe + server_vad 권장 조합)");
                 }, TaskScheduler.Default);
             }
             else if (type == "error")
