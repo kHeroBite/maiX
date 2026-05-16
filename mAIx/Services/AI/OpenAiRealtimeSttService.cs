@@ -174,7 +174,7 @@ public sealed class OpenAiRealtimeSttService : IOpenAiRealtimeSttService
                 {
                     input = new
                     {
-                        format = new { type = "pcm16", rate = 24000 },
+                        format = new { type = "audio/pcm", rate = 24000 },
                         transcription = new
                         {
                             model = transcriptionModel,
