@@ -8471,6 +8471,7 @@
                                                                               SelectedValue="{Binding TranscriptionModel, Mode=TwoWay}"
                                                                               SelectedValuePath="Tag"
                                                                               FontSize="12" Width="220">
+                                                                        <ComboBoxItem Content="gpt-realtime-whisper (실시간 전용)" Tag="gpt-realtime-whisper"/>
                                                                         <ComboBoxItem Content="gpt-4o-mini-transcribe (권장)" Tag="gpt-4o-mini-transcribe"/>
                                                                         <ComboBoxItem Content="gpt-4o-transcribe (고품질)" Tag="gpt-4o-transcribe"/>
                                                                         <ComboBoxItem Content="whisper-1 (구형, 일괄)" Tag="whisper-1"/>
