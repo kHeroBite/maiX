@@ -13,10 +13,10 @@ public class OpenAiRecordingSettings
 {
     /// <summary>
     /// 실시간 STT 모델 (WebSocket 기반) — GA transcription 모드 호환 모델.
-    /// 사용 가능: "gpt-realtime", "gpt-4o-transcribe" (2026-05 GA 기준)
+    /// 사용 가능: "gpt-realtime-whisper" (GA 스트리밍 전용), "gpt-4o-transcribe" (오프라인 파일 전용)
     /// </summary>
     [XmlElement("RealtimeSttModel")]
-    public string RealtimeSttModel { get; set; } = "gpt-4o-transcribe";
+    public string RealtimeSttModel { get; set; } = "gpt-realtime-whisper";
 
     /// <summary>
     /// 화자분리 STT 모델 (청크 기반)
@@ -112,9 +112,9 @@ public class OpenAiRecordingSettings
     [XmlElement("TypoFixModel")]
     public string TypoFixModel { get; set; } = "gpt-4o-mini";
 
-    /// <summary>STT input_audio_transcription 모델. 검증 결과 gpt-realtime-whisper는 conversation API에서 transcript 미발송 → 기본 gpt-4o-mini-transcribe 회귀.</summary>
+    /// <summary>STT input_audio_transcription 모델. GA 스트리밍 transcription 전용 — gpt-realtime-whisper 필수 (gpt-4o-transcribe는 오프라인 파일 전용으로 스트리밍 파이프라인 미활성화).</summary>
     [XmlElement("TranscriptionModel")]
-    public string TranscriptionModel { get; set; } = "gpt-4o-mini-transcribe";
+    public string TranscriptionModel { get; set; } = "gpt-realtime-whisper";
 
     /// <summary>OpenAI server_vad 사용 여부 (true: 자동 발화 감지, false: 수동 종료 시 일괄 전사). 기본 true.</summary>
     [XmlElement("ServerVadEnabled")]

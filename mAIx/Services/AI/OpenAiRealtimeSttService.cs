@@ -76,6 +76,10 @@ public sealed class OpenAiRealtimeSttService : IOpenAiRealtimeSttService
     private DateTime _lastDeltaAt = DateTime.MinValue;
     private const double SilenceCardThresholdSec = 2.0; // 2초 침묵 시 새 카드
 
+    // 스트리밍 미활성 조기 감지 — session.updated 수신 시각 기록
+    private DateTime? _sessionUpdatedAt = null;
+    private bool _speechActivityDetected = false;
+
     // PCM 24kHz mono 기준 bytes/sec
     private const int BytesPerSecond = 24000 * 2;
 
@@ -159,7 +163,7 @@ public sealed class OpenAiRealtimeSttService : IOpenAiRealtimeSttService
         var sttLang = string.IsNullOrWhiteSpace(_settings.OaiRecording.SttLanguage) ? "ko" : _settings.OaiRecording.SttLanguage;
         var sttPrompt = _settings.OaiRecording.SttPrompt ?? string.Empty;
         var transcriptionModel = string.IsNullOrWhiteSpace(_settings.OaiRecording.TranscriptionModel)
-            ? "gpt-4o-transcribe"
+            ? "gpt-realtime-whisper"
             : _settings.OaiRecording.TranscriptionModel;
 
         // GA shape: session.type="transcription" + audio.input.format/transcription/turn_detection nested
@@ -224,6 +228,7 @@ public sealed class OpenAiRealtimeSttService : IOpenAiRealtimeSttService
             });
             var bytes = Encoding.UTF8.GetBytes(message);
             await _ws.SendAsync(new ArraySegment<byte>(bytes), WebSocketMessageType.Text, true, _cts?.Token ?? CancellationToken.None).ConfigureAwait(false);
+            _log.Info("[OpenAi-Realtime] SendAudioChunkAsync 송신 완료 — bytes={Bytes}", pcmData.Length);
         }
         catch (Exception ex)
         {
@@ -371,6 +376,7 @@ public sealed class OpenAiRealtimeSttService : IOpenAiRealtimeSttService
                 _lastSpeechStartedMs = startMs;
                 _silenceStartedAt = null;
                 _lastSilenceMarkerSec = 0;
+                _speechActivityDetected = true;
                 // 옵션 C: itemId는 delta 도착 시 N초 침묵 기반으로 결정 (speech_started에서 변경 안 함)
                 _log.Info($"[OpenAi-Realtime] speech_started — audio_start_ms={startMs}");
 
@@ -466,6 +472,19 @@ public sealed class OpenAiRealtimeSttService : IOpenAiRealtimeSttService
             else if (type == "conversation.item.input_audio_transcription.failed")
             {
                 _log.Warn($"[OpenAi-Realtime] transcription.failed — json={json.Substring(0, Math.Min(200, json.Length))}");
+            }
+            else if (type == "session.updated")
+            {
+                _sessionUpdatedAt = DateTime.Now;
+                _speechActivityDetected = false;
+                _log.Info("[OpenAi-Realtime] session.updated 수신 — 스트리밍 미활성 감지 타이머 시작 (15초 내 speech 이벤트 미수신 시 WARN)");
+                // 15초 후 speech 이벤트 미발생이면 모델 설정 오류 가능성 경고
+                var capturedAt = _sessionUpdatedAt.Value;
+                _ = Task.Delay(TimeSpan.FromSeconds(15)).ContinueWith(_ =>
+                {
+                    if (!_speechActivityDetected && _sessionUpdatedAt == capturedAt)
+                        _log.Warn("[RealtimeSTT] 스트리밍 미활성 의심 — session.updated 후 15초간 speech 이벤트 0건. transcriptionModel 확인 필요 (gpt-realtime-whisper 권장)");
+                }, TaskScheduler.Default);
             }
             else if (type == "error")
             {
