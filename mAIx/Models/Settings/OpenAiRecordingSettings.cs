@@ -70,7 +70,7 @@ public class OpenAiRecordingSettings
     /// 주제어 네비게이션 패널 방향 (Horizontal/Vertical)
     /// </summary>
     [XmlElement("TopicNavOrientation")]
-    public string TopicNavOrientation { get; set; } = "Horizontal";
+    public string TopicNavOrientation { get; set; } = "Vertical";
 
     /// <summary>
     /// TTS 모델 (tts-1, tts-1-hd)

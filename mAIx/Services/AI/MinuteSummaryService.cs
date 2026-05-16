@@ -227,7 +227,8 @@ public sealed class MinuteSummaryService : IMinuteSummaryService
                 반드시 다음 JSON 형식으로만 응답하라. 다른 설명/마크다운 금지.
                 {
                   "summary": "30~150자 요약 텍스트",
-                  "topic": "5~20자 주제어 또는 주제맥락 (예: '하네스엔지니어링 설명', '바이브코딩의 미래에 대한 분석')"
+                  "topic": "5~20자 주제어 또는 주제맥락 (예: '하네스엔지니어링 설명', '바이브코딩의 미래에 대한 분석')",
+                  "keywords": ["전사 텍스트에 실제로 등장한 핵심 단어/용어 3~8개 (전사 원문 표기 그대로, 1~10자, 중복 없이)"]
                 }
                 """;
 
@@ -246,7 +247,7 @@ public sealed class MinuteSummaryService : IMinuteSummaryService
                     new { role = "system", content = systemPrompt },
                     new { role = "user", content = userPrompt }
                 },
-                max_completion_tokens = 256,
+                max_completion_tokens = 320,
                 response_format = new { type = "json_object" }
             };
 
@@ -262,7 +263,7 @@ public sealed class MinuteSummaryService : IMinuteSummaryService
 
             var respJson = await response.Content.ReadAsStringAsync(ct).ConfigureAwait(false);
             var llmContent = ExtractSummaryText(respJson);
-            var (summaryText, topic) = ExtractSummaryAndTopic(llmContent);
+            var (summaryText, topic, keywords) = ExtractSummaryAndTopic(llmContent);
 
             if (string.IsNullOrWhiteSpace(summaryText)) return;
 
@@ -273,6 +274,7 @@ public sealed class MinuteSummaryService : IMinuteSummaryService
                 EndTime = endTime,
                 SummaryText = summaryText,
                 Topic = topic,
+                Keywords = keywords,
                 CreatedAt = DateTime.Now
             };
 
@@ -323,13 +325,14 @@ public sealed class MinuteSummaryService : IMinuteSummaryService
     }
 
     /// <summary>
-    /// LLM 응답 content 문자열에서 summary와 topic을 추출한다.
-    /// JSON 파싱 실패 시 summary=원문(150자), topic=summary앞20자 fallback.
+    /// LLM 응답 content 문자열에서 summary, topic, keywords를 추출한다.
+    /// JSON 파싱 실패 시 summary=원문(150자), topic=summary앞20자, keywords=빈목록 fallback.
+    /// keywords 필드가 없거나 배열이 아니면 빈 목록 (기존 {summary, topic} 응답 호환).
     /// </summary>
-    private static (string summary, string topic) ExtractSummaryAndTopic(string llmContent)
+    private static (string summary, string topic, List<string> keywords) ExtractSummaryAndTopic(string llmContent)
     {
         if (string.IsNullOrWhiteSpace(llmContent))
-            return (string.Empty, string.Empty);
+            return (string.Empty, string.Empty, new List<string>());
 
         try
         {
@@ -342,6 +345,20 @@ public sealed class MinuteSummaryService : IMinuteSummaryService
                 ? (topicProp.GetString() ?? string.Empty)
                 : string.Empty;
 
+            // keywords 추출 (배열 아니면 빈 목록 — 기존 응답 호환 graceful)
+            var keywords = new List<string>();
+            if (root.TryGetProperty("keywords", out var kwProp) &&
+                kwProp.ValueKind == JsonValueKind.Array)
+            {
+                foreach (var kw in kwProp.EnumerateArray())
+                {
+                    if (kw.ValueKind != JsonValueKind.String) continue;
+                    var s = kw.GetString()?.Trim();
+                    if (!string.IsNullOrWhiteSpace(s) && s.Length <= 30 && !keywords.Contains(s))
+                        keywords.Add(s);
+                }
+            }
+
             // topic 길이 보정: 5자 미만이면 summary 앞 20자, 20자 초과면 앞 20자 truncate
             topic = topic.Trim();
             if (topic.Length < 5)
@@ -349,15 +366,15 @@ public sealed class MinuteSummaryService : IMinuteSummaryService
             else if (topic.Length > 20)
                 topic = topic[..20];
 
-            return (summary, topic);
+            return (summary, topic, keywords);
         }
         catch
         {
-            // JSON 파싱 실패 — 원문 그대로 fallback
+            // JSON 파싱 실패 — 원문 그대로 fallback (keywords 없음)
             var fallbackSummary = llmContent.Length > 150 ? llmContent[..150] : llmContent;
             var fallbackTopic = fallbackSummary.Trim();
             fallbackTopic = fallbackTopic.Length > 20 ? fallbackTopic[..20] : fallbackTopic;
-            return (fallbackSummary, fallbackTopic);
+            return (fallbackSummary, fallbackTopic, new List<string>());
         }
     }
 

@@ -6889,18 +6889,6 @@
                                                         <Ellipse x:Name="OneNoteSTTLiveIndicator" Width="8" Height="8" Fill="#10B981" Margin="8,0,4,0" VerticalAlignment="Center" Visibility="Collapsed"/>
                                                         <TextBlock x:Name="OneNoteSTTLiveText" Text="실시간" FontSize="11" Foreground="#10B981" VerticalAlignment="Center" Visibility="Collapsed"/>
                                                     </StackPanel>
-                                                    <!-- 버튼 그룹 (STT 분석) -->
-                                                    <StackPanel Grid.Column="1" Orientation="Horizontal">
-                                                        <!-- STT 분석 버튼 (녹음탭의 모델 설정 사용) -->
-                                                        <ui:Button x:Name="OneNoteTabRunSTTButton"
-                                                                   Content="STT 분석"
-                                                                   Icon="{ui:SymbolIcon Mic24}"
-                                                                   Appearance="Secondary"
-                                                                   FontSize="11"
-                                                                   Padding="10,5"
-                                                                   Click="OneNoteTabRunSTT_Click"/>
-                                                    </StackPanel>
-
                                                     <!-- STT 진행률 표시 -->
                                                     <Border x:Name="OneNoteSTTProgressPanel" Grid.Row="1" Grid.ColumnSpan="2"
                                                             Visibility="Collapsed" Margin="0,8,0,0"
@@ -6933,13 +6921,9 @@
                                                     </Border>
                                                 </Grid>
 
-                                                <!-- STT 세그먼트 목록 (좌측 ScrollViewer + 우측 VS 미니맵) -->
+                                                <!-- STT 세그먼트 목록 -->
                                                 <Grid Grid.Row="1">
-                                                    <Grid.ColumnDefinitions>
-                                                        <ColumnDefinition Width="*"/>
-                                                        <ColumnDefinition Width="Auto"/>
-                                                    </Grid.ColumnDefinitions>
-                                                    <ScrollViewer x:Name="OneNoteSTTScrollViewer" Grid.Column="0" VerticalScrollBarVisibility="Auto">
+                                                    <ScrollViewer x:Name="OneNoteSTTScrollViewer" VerticalScrollBarVisibility="Auto">
                                                     <Grid>
                                                         <!-- 빈 상태 -->
                                                         <TextBlock x:Name="OneNoteSTTEmptyText" Text="STT 분석 결과가 없습니다."
@@ -6992,8 +6976,6 @@
                                                         </ItemsControl>
                                                     </Grid>
                                                 </ScrollViewer>
-                                                    <!-- VS2022 스타일 미니맵 — STT 컨텐츠 축소 미리보기 + Y 좌표 양방향 스크롤 -->
-                                                    <controls:MinimapScrollPanel x:Name="OneNoteSTTMinimap" Grid.Column="1" Width="80"/>
                                                 </Grid>
                                             </Grid>
                                         </Border>
@@ -7021,7 +7003,7 @@
                                                     </Grid.ColumnDefinitions>
                                                     <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
                                                         <ui:SymbolIcon Symbol="TextBulletListLtr24" FontSize="18" Margin="0,0,8,0" VerticalAlignment="Center"/>
-                                                        <TextBlock Text="핵심요약 네비게이션" FontSize="15" FontWeight="SemiBold" VerticalAlignment="Center"/>
+                                                        <TextBlock Text="대화 네비게이션" FontSize="15" FontWeight="SemiBold" VerticalAlignment="Center"/>
                                                     </StackPanel>
                                                     <ToggleButton x:Name="OneNoteTopicNavOrientationToggle"
                                                                   Grid.Column="1"
@@ -7032,58 +7014,62 @@
                                                     </ToggleButton>
                                                 </Grid>
 
-                                                <!-- 대화 네비게이션 카드 목록 — StackPanel + DisplayHeight 바인딩 -->
-                                                <!-- ScrollViewer 제거 — 스크롤 금지 + 전체높이 맞춤 -->
-                                                <Grid x:Name="TopicNavContainer"
+                                                <!-- 대화 네비게이션 카드 목록 — 세로/가로 레이아웃 토글 (TopicNavOrientation 바인딩, L-389/L-424 준수) -->
+                                                <Grid x:Name="TopicSegmentsContainer"
                                                       Grid.Row="1"
                                                       SizeChanged="TopicNavScrollViewer_SizeChanged">
-                                                        <Grid.ColumnDefinitions>
-                                                            <ColumnDefinition Width="52"/>
-                                                            <ColumnDefinition Width="*"/>
-                                                        </Grid.ColumnDefinitions>
 
-                                                        <!-- Column 0: 타임라인 눈금 (00:00부터 현재 진행시간까지) -->
-                                                        <ItemsControl Grid.Column="0"
-                                                                      ItemsSource="{Binding TimelineTicks}">
-                                                            <ItemsControl.ItemsPanel>
-                                                                <ItemsPanelTemplate>
-                                                                    <Canvas/>
-                                                                </ItemsPanelTemplate>
-                                                            </ItemsControl.ItemsPanel>
-                                                            <ItemsControl.ItemContainerStyle>
-                                                                <Style TargetType="ContentPresenter">
-                                                                    <Setter Property="Canvas.Top" Value="{Binding TopPx}"/>
-                                                                </Style>
-                                                            </ItemsControl.ItemContainerStyle>
-                                                            <ItemsControl.ItemTemplate>
-                                                                <DataTemplate>
-                                                                    <StackPanel Orientation="Horizontal" Width="52">
-                                                                        <TextBlock Text="{Binding Label}"
-                                                                                   Foreground="{DynamicResource TextFillColorTertiaryBrush}"
-                                                                                   FontSize="10" Width="32"
-                                                                                   VerticalAlignment="Top"/>
-                                                                        <Line X1="0" Y1="6" X2="20" Y2="6"
-                                                                              Stroke="{DynamicResource TextFillColorTertiaryBrush}"
-                                                                              StrokeThickness="1"/>
+                                                    <!-- 세로 레이아웃 (기본, 시간 비례 높이, StackPanel Vertical + DisplayHeight) -->
+                                                    <ItemsControl x:Name="TopicSegmentsItemsControl"
+                                                                  Visibility="{Binding TopicNavOrientation, Converter={StaticResource StringEqualsToVisibilityConverter}, ConverterParameter=Vertical}"
+                                                                  ItemsSource="{Binding TopicSegments}">
+                                                        <ItemsControl.ItemsPanel>
+                                                            <ItemsPanelTemplate>
+                                                                <StackPanel Orientation="Vertical"/>
+                                                            </ItemsPanelTemplate>
+                                                        </ItemsControl.ItemsPanel>
+                                                        <ItemsControl.ItemTemplate>
+                                                            <DataTemplate>
+                                                                <Border Height="{Binding DisplayHeight}"
+                                                                        Background="{Binding BackgroundColorHex, Converter={StaticResource HexToBrushConverter}}"
+                                                                        Padding="6,4" Margin="0,0,0,2" CornerRadius="4"
+                                                                        Cursor="Hand"
+                                                                        MouseLeftButtonDown="TopicSegment_Click">
+                                                                    <Border.ToolTip>
+                                                                        <ToolTip>
+                                                                            <TextBlock Text="{Binding ToolTipText}" TextWrapping="Wrap" MaxWidth="400"/>
+                                                                        </ToolTip>
+                                                                    </Border.ToolTip>
+                                                                    <StackPanel>
+                                                                        <!-- 주제어/핵심맥락 (5~20자) -->
+                                                                        <TextBlock Text="{Binding BodyDisplay}"
+                                                                                   FontSize="11" FontWeight="SemiBold"
+                                                                                   Foreground="{Binding BackgroundColorHex, Converter={StaticResource HexToReadableForegroundConverter}}"
+                                                                                   TextWrapping="NoWrap"
+                                                                                   TextTrimming="CharacterEllipsis"/>
                                                                     </StackPanel>
-                                                                </DataTemplate>
-                                                            </ItemsControl.ItemTemplate>
-                                                        </ItemsControl>
+                                                                </Border>
+                                                            </DataTemplate>
+                                                        </ItemsControl.ItemTemplate>
+                                                    </ItemsControl>
 
-                                                        <!-- Column 1: 핵심요약 카드 목록 (시간 비례 높이) -->
-                                                        <ItemsControl Grid.Column="1"
-                                                                      x:Name="TopicSegmentsItemsControl"
+                                                    <!-- 가로 레이아웃 (가로로 길게, StackPanel Horizontal + DisplayWidth, 가로 스크롤) -->
+                                                    <ScrollViewer x:Name="TopicSegmentsHorizontalScroll"
+                                                                  Visibility="{Binding TopicNavOrientation, Converter={StaticResource StringEqualsToVisibilityConverter}, ConverterParameter=Horizontal}"
+                                                                  HorizontalScrollBarVisibility="Auto"
+                                                                  VerticalScrollBarVisibility="Disabled">
+                                                        <ItemsControl x:Name="TopicSegmentsItemsControlHorizontal"
                                                                       ItemsSource="{Binding TopicSegments}">
                                                             <ItemsControl.ItemsPanel>
                                                                 <ItemsPanelTemplate>
-                                                                    <StackPanel Orientation="Vertical"/>
+                                                                    <StackPanel Orientation="Horizontal"/>
                                                                 </ItemsPanelTemplate>
                                                             </ItemsControl.ItemsPanel>
                                                             <ItemsControl.ItemTemplate>
                                                                 <DataTemplate>
-                                                                    <Border Height="{Binding DisplayHeight}"
+                                                                    <Border Width="{Binding DisplayWidth}"
                                                                             Background="{Binding BackgroundColorHex, Converter={StaticResource HexToBrushConverter}}"
-                                                                            Padding="6,4" Margin="0,0,0,2" CornerRadius="4"
+                                                                            Padding="6,4" Margin="0,0,2,0" CornerRadius="4"
                                                                             Cursor="Hand"
                                                                             MouseLeftButtonDown="TopicSegment_Click">
                                                                         <Border.ToolTip>
@@ -7091,23 +7077,19 @@
                                                                                 <TextBlock Text="{Binding ToolTipText}" TextWrapping="Wrap" MaxWidth="400"/>
                                                                             </ToolTip>
                                                                         </Border.ToolTip>
-                                                                        <StackPanel>
-                                                                            <!-- 시간 범위 -->
-                                                                            <TextBlock Text="{Binding TimeRangeDisplay}"
-                                                                                       FontSize="9"
-                                                                                       Foreground="{Binding BackgroundColorHex, Converter={StaticResource HexToReadableForegroundConverter}, ConverterParameter=Tertiary}"
-                                                                                       Margin="0,0,0,2"/>
+                                                                        <StackPanel VerticalAlignment="Center">
                                                                             <!-- 주제어/핵심맥락 (5~20자) -->
                                                                             <TextBlock Text="{Binding BodyDisplay}"
                                                                                        FontSize="11" FontWeight="SemiBold"
                                                                                        Foreground="{Binding BackgroundColorHex, Converter={StaticResource HexToReadableForegroundConverter}}"
-                                                                                       TextWrapping="NoWrap"
+                                                                                       TextWrapping="Wrap"
                                                                                        TextTrimming="CharacterEllipsis"/>
                                                                         </StackPanel>
                                                                     </Border>
                                                                 </DataTemplate>
                                                             </ItemsControl.ItemTemplate>
                                                         </ItemsControl>
+                                                    </ScrollViewer>
                                                 </Grid>
                                             </Grid>
                                         </Border>
@@ -7142,15 +7124,6 @@
                                                             <TextBlock x:Name="OneNoteSummaryProgressText" Text="" FontSize="12" Margin="6,0,0,0"
                                                                        Foreground="{DynamicResource TextFillColorSecondaryBrush}" VerticalAlignment="Center"/>
                                                         </StackPanel>
-                                                        <!-- 요약 버튼 -->
-                                                        <ui:Button x:Name="OneNoteTabRunSummaryButton"
-                                                                   Grid.Column="1"
-                                                                   Content="요약"
-                                                                   Icon="{ui:SymbolIcon Sparkle24}"
-                                                                   Appearance="Secondary"
-                                                                   FontSize="11"
-                                                                   Padding="8,4"
-                                                                   Click="OneNoteTabRunSummary_Click"/>
                                                     </Grid>
 
                                                     <!-- 요약 콘텐츠 -->

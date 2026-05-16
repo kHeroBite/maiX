@@ -193,10 +193,16 @@ namespace mAIx.Views
                 if (_oneNoteViewModel == null) return;
                 // ScrollViewer 제거 후 FrameworkElement(Grid) 기반으로 변경
                 var height = e.NewSize.Height;
-                if (height <= 0 && sender is FrameworkElement fe)
-                    height = fe.ActualHeight;
+                var width = e.NewSize.Width;
+                if (sender is FrameworkElement fe)
+                {
+                    if (height <= 0) height = fe.ActualHeight;
+                    if (width <= 0) width = fe.ActualWidth;
+                }
                 if (height > 0)
                     _oneNoteViewModel.SetPanelHeight(height);
+                if (width > 0)
+                    _oneNoteViewModel.SetPanelWidth(width);
             }
             catch (Exception ex)
             {

@@ -1686,6 +1686,63 @@ L-424(WPF ItemsControl 가변높이 안티패턴 기각)가 직전 작업 완료
 - **재발방지**: WebSocket 이벤트 핸들러 작성 시 error 타입 분기 유무를 코드 리뷰 체크리스트에 포함
 - **Level**: 2 (WebSocket 클라이언트 표준 패턴)
 
+## L-446: 외부 API 디버깅 장기전 — 단발 추측 수정은 매몰비용, nlog 직접 확인이 정답 (2026-05-17)
+
+- **문제**: OpenAI Realtime GA STT 복구를 단발 추측 수정 6커밋(3ebf7939~9258e4f3)으로 반복 → 누적 후에야 사용자 "잘된다"
+- **근본 교훈**: 외부 API Beta→GA 등 폐기/변경 디버깅에서 추측 수정 2회+ 실패 = 매몰비용 신호. 매번 nlog 직접 확인이 정답이었음
+- **로그 이중 채널 (강력 재확인 — L-406/L-408)**: STT 출력은 NLog `nlog-*.log` 전용. Log4 `mAIx-*.log` 아님. 채널 혼동 시 "동작 안 함"으로 오판
+- **재발방지**: 외부 API 디버깅 2회+ 단발 추측 실패 시 즉시 nlog 직접 확인 모드 전환 (odev/SKILL.md 미반영 — docs Level 2)
+- **Level**: 2
+
+## L-447: 화자분리 STT response_format 모델별 분기 — gpt-4o-transcribe=json, whisper-1만 verbose_json (2026-05-17)
+
+- **문제**: 화자분리 ON 별도 서비스(OpenAiTranscribeSttService)가 `/v1/audio/transcriptions`에 `verbose_json` 고정 → gpt-4o-transcribe 계열 전 청크 BadRequest → transcript 0건
+- **해결**: `model.Contains("whisper")` 분기. whisper-1 → verbose_json + timestamp_granularities[] 유지. gpt-4o-transcribe → json (timestamp 미반환 → ProcessTranscriptionResponse text 분기가 chunkStartTime 폴백)
+- **재발방지**: OpenAI transcription API 통합 시 response_format은 모델 capability별 분기 필수. 모델 추가 시 capability 확인
+- **Level**: 2
+
+## L-448: VAD OFF(turn_detection=null) → 서버 commit 미발생 → 주기적 수동 commit 필수 (2026-05-17)
+
+- **문제**: ServerVadEnabled=false 또는 whisper 계열 시 turn_detection=null → OpenAI 서버 자동 commit 없음 → 스트리밍 commit 0건 → 실시간 전사 0건
+- **해결**: PeriodicTimer(3s) 수동 `input_audio_buffer.commit` 루프. `_audioAppendedSinceCommit`(volatile) 추적으로 빈버퍼 commit_empty 회피. L-443 `_sendLock` 동시 적용. L-380 외부 try-catch
+- **재발방지**: turn_detection=null 분기 존재 시 수동 commit 루프 동반 필수 (odev/SKILL.md 반영 — L-448 섹션)
+- **Level**: 2
+
+## L-449: 하이라이트 무동작 = 데이터 소스 부재(통지 누락 아님) — LLM keywords는 프롬프트 스키마 확장이 정식 경로 (2026-05-17)
+
+- **문제**: TopicSegment.Keywords 미할당 시 HighlightTextBehavior 영구 무동작. 통지 경로 의심으로 시간 소모
+- **근본 원인**: 통지 누락이 아닌 **데이터 소스 부재**. MinuteSummaryService systemPrompt JSON에 keywords 배열 요청(전사 원문 표기 명시) + entry/navSegment 매핑이 정식 경로(B안)
+- **부가**: 구버전 .realtime.json 역직렬화 시 keywords 누락 → 빈목록 graceful. CollectionChanged 단일구독으로 통지누락 근본해결
+- **재발방지**: 하이라이트/표시 무동작 시 통지보다 데이터 소스(원천 할당) 부재 먼저 의심. LLM 파생 데이터는 프롬프트 스키마 확장이 정식 경로
+- **Level**: 1
+
+## L-450: 토글 무반응 = 반응할 레이아웃 미구현(토글은 정상) — 2모드는 Option B (2026-05-17)
+
+- **문제**: 가로/세로 토글 무반응. 토글 바인딩은 정상이나 단일 ItemsControl만 존재 → 반응할 가로 레이아웃 자체가 없음
+- **해결 (Option B)**: 세로 ItemsControl(기존 byte-identical 보존) + 가로 ScrollViewer+ItemsControl(Border Width=DisplayWidth) 2개를 StringEqualsToVisibilityConverter로 모드 토글. L-389(LoadContent 미사용)/L-424(ItemsPanel=StackPanel+Orientation) 절대 준수
+- **재발방지**: 토글 무반응 신고 시 바인딩보다 "반응할 레이아웃 존재 여부" 먼저 확인. 2모드는 Option B 기본 채택 (oplan_normal/SKILL.md 반영 — L-450 섹션)
+- **Level**: 2
+
+## L-451: WebSocket 종료 await 경로의 send는 취소 가능해야 함 (codex 적대리뷰) (2026-05-17)
+
+- **지적 (codex 외부 AI 적대리뷰)**: SendJsonAsync가 `_sendLock.WaitAsync`(취소 불가) + `_ws.SendAsync(CancellationToken.None)`. 소켓 stall 시 StopAsync finally의 `await _manualCommitTask`가 같은 경로에 막혀 무한 hang 가능
+- **현황**: 본 작업은 기존 SendJsonAsync 패턴 답습(신규 결함 아님). 일관성상 현 사이클 미수정, 향후 강화 대상
+- **재발방지**: StopAsync/Dispose에서 await되는 send 경로는 `_sendLock.WaitAsync(ct)` + `SendAsync(ct)` 또는 타임아웃 필수. CancellationToken.None send를 종료 await 경로에 두지 말 것 (odev/SKILL.md 반영 — L-451 섹션)
+- **Level**: 2
+
+## L-452: model.Contains() capability 추론은 alias/deployment명에 취약 (codex 적대리뷰) (2026-05-17)
+
+- **지적 (codex)**: `model.Contains("whisper")`는 capability를 명명규칙으로 추론. 모델 alias(예: stt-prod → whisper-1)면 오분류로 잘못된 response_format + VAD 동작 변경
+- **현황**: 본 작업은 기존 session.update turn_detection 분기와 동일 로직 답습(일관성 우선). 현 사이클 미수정
+- **재발방지**: 외부 API capability를 모델명 substring으로 추론 시 alias/deployment 취약성 인지. 향후 명시 capability 매핑 테이블 또는 설정값 도입 검토
+- **Level**: 1
+
+## L-453: 사용자 결정 SendMessage idle 중 미수신 가능 — 결정 메시지는 수신 확인/재전송 필요 (2026-05-17)
+
+- **문제 (프로세스)**: 사용자 결정 메시지가 idle 상태 중 발송되어 메인 미수신 3회 실측
+- **재발방지**: 사용자 결정 대기 중 메시지 미수신 가능성 인지. 결정 메시지는 수신 확인 또는 명확한 재전송 패턴 적용
+- **Level**: 1
+
 ## 반영 추적 테이블
 
 | 교훈 ID | 교훈 요약 | 반영 대상 | 반영 위치 | 반영일 | 검증 |
@@ -1776,3 +1833,11 @@ L-424(WPF ItemsControl 가변높이 안티패턴 기각)가 직전 작업 완료
 | L-443 | PeriodicTimer + WebSocket 결합 시 _sendLock SemaphoreSlim(1,1) 필수 (L-376 IDisposable 패턴 준수) | docs+skill | LESSONS.md + MEMORY.md + odev/SKILL.md | 2026-05-15 | ✅ |
 | L-444 | 외부 API Beta→GA 마이그레이션 4축 — Beta 헤더 제거 + URL endpoint 변경 + 페이로드 nested 재구조 + 이벤트명 매핑 동시 적용 | docs | LESSONS.md + HISTORY.md | 2026-05-15 | ✅ |
 | L-445 | WebSocket 외부 에러 silent close 방지 — type=="error" 분기 추가 + NLog Error + 사용자 가시 알림 발행 (fail-fast 패턴) | docs+code | LESSONS.md + OpenAiRealtimeSttService.cs | 2026-05-15 | ✅ |
+| L-446 | 외부 API 디버깅 장기전 — 단발 추측 수정 2회+ 실패 = 매몰비용. nlog 직접 확인이 정답. 로그 이중채널(STT=NLog nlog-*.log) (L-406/L-408 재확인) | docs | LESSONS.md + HISTORY.md + MEMORY.md | 2026-05-17 | ✅ |
+| L-447 | 화자분리 STT response_format 모델별 분기 — gpt-4o-transcribe=json, whisper-1만 verbose_json. 전 청크 BadRequest → 0건 증상 | docs | LESSONS.md + MEMORY.md | 2026-05-17 | ✅ |
+| L-448 | VAD OFF turn_detection=null → 서버 commit 미발생 → PeriodicTimer 수동 commit + _audioAppendedSinceCommit + _sendLock 필수 (L-443 연관) | docs+skill | LESSONS.md + MEMORY.md + odev/SKILL.md | 2026-05-17 | ✅ |
+| L-449 | 하이라이트 무동작 = 데이터 소스 부재(통지 누락 아님). LLM keywords는 프롬프트 JSON 스키마 확장이 정식 경로(B안) | docs | LESSONS.md | 2026-05-17 | ✅ |
+| L-450 | 토글 무반응 = 반응할 레이아웃 미구현(토글은 정상). 2모드는 Option B(2 ItemsControl Visibility 토글, L-389/L-424 준수) | docs+skill | LESSONS.md + oplan_normal/SKILL.md | 2026-05-17 | ✅ |
+| L-451 | WebSocket 종료 await 경로의 send는 취소 가능해야 함 — _sendLock.WaitAsync(ct)+SendAsync(ct) 또는 타임아웃 (codex 적대리뷰) | docs+skill | LESSONS.md + odev/SKILL.md | 2026-05-17 | ✅ |
+| L-452 | model.Contains() capability 추론은 alias/deployment명에 취약 — 향후 명시 capability 매핑 검토 (codex 적대리뷰) | docs | LESSONS.md | 2026-05-17 | ✅ |
+| L-453 | 사용자 결정 SendMessage idle 중 미수신 가능 — 결정 메시지는 수신 확인/재전송 필요 (프로세스 교훈, 3회 실측) | docs | LESSONS.md | 2026-05-17 | ✅ |

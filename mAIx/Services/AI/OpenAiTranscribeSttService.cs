@@ -126,12 +126,26 @@ public sealed class OpenAiTranscribeSttService : IOpenAiTranscribeSttService
             audioContent.Headers.ContentType = new MediaTypeHeaderValue("audio/wav");
             content.Add(audioContent, "file", "audio.wav");
             content.Add(new StringContent(model), "model");
-            content.Add(new StringContent("verbose_json"), "response_format");
-            content.Add(new StringContent("segment"), "timestamp_granularities[]");
+
+            // 항목8 수정: response_format 모델별 분기.
+            // verbose_json + timestamp_granularities[]는 whisper-1만 지원.
+            // gpt-4o-transcribe 계열은 json/text만 허용 (verbose_json 사용 시 BadRequest).
+            // gpt-4o-transcribe 계열은 segment timestamp 미반환 → ProcessTranscriptionResponse의
+            // text 분기에서 chunkStartTime을 폴백 타임스탬프로 사용.
+            var isWhisper = model.Contains("whisper", StringComparison.OrdinalIgnoreCase);
+            if (isWhisper)
+            {
+                content.Add(new StringContent("verbose_json"), "response_format");
+                content.Add(new StringContent("segment"), "timestamp_granularities[]");
+            }
+            else
+            {
+                content.Add(new StringContent("json"), "response_format");
+            }
             content.Add(new StringContent("ko"), "language");
 
             _log.Debug("[TranscribeSTT] API 요청: {Url}, chunk={Bytes}B", url, pcmData.Length);
-            _log.Info($"[OpenAi-Transcribe] POST /v1/audio/transcriptions — model={model}, contentLength={wavStream.Length}");
+            _log.Info($"[OpenAi-Transcribe] POST /v1/audio/transcriptions — model={model}, response_format={(isWhisper ? "verbose_json" : "json")}, contentLength={wavStream.Length}");
 
             var response = await _httpClient.PostAsync(url, content, _cts.Token).ConfigureAwait(false);
 

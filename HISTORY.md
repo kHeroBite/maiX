@@ -2,6 +2,46 @@
 
 > PROJECT.md 작업 이력 테이블의 상세 보완본
 
+## [2026-05-17] OneNote UI 정리 5건 + STT 버그 3건 (9개 작업, O4 Full Path — 단일사이클)
+
+**분류**: O4 Full Path (Wave 기반 spawn — Wave1 타입/인터페이스 → Wave2 구현 병렬 → Wave3 통합)
+**otest 결과**: 9개 작업 정적/빌드/규칙 PASS. 7/8/9 런타임은 사용자 녹음 검증 (PASS-with-user-validation)
+**범위**: 수정 10파일 (~9개 작업 단위)
+**파이프라인 이력**: 단일 사이클 (역라우팅 0회)
+**대화ID**: conv_177893864234
+
+### 변경 내용
+
+**UI 정리 (5건)**:
+- 미니맵 제거 / "대화 네비게이션" 라벨 / 타임라인 눈금·TimeRange 제거 / 본문 STT·AI요약 버튼 제거
+- 가로/세로 토글 레이아웃 신규 (Option B — 세로 ItemsControl byte-identical 보존 + 가로 ScrollViewer+ItemsControl, StringEqualsToVisibilityConverter 토글, L-389/L-424 준수)
+- TopicSegment.DisplayWidth 미러 프로퍼티 + RecalculateTopicSegmentHeights 가로 폭 시간비례 계산
+- TopicNavOrientation 기본값 Horizontal → Vertical
+- "실시간 요약 중..." 텍스트
+
+**STT 버그 (3건)**:
+- 키워드 하이라이트 B안: MinuteSummaryService systemPrompt JSON에 keywords 배열 요청 + MinuteSummaryEntry.Keywords + navSegment.Keywords 매핑 (정식 LLM 경로, 구버전 역직렬화 graceful 빈목록)
+- 화자분리 STT(항목8): OpenAiTranscribeSttService response_format 모델별 분기 (whisper-1=verbose_json, gpt-4o-transcribe=json) — 전 청크 BadRequest → 0건 해결
+- VAD OFF STT(항목9): OpenAiRealtimeSttService 주기적 수동 commit 루프(PeriodicTimer 3s) + _audioAppendedSinceCommit + _sendLock(L-443) + L-380 외부 try-catch
+
+**변경 파일 (10개)**: MinuteSummaryEntry.cs, OpenAiRecordingSettings.cs, TopicSegment.cs, MinuteSummaryService.cs, OpenAiRealtimeSttService.cs, OpenAiTranscribeSttService.cs, OneNoteViewModel.cs, MainWindow.OneNote.cs, MainWindow.xaml, MainWindow.xaml.cs
+
+### 교훈 (L-446 ~ L-453)
+
+- L-446 외부 API 디버깅 장기전 — 단발 추측 수정 2회+ 실패 = 매몰비용. nlog 직접 확인이 정답. 로그 이중채널(STT=NLog nlog-*.log) L-406/L-408 재확인
+- L-447 화자분리 STT response_format 모델별 분기
+- L-448 VAD OFF turn_detection=null → 주기적 수동 commit 필수 (L-443 연관)
+- L-449 하이라이트 무동작 = 데이터 소스 부재(통지 누락 아님)
+- L-450 토글 무반응 = 반응할 레이아웃 미구현. 2모드 Option B
+- L-451 WebSocket 종료 await 경로의 send는 취소 가능해야 함 (codex 적대리뷰)
+- L-452 model.Contains() capability 추론은 alias/deployment명에 취약 (codex 적대리뷰)
+- L-453 사용자 결정 SendMessage idle 중 미수신 가능 (프로세스 교훈)
+
+### 외부 AI 이중 리뷰 (O4 Full Path)
+
+- code-review: 로컬 diff 검토 — STT 변경 well-engineered(_sendLock 직렬화, graceful 분기) 차단 이슈 0건
+- codex 적대리뷰: 3건 지적 (StopAsync hang HIGH, Dispose race MEDIUM, model.Contains MEDIUM) → L-451/L-452 교훈화 (기존 패턴 답습, 일관성상 현 사이클 미수정 — 향후 강화)
+
 ## [2026-05-15] 음성 파이프라인 2모드 시스템 — Legacy/Unified + 감성 분석 + 자동 폴백 + 비용 표시 (O4 Full Path — 단일사이클 PASS) [REVERTED: 런타임 실패로 9defe030 revert]
 
 **분류**: O4 Full Path (Wave 기반 spawn 6 에이전트)

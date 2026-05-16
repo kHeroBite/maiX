@@ -498,6 +498,12 @@ public partial class OneNoteViewModel : ViewModelBase
     private double _panelHeight;
 
     /// <summary>
+    /// 대화 네비게이션 가로 모드용 뷰포트 폭 — SetPanelWidth로 갱신
+    /// </summary>
+    [ObservableProperty]
+    private double _panelWidth;
+
+    /// <summary>
     /// STT 화면 키워드 하이라이트용 — 모든 주제 세그먼트의 키워드 평탄화 합산
     /// </summary>
     public System.Collections.Generic.IEnumerable<string> AllTopicKeywords =>
@@ -598,7 +604,22 @@ public partial class OneNoteViewModel : ViewModelBase
     /// 주제어 네비게이션 패널 방향 (Horizontal / Vertical)
     /// </summary>
     [ObservableProperty]
-    private string _topicNavOrientation = "Horizontal";
+    [NotifyPropertyChangedFor(nameof(IsTopicNavHorizontal))]
+    private string _topicNavOrientation = "Vertical";
+
+    /// <summary>
+    /// 주제어 네비게이션 방향이 가로(Horizontal)인지 여부 — XAML 레이아웃 토글 바인딩용
+    /// </summary>
+    public bool IsTopicNavHorizontal =>
+        string.Equals(TopicNavOrientation, "Horizontal", StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// 방향 전환 시 로그 — AC-005 런타임 발화 검증용
+    /// </summary>
+    partial void OnTopicNavOrientationChanged(string value)
+    {
+        Log4.Info($"[OneNote] 대화 네비게이션 방향 변경: {value} (IsHorizontal={IsTopicNavHorizontal})");
+    }
 
     /// <summary>
     /// 1분 요약 생성 횟수
@@ -634,7 +655,7 @@ public partial class OneNoteViewModel : ViewModelBase
             _chunkSeconds = oaiSettings.ChunkSeconds;
             _cumulativeIntervalMinutes = oaiSettings.CumulativeSummaryIntervalMinutes;
             _processingIntervalSeconds = oaiSettings.ProcessingIntervalSeconds;
-            _topicNavOrientation = oaiSettings.TopicNavOrientation ?? "Horizontal";
+            _topicNavOrientation = oaiSettings.TopicNavOrientation ?? "Vertical";
             _isAutoFinalSummary = oaiSettings.AutoFinalSummary;
             _isEnableTypoFix = oaiSettings.EnableTypoFix;
             _transcriptionModel = string.IsNullOrWhiteSpace(oaiSettings.TranscriptionModel) ? "gpt-4o-mini-transcribe" : oaiSettings.TranscriptionModel;
@@ -644,6 +665,17 @@ public partial class OneNoteViewModel : ViewModelBase
 
         // 녹음 목록에 새 파일 추가 시 자동 선택
         _currentPageRecordings.CollectionChanged += OnCurrentPageRecordingsChanged;
+
+        // TopicSegments 변경 시 키워드 하이라이트용 AllTopicKeywords 재통지 (Add/Clear/Reset 전 경로 일괄 보장 — AC-007)
+        _topicSegments.CollectionChanged += OnTopicSegmentsCollectionChanged;
+    }
+
+    /// <summary>
+    /// TopicSegments 컬렉션 변경 시 AllTopicKeywords 재평가 통지 — 키워드 하이라이트 갱신
+    /// </summary>
+    private void OnTopicSegmentsCollectionChanged(object? sender, System.Collections.Specialized.NotifyCollectionChangedEventArgs e)
+    {
+        OnPropertyChanged(nameof(AllTopicKeywords));
     }
 
     // 녹음 완료 직후 플래그 (자동 선택용)
@@ -3106,6 +3138,7 @@ public partial class OneNoteViewModel : ViewModelBase
                         EndTime = entry.EndTime,
                         DisplayTitle = entry.TimeRangeDisplay,
                         SummaryPreview = entry.Topic,
+                        Keywords = entry.Keywords ?? new System.Collections.Generic.List<string>(),
                         BackgroundColorHex = palette[(MinuteSummaryCount - 1) % palette.Length],
                     };
                     TopicSegments.Add(navSegment);
@@ -3135,6 +3168,7 @@ public partial class OneNoteViewModel : ViewModelBase
         if (totalDuration <= 0) return;
 
         double accumulated = 0;
+        double accumulatedW = 0;
         for (int i = 0; i < TopicSegments.Count; i++)
         {
             var seg = TopicSegments[i];
@@ -3151,7 +3185,33 @@ public partial class OneNoteViewModel : ViewModelBase
                 accumulated += height;
             }
             seg.DisplayHeight = Math.Max(0.0, height);  // Min 40px 가드 제거
+
+            // 가로 모드 카드 폭 — 시간 비례 (PanelWidth 미측정 시 기본값 유지)
+            if (PanelWidth > 0)
+            {
+                double width;
+                if (i == TopicSegments.Count - 1)
+                {
+                    width = PanelWidth - accumulatedW;
+                }
+                else
+                {
+                    width = (duration / totalDuration) * PanelWidth;
+                    accumulatedW += width;
+                }
+                seg.DisplayWidth = Math.Max(40.0, width);  // 가로 카드 최소 가독 폭
+            }
         }
+    }
+
+    /// <summary>
+    /// 가로 모드 뷰포트 폭 갱신 — 카드 폭 비례 재계산
+    /// </summary>
+    public void SetPanelWidth(double width)
+    {
+        if (Math.Abs(PanelWidth - width) < 1.0) return;
+        PanelWidth = width;
+        RecalculateTopicSegmentHeights();
     }
 
     private const int MAX_TOPIC_SEGMENTS = 20;

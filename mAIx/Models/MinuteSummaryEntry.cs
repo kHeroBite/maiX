@@ -1,5 +1,6 @@
 // 1분 요약 엔트리 (내부 압축용 — 누적요약 입력 자료)
 using System;
+using System.Collections.Generic;
 
 namespace mAIx.Models;
 
@@ -32,6 +33,12 @@ public class MinuteSummaryEntry
     /// 핵심요약 네비게이션 표시용 주제어 (5~20자, LLM JSON 응답에서 추출)
     /// </summary>
     public string Topic { get; set; } = string.Empty;
+
+    /// <summary>
+    /// STT 화면 하이라이트용 핵심 키워드 목록 (LLM JSON 응답 keywords 배열에서 추출).
+    /// 구버전 .realtime.json 역직렬화 시 누락되면 빈 목록 (graceful).
+    /// </summary>
+    public List<string> Keywords { get; set; } = new();
 
     /// <summary>
     /// 엔트리 생성 일시

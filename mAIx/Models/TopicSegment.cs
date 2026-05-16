@@ -53,6 +53,7 @@ public class TopicSegment : INotifyPropertyChanged
     private string _summaryPreview = string.Empty;
     private string _backgroundColorHex = "#E3F2FD";
     private double _displayHeight = 60;
+    private double _displayWidth = 120;
 
     /// <summary>
     /// 세그먼트 고유 ID (0부터 시작)
@@ -129,6 +130,22 @@ public class TopicSegment : INotifyPropertyChanged
             {
                 _displayHeight = value;
                 RaisePropertyChanged(nameof(DisplayHeight));
+            }
+        }
+    }
+
+    /// <summary>
+    /// 가로 모드 StackPanel 레이아웃에서 카드 픽셀 폭 (시간 비례 계산값)
+    /// </summary>
+    public double DisplayWidth
+    {
+        get => _displayWidth;
+        set
+        {
+            if (Math.Abs(_displayWidth - value) > 0.5)
+            {
+                _displayWidth = value;
+                RaisePropertyChanged(nameof(DisplayWidth));
             }
         }
     }

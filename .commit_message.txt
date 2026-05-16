@@ -1,23 +1,13 @@
-🔀 refactor: 핵심요약 네비게이션 재설계 — TopicExtractorService 제거 + MinuteSummary 콜백 변환 by claude-opus-4-7
+🎨 OneNote UI 정리 5건 + STT 버그 3건 (9개 작업) by claude-opus-4-7
 
-## 변경 내용
+- 미니맵 제거 / "대화 네비게이션" 라벨 / 타임라인 눈금 제거 / 본문 버튼 제거
+- 가로/세로 토글 레이아웃 신규 (Option B + TopicSegment.DisplayWidth)
+- "실시간 요약 중..." 텍스트
+- 키워드 하이라이트 B안 (LLM keywords 정식 경로 — MinuteSummaryEntry.Keywords)
+- 화자분리 STT: OpenAiTranscribeSttService response_format 모델별 분기
+- VAD off STT: 주기적 수동 commit + _sendLock (L-443)
 
-### 삭제 (2개 파일)
-- `mAIx/Services/AI/TopicExtractorService.cs`: PeriodicTimer 기반 주제어 추출 서비스 전체 삭제
-- `mAIx/Converters/TopicSegmentProportionalHeightConverter.cs`: 비례높이 컨버터 삭제 (미추적 파일)
-
-### 수정 (6개 파일)
-- `mAIx/App.xaml`: TopicSegmentProportionalHeightConverter 리소스 등록 제거
-- `mAIx/App.xaml.cs`: ITopicExtractorService DI 등록 제거
-- `mAIx/ViewModels/OneNoteViewModel.cs`: TopicExtractor 구독/해제/메서드 제거 + OnMinuteSummaryCreated에서 MinuteSummaryEntry → TopicSegment 직접 변환 삽입
-- `mAIx/Views/MainWindow.xaml`: 핵심요약 네비게이션 영역 재작성 (비례높이 → ScrollViewer+StackPanel 고정 카드 구조)
-- `mAIx/Services/AI/MinuteSummaryService.cs`: PeriodicTimer 로그 강화 + _running 완화 + ToString verbatim 수정 (직전 conv 미커밋 보존)
-- `mAIx/Services/AI/OpenAiRealtimeSttService.cs`: endTime 시그니처 추가 (직전 conv 미커밋 보존)
-
-## 설계 변경
-- 이전: TopicExtractorService가 독립 PeriodicTimer로 실행 → 핵심주제 추출
-- 이후: MinuteSummaryCreated 콜백에서 MinuteSummaryEntry → TopicSegment 직접 변환
-- 효과: 서비스 1개 제거, DI 단순화, 이벤트 경로 단축, 구조 명확화
+대화ID: conv_177893864234
 
 🤖 Generated with [Claude Code](https://claude.com/claude-code) (claude-opus-4-7)
 

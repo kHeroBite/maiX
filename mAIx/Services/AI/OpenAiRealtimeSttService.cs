@@ -71,6 +71,17 @@ public sealed class OpenAiRealtimeSttService : IOpenAiRealtimeSttService
     private double _lastSilenceMarkerSec = 0;
     private Task? _silenceMonitorTask = null;
 
+    // 항목9: VAD OFF(turn_detection=null) 시 OpenAI 서버가 자동 commit 하지 않으므로
+    // 주기적 수동 input_audio_buffer.commit을 송신하여 녹음 중 실시간 전사를 유도.
+    private Task? _manualCommitTask = null;
+    // PeriodicTimer commit과 SendAudioChunkAsync append가 동시에 _ws.SendAsync를 호출하므로
+    // ClientWebSocket InvalidOperationException 방지를 위해 송신 직렬화 (L-443).
+    private readonly SemaphoreSlim _sendLock = new(1, 1);
+    // 빈 버퍼 commit 시 OpenAI input_audio_buffer_commit_empty 에러 → append 이후에만 commit.
+    private volatile bool _audioAppendedSinceCommit = false;
+    // VAD OFF 수동 commit 주기 (초). 짧으면 부분 전사 빈번, 길면 지연 → 3초 절충.
+    private const double ManualCommitIntervalSec = 3.0;
+
     // 옵션 C: N초 침묵 기반 카드 분할 — delta 도착 사이 간격이 N초 이상이면 새 itemId 생성
     private string? _currentSpeechItemId = null;
     private DateTime _lastDeltaAt = DateTime.MinValue;
@@ -205,6 +216,17 @@ public sealed class OpenAiRealtimeSttService : IOpenAiRealtimeSttService
         _lastSilenceMarkerSec = 0;
         _silenceMonitorTask = SilenceMonitorLoopAsync(_cts.Token);
         _receiveTask = ReceiveLoopAsync(_cts.Token);
+
+        // 항목9: turn_detection==null(서버 VAD 비활성) 시 OpenAI 자동 commit 없음 → 주기적 수동 commit 필요.
+        // 조건은 session.update의 turn_detection 분기와 동일: whisper 계열 또는 ServerVadEnabled=false.
+        var isWhisperModel = transcriptionModel.Contains("whisper", StringComparison.OrdinalIgnoreCase);
+        var serverVadActive = _settings.OaiRecording.ServerVadEnabled && !isWhisperModel;
+        if (!serverVadActive)
+        {
+            _audioAppendedSinceCommit = false;
+            _manualCommitTask = ManualCommitLoopAsync(_cts.Token);
+            _log.Info($"[OpenAi-Realtime] VAD OFF 감지 — 주기적 수동 commit 루프 시작 (간격 {ManualCommitIntervalSec:F0}s)");
+        }
     }
 
     /// <summary>
@@ -235,7 +257,16 @@ public sealed class OpenAiRealtimeSttService : IOpenAiRealtimeSttService
                 audio = base64Audio
             });
             var bytes = Encoding.UTF8.GetBytes(message);
-            await _ws.SendAsync(new ArraySegment<byte>(bytes), WebSocketMessageType.Text, true, _cts?.Token ?? CancellationToken.None).ConfigureAwait(false);
+            await _sendLock.WaitAsync(_cts?.Token ?? CancellationToken.None).ConfigureAwait(false);
+            try
+            {
+                await _ws.SendAsync(new ArraySegment<byte>(bytes), WebSocketMessageType.Text, true, _cts?.Token ?? CancellationToken.None).ConfigureAwait(false);
+            }
+            finally
+            {
+                _sendLock.Release();
+            }
+            _audioAppendedSinceCommit = true;
             _log.Info("[OpenAi-Realtime] SendAudioChunkAsync 송신 완료 — bytes={Bytes}", pcmData.Length);
         }
         catch (Exception ex)
@@ -284,6 +315,10 @@ public sealed class OpenAiRealtimeSttService : IOpenAiRealtimeSttService
             {
                 try { await _silenceMonitorTask.ConfigureAwait(false); } catch { /* 취소 예외 무시 */ }
             }
+            if (_manualCommitTask != null)
+            {
+                try { await _manualCommitTask.ConfigureAwait(false); } catch { /* 취소 예외 무시 */ }
+            }
             Cleanup();
         }
     }
@@ -310,6 +345,40 @@ public sealed class OpenAiRealtimeSttService : IOpenAiRealtimeSttService
         }
         catch (OperationCanceledException) { /* 정상 종료 */ }
         catch (Exception ex) { _log.Error(ex, "[OpenAi-Realtime] 묵음 모니터 루프 오류"); }
+    }
+
+    /// <summary>
+    /// 항목9: VAD OFF(turn_detection=null) 시 OpenAI 서버가 자동 commit을 수행하지 않으므로
+    /// 주기적으로 input_audio_buffer.commit을 송신하여 녹음 중 실시간 전사를 유도.
+    /// append가 한 번도 없었으면 빈 버퍼 commit(commit_empty 에러) 회피를 위해 스킵.
+    /// L-380: PeriodicTimer 콜백 전체를 외부 try-catch로 래핑.
+    /// </summary>
+    private async Task ManualCommitLoopAsync(CancellationToken ct)
+    {
+        try
+        {
+            using var timer = new PeriodicTimer(TimeSpan.FromSeconds(ManualCommitIntervalSec));
+            while (await timer.WaitForNextTickAsync(ct).ConfigureAwait(false))
+            {
+                if (_ws == null || _ws.State != WebSocketState.Open) continue;
+                // 빈 버퍼 commit 스킵 — 직전 commit 이후 append가 있었을 때만 commit.
+                if (!_audioAppendedSinceCommit) continue;
+
+                _audioAppendedSinceCommit = false;
+                try
+                {
+                    await SendJsonAsync(new { type = "input_audio_buffer.commit" }).ConfigureAwait(false);
+                    _committedCount++;
+                    _log.Info($"[OpenAi-Realtime] VAD OFF 수동 commit 송신 (주기 {ManualCommitIntervalSec:F0}s) — committedCount={_committedCount}");
+                }
+                catch (Exception ex)
+                {
+                    _log.Warn(ex, "[OpenAi-Realtime] VAD OFF 수동 commit 송신 실패");
+                }
+            }
+        }
+        catch (OperationCanceledException) { /* 정상 종료 */ }
+        catch (Exception ex) { _log.Error(ex, "[OpenAi-Realtime] 수동 commit 루프 오류"); }
     }
 
     private async Task ReceiveLoopAsync(CancellationToken ct)
@@ -528,7 +597,16 @@ public sealed class OpenAiRealtimeSttService : IOpenAiRealtimeSttService
         if (_ws == null || _ws.State != WebSocketState.Open) return;
         var json = JsonSerializer.Serialize(payload);
         var bytes = Encoding.UTF8.GetBytes(json);
-        await _ws.SendAsync(new ArraySegment<byte>(bytes), WebSocketMessageType.Text, true, CancellationToken.None).ConfigureAwait(false);
+        // L-443: PeriodicTimer 수동 commit과 audio append가 동시에 _ws.SendAsync 호출 가능 → 직렬화.
+        await _sendLock.WaitAsync().ConfigureAwait(false);
+        try
+        {
+            await _ws.SendAsync(new ArraySegment<byte>(bytes), WebSocketMessageType.Text, true, CancellationToken.None).ConfigureAwait(false);
+        }
+        finally
+        {
+            _sendLock.Release();
+        }
     }
 
     /// <summary>
@@ -585,6 +663,7 @@ public sealed class OpenAiRealtimeSttService : IOpenAiRealtimeSttService
         _cts = null;
         _receiveTask = null;
         _silenceMonitorTask = null;
+        _manualCommitTask = null;
     }
 
     public void Dispose()
@@ -593,5 +672,7 @@ public sealed class OpenAiRealtimeSttService : IOpenAiRealtimeSttService
         _disposed = true;
         _cts?.Cancel();
         Cleanup();
+        // L-376: SemaphoreSlim은 IDisposable — 필드 보유 시 Dispose에서 해제.
+        _sendLock.Dispose();
     }
 }
