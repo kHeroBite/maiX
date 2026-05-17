@@ -1803,6 +1803,15 @@ L-424(WPF ItemsControl 가변높이 안티패턴 기각)가 직전 작업 완료
 - **교훈**: 회귀 수정에서 정적 PASS는 필요조건이지 충분조건이 아님. 반드시 nlog 런타임 재현으로 "실제 파괴 시점"을 확인한 후 수정해야 함. 단발 추측 수정 2회+ 실패는 매몰비용 — L-446/L-420 강력 재확인
 - **Level**: 3 (프로세스 교훈)
 
+
+## L-466: LoadXxxResultAsync 진입 즉시 Clear → 비동기 저장 race로 데이터 소실 (2026-05-17)
+
+- **문제**: 녹음 중지 직후 STT만 사라지는 현상 회귀 3연속 (cb4ae007·3cd74ec2 실효 없음). 원인: LoadSTTResultAsync 진입 즉시 STTSegments.Clear() 실행 → 새 녹음 .stt.json이 비동기 Task.Run 저장 중이라 아직 파일 없음 → early return → STT 0건
+- **근본원인**: cb4ae007(SelectionChanged guardScope) · 3cd74ec2(이중 Stop 가드)는 각각 "다른 경로"를 보호했지만 LoadSTTResultAsync 내부 Clear 타이밍은 건드리지 않음. 추측 수정 2회 모두 진짜 경로를 빗나감
+- **해결 (설계A)**: Clear 위치를 "파일 존재 확인 통과 후"로 이동. early return 2경로(recording_/sttPath 미존재)는 Clear 없이 반환 → 메모리 STT 보존
+- **교훈1**: LoadXxxResultAsync에서 Clear는 새 데이터 확보(파일 존재 확인) 후에만 실행 (L-385/L-386 "캡처→Clear+Add" 패턴 보강)
+- **교훈2**: 회귀 N연속 시 "증상 단서(STT만 사라짐=STT전용함수)"로 진짜 경로 좁히기가 추측 수정보다 우선 (L-465/L-446/L-420 연관)
+- **Level**: 2 (설계 패턴 교훈)
 ## 반영 추적 테이블
 
 | 교훈 ID | 교훈 요약 | 반영 대상 | 반영 위치 | 반영일 | 검증 |
@@ -1913,3 +1922,4 @@ L-424(WPF ItemsControl 가변높이 안티패턴 기각)가 직전 작업 완료
 | L-463 | 추상 UI "너비/높이 1/4"와 실제 도킹 가변축 기하 반전 — 세로 모드 대화네비는 Row(높이)가 축소 대상, 가로 모드는 패널 자체가 아닌 픽셀 Row 높이. oplan에서 "A 의미입니까 B 의미입니까?" 형식 L-455 추가 명시 필요 | docs | LESSONS.md | 2026-05-17 | ✅ |
 | L-464 | 이중 Stop 경로(동기 StopRecording + 비동기 OnRecordingCompleted) 컬렉션 복사-Clear race — bool 플래그(_sttCopiedByStopRecording)로 먼저 실행된 경로가 가드 설정, 나중 경로는 skip. StartRecordingAsync에서 false 리셋 필수 | docs+code | LESSONS.md + OneNoteViewModel.cs | 2026-05-17 | ✅ |
 | L-465 | 회귀 수정은 추정 원인만 보호하면 실효 없음 — 진짜 파괴 경로는 nlog 런타임 재현으로 "실제 파괴 시점" 측정 후 수정 필수. 정적 PASS만으로 통과 금지 (L-446/L-420 재확인) | docs | LESSONS.md | 2026-05-17 | ✅ |
+| L-466 | LoadXxxResultAsync 진입 즉시 Clear \xe2\x86\x92 비동기 저장 race로 빈 파일 로드 시 데이터 소실 \xe2\x80\x94 Clear는 파일 존재 확인 통과 후에만 실행(설계A). early return 경로는 Clear 없이 반환하여 메모리 데이터 보존 필수. 회귀 N연속 시 증상 단서(STT만 사라짐=STT전용함수)로 호출 경로 좁히기가 추측 수정보다 우선 (L-385/L-386 보강, L-465 연관) | docs+code | LESSONS.md + HISTORY.md + OneNoteViewModel.cs | 2026-05-17 | \xe2\x9c\x85 |

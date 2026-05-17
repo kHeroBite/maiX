@@ -1942,7 +1942,7 @@ public partial class OneNoteViewModel : ViewModelBase
     {
         if (value != null)
         {
-            Utils.Log4.Info($"[OneNote] OnSelectedRecordingChanged 호출됨: {value.FileName}, SkipLoad 카운터: {_skipLoadSTTOnSelectionChange}");
+            Utils.Log4.Info($"[STT진단] OnSelectedRecordingChanged: file={value.FileName}, 카운터={_skipLoadSTTOnSelectionChange}, STTSegments={STTSegments.Count}");
 
             // 녹음 완료 직후에는 이미 메모리에 STT 결과가 있으므로 파일에서 로드하지 않음
             // guardScope 패턴(L-386): 카운터 > 0이면 한 회 소비 후 건너뜀
@@ -1956,7 +1956,7 @@ public partial class OneNoteViewModel : ViewModelBase
             else
             {
                 _skipLoadSTTOnSelectionChange--; // 카운터 1 소비
-                Utils.Log4.Info($"[OneNote] 녹음 완료 직후 - 파일 로드 건너뜀, 메모리 STT 결과 유지: {STTSegments.Count}개 (잔여 카운터: {_skipLoadSTTOnSelectionChange})");
+                Utils.Log4.Info($"[STT진단] 녹음 완료 직후 skip — STTSegments 유지={STTSegments.Count}개, 잔여 카운터={_skipLoadSTTOnSelectionChange}: {value.FileName}");
             }
         }
         else
@@ -2190,12 +2190,12 @@ public partial class OneNoteViewModel : ViewModelBase
             // 녹음 완료 직후에는 메모리 결과 유지 (카운터 > 0 이면 소비 후 건너뜀)
             if (_skipLoadSTTOnSelectionChange > 0)
             {
-                _logger.Information("[OneNote] LoadSelectedRecordingResults 건너뜀 (녹음 완료 직후): {FileName}", SelectedRecording.FileName);
                 _skipLoadSTTOnSelectionChange--;
+                Utils.Log4.Info($"[STT진단] LoadSelectedRecordingResults skip — 카운터 소비 후 잔여={_skipLoadSTTOnSelectionChange}, STTSegments={STTSegments.Count}: {SelectedRecording.FileName}");
                 return;
             }
 
-            _logger.Information("[OneNote] LoadSelectedRecordingResults 호출: {FileName}", SelectedRecording.FileName);
+            Utils.Log4.Info($"[STT진단] LoadSelectedRecordingResults 호출 — STTSegments(호출전)={STTSegments.Count}: {SelectedRecording.FileName}");
             _ = LoadSTTResultAsync(SelectedRecording);
             _ = LoadSummaryResultAsync(SelectedRecording);
             _ = LoadRealtimeResultAsync(SelectedRecording);
@@ -2207,8 +2207,8 @@ public partial class OneNoteViewModel : ViewModelBase
     /// </summary>
     public async Task LoadSTTResultAsync(Models.RecordingInfo recording)
     {
-        STTSegments.Clear();
-        Utils.Log4.Info($"[OneNote] LoadSTTResultAsync 시작: {recording.FileName}, FilePath: {recording.FilePath}");
+        var sttCountBefore = STTSegments.Count;
+        Utils.Log4.Info($"[STT진단] LoadSTTResultAsync 진입: file={recording.FileName}, STTSegments(진입시)={sttCountBefore}");
 
         // STT 결과 파일 경로 (녹음 파일과 같은 위치에 .stt.json)
         var sttPath = recording.STTResultPath;
@@ -2225,9 +2225,10 @@ public partial class OneNoteViewModel : ViewModelBase
             var fileName = Path.GetFileNameWithoutExtension(recording.FileName);
 
             // mAIx 자체 녹음 파일인 경우 기본명 검색 건너뜀 (정확한 매칭만 사용)
+            // [설계A] recording_ early return 시 Clear 없이 반환 → 메모리 STT 보존 (race 차단)
             if (fileName.StartsWith("recording_"))
             {
-                Utils.Log4.Info($"[OneNote] mAIx 녹음 파일 - STT 파일 없음: {recording.FileName}");
+                Utils.Log4.Info($"[STT진단] recording_ early return — sttPath 미존재, STTSegments 보존({sttCountBefore}개, Clear 없음): {recording.FileName}");
                 return;
             }
 
@@ -2265,9 +2266,15 @@ public partial class OneNoteViewModel : ViewModelBase
 
         if (string.IsNullOrEmpty(sttPath) || !File.Exists(sttPath))
         {
+            // [설계A] sttPath 없음 early return — Clear 없이 반환하여 메모리 STT 보존
+            Utils.Log4.Info($"[STT진단] sttPath 없음 early return — STTSegments 보존({sttCountBefore}개, Clear 없음): {recording.FileName}");
             _logger.Debug("[OneNote] STT 결과 없음: {FileName}", recording.FileName);
             return;
         }
+
+        // [설계A] 파일 존재 확인 후 Clear — early return 경로는 Clear 없이 반환됨
+        Utils.Log4.Info($"[STT진단] sttPath 확인됨, STTSegments.Clear 실행(Clear전={sttCountBefore}개): {sttPath}");
+        STTSegments.Clear();
 
         try
         {

@@ -7018,7 +7018,7 @@
                                                     </Grid.ColumnDefinitions>
                                                     <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
                                                         <ui:SymbolIcon Symbol="TextBulletListLtr24" FontSize="18" Margin="0,0,8,0" VerticalAlignment="Center"/>
-                                                        <TextBlock Text="대화 네비게이션" FontSize="15" FontWeight="SemiBold" VerticalAlignment="Center"/>
+                                                        <TextBlock Text="MAP" FontSize="15" FontWeight="SemiBold" VerticalAlignment="Center"/>
                                                     </StackPanel>
                                                     <ToggleButton x:Name="OneNoteTopicNavOrientationToggle"
                                                                   Grid.Column="1"
@@ -7105,7 +7105,7 @@
                                                                             <!-- 주제어/핵심맥락 (5~20자) -->
                                                                             <TextBlock Text="{Binding BodyDisplay}"
                                                                                        FontSize="11" FontWeight="SemiBold"
-                                                                                       TextWrapping="NoWrap"
+                                                                                       TextWrapping="Wrap"
                                                                                        TextTrimming="CharacterEllipsis">
                                                                                 <TextBlock.Style>
                                                                                     <Style TargetType="TextBlock">

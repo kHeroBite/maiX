@@ -7516,6 +7516,8 @@ public partial class MainWindow : FluentWindow
             ? _oneNoteViewModel.LiveSTTSegments
             : _oneNoteViewModel.STTSegments;
 
+        Log4.Info($"[STT진단] UpdateRecordingContentPanel: IsRecording={_oneNoteViewModel.IsRecording}, STTSegments={_oneNoteViewModel.STTSegments.Count}, segmentsToShow={segmentsToShow.Count}");
+
         if (segmentsToShow.Count > 0)
         {
             OneNoteSTTEmptyText.Visibility = Visibility.Collapsed;
@@ -13927,6 +13929,7 @@ public partial class MainWindow : FluentWindow
                                 }
 
                                 // UI 패널 업데이트
+                                Log4.Info($"[STT진단] NewRecordingSelected→UpdateRecordingContentPanel 호출 직전: STTSegments={_oneNoteViewModel?.STTSegments?.Count ?? -1}");
                                 UpdateRecordingContentPanel();
                                 UpdateSummaryContentPanel();
 
