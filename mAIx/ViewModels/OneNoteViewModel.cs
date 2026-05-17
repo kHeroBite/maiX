@@ -3473,8 +3473,10 @@ public partial class OneNoteViewModel : ViewModelBase
     /// </summary>
     public void SetPanelHeight(double height)
     {
-        if (Math.Abs(PanelHeight - height) < 1.0) return;
-        PanelHeight = height;
+        // 세로 모드 카드 1/2 축소 — 패널 높이 입력값을 0.5배로 제한 (ΣDisplay=PanelHeight 불변식 유지)
+        var effectiveHeight = height * 0.5;
+        if (Math.Abs(PanelHeight - effectiveHeight) < 1.0) return;
+        PanelHeight = effectiveHeight;
         RecalculateTopicSegmentHeights();
         RebuildTimelineTicks();
     }
