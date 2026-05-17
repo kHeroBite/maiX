@@ -2,6 +2,23 @@
 
 > PROJECT.md 작업 이력 테이블의 상세 보완본
 
+## [2026-05-17] 대화네비 1/2 정정 + 녹음중지 STT 사라짐 회귀 근본수정 (O3 Fast Path)
+
+**분류**: O3 Fast Path (review + docs + git)
+**otest 결과**: 정적/빌드/규칙 PASS (2건). 작업2 마이크 런타임 사용자 검증 대기 (PASS-with-user-validation)
+**범위**: 수정 3파일 (MainWindow.xaml, MainWindow.OneNote.cs, OneNoteViewModel.cs)
+**파이프라인 이력**: 단일 사이클
+**대화ID**: conv_177901135205
+
+### 변경 내용
+
+- **작업1** (대화네비 1/4→1/2 정정): 직전 cb4ae007이 1/4(55px)로 너무 작았음 → 1/2(110px)로 정정. `MainWindow.xaml` OneNoteRecCol2 Width 75→150/MinWidth 40→80, `MainWindow.OneNote.cs` GridLength(55)→GridLength(110) + 주석 정정
+- **작업2** (녹음중지 STT 사라짐 회귀 근본수정): 이중 Stop 경로 race 차단. StopRecording(동기) + OnRecordingCompleted(비동기 NAudio 콜백) 두 경로가 LiveSTTSegments→STTSegments 복사를 중복 실행 → Clear된 LiveSTTSegments 재복사로 STTSegments=0. `_sttCopiedByStopRecording` bool 플래그로 StopRecording이 먼저 복사 후 true 설정, OnRecordingCompleted는 skip. StartRecordingAsync에서 false 리셋
+
+### 교훈 (L-464, L-465)
+- L-464: 이중 Stop 경로 bool 플래그 가드 패턴
+- L-465: 회귀 수정은 추정 원인만 보호하면 실효 없음 — nlog 런타임 재현 필수 (L-446/L-420 재확인)
+
 ## [2026-05-17] OneNote 후속 4건 — 타임라인 보정/도킹 재설계/하이라이트 정밀화/전체묵음 (O3 Fast Path)
 
 **분류**: O3 Fast Path (lesson + docs + git)

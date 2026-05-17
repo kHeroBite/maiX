@@ -6862,7 +6862,7 @@
                                         <Grid.ColumnDefinitions>
                                             <ColumnDefinition x:Name="OneNoteRecCol0" Width="*" MinWidth="250"/>
                                             <ColumnDefinition x:Name="OneNoteRecCol1" Width="4"/>
-                                            <ColumnDefinition x:Name="OneNoteRecCol2" Width="75" MinWidth="40"/>
+                                            <ColumnDefinition x:Name="OneNoteRecCol2" Width="150" MinWidth="80"/>
                                             <ColumnDefinition x:Name="OneNoteRecCol3" Width="4"/>
                                             <ColumnDefinition x:Name="OneNoteRecCol4" Width="280" MinWidth="200"/>
                                         </Grid.ColumnDefinitions>

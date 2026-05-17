@@ -444,6 +444,15 @@ public partial class OneNoteViewModel : ViewModelBase
     private int _skipLoadSTTOnSelectionChange;
 
     /// <summary>
+    /// StopRecording()이 이미 LiveSTTSegments→STTSegments 복사를 완료했음을 표시.
+    /// 이중 Stop 경로 race 차단(L-462 후속): StopRecording()이 동기적으로 복사한 후
+    /// NAudio 비동기 콜백으로 OnRecordingCompleted()가 중복 복사하여 STTSegments=0이 되는 버그 방지.
+    /// true이면 OnRecordingCompleted()의 STT 복사 블록 skip, false이면 정상 복사(NAudio 자체 종료 케이스).
+    /// StartRecordingAsync()에서 false로 리셋.
+    /// </summary>
+    private bool _sttCopiedByStopRecording;
+
+    /// <summary>
     /// 녹음 일시정지 여부
     /// </summary>
     [ObservableProperty]
@@ -2878,6 +2887,7 @@ public partial class OneNoteViewModel : ViewModelBase
             _liveSegmentsBeforeDiarization = null;
             _segmentsBeforeDiarization = null;
             _segmentsAfterDiarization = null;
+            _sttCopiedByStopRecording = false; // 신규 녹음 시작 — 이중 Stop race 가드 리셋
 
             // AI 분석 활성화 시 OpenAI STT 오디오 청크 이벤트 연결
             // (제거됨) Jarvis 서버 STT — OpenAI로 전환
@@ -3486,15 +3496,26 @@ public partial class OneNoteViewModel : ViewModelBase
             // OpenAI AI 서비스 정리 (최종 요약 포함)
             _ = StopOpenAiServicesAsync();
 
-            // 실시간 STT 결과를 STTSegments로 복사 (중복 방지를 위해 먼저 클리어)
-            STTSegments.Clear();
-            foreach (var segment in LiveSTTSegments)
+            // 실시간 STT 결과를 STTSegments로 복사
+            // 이중 Stop race 차단(L-462 후속): StopRecording()이 이미 복사했으면 skip
+            if (!_sttCopiedByStopRecording)
             {
-                STTSegments.Add(segment);
+                // NAudio 자체 종료(사용자 Stop 미경유) — StopRecording() 미실행이므로 여기서 복사
+                STTSegments.Clear();
+                foreach (var segment in LiveSTTSegments)
+                {
+                    STTSegments.Add(segment);
+                }
+                Log4.Info($"[녹음] ★ 실시간 STT 결과 복사: {STTSegments.Count}개 (경로=OnRecordingCompleted)");
             }
-            Log4.Info($"[녹음] ★ 실시간 STT 결과 복사: {STTSegments.Count}개");
+            else
+            {
+                // StopRecording()이 이미 복사 완료 — 중복 복사 방지 (STTSegments=0 버그 차단)
+                Log4.Info($"[녹음] STT 이미 StopRecording에서 복사됨({STTSegments.Count}개) — OnRecordingCompleted 복사 skip");
+                _sttCopiedByStopRecording = false; // 다음 녹음을 위해 리셋
+            }
 
-            // 화자분리 전/후 데이터 복사 (토글 버튼용)
+            // 화자분리 전/후 데이터 복사 (토글 버튼용 — 가드 밖 유지)
             _segmentsBeforeDiarization = _liveSegmentsBeforeDiarization;
             _segmentsAfterDiarization = LiveSTTSegments.ToList();
             Log4.Info($"[녹음] ★ 화자분리 전/후 데이터 복사: 전={_segmentsBeforeDiarization?.Count ?? 0}개, 후={_segmentsAfterDiarization?.Count ?? 0}개");
@@ -3992,13 +4013,14 @@ public partial class OneNoteViewModel : ViewModelBase
             // OpenAI AI 서비스 정리 (핸들러 해제 포함)
             _ = StopOpenAiServicesAsync();
 
-            // 실시간 STT 결과를 STTSegments로 복사
+            // 실시간 STT 결과를 STTSegments로 복사 (이중 Stop race 차단: OnRecordingCompleted에서 중복 복사 방지)
+            _sttCopiedByStopRecording = true;
             STTSegments.Clear();
             foreach (var segment in LiveSTTSegments)
             {
                 STTSegments.Add(segment);
             }
-            Log4.Info($"[녹음] ★ 실시간 STT 결과 복사: {STTSegments.Count}개");
+            Log4.Info($"[녹음] ★ 실시간 STT 결과 복사: {STTSegments.Count}개 (경로=StopRecording)");
 
             // 화자분리 전/후 데이터 복사 (토글 버튼용)
             _segmentsBeforeDiarization = _liveSegmentsBeforeDiarization;

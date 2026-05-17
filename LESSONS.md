@@ -1787,6 +1787,22 @@ L-424(WPF ItemsControl 가변높이 안티패턴 기각)가 직전 작업 완료
 - **교훈**: Visibility를 토글하는 컨테이너에 SizeChanged를 달면 Collapsed 상태에서 미발화. 2모드 레이아웃에서 SizeChanged 이벤트는 반드시 두 모드를 모두 감싸는 부모 호스트에 귀속시켜야 함
 - **Level**: 2 (L-450 Option B 패턴 보완)
 
+## L-464: 이중 Stop 경로 race — bool 플래그로 먼저 실행 경로가 가드 설정 (2026-05-17)
+
+- **문제**: 녹음 중지 시 STTSegments가 0개로 비어 표시되는 회귀. 직전 guardScope 수정(cb4ae007)이 실효 없었던 이유: 추정 원인(SelectionChanged→파일로드 race)만 보호하고 진짜 파괴 경로를 놓침
+- **진짜 파괴 경로**: StopRecording()이 LiveSTTSegments→STTSegments 동기 복사 후 LiveSTTSegments.Clear() → NAudio 비동기 콜백으로 OnRecordingCompleted()가 Clear된 LiveSTTSegments를 재복사 → STTSegments=0
+- **해결**: `_sttCopiedByStopRecording` bool 플래그. StopRecording()에서 복사 직전 true 설정, OnRecordingCompleted()에서 flag 체크 후 skip. StartRecordingAsync()에서 false 리셋
+- **교훈**: 이중 Stop 경로(동기 + 비동기 비동기 콜백)가 동일 컬렉션을 복사할 때, 먼저 실행된 경로가 가드 플래그를 설정하고 나중 경로가 skip하는 패턴이 안전. bool 플래그는 단발성 동기-비동기 race에 적합 (복수 재진입 경쟁 → L-462 int 카운터)
+- **Level**: 3
+
+## L-465: 회귀 수정은 추정 원인만 보호하면 실효 없음 — nlog 런타임 재현 필수 (2026-05-17)
+
+- **문제**: cb4ae007 회귀 수정이 정적 PASS했으나 사용자 런타임에서 재현. guardScope가 SelectionChanged race를 보호했지만 진짜 파괴 경로(이중 Stop)는 보호하지 않음
+- **근본원인**: otest가 정적 grep으로 PASS 처리, 런타임 nlog로 실제 파괴 시점을 측정하지 않음 → 추정 원인만 수정하고 진짜 원인은 건드리지 않음
+- **해결**: 런타임 nlog 경로 표시 (`경로=StopRecording`, `경로=OnRecordingCompleted`, `skip` 분기)로 실제 실행 흐름을 측정 가능하게 하여 진짜 파괴 경로 규명
+- **교훈**: 회귀 수정에서 정적 PASS는 필요조건이지 충분조건이 아님. 반드시 nlog 런타임 재현으로 "실제 파괴 시점"을 확인한 후 수정해야 함. 단발 추측 수정 2회+ 실패는 매몰비용 — L-446/L-420 강력 재확인
+- **Level**: 3 (프로세스 교훈)
+
 ## 반영 추적 테이블
 
 | 교훈 ID | 교훈 요약 | 반영 대상 | 반영 위치 | 반영일 | 검증 |
@@ -1895,3 +1911,5 @@ L-424(WPF ItemsControl 가변높이 안티패턴 기각)가 직전 작업 완료
 | L-461 | Canvas.Left 절대좌표 vs StackPanel 누적폭 클램프 정책 불일치 — 같은 축 내 클램프 기준값은 좌표계에 맞게 일치(가로=0.0, 세로=최소높이) 필수 | docs | LESSONS.md | 2026-05-17 | ✅ |
 | L-462 | 단발성 bool guard → int 카운터 guardScope 전환으로 재진입 race 차단 — 복수 경로가 동시에 보호 카운터를 증가시킬 때 bool은 경쟁 조건 유발, int 카운터는 회별 소비로 안전 (L-385/L-386 보강) | docs | LESSONS.md | 2026-05-17 | ✅ |
 | L-463 | 추상 UI "너비/높이 1/4"와 실제 도킹 가변축 기하 반전 — 세로 모드 대화네비는 Row(높이)가 축소 대상, 가로 모드는 패널 자체가 아닌 픽셀 Row 높이. oplan에서 "A 의미입니까 B 의미입니까?" 형식 L-455 추가 명시 필요 | docs | LESSONS.md | 2026-05-17 | ✅ |
+| L-464 | 이중 Stop 경로(동기 StopRecording + 비동기 OnRecordingCompleted) 컬렉션 복사-Clear race — bool 플래그(_sttCopiedByStopRecording)로 먼저 실행된 경로가 가드 설정, 나중 경로는 skip. StartRecordingAsync에서 false 리셋 필수 | docs+code | LESSONS.md + OneNoteViewModel.cs | 2026-05-17 | ✅ |
+| L-465 | 회귀 수정은 추정 원인만 보호하면 실효 없음 — 진짜 파괴 경로는 nlog 런타임 재현으로 "실제 파괴 시점" 측정 후 수정 필수. 정적 PASS만으로 통과 금지 (L-446/L-420 재확인) | docs | LESSONS.md | 2026-05-17 | ✅ |
