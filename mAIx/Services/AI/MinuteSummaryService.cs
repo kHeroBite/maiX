@@ -231,6 +231,7 @@ public sealed class MinuteSummaryService : IMinuteSummaryService
                     SummaryText = "묵음",
                     Topic = "묵음",
                     Keywords = new List<string>(),
+                    IsSilence = true,
                     CreatedAt = DateTime.Now
                 };
                 lock (_bufferLock) { _entries.Add(silentEntry); }

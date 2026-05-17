@@ -54,6 +54,7 @@ public class TopicSegment : INotifyPropertyChanged
     private string _backgroundColorHex = "#E3F2FD";
     private double _displayHeight = 60;
     private double _displayWidth = 120;
+    private bool _isSilence;
 
     /// <summary>
     /// 세그먼트 고유 ID (0부터 시작)
@@ -116,6 +117,15 @@ public class TopicSegment : INotifyPropertyChanged
     {
         get => _backgroundColorHex;
         set { _backgroundColorHex = value; OnPropertyChanged(); }
+    }
+
+    /// <summary>
+    /// 묵음 세그먼트 여부 — true 시 회색 표시 (컨버터 연동)
+    /// </summary>
+    public bool IsSilence
+    {
+        get => _isSilence;
+        set { _isSilence = value; OnPropertyChanged(); }
     }
 
     /// <summary>

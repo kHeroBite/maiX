@@ -84,13 +84,25 @@ namespace mAIx.Views
         }
 
         /// <summary>
-        /// 녹음내용 Grid 최초 로드 시 영속된 도킹 설정(TopicNavOrientation)을 반영
+        /// 녹음내용 Grid 최초 로드 시 영속된 도킹 설정(TopicNavOrientation)을 반영하고
+        /// 자동스크롤 이벤트를 구독한다 (중복 구독 방지: -= 후 +=).
         /// </summary>
         private void OneNoteRecDockGrid_Loaded(object sender, RoutedEventArgs e)
         {
             try
             {
                 ApplyTopicNavDockLayout();
+
+                // 자동스크롤 이벤트 구독 — 체크 순간 즉시 1회 ScrollToEnd (작업4)
+                // 중복 구독 방지: Loaded가 재발화되더라도 -= 후 += 패턴으로 안전
+                if (_oneNoteViewModel != null)
+                {
+                    _oneNoteViewModel.SttAutoScrollEnabled -= ScrollSttToEndIfEnabled;
+                    _oneNoteViewModel.SttAutoScrollEnabled += ScrollSttToEndIfEnabled;
+
+                    _oneNoteViewModel.SummaryAutoScrollEnabled -= ScrollSummaryToEndIfEnabled;
+                    _oneNoteViewModel.SummaryAutoScrollEnabled += ScrollSummaryToEndIfEnabled;
+                }
             }
             catch (Exception ex)
             {
@@ -120,7 +132,7 @@ namespace mAIx.Views
                     // 상단 행(STT + 요약)을 Row0에, 대화네비를 Row2 전폭에 배치
                     OneNoteRecRow0.Height = new GridLength(1, GridUnitType.Star);   // 상단 STT/요약
                     OneNoteRecRow1.Height = new GridLength(4);                       // 가로 Splitter
-                    OneNoteRecRow2.Height = new GridLength(220, GridUnitType.Pixel); // 하단 대화네비
+                    OneNoteRecRow2.Height = new GridLength(55, GridUnitType.Pixel); // 하단 대화네비 (1/4 축소: 220→55)
 
                     // STT: Row0 Col0 유지
                     Grid.SetRow(OneNoteSTTPanel, 0);

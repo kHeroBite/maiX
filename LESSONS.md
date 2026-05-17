@@ -1893,3 +1893,5 @@ L-424(WPF ItemsControl 가변높이 안티패턴 기각)가 직전 작업 완료
 | L-459 | SizeChanged 이벤트는 항상 표시된(Collapsed 아닌) 컨테이너가 소유 — Collapsed 요소는 SizeChanged 미발화, 호스트 Grid에 이관 필수 | docs | LESSONS.md + HISTORY.md | 2026-05-17 | ✅ |
 | L-460 | 대칭 메서드 쌍(SetPanelWidth/SetPanelHeight) 한쪽 재계산 누락 → 한 축 stale — 동일 재계산 호출은 두 메서드 모두에 대칭 배치 필수 | docs | LESSONS.md | 2026-05-17 | ✅ |
 | L-461 | Canvas.Left 절대좌표 vs StackPanel 누적폭 클램프 정책 불일치 — 같은 축 내 클램프 기준값은 좌표계에 맞게 일치(가로=0.0, 세로=최소높이) 필수 | docs | LESSONS.md | 2026-05-17 | ✅ |
+| L-462 | 단발성 bool guard → int 카운터 guardScope 전환으로 재진입 race 차단 — 복수 경로가 동시에 보호 카운터를 증가시킬 때 bool은 경쟁 조건 유발, int 카운터는 회별 소비로 안전 (L-385/L-386 보강) | docs | LESSONS.md | 2026-05-17 | ✅ |
+| L-463 | 추상 UI "너비/높이 1/4"와 실제 도킹 가변축 기하 반전 — 세로 모드 대화네비는 Row(높이)가 축소 대상, 가로 모드는 패널 자체가 아닌 픽셀 Row 높이. oplan에서 "A 의미입니까 B 의미입니까?" 형식 L-455 추가 명시 필요 | docs | LESSONS.md | 2026-05-17 | ✅ |

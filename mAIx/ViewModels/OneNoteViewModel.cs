@@ -32,6 +32,16 @@ public partial class OneNoteViewModel : ViewModelBase
     /// </summary>
     public event Action<Models.RecordingInfo>? NewRecordingSelected;
 
+    /// <summary>
+    /// SttAutoScroll 체크 ON 시 즉시 최하단 스크롤 요청 이벤트
+    /// </summary>
+    public event Action? SttAutoScrollEnabled;
+
+    /// <summary>
+    /// SummaryAutoScroll 체크 ON 시 즉시 최하단 스크롤 요청 이벤트
+    /// </summary>
+    public event Action? SummaryAutoScrollEnabled;
+
     // 캐시 관련
     private static readonly string CacheDir = Path.Combine(
         Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "mAIx", "cache");
@@ -425,9 +435,13 @@ public partial class OneNoteViewModel : ViewModelBase
     private bool _isRecording;
 
     /// <summary>
-    /// 녹음 완료 직후 플래그 (STT 결과 파일 로드 건너뛰기용)
+    /// 녹음 완료 직후 STT 파일 로드 건너뛰기 카운터.
+    /// guardScope 패턴(L-386): 복수 경로(StopRecording/OnRecordingCompleted/CollectionChanged)가
+    /// 각각 ++ 후 SelectedRecording을 설정하더라도 OnSelectedRecordingChanged가 각 호출에서
+    /// 카운터를 1씩 소비(--until 0)하여 로드 건너뛰기를 정확히 보장.
+    /// 0이면 파일 로드 허용, 1 이상이면 메모리 결과 유지.
     /// </summary>
-    private bool _skipLoadSTTOnSelectionChange;
+    private int _skipLoadSTTOnSelectionChange;
 
     /// <summary>
     /// 녹음 일시정지 여부
@@ -637,6 +651,7 @@ public partial class OneNoteViewModel : ViewModelBase
             App.Settings.OaiRecording.SttAutoScroll = value;
             App.Settings.SaveAll();
         }
+        if (value) SttAutoScrollEnabled?.Invoke();
     }
 
     /// <summary>
@@ -655,6 +670,7 @@ public partial class OneNoteViewModel : ViewModelBase
             App.Settings.OaiRecording.SummaryAutoScroll = value;
             App.Settings.SaveAll();
         }
+        if (value) SummaryAutoScrollEnabled?.Invoke();
     }
 
     /// <summary>
@@ -740,7 +756,7 @@ public partial class OneNoteViewModel : ViewModelBase
                 if (recording != null && recording.FilePath == _lastCompletedRecordingPath)
                 {
                     Log4.Info($"[녹음] ★ 새 녹음 파일 추가됨 - 자동 선택: {recording.FileName}");
-                    _skipLoadSTTOnSelectionChange = true;
+                    _skipLoadSTTOnSelectionChange++; // guardScope++
                     SelectedRecording = recording;
                     NewRecordingSelected?.Invoke(recording);
 
@@ -1917,10 +1933,11 @@ public partial class OneNoteViewModel : ViewModelBase
     {
         if (value != null)
         {
-            Utils.Log4.Info($"[OneNote] OnSelectedRecordingChanged 호출됨: {value.FileName}, SkipLoad: {_skipLoadSTTOnSelectionChange}");
+            Utils.Log4.Info($"[OneNote] OnSelectedRecordingChanged 호출됨: {value.FileName}, SkipLoad 카운터: {_skipLoadSTTOnSelectionChange}");
 
             // 녹음 완료 직후에는 이미 메모리에 STT 결과가 있으므로 파일에서 로드하지 않음
-            if (!_skipLoadSTTOnSelectionChange)
+            // guardScope 패턴(L-386): 카운터 > 0이면 한 회 소비 후 건너뜀
+            if (_skipLoadSTTOnSelectionChange <= 0)
             {
                 Utils.Log4.Info($"[OneNote] STT/요약 로드 시작: {value.FileName}");
                 _ = LoadSTTResultAsync(value);
@@ -1929,8 +1946,8 @@ public partial class OneNoteViewModel : ViewModelBase
             }
             else
             {
-                _skipLoadSTTOnSelectionChange = false; // 플래그 리셋
-                Utils.Log4.Info($"[OneNote] 녹음 완료 직후 - 파일 로드 건너뜀, 메모리 STT 결과 유지: {STTSegments.Count}개");
+                _skipLoadSTTOnSelectionChange--; // 카운터 1 소비
+                Utils.Log4.Info($"[OneNote] 녹음 완료 직후 - 파일 로드 건너뜀, 메모리 STT 결과 유지: {STTSegments.Count}개 (잔여 카운터: {_skipLoadSTTOnSelectionChange})");
             }
         }
         else
@@ -2151,7 +2168,7 @@ public partial class OneNoteViewModel : ViewModelBase
     /// </summary>
     public void PreserveSTTOnSelectionChange()
     {
-        _skipLoadSTTOnSelectionChange = true;
+        _skipLoadSTTOnSelectionChange++; // guardScope: 호출 횟수만큼 OnSelectedRecordingChanged 로드를 보호
     }
 
     /// <summary>
@@ -2161,11 +2178,11 @@ public partial class OneNoteViewModel : ViewModelBase
     {
         if (SelectedRecording != null)
         {
-            // 녹음 완료 직후에는 메모리 결과 유지
-            if (_skipLoadSTTOnSelectionChange)
+            // 녹음 완료 직후에는 메모리 결과 유지 (카운터 > 0 이면 소비 후 건너뜀)
+            if (_skipLoadSTTOnSelectionChange > 0)
             {
                 _logger.Information("[OneNote] LoadSelectedRecordingResults 건너뜀 (녹음 완료 직후): {FileName}", SelectedRecording.FileName);
-                _skipLoadSTTOnSelectionChange = false;
+                _skipLoadSTTOnSelectionChange--;
                 return;
             }
 
@@ -2916,6 +2933,7 @@ public partial class OneNoteViewModel : ViewModelBase
             CumulativeSummaryText = string.Empty;
             FinalSummaryText = string.Empty;
             MinuteSummaryCount = 0;
+            RebuildTimelineTicks(); // 새 녹음 시작 시 타임라인 눈금 잔존 제거 (작업6)
 
             // 서비스 resolve
             _realtimeSttService = _serviceProvider.GetService<IOpenAiRealtimeSttService>();
@@ -3050,6 +3068,59 @@ public partial class OneNoteViewModel : ViewModelBase
         }
     }
 
+    // ─── 전체 요약 수동 생성 ────────────────────────────────────────────────
+
+    /// <summary>
+    /// 전체요약 수동 생성 Command — 녹음 종료 후 IsAutoFinalSummary=false 상태에서 사용자가 직접 클릭
+    /// </summary>
+    private bool _isGeneratingFinalSummary;
+
+    [RelayCommand]
+    public async Task GenerateFinalSummaryAsync()
+    {
+        try
+        {
+            // 진행 중 재클릭 방지
+            if (_isGeneratingFinalSummary)
+            {
+                Log4.Info("[녹음] 전체요약 생성 이미 진행 중 — 재클릭 무시");
+                return;
+            }
+
+            if (_cumulativeSummaryService == null)
+            {
+                Log4.Warn("[녹음] 전체요약 생성 불가 — _cumulativeSummaryService null");
+                return;
+            }
+
+            _isGeneratingFinalSummary = true;
+            Log4.Info("[녹음] 전체요약 수동 생성 시작");
+
+            try
+            {
+                var finalText = await _cumulativeSummaryService.FinalSummarizeAsync();
+                var dispatcher = System.Windows.Application.Current?.Dispatcher;
+                if (dispatcher != null)
+                {
+                    await dispatcher.InvokeAsync(() =>
+                    {
+                        FinalSummaryText = finalText ?? string.Empty;
+                        Log4.Info($"[녹음] 전체요약 수동 생성 완료: {FinalSummaryText.Length}자");
+                    }).Task.ConfigureAwait(false);
+                }
+            }
+            finally
+            {
+                _isGeneratingFinalSummary = false;
+            }
+        }
+        catch (Exception ex)
+        {
+            _isGeneratingFinalSummary = false;
+            Log4.Error($"[녹음] 전체요약 수동 생성 실패: {ex.Message}");
+        }
+    }
+
     // ─── OpenAI 서비스 이벤트 핸들러 ──────────────────────────────────────
 
     // 이벤트 핸들러 — 실제 인터페이스 시그니처에 맞춤
@@ -3178,6 +3249,7 @@ public partial class OneNoteViewModel : ViewModelBase
                         SummaryPreview = entry.Topic,
                         Keywords = entry.Keywords ?? new System.Collections.Generic.List<string>(),
                         BackgroundColorHex = palette[(MinuteSummaryCount - 1) % palette.Length],
+                        IsSilence = entry.IsSilence,
                     };
                     TopicSegments.Add(navSegment);
                     TryMergeAdjacentTopics();
@@ -3445,7 +3517,7 @@ public partial class OneNoteViewModel : ViewModelBase
 
             if (newRecording != null)
             {
-                _skipLoadSTTOnSelectionChange = true; // 파일에서 로드하지 않고 메모리 결과 유지
+                _skipLoadSTTOnSelectionChange++; // guardScope++ — 파일에서 로드하지 않고 메모리 결과 유지
                 SelectedRecording = newRecording;
                 Log4.Info($"[녹음] ★ 새 녹음 파일 선택됨: {newRecording.FileName}");
 
@@ -3953,7 +4025,7 @@ public partial class OneNoteViewModel : ViewModelBase
                 if (newRecording != null)
                 {
                     Log4.Info($"[녹음] ★ 새 녹음 파일 직접 선택: {newRecording.FileName}");
-                    _skipLoadSTTOnSelectionChange = true;
+                    _skipLoadSTTOnSelectionChange++; // guardScope++
                     SelectedRecording = newRecording;
                     NewRecordingSelected?.Invoke(newRecording);
                 }

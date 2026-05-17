@@ -41,6 +41,12 @@ public class MinuteSummaryEntry
     public List<string> Keywords { get; set; } = new();
 
     /// <summary>
+    /// 묵음 구간 엔트리 여부 — true 시 회색 표시 (컨버터 연동).
+    /// 구버전 .realtime.json 역직렬화 시 누락되면 기본값 false (graceful).
+    /// </summary>
+    public bool IsSilence { get; set; } = false;
+
+    /// <summary>
     /// 엔트리 생성 일시
     /// </summary>
     public DateTime CreatedAt { get; set; } = DateTime.Now;
