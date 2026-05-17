@@ -453,6 +453,15 @@ public partial class OneNoteViewModel : ViewModelBase
     private bool _sttCopiedByStopRecording;
 
     /// <summary>
+    /// OnRecordingCompleted()가 이미 LiveSTTSegments→STTSegments 복사를 완료했음을 표시.
+    /// 이중 Stop race 대칭 가드(L-5연속회귀 근본수정): OnRecordingCompleted()가 먼저 복사한 후
+    /// StopRecordingAsync()가 재개되어 빈 LiveSTTSegments로 덮어씌우는 버그 방지 (반대 방향).
+    /// true이면 StopRecordingAsync()의 STTSegments.Clear()+복사 블록 skip.
+    /// StartRecordingAsync()에서 false로 리셋.
+    /// </summary>
+    private bool _sttCopiedByRecordingCompleted;
+
+    /// <summary>
     /// 녹음 일시정지 여부
     /// </summary>
     [ObservableProperty]
@@ -2895,6 +2904,7 @@ public partial class OneNoteViewModel : ViewModelBase
             _segmentsBeforeDiarization = null;
             _segmentsAfterDiarization = null;
             _sttCopiedByStopRecording = false; // 신규 녹음 시작 — 이중 Stop race 가드 리셋
+            _sttCopiedByRecordingCompleted = false; // 신규 녹음 시작 — 대칭 가드 리셋
 
             // AI 분석 활성화 시 OpenAI STT 오디오 청크 이벤트 연결
             // (제거됨) Jarvis 서버 STT — OpenAI로 전환
@@ -3520,6 +3530,9 @@ public partial class OneNoteViewModel : ViewModelBase
                 {
                     STTSegments.Add(segment);
                 }
+                // 대칭 가드 set: StopRecordingAsync()가 뒤늦게 재개되어 빈 LiveSTTSegments로 덮어씌우기 방지
+                _sttCopiedByRecordingCompleted = true;
+                Log4.Info($"[STT진단C-set] RecordingCompleted STT복사 {STTSegments.Count}개 → 가드 set");
                 Log4.Info($"[녹음] ★ 실시간 STT 결과 복사: {STTSegments.Count}개 (경로=OnRecordingCompleted)");
             }
             else
@@ -4056,13 +4069,22 @@ public partial class OneNoteViewModel : ViewModelBase
             Log4.Info($"[STT진단A] await StopOpenAiServices 완료, LiveSTT={LiveSTTSegments.Count}");
 
             // 실시간 STT 결과를 STTSegments로 복사 (이중 Stop race 차단: OnRecordingCompleted에서 중복 복사 방지)
+            // 대칭 가드(L-5연속회귀 근본수정): OnRecordingCompleted가 이미 선복사한 경우 빈 LiveSTT로 덮어씌우기 방지
             _sttCopiedByStopRecording = true;
-            STTSegments.Clear();
-            foreach (var segment in LiveSTTSegments)
+            if (!_sttCopiedByRecordingCompleted)
             {
-                STTSegments.Add(segment);
+                STTSegments.Clear();
+                foreach (var segment in LiveSTTSegments)
+                {
+                    STTSegments.Add(segment);
+                }
+                Log4.Info($"[녹음] ★ 실시간 STT 결과 복사: {STTSegments.Count}개 (경로=StopRecording)");
             }
-            Log4.Info($"[녹음] ★ 실시간 STT 결과 복사: {STTSegments.Count}개 (경로=StopRecording)");
+            else
+            {
+                // OnRecordingCompleted가 이미 정상 복사함 — 빈 LiveSTTSegments로 덮어씌우기 skip
+                Log4.Info($"[STT진단C] StopRecording 복사 skip — RecordingCompleted 선복사됨 ({STTSegments.Count}개 보존)");
+            }
 
             // 화자분리 전/후 데이터 복사 (토글 버튼용)
             _segmentsBeforeDiarization = _liveSegmentsBeforeDiarization;
