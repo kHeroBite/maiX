@@ -1891,3 +1891,5 @@ L-424(WPF ItemsControl 가변높이 안티패턴 기각)가 직전 작업 완료
 | L-457 | 하이라이트 정밀화 = LLM 프롬프트 품질 강화 + IsWordBoundary 단어경계 양쪽 동시 필요 — 한쪽만 수정 시 나머지 쪽 부정확 잔류 | docs | LESSONS.md | 2026-05-17 | ✅ |
 | L-458 | 전체 묵음 분기 = LLM 스킵 + 기존 이벤트 경로 재사용 — 별도 UI 경로 추가 금지. 예외 결과를 기존 흐름에 주입하여 UI 레이어 무수정 유지 | docs | LESSONS.md | 2026-05-17 | ✅ |
 | L-459 | SizeChanged 이벤트는 항상 표시된(Collapsed 아닌) 컨테이너가 소유 — Collapsed 요소는 SizeChanged 미발화, 호스트 Grid에 이관 필수 | docs | LESSONS.md + HISTORY.md | 2026-05-17 | ✅ |
+| L-460 | 대칭 메서드 쌍(SetPanelWidth/SetPanelHeight) 한쪽 재계산 누락 → 한 축 stale — 동일 재계산 호출은 두 메서드 모두에 대칭 배치 필수 | docs | LESSONS.md | 2026-05-17 | ✅ |
+| L-461 | Canvas.Left 절대좌표 vs StackPanel 누적폭 클램프 정책 불일치 — 같은 축 내 클램프 기준값은 좌표계에 맞게 일치(가로=0.0, 세로=최소높이) 필수 | docs | LESSONS.md | 2026-05-17 | ✅ |

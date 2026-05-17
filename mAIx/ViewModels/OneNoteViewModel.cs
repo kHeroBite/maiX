@@ -622,6 +622,42 @@ public partial class OneNoteViewModel : ViewModelBase
     }
 
     /// <summary>
+    /// 실시간 STT 자동스크롤 ON/OFF (기본 true) — 영속화
+    /// </summary>
+    [ObservableProperty]
+    private bool _sttAutoScroll = true;
+
+    /// <summary>
+    /// SttAutoScroll 변경 시 설정 저장
+    /// </summary>
+    partial void OnSttAutoScrollChanged(bool value)
+    {
+        if (App.Settings?.OaiRecording != null)
+        {
+            App.Settings.OaiRecording.SttAutoScroll = value;
+            App.Settings.SaveAll();
+        }
+    }
+
+    /// <summary>
+    /// 실시간 요약 자동스크롤 ON/OFF (기본 true) — 영속화
+    /// </summary>
+    [ObservableProperty]
+    private bool _summaryAutoScroll = true;
+
+    /// <summary>
+    /// SummaryAutoScroll 변경 시 설정 저장
+    /// </summary>
+    partial void OnSummaryAutoScrollChanged(bool value)
+    {
+        if (App.Settings?.OaiRecording != null)
+        {
+            App.Settings.OaiRecording.SummaryAutoScroll = value;
+            App.Settings.SaveAll();
+        }
+    }
+
+    /// <summary>
     /// 1분 요약 생성 횟수
     /// </summary>
     [ObservableProperty]
@@ -661,6 +697,8 @@ public partial class OneNoteViewModel : ViewModelBase
             _transcriptionModel = string.IsNullOrWhiteSpace(oaiSettings.TranscriptionModel) ? "gpt-4o-mini-transcribe" : oaiSettings.TranscriptionModel;
             _isServerVadEnabled = oaiSettings.ServerVadEnabled;
             _chunkOverlapSeconds = oaiSettings.ChunkOverlapSeconds;
+            _sttAutoScroll = oaiSettings.SttAutoScroll;
+            _summaryAutoScroll = oaiSettings.SummaryAutoScroll;
         }
 
         // 녹음 목록에 새 파일 추가 시 자동 선택
@@ -3199,19 +3237,20 @@ public partial class OneNoteViewModel : ViewModelBase
                     width = (duration / totalDuration) * PanelWidth;
                     accumulatedW += width;
                 }
-                seg.DisplayWidth = Math.Max(40.0, width);  // 가로 카드 최소 가독 폭
+                seg.DisplayWidth = Math.Max(0.0, width);  // 잔여 흡수, 세로 height와 동일 정책
             }
         }
     }
 
     /// <summary>
-    /// 가로 모드 뷰포트 폭 갱신 — 카드 폭 비례 재계산
+    /// 가로 모드 뷰포트 폭 갱신 — 카드 폭 비례 재계산 + 눈금 절대위치 재계산 (SetPanelHeight와 대칭)
     /// </summary>
     public void SetPanelWidth(double width)
     {
         if (Math.Abs(PanelWidth - width) < 1.0) return;
         PanelWidth = width;
         RecalculateTopicSegmentHeights();
+        RebuildTimelineTicks();
     }
 
     private const int MAX_TOPIC_SEGMENTS = 20;

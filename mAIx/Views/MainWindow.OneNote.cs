@@ -19,6 +19,11 @@ namespace mAIx.Views
     {
         private static readonly Logger _oneNoteLog = LogManager.GetCurrentClassLogger();
 
+        // ─── 자동스크롤 플래그 ─────────────────────────────────────────────
+        // 자동 ScrollToEnd 유발 여부 구분 — true이면 ScrollChanged에서 사용자 스크롤로 오해제 방지
+        private bool _isSttAutoScrolling;
+        private bool _isSummaryAutoScrolling;
+
         // ─── 주제어 네비게이션 핸들러 ─────────────────────────────────────
 
         /// <summary>
@@ -327,6 +332,106 @@ namespace mAIx.Views
             catch (Exception ex)
             {
                 _oneNoteLog.Error(ex, "[OneNote] TopicNavScrollViewer_SizeChanged 실패");
+            }
+        }
+
+        // ─── 자동스크롤 헬퍼 ────────────────────────────────────────────────
+
+        /// <summary>
+        /// SttAutoScroll 활성 시 STT ScrollViewer를 맨 아래로 이동.
+        /// 자동 스크롤 플래그를 ON 후 ScrollToEnd, Dispatcher로 OFF.
+        /// </summary>
+        internal void ScrollSttToEndIfEnabled()
+        {
+            try
+            {
+                if (_oneNoteViewModel == null || !_oneNoteViewModel.SttAutoScroll) return;
+                _isSttAutoScrolling = true;
+                OneNoteSTTScrollViewer.ScrollToEnd();
+                _ = Dispatcher.InvokeAsync(() => { _isSttAutoScrolling = false; },
+                    System.Windows.Threading.DispatcherPriority.Background);
+            }
+            catch (Exception ex)
+            {
+                _isSttAutoScrolling = false;
+                _oneNoteLog.Error(ex, "[OneNote] ScrollSttToEndIfEnabled 실패");
+            }
+        }
+
+        /// <summary>
+        /// SummaryAutoScroll 활성 시 요약 ScrollViewer를 맨 아래로 이동.
+        /// 자동 스크롤 플래그를 ON 후 ScrollToEnd, Dispatcher로 OFF.
+        /// </summary>
+        internal void ScrollSummaryToEndIfEnabled()
+        {
+            try
+            {
+                if (_oneNoteViewModel == null || !_oneNoteViewModel.SummaryAutoScroll) return;
+                _isSummaryAutoScrolling = true;
+                OneNoteRealtimeSummaryContent.ScrollToEnd();
+                _ = Dispatcher.InvokeAsync(() => { _isSummaryAutoScrolling = false; },
+                    System.Windows.Threading.DispatcherPriority.Background);
+            }
+            catch (Exception ex)
+            {
+                _isSummaryAutoScrolling = false;
+                _oneNoteLog.Error(ex, "[OneNote] ScrollSummaryToEndIfEnabled 실패");
+            }
+        }
+
+        // ─── ScrollChanged 핸들러 — 사용자 위로 스크롤 시 자동스크롤 해제 ──
+
+        /// <summary>
+        /// STT ScrollViewer ScrollChanged — 사용자가 위로 스크롤하면 SttAutoScroll 해제.
+        /// </summary>
+        private void OneNoteSttScroll_ScrollChanged(object sender, System.Windows.Controls.ScrollChangedEventArgs e)
+        {
+            try
+            {
+                // 자동 스크롤 유발 중이면 무시 (재귀/오해제 방지)
+                if (_isSttAutoScrolling) return;
+                // 위로 이동(VerticalChange < 0) 시 자동스크롤 해제
+                if (e.VerticalChange < 0 && _oneNoteViewModel != null)
+                {
+                    _oneNoteViewModel.SttAutoScroll = false;
+                    var oaiSettings = App.Settings?.OaiRecording;
+                    if (oaiSettings != null)
+                    {
+                        oaiSettings.SttAutoScroll = false;
+                        App.Settings?.SaveAll();
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                _oneNoteLog.Error(ex, "[OneNote] OneNoteSttScroll_ScrollChanged 실패");
+            }
+        }
+
+        /// <summary>
+        /// 요약 ScrollViewer ScrollChanged — 사용자가 위로 스크롤하면 SummaryAutoScroll 해제.
+        /// </summary>
+        private void OneNoteSummaryScroll_ScrollChanged(object sender, System.Windows.Controls.ScrollChangedEventArgs e)
+        {
+            try
+            {
+                // 자동 스크롤 유발 중이면 무시 (재귀/오해제 방지)
+                if (_isSummaryAutoScrolling) return;
+                // 위로 이동(VerticalChange < 0) 시 자동스크롤 해제
+                if (e.VerticalChange < 0 && _oneNoteViewModel != null)
+                {
+                    _oneNoteViewModel.SummaryAutoScroll = false;
+                    var oaiSettings = App.Settings?.OaiRecording;
+                    if (oaiSettings != null)
+                    {
+                        oaiSettings.SummaryAutoScroll = false;
+                        App.Settings?.SaveAll();
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                _oneNoteLog.Error(ex, "[OneNote] OneNoteSummaryScroll_ScrollChanged 실패");
             }
         }
     }

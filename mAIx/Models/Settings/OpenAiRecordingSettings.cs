@@ -131,4 +131,12 @@ public class OpenAiRecordingSettings
     /// <summary>청크 오버랩 (초). 청크 경계에서 단어 끊김 방지 — 화자분리 모드에서 의미 있음. 기본 0.5초.</summary>
     [XmlElement("ChunkOverlapSeconds")]
     public double ChunkOverlapSeconds { get; set; } = 0.5;
+
+    /// <summary>실시간 STT 자동스크롤 여부 (기본 true — 새 세그먼트 추가 시 맨 아래로 이동).</summary>
+    [XmlElement("SttAutoScroll")]
+    public bool SttAutoScroll { get; set; } = true;
+
+    /// <summary>실시간 요약 자동스크롤 여부 (기본 true — 새 요약 추가 시 맨 아래로 이동).</summary>
+    [XmlElement("SummaryAutoScroll")]
+    public bool SummaryAutoScroll { get; set; } = true;
 }

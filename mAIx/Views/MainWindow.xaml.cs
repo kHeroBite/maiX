@@ -7524,19 +7524,12 @@ public partial class MainWindow : FluentWindow
             OneNoteSTTSegmentsList.DataContext = _oneNoteViewModel;
             OneNoteSTTSegmentsList.ItemsSource = segmentsToShow;
             
-            // 실시간 STT 중일 때 자동 스크롤
+            // 실시간 STT 중일 때 자동 스크롤 (SttAutoScroll 체크 후 헬퍼 위임)
             if (_oneNoteViewModel.IsRecording && _oneNoteViewModel.IsAIAnalysisEnabled)
             {
                 _ = OneNoteSTTSegmentsList.Dispatcher.InvokeAsync(() =>
                 {
-                    // ItemsControl의 부모 ScrollViewer를 찾아 맨 아래로 스크롤
-                    var scrollViewer = FindVisualChild<ScrollViewer>(OneNoteSTTSegmentsList);
-                    if (scrollViewer == null)
-                    {
-                        // 부모에서 ScrollViewer 찾기
-                        scrollViewer = FindVisualParent<ScrollViewer>(OneNoteSTTSegmentsList);
-                    }
-                    scrollViewer?.ScrollToEnd();
+                    ScrollSttToEndIfEnabled();
                 }, System.Windows.Threading.DispatcherPriority.Background);
             }
         }
@@ -14111,6 +14104,25 @@ public partial class MainWindow : FluentWindow
                         catch (Exception ex)
                         {
                             Log4.Error($"[MainWindow] STTSegments CollectionChanged 핸들러 실패: {ex}");
+                        }
+                    };
+
+                    // MinuteSummaries 항목 추가 시 요약 자동스크롤
+                    _oneNoteViewModel.MinuteSummaries.CollectionChanged += async (s, e) =>
+                    {
+                        try
+                        {
+                            if (e.Action == System.Collections.Specialized.NotifyCollectionChangedAction.Add)
+                            {
+                                await Dispatcher.InvokeAsync(() =>
+                                {
+                                    ScrollSummaryToEndIfEnabled();
+                                }, System.Windows.Threading.DispatcherPriority.Background);
+                            }
+                        }
+                        catch (Exception ex)
+                        {
+                            Log4.Error($"[MainWindow] MinuteSummaries CollectionChanged 핸들러 실패: {ex}");
                         }
                     };
 

@@ -6899,6 +6899,10 @@
                                                         <Ellipse x:Name="OneNoteSTTLiveIndicator" Width="8" Height="8" Fill="#10B981" Margin="8,0,4,0" VerticalAlignment="Center" Visibility="Collapsed"/>
                                                         <TextBlock x:Name="OneNoteSTTLiveText" Text="실시간" FontSize="11" Foreground="#10B981" VerticalAlignment="Center" Visibility="Collapsed"/>
                                                     </StackPanel>
+                                                    <!-- STT 자동스크롤 체크박스 -->
+                                                    <CheckBox Grid.Column="1" Content="자동스크롤" FontSize="11"
+                                                              VerticalAlignment="Center" Margin="8,0,0,0"
+                                                              IsChecked="{Binding SttAutoScroll, Mode=TwoWay}"/>
                                                     <!-- STT 진행률 표시 -->
                                                     <Border x:Name="OneNoteSTTProgressPanel" Grid.Row="1" Grid.ColumnSpan="2"
                                                             Visibility="Collapsed" Margin="0,8,0,0"
@@ -6933,7 +6937,8 @@
 
                                                 <!-- STT 세그먼트 목록 -->
                                                 <Grid Grid.Row="1">
-                                                    <ScrollViewer x:Name="OneNoteSTTScrollViewer" VerticalScrollBarVisibility="Auto">
+                                                    <ScrollViewer x:Name="OneNoteSTTScrollViewer" VerticalScrollBarVisibility="Auto"
+                                                                  ScrollChanged="OneNoteSttScroll_ScrollChanged">
                                                     <Grid>
                                                         <!-- 빈 상태 -->
                                                         <TextBlock x:Name="OneNoteSTTEmptyText" Text="STT 분석 결과가 없습니다."
@@ -7217,6 +7222,10 @@
                                                             <TextBlock x:Name="OneNoteSummaryProgressText" Text="" FontSize="12" Margin="6,0,0,0"
                                                                        Foreground="{DynamicResource TextFillColorSecondaryBrush}" VerticalAlignment="Center"/>
                                                         </StackPanel>
+                                                        <!-- 요약 자동스크롤 체크박스 -->
+                                                        <CheckBox Grid.Column="1" Content="자동스크롤" FontSize="11"
+                                                                  VerticalAlignment="Center" Margin="8,0,0,0"
+                                                                  IsChecked="{Binding SummaryAutoScroll, Mode=TwoWay}"/>
                                                     </Grid>
 
                                                     <!-- 요약 콘텐츠 -->
@@ -7249,7 +7258,8 @@
                                                         <ScrollViewer x:Name="OneNoteRealtimeSummaryContent" Grid.Row="1"
                                                                       VerticalScrollBarVisibility="Auto"
                                                                       HorizontalScrollBarVisibility="Disabled"
-                                                                      Visibility="Visible">
+                                                                      Visibility="Visible"
+                                                                      ScrollChanged="OneNoteSummaryScroll_ScrollChanged">
                                                             <ItemsControl ItemsSource="{Binding MinuteSummaries}">
                                                                 <ItemsControl.ItemTemplate>
                                                                     <DataTemplate>
