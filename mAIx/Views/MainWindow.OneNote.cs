@@ -224,9 +224,8 @@ namespace mAIx.Views
 
                 _oneNoteLog.Info("[OneNote] 녹음 종료 버튼 클릭 (최종 요약 포함)");
 
-                // 기존 StopRecording() + UI 업데이트 흐름 사용
-                // StopOpenAiServicesAsync는 OnRecordingCompleted 내부에서 자동 호출됨
-                _oneNoteViewModel.StopRecording();
+                // await 전파 — StopOpenAiServicesAsync flush 완료 후 UI 업데이트 (L-388 수정)
+                await _oneNoteViewModel.StopRecordingAsync();
                 await UpdateRecordingUI(false);
             }
             catch (Exception ex)

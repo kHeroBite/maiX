@@ -1982,3 +1982,7 @@ ConfigureAwait(false)를 Service 레이어 전체에 적용하여 스레드 컨�
 | 2026-05-17 | OneNote 녹음 7개 개선 — 주제박스 Row 55px 1/4 축소, 세로 간격 제거, 묵음 항상 회색(SilenceToGrayBrushConverter 신규), 자동스크롤 체크 즉시 최하단, STT 회귀 bool→int guardScope 수정(L-462), 새 녹음 시 데이터 초기화+타임라인 잔존 제거, 전체요약 수동버튼 추가 | 커밋 완료 |
 
 | 2026-05-17 | 가로카드 2배+MAP/다줄 + STT 중지 사라짐 회귀 근본수정 (3건) — 가로모드 Row2 110→220px, 세로헤더 MAP+TextWrapping=Wrap, LoadSTTResultAsync Clear를 파일 존재 확인 후로 이동(설계A) — 회귀 3연속 진짜 원인(비동기 저장 race) 규명 (L-466) | 커밋 완료 |
+
+## 2026-05-17 — 녹음중지 STT 사라짐 회귀 4연속 근본수정
+
+| 2026-05-17 | 🐛 녹음중지 STT 사라짐 회귀 4연속 근본수정 — StopOpenAiServices fire-and-forget → await 전환 + flush drain + 작은파일 덮어쓰기 거부 3중 방어 | OneNoteViewModel.cs, MainWindow.OneNote.cs, MainWindow.xaml.cs |

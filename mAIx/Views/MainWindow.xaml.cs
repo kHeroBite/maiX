@@ -6246,8 +6246,8 @@ public partial class MainWindow : FluentWindow
 
             if (_oneNoteViewModel.IsRecording)
             {
-                // 녹음 중지
-                _oneNoteViewModel.StopRecording();
+                // 녹음 중지 — await 전파 (L-388 수정)
+                await _oneNoteViewModel.StopRecordingAsync();
                 await UpdateRecordingUI(false);
 
                 // 녹음 중지 시 노트내용 탭으로 전환 (녹음 선택된 게 없으면)

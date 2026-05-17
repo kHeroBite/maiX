@@ -3077,6 +3077,13 @@ public partial class OneNoteViewModel : ViewModelBase
             else if (_realtimeSttService != null)
                 await _realtimeSttService.StopAsync();
 
+            // 펜딩 Dispatcher 큐(마지막 transcription.completed → LiveSTTSegments.Add) 드레인 (L-374, A2)
+            // Background 우선순위로 큐잉된 InvokeAsync들이 모두 처리된 후 반환 보장
+            await System.Windows.Application.Current.Dispatcher
+                .InvokeAsync(() => { }, System.Windows.Threading.DispatcherPriority.Background)
+                .Task.ConfigureAwait(true);
+            Log4.Info("[STT진단A2] flush drain 완료");
+
             Log4.Info("[녹음] OpenAI 서비스 중지 완료");
         }
         catch (Exception ex)
@@ -3816,6 +3823,33 @@ public partial class OneNoteViewModel : ViewModelBase
             result.Segments.AddRange(STTSegments);
 
             var sttPath = Path.ChangeExtension(audioFilePath, ".stt.json");
+
+            // 방어선 B: 기존 파일이 신규 저장분보다 더 크면 덮어쓰기 거부 (828B 빈 껍데기가 정상 파일 덮는 회귀5 차단)
+            if (File.Exists(sttPath))
+            {
+                try
+                {
+                    var existingJson = await File.ReadAllTextAsync(sttPath, System.Text.Encoding.UTF8);
+                    var existingResult = STJ.JsonSerializer.Deserialize<Models.TranscriptResult>(existingJson);
+                    if (existingResult != null)
+                    {
+                        var existingCount = existingResult.Segments.Count;
+                        var existingTextLen = existingResult.Segments.Sum(s => s.Text?.Length ?? 0);
+                        var newCount = result.Segments.Count;
+                        var newTextLen = result.Segments.Sum(s => s.Text?.Length ?? 0);
+                        if (existingCount > newCount && existingTextLen > newTextLen)
+                        {
+                            Log4.Warn($"[STT진단B] 덮어쓰기 거부 old={existingCount}개/{existingTextLen}자 new={newCount}개/{newTextLen}자 — 기존 파일 더 큼");
+                            return;
+                        }
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Log4.Warn($"[STT진단B] 기존 파일 검증 실패(무시하고 저장): {ex.Message}");
+                }
+            }
+
             var options = new STJ.JsonSerializerOptions
             {
                 WriteIndented = true,
@@ -3993,7 +4027,7 @@ public partial class OneNoteViewModel : ViewModelBase
     /// 녹음 중지
     /// </summary>
     [RelayCommand]
-    public void StopRecording()
+    public async Task StopRecordingAsync()
     {
         if (!IsRecording || _recordingService == null) return;
 
@@ -4017,8 +4051,9 @@ public partial class OneNoteViewModel : ViewModelBase
             RecordingVolume = 0;
 
             // (제거됨) Jarvis 서버 STT — OpenAI로 전환
-            // OpenAI AI 서비스 정리 (핸들러 해제 포함)
-            _ = StopOpenAiServicesAsync();
+            // OpenAI AI 서비스 정리 (핸들러 해제 포함) — await로 마지막 transcription.completed flush 보장 (L-388 수정)
+            await StopOpenAiServicesAsync();
+            Log4.Info($"[STT진단A] await StopOpenAiServices 완료, LiveSTT={LiveSTTSegments.Count}");
 
             // 실시간 STT 결과를 STTSegments로 복사 (이중 Stop race 차단: OnRecordingCompleted에서 중복 복사 방지)
             _sttCopiedByStopRecording = true;
