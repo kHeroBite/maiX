@@ -7001,7 +7001,7 @@
                                                       Background="Transparent" Cursor="SizeWE"/>
 
                                         <!-- 중간: 대화 네비게이션 패널 (Col2 — 우측 도킹 / Mode B에서 Row2 전폭으로 재배치) -->
-                                        <Border x:Name="OneNoteTopicNavPanel" Grid.Column="2" Padding="16"
+                                        <Border x:Name="OneNoteTopicNavPanel" Grid.Column="2" Padding="0,16,16,16"
                                                 BorderBrush="{DynamicResource ControlElevationBorderBrush}"
                                                 BorderThickness="0,0,1,0">
                                             <Grid>
@@ -7064,6 +7064,7 @@
                                                                            Foreground="{DynamicResource TextFillColorTertiaryBrush}"
                                                                            FontSize="10" Width="32"
                                                                            TextAlignment="Right"
+                                                                           Margin="0,0,2,0"
                                                                            VerticalAlignment="Top"/>
                                                             </DataTemplate>
                                                         </ItemsControl.ItemTemplate>
