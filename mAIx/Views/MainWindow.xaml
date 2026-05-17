@@ -7041,7 +7041,7 @@
                                                      L-389/L-424 준수: Canvas는 절대좌표 눈금 전용(정적), ItemsPanel 동적변경 아님 -->
                                                 <Grid x:Name="TopicSegmentsContainer">
                                                     <Grid.ColumnDefinitions>
-                                                        <ColumnDefinition Width="48"/>
+                                                        <ColumnDefinition Width="32"/>
                                                         <ColumnDefinition Width="*"/>
                                                     </Grid.ColumnDefinitions>
 
@@ -7062,7 +7062,8 @@
                                                             <DataTemplate>
                                                                 <TextBlock Text="{Binding Label}"
                                                                            Foreground="{DynamicResource TextFillColorTertiaryBrush}"
-                                                                           FontSize="10" Width="48"
+                                                                           FontSize="10" Width="32"
+                                                                           TextAlignment="Right"
                                                                            VerticalAlignment="Top"/>
                                                             </DataTemplate>
                                                         </ItemsControl.ItemTemplate>
