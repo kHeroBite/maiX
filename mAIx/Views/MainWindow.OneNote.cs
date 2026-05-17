@@ -132,7 +132,7 @@ namespace mAIx.Views
                     // 상단 행(STT + 요약)을 Row0에, 대화네비를 Row2 전폭에 배치
                     OneNoteRecRow0.Height = new GridLength(1, GridUnitType.Star);   // 상단 STT/요약
                     OneNoteRecRow1.Height = new GridLength(4);                       // 가로 Splitter
-                    OneNoteRecRow2.Height = new GridLength(220, GridUnitType.Pixel); // 하단 대화네비 (카드 높이·영역 2배: 110→220)
+                    OneNoteRecRow2.Height = new GridLength(147, GridUnitType.Pixel); // 하단 대화네비 (패널 2/3 축소: 220→147)
 
                     // STT: Row0 Col0 유지
                     Grid.SetRow(OneNoteSTTPanel, 0);
