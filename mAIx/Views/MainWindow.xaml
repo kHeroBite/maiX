@@ -7024,13 +7024,17 @@
                                                     </ToggleButton>
                                                 </Grid>
 
+                                                <!-- L-450 Option B: 세로/가로 2모드 별도 컨테이너 + Visibility 토글.
+                                                     SizeChanged는 항상 표시되는 호스트가 소유 — Collapsed된 레이아웃의 SizeChanged 미발화로 PanelWidth 누락 방지 -->
+                                                <Grid x:Name="TopicNavLayoutHost"
+                                                      Grid.Row="1"
+                                                      SizeChanged="TopicNavScrollViewer_SizeChanged">
+
                                                 <!-- 대화 네비게이션 카드 목록 (세로 모드 — 우측 도킹 전용)
                                                      항목3-a: Column0 타임라인 시간눈금(Label) 복원, Line(눈금 선) 제거
                                                      항목3-b: 가로 스크롤바 금지(상하만 허용)
                                                      L-389/L-424 준수: Canvas는 절대좌표 눈금 전용(정적), ItemsPanel 동적변경 아님 -->
-                                                <Grid x:Name="TopicSegmentsContainer"
-                                                      Grid.Row="1"
-                                                      SizeChanged="TopicNavScrollViewer_SizeChanged">
+                                                <Grid x:Name="TopicSegmentsContainer">
                                                     <Grid.ColumnDefinitions>
                                                         <ColumnDefinition Width="52"/>
                                                         <ColumnDefinition Width="*"/>
@@ -7063,7 +7067,7 @@
                                                          항목3-b: ScrollViewer로 감싸 좌우 스크롤 금지(상하만 허용) -->
                                                     <ScrollViewer Grid.Column="1"
                                                                   HorizontalScrollBarVisibility="Disabled"
-                                                                  VerticalScrollBarVisibility="Auto">
+                                                                  VerticalScrollBarVisibility="Disabled">
                                                         <ItemsControl x:Name="TopicSegmentsItemsControl"
                                                                       ItemsSource="{Binding TopicSegments}">
                                                             <ItemsControl.ItemsPanel>
@@ -7075,7 +7079,7 @@
                                                                 <DataTemplate>
                                                                     <Border Height="{Binding DisplayHeight}"
                                                                             Background="{Binding BackgroundColorHex, Converter={StaticResource HexToBrushConverter}}"
-                                                                            Padding="6,4" Margin="0,0,0,2" CornerRadius="4"
+                                                                            Padding="6,4" Margin="0" CornerRadius="4"
                                                                             Cursor="Hand"
                                                                             MouseLeftButtonDown="TopicSegment_Click">
                                                                         <Border.ToolTip>
@@ -7097,6 +7101,83 @@
                                                         </ItemsControl>
                                                     </ScrollViewer>
                                                 </Grid>
+                                                <!-- /TopicSegmentsContainer (세로 모드 — byte-identical 보존, 래핑/Margin/ScrollBar만 보정1 직접 트레이스) -->
+
+                                                <!-- 가로 모드 레이아웃 (하단 도킹 전용, 기본 Collapsed)
+                                                     L-450 Option B: 세로 컨테이너와 별도 / L-424 StackPanel Horizontal + Border Width=DisplayWidth
+                                                     L-389: Canvas는 정적 절대좌표 눈금 전용(ItemsPanel 동적변경 아님) -->
+                                                <Grid x:Name="TopicNavHorizontalLayout" Visibility="Collapsed">
+                                                    <Grid.RowDefinitions>
+                                                        <RowDefinition Height="18"/>
+                                                        <RowDefinition Height="*"/>
+                                                    </Grid.RowDefinitions>
+
+                                                    <!-- Row 0: 타임라인 시간눈금 (좌→우 수평, Canvas.Left=LeftPx) -->
+                                                    <ItemsControl Grid.Row="0"
+                                                                  ItemsSource="{Binding TimelineTicks}">
+                                                        <ItemsControl.ItemsPanel>
+                                                            <ItemsPanelTemplate>
+                                                                <Canvas/>
+                                                            </ItemsPanelTemplate>
+                                                        </ItemsControl.ItemsPanel>
+                                                        <ItemsControl.ItemContainerStyle>
+                                                            <Style TargetType="ContentPresenter">
+                                                                <Setter Property="Canvas.Left" Value="{Binding LeftPx}"/>
+                                                                <Setter Property="Canvas.Top" Value="0"/>
+                                                            </Style>
+                                                        </ItemsControl.ItemContainerStyle>
+                                                        <ItemsControl.ItemTemplate>
+                                                            <DataTemplate>
+                                                                <TextBlock Text="{Binding Label}"
+                                                                           Foreground="{DynamicResource TextFillColorTertiaryBrush}"
+                                                                           FontSize="10"
+                                                                           VerticalAlignment="Top"/>
+                                                            </DataTemplate>
+                                                        </ItemsControl.ItemTemplate>
+                                                    </ItemsControl>
+
+                                                    <!-- Row 1: 대화 네비게이션 카드 목록 (가로 모드 — StackPanel Horizontal + DisplayWidth)
+                                                         양방향 스크롤 금지 (콘텐츠 ΣWidth = PanelWidth 정확 fit) -->
+                                                    <ScrollViewer Grid.Row="1"
+                                                                  HorizontalScrollBarVisibility="Disabled"
+                                                                  VerticalScrollBarVisibility="Disabled">
+                                                        <ItemsControl x:Name="TopicSegmentsHorizontalItemsControl"
+                                                                      ItemsSource="{Binding TopicSegments}">
+                                                            <ItemsControl.ItemsPanel>
+                                                                <ItemsPanelTemplate>
+                                                                    <StackPanel Orientation="Horizontal"/>
+                                                                </ItemsPanelTemplate>
+                                                            </ItemsControl.ItemsPanel>
+                                                            <ItemsControl.ItemTemplate>
+                                                                <DataTemplate>
+                                                                    <Border Width="{Binding DisplayWidth}"
+                                                                            Background="{Binding BackgroundColorHex, Converter={StaticResource HexToBrushConverter}}"
+                                                                            Padding="6,4" Margin="0" CornerRadius="4"
+                                                                            Cursor="Hand"
+                                                                            MouseLeftButtonDown="TopicSegment_Click">
+                                                                        <Border.ToolTip>
+                                                                            <ToolTip>
+                                                                                <TextBlock Text="{Binding ToolTipText}" TextWrapping="Wrap" MaxWidth="400"/>
+                                                                            </ToolTip>
+                                                                        </Border.ToolTip>
+                                                                        <StackPanel>
+                                                                            <!-- 주제어/핵심맥락 (5~20자) -->
+                                                                            <TextBlock Text="{Binding BodyDisplay}"
+                                                                                       FontSize="11" FontWeight="SemiBold"
+                                                                                       Foreground="{Binding BackgroundColorHex, Converter={StaticResource HexToReadableForegroundConverter}}"
+                                                                                       TextWrapping="Wrap"
+                                                                                       TextTrimming="CharacterEllipsis"/>
+                                                                        </StackPanel>
+                                                                    </Border>
+                                                                </DataTemplate>
+                                                            </ItemsControl.ItemTemplate>
+                                                        </ItemsControl>
+                                                    </ScrollViewer>
+                                                </Grid>
+                                                <!-- /TopicNavHorizontalLayout -->
+
+                                                </Grid>
+                                                <!-- /TopicNavLayoutHost -->
                                             </Grid>
                                         </Border>
 

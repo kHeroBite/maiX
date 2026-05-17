@@ -142,6 +142,12 @@ namespace mAIx.Views
                     Grid.SetColumn(OneNoteTopicNavPanel, 0);
                     Grid.SetColumnSpan(OneNoteTopicNavPanel, 5);
                     OneNoteTopicNavPanel.BorderThickness = new Thickness(0, 1, 0, 0);
+
+                    // L-450 Option B: 가로 레이아웃 표시 / 세로 레이아웃 숨김 (멱등)
+                    if (TopicSegmentsContainer != null)
+                        TopicSegmentsContainer.Visibility = Visibility.Collapsed;
+                    if (TopicNavHorizontalLayout != null)
+                        TopicNavHorizontalLayout.Visibility = Visibility.Visible;
                 }
                 else
                 {
@@ -176,6 +182,12 @@ namespace mAIx.Views
 
                     // 가로 Splitter: 숨김
                     OneNoteRecSplitterBottom.Visibility = Visibility.Collapsed;
+
+                    // L-450 Option B: 세로 레이아웃 표시 / 가로 레이아웃 숨김 (멱등)
+                    if (TopicSegmentsContainer != null)
+                        TopicSegmentsContainer.Visibility = Visibility.Visible;
+                    if (TopicNavHorizontalLayout != null)
+                        TopicNavHorizontalLayout.Visibility = Visibility.Collapsed;
                 }
             }
             catch (Exception ex)

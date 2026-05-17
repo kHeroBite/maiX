@@ -3296,14 +3296,17 @@ public partial class OneNoteViewModel : ViewModelBase
         {
             if (PanelHeight > 0)
             {
-                _timelineTicks.Add(new Models.TimelineTick { Time = TimeSpan.Zero, TopPx = 0, Label = "0:00" });
-                _timelineTicks.Add(new Models.TimelineTick { Time = TimeSpan.FromMinutes(1), TopPx = PanelHeight, Label = "1:00" });
+                // 가로 모드용 LeftPx — PanelWidth 미측정 시 0 (회귀 없음)
+                _timelineTicks.Add(new Models.TimelineTick { Time = TimeSpan.Zero, TopPx = 0, LeftPx = 0, Label = "0:00" });
+                _timelineTicks.Add(new Models.TimelineTick { Time = TimeSpan.FromMinutes(1), TopPx = PanelHeight, LeftPx = PanelWidth > 0 ? PanelWidth : 0, Label = "1:00" });
             }
             return;
         }
         var totalDuration = TopicSegments.Sum(s => Math.Max(1.0, (s.EndTime - s.StartTime).TotalSeconds));
         if (totalDuration <= 0) return;
         var pixelsPerSecond = PanelHeight / totalDuration;
+        // 가로 모드 타임라인 좌→우 — PanelWidth 미측정(0) 시 LeftPx=0 (기존 동작 회귀 없음)
+        var pixelsPerSecondW = PanelWidth > 0 ? PanelWidth / totalDuration : 0.0;
 
         var endTime = TopicSegments[^1].EndTime;
         var totalMinutes = (int)Math.Ceiling(endTime.TotalMinutes);
@@ -3314,6 +3317,7 @@ public partial class OneNoteViewModel : ViewModelBase
             {
                 Time = t,
                 TopPx = t.TotalSeconds * pixelsPerSecond,
+                LeftPx = t.TotalSeconds * pixelsPerSecondW,
                 Label = $"{m}:00"
             });
         }

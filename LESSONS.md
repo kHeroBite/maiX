@@ -1780,6 +1780,13 @@ L-424(WPF ItemsControl 가변높이 안티패턴 기각)가 직전 작업 완료
 - **교훈**: 예외 케이스(묵음/빈 입력) 처리 시 별도 UI 경로 추가 금지. 기존 이벤트/데이터 흐름에 예외 결과를 주입하여 UI 레이어는 무수정 유지 (Surgical 준수)
 - **Level**: 1
 
+## L-459: SizeChanged 이벤트는 Collapsed 아닌 호스트가 소유해야 함 (2026-05-17)
+
+- **문제**: 가로/세로 2모드에서 세로 컨테이너(`TopicSegmentsContainer`)가 `SizeChanged`를 소유했으나, 가로 모드로 전환 시 세로 컨테이너가 Collapsed → `SizeChanged` 미발화 → `PanelWidth` 미측정 → 가로 타임라인 LeftPx=0
+- **해결**: `SizeChanged`를 항상 표시된 부모 호스트 Grid(`TopicNavLayoutHost`)에 이관. 자식 컨테이너(Collapsed 가능) 소유 금지
+- **교훈**: Visibility를 토글하는 컨테이너에 SizeChanged를 달면 Collapsed 상태에서 미발화. 2모드 레이아웃에서 SizeChanged 이벤트는 반드시 두 모드를 모두 감싸는 부모 호스트에 귀속시켜야 함
+- **Level**: 2 (L-450 Option B 패턴 보완)
+
 ## 반영 추적 테이블
 
 | 교훈 ID | 교훈 요약 | 반영 대상 | 반영 위치 | 반영일 | 검증 |
@@ -1883,3 +1890,4 @@ L-424(WPF ItemsControl 가변높이 안티패턴 기각)가 직전 작업 완료
 | L-456 | 단일 Grid 코드비하인드 재배치 = 마크업 복제 0 도킹 패턴 — Grid.SetRow/SetColumn 런타임 변경으로 2-컨테이너 복제 회피 | docs | LESSONS.md | 2026-05-17 | ✅ |
 | L-457 | 하이라이트 정밀화 = LLM 프롬프트 품질 강화 + IsWordBoundary 단어경계 양쪽 동시 필요 — 한쪽만 수정 시 나머지 쪽 부정확 잔류 | docs | LESSONS.md | 2026-05-17 | ✅ |
 | L-458 | 전체 묵음 분기 = LLM 스킵 + 기존 이벤트 경로 재사용 — 별도 UI 경로 추가 금지. 예외 결과를 기존 흐름에 주입하여 UI 레이어 무수정 유지 | docs | LESSONS.md | 2026-05-17 | ✅ |
+| L-459 | SizeChanged 이벤트는 항상 표시된(Collapsed 아닌) 컨테이너가 소유 — Collapsed 요소는 SizeChanged 미발화, 호스트 Grid에 이관 필수 | docs | LESSONS.md + HISTORY.md | 2026-05-17 | ✅ |

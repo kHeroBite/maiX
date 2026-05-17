@@ -24,6 +24,14 @@ public class TimelineTick : INotifyPropertyChanged
         set { _topPx = value; OnPropertyChanged(); }
     }
 
+    // 가로 모드 타임라인 — 좌→우 수평 배치용 절대 X 좌표 (Canvas.Left 바인딩)
+    private double _leftPx;
+    public double LeftPx
+    {
+        get => _leftPx;
+        set { _leftPx = value; OnPropertyChanged(); }
+    }
+
     private string _label = "";
     public string Label
     {

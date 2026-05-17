@@ -1909,6 +1909,28 @@ ConfigureAwait(false)를 Service 레이어 전체에 적용하여 스레드 컨�
 
 ---
 
+## 2026-05-17: 대화네비 양모드 스크롤바 제거 + 가로모드 타임라인 좌→우 흐름 (보정 2건)
+
+### 작업 내용
+- **보정1 — 양모드 ScrollBarVisibility=Disabled**: 세로/가로 모드 ScrollViewer 양방향 스크롤바 Disabled. 세로 카드 `Margin="0"` (하단 2px 여분 제거). `RecalculateTopicSegmentHeights` 마지막 카드 잔여폭 흡수 보정.
+- **보정2 — 가로모드 타임라인 좌→우**: `TimelineTick.LeftPx` 프로퍼티 추가(INotifyPropertyChanged). `RebuildTimelineTicks`에 `pixelsPerSecondW=PanelWidth/totalDuration` 계산. `TopicNavHorizontalLayout` 신규(Canvas.Left=LeftPx + StackPanel Horizontal + Border Width=DisplayWidth).
+- **SizeChanged TopicNavLayoutHost 이관**: Collapsed 컨테이너 SizeChanged 미발화 방지 — 항상 표시되는 부모 호스트로 이관 (L-459).
+- **L-450 Option B 멱등 토글**: `ApplyTopicNavDockLayout` 가로/세로 Visibility 멱등 토글 추가. 세로 컨테이너 byte-identical 보존.
+
+### 주요 변경 파일
+- `mAIx/Models/TimelineTick.cs` — LeftPx 프로퍼티 추가
+- `mAIx/ViewModels/OneNoteViewModel.cs` — LeftPx 계산 + 잔여폭 흡수
+- `mAIx/Views/MainWindow.xaml` — TopicNavLayoutHost + TopicNavHorizontalLayout 신규, ScrollBar Disabled
+- `mAIx/Views/MainWindow.OneNote.cs` — 가로/세로 Visibility 멱등 토글
+
+### 테스트 결과 (otest Fast Path O3)
+- 빌드: 성공 (오류 0건, 신규 경고 0건) ✅
+- L-424/L-389/L-450/L-377/L-419 코드규칙 PASS ✅
+- 세로 모드 byte-identical 보존, AC-004 회귀 없음 ✅
+- 런타임 (스크롤바 부재 + 가로 타임라인): 사용자 육안 검증 대기
+
+---
+
 ## 2026-05-14: 핵심요약 네비게이션 5~20 카드 통폐합 + 스크롤 금지 (Min 40px 가드 제거)
 
 ### 작업 내용
