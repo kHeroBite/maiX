@@ -184,6 +184,17 @@ public partial class OneNoteViewModel : ViewModelBase
     private const int AutoSaveDelayMs = 3000; // 3초
 
     /// <summary>
+    /// 실시간 영속화 디바운스 타이머 — 녹음 중 크래시 내성 (2.5초 debounce)
+    /// </summary>
+    private System.Timers.Timer? _realtimePersistTimer;
+    private const double RealtimePersistDelayMs = 2500.0;
+
+    /// <summary>
+    /// 실시간 영속화 직렬화 락 (L-376: SemaphoreSlim IDisposable)
+    /// </summary>
+    private SemaphoreSlim _realtimePersistLock = new SemaphoreSlim(1, 1);
+
+    /// <summary>
     /// 현재 편집 중인 콘텐츠 (에디터에서 업데이트)
     /// </summary>
     private string? _editingContent;
@@ -3070,6 +3081,7 @@ public partial class OneNoteViewModel : ViewModelBase
                         var finalText = await _cumulativeSummaryService.FinalSummarizeAsync();
                         FinalSummaryText = finalText ?? string.Empty;
                         Log4.Info($"[녹음] 최종 요약 생성 완료: {FinalSummaryText.Length}자");
+                        TriggerRealtimePersist();
                     }
                     catch (Exception ex)
                     {
@@ -3142,6 +3154,7 @@ public partial class OneNoteViewModel : ViewModelBase
                         Log4.Info($"[녹음] 전체요약 수동 생성 완료: {FinalSummaryText.Length}자");
                     }).Task.ConfigureAwait(false);
                 }
+                TriggerRealtimePersist();
             }
             finally
             {
@@ -3228,6 +3241,7 @@ public partial class OneNoteViewModel : ViewModelBase
                     });
                 }
             }).Task.ConfigureAwait(false);
+            TriggerRealtimePersist();
         }
         catch (Exception ex)
         {
@@ -3253,6 +3267,7 @@ public partial class OneNoteViewModel : ViewModelBase
                 }
                 if (existing != null) LiveSTTSegments.Remove(existing);
             }).Task.ConfigureAwait(false);
+            TriggerRealtimePersist();
         }
         catch (Exception ex)
         {
@@ -3294,6 +3309,7 @@ public partial class OneNoteViewModel : ViewModelBase
                     Log4.Info($"[녹음] 1분 요약 생성 #{MinuteSummaryCount} — {entry.SummaryText.Length}자, 네비게이션 카드 추가: {navSegment.DisplayTitle}");
                 }).Task.ConfigureAwait(false);
             }
+            TriggerRealtimePersist();
         }
         catch (Exception ex)
         {
@@ -3359,10 +3375,12 @@ public partial class OneNoteViewModel : ViewModelBase
         RebuildTimelineTicks();
     }
 
-    private const int MAX_TOPIC_SEGMENTS = 20;
+    private const int MAX_TOPIC_SEGMENTS = 15;
+    private const int SOFT_TARGET_TOPIC_SEGMENTS = 10;
 
     /// <summary>
-    /// 인접 중복 주제 병합 시도 — 5개 이하 skip, 6~20개 유사 주제 검사, 20개 초과 강제 병합
+    /// 인접 중복 주제 병합 시도 — 5개 이하 skip, 6~15개 유사 주제 검사, 15개 초과 강제 병합
+    /// 호출 1회당 최대 1쌍 병합 (점진 수렴)
     /// </summary>
     private void TryMergeAdjacentTopics()
     {
@@ -3374,22 +3392,34 @@ public partial class OneNoteViewModel : ViewModelBase
             return;
         }
 
-        var mergedIndex = FindDuplicateAdjacent();
+        // 6~15 구간: Count > SOFT_TARGET 시 유사도 0.6 탐색 → 없으면 0.45 완화 → 없으면 강제 병합
+        if (TopicSegments.Count > SOFT_TARGET_TOPIC_SEGMENTS)
+        {
+            var idx = FindDuplicateAdjacent(0.6);
+            if (idx >= 0) { MergeAt(idx); return; }
+            idx = FindDuplicateAdjacent(0.45);
+            if (idx >= 0) { MergeAt(idx); return; }
+            ForceMergeBestPair();
+            return;
+        }
+
+        // Count <= SOFT_TARGET: 기존 동작 유지 (0.6 임계값)
+        var mergedIndex = FindDuplicateAdjacent(0.6);
         if (mergedIndex >= 0)
             MergeAt(mergedIndex);
     }
 
-    private int FindDuplicateAdjacent()
+    private int FindDuplicateAdjacent(double threshold = 0.6)
     {
         for (int i = 0; i < TopicSegments.Count - 1; i++)
         {
-            if (IsSimilarTopic(TopicSegments[i].SummaryPreview ?? "", TopicSegments[i + 1].SummaryPreview ?? ""))
+            if (IsSimilarTopic(TopicSegments[i].SummaryPreview ?? "", TopicSegments[i + 1].SummaryPreview ?? "", threshold))
                 return i;
         }
         return -1;
     }
 
-    private bool IsSimilarTopic(string a, string b)
+    private bool IsSimilarTopic(string a, string b, double threshold = 0.6)
     {
         if (string.IsNullOrWhiteSpace(a) || string.IsNullOrWhiteSpace(b)) return false;
         if (a.Equals(b, StringComparison.OrdinalIgnoreCase)) return true;
@@ -3400,7 +3430,7 @@ public partial class OneNoteViewModel : ViewModelBase
 
         var intersection = wordsA.Intersect(wordsB, StringComparer.OrdinalIgnoreCase).Count();
         var minLen = Math.Min(wordsA.Length, wordsB.Length);
-        return (double)intersection / minLen >= 0.6;
+        return (double)intersection / minLen >= threshold;
     }
 
     private void MergeAt(int firstIndex)
@@ -3431,8 +3461,108 @@ public partial class OneNoteViewModel : ViewModelBase
         MergeAt(bestIdx);
     }
 
+    // ─── 실시간 영속화 (크래시 내성) ───────────────────────────────────────
+
     /// <summary>
-    /// 타임라인 눈금 재생성 — 분 단위, Canvas TopPx 절대 좌표 계산
+    /// 실시간 영속화 디바운스 트리거 — STT/요약 이벤트 발생 시 2.5초 후 저장 (Stop 시 취소)
+    /// </summary>
+    private void TriggerRealtimePersist()
+    {
+        if (_realtimePersistTimer == null)
+        {
+            _realtimePersistTimer = new System.Timers.Timer(RealtimePersistDelayMs);
+            _realtimePersistTimer.AutoReset = false;
+            _realtimePersistTimer.Elapsed += async (s, e) =>
+            {
+                try
+                {
+                    await _realtimePersistLock.WaitAsync().ConfigureAwait(false);
+                    try
+                    {
+                        var filePath = _recordingService?.CurrentFilePath;
+                        if (string.IsNullOrEmpty(filePath)) return;
+
+                        Log4.Info($"[영속화] 실시간 저장 시작: {filePath}");
+
+                        // 녹음 중 LiveSTTSegments → .stt.json (SaveRealtimeSTTLiveAsync)
+                        if (LiveSTTSegments.Count > 0)
+                            await SaveRealtimeSTTLiveAsync(filePath).ConfigureAwait(false);
+
+                        // 요약/MAP → .realtime.json (기존 메서드 재사용)
+                        if (TopicSegments.Count > 0 || MinuteSummaries.Count > 0 ||
+                            !string.IsNullOrWhiteSpace(CumulativeSummaryText) ||
+                            !string.IsNullOrWhiteSpace(FinalSummaryText))
+                            await SaveRealtimeRecordingResultAsync(filePath).ConfigureAwait(false);
+
+                        Log4.Info($"[영속화] 실시간 저장 완료");
+                    }
+                    finally
+                    {
+                        _realtimePersistLock.Release();
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Log4.Error($"[영속화] 실시간 저장 타이머 실패: {ex.Message}");
+                }
+            };
+        }
+
+        _realtimePersistTimer.Stop();
+        _realtimePersistTimer.Start();
+    }
+
+    /// <summary>
+    /// 녹음 중 LiveSTTSegments → .stt.json 저장 (Stop 이전 크래시 내성용)
+    /// </summary>
+    private async Task SaveRealtimeSTTLiveAsync(string audioFilePath)
+    {
+        if (LiveSTTSegments.Count == 0) return;
+        try
+        {
+            // UI 스레드의 LiveSTTSegments 스냅샷 — Dispatcher 경유
+            List<Models.TranscriptSegment> snapshot = new();
+            var dispatcher = System.Windows.Application.Current?.Dispatcher;
+            if (dispatcher != null)
+            {
+                await dispatcher.InvokeAsync(() =>
+                {
+                    snapshot = LiveSTTSegments.ToList();
+                }).Task.ConfigureAwait(false);
+            }
+            if (snapshot.Count == 0) return;
+
+            var result = new Models.TranscriptResult
+            {
+                AudioFilePath = audioFilePath,
+                CreatedAt = DateTime.Now,
+                ModelName = "Server-Realtime-Live",
+                Language = "ko",
+                TotalDuration = snapshot.LastOrDefault()?.EndTime ?? TimeSpan.Zero,
+                Speakers = snapshot.Select(s => s.Speaker).Distinct().ToList()
+            };
+            result.Segments.AddRange(snapshot);
+
+            var sttPath = Path.ChangeExtension(audioFilePath, ".stt.json");
+            var options = new STJ.JsonSerializerOptions
+            {
+                WriteIndented = true,
+                Encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping
+            };
+            var json = STJ.JsonSerializer.Serialize(result, options);
+            await File.WriteAllTextAsync(sttPath, json, System.Text.Encoding.UTF8).ConfigureAwait(false);
+            Log4.Info($"[영속화] LiveSTT {snapshot.Count}개 → {sttPath}");
+        }
+        catch (Exception ex)
+        {
+            Log4.Error($"[영속화] SaveRealtimeSTTLiveAsync 실패: {ex.Message}");
+        }
+    }
+
+    /// <summary>
+    /// 타임라인 눈금 재생성 — 세그먼트 경계 기반, RecalculateTopicSegmentHeights와 동일 비례식
+    /// StartTime(각 세그먼트 시작) + 마지막 EndTime에만 tick 생성
+    /// 병합으로 세그먼트 소멸 시 해당 StartTime tick도 자동 사라짐
     /// </summary>
     private void RebuildTimelineTicks()
     {
@@ -3449,22 +3579,44 @@ public partial class OneNoteViewModel : ViewModelBase
         }
         var totalDuration = TopicSegments.Sum(s => Math.Max(1.0, (s.EndTime - s.StartTime).TotalSeconds));
         if (totalDuration <= 0) return;
-        var pixelsPerSecond = PanelHeight / totalDuration;
-        // 가로 모드 타임라인 좌→우 — PanelWidth 미측정(0) 시 LeftPx=0 (기존 동작 회귀 없음)
-        var pixelsPerSecondW = PanelWidth > 0 ? PanelWidth / totalDuration : 0.0;
 
-        var endTime = TopicSegments[^1].EndTime;
-        var totalMinutes = (int)Math.Ceiling(endTime.TotalMinutes);
-        for (int m = 0; m <= totalMinutes; m++)
+        // RecalculateTopicSegmentHeights와 동일 비례식: 누적 픽셀 오프셋, 마지막 잔여 흡수
+        double accumulated = 0;
+        double accumulatedW = 0;
+        for (int i = 0; i < TopicSegments.Count; i++)
         {
-            var t = TimeSpan.FromMinutes(m);
+            var seg = TopicSegments[i];
+            var duration = Math.Max(1.0, (seg.EndTime - seg.StartTime).TotalSeconds);
+
+            double topPx = accumulated;
+            double leftPx = accumulatedW;
+            var t = seg.StartTime;
             _timelineTicks.Add(new Models.TimelineTick
             {
                 Time = t,
-                TopPx = t.TotalSeconds * pixelsPerSecond,
-                LeftPx = t.TotalSeconds * pixelsPerSecondW,
-                Label = $"{m}:00"
+                TopPx = topPx,
+                LeftPx = leftPx,
+                Label = $"{(int)t.TotalMinutes}:{t.Seconds:D2}"
             });
+
+            if (i == TopicSegments.Count - 1)
+            {
+                // 마지막 세그먼트 EndTime — 잔여 흡수 (RecalculateTopicSegmentHeights 동일 정책)
+                var endT = seg.EndTime;
+                _timelineTicks.Add(new Models.TimelineTick
+                {
+                    Time = endT,
+                    TopPx = PanelHeight,
+                    LeftPx = PanelWidth > 0 ? PanelWidth : 0,
+                    Label = $"{(int)endT.TotalMinutes}:{endT.Seconds:D2}"
+                });
+            }
+            else
+            {
+                accumulated += (duration / totalDuration) * PanelHeight;
+                if (PanelWidth > 0)
+                    accumulatedW += (duration / totalDuration) * PanelWidth;
+            }
         }
     }
 
@@ -3492,6 +3644,7 @@ public partial class OneNoteViewModel : ViewModelBase
                     Log4.Info($"[녹음] 누적 요약 갱신: {CumulativeSummaryText.Length}자");
                 }).Task.ConfigureAwait(false);
             }
+            TriggerRealtimePersist();
         }
         catch (Exception ex)
         {
@@ -3514,6 +3667,9 @@ public partial class OneNoteViewModel : ViewModelBase
             IsRecordingPaused = false;
             RecordingDuration = TimeSpan.Zero;
             RecordingVolume = 0;
+
+            // 실시간 영속화 타이머 중단 — Stop 경로의 최종 저장과 경합 차단
+            _realtimePersistTimer?.Stop();
 
             // 실시간 STT 정리
             // (제거됨) Jarvis 서버 STT — OpenAI로 전환
@@ -4062,6 +4218,9 @@ public partial class OneNoteViewModel : ViewModelBase
             IsRecordingPaused = false;
             RecordingDuration = TimeSpan.Zero;
             RecordingVolume = 0;
+
+            // 실시간 영속화 타이머 중단 — Stop 경로의 최종 저장과 경합 차단
+            _realtimePersistTimer?.Stop();
 
             // (제거됨) Jarvis 서버 STT — OpenAI로 전환
             // OpenAI AI 서비스 정리 (핸들러 해제 포함) — await로 마지막 transcription.completed flush 보장 (L-388 수정)
@@ -5025,6 +5184,12 @@ public partial class OneNoteViewModel : ViewModelBase
         _autoSaveTimer?.Stop();
         _autoSaveTimer?.Dispose();
         _autoSaveTimer = null;
+
+        _realtimePersistTimer?.Stop();
+        _realtimePersistTimer?.Dispose();
+        _realtimePersistTimer = null;
+
+        _realtimePersistLock?.Dispose();
 
         _audioPlayerService?.Dispose();
         _audioPlayerService = null;

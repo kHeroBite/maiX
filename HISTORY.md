@@ -1995,3 +1995,7 @@ ConfigureAwait(false)를 Service 레이어 전체에 적용하여 스레드 컨�
 ## 2026-05-18 — 세로 0:00 라벨 좌5px 이동 + 패널 드래그/도킹 모드 영속화 (O3 Fast Path)
 
 | 2026-05-18 | 🎨 세로 0:00 타임라인 라벨 좌5px(RenderTransform) + 패널 드래그 크기·도킹 모드 영속화 — Canvas+우측정렬 TextBlock Margin 무효 확인 후 TranslateTransform X=-5 적용(L-470). TopicNavPanelWidth/Height 필드 추가+DragCompleted 저장+ApplyTopicNavDockLayout 복원. | MainWindow.xaml, OpenAiRecordingSettings.cs, MainWindow.OneNote.cs |
+
+## 2026-05-18 — 녹음 실시간 영속화(throttle) + STT/요약 카드 여백 + MAP 5~15 정책 + 타임라인 세그먼트경계 라벨 (O3 Fast Path)
+
+| 2026-05-18 | 🔒 녹음 실시간 영속화(debounce 2.5s) + STT/요약 카드 우측 18px + MAP MAX 20→15·SOFT 10 점진병합 + RebuildTimelineTicks 세그먼트경계 라벨(병합 중간시간 자동소멸) — L-471·L-472 교훈 등록. | OneNoteViewModel.cs, MainWindow.xaml |
