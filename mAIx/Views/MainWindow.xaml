@@ -6998,7 +6998,8 @@
                                         <!-- GridSplitter (Col1, STT↔대화네비 — 우측 도킹 모드 전용) -->
                                         <GridSplitter x:Name="OneNoteRecSplitter1" Grid.Column="1" Width="4"
                                                       HorizontalAlignment="Stretch"
-                                                      Background="Transparent" Cursor="SizeWE"/>
+                                                      Background="Transparent" Cursor="SizeWE"
+                                                      Thumb.DragCompleted="OneNoteRecVerticalSplitter_DragCompleted"/>
 
                                         <!-- 중간: 대화 네비게이션 패널 (Col2 — 우측 도킹 / Mode B에서 Row2 전폭으로 재배치) -->
                                         <Border x:Name="OneNoteTopicNavPanel" Grid.Column="2" Padding="0,16,16,16"
@@ -7065,7 +7066,11 @@
                                                                            FontSize="10" Width="32"
                                                                            TextAlignment="Right"
                                                                            Margin="0,0,6,0"
-                                                                           VerticalAlignment="Top"/>
+                                                                           VerticalAlignment="Top">
+                                                                    <TextBlock.RenderTransform>
+                                                                        <TranslateTransform X="-5"/>
+                                                                    </TextBlock.RenderTransform>
+                                                                </TextBlock>
                                                             </DataTemplate>
                                                         </ItemsControl.ItemTemplate>
                                                     </ItemsControl>
@@ -7229,13 +7234,15 @@
                                         <!-- GridSplitter (Col3, 대화네비↔요약 — 우측 도킹 모드 전용) -->
                                         <GridSplitter x:Name="OneNoteRecSplitter3" Grid.Column="3" Width="4"
                                                       HorizontalAlignment="Stretch"
-                                                      Background="Transparent" Cursor="SizeWE"/>
+                                                      Background="Transparent" Cursor="SizeWE"
+                                                      Thumb.DragCompleted="OneNoteRecVerticalSplitter_DragCompleted"/>
 
                                         <!-- 가로 GridSplitter (Row1, 상단 STT/요약 ↔ 하단 대화네비 — 하단 도킹 모드 전용, 기본 숨김) -->
                                         <GridSplitter x:Name="OneNoteRecSplitterBottom" Grid.Row="1" Grid.Column="0" Grid.ColumnSpan="5"
                                                       Height="4" Visibility="Collapsed"
                                                       VerticalAlignment="Stretch" HorizontalAlignment="Stretch"
-                                                      Background="Transparent" Cursor="SizeNS"/>
+                                                      Background="Transparent" Cursor="SizeNS"
+                                                      Thumb.DragCompleted="OneNoteRecBottomSplitter_DragCompleted"/>
 
                                         <!-- 우측: 녹음옵션(상단) + AI 요약(하단) (Col4 — Mode B에서 Col2로 재배치) -->
                                         <Grid x:Name="OneNoteSummaryPanel" Grid.Column="4">

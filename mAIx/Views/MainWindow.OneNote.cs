@@ -116,6 +116,66 @@ namespace mAIx.Views
         ///  - Mode A(Vertical, 우측 도킹, 기본): 5컬럼 1행. STT=Col0 / 세로Split=Col1 / 대화네비=Col2 / 세로Split=Col3 / 요약=Col4
         ///  - Mode B(Horizontal, 하단 도킹): Row0=상단(STT=Col0 / 세로Split=Col1 / 요약=Col2~Col4 전폭) / Row1=가로Split / Row2=대화네비 전폭
         /// </summary>
+        /// <summary>
+        /// 저장된 패널 폭(TopicNavPanelWidth)을 반환한다. 유효 범위(80 이상)가 아니면 기본값 147을 반환한다.
+        /// </summary>
+        private double GetSavedPanelWidth()
+        {
+            var oaiSettings = App.Settings?.OaiRecording;
+            if (oaiSettings == null) return 147;
+            return oaiSettings.TopicNavPanelWidth >= 80 ? oaiSettings.TopicNavPanelWidth : 147;
+        }
+
+        /// <summary>
+        /// 저장된 패널 높이(TopicNavPanelHeight)를 반환한다. 유효 범위(80 이상)가 아니면 기본값 147을 반환한다.
+        /// </summary>
+        private double GetSavedPanelHeight()
+        {
+            var oaiSettings = App.Settings?.OaiRecording;
+            if (oaiSettings == null) return 147;
+            return oaiSettings.TopicNavPanelHeight >= 80 ? oaiSettings.TopicNavPanelHeight : 147;
+        }
+
+        /// <summary>
+        /// 세로 GridSplitter(Splitter1/Splitter3) 드래그 완료 시 Col2 폭을 저장한다.
+        /// </summary>
+        private void OneNoteRecVerticalSplitter_DragCompleted(object sender, System.Windows.Controls.Primitives.DragCompletedEventArgs e)
+        {
+            try
+            {
+                var width = OneNoteRecCol2?.ActualWidth ?? 0;
+                if (width < 80) return;
+                var oaiSettings = App.Settings?.OaiRecording;
+                if (oaiSettings == null) return;
+                oaiSettings.TopicNavPanelWidth = width;
+                App.Settings?.SaveAll();
+            }
+            catch (Exception ex)
+            {
+                _oneNoteLog.Error(ex, "[OneNote] OneNoteRecVerticalSplitter_DragCompleted 처리 실패");
+            }
+        }
+
+        /// <summary>
+        /// 하단 GridSplitter(SplitterBottom) 드래그 완료 시 Row2 높이를 저장한다.
+        /// </summary>
+        private void OneNoteRecBottomSplitter_DragCompleted(object sender, System.Windows.Controls.Primitives.DragCompletedEventArgs e)
+        {
+            try
+            {
+                var height = OneNoteRecRow2?.ActualHeight ?? 0;
+                if (height < 80) return;
+                var oaiSettings = App.Settings?.OaiRecording;
+                if (oaiSettings == null) return;
+                oaiSettings.TopicNavPanelHeight = height;
+                App.Settings?.SaveAll();
+            }
+            catch (Exception ex)
+            {
+                _oneNoteLog.Error(ex, "[OneNote] OneNoteRecBottomSplitter_DragCompleted 처리 실패");
+            }
+        }
+
         private void ApplyTopicNavDockLayout()
         {
             try
@@ -132,7 +192,7 @@ namespace mAIx.Views
                     // 상단 행(STT + 요약)을 Row0에, 대화네비를 Row2 전폭에 배치
                     OneNoteRecRow0.Height = new GridLength(1, GridUnitType.Star);   // 상단 STT/요약
                     OneNoteRecRow1.Height = new GridLength(4);                       // 가로 Splitter
-                    OneNoteRecRow2.Height = new GridLength(147, GridUnitType.Pixel); // 하단 대화네비 (패널 2/3 축소: 220→147)
+                    OneNoteRecRow2.Height = new GridLength(GetSavedPanelHeight(), GridUnitType.Pixel); // 하단 대화네비 (저장값 우선, 미저장 시 147)
 
                     // STT: Row0 Col0 유지
                     Grid.SetRow(OneNoteSTTPanel, 0);
@@ -172,6 +232,10 @@ namespace mAIx.Views
                     OneNoteRecRow0.Height = new GridLength(1, GridUnitType.Star);
                     OneNoteRecRow1.Height = new GridLength(0);
                     OneNoteRecRow2.Height = new GridLength(0);
+
+                    // Col2 폭: 저장값 우선, 미저장 시 147 폴백
+                    if (OneNoteRecCol2 != null)
+                        OneNoteRecCol2.Width = new GridLength(GetSavedPanelWidth());
 
                     // STT: Row0 Col0
                     Grid.SetRow(OneNoteSTTPanel, 0);

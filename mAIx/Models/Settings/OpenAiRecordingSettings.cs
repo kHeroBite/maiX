@@ -73,6 +73,18 @@ public class OpenAiRecordingSettings
     public string TopicNavOrientation { get; set; } = "Vertical";
 
     /// <summary>
+    /// 주제어 네비게이션 패널 폭 (세로 우측 도킹 Mode A, Col2 Width, 기본 147)
+    /// </summary>
+    [XmlElement("TopicNavPanelWidth")]
+    public double TopicNavPanelWidth { get; set; } = 147;
+
+    /// <summary>
+    /// 주제어 네비게이션 패널 높이 (가로 하단 도킹 Mode B, Row2 Height, 기본 147)
+    /// </summary>
+    [XmlElement("TopicNavPanelHeight")]
+    public double TopicNavPanelHeight { get; set; } = 147;
+
+    /// <summary>
     /// TTS 모델 (tts-1, tts-1-hd)
     /// </summary>
     [XmlElement("TtsModel")]
