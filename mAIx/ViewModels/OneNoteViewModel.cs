@@ -1968,6 +1968,7 @@ public partial class OneNoteViewModel : ViewModelBase
             // guardScope 패턴(L-386): 카운터 > 0이면 한 회 소비 후 건너뜀
             if (_skipLoadSTTOnSelectionChange <= 0)
             {
+                _realtimePersistTimer?.Stop(); // 가드3: 파일 전환 시 예약된 stale 타이머 무력화
                 Utils.Log4.Info($"[OneNote] STT/요약 로드 시작: {value.FileName}");
                 _ = LoadSTTResultAsync(value);
                 _ = LoadSummaryResultAsync(value);
@@ -3468,6 +3469,7 @@ public partial class OneNoteViewModel : ViewModelBase
     /// </summary>
     private void TriggerRealtimePersist()
     {
+        if (!IsRecording) return; // 가드1: 비녹음 시 타이머 예약 자체 차단
         if (_realtimePersistTimer == null)
         {
             _realtimePersistTimer = new System.Timers.Timer(RealtimePersistDelayMs);
@@ -3479,6 +3481,7 @@ public partial class OneNoteViewModel : ViewModelBase
                     await _realtimePersistLock.WaitAsync().ConfigureAwait(false);
                     try
                     {
+                        if (!IsRecording) return; // 가드2: 2.5s debounce 사이 Stop 케이스 재확인 (L-420)
                         var filePath = _recordingService?.CurrentFilePath;
                         if (string.IsNullOrEmpty(filePath)) return;
 
