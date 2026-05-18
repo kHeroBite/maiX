@@ -7242,6 +7242,7 @@ public partial class MainWindow : FluentWindow
             if (TopicSegmentsItemsControl != null)
                 TopicSegmentsItemsControl.DataContext = _oneNoteViewModel;
             _oneNoteViewModel.ActiveContentTab = "recording";
+            ApplyTopicNavDockLayout(); // VM 생성 완료 결정론적 시점에 초기 도킹 레이아웃 동기화 (첫클릭 무반응 버그 수정)
             Log4.Info($"[녹음탭] DataContext 할당 완료 — ChunkSeconds={_oneNoteViewModel.ChunkSeconds}, TranscriptionModel={_oneNoteViewModel.TranscriptionModel}, IsServerVadEnabled={_oneNoteViewModel.IsServerVadEnabled}");
         }
     }

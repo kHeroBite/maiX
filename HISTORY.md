@@ -1990,3 +1990,4 @@ ConfigureAwait(false)를 Service 레이어 전체에 적용하여 스레드 컨�
 ## 2026-05-17 — 녹음중지 STT 사라짐 5연속 회귀 종결 (이중 Stop race 대칭 가드)
 
 | 2026-05-17 | 🐛 녹음중지 STT 사라짐 5연속 회귀 종결 — StopRecordingAsync:4060이 OnRecordingCompleted 정상복사(2개)를 빈 LiveSTTSegments로 0개 덮어씌우는 이중 Stop race. 단방향 가드만 존재하여 반대 방향 무방비. 대칭 가드(_sttCopiedByRecordingCompleted) 추가로 근본 차단. 5연속 실패 메타원인: 로그 채널 오판(794MB Serilog 파일)으로 "코드 미실행" 잘못된 가설 4회 반복 (L-467/L-468) | OneNoteViewModel.cs |
+| 2026-05-18 | 🔧 세로 OneNoteRecCol2 폭 150→147, 0:00↔카드 TextBlock Margin 2→6px, 도킹토글 첫클릭 무반응 버그 수정(SwitchToRecordingContentTab에 ApplyTopicNavDockLayout 초기화 추가) | MainWindow.xaml, MainWindow.xaml.cs |

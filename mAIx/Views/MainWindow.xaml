@@ -6862,7 +6862,7 @@
                                         <Grid.ColumnDefinitions>
                                             <ColumnDefinition x:Name="OneNoteRecCol0" Width="*" MinWidth="250"/>
                                             <ColumnDefinition x:Name="OneNoteRecCol1" Width="4"/>
-                                            <ColumnDefinition x:Name="OneNoteRecCol2" Width="150" MinWidth="80"/>
+                                            <ColumnDefinition x:Name="OneNoteRecCol2" Width="147" MinWidth="80"/>
                                             <ColumnDefinition x:Name="OneNoteRecCol3" Width="4"/>
                                             <ColumnDefinition x:Name="OneNoteRecCol4" Width="280" MinWidth="200"/>
                                         </Grid.ColumnDefinitions>
@@ -7064,7 +7064,7 @@
                                                                            Foreground="{DynamicResource TextFillColorTertiaryBrush}"
                                                                            FontSize="10" Width="32"
                                                                            TextAlignment="Right"
-                                                                           Margin="0,0,2,0"
+                                                                           Margin="0,0,6,0"
                                                                            VerticalAlignment="Top"/>
                                                             </DataTemplate>
                                                         </ItemsControl.ItemTemplate>
