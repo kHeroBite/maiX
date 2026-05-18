@@ -3661,6 +3661,8 @@ public partial class OneNoteViewModel : ViewModelBase
     private void OnRecordingCompleted(string filePath)
     {
         Log4.Info($"[녹음] ★ 녹음 완료 이벤트 수신: {filePath}");
+        // Stop경로 비동기 저장용 STT 스냅샷 (selection-change Clear 레이스 회피 — L-385)
+        List<Models.TranscriptSegment> _sttSnapshotForSave = new();
 
         _ = System.Windows.Application.Current?.Dispatcher.InvokeAsync(() =>
         {
@@ -3700,6 +3702,10 @@ public partial class OneNoteViewModel : ViewModelBase
                 Log4.Info($"[녹음] STT 이미 StopRecording에서 복사됨({STTSegments.Count}개) — OnRecordingCompleted 복사 skip");
                 _sttCopiedByStopRecording = false; // 다음 녹음을 위해 리셋
             }
+
+            // STT 스냅샷 선캡처 — 이후 LoadRecordings()의 selection-change가 STTSegments.Clear() 해도 보존
+            _sttSnapshotForSave = STTSegments.ToList();
+            Log4.Info($"[STT진단-snap] OnRecordingCompleted STT 스냅샷 캡처: {_sttSnapshotForSave.Count}개");
 
             // 화자분리 전/후 데이터 복사 (토글 버튼용 — 가드 밖 유지)
             _segmentsBeforeDiarization = _liveSegmentsBeforeDiarization;
@@ -3744,10 +3750,10 @@ public partial class OneNoteViewModel : ViewModelBase
         {
             try
             {
-                // 실시간 STT 결과가 있으면 저장 (STTSegments 기준)
-                if (STTSegments.Count > 0)
+                // 실시간 STT 결과가 있으면 저장 (스냅샷 기준 — selection-change Clear 레이스 회피 L-385)
+                if (_sttSnapshotForSave.Count > 0)
                 {
-                    await SaveRealtimeSTTResultAsync(filePath);
+                    await SaveRealtimeSTTSnapshotAsync(filePath, _sttSnapshotForSave);
                 }
 
                 // 실시간 요약이 있으면 저장
@@ -4039,6 +4045,71 @@ public partial class OneNoteViewModel : ViewModelBase
     }
 
     /// <summary>
+    /// 스냅샷 기반 실시간 STT 결과 저장 — Stop 경로의 selection-change Clear 레이스 회피용 (L-385/L-386)
+    /// 동기 블록에서 캡처한 불변 스냅샷을 비동기 블록이 안전하게 저장한다.
+    /// </summary>
+    private async Task SaveRealtimeSTTSnapshotAsync(string audioFilePath, List<Models.TranscriptSegment> snapshot)
+    {
+        if (snapshot == null || snapshot.Count == 0) return;
+
+        try
+        {
+            var result = new Models.TranscriptResult
+            {
+                AudioFilePath = audioFilePath,
+                CreatedAt = DateTime.Now,
+                ModelName = "Server-Realtime",
+                Language = "ko",
+                TotalDuration = snapshot.LastOrDefault()?.EndTime ?? TimeSpan.Zero,
+                Speakers = snapshot.Select(s => s.Speaker).Distinct().ToList()
+            };
+            result.Segments.AddRange(snapshot);
+
+            var sttPath = Path.ChangeExtension(audioFilePath, ".stt.json");
+
+            // 방어선 B: 기존 파일이 신규 저장분보다 더 크면 덮어쓰기 거부 (회귀5 차단 — 기존 로직 동일)
+            if (File.Exists(sttPath))
+            {
+                try
+                {
+                    var existingJson = await File.ReadAllTextAsync(sttPath, System.Text.Encoding.UTF8);
+                    var existingResult = STJ.JsonSerializer.Deserialize<Models.TranscriptResult>(existingJson);
+                    if (existingResult != null)
+                    {
+                        var existingCount = existingResult.Segments.Count;
+                        var existingTextLen = existingResult.Segments.Sum(s => s.Text?.Length ?? 0);
+                        var newCount = result.Segments.Count;
+                        var newTextLen = result.Segments.Sum(s => s.Text?.Length ?? 0);
+                        if (existingCount > newCount && existingTextLen > newTextLen)
+                        {
+                            Log4.Warn($"[STT진단B] 덮어쓰기 거부(snapshot) old={existingCount}개/{existingTextLen}자 new={newCount}개/{newTextLen}자");
+                            return;
+                        }
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Log4.Warn($"[STT진단B] 기존 파일 검증 실패(snapshot, 무시하고 저장): {ex.Message}");
+                }
+            }
+
+            var options = new STJ.JsonSerializerOptions
+            {
+                WriteIndented = true,
+                Encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping
+            };
+            var json = STJ.JsonSerializer.Serialize(result, options);
+            await File.WriteAllTextAsync(sttPath, json, System.Text.Encoding.UTF8);
+
+            _logger.Information("[녹음] 실시간 STT 결과 저장(snapshot): {Path}", sttPath);
+        }
+        catch (Exception ex)
+        {
+            _logger.Error($"[녹음] 실시간 STT 결과 저장(snapshot) 실패: {ex.Message}");
+        }
+    }
+
+    /// <summary>
     /// 실시간 요약 결과 저장
     /// </summary>
     private async Task SaveRealtimeSummaryAsync(string audioFilePath)
@@ -4207,6 +4278,8 @@ public partial class OneNoteViewModel : ViewModelBase
         {
             var filePath = _recordingService.StopRecording();
             _logger.Information("녹음 중지됨: {FilePath}", filePath);
+            // Stop경로 비동기 저장용 STT 스냅샷 (selection-change Clear 레이스 회피 — L-385)
+            List<Models.TranscriptSegment> _sttSnapshotForSave = new();
 
             // 녹음 완료 플래그 설정 (CollectionChanged에서 자동 선택용)
             if (!string.IsNullOrEmpty(filePath))
@@ -4247,6 +4320,10 @@ public partial class OneNoteViewModel : ViewModelBase
                 // OnRecordingCompleted가 이미 정상 복사함 — 빈 LiveSTTSegments로 덮어씌우기 skip
                 Log4.Info($"[STT진단C] StopRecording 복사 skip — RecordingCompleted 선복사됨 ({STTSegments.Count}개 보존)");
             }
+
+            // STT 스냅샷 선캡처 — 이후 LoadRecordings()의 selection-change가 STTSegments.Clear() 해도 보존
+            _sttSnapshotForSave = STTSegments.ToList();
+            Log4.Info($"[STT진단-snap] StopRecordingAsync STT 스냅샷 캡처: {_sttSnapshotForSave.Count}개");
 
             // 화자분리 전/후 데이터 복사 (토글 버튼용)
             _segmentsBeforeDiarization = _liveSegmentsBeforeDiarization;
@@ -4294,9 +4371,10 @@ public partial class OneNoteViewModel : ViewModelBase
                 {
                     try
                     {
-                        if (STTSegments.Count > 0)
+                        // 실시간 STT 결과가 있으면 저장 (스냅샷 기준 — selection-change Clear 레이스 회피 L-385)
+                        if (_sttSnapshotForSave.Count > 0)
                         {
-                            await SaveRealtimeSTTResultAsync(filePath);
+                            await SaveRealtimeSTTSnapshotAsync(filePath, _sttSnapshotForSave);
                         }
                         if (!string.IsNullOrWhiteSpace(LiveSummaryText))
                         {
