@@ -1999,3 +1999,7 @@ ConfigureAwait(false)를 Service 레이어 전체에 적용하여 스레드 컨�
 ## 2026-05-18 — 녹음 실시간 영속화(throttle) + STT/요약 카드 여백 + MAP 5~15 정책 + 타임라인 세그먼트경계 라벨 (O3 Fast Path)
 
 | 2026-05-18 | 🔒 녹음 실시간 영속화(debounce 2.5s) + STT/요약 카드 우측 18px + MAP MAX 20→15·SOFT 10 점진병합 + RebuildTimelineTicks 세그먼트경계 라벨(병합 중간시간 자동소멸) — L-471·L-472 교훈 등록. | OneNoteViewModel.cs, MainWindow.xaml |
+
+## 2026-05-19 — 짧은 녹음 STT 미저장 race 수정 (O3 Fast Path)
+
+| 2026-05-19 | 🐛 짧은 녹음 STT 미저장 race 수정 — OnRecordingCompleted의 fire-and-forget Dispatcher.InvokeAsync + 동시 Task.Run race로 _sttSnapshotForSave 캡처 미완료 시점에 저장 게이트가 0 평가 → .stt.json 미생성. async void 시그니처 + await .Task.ConfigureAwait(false) 직렬화 + Task.Run 제거 + 외부 try-catch. L-474 교훈 등록. | OneNoteViewModel.cs |

@@ -3658,14 +3658,20 @@ public partial class OneNoteViewModel : ViewModelBase
     /// <summary>
     /// 녹음 완료 이벤트 핸들러
     /// </summary>
-    private void OnRecordingCompleted(string filePath)
+    private async void OnRecordingCompleted(string filePath)
     {
+        try
+        {
         Log4.Info($"[녹음] ★ 녹음 완료 이벤트 수신: {filePath}");
         // Stop경로 비동기 저장용 STT 스냅샷 (selection-change Clear 레이스 회피 — L-385)
         List<Models.TranscriptSegment> _sttSnapshotForSave = new();
 
-        _ = System.Windows.Application.Current?.Dispatcher.InvokeAsync(() =>
+        // UI 작업 완료 후 snapshot 캡처 보장 — L-374 .Task.ConfigureAwait(false) 패턴
+        var dispatcher = System.Windows.Application.Current?.Dispatcher;
+        if (dispatcher != null)
         {
+            await dispatcher.InvokeAsync(() =>
+            {
             Log4.Info("[녹음] ★ 녹음 완료 처리 시작");
 
             IsRecording = false;
@@ -3743,41 +3749,44 @@ public partial class OneNoteViewModel : ViewModelBase
             {
                 Log4.Warn($"[녹음] ★ 새 녹음 파일을 목록에서 찾지 못함: {filePath}");
             }
-        });
+            }).Task.ConfigureAwait(false);
+        }
 
-        // 비동기 작업은 별도로 처리
-        _ = Task.Run(async () =>
+        // 비동기 작업 직렬 실행 — UI 스레드 snapshot 캡처 완료 후 실행 보장 (race 해소)
+        try
         {
-            try
+            // 실시간 STT 결과가 있으면 저장 (스냅샷 기준 — selection-change Clear 레이스 회피 L-385)
+            if (_sttSnapshotForSave.Count > 0)
             {
-                // 실시간 STT 결과가 있으면 저장 (스냅샷 기준 — selection-change Clear 레이스 회피 L-385)
-                if (_sttSnapshotForSave.Count > 0)
-                {
-                    await SaveRealtimeSTTSnapshotAsync(filePath, _sttSnapshotForSave);
-                }
-
-                // 실시간 요약이 있으면 저장
-                if (!string.IsNullOrWhiteSpace(LiveSummaryText))
-                {
-                    await SaveRealtimeSummaryAsync(filePath);
-                }
-
-                // 실시간 녹음 결과 저장 (TopicSegments/MinuteSummaries/CumulativeSummary/FinalSummary)
-                if (TopicSegments.Count > 0 || MinuteSummaries.Count > 0 ||
-                    !string.IsNullOrWhiteSpace(CumulativeSummaryText) ||
-                    !string.IsNullOrWhiteSpace(FinalSummaryText))
-                {
-                    await SaveRealtimeRecordingResultAsync(filePath);
-                }
-
-                // 후처리 실행 (실시간 결과 저장 완료 후)
-                await RunPostProcessingAsync(filePath);
+                await SaveRealtimeSTTSnapshotAsync(filePath, _sttSnapshotForSave);
             }
-            catch (Exception ex)
+
+            // 실시간 요약이 있으면 저장
+            if (!string.IsNullOrWhiteSpace(LiveSummaryText))
             {
-                _logger.Error(ex, "[녹음] 실시간 STT/요약 저장 실패");
+                await SaveRealtimeSummaryAsync(filePath);
             }
-        });
+
+            // 실시간 녹음 결과 저장 (TopicSegments/MinuteSummaries/CumulativeSummary/FinalSummary)
+            if (TopicSegments.Count > 0 || MinuteSummaries.Count > 0 ||
+                !string.IsNullOrWhiteSpace(CumulativeSummaryText) ||
+                !string.IsNullOrWhiteSpace(FinalSummaryText))
+            {
+                await SaveRealtimeRecordingResultAsync(filePath);
+            }
+
+            // 후처리 실행 (실시간 결과 저장 완료 후)
+            await RunPostProcessingAsync(filePath);
+        }
+        catch (Exception ex)
+        {
+            _logger.Error(ex, "[녹음] 실시간 STT/요약 저장 실패");
+        }
+        }
+        catch (Exception ex)
+        {
+            _logger.Error(ex, "[녹음] OnRecordingCompleted 외부 예외");
+        }
     }
 
     /// <summary>
