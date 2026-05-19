@@ -132,6 +132,20 @@ public class OpenAiRecordingSettings
     [XmlElement("ServerVadEnabled")]
     public bool ServerVadEnabled { get; set; } = true;
 
+    /// <summary>
+    /// server_vad 감도 임계값 (0.0~1.0). 값이 낮을수록 민감하게 발화를 감지.
+    /// 기본 0.5. ServerVadEnabled=true 시에만 적용.
+    /// </summary>
+    [XmlElement("VadThreshold")]
+    public double VadThreshold { get; set; } = 0.5;
+
+    /// <summary>
+    /// server_vad 발화 종료 판정 침묵 시간 (밀리초, 100~3000).
+    /// 침묵이 이 시간 이상 지속되면 발화 종료로 간주. 기본 500ms.
+    /// </summary>
+    [XmlElement("VadSilenceDurationMs")]
+    public int VadSilenceDurationMs { get; set; } = 500;
+
     /// <summary>STT 화면에서 주제어 키워드를 하이라이트로 표시할지 여부. 기본 true.</summary>
     [XmlElement("KeywordHighlightEnabled")]
     public bool KeywordHighlightEnabled { get; set; } = true;

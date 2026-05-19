@@ -752,6 +752,11 @@ public partial class ApiSettingsWindow : FluentWindow
         if (ChunkSecondsComboBox.SelectedItem == null)
             ChunkSecondsComboBox.SelectedIndex = 1; // 기본 10초
 
+        // VAD 설정 로드
+        VadEnabledToggle.IsChecked = rec.ServerVadEnabled;
+        VadThresholdTextBox.Text = rec.VadThreshold.ToString();
+        VadSilenceMsTextBox.Text = rec.VadSilenceDurationMs.ToString();
+
         // TTS 설정 로드
         TtsModelTextBox.Text = rec.TtsModel;
         foreach (ComboBoxItem item in TtsVoiceComboBox.Items)
@@ -791,6 +796,13 @@ public partial class ApiSettingsWindow : FluentWindow
         {
             rec.ChunkSeconds = chunk;
         }
+
+        // VAD 설정 저장
+        rec.ServerVadEnabled = VadEnabledToggle.IsChecked == true;
+        if (double.TryParse(VadThresholdTextBox.Text?.Trim(), out double vadThr))
+            rec.VadThreshold = Math.Clamp(vadThr, 0.0, 1.0);
+        if (int.TryParse(VadSilenceMsTextBox.Text?.Trim(), out int vadSil))
+            rec.VadSilenceDurationMs = Math.Clamp(vadSil, 100, 3000);
 
         // TTS 설정 저장
         if (!string.IsNullOrWhiteSpace(TtsModelTextBox.Text))

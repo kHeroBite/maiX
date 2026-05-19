@@ -204,13 +204,13 @@ public sealed class OpenAiRealtimeSttService : IOpenAiRealtimeSttService
                         turn_detection = (transcriptionModel != null && transcriptionModel.Contains("whisper"))
                             ? null
                             : (_settings.OaiRecording.ServerVadEnabled
-                                ? (object)new { type = "server_vad", threshold = 0.5, prefix_padding_ms = 300, silence_duration_ms = 500 }
+                                ? (object)new { type = "server_vad", threshold = _settings.OaiRecording.VadThreshold, prefix_padding_ms = 300, silence_duration_ms = _settings.OaiRecording.VadSilenceDurationMs }
                                 : null)
                     }
                 }
             }
         }).ConfigureAwait(false);
-        _log.Info($"[OpenAi-Realtime] session.update 발송 (GA transcription shape) — VAD={(_settings.OaiRecording.ServerVadEnabled ? "server_vad(thr=0.5,sil=500ms)" : "OFF (수동 commit)")}, transcriptionModel={transcriptionModel}, language={sttLang}, prompt={sttPrompt.Length}자");
+        _log.Info($"[OpenAi-Realtime] session.update 발송 (GA transcription shape) — VAD={(_settings.OaiRecording.ServerVadEnabled ? $"server_vad(thr={_settings.OaiRecording.VadThreshold},sil={_settings.OaiRecording.VadSilenceDurationMs}ms)" : "OFF (수동 commit)")}, transcriptionModel={transcriptionModel}, language={sttLang}, prompt={sttPrompt.Length}자");
 
         _silenceStartedAt = DateTime.Now;
         _lastSilenceMarkerSec = 0;
