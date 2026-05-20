@@ -8658,6 +8658,18 @@
                                                                           IsChecked="{Binding IsServerVadEnabled, Mode=TwoWay}"
                                                                           FontSize="12" Margin="0,4,0,4"
                                                                           ToolTip="권장: 체크."/>
+                                                                <StackPanel Orientation="Horizontal" Margin="0,2,0,2">
+                                                                    <TextBlock Text="VAD 감도 (Threshold)" FontSize="12" VerticalAlignment="Center" Margin="0,0,6,0"/>
+                                                                    <ui:TextBox Text="{Binding VadThreshold, Mode=TwoWay}"
+                                                                                PlaceholderText="0.0~1.0, 기본 0.5"
+                                                                                Width="100" FontSize="12"/>
+                                                                </StackPanel>
+                                                                <StackPanel Orientation="Horizontal" Margin="0,2,0,4">
+                                                                    <TextBlock Text="발화 종료 침묵 (ms)" FontSize="12" VerticalAlignment="Center" Margin="0,0,6,0"/>
+                                                                    <ui:TextBox Text="{Binding VadSilenceDurationMs, Mode=TwoWay}"
+                                                                                PlaceholderText="100~3000, 기본 500"
+                                                                                Width="100" FontSize="12"/>
+                                                                </StackPanel>
                                                                 <CheckBox Content="주제 키워드 하이라이트 표시 (STT 화면)"
                                                                           IsChecked="{Binding IsKeywordHighlightEnabled, Mode=TwoWay}"
                                                                           FontSize="12" Margin="0,0,0,4"

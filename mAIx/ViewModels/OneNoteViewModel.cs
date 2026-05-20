@@ -607,6 +607,14 @@ public partial class OneNoteViewModel : ViewModelBase
     [ObservableProperty]
     private bool _isServerVadEnabled = true;
 
+    /// <summary>VAD 감도 (0.0~1.0, 기본 0.5)</summary>
+    [ObservableProperty]
+    private double _vadThreshold = 0.5;
+
+    /// <summary>발화 종료 침묵 기준 (ms, 기본 500)</summary>
+    [ObservableProperty]
+    private int _vadSilenceDurationMs = 500;
+
     /// <summary>
     /// 실시간(분) 요약 LLM 모델 — 옵션 패널 ComboBox 바인딩
     /// </summary>
@@ -741,6 +749,8 @@ public partial class OneNoteViewModel : ViewModelBase
             _isEnableTypoFix = oaiSettings.EnableTypoFix;
             _transcriptionModel = string.IsNullOrWhiteSpace(oaiSettings.TranscriptionModel) ? "gpt-4o-mini-transcribe" : oaiSettings.TranscriptionModel;
             _isServerVadEnabled = oaiSettings.ServerVadEnabled;
+            _vadThreshold = oaiSettings.VadThreshold;
+            _vadSilenceDurationMs = oaiSettings.VadSilenceDurationMs;
             _chunkOverlapSeconds = oaiSettings.ChunkOverlapSeconds;
             _sttAutoScroll = oaiSettings.SttAutoScroll;
             _summaryAutoScroll = oaiSettings.SummaryAutoScroll;
@@ -2055,6 +2065,40 @@ public partial class OneNoteViewModel : ViewModelBase
         catch (Exception ex)
         {
             Log4.Error($"[옵션:디버그] ServerVadEnabled 저장 예외: {ex}");
+        }
+    }
+
+    /// <summary>VAD 감도 변경 시 영구 저장</summary>
+    partial void OnVadThresholdChanged(double value)
+    {
+        try
+        {
+            if (App.Settings?.OaiRecording != null)
+            {
+                App.Settings.OaiRecording.VadThreshold = value;
+                App.Settings.SaveAll();
+            }
+        }
+        catch (Exception ex)
+        {
+            Log4.Error($"[옵션] VadThreshold 저장 예외: {ex}");
+        }
+    }
+
+    /// <summary>발화 종료 침묵 변경 시 영구 저장</summary>
+    partial void OnVadSilenceDurationMsChanged(int value)
+    {
+        try
+        {
+            if (App.Settings?.OaiRecording != null)
+            {
+                App.Settings.OaiRecording.VadSilenceDurationMs = value;
+                App.Settings.SaveAll();
+            }
+        }
+        catch (Exception ex)
+        {
+            Log4.Error($"[옵션] VadSilenceDurationMs 저장 예외: {ex}");
         }
     }
 
