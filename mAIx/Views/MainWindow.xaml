@@ -6938,7 +6938,8 @@
                                                 <!-- STT 세그먼트 목록 -->
                                                 <Grid Grid.Row="1">
                                                     <ScrollViewer x:Name="OneNoteSTTScrollViewer" VerticalScrollBarVisibility="Auto"
-                                                                  ScrollChanged="OneNoteSttScroll_ScrollChanged">
+                                                                  ScrollChanged="OneNoteSttScroll_ScrollChanged"
+                                                                  PreviewMouseWheel="OneNoteSttScroll_PreviewMouseWheel">
                                                     <Grid>
                                                         <!-- 빈 상태 -->
                                                         <TextBlock x:Name="OneNoteSTTEmptyText" Text="STT 분석 결과가 없습니다."
@@ -7352,7 +7353,8 @@
                                                                       VerticalScrollBarVisibility="Auto"
                                                                       HorizontalScrollBarVisibility="Disabled"
                                                                       Visibility="Visible"
-                                                                      ScrollChanged="OneNoteSummaryScroll_ScrollChanged">
+                                                                      ScrollChanged="OneNoteSummaryScroll_ScrollChanged"
+                                                                      PreviewMouseWheel="OneNoteSummaryScroll_PreviewMouseWheel">
                                                             <ItemsControl ItemsSource="{Binding MinuteSummaries}">
                                                                 <ItemsControl.ItemTemplate>
                                                                     <DataTemplate>

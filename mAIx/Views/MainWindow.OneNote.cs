@@ -517,6 +517,56 @@ namespace mAIx.Views
             }
         }
 
+        // ─── PreviewMouseWheel 핸들러 — 사용자 휠 입력을 명확히 감지하여 자동스크롤 OFF (race 가드 우회) ──
+
+        /// <summary>
+        /// STT ScrollViewer PreviewMouseWheel — 사용자 휠 입력을 감지하면 가드 플래그와 무관하게 SttAutoScroll 즉시 해제.
+        /// 배경: 자동 ScrollToEnd 진행 중(_isSttAutoScrolling=true)에 사용자 휠이 도착하면 ScrollChanged 가드로 무시되어 OFF 안 됨.
+        /// 휠 이벤트는 ScrollChanged보다 먼저 발화하고 사용자 입력임이 확실하므로 가드 우회로 OFF 발화.
+        /// </summary>
+        private void OneNoteSttScroll_PreviewMouseWheel(object sender, System.Windows.Input.MouseWheelEventArgs e)
+        {
+            try
+            {
+                if (_oneNoteViewModel == null || !_oneNoteViewModel.SttAutoScroll) return;
+                _oneNoteViewModel.SttAutoScroll = false;
+                var oaiSettings = App.Settings?.OaiRecording;
+                if (oaiSettings != null)
+                {
+                    oaiSettings.SttAutoScroll = false;
+                    App.Settings?.SaveAll();
+                }
+                _oneNoteLog.Info($"[휠OFF-실행] STT 사용자 휠 감지 — SttAutoScroll OFF (Delta={e.Delta})");
+            }
+            catch (Exception ex)
+            {
+                _oneNoteLog.Error(ex, "[OneNote] OneNoteSttScroll_PreviewMouseWheel 실패");
+            }
+        }
+
+        /// <summary>
+        /// 요약 ScrollViewer PreviewMouseWheel — 사용자 휠 입력을 감지하면 가드 플래그와 무관하게 SummaryAutoScroll 즉시 해제.
+        /// </summary>
+        private void OneNoteSummaryScroll_PreviewMouseWheel(object sender, System.Windows.Input.MouseWheelEventArgs e)
+        {
+            try
+            {
+                if (_oneNoteViewModel == null || !_oneNoteViewModel.SummaryAutoScroll) return;
+                _oneNoteViewModel.SummaryAutoScroll = false;
+                var oaiSettings = App.Settings?.OaiRecording;
+                if (oaiSettings != null)
+                {
+                    oaiSettings.SummaryAutoScroll = false;
+                    App.Settings?.SaveAll();
+                }
+                _oneNoteLog.Info($"[휠OFF-실행] 요약 사용자 휠 감지 — SummaryAutoScroll OFF (Delta={e.Delta})");
+            }
+            catch (Exception ex)
+            {
+                _oneNoteLog.Error(ex, "[OneNote] OneNoteSummaryScroll_PreviewMouseWheel 실패");
+            }
+        }
+
         // ─── 녹음 목록 마우스 휠 스크롤 전파 핸들러 (AC-010) ──
 
         /// <summary>
