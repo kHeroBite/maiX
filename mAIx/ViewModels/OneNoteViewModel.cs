@@ -547,10 +547,21 @@ public partial class OneNoteViewModel : ViewModelBase
     private double _panelWidth;
 
     /// <summary>
-    /// STT 화면 키워드 하이라이트용 — 모든 주제 세그먼트의 키워드 평탄화 합산
+    /// AC-007: AllTopicKeywords 일배어 필터용 stopwords (L-419)
+    /// </summary>
+    private static readonly System.Collections.Generic.HashSet<string> _stopWords = new()
+    {
+        "이것", "그것", "저것", "때문", "정도", "관련", "내용", "준비", "회의", "문제", "경우",
+        "방법", "시간", "오늘", "어제", "내일", "여기", "거기", "우리", "저희", "이거", "그거"
+    };
+
+    /// <summary>
+    /// STT 화면 키워드 하이라이트용 — 모든 주제 세그먼트의 키워드 평탄화 합산 (stopwords 필터 적용)
     /// </summary>
     public System.Collections.Generic.IEnumerable<string> AllTopicKeywords =>
-        TopicSegments.SelectMany(s => s.Keywords ?? new System.Collections.Generic.List<string>()).Distinct();
+        TopicSegments.SelectMany(s => s.Keywords ?? new System.Collections.Generic.List<string>())
+                     .Where(k => !string.IsNullOrWhiteSpace(k) && k.Length >= 2 && !_stopWords.Contains(k.Trim()))
+                     .Distinct();
 
     /// <summary>
     /// 누적 요약 텍스트
@@ -1979,6 +1990,16 @@ public partial class OneNoteViewModel : ViewModelBase
             if (_skipLoadSTTOnSelectionChange <= 0)
             {
                 _realtimePersistTimer?.Stop(); // 가드3: 파일 전환 시 예약된 stale 타이머 무력화
+                // AC-001: 파일 전환 시 이전 데이터 6종 초기화 (L-432~L-435)
+                STTSegments.Clear();
+                TopicSegments.Clear();
+                MinuteSummaries.Clear();
+                CumulativeSummaryText = string.Empty;
+                FinalSummaryText = string.Empty;
+                MinuteSummaryCount = 0;
+                // AC-008: 자동스크롤 true 강제 → setter가 ScrollToEnd 발화 (AC-005 메커니즘)
+                SttAutoScroll = true;
+                SummaryAutoScroll = true;
                 Utils.Log4.Info($"[OneNote] STT/요약 로드 시작: {value.FileName}");
                 _ = LoadSTTResultAsync(value);
                 _ = LoadSummaryResultAsync(value);
@@ -3344,6 +3365,8 @@ public partial class OneNoteViewModel : ViewModelBase
                         Keywords = entry.Keywords ?? new System.Collections.Generic.List<string>(),
                         BackgroundColorHex = palette[(MinuteSummaryCount - 1) % palette.Length],
                         IsSilence = entry.IsSilence,
+                        Title = entry.Title ?? string.Empty,
+                        Context = entry.Context ?? string.Empty,
                     };
                     TopicSegments.Add(navSegment);
                     TryMergeAdjacentTopics();

@@ -935,3 +935,5 @@ if (dialog.ShowDialog() == true)
 - **% 비례 계산**: `OneNoteViewModel.SetPanelHeight(totalHeight)` → `RebuildTimelineTicks()` + `RecalculateTopicSegmentHeights()`.
 - **SizeChanged 연동**: `MainWindow.OneNote.cs`의 `TopicNavScrollViewer_SizeChanged`가 ViewScrollHeight → VM 전달.
 - **안티패턴 금지**: ItemsPanelTemplate=Grid + RowDefinition 동적 생성 (ItemContainerGenerator/Grid.SetRow 3중 우회 필요, 신뢰 불가 — L-424).
+- **MAP 카드 3분할 DataTemplate (AC-011, 2026-05-20)**: 세로/가로 모드 양쪽 DataTemplate에 Title(Bold/FontSize=11) + Context(#666666/FontSize=10) + BodyDisplay(기존) 3분할 표시. `NullToVisibilityConverter`로 Title/Context 빈값 자동 Collapsed. 옛 LLM 응답(2필드) graceful 호환 — `TryGetProperty+string.Empty fallback` 패턴 (L-478). Option B 양쪽 ItemsControl 동등 적용 필수 (L-450).
+- **녹음목록 마우스휠 전파 (AC-010, 2026-05-20)**: `OneNoteRecordingsList_PreviewMouseWheel` — `e.Handled=true` 먼저 → 새 `MouseWheelEventArgs` 인스턴스 → `OneNoteRecordingsScrollViewer.RaiseEvent(args)`. 무한루프 방지 위해 e.Handled=true 선행 필수 (L-477).

@@ -341,15 +341,17 @@ Models:
   - 파일명: TopicSegment.cs (신규 — 2026-05-09)
     경로: Models/
     역할: 주제어 세그먼트 모델 (PastelPalette 8색, INotifyPropertyChanged)
-    속성: Id, StartTime, EndTime, Keywords, DisplayTitle, SummaryPreview, BackgroundColorHex, DisplayHeight
+    속성: Id, StartTime, EndTime, Keywords, DisplayTitle, SummaryPreview, BackgroundColorHex, DisplayHeight, Title, Context
     computed: KeywordsDisplay, TimeRangeDisplay, ToolTipText
     변경_2026-05-14: DisplayHeight 프로퍼티 추가 (기본 60px, 시간비례 재계산 대상 — StackPanel+DisplayHeight 패턴)
+    변경_2026-05-20: Title(주제어 타이틀), Context(맥락 텍스트) 필드 추가 — MAP 카드 3분할 표시용
 
   - 파일명: MinuteSummaryEntry.cs (신규 — 2026-05-09)
     경로: Models/
     역할: 1분 요약 엔트리 (순번/시간범위/요약 텍스트/생성시각/주제어)
-    속성: Index, StartTime, EndTime, SummaryText, CreatedAt, Topic
+    속성: Index, StartTime, EndTime, SummaryText, CreatedAt, Topic, Title, Context
     변경_2026-05-14: Topic 필드 추가 (5~20자 주제어 저장, LLM JSON 응답 파싱)
+    변경_2026-05-20: Title(요약 타이틀), Context(맥락 텍스트) 필드 추가 — 5필드 JSON 파싱 대응
 
   - 파일명: TimelineTick.cs (신규 — 2026-05-14)
     경로: Models/

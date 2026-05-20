@@ -66,6 +66,13 @@ namespace mAIx.Views
                 // 도킹 위치 재배치 (단일 Grid 재배치 — 마크업 복제 없음)
                 ApplyTopicNavDockLayout();
 
+                // AC-006: 가로/세로 모드 토글 후 자동스크롤 복원 (L-374 Dispatcher.InvokeAsync().Task)
+                await Dispatcher.InvokeAsync(() =>
+                {
+                    ScrollSttToEndIfEnabled();
+                    ScrollSummaryToEndIfEnabled();
+                }, System.Windows.Threading.DispatcherPriority.Background).Task.ConfigureAwait(false);
+
                 // 설정 영구 저장
                 var oaiSettings = App.Settings?.OaiRecording;
                 if (oaiSettings != null)
@@ -508,6 +515,23 @@ namespace mAIx.Views
             {
                 _oneNoteLog.Error(ex, "[OneNote] OneNoteSummaryScroll_ScrollChanged 실패");
             }
+        }
+
+        // ─── 녹음 목록 마우스 휠 스크롤 전파 핸들러 (AC-010) ──
+
+        /// <summary>
+        /// 녹음 파일 목록 ListBox의 마우스 휠 이벤트를 외부 ScrollViewer로 전파.
+        /// ListBox 내부 ScrollViewer가 휠 이벤트를 흡수하므로 외부 ScrollViewer로 재발행.
+        /// </summary>
+        private void OneNoteRecordingsList_PreviewMouseWheel(object sender, System.Windows.Input.MouseWheelEventArgs e)
+        {
+            if (e.Handled) return;
+            e.Handled = true;
+            var args = new System.Windows.Input.MouseWheelEventArgs(e.MouseDevice, e.Timestamp, e.Delta)
+            {
+                RoutedEvent = System.Windows.UIElement.MouseWheelEvent
+            };
+            OneNoteRecordingsScrollViewer?.RaiseEvent(args);
         }
     }
 }

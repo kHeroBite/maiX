@@ -7109,6 +7109,23 @@
                                                                             </ToolTip>
                                                                         </Border.ToolTip>
                                                                         <StackPanel>
+                                                                            <!-- AC-011: 카드 타이틀 (Title 필드 — 빈값 시 자동 숨김) -->
+                                                                            <TextBlock Text="{Binding Title}"
+                                                                                       FontSize="11" FontWeight="Bold"
+                                                                                       TextWrapping="Wrap"
+                                                                                       Visibility="{Binding Title, Converter={StaticResource NullToVisibilityConverter}}"
+                                                                                       Margin="0,0,0,2">
+                                                                                <TextBlock.Style>
+                                                                                    <Style TargetType="TextBlock">
+                                                                                        <Setter Property="Foreground" Value="{Binding BackgroundColorHex, Converter={StaticResource HexToReadableForegroundConverter}}"/>
+                                                                                        <Style.Triggers>
+                                                                                            <DataTrigger Binding="{Binding IsSilence}" Value="True">
+                                                                                                <Setter Property="Foreground" Value="#707070"/>
+                                                                                            </DataTrigger>
+                                                                                        </Style.Triggers>
+                                                                                    </Style>
+                                                                                </TextBlock.Style>
+                                                                            </TextBlock>
                                                                             <!-- 주제어/핵심맥락 (5~20자) -->
                                                                             <TextBlock Text="{Binding BodyDisplay}"
                                                                                        FontSize="11" FontWeight="SemiBold"
@@ -7125,6 +7142,12 @@
                                                                                     </Style>
                                                                                 </TextBlock.Style>
                                                                             </TextBlock>
+                                                                            <!-- AC-011: 맥락 (Context 필드 — 빈값 시 자동 숨김) -->
+                                                                            <TextBlock Text="{Binding Context}"
+                                                                                       FontSize="10" Foreground="#666666"
+                                                                                       TextWrapping="Wrap"
+                                                                                       Visibility="{Binding Context, Converter={StaticResource NullToVisibilityConverter}}"
+                                                                                       Margin="0,2,0,0"/>
                                                                         </StackPanel>
                                                                     </Border>
                                                                 </DataTemplate>
@@ -7201,6 +7224,23 @@
                                                                             </ToolTip>
                                                                         </Border.ToolTip>
                                                                         <StackPanel>
+                                                                            <!-- AC-011: 카드 타이틀 (Title 필드 — 빈값 시 자동 숨김) -->
+                                                                            <TextBlock Text="{Binding Title}"
+                                                                                       FontSize="11" FontWeight="Bold"
+                                                                                       TextWrapping="Wrap"
+                                                                                       Visibility="{Binding Title, Converter={StaticResource NullToVisibilityConverter}}"
+                                                                                       Margin="0,0,0,2">
+                                                                                <TextBlock.Style>
+                                                                                    <Style TargetType="TextBlock">
+                                                                                        <Setter Property="Foreground" Value="{Binding BackgroundColorHex, Converter={StaticResource HexToReadableForegroundConverter}}"/>
+                                                                                        <Style.Triggers>
+                                                                                            <DataTrigger Binding="{Binding IsSilence}" Value="True">
+                                                                                                <Setter Property="Foreground" Value="#707070"/>
+                                                                                            </DataTrigger>
+                                                                                        </Style.Triggers>
+                                                                                    </Style>
+                                                                                </TextBlock.Style>
+                                                                            </TextBlock>
                                                                             <!-- 주제어/핵심맥락 (5~20자) -->
                                                                             <TextBlock Text="{Binding BodyDisplay}"
                                                                                        FontSize="11" FontWeight="SemiBold"
@@ -7217,6 +7257,12 @@
                                                                                     </Style>
                                                                                 </TextBlock.Style>
                                                                             </TextBlock>
+                                                                            <!-- AC-011: 맥락 (Context 필드 — 빈값 시 자동 숨김) -->
+                                                                            <TextBlock Text="{Binding Context}"
+                                                                                       FontSize="10" Foreground="#666666"
+                                                                                       TextWrapping="Wrap"
+                                                                                       Visibility="{Binding Context, Converter={StaticResource NullToVisibilityConverter}}"
+                                                                                       Margin="0,2,0,0"/>
                                                                         </StackPanel>
                                                                     </Border>
                                                                 </DataTemplate>
@@ -8390,7 +8436,7 @@
                                             <!-- Row 1: 탭 콘텐츠 (녹음파일 / 옵션 겹침) -->
                                             <!-- 녹음 파일 패널 (기본 활성) -->
                                             <Border Grid.Row="1" x:Name="OneNoteRecordingsLeftPanel" Visibility="Visible" Padding="0">
-                                                <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+                                                <ScrollViewer x:Name="OneNoteRecordingsScrollViewer" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
                                                     <StackPanel x:Name="OneNoteRecordingsLeftStack">
                                                         <!-- 녹음 파일 목록 헤더 -->
                                                         <Grid Margin="0,0,0,8">
@@ -8414,7 +8460,8 @@
                                                                  BorderThickness="0"
                                                                  SelectedItem="{Binding SelectedRecording, Mode=TwoWay}"
                                                                  PreviewMouseLeftButtonDown="OneNoteRecordingsList_PreviewMouseLeftButtonDown"
-                                                                 SelectionChanged="OneNoteRecordingsList_SelectionChanged">
+                                                                 SelectionChanged="OneNoteRecordingsList_SelectionChanged"
+                                                                 PreviewMouseWheel="OneNoteRecordingsList_PreviewMouseWheel">
                                                             <ListBox.ItemContainerStyle>
                                                                 <Style TargetType="ListBoxItem">
                                                                     <Setter Property="Padding" Value="0"/>

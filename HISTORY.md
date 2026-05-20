@@ -2003,3 +2003,28 @@ ConfigureAwait(false)를 Service 레이어 전체에 적용하여 스레드 컨�
 ## 2026-05-19 — 짧은 녹음 STT 미저장 race 수정 (O3 Fast Path)
 
 | 2026-05-19 | 🐛 짧은 녹음 STT 미저장 race 수정 — OnRecordingCompleted의 fire-and-forget Dispatcher.InvokeAsync + 동시 Task.Run race로 _sttSnapshotForSave 캡처 미완료 시점에 저장 게이트가 0 평가 → .stt.json 미생성. async void 시그니처 + await .Task.ConfigureAwait(false) 직렬화 + Task.Run 제거 + 외부 try-catch. L-474 교훈 등록. | OneNoteViewModel.cs |
+
+## 2026-05-20 — 녹음/STT/MAP/요약 11개 이슈 통합 수정
+
+### 수정 내용
+- AC-001: 녹음파일 선택 시 STT/MAP/요약 6종 데이터 초기화
+- AC-002: SttAutoScroll/SummaryAutoScroll 기본값 true (자동스크롤 기본 ON)
+- AC-003: topic 블랙리스트 (회의/녹음/대화 등 8개 일반어 차단)
+- AC-004: STT 할루시네이션 패턴 3개 추가 (프롬프트 누출 차단)
+- AC-005: AutoScroll setter → ScrollToEnd 이벤트 연결
+- AC-006: 토글 후 ScrollToEnd 유지 (Dispatcher.Background 순서 보장)
+- AC-007: keywords/topicKeywords 불용어 사전 (stopWords HashSet)
+- AC-008: 녹음파일 선택 시 AutoScroll 자동 true 복원
+- AC-009: WAV 주기 flush 타이머 (10초 간격)
+- AC-010: 녹음목록 마우스휠 ScrollViewer 전파 (PreviewMouseWheel)
+- AC-011: MAP 카드 주제어/맥락/타이틀 3분할 (옛 응답 graceful 호환)
+
+### 변경 파일
+- mAIx/Models/MinuteSummaryEntry.cs (Title/Context 추가)
+- mAIx/Models/TopicSegment.cs (Title/Context 추가)
+- mAIx/Services/AI/MinuteSummaryService.cs (5필드 파싱/블랙리스트/불용어)
+- mAIx/Services/AI/OpenAiRealtimeSttService.cs (할루시네이션 패턴)
+- mAIx/Services/Audio/AudioRecordingService.cs (WAV flush 타이머)
+- mAIx/ViewModels/OneNoteViewModel.cs (초기화/불용어/자동스크롤)
+- mAIx/Views/MainWindow.OneNote.cs (토글 스크롤/마우스휠 핸들러)
+- mAIx/Views/MainWindow.xaml (ScrollViewer x:Name/MAP DataTemplate 3분할)

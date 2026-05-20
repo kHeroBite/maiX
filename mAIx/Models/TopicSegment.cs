@@ -55,6 +55,8 @@ public class TopicSegment : INotifyPropertyChanged
     private double _displayHeight = 60;
     private double _displayWidth = 120;
     private bool _isSilence;
+    private string _title = string.Empty;
+    private string _context = string.Empty;
 
     /// <summary>
     /// 세그먼트 고유 ID (0부터 시작)
@@ -129,6 +131,26 @@ public class TopicSegment : INotifyPropertyChanged
     }
 
     /// <summary>
+    /// 20자 이내 카드 제목 (LLM 5필드 응답 — title 필드).
+    /// 옛 2필드 응답 역직렬화 시 string.Empty (graceful 호환).
+    /// </summary>
+    public string Title
+    {
+        get => _title;
+        set { _title = value; OnPropertyChanged(); OnPropertyChanged(nameof(ToolTipText)); }
+    }
+
+    /// <summary>
+    /// 주제어 배경 한 줄 설명 30~80자 (LLM 5필드 응답 — context 필드).
+    /// 옛 2필드 응답 역직렬화 시 string.Empty (graceful 호환).
+    /// </summary>
+    public string Context
+    {
+        get => _context;
+        set { _context = value; OnPropertyChanged(); OnPropertyChanged(nameof(ToolTipText)); }
+    }
+
+    /// <summary>
     /// StackPanel 레이아웃에서 카드 픽셀 높이 (시간 비례 계산값)
     /// </summary>
     public double DisplayHeight
@@ -184,7 +206,7 @@ public class TopicSegment : INotifyPropertyChanged
     /// 마우스오버 ToolTip 전체 텍스트
     /// </summary>
     public string ToolTipText =>
-        $"[{DisplayTitle}]\n{TimeRangeDisplay}\n핵심요약: {SummaryPreview}\n키워드: {KeywordsDisplay}";
+        $"[{(string.IsNullOrWhiteSpace(Title) ? DisplayTitle : Title)}]\n{TimeRangeDisplay}\n{(string.IsNullOrWhiteSpace(Context) ? "" : $"맥락: {Context}\n")}핵심요약: {SummaryPreview}\n키워드: {KeywordsDisplay}";
 
     // ─── INotifyPropertyChanged ─────────────────────────────────────────
 

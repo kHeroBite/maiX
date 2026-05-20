@@ -1933,3 +1933,45 @@ L-424(WPF ItemsControl 가변높이 안티패턴 기각)가 직전 작업 완료
 | L-473 | 새 기능(영속화 throttle 타이머)이 우회하던 비정상 의존을 정상화 가드가 끊으면 숨은 결함이 노출됨 — 짧은 녹음 .stt.json이 그동안 "녹음중 타이머의 LiveSTT 저장"에 의존했고, Stop 경로 단일화 시 selection-change Clear 레이스(L-385/L-386)로 STTSegments가 비동기 저장 평가 전에 Clear되어 저장 자체가 미호출. 휘발 컬렉션 저장은 Clear 가능 지점 이전에 ToList() 불변 스냅샷 선캡처 후 그 스냅샷으로 게이트+저장 — 컬렉션 무단변경 0으로 연쇄영향 차단. 회귀 디버깅 시 단발 가설보다 nlog 직접 확인이 정답(L-446 재확인). | docs+code | LESSONS.md + OneNoteViewModel.cs | 2026-05-18 | ✅ |
 | L-474 | 외부 스코프 변수를 fire-and-forget `Dispatcher.InvokeAsync` 람다에서 채우고 동시 `Task.Run`에서 그 변수를 읽는 패턴은 race condition — InvokeAsync 완료 보장 없이 Task.Run이 즉시 시작해 빈 값으로 평가됨. 동기 시점의 데이터를 비동기로 전달하려면 `await dispatcher.InvokeAsync(...).Task.ConfigureAwait(false)`로 직렬화하고 Task.Run 자체를 제거(또는 await 직렬화). 캡처/저장 두 비동기 사이에 happens-before 관계 강제 필요. 짧은 녹음 STT 미저장의 진짜 원인이 빌드 미반영 가설을 압도하지 않게 dll strings + 로그 양쪽 증명 필수. | docs+code | LESSONS.md + OneNoteViewModel.cs | 2026-05-19 | ✅ |
 | L-475 | TeamDelete 3차+sleep 후에도 in-process 캐시 잔존 가능 — Claude Code 내부 레지스트리는 shutdown_response 수신/pane 소멸/FS 정리와 비동기. evidence/inprocess_stuck 마커로 fail-loud 보장 + ok_pipeline precheck CASE 0 차단 + 세션 재기동 권고. L-204 fire-and-forget shutdown 원칙 유지(차단형 대기 금지). | docs+skill | LESSONS.md + oinit/SKILL.md + ok_pipeline/SKILL.md + CLAUDE.md | 2026-05-20 | ✅ |
+| L-476 | Timer 런타임 발화 검증 대체 조건 — 30초+ 주기 Timer는 정적 3조건(Start 호출/핸들러 존재/로그 패턴) 모두 충족 시 otest 정적 PASS 허용 (L-420 보완) | docs | LESSONS.md | 2026-05-20 | ✅ |
+| L-477 | PreviewMouseWheel 외부 전파 — e.Handled=true 먼저 + 새 MouseWheelEventArgs 인스턴스로 무한루프 방지 | docs | LESSONS.md | 2026-05-20 | ✅ |
+| L-478 | LLM JSON 스키마 확장 graceful 호환 — TryGetProperty+Empty fallback + NullToVisibilityConverter 조합으로 구형 응답 하위 호환 | docs | LESSONS.md | 2026-05-20 | ✅ |
+
+## L-476: Timer 런타임 발화 검증 대체 조건 — 30초+ 주기 Timer 정적 PASS 허용 기준 (2026-05-20)
+
+- **문제**: L-420(otest 런타임 발화 검증 필수)이 30초+ 주기 Timer에 일률 적용되면 otest 대기 시간이 30초~수분 발생하여 파이프라인 비효율
+- **해결**: 30초 이상 주기 Timer는 다음 정적 3조건 모두 충족 시 otest 정적 PASS 허용
+  1. `Start()` 또는 `StartAsync()` 호출부 grep 확인
+  2. Elapsed/콜백 핸들러 존재 grep 확인
+  3. 핸들러 내 로그 패턴 존재 grep 확인 (tick 발화 추적용 로그)
+- **적용 범위**: 30초 미만 주기 Timer는 L-420 원칙 그대로 유지 (런타임 발화 검증 필수)
+- **연관**: L-420 (otest 런타임 발화 검증 필수 — 기본 원칙)
+- **Level**: 1 (L-420 보완 예외 조건 명세)
+
+## L-477: PreviewMouseWheel 외부 전파 패턴 — e.Handled=true 선행 + 새 EventArgs 인스턴스 (2026-05-20)
+
+- **문제**: WPF에서 내부 ScrollViewer의 마우스 휠 이벤트를 외부 컨테이너로 전파할 때, 기존 EventArgs를 재사용하거나 `e.Handled=true` 설정 순서를 잘못 두면 이벤트가 ListBox로 재진입하여 무한루프 발생 가능
+- **해결**: 올바른 패턴
+  1. `e.Handled = true` 먼저 설정 (현재 이벤트 전파 중단)
+  2. `new MouseWheelEventArgs(e.MouseDevice, e.Timestamp, e.Delta)` 새 인스턴스 생성
+  3. `newArgs.RoutedEvent = UIElement.MouseWheelEvent` 설정 후 `RaiseEvent(newArgs)`
+- **잘못된 패턴**: e.Handled=true 없이 기존 args로 RaiseEvent → 이벤트가 ListBox로 다시 버블링 → 무한루프
+- **적용 위치**: PreviewMouseWheel 핸들러 내 외부 컨테이너로 휠 이벤트 전파가 필요한 모든 경우
+- **Level**: 1 (WPF 이벤트 라우팅 패턴)
+
+## L-478: LLM 응답 JSON 스키마 확장 graceful 호환 패턴 (2026-05-20)
+
+- **문제**: LLM 프롬프트 스키마에 새 필드를 추가하면, 기존 캐시/히스토리에서 반환된 구형 응답에 해당 필드가 없어 `KeyNotFoundException` 또는 `NullReferenceException` 발생
+- **해결**: TryGetProperty + Empty fallback 패턴으로 하위 호환 보장
+  ```csharp
+  // ❌ 잘못: 새 필드 직접 접근
+  var keywords = doc.RootElement.GetProperty("keywords").GetString();
+  
+  // ✅ 올바름: TryGetProperty + fallback
+  var keywords = doc.RootElement.TryGetProperty("keywords", out var kw)
+      ? kw.GetString() ?? string.Empty
+      : string.Empty;
+  ```
+- **NullToVisibilityConverter 조합**: `string.Empty` fallback값이 `NullToVisibilityConverter`와 함께 사용되면 빈 값 시 UI 자동 Collapsed → 구형 응답에서 신규 필드 UI가 표시되지 않아 자연스러운 하위 호환
+- **재발방지**: LLM 프롬프트 스키마 신규 필드 추가 시 파싱 코드에 TryGetProperty 패턴 표준 적용 의무화
+- **Level**: 1 (LLM 응답 파싱 표준 패턴)

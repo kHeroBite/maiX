@@ -47,6 +47,18 @@ public class MinuteSummaryEntry
     public bool IsSilence { get; set; } = false;
 
     /// <summary>
+    /// 20자 이내 카드 제목 (LLM 5필드 응답 — title 필드).
+    /// 옛 응답에 필드 부재 시 string.Empty (graceful 호환).
+    /// </summary>
+    public string Title { get; set; } = string.Empty;
+
+    /// <summary>
+    /// 주제어 배경/이유 한 줄 (30~80자, LLM 5필드 응답 — context 필드).
+    /// 옛 응답에 필드 부재 시 string.Empty (graceful 호환).
+    /// </summary>
+    public string Context { get; set; } = string.Empty;
+
+    /// <summary>
     /// 엔트리 생성 일시
     /// </summary>
     public DateTime CreatedAt { get; set; } = DateTime.Now;

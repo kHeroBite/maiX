@@ -245,12 +245,20 @@ public sealed class MinuteSummaryService : IMinuteSummaryService
             var url = baseUrl + "/chat/completions";
 
             const string systemPrompt = """
-                반드시 다음 JSON 형식으로만 응답하라. 다른 설명/마크다운 금지.
+                반드시 다음 JSON 형식으로만 응답하라. 다른 텍스트 절대 포함 금지.
                 {
+                  "title": "20자 이내 카드 제목 (예: '하네스엔지니어링 자기소개')",
+                  "topic": "5~10자 핵심 주제어 (예: '자기소개')",
+                  "context": "주제어의 배경/이유 한 줄 (30~80자)",
                   "summary": "30~150자 요약 텍스트",
-                  "topic": "5~20자 주제어 또는 주제맥락 (예: '하네스엔지니어링 설명', '바이브코딩의 미래에 대한 분석')",
-                  "keywords": ["고유명사·전문용어·핵심명사만 3~5개 (전사 원문 표기 그대로, 2~10자). 조사·접속사·일반동사·1~2자 일반어·불용어(이것/그것/때문/정도 등) 제외. 진짜 핵심어만."]
+                  "keywords": ["고유명사·전문용어·핵심명사만 3~5개"]
                 }
+
+                엄격한 규칙:
+                1. topic은 다음 일반어를 절대 사용하지 마라: 회의내용, 회의 준비, 회의, 내용, 준비, 녹음, 대화
+                   (대화의 진짜 핵심 키워드를 뽑아라. 예: '예산 협의', 'API 설계 토론')
+                2. keywords는 명사/고유명사만. 조사/지시대명사/일반어 제외.
+                3. summary는 회의 진행 사실이 아닌 실제 내용 요약.
                 """;
 
             var userPrompt = $"""
@@ -284,9 +292,12 @@ public sealed class MinuteSummaryService : IMinuteSummaryService
 
             var respJson = await response.Content.ReadAsStringAsync(ct).ConfigureAwait(false);
             var llmContent = ExtractSummaryText(respJson);
-            var (summaryText, topic, keywords) = ExtractSummaryAndTopic(llmContent);
+            var (summaryText, topic, title, context, keywords) = ExtractAll(llmContent);
 
             if (string.IsNullOrWhiteSpace(summaryText)) return;
+
+            _log.Info("[MinuteSummary] 5필드 파싱 — title={Title}, topic={Topic}, context={ContextLen}자, keywords={KwCount}개",
+                title, topic, context.Length, keywords.Count);
 
             var entry = new MinuteSummaryEntry
             {
@@ -295,6 +306,8 @@ public sealed class MinuteSummaryService : IMinuteSummaryService
                 EndTime = endTime,
                 SummaryText = summaryText,
                 Topic = topic,
+                Title = title,
+                Context = context,
                 Keywords = keywords,
                 CreatedAt = DateTime.Now
             };
@@ -345,25 +358,47 @@ public sealed class MinuteSummaryService : IMinuteSummaryService
         return string.Empty;
     }
 
+    // ─── AC-003 topic 블랙리스트 ────────────────────────────────────────
+    private static readonly HashSet<string> _topicBlacklist = new()
+    {
+        "회의내용", "회의 준비", "회의", "내용", "준비", "녹음", "대화", "이야기"
+    };
+
+    // ─── AC-007 keywords 불용어 사전 (odev-1 AllTopicKeywords와 동일 사본) ──
+    private static readonly HashSet<string> _stopWords = new()
+    {
+        "이것", "그것", "저것", "때문", "정도", "관련", "내용", "준비", "회의",
+        "문제", "경우", "방법", "시간", "오늘", "어제", "내일", "여기", "거기",
+        "우리", "저희", "이거", "그거"
+    };
+
     /// <summary>
-    /// LLM 응답 content 문자열에서 summary, topic, keywords를 추출한다.
-    /// JSON 파싱 실패 시 summary=원문(150자), topic=summary앞20자, keywords=빈목록 fallback.
-    /// keywords 필드가 없거나 배열이 아니면 빈 목록 (기존 {summary, topic} 응답 호환).
+    /// LLM 응답 content 문자열에서 5필드(summary/topic/title/context/keywords)를 추출한다 (AC-011).
+    /// 옛 2필드(summary/topic) 응답도 graceful 처리 — title/context는 string.Empty 반환.
+    /// JSON 파싱 실패 시 summary=원문(150자), topic=summary앞10자, title/context=Empty, keywords=빈목록.
     /// </summary>
-    private static (string summary, string topic, List<string> keywords) ExtractSummaryAndTopic(string llmContent)
+    private static (string summary, string topic, string title, string context, List<string> keywords) ExtractAll(string llmContent)
     {
         if (string.IsNullOrWhiteSpace(llmContent))
-            return (string.Empty, string.Empty, new List<string>());
+            return (string.Empty, string.Empty, string.Empty, string.Empty, new List<string>());
 
         try
         {
             using var doc = JsonDocument.Parse(llmContent);
             var root = doc.RootElement;
+
             var summary = root.TryGetProperty("summary", out var sumProp)
                 ? (sumProp.GetString() ?? string.Empty)
                 : string.Empty;
             var topic = root.TryGetProperty("topic", out var topicProp)
                 ? (topicProp.GetString() ?? string.Empty)
+                : string.Empty;
+            // title/context — 옛 응답 부재 시 string.Empty (graceful 호환)
+            var title = root.TryGetProperty("title", out var titleProp)
+                ? (titleProp.GetString() ?? string.Empty)
+                : string.Empty;
+            var context = root.TryGetProperty("context", out var ctxProp)
+                ? (ctxProp.GetString() ?? string.Empty)
                 : string.Empty;
 
             // keywords 추출 (배열 아니면 빈 목록 — 기존 응답 호환 graceful)
@@ -380,23 +415,50 @@ public sealed class MinuteSummaryService : IMinuteSummaryService
                 }
             }
 
-            // topic 길이 보정: 5자 미만이면 summary 앞 20자, 20자 초과면 앞 20자 truncate
+            // AC-007 keywords 불용어 필터
+            var beforeCount = keywords.Count;
+            keywords = keywords
+                .Where(k => !string.IsNullOrWhiteSpace(k) && k.Trim().Length >= 2 && !_stopWords.Contains(k.Trim()))
+                .ToList();
+            if (beforeCount != keywords.Count)
+                _log.Info("[MinuteSummary] AC-007 stopwords 필터 — {Before}개 → {After}개", beforeCount, keywords.Count);
+
+            // topic 길이 보정: 5자 미만이면 summary 앞 10자
             topic = topic.Trim();
             if (topic.Length < 5)
-                topic = summary.Trim().Length > 20 ? summary.Trim()[..20] : summary.Trim();
+                topic = summary.Trim().Length > 10 ? summary.Trim()[..10] : summary.Trim();
             else if (topic.Length > 20)
                 topic = topic[..20];
 
-            return (summary, topic, keywords);
+            // AC-003 topic 블랙리스트 — 일반어 매치 시 summary 앞 10자 fallback
+            if (_topicBlacklist.Contains(topic.Trim()))
+            {
+                var fallback = summary.Trim();
+                var oldTopic = topic;
+                topic = fallback.Length > 10 ? fallback[..10] : fallback;
+                _log.Info("[MinuteSummary] AC-003 topic blacklist match ({Old}) → fallback: {New}", oldTopic, topic);
+            }
+
+            return (summary, topic, title, context, keywords);
         }
         catch
         {
-            // JSON 파싱 실패 — 원문 그대로 fallback (keywords 없음)
+            // JSON 파싱 실패 — 원문 그대로 fallback
             var fallbackSummary = llmContent.Length > 150 ? llmContent[..150] : llmContent;
             var fallbackTopic = fallbackSummary.Trim();
-            fallbackTopic = fallbackTopic.Length > 20 ? fallbackTopic[..20] : fallbackTopic;
-            return (fallbackSummary, fallbackTopic, new List<string>());
+            fallbackTopic = fallbackTopic.Length > 10 ? fallbackTopic[..10] : fallbackTopic;
+            return (fallbackSummary, fallbackTopic, string.Empty, string.Empty, new List<string>());
         }
+    }
+
+    /// <summary>
+    /// [호환 wrapper] ExtractAll에서 (summary, topic) 튜플만 반환.
+    /// 옛 코드 경로 호환 — 내부적으로 ExtractAll 호출.
+    /// </summary>
+    private static (string summary, string topic, List<string> keywords) ExtractSummaryAndTopic(string llmContent)
+    {
+        var (summary, topic, _, _, keywords) = ExtractAll(llmContent);
+        return (summary, topic, keywords);
     }
 
     /// <summary>

@@ -112,6 +112,10 @@ public sealed class OpenAiRealtimeSttService : IOpenAiRealtimeSttService
         new System.Text.RegularExpressions.Regex(@"채널.*구독", System.Text.RegularExpressions.RegexOptions.Compiled),
         new System.Text.RegularExpressions.Regex(@"댓글.*부탁", System.Text.RegularExpressions.RegexOptions.Compiled),
         new System.Text.RegularExpressions.Regex(@"영상.*보러", System.Text.RegularExpressions.RegexOptions.Compiled),
+        // prompt leak 패턴 (L-446/L-447)
+        new System.Text.RegularExpressions.Regex(@"한국어\s*회의\s*녹음", System.Text.RegularExpressions.RegexOptions.Compiled),
+        new System.Text.RegularExpressions.Regex(@"회의\s*녹음\s*입니다", System.Text.RegularExpressions.RegexOptions.Compiled),
+        new System.Text.RegularExpressions.Regex(@"녹음\s*시작합니다", System.Text.RegularExpressions.RegexOptions.Compiled),
     };
 
     private static bool IsHallucination(string text)

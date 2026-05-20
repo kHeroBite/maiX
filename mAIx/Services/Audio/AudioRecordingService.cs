@@ -28,6 +28,10 @@ public class AudioRecordingService : IDisposable
     // 파일 저장용 포맷 (24kHz 16bit mono — STT 최적)
     private static readonly WaveFormat _outputFormat = new(24000, 16, 1);
 
+    // WAV 주기 flush 타이머 (강제종료 대비 — AC-009)
+    private System.Timers.Timer? _wavFlushTimer;
+    private const double WavFlushIntervalMs = 10_000; // 10초
+
     // 실시간 STT용 버퍼
     private List<byte> _realtimeBuffer = new();
     private float _realtimeChunkSeconds = 15f; // 15초 단위 청크
@@ -284,6 +288,25 @@ public class AudioRecordingService : IDisposable
             _isPaused = false;
             _recordingStartTime = DateTime.Now;
             _pausedDuration = TimeSpan.Zero;
+
+            // WAV 헤더 주기 flush 타이머 시작 (강제종료 대비 — AC-009, L-380)
+            _wavFlushTimer = new System.Timers.Timer(WavFlushIntervalMs) { AutoReset = true };
+            _wavFlushTimer.Elapsed += (s, e) =>
+            {
+                try   // L-380 Timer.Elapsed 외부 try-catch 필수
+                {
+                    if (_writer != null && _isRecording && !_isPaused)
+                    {
+                        _writer.Flush();
+                        Log4.Info($"[녹음] WAV 헤더 flush 완료 (duration={RecordingDuration.TotalSeconds:F1}초)");
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Log4.Warn($"[녹음] WAV flush 실패: {ex.Message}");
+                }
+            };
+            _wavFlushTimer.Start();
 
             Log4.Info($"[녹음] 녹음 시작: {_currentFilePath}");
             return _currentFilePath;
@@ -581,6 +604,13 @@ public class AudioRecordingService : IDisposable
     {
         _isRecording = false;
         _isPaused = false;
+
+        // WAV flush 타이머 정리 (L-376 IDisposable 준수)
+        if (_wavFlushTimer != null)
+        {
+            try { _wavFlushTimer.Stop(); _wavFlushTimer.Dispose(); } catch { }
+            _wavFlushTimer = null;
+        }
 
         if (_capture != null)
         {
