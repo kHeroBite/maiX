@@ -699,7 +699,13 @@ public partial class OneNoteViewModel : ViewModelBase
             App.Settings.OaiRecording.SttAutoScroll = value;
             App.Settings.SaveAll();
         }
-        if (value) SttAutoScrollEnabled?.Invoke();
+        // AC-005 회귀 수정: setter 발화 시 자동스크롤 이벤트 Invoke. 구독자 수 로그로 런타임 검증.
+        if (value)
+        {
+            var subscriberCount = SttAutoScrollEnabled?.GetInvocationList().Length ?? 0;
+            Utils.Log4.Info($"[AC005-실행] SttAutoScroll setter 발화 → Event.Invoke (subscribers={subscriberCount})");
+            SttAutoScrollEnabled?.Invoke();
+        }
     }
 
     /// <summary>
@@ -718,7 +724,13 @@ public partial class OneNoteViewModel : ViewModelBase
             App.Settings.OaiRecording.SummaryAutoScroll = value;
             App.Settings.SaveAll();
         }
-        if (value) SummaryAutoScrollEnabled?.Invoke();
+        // AC-005 회귀 수정: setter 발화 시 자동스크롤 이벤트 Invoke. 구독자 수 로그로 런타임 검증.
+        if (value)
+        {
+            var subscriberCount = SummaryAutoScrollEnabled?.GetInvocationList().Length ?? 0;
+            Utils.Log4.Info($"[AC005-실행] SummaryAutoScroll setter 발화 → Event.Invoke (subscribers={subscriberCount})");
+            SummaryAutoScrollEnabled?.Invoke();
+        }
     }
 
     /// <summary>
@@ -1997,9 +2009,14 @@ public partial class OneNoteViewModel : ViewModelBase
                 CumulativeSummaryText = string.Empty;
                 FinalSummaryText = string.Empty;
                 MinuteSummaryCount = 0;
-                // AC-008: 자동스크롤 true 강제 → setter가 ScrollToEnd 발화 (AC-005 메커니즘)
+                // AC-008 회귀 수정: [ObservableProperty] setter는 이전 값과 동일할 때 early return하므로
+                // 영속화/기본값이 true인 상태에서 `SttAutoScroll = true` 재할당은 Invoke 미발화.
+                // 강제 발화 패턴 — false 우회 후 true 할당으로 setter equal-check 무효화.
+                if (_sttAutoScroll) { _sttAutoScroll = false; OnPropertyChanged(nameof(SttAutoScroll)); }
+                if (_summaryAutoScroll) { _summaryAutoScroll = false; OnPropertyChanged(nameof(SummaryAutoScroll)); }
                 SttAutoScroll = true;
                 SummaryAutoScroll = true;
+                Utils.Log4.Info($"[AC008-실행] OnSelectedRecording 자동스크롤 강제 발화: Stt={SttAutoScroll}, Summary={SummaryAutoScroll}, file={value.FileName}");
                 Utils.Log4.Info($"[OneNote] STT/요약 로드 시작: {value.FileName}");
                 _ = LoadSTTResultAsync(value);
                 _ = LoadSummaryResultAsync(value);

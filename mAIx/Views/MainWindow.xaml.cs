@@ -14104,6 +14104,18 @@ public partial class MainWindow : FluentWindow
                                 Log4.Debug($"[MainWindow] STTSegments 변경 - UI 업데이트 ({_oneNoteViewModel.STTSegments.Count}개)");
                                 UpdateRecordingContentPanel();
                             });
+                            // AC-008 회귀 수정: 파일 선택 후 LoadSTTResultAsync가 STTSegments에 데이터 추가 완료 시점에
+                            // 자동스크롤 트리거. Add는 매 항목, Reset은 Clear 직후 무시 (데이터 없음).
+                            // 레이아웃 완료 후 ScrollToEnd 발화 위해 Dispatcher.Background 사용.
+                            if (e.Action == System.Collections.Specialized.NotifyCollectionChangedAction.Add &&
+                                _oneNoteViewModel.SttAutoScroll)
+                            {
+                                await Dispatcher.InvokeAsync(() =>
+                                {
+                                    Log4.Info($"[AC008-실행] STTSegments Add 후 자동스크롤 발화 ({_oneNoteViewModel.STTSegments.Count}개)");
+                                    ScrollSttToEndIfEnabled();
+                                }, System.Windows.Threading.DispatcherPriority.Background);
+                            }
                         }
                         catch (Exception ex)
                         {
