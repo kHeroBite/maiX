@@ -461,60 +461,25 @@ namespace mAIx.Views
             }
         }
 
-        // ─── ScrollChanged 핸들러 — 사용자 위로 스크롤 시 자동스크롤 해제 ──
+        // ─── ScrollChanged 핸들러 — 관찰용 (OFF 로직 제거 — L-456) ──
+        // 회귀 수정 사유: ScrollChanged는 사용자 휠뿐 아니라 STTSegments.Clear()/LoadSTTResultAsync()의
+        // 프로그램적 콘텐츠 변경에도 VerticalChange<0가 발생하여 SttAutoScroll=false 오해제 유발.
+        // 사용자 휠은 PreviewMouseWheel 핸들러가 단독으로 처리 (1834cfe6 커밋 의도와 일치).
 
         /// <summary>
-        /// STT ScrollViewer ScrollChanged — 사용자가 위로 스크롤하면 SttAutoScroll 해제.
+        /// STT ScrollViewer ScrollChanged — 관찰/진단용. OFF 처리는 PreviewMouseWheel 단독 담당.
         /// </summary>
         private void OneNoteSttScroll_ScrollChanged(object sender, System.Windows.Controls.ScrollChangedEventArgs e)
         {
-            try
-            {
-                // 자동 스크롤 유발 중이면 무시 (재귀/오해제 방지)
-                if (_isSttAutoScrolling) return;
-                // 위로 이동(VerticalChange < 0) 시 자동스크롤 해제
-                if (e.VerticalChange < 0 && _oneNoteViewModel != null)
-                {
-                    _oneNoteViewModel.SttAutoScroll = false;
-                    var oaiSettings = App.Settings?.OaiRecording;
-                    if (oaiSettings != null)
-                    {
-                        oaiSettings.SttAutoScroll = false;
-                        App.Settings?.SaveAll();
-                    }
-                }
-            }
-            catch (Exception ex)
-            {
-                _oneNoteLog.Error(ex, "[OneNote] OneNoteSttScroll_ScrollChanged 실패");
-            }
+            // OFF 처리 제거 — Codex 가이드: ScrollChanged는 프로그램적 변화도 발화하므로 사용자 의도 판정 부적합
         }
 
         /// <summary>
-        /// 요약 ScrollViewer ScrollChanged — 사용자가 위로 스크롤하면 SummaryAutoScroll 해제.
+        /// 요약 ScrollViewer ScrollChanged — 관찰/진단용. OFF 처리는 PreviewMouseWheel 단독 담당.
         /// </summary>
         private void OneNoteSummaryScroll_ScrollChanged(object sender, System.Windows.Controls.ScrollChangedEventArgs e)
         {
-            try
-            {
-                // 자동 스크롤 유발 중이면 무시 (재귀/오해제 방지)
-                if (_isSummaryAutoScrolling) return;
-                // 위로 이동(VerticalChange < 0) 시 자동스크롤 해제
-                if (e.VerticalChange < 0 && _oneNoteViewModel != null)
-                {
-                    _oneNoteViewModel.SummaryAutoScroll = false;
-                    var oaiSettings = App.Settings?.OaiRecording;
-                    if (oaiSettings != null)
-                    {
-                        oaiSettings.SummaryAutoScroll = false;
-                        App.Settings?.SaveAll();
-                    }
-                }
-            }
-            catch (Exception ex)
-            {
-                _oneNoteLog.Error(ex, "[OneNote] OneNoteSummaryScroll_ScrollChanged 실패");
-            }
+            // OFF 처리 제거 — Codex 가이드: ScrollChanged는 프로그램적 변화도 발화하므로 사용자 의도 판정 부적합
         }
 
         // ─── PreviewMouseWheel 핸들러 — 사용자 휠 입력을 명확히 감지하여 자동스크롤 OFF (race 가드 우회) ──

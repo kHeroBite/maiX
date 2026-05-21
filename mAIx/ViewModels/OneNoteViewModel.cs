@@ -2009,14 +2009,17 @@ public partial class OneNoteViewModel : ViewModelBase
                 CumulativeSummaryText = string.Empty;
                 FinalSummaryText = string.Empty;
                 MinuteSummaryCount = 0;
-                // AC-008 회귀 수정: [ObservableProperty] setter는 이전 값과 동일할 때 early return하므로
-                // 영속화/기본값이 true인 상태에서 `SttAutoScroll = true` 재할당은 Invoke 미발화.
-                // 강제 발화 패턴 — false 우회 후 true 할당으로 setter equal-check 무효화.
-                if (_sttAutoScroll) { _sttAutoScroll = false; OnPropertyChanged(nameof(SttAutoScroll)); }
-                if (_summaryAutoScroll) { _summaryAutoScroll = false; OnPropertyChanged(nameof(SummaryAutoScroll)); }
-                SttAutoScroll = true;
-                SummaryAutoScroll = true;
-                Utils.Log4.Info($"[AC008-실행] OnSelectedRecording 자동스크롤 강제 발화: Stt={SttAutoScroll}, Summary={SummaryAutoScroll}, file={value.FileName}");
+                // AC-008 회귀 수정 (L-456): 파일 전환 시 AutoScroll 강제 ON 복귀.
+                // 핵심 1 — ScrollChanged 핸들러의 false 재설정 제거됨 (MainWindow.OneNote.cs).
+                //           STTSegments.Clear()로 인한 프로그램적 ScrollChanged가 더 이상 false 덮어쓰기 안 함.
+                // 핵심 2 — 백킹 필드 직접 설정 후 setter 호출 — 이전 값(false)과 다르면 setter 동작,
+                //           이전 값(true)이라도 백킹필드를 false로 강제 후 setter 호출하면 PropertyChanged + Settings 저장 + Event Invoke 발화.
+                Utils.Log4.Info($"[AC008-실행] OnSelectedRecording 자동스크롤 복귀 시작: 기존 Stt={_sttAutoScroll}, Summary={_summaryAutoScroll}, file={value.FileName}");
+                _sttAutoScroll = false;
+                _summaryAutoScroll = false;
+                SttAutoScroll = true;      // setter 발화 → Settings 저장 + Event Invoke + ScrollToEnd
+                SummaryAutoScroll = true;  // setter 발화 → Settings 저장 + Event Invoke + ScrollToEnd
+                Utils.Log4.Info($"[AC008-실행] OnSelectedRecording 자동스크롤 복귀 완료: Stt={SttAutoScroll}, Summary={SummaryAutoScroll}, file={value.FileName}");
                 Utils.Log4.Info($"[OneNote] STT/요약 로드 시작: {value.FileName}");
                 _ = LoadSTTResultAsync(value);
                 _ = LoadSummaryResultAsync(value);
