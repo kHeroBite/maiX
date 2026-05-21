@@ -2029,6 +2029,10 @@ ConfigureAwait(false)를 Service 레이어 전체에 적용하여 스레드 컨�
 - mAIx/Views/MainWindow.OneNote.cs (토글 스크롤/마우스휠 핸들러)
 - mAIx/Views/MainWindow.xaml (ScrollViewer x:Name/MAP DataTemplate 3분할)
 
+## 2026-05-21 — 마인드맵 오버레이 (WebView2+Markmap) 구축
+
+| 2026-05-21 | ✨ 마인드맵 오버레이 구축 — AC-MM01~MM09 전항목 PASS. WebView2+Markmap으로 녹음내용탭 STT/MAP/요약 데이터를 마인드맵 시각화. 토글 버튼(BranchFork24) 클릭으로 오버레이 표시/숨김. TopicSegments+MinuteSummaries CollectionChanged + 1초 디바운스 자동 재렌더. SetVirtualHostNameToFolderMapping 로컬 JS 참조. WebView2RuntimeNotFoundException catch UI 안내 패턴. 신규 교훈: L-487(WebView2 로컬 리소스 매핑+디바운스), L-488(RuntimeNotFoundException catch), L-489(ogrill 확정 후 oplan 재질문 0회). | mAIx/Controls/MindMapOverlay.xaml (신규), mAIx/Controls/MindMapOverlay.xaml.cs (신규), mAIx/Resources/mindmap.html (신규), mAIx/Resources/markmap-lib.js+markmap-view.js+markmap-d3.js (신규), mAIx/ViewModels/OneNoteViewModel.cs (IsMindMapVisible), mAIx/Views/MainWindow.xaml (토글+오버레이), mAIx/Views/MainWindow.OneNote.cs (토글 핸들러), mAIx/mAIx.csproj (Resources 등록) |
+
 ## 2026-05-21 — 녹음 시작 즉시 임시 카드 추가+자동선택 (라이브 카드 모델)
 
 | 2026-05-21 | ✨ 녹음 시작 즉시 임시 카드 추가 + 자동 선택 — AC-021: 녹음 시작 시 IsLiveRecording=true 임시 카드 Insert(0); AC-022: SelectedRecording=tempCard 자동 선택; AC-023: _skipLoadSTTOnSelectionChange guardScope try/finally(L-482); AC-024: 종료 시 임시 카드 Remove(Stop+OnRecordingCompleted 2중 안전망, Contains+null 가드 이중 보호 — L-481); AC-025: 취소 시 임시 카드 Remove+SelectedRecording=null. 신규 패턴 등록: L-481(라이브 임시 카드)/L-482(Insert+선택 guardScope). | mAIx/Models/RecordingInfo.cs (IsLiveRecording 프로퍼티), mAIx/ViewModels/OneNoteViewModel.cs (_liveRecordingCard 필드 + 4개 메서드) |

@@ -1,0 +1,58 @@
+<!-- WebView2에서 Markmap 마인드맵을 렌더링하는 셸 HTML -->
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<title>MindMap</title>
+<style>
+  html, body { margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden; background: #1e1e1e; }
+  #mindmap { width: 100vw; height: 100vh; }
+</style>
+</head>
+<body>
+<svg id="mindmap"></svg>
+<script src="markmap-d3.js"></script>
+<script src="markmap-view.js"></script>
+<script src="markmap-lib.js"></script>
+<script>
+  // 외부에서 호출 가능한 전역 함수
+  let markmapInstance = null;
+  let transformer = null;
+
+  function initMarkmap() {
+    try {
+      transformer = new markmap.Transformer();
+      const svgEl = document.querySelector('#mindmap');
+      markmapInstance = markmap.Markmap.create(svgEl);
+      console.log('Markmap initialized');
+    } catch (e) {
+      console.error('Markmap init failed:', e);
+    }
+  }
+
+  // 외부(C#)에서 호출하는 진입점 — markdown 문자열 받아 렌더
+  window.renderMindMap = function(markdownStr) {
+    try {
+      if (!markmapInstance) initMarkmap();
+      const { root } = transformer.transform(markdownStr);
+      markmapInstance.setData(root);
+      markmapInstance.fit();
+      return 'OK';
+    } catch (e) {
+      console.error('renderMindMap failed:', e);
+      return 'ERROR: ' + e.message;
+    }
+  };
+
+  // 초기 빈 마인드맵
+  document.addEventListener('DOMContentLoaded', () => {
+    initMarkmap();
+    if (markmapInstance && transformer) {
+      const { root } = transformer.transform('# 녹음 데이터 대기 중\n\n- 녹음 시작 또는 파일 선택');
+      markmapInstance.setData(root);
+      markmapInstance.fit();
+    }
+  });
+</script>
+</body>
+</html>

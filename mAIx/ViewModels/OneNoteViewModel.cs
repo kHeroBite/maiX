@@ -690,6 +690,12 @@ public partial class OneNoteViewModel : ViewModelBase
     }
 
     /// <summary>
+    /// 마인드맵 패널 표시 여부 (기본 false)
+    /// </summary>
+    [ObservableProperty]
+    private bool _isMindMapVisible;
+
+    /// <summary>
     /// 실시간 STT 자동스크롤 ON/OFF (기본 true) — 영속화
     /// </summary>
     [ObservableProperty]

@@ -2042,3 +2042,35 @@ L-424(WPF ItemsControl 가변높이 안티패턴 기각)가 직전 작업 완료
 - **5축 빠른 평가**: 목표/범위/제약/완료기준/열린질문 각각 채워짐/빈칸 이진 판정. 빈 칸 ≥ 4 → 강력 권고 / 3 → 약권고 / ≤ 2 → 스킵
 - **예외 스킵**: tier ≤ o2 / 단일 파일명+라인 명시 / 사용자 명시 "바로 진행" / 이미 ogrill 결과 제공
 - **Level**: 2 (파이프라인 게이트 설계 패턴)
+
+## L-487: WebView2 로컬 리소스 매핑 패턴 — SetVirtualHostNameToFolderMapping + ExecuteScriptAsync 디바운스 (2026-05-21)
+
+- **문제**: WebView2에서 로컬 JS/HTML 리소스를 참조할 때 file:// 경로 직접 사용 불가 (보안 제약). ExecuteScriptAsync 호출 빈도가 높으면 렌더링 과부하 발생.
+- **해결**: `SetVirtualHostNameToFolderMapping("mindmap.local", resourcesPath, CoreWebView2HostResourceAccessKind.Allow)`로 가상 호스트 매핑 → `NavigateToString(htmlContent)` 내에서 `<script src="http://mindmap.local/markmap-lib.js">` 참조.
+- **디바운스 패턴**: `DispatcherTimer { Interval = TimeSpan.FromSeconds(1) }` + Tick 핸들러에서 `_debounceTimer.Stop(); await UpdateMindMapAsync()` → CollectionChanged 이벤트 빈발 시 마지막 변경만 렌더링.
+- **L-380 준수 필수**: DispatcherTimer.Tick async lambda 내부 전체 try-catch 래핑 필수.
+- **초기화 순서**: `EnsureCoreWebView2Async()` → `SetVirtualHostNameToFolderMapping()` → `NavigateToString()` → `NavigationCompleted`에서 `_isWebViewReady = true`.
+- **Level**: 1 (WebView2 로컬 리소스 통합 패턴)
+
+## L-488: WebView2RuntimeNotFoundException catch 패턴 — 런타임 미설치 시 UI 안내 (2026-05-21)
+
+- **문제**: WebView2 런타임이 설치되지 않은 환경에서 `EnsureCoreWebView2Async()` 호출 시 `WebView2RuntimeNotFoundException` 발생. 예외 미처리 시 앱 크래시.
+- **해결**: `catch (WebView2RuntimeNotFoundException)` 블록에서 안내 패널 표시 + WebView 숨김:
+  ```csharp
+  catch (WebView2RuntimeNotFoundException ex)
+  {
+      _log.Warn(ex, "[AC-MM-실행] WebView2 런타임 미설치");
+      RuntimeNotInstalledPanel.Visibility = Visibility.Visible;
+      MindMapWebView.Visibility = Visibility.Collapsed;
+  }
+  ```
+- **패턴**: 필수 런타임 미설치 시나리오를 항상 별도 catch로 처리. 앱 크래시 없이 사용자 안내.
+- **Level**: 1 (WebView2 런타임 예외 처리 패턴)
+
+## L-489: ogrill 5축 확정 후 oplan 재질문 0회 — 인터뷰 완료 후 신뢰 기반 진행 (2026-05-21)
+
+- **패턴**: ogrill이 5회 인터뷰로 5축(목표/범위/제약/완료기준/열린질문)을 완전히 확정한 경우, oplan은 ogrill 결과를 그대로 신뢰하고 재질문 없이 즉시 계획 수립에 진입.
+- **이유**: ogrill이 이미 사용자 의도를 충분히 탐색·확정했으므로 oplan이 동일 질문을 반복하면 불필요한 인터럽트 발생.
+- **적용 조건**: ogrill_result.md의 5축이 모두 채워지고 열린질문도 해소된 경우.
+- **예외**: ogrill 결과에 열린질문이 아직 남아있거나, 계획 수립 중 새로운 기술적 제약 발견 시 한 번만 확인 가능.
+- **Level**: 1 (파이프라인 진행 효율화 패턴)

@@ -237,6 +237,15 @@ ViewModels:
 ### 3.5. Controls (커스텀 컨트롤)
 
 ```yaml
+Controls_OneNote:
+  - 파일명: MindMapOverlay.xaml / MindMapOverlay.xaml.cs (신규 — 2026-05-21 마인드맵 오버레이)
+    경로: mAIx/Controls/
+    역할: WebView2+Markmap 기반 마인드맵 오버레이 컨트롤 — TopicSegments+MinuteSummaries를 실시간 마인드맵으로 렌더링
+    의존성: OneNoteViewModel, Microsoft.Web.WebView2.Wpf
+    패턴: SetVirtualHostNameToFolderMapping + DispatcherTimer 디바운스 + ExecuteScriptAsync
+```
+
+```yaml
 Controls_Teams:
   - 파일명: ChannelCalendarControl.xaml / ChannelCalendarControl.xaml.cs (신규 — 2026-04-11 Teams Phase 4)
     경로: MaiX/Controls/Teams/
@@ -956,6 +965,8 @@ curl -s http://localhost:5858/api/status
 | 2026-04-14 | 이메일 동기화 Inbox 우선 정렬 + Inbox 첫 로드 $top=10 분기 (Phase 1, o5) | mAIx/Services/Graph/GraphMailService.cs, mAIx/Services/Sync/BackgroundSyncService.cs | GetMessagesDeltaAsync isInitialSync 파라미터; Inbox 2단계 우선 정렬; IsInboxFolder 헬퍼; Phase 2(점진 UI/Upsert) 보류 |
 | 2026-04-24 | InternetMessageId 단독 UNIQUE → 복합 UNIQUE 마이그레이션 (자기 자신에게 보낸 메일 누락 수정) | mAIx/Migrations/20260424000016_FixInternetMessageIdUniqueIndex.cs(신규), mAIx/Services/Sync/BackgroundSyncService.cs | 단독 UNIQUE 폐기+복합 UNIQUE 추가; SaveEmailsAsync UNIQUE catch 폴백 검색 추가 |
 | 2026-05-01 | UI 버그 3종 수정 — BUG-2(ComposeWindow 닫기), BUG-3(인라인 컴포즈 패널), BUG-4(Dispatcher 블로킹) | mAIx/Views/ComposeWindow.xaml.cs, mAIx/ViewModels/MainViewModel.cs, mAIx/Views/MainWindow.xaml, mAIx/Views/MainWindow.xaml.cs | BUG-2: Dispatcher.BeginInvoke 지연 닫기; BUG-3: MainViewModel 인라인컴포즈 프로퍼티/커맨드+MainWindow 패널 UI; BUG-4: Dispatcher.Invoke→InvokeAsync 비동기 전환 |
+
+| 2026-05-21 | 마인드맵 오버레이 (WebView2+Markmap) 구축 — AC-MM01~MM09 PASS | mAIx/Controls/MindMapOverlay.xaml(신규), mAIx/Controls/MindMapOverlay.xaml.cs(신규), mAIx/Resources/mindmap.html(신규), mAIx/Resources/markmap-lib.js(신규), mAIx/Resources/markmap-view.js(신규), mAIx/Resources/markmap-d3.js(신규), mAIx/ViewModels/OneNoteViewModel.cs(IsMindMapVisible), mAIx/Views/MainWindow.xaml(토글+오버레이), mAIx/Views/MainWindow.OneNote.cs(토글 핸들러), mAIx/mAIx.csproj(Resources 등록) | WebView2 로컬 리소스 매핑+디바운스(L-487), RuntimeNotFoundException(L-488) |
 
 ---
 

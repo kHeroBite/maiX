@@ -7017,13 +7017,22 @@
                                                     <Grid.ColumnDefinitions>
                                                         <ColumnDefinition Width="*"/>
                                                         <ColumnDefinition Width="Auto"/>
+                                                        <ColumnDefinition Width="Auto"/>
                                                     </Grid.ColumnDefinitions>
                                                     <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
                                                         <ui:SymbolIcon Symbol="TextBulletListLtr24" FontSize="18" Margin="0,0,8,0" VerticalAlignment="Center"/>
                                                         <TextBlock Text="MAP" FontSize="15" FontWeight="SemiBold" VerticalAlignment="Center"/>
                                                     </StackPanel>
+                                                    <Button x:Name="OneNoteMindMapToggle"
+                                                            Grid.Column="1"
+                                                            Padding="10,5"
+                                                            ToolTip="마인드맵 토글"
+                                                            Style="{StaticResource {x:Static ToolBar.ButtonStyleKey}}"
+                                                            Click="OneNoteMindMapToggle_Click">
+                                                        <ui:SymbolIcon Symbol="Share24" FontSize="14"/>
+                                                    </Button>
                                                     <ToggleButton x:Name="OneNoteTopicNavOrientationToggle"
-                                                                  Grid.Column="1"
+                                                                  Grid.Column="2"
                                                                   Padding="10,5"
                                                                   ToolTip="우측/하단 도킹 전환"
                                                                   Click="OneNoteTopicNavOrientationToggle_Click">
@@ -7455,6 +7464,12 @@
                                                 </Grid>
                                             </Border>
                                         </Grid>
+                                        <!-- 마인드맵 오버레이 — ZIndex 999, STT/MAP/요약 전체 커버 -->
+                                        <controls:MindMapOverlay x:Name="MindMapOverlayInstance"
+                                                                  Grid.Row="0" Grid.Column="0"
+                                                                  Grid.RowSpan="3" Grid.ColumnSpan="5"
+                                                                  Panel.ZIndex="999"
+                                                                  Visibility="{Binding IsMindMapVisible, Converter={StaticResource BooleanToVisibilityConverter}}"/>
                                     </Grid>
                                 </Border>
 

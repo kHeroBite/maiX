@@ -539,6 +539,37 @@ namespace mAIx.Views
         // ─── 녹음 목록 마우스 휠 스크롤 전파 핸들러 (AC-010) ──
 
         /// <summary>
+        /// 마인드맵 오버레이 표시/숨김 토글 — TopicSegments + MinuteSummaries 바인딩 연결
+        /// </summary>
+        private void OneNoteMindMapToggle_Click(object sender, RoutedEventArgs e)
+        {
+            try
+            {
+                if (_oneNoteViewModel == null) return;
+                var newState = !_oneNoteViewModel.IsMindMapVisible;
+                _oneNoteViewModel.IsMindMapVisible = newState;
+                if (newState)
+                {
+                    var rootTitle = _oneNoteViewModel.SelectedRecording?.FileName ?? "녹음 데이터";
+                    MindMapOverlayInstance.Bind(
+                        _oneNoteViewModel.TopicSegments,
+                        _oneNoteViewModel.MinuteSummaries,
+                        rootTitle);
+                    _oneNoteLog.Info("[AC-MM-실행] 마인드맵 토글 ON");
+                }
+                else
+                {
+                    MindMapOverlayInstance.Unbind();
+                    _oneNoteLog.Info("[AC-MM-실행] 마인드맵 토글 OFF");
+                }
+            }
+            catch (Exception ex)
+            {
+                _oneNoteLog.Error(ex, "[AC-MM-실행] OneNoteMindMapToggle_Click 실패");
+            }
+        }
+
+        /// <summary>
         /// 녹음 파일 목록 ListBox의 마우스 휠 이벤트를 외부 ScrollViewer로 전파.
         /// ListBox 내부 ScrollViewer가 휠 이벤트를 흡수하므로 외부 ScrollViewer로 재발행.
         /// </summary>
