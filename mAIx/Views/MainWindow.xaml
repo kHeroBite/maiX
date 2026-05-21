@@ -7127,22 +7127,6 @@
                                                                                     </Style>
                                                                                 </TextBlock.Style>
                                                                             </TextBlock>
-                                                                            <!-- 주제어/핵심맥락 (5~20자) -->
-                                                                            <TextBlock Text="{Binding BodyDisplay}"
-                                                                                       FontSize="11" FontWeight="SemiBold"
-                                                                                       TextWrapping="Wrap"
-                                                                                       TextTrimming="CharacterEllipsis">
-                                                                                <TextBlock.Style>
-                                                                                    <Style TargetType="TextBlock">
-                                                                                        <Setter Property="Foreground" Value="{Binding BackgroundColorHex, Converter={StaticResource HexToReadableForegroundConverter}}"/>
-                                                                                        <Style.Triggers>
-                                                                                            <DataTrigger Binding="{Binding IsSilence}" Value="True">
-                                                                                                <Setter Property="Foreground" Value="#707070"/>
-                                                                                            </DataTrigger>
-                                                                                        </Style.Triggers>
-                                                                                    </Style>
-                                                                                </TextBlock.Style>
-                                                                            </TextBlock>
                                                                         </StackPanel>
                                                                     </Border>
                                                                 </DataTemplate>
@@ -7225,22 +7209,6 @@
                                                                                        TextWrapping="Wrap"
                                                                                        Visibility="{Binding Title, Converter={StaticResource NullToVisibilityConverter}}"
                                                                                        Margin="0,0,0,2">
-                                                                                <TextBlock.Style>
-                                                                                    <Style TargetType="TextBlock">
-                                                                                        <Setter Property="Foreground" Value="{Binding BackgroundColorHex, Converter={StaticResource HexToReadableForegroundConverter}}"/>
-                                                                                        <Style.Triggers>
-                                                                                            <DataTrigger Binding="{Binding IsSilence}" Value="True">
-                                                                                                <Setter Property="Foreground" Value="#707070"/>
-                                                                                            </DataTrigger>
-                                                                                        </Style.Triggers>
-                                                                                    </Style>
-                                                                                </TextBlock.Style>
-                                                                            </TextBlock>
-                                                                            <!-- 주제어/핵심맥락 (5~20자) -->
-                                                                            <TextBlock Text="{Binding BodyDisplay}"
-                                                                                       FontSize="11" FontWeight="SemiBold"
-                                                                                       TextWrapping="Wrap"
-                                                                                       TextTrimming="CharacterEllipsis">
                                                                                 <TextBlock.Style>
                                                                                     <Style TargetType="TextBlock">
                                                                                         <Setter Property="Foreground" Value="{Binding BackgroundColorHex, Converter={StaticResource HexToReadableForegroundConverter}}"/>
