@@ -46,6 +46,7 @@ public class RecordingInfo : INotifyPropertyChanged
     private TimeSpan _currentPosition;
     private bool _isSTTInProgress;
     private bool _isSummaryInProgress;
+    private bool _isLiveRecording;
 
     /// <summary>
     /// 파일 경로
@@ -205,6 +206,20 @@ public class RecordingInfo : INotifyPropertyChanged
             OnPropertyChanged();
             OnPropertyChanged(nameof(SummaryButtonContent));
             OnPropertyChanged(nameof(SummaryButtonAppearance));
+        }
+    }
+
+    /// <summary>
+    /// 녹음 진행 중인 임시 카드 식별자 (true=실시간 녹음 카드)
+    /// </summary>
+    public bool IsLiveRecording
+    {
+        get => _isLiveRecording;
+        set
+        {
+            if (_isLiveRecording == value) return;
+            _isLiveRecording = value;
+            OnPropertyChanged();
         }
     }
 

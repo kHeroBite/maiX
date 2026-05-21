@@ -2003,6 +2003,22 @@ L-424(WPF ItemsControl 가변높이 안티패턴 기각)가 직전 작업 완료
 
 ## L-480: MAP 카드 단순화 — 사용자 피드백 기반 보정 패턴 (2026-05-21)
 
+## L-481: 라이브 임시 카드 패턴 — 즉시 삽입 + 종료 시 교체 (2026-05-21)
+
+- **문제**: 녹음 시작 ~ 파일 생성 사이의 수초 간격 동안 카드가 없어 사용자가 녹음 중임을 시각적으로 알 수 없음
+- **해결**: StartRecordingAsync에서 임시 RecordingInfo(IsLiveRecording=true) 즉시 Insert(0) → 종료 경로(Stop/Completed/Cancel) 모두에 Remove 안전망 적용
+- **중복 Remove 차단**: `if (_liveRecordingCard != null && CurrentPageRecordings.Contains(_liveRecordingCard)) { Remove; _liveRecordingCard = null; }` 패턴. null 가드 먼저 → Contains 체크 → Remove → null 재설정 순서 고정.
+- **종료 경로 2중 안전망**: StopRecordingAsync(정상 종료) + OnRecordingCompleted(완료 콜백) 양쪽 모두 동일 패턴 적용. 먼저 실행된 경로가 Remove 후 null로 설정 → 나중 경로는 null 가드에서 통과.
+- **Level**: 1 (라이브 임시 객체 교체 패턴)
+
+## L-482: ObservableCollection 즉시 삽입+선택 guardScope 패턴 (Insert 버전) (2026-05-21)
+
+- **문제**: ObservableCollection.Insert(0, tempCard) 직후 SelectedRecording = tempCard 할당 시 SelectionChanged 발화 → LoadSTTData 등 부작용 트리거 가능성
+- **해결**: L-385/L-386의 guardScope 패턴을 Insert+즉시선택에 적용: `_skipLoadSTTOnSelectionChange++; try { Insert; SelectedItem=obj; } finally { _skipLoadSTTOnSelectionChange--; }`
+- **SelectionChanged 차단**: 핸들러 진입부에서 `if (_skipLoadSTTOnSelectionChange > 0) return;` 조건으로 프로그래매틱 삽입 중 부작용 차단
+- **L-385/L-386 관계**: Clear+Add race 가드(L-385)와 동일 원칙의 Insert 버전. ObservableCollection 조작+선택 조합에서 SelectionChanged 부작용이 있으면 항상 guardScope 적용
+- **Level**: 1 (ObservableCollection 삽입+선택 guardScope 패턴)
+
 - **문제**: AC-011에서 3분할(Title/Context/BodyDisplay)로 구현했으나 사용자가 "타이틀만 표시"로 단순화 요청 → AC-013/014/015로 보정 필요
 - **교훈**: LLM이 기능을 "더 풍부하게" 구현하는 방향으로 해석하는 경향 → 사용자의 단순화 의도가 명시적일 때는 최소 구현 우선
 - **해결 패턴**: `L-454` 준수 — DataTemplate 하위 요소 단위 외과적 제거 (Context TextBlock만 제거, 나머지 보존)

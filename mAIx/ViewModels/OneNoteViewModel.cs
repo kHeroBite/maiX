@@ -455,6 +455,12 @@ public partial class OneNoteViewModel : ViewModelBase
     private int _skipLoadSTTOnSelectionChange;
 
     /// <summary>
+    /// 녹음 진행 중 임시 라이브 카드 참조 (Insert/Remove 추적).
+    /// StartRecordingAsync에서 생성, StopRecordingAsync/OnRecordingCompleted/CancelRecording에서 제거.
+    /// </summary>
+    private Models.RecordingInfo? _liveRecordingCard;
+
+    /// <summary>
     /// StopRecording()이 이미 LiveSTTSegments→STTSegments 복사를 완료했음을 표시.
     /// 이중 Stop 경로 race 차단(L-462 후속): StopRecording()이 동기적으로 복사한 후
     /// NAudio 비동기 콜백으로 OnRecordingCompleted()가 중복 복사하여 STTSegments=0이 되는 버그 방지.
@@ -3035,6 +3041,37 @@ public partial class OneNoteViewModel : ViewModelBase
 
             IsRecording = true;
             IsRecordingPaused = false;
+
+            // AC-021: 녹음 시작 시 즉시 임시 카드 추가 + 자동 선택
+            var dispatcher = System.Windows.Application.Current?.Dispatcher;
+            if (dispatcher != null)
+            {
+                await dispatcher.InvokeAsync(() =>
+                {
+                    var tempCard = new Models.RecordingInfo
+                    {
+                        FileName = "녹음중...",
+                        FilePath = string.Empty,
+                        CreatedTime = DateTime.Now,
+                        Duration = TimeSpan.Zero,
+                        Source = Models.RecordingSource.mAIx,
+                        IsLiveRecording = true,
+                    };
+                    _liveRecordingCard = tempCard;
+                    _skipLoadSTTOnSelectionChange++;  // guardScope++ — 임시 카드 선택이 STT 로드 유발하지 않도록
+                    try
+                    {
+                        CurrentPageRecordings.Insert(0, tempCard);   // 최상단 추가
+                        SelectedRecording = tempCard;                 // AC-022: 자동 선택
+                    }
+                    finally
+                    {
+                        _skipLoadSTTOnSelectionChange--;
+                    }
+                    Log4.Info($"[AC021-실행] 녹음 시작 임시카드 추가+자동선택 — name={tempCard.DisplayName}");
+                }).Task.ConfigureAwait(false);
+            }
+
             Log4.Info($"[녹음] ★ 녹음 시작됨 (페이지: {pageId ?? "없음"}, 실시간 STT: {IsAIAnalysisEnabled}, 화자분리모드: {IsRealtimeDiarizationEnabled})");
         }
         catch (Exception ex)
@@ -3825,6 +3862,14 @@ public partial class OneNoteViewModel : ViewModelBase
             LoadRecordings();
             Log4.Info($"[녹음] ★ 녹음 목록 새로고침 완료 - CurrentPageRecordings: {CurrentPageRecordings.Count}개");
 
+            // AC-024 안전망: OnRecordingCompleted에서도 임시카드 제거 시도 (Stop과 race 무관 — Contains+null 가드)
+            if (_liveRecordingCard != null && CurrentPageRecordings.Contains(_liveRecordingCard))
+            {
+                CurrentPageRecordings.Remove(_liveRecordingCard);
+                Log4.Info("[AC024-실행] OnRecordingCompleted 임시카드 정리");
+            }
+            _liveRecordingCard = null;
+
             // 새로 녹음된 파일 선택 (플래그 설정하여 파일 로드 건너뛰기)
             var newRecording = CurrentPageRecordings.FirstOrDefault(r => r.FilePath == filePath);
             Log4.Info($"[녹음] ★ 새 녹음 파일 검색 결과: {(newRecording != null ? newRecording.FileName : "찾지 못함")}");
@@ -4445,6 +4490,14 @@ public partial class OneNoteViewModel : ViewModelBase
             LoadRecordings();
             Log4.Info($"[녹음] ★ 녹음 목록 새로고침 완료 - CurrentPageRecordings: {CurrentPageRecordings.Count}개");
 
+            // AC-024: 녹음 종료 시 임시 카드 제거 (실파일 카드가 LoadRecordings로 추가됨 → 중복 방지)
+            if (_liveRecordingCard != null && CurrentPageRecordings.Contains(_liveRecordingCard))
+            {
+                CurrentPageRecordings.Remove(_liveRecordingCard);
+                Log4.Info("[AC024-실행] StopRecordingAsync 임시카드 제거 (실파일 카드로 교체됨)");
+            }
+            _liveRecordingCard = null;
+
             // 새로 추가된 녹음 파일 직접 선택
             if (!string.IsNullOrEmpty(filePath))
             {
@@ -4555,6 +4608,15 @@ public partial class OneNoteViewModel : ViewModelBase
             RecordingDuration = TimeSpan.Zero;
             RecordingVolume = 0;
             _logger.Information("녹음 취소됨");
+
+            // AC-025: 녹음 취소 시 임시카드 제거 + SelectedRecording 초기화
+            if (_liveRecordingCard != null && CurrentPageRecordings.Contains(_liveRecordingCard))
+            {
+                CurrentPageRecordings.Remove(_liveRecordingCard);
+                SelectedRecording = null;
+                Log4.Info("[AC025-실행] 녹음 취소 임시카드 제거");
+            }
+            _liveRecordingCard = null;
         }
         catch (Exception ex)
         {
