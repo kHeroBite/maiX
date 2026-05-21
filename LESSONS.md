@@ -1975,3 +1975,37 @@ L-424(WPF ItemsControl 가변높이 안티패턴 기각)가 직전 작업 완료
 - **NullToVisibilityConverter 조합**: `string.Empty` fallback값이 `NullToVisibilityConverter`와 함께 사용되면 빈 값 시 UI 자동 Collapsed → 구형 응답에서 신규 필드 UI가 표시되지 않아 자연스러운 하위 호환
 - **재발방지**: LLM 프롬프트 스키마 신규 필드 추가 시 파싱 코드에 TryGetProperty 패턴 표준 적용 의무화
 - **Level**: 1 (LLM 응답 파싱 표준 패턴)
+
+## L-479: STT delta 누적 + 마침 문자 감지 자동 분리 패턴 (2026-05-21)
+
+- **문제**: Realtime STT WebSocket의 `delta` 이벤트는 단어 단위로 조각 전달 — 한 문장이 50자를 초과해도 자동으로 분리되지 않아 STT 세그먼트가 과도하게 길어짐
+- **해결**: `ConcurrentDictionary<itemId, accum>` 버퍼에 delta를 누적 후 `accum.Length >= 50` AND 역방향 마침 문자(`. ! ? 。 ！ ？`) 탐색으로 분리 지점 결정
+  ```csharp
+  // AC-017 패턴: delta 누적 + 역방향 마침 탐색
+  if (accum.Length >= AutoSplitMinLength)
+  {
+      int splitIdx = -1;
+      for (int i = accum.Length - 1; i >= 0; i--)
+          if (AutoSplitTerminators.Contains(accum[i])) { splitIdx = i; break; }
+      if (splitIdx >= 0)
+      {
+          var splitText = accum[..(splitIdx + 1)];
+          var remainder = accum[(splitIdx + 1)..];
+          TranscriptSegmentReceived?.Invoke(ts, splitText);  // 새 세그먼트 commit
+          _deltaBuffers[itemId] = remainder;                  // 나머지는 다음 delta로 이어짐
+      }
+  }
+  ```
+- **역방향 탐색 이유**: 문장 마지막에 마침이 올 가능성이 높음 → 첫 마침 기준 분리보다 역방향이 자연스러운 분리점
+- **TranscriptSegmentUpdated 유지**: 실시간 LiveSTT UI 표시용은 분리 후에도 계속 발화 (분리와 독립)
+- **임계값**: const 50 (설정 미노출 — 단순 구현 우선)
+- **Level**: 1 (STT 스트리밍 분리 패턴)
+
+## L-480: MAP 카드 단순화 — 사용자 피드백 기반 보정 패턴 (2026-05-21)
+
+- **문제**: AC-011에서 3분할(Title/Context/BodyDisplay)로 구현했으나 사용자가 "타이틀만 표시"로 단순화 요청 → AC-013/014/015로 보정 필요
+- **교훈**: LLM이 기능을 "더 풍부하게" 구현하는 방향으로 해석하는 경향 → 사용자의 단순화 의도가 명시적일 때는 최소 구현 우선
+- **해결 패턴**: `L-454` 준수 — DataTemplate 하위 요소 단위 외과적 제거 (Context TextBlock만 제거, 나머지 보존)
+- **세로/가로 양쪽**: `TopicSegmentsItemsControl` + `TopicSegmentsHorizontalItemsControl` 동시 동기화 필수 (한쪽만 수정 시 모드 전환 후 회귀)
+- **재발방지**: 오plan 의도분석(Phase A)에서 UI 카드 요소 수 명시적 확인 ("A/B/C 3개 표시" vs "A 1개만 표시") 필수
+- **Level**: 1 (UI 단순화 요청 해석 패턴)

@@ -7143,12 +7143,6 @@
                                                                                     </Style>
                                                                                 </TextBlock.Style>
                                                                             </TextBlock>
-                                                                            <!-- AC-011: 맥락 (Context 필드 — 빈값 시 자동 숨김) -->
-                                                                            <TextBlock Text="{Binding Context}"
-                                                                                       FontSize="10" Foreground="#666666"
-                                                                                       TextWrapping="Wrap"
-                                                                                       Visibility="{Binding Context, Converter={StaticResource NullToVisibilityConverter}}"
-                                                                                       Margin="0,2,0,0"/>
                                                                         </StackPanel>
                                                                     </Border>
                                                                 </DataTemplate>
@@ -7258,12 +7252,6 @@
                                                                                     </Style>
                                                                                 </TextBlock.Style>
                                                                             </TextBlock>
-                                                                            <!-- AC-011: 맥락 (Context 필드 — 빈값 시 자동 숨김) -->
-                                                                            <TextBlock Text="{Binding Context}"
-                                                                                       FontSize="10" Foreground="#666666"
-                                                                                       TextWrapping="Wrap"
-                                                                                       Visibility="{Binding Context, Converter={StaticResource NullToVisibilityConverter}}"
-                                                                                       Margin="0,2,0,0"/>
                                                                         </StackPanel>
                                                                     </Border>
                                                                 </DataTemplate>

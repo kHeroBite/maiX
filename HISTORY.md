@@ -2028,3 +2028,7 @@ ConfigureAwait(false)를 Service 레이어 전체에 적용하여 스레드 컨�
 - mAIx/ViewModels/OneNoteViewModel.cs (초기화/불용어/자동스크롤)
 - mAIx/Views/MainWindow.OneNote.cs (토글 스크롤/마우스휠 핸들러)
 - mAIx/Views/MainWindow.xaml (ScrollViewer x:Name/MAP DataTemplate 3분할)
+
+## 2026-05-21 — 4개 이슈 통합 수정 (녹음시작 자동체크 + MAP 단순화 + 휠 진단 + STT 50자 분리)
+
+| 2026-05-21 | 🐛 4개 이슈 통합 수정 — AC-012: 녹음 시작 시 SttAutoScroll/SummaryAutoScroll 강제 ON (백킹필드 false→true 우회 패턴); AC-013/014: MAP 카드 Context TextBlock 외과적 제거(세로+가로 양쪽); AC-016: 휠 스크롤 [AC016-휠] 진단 로그 추가; AC-017: STT delta 50자+마침 자동분리 패턴. L-479(delta 분리)/L-480(MAP 단순화 보정) 교훈 등록. | OneNoteViewModel.cs, OpenAiRealtimeSttService.cs, MainWindow.xaml, MainWindow.OneNote.cs |

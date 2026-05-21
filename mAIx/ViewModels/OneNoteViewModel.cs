@@ -3025,6 +3025,14 @@ public partial class OneNoteViewModel : ViewModelBase
             await StartOpenAiServicesAsync();
             Log4.Info("[녹음] StartOpenAiServicesAsync 호출 완료");
 
+            // AC-012: 녹음 시작 시 STT/요약 자동스크롤 강제 ON (백킹필드 false→true 우회)
+            Log4.Info($"[AC012-실행] 녹음 시작 AutoScroll 복귀 시작: 기존 Stt={_sttAutoScroll}, Summary={_summaryAutoScroll}");
+            _sttAutoScroll = false;
+            _summaryAutoScroll = false;
+            SttAutoScroll = true;      // setter 발화 → Settings 저장 + Event Invoke + ScrollToEnd
+            SummaryAutoScroll = true;  // setter 발화 → Settings 저장 + Event Invoke + ScrollToEnd
+            Log4.Info($"[AC012-실행] 녹음 시작 AutoScroll 복귀 완료: Stt={SttAutoScroll}, Summary={SummaryAutoScroll}");
+
             IsRecording = true;
             IsRecordingPaused = false;
             Log4.Info($"[녹음] ★ 녹음 시작됨 (페이지: {pageId ?? "없음"}, 실시간 STT: {IsAIAnalysisEnabled}, 화자분리모드: {IsRealtimeDiarizationEnabled})");

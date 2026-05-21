@@ -138,6 +138,10 @@ public sealed class OpenAiRealtimeSttService : IOpenAiRealtimeSttService
     // delta 누적 버퍼 (item_id → 누적 텍스트)
     private readonly System.Collections.Concurrent.ConcurrentDictionary<string, string> _deltaBuffers = new();
 
+    // AC-017: 50자+마침 자동 분리 상수
+    private const int AutoSplitMinLength = 50;
+    private static readonly HashSet<char> AutoSplitTerminators = new() { '.', '!', '?', '。', '！', '？' };
+
     public OpenAiRealtimeSttService(AppSettingsManager settings)
     {
         _settings = settings ?? throw new ArgumentNullException(nameof(settings));
@@ -507,6 +511,30 @@ public sealed class OpenAiRealtimeSttService : IOpenAiRealtimeSttService
                         var tsEnd = TimeSpan.FromMilliseconds(_lastSpeechStoppedMs > 0 ? _lastSpeechStoppedMs : _lastSpeechStartedMs);
                         _log.Info($"[OpenAi-Realtime] delta — text='{deltaText}' openAiItemId={openAiItemId} accum_len={accum.Length}");
                         TranscriptSegmentUpdated?.Invoke(openAiItemId, ts, tsEnd, accum);
+
+                        // AC-017: 50자 이상 + 마침 문자 감지 시 강제 분리
+                        if (accum.Length >= AutoSplitMinLength)
+                        {
+                            // 마지막 마침 문자 위치를 역방향 탐색
+                            int splitIdx = -1;
+                            for (int i = accum.Length - 1; i >= 0; i--)
+                            {
+                                if (AutoSplitTerminators.Contains(accum[i]))
+                                {
+                                    splitIdx = i;
+                                    break;
+                                }
+                            }
+                            if (splitIdx >= 0)
+                            {
+                                var splitText = accum[..(splitIdx + 1)];
+                                var remainder = accum[(splitIdx + 1)..];
+                                _log.Info($"[AC017-AutoSplit] 분리 발화 — len={splitText.Length}, lastChar={accum[splitIdx]}, remainder_len={remainder.Length}");
+                                try { TranscriptSegmentReceived?.Invoke(ts, splitText); }
+                                catch (Exception ex) { _log.Error(ex, "[AC017-AutoSplit] TranscriptSegmentReceived 발화 예외"); }
+                                _deltaBuffers[openAiItemId] = remainder;
+                            }
+                        }
                     }
                 }
             }

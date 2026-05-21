@@ -493,6 +493,7 @@ namespace mAIx.Views
         {
             try
             {
+                _oneNoteLog.Info($"[AC016-휠] STT 휠 감지 — delta={e.Delta}, AutoScroll={_oneNoteViewModel?.SttAutoScroll}, Handled(진입)={e.Handled}");
                 if (_oneNoteViewModel == null || !_oneNoteViewModel.SttAutoScroll) return;
                 _oneNoteViewModel.SttAutoScroll = false;
                 var oaiSettings = App.Settings?.OaiRecording;
@@ -502,6 +503,7 @@ namespace mAIx.Views
                     App.Settings?.SaveAll();
                 }
                 _oneNoteLog.Info($"[휠OFF-실행] STT 사용자 휠 감지 — SttAutoScroll OFF (Delta={e.Delta})");
+                // e.Handled = false 유지 — ScrollViewer 자체 휠 처리 허용 (방법 A)
             }
             catch (Exception ex)
             {
@@ -516,6 +518,7 @@ namespace mAIx.Views
         {
             try
             {
+                _oneNoteLog.Info($"[AC016-휠] 요약 휠 감지 — delta={e.Delta}, AutoScroll={_oneNoteViewModel?.SummaryAutoScroll}, Handled(진입)={e.Handled}");
                 if (_oneNoteViewModel == null || !_oneNoteViewModel.SummaryAutoScroll) return;
                 _oneNoteViewModel.SummaryAutoScroll = false;
                 var oaiSettings = App.Settings?.OaiRecording;
@@ -525,6 +528,7 @@ namespace mAIx.Views
                     App.Settings?.SaveAll();
                 }
                 _oneNoteLog.Info($"[휠OFF-실행] 요약 사용자 휠 감지 — SummaryAutoScroll OFF (Delta={e.Delta})");
+                // e.Handled = false 유지 — ScrollViewer 자체 휠 처리 허용 (방법 A)
             }
             catch (Exception ex)
             {
