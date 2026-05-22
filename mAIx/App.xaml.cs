@@ -214,6 +214,7 @@ public partial class App : Application
         services.AddSingleton<IOpenAiTtsService, OpenAiTtsService>();
         services.AddSingleton<IMinuteSummaryService, MinuteSummaryService>();
         services.AddSingleton<ICumulativeSummaryService, CumulativeSummaryService>();
+        services.AddSingleton<IMindMapTreeService, MindMapTreeService>();
 
         // DbContext 등록 (SQLite) - Factory 패턴 사용
         services.AddDbContextFactory<mAIxDbContext>(options =>

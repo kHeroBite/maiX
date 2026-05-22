@@ -29,8 +29,24 @@
                 Width="32" Height="32"
                 Background="#80000000"
                 BorderThickness="0"
+                Panel.ZIndex="100"
                 ToolTip="마인드맵 닫기 (ESC)">
             <ui:SymbolIcon Symbol="Dismiss24" FontSize="14" Foreground="White"/>
         </Button>
+        <!-- WPF 보조 X 버튼 — Airspace 대응용 (WebView2 위 영역 클릭 보장) -->
+        <Button x:Name="WpfCloseButton"
+                Content="✕"
+                Width="40" Height="40"
+                HorizontalAlignment="Right"
+                VerticalAlignment="Top"
+                Margin="0,8,8,0"
+                Panel.ZIndex="999"
+                Click="WpfCloseButton_Click"
+                Background="#99000000"
+                Foreground="White"
+                BorderThickness="0"
+                FontSize="18"
+                FontWeight="Bold"
+                ToolTip="닫기 (ESC)"/>
     </Grid>
 </UserControl>

@@ -2029,6 +2029,10 @@ ConfigureAwait(false)를 Service 레이어 전체에 적용하여 스레드 컨�
 - mAIx/Views/MainWindow.OneNote.cs (토글 스크롤/마우스휠 핸들러)
 - mAIx/Views/MainWindow.xaml (ScrollViewer x:Name/MAP DataTemplate 3분할)
 
+## 2026-05-22 — 마인드맵 rev3: LLM 트리 통합 + X 버튼 3-pronged + PropertyChanged 동기화
+
+| 2026-05-22 | 🔧 마인드맵 rev3 — LLM 트리 통합 + X 버튼 회귀 3-pronged 보강 + PropertyChanged 동기화. ① MindMapTreeService 신규(259줄): IMindMapTreeService+IDisposable, GPT-4o HTTP 호출, 5초 디바운스 PeriodicTimer, LastTreeMarkdown 메모리 캐시, EventHandler<string> 이벤트, _httpLock SemaphoreSlim. ② MindMapOverlay X 버튼 3-pronged: HTML #closeBtn pointer-events:auto+stopPropagation, WpfCloseButton Panel.ZIndex=999, NLog[AC-MMX3-click]+DevTools[MMR3] 양쪽 마커. ③ LLM 트리 패스스루: _treeService 필드+OnTreeMarkdownGenerated 핸들러, BuildMarkdown에서 _llmTreeMarkdown 우선 분기, Take() 제거. ④ MainWindow.OneNote PropertyChanged 동기화: OnViewModelPropertyChanged_ForMindMap 구독+CloseRequested 해제+UpdateRootTitle+Bind 재호출. ⑤ App.xaml.cs DI 등록. 정적/회귀/빌드 PASS. ⚠️ 사용자 UI 실측 보류: X 버튼 실클릭, LLM 트리 5초 발화, AC-MMT03/MMT04 마커 불일치. 신규 교훈: L-494~L-499. | mAIx/Services/AI/MindMapTreeService.cs (신규), mAIx/Controls/MindMapOverlay.xaml (Panel.ZIndex), mAIx/Controls/MindMapOverlay.xaml.cs (LLM 패스스루+WpfCloseButton), mAIx/Resources/mindmap.html (pointer-events+stopPropagation), mAIx/Views/MainWindow.OneNote.cs (PropertyChanged 동기화), mAIx/App.xaml.cs (DI 등록) |
+
 ## 2026-05-22 — 마인드맵 6개 이슈 회귀+개선 (mm_polish)
 
 | 2026-05-22 | 🔧 마인드맵 6개 이슈 회귀+개선 — AC-MMP01~06 전항목 PASS. ① 루트 제목: IsLiveRecording 분기로 "현재 녹음" vs 페이지 제목 동적 결정. ② MinuteSummaries 노드 제거: 마인드맵에서 요약 노드 완전 제거(TopicSegments만 렌더). ③ 묵음 필터: IsSilence 우선 + _silenceWords HashSet + 1글자 이하 3중 필터. ④ X 버튼+WebMessage: WPF HWND z-order 한계 → HTML 내부 #closeBtn + postMessage 패턴(L-490). ⑤ Keywords/Context L2: Take(3)+2글자+stopWords 필터로 L2 키워드 노드 정제. ⑥ 테마 동기화: CSS 변수(:root/html.theme-light) + window.setTheme() + ThemeService 구독/Unbind 해제(L-491/L-492). 신규 교훈: L-490(WebView2 HWND z-order), L-491(이벤트 대칭 해제), L-492(Markmap 동적 테마), L-493(묵음 3중 필터). | mAIx/Controls/MindMapOverlay.xaml.cs (이슈2/3/4/5/6), mAIx/Views/MainWindow.OneNote.cs (이슈1 ResolveRootTitle), mAIx/Resources/mindmap.html (이슈4 X버튼+postMessage, 이슈6 CSS변수+setTheme) |

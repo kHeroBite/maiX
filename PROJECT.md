@@ -433,6 +433,18 @@ AI_Services:
     이벤트: CumulativeSummaryUpdated
     변경_2026-05-10: Mock 분기 + DebugTimerScale 적용 (기본 1.0, 테스트 시 0.1)
 
+  - 파일명: MindMapTreeService.cs (신규 — 2026-05-22 마인드맵 rev3)
+    경로: Services/AI/
+    역할: GPT-4o HTTP 호출 기반 마인드맵 LLM 트리 생성 서비스
+    인터페이스: IMindMapTreeService (IDisposable 포함)
+    이벤트: EventHandler<string> TreeMarkdownGenerated
+    주요기능:
+      - 5초 디바운스 PeriodicTimer — 음성 세그먼트 업데이트마다 타이머 리셋
+      - LastTreeMarkdown 메모리 캐시 — 오버레이 Bind 시 즉시 표시
+      - SemaphoreSlim _httpLock — 동시 HTTP 호출 방지
+      - RequestTreeUpdate(string text) — 외부에서 업데이트 요청
+    DI: Singleton (App.xaml.cs AddSingleton<IMindMapTreeService, MindMapTreeService>)
+
   - 파일명: MinuteSummaryService.cs (변경)
     역할: 60초 PeriodicTimer 기반 1분 요약 생성 + 디스크 JSON 저장
     변경_2026-05-10: Mock 분기 + DebugTimerScale 적용 (60초→6초 등 스케일 조정 가능)
@@ -968,6 +980,7 @@ curl -s http://localhost:5858/api/status
 
 | 2026-05-21 | 마인드맵 오버레이 (WebView2+Markmap) 구축 — AC-MM01~MM09 PASS | mAIx/Controls/MindMapOverlay.xaml(신규), mAIx/Controls/MindMapOverlay.xaml.cs(신규), mAIx/Resources/mindmap.html(신규), mAIx/Resources/markmap-lib.js(신규), mAIx/Resources/markmap-view.js(신규), mAIx/Resources/markmap-d3.js(신규), mAIx/ViewModels/OneNoteViewModel.cs(IsMindMapVisible), mAIx/Views/MainWindow.xaml(토글+오버레이), mAIx/Views/MainWindow.OneNote.cs(토글 핸들러), mAIx/mAIx.csproj(Resources 등록) | WebView2 로컬 리소스 매핑+디바운스(L-487), RuntimeNotFoundException(L-488) |
 | 2026-05-22 | 마인드맵 6개 이슈 회귀+개선 — AC-MMP01~06 PASS | mAIx/Controls/MindMapOverlay.xaml.cs(이슈2/3/4/5/6 수정), mAIx/Views/MainWindow.OneNote.cs(이슈1 ResolveRootTitle), mAIx/Resources/mindmap.html(이슈4 X버튼+postMessage, 이슈6 CSS변수+setTheme) | WebView2 HWND z-order→HTML내부버튼+postMessage(L-490), 이벤트 대칭 해제(L-491), Markmap CSS테마(L-492), 묵음3중필터(L-493) |
+| 2026-05-22 | 마인드맵 rev3 — LLM 트리 통합 + X 버튼 3-pronged + PropertyChanged 동기화 ⚠️사용자 UI 실측 보류 | mAIx/Services/AI/MindMapTreeService.cs(신규), mAIx/Controls/MindMapOverlay.xaml(Panel.ZIndex), mAIx/Controls/MindMapOverlay.xaml.cs(LLM 패스스루+WpfCloseButton), mAIx/Resources/mindmap.html(pointer-events+stopPropagation), mAIx/Views/MainWindow.OneNote.cs(PropertyChanged 동기화), mAIx/App.xaml.cs(DI 등록) | LLM 트리 통합 패턴(L-494), X버튼 3-pronged(L-495), UI실측 보류 명시(L-496), auto_script 마커 일치(L-497), PropertyChanged 해제(L-498), Wave 패턴(L-499) |
 
 ---
 

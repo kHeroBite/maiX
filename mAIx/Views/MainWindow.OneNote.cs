@@ -1,5 +1,7 @@
 // MainWindow partial — OneNote 녹음 STT + 주제어 네비게이션 핸들러 (Phase 7)
 using System;
+using System.Collections.ObjectModel;
+using System.ComponentModel;
 using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Controls;
@@ -109,6 +111,10 @@ namespace mAIx.Views
 
                     _oneNoteViewModel.SummaryAutoScrollEnabled -= ScrollSummaryToEndIfEnabled;
                     _oneNoteViewModel.SummaryAutoScrollEnabled += ScrollSummaryToEndIfEnabled;
+
+                    // 마인드맵 녹음 전환 동기화 — 한 번만 등록 (중복 방지: -= 후 +=)
+                    _oneNoteViewModel.PropertyChanged -= OnViewModelPropertyChanged_ForMindMap;
+                    _oneNoteViewModel.PropertyChanged += OnViewModelPropertyChanged_ForMindMap;
                 }
             }
             catch (Exception ex)
@@ -566,9 +572,14 @@ namespace mAIx.Views
                     {
                         try
                         {
-                            if (_oneNoteViewModel != null) _oneNoteViewModel.IsMindMapVisible = false;
+                            if (_oneNoteViewModel != null)
+                            {
+                                _oneNoteViewModel.IsMindMapVisible = false;
+                                // PropertyChanged 해제 — 메모리 누수 방지 (오버레이 닫힘 시)
+                                _oneNoteViewModel.PropertyChanged -= OnViewModelPropertyChanged_ForMindMap;
+                            }
                             MindMapOverlayInstance.Unbind();
-                            _oneNoteLog.Info("[AC-MMX-실행] CloseRequested 콜백 — 오버레이 OFF");
+                            _oneNoteLog.Info("[AC-MMX-실행] CloseRequested 콜백 — 오버레이 OFF + PropertyChanged 해제");
                         }
                         catch (Exception cbEx)
                         {
@@ -591,6 +602,70 @@ namespace mAIx.Views
             {
                 _oneNoteLog.Error(ex, "[AC-MM-실행] OneNoteMindMapToggle_Click 실패");
             }
+        }
+
+        // ─── 마인드맵 녹음 전환 동기화 핸들러 ──────────────────────────────
+
+        /// <summary>
+        /// ViewModel.SelectedRecording / SelectedPage 변경 감지 → 마인드맵 자동 갱신
+        /// OneNoteRecDockGrid_Loaded에서 한 번만 등록, CloseRequested 콜백에서 해제
+        /// </summary>
+        private void OnViewModelPropertyChanged_ForMindMap(object? sender, PropertyChangedEventArgs e)
+        {
+            try
+            {
+                if (e.PropertyName == nameof(OneNoteViewModel.SelectedRecording)
+                    || e.PropertyName == nameof(OneNoteViewModel.SelectedPage))
+                {
+                    OnSelectedRecordingChangedForMindMap();
+                }
+            }
+            catch (Exception ex)
+            {
+                _oneNoteLog.Error(ex, "[MMT-실행] OnViewModelPropertyChanged_ForMindMap 실패");
+            }
+        }
+
+        /// <summary>
+        /// 녹음 파일 또는 페이지 전환 시 마인드맵 Bind 재호출 (idempotent)
+        /// 오버레이가 숨겨져 있으면 무시
+        /// </summary>
+        private void OnSelectedRecordingChangedForMindMap()
+        {
+            try
+            {
+                if (MindMapOverlayInstance == null || !MindMapOverlayInstance.IsVisible) return;
+
+                var newTitle = ResolveRootTitleForMindMap();
+                _oneNoteLog.Info($"[MMT-실행] 녹음 전환 — Bind 재호출, rootTitle='{newTitle}'");
+
+                MindMapOverlayInstance.Unbind();
+                MindMapOverlayInstance.Bind(
+                    _oneNoteViewModel?.TopicSegments ?? new ObservableCollection<TopicSegment>(),
+                    _oneNoteViewModel?.MinuteSummaries ?? new ObservableCollection<MinuteSummaryEntry>(),
+                    newTitle);
+            }
+            catch (Exception ex)
+            {
+                _oneNoteLog.Error(ex, "[MMT-실행] OnSelectedRecordingChangedForMindMap 실패");
+            }
+        }
+
+        /// <summary>
+        /// 마인드맵 루트 제목 결정 — 라이브 녹음이면 페이지 제목 우선 (rev2 로직과 동일)
+        /// </summary>
+        private string ResolveRootTitleForMindMap()
+        {
+            var recording = _oneNoteViewModel?.SelectedRecording;
+            if (recording?.IsLiveRecording == true)
+            {
+                var pageTitle = _oneNoteViewModel?.SelectedPage?.Title?.Trim();
+                return string.IsNullOrWhiteSpace(pageTitle) ? "현재 녹음" : pageTitle;
+            }
+            var fn = recording?.FileName;
+            if (!string.IsNullOrWhiteSpace(fn) && fn != "녹음중...") return fn;
+            var fallbackTitle = _oneNoteViewModel?.SelectedPage?.Title?.Trim();
+            return string.IsNullOrWhiteSpace(fallbackTitle) ? "녹음 데이터" : fallbackTitle;
         }
 
         /// <summary>

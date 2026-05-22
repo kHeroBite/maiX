@@ -2108,3 +2108,106 @@ L-424(WPF ItemsControl 가변높이 안티패턴 기각)가 직전 작업 완료
   3. `if (text.Length <= 1) continue;` — 1글자 이하 제거
 - **_silenceWords 정의 위치**: 클래스 필드로 `HashSet<string>` 초기화 (루프 내 생성 금지 — 성능).
 - **Level**: 1 (음성 STT 품질 필터링 패턴)
+
+## L-494: LLM 트리 통합 패턴 — 별도 HTTP 서비스 + 5초 디바운스 + 메모리 캐시 (2026-05-22)
+
+**문제**: Realtime WebSocket에 LLM 트리 생성을 통합하려 했으나 세션 관리 복잡도와 기존 오디오 파이프라인 충돌 가능성이 있음.
+
+**해결**: 별도 IDisposable 서비스(MindMapTreeService) 분리.
+- `IMindMapTreeService` 인터페이스 + `MindMapTreeService` 구현체 DI 등록
+- `PeriodicTimer` 5초 디바운스 — 음성 세그먼트 업데이트마다 타이머 리셋
+- `LastTreeMarkdown` 메모리 캐시 — 오버레이 Bind 시 즉시 표시
+- `EventHandler<string> TreeMarkdownGenerated` 이벤트 기반 비동기 결과 전달
+- `SemaphoreSlim _httpLock` — 동시 HTTP 호출 방지
+
+**규칙**:
+- LLM 트리 생성은 Realtime 통합 대신 독립 HTTP 서비스 분리가 안정적
+- `IDisposable` + `Dispose()`에서 `_httpLock.Dispose()` 필수
+- Level: 1
+
+---
+
+## L-495: X 버튼 WebView2 회귀 3-pronged 동시 보강 패턴 (2026-05-22)
+
+**문제**: WebView2 Airspace로 HTML 위에 WPF 요소가 가려짐. pointer-events 단독 또는 ZIndex 단독으로는 불충분. 3차 회귀 발생.
+
+**해결**: 3가지를 동시에 적용 (하나라도 누락하면 회귀 재발 위험).
+1. **HTML `pointer-events:auto` + `stopPropagation`**: `#closeBtn { pointer-events: auto !important; }` + `e.stopPropagation()`
+2. **WPF 대체 버튼 `Panel.ZIndex=999`**: `WpfCloseButton` IsHitTestVisible=True + ZIndex=999 명시
+3. **NLog `[AC-MMX3-click]` + DevTools console `[MMR3]` 양쪽 마커**: 실측 검증을 위해 두 채널 모두 필수
+
+**규칙**:
+- WebView2 위 버튼 회귀 시 3가지 동시 적용 의무
+- NLog + DevTools 양쪽 마커 없으면 실측 검증 불가
+- Level: 2
+
+---
+
+## L-496: 정적 PASS ≠ 동작 PASS — UI 실측 보류 항목 명시 필수 (2026-05-22)
+
+**문제**: 정적 grep으로 코드 존재는 확인했으나 실제 WebView2 클릭/LLM API 호출은 사용자 직접 조작 없이 검증 불가. 3차 회귀 근본 원인 중 하나.
+
+**해결**:
+- otest 결과 보고 시 `## ⚠️ 사용자 UI 실측 보류` 섹션 필수 포함
+- X 버튼/WebView2/LLM 호출 관련 항목은 정적 grep만으로 PASS 선언 금지
+- 커밋 메시지에 "사용자 UI 실측 보류" 명시 (이전 사이클 회귀 방지 의미)
+
+**규칙**:
+- `정적 grep PASS` ≠ `동작 PASS` — 반드시 구분
+- 실측 불가 항목은 보류 목록으로 분리 관리
+- Level: 2
+
+---
+
+## L-497: otest auto_script grep 패턴 = oplan 마커명 = odev 실제 코드 (2026-05-22)
+
+**문제**: oplan 단계에서 NLog 마커명을 acceptance_criteria에 정확히 명시하지 않음. odev에서 임의 문자열 사용. auto_script grep 패턴과 불일치 → 런타임 실행 시 FAIL 판정 가능.
+
+**사례**: AC-MMT03 auto_script grep: `[MMT-실행] GenerateTreeAsync 완료` vs 실제 코드: `[MMT-실행] LLM 트리 생성 완료 — 줄수=N`
+
+**해결**:
+- oplan acceptance_criteria에 NLog 마커 정확한 문자열 명시
+- odev 에이전트는 해당 문자열 그대로 코드에 작성
+- otest auto_script도 동일 문자열로 grep
+
+**규칙**:
+- oplan 마커명 = odev 코드 마커 = otest auto_script grep 패턴 (셋이 일치해야 런타임 검증 가능)
+- Level: 2
+
+---
+
+## L-498: PropertyChanged 구독 해제 — CloseRequested/Unbind 콜백 대칭 패턴 (2026-05-22)
+
+**문제**: ViewModel PropertyChanged에 구독하면 오버레이가 닫혀도 핸들러가 살아있어 메모리 누수 발생.
+
+**해결**:
+```csharp
+// 구독
+_vmPropertyChangedHandler = OnViewModelPropertyChanged_ForMindMap;
+vm.PropertyChanged += _vmPropertyChangedHandler;
+
+// CloseRequested 콜백에서 해제
+vm.PropertyChanged -= _vmPropertyChangedHandler;
+```
+- `_handlerField`에 저장 후 동일 인스턴스로 `-=` 보장
+- `CloseRequested` 콜백 또는 `Unbind()` 메서드에서 해제 필수
+
+**규칙**:
+- ViewModel PropertyChanged 구독 시 항상 Unbind에서 대칭 해제
+- Level: 1
+
+---
+
+## L-499: Wave 패턴 — 다파일 다중 에이전트 충돌 방지 (2026-05-22)
+
+**문제**: 5+ 파일 병렬 수정 시 타입/인터페이스 미확정 상태로 구현 에이전트가 다르게 해석할 수 있음.
+
+**해결** (rev3 실증 — 14파일, 역라우팅 0회):
+1. **Wave1**: 인터페이스/타입/팩토리 시그니처 확정 (MindMapTreeService 인터페이스 포함)
+2. **Wave2**: 구현 에이전트 병렬 spawn (MindMapOverlay + MainWindow.OneNote 병렬)
+3. **Wave3**: 통합 검증
+
+**규칙**:
+- Wave1 완료 전 Wave2 병렬 spawn 금지
+- Wave1에서 타입/인터페이스/이벤트 시그니처 완전 확정 필수
+- Level: 1

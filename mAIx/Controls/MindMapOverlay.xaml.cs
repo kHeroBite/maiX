@@ -11,9 +11,11 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Threading;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Web.WebView2.Core;
 using NLog;
 using mAIx.Models;
+using mAIx.Services.AI;
 using mAIx.Services.Theme;
 using Wpf.Ui.Appearance;
 
@@ -48,6 +50,10 @@ public partial class MindMapOverlay : UserControl
         "이런", "그런", "저런", "이렇게", "그렇게", "저렇게",
         "있는", "있어", "있다", "없는", "없어", "없다"
     };
+
+    // LLM 트리 서비스 + 캐시 (X2 — LLM 패스스루)
+    private IMindMapTreeService? _treeService;
+    private string? _llmTreeMarkdown;
 
     // ThemeService 구독 핸들러 (Unbind에서 해제 필수)
     private EventHandler<ApplicationTheme>? _themeHandler;
@@ -87,12 +93,30 @@ public partial class MindMapOverlay : UserControl
     {
         try
         {
+            _log.Info($"[AC-MMX3-click] WPF CloseButton 클릭 발화 타임스탬프={DateTime.Now:HH:mm:ss.fff}");
             _log.Info("[AC-MMX-실행] X 닫기 버튼 클릭");
             CloseRequested?.Invoke();
         }
         catch (Exception ex)
         {
             _log.Error(ex, "[AC-MMX-실행] CloseButton_Click 실패");
+        }
+    }
+
+    /// <summary>
+    /// WPF 보조 X 버튼 클릭 (Airspace 대응) → CloseRequested 콜백 호출
+    /// </summary>
+    private void WpfCloseButton_Click(object sender, RoutedEventArgs e)
+    {
+        try
+        {
+            _log.Info($"[AC-MMX3-click] WPF WpfCloseButton 클릭 발화 타임스탬프={DateTime.Now:HH:mm:ss.fff}");
+            _log.Info("[AC-MMX-실행] WPF 보조 X 닫기 버튼 클릭");
+            CloseRequested?.Invoke();
+        }
+        catch (Exception ex)
+        {
+            _log.Error(ex, "[AC-MMX-실행] WpfCloseButton_Click 실패");
         }
     }
 
@@ -126,15 +150,12 @@ public partial class MindMapOverlay : UserControl
             var env = await CoreWebView2Environment.CreateAsync();
             await MindMapWebView.EnsureCoreWebView2Async(env);
 
-            // WebMessageReceived 핸들러 등록 — 단 한 번만 (재진입 가드)
+            // WebMessageReceived 핸들러 등록 — InitializeAsync는 1회만 호출되므로 자연스럽게 단발 등록
             MindMapWebView.CoreWebView2.Settings.IsWebMessageEnabled = true;
-            if (!_webMessageHooked)
-            {
-                _webMessageHandler = OnWebMessageReceived;
-                MindMapWebView.CoreWebView2.WebMessageReceived += _webMessageHandler;
-                _webMessageHooked = true;
-                _log.Info("[AC-MMR-실행] WebMessageReceived 핸들러 등록 완료");
-            }
+            _webMessageHandler = OnWebMessageReceived;
+            MindMapWebView.CoreWebView2.WebMessageReceived += _webMessageHandler;
+            _webMessageHooked = true;
+            _log.Info("[AC-MMR-실행] WebMessageReceived 핸들러 등록 완료 (단발 등록 — 토글 재진입에도 유지)");
 
             var resourcePath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Resources");
             MindMapWebView.CoreWebView2.SetVirtualHostNameToFolderMapping(
@@ -215,6 +236,20 @@ public partial class MindMapOverlay : UserControl
         if (_minuteSummaries != null)
             _minuteSummaries.CollectionChanged += OnDataChanged;
 
+        // LLM 트리 서비스 구독 (X2 — DI에서 싱글턴 가져오기)
+        _treeService = (Application.Current as App)?.ServiceProvider?.GetService<IMindMapTreeService>();
+        if (_treeService != null)
+        {
+            _treeService.TreeMarkdownGenerated += OnTreeMarkdownGenerated;
+            // 캐시된 응답이 있으면 즉시 사용
+            if (!string.IsNullOrWhiteSpace(_treeService.LastTreeMarkdown))
+            {
+                _llmTreeMarkdown = _treeService.LastTreeMarkdown;
+            }
+            // 첫 LLM 트리 요청
+            RequestTreeUpdate();
+        }
+
         TriggerRender();
         _log.Info($"[AC-MM-실행] 마인드맵 바인딩 완료 — rootTitle={_rootTitle}");
     }
@@ -236,20 +271,16 @@ public partial class MindMapOverlay : UserControl
             _themeHandler = null;
         }
 
-        // WebMessageReceived 구독 해제
-        if (_webMessageHandler != null && _isWebViewReady)
+        // WebMessageReceived 구독은 단발 등록 유지 (Unbind 시 해제 안 함 — §8 재설계)
+        // InitializeAsync 1회 호출로 자연스럽게 단발 등록, 토글 재진입에도 핸들러 살아있음
+
+        // LLM 트리 서비스 구독 해제 (X2)
+        if (_treeService != null)
         {
-            try
-            {
-                MindMapWebView.CoreWebView2.WebMessageReceived -= _webMessageHandler;
-            }
-            catch (Exception ex)
-            {
-                _log.Warn(ex, "[AC-MMP-실행] WebMessageReceived 해제 실패");
-            }
-            _webMessageHandler = null;
-            _webMessageHooked = false;
+            _treeService.TreeMarkdownGenerated -= OnTreeMarkdownGenerated;
+            _treeService = null;
         }
+        _llmTreeMarkdown = null;
 
         _topicSegments = null;
         _minuteSummaries = null;
@@ -260,7 +291,10 @@ public partial class MindMapOverlay : UserControl
     /// 컬렉션 변경 시 디바운스 렌더 트리거
     /// </summary>
     private void OnDataChanged(object? sender, NotifyCollectionChangedEventArgs e)
-        => TriggerRender();
+    {
+        RequestTreeUpdate();
+        TriggerRender();
+    }
 
     /// <summary>
     /// 디바운스 타이머 리셋 — 마지막 변경 후 1초 뒤 렌더
@@ -269,6 +303,49 @@ public partial class MindMapOverlay : UserControl
     {
         _debounceTimer?.Stop();
         _debounceTimer?.Start();
+    }
+
+    /// <summary>
+    /// LLM 트리 갱신 요청 — _treeService.RequestTreeUpdate 위임 (X2)
+    /// </summary>
+    private void RequestTreeUpdate()
+    {
+        if (_treeService == null || _topicSegments == null) return;
+        var minuteSummaries = _minuteSummaries?
+            .Select(m => m.SummaryText ?? string.Empty)
+            .ToList() ?? new List<string>();
+        _treeService.RequestTreeUpdate(_topicSegments.ToList(), minuteSummaries);
+    }
+
+    /// <summary>
+    /// LLM 트리 생성 완료 이벤트 핸들러 — UI 스레드로 마샬링 후 재렌더 (X2)
+    /// </summary>
+    private async void OnTreeMarkdownGenerated(object? sender, string markdown)
+    {
+        try
+        {
+            _llmTreeMarkdown = markdown;
+            _log.Info($"[MMT-실행] LLM 트리 수신 — 줄수={markdown.Split('\n').Length}");
+            await Dispatcher.InvokeAsync(() => RenderAsync()).Task.ConfigureAwait(false);
+        }
+        catch (Exception ex)
+        {
+            _log.Error(ex, "[MMT-실행] OnTreeMarkdownGenerated 처리 실패");
+        }
+    }
+
+    /// <summary>
+    /// 루트 타이틀 즉시 갱신 + 재렌더 트리거 (odev-3 호출용 — 녹음전환 동기화) (X2)
+    /// </summary>
+    public void UpdateRootTitle(string newTitle)
+    {
+        var oldTitle = _rootTitle;
+        _rootTitle = string.IsNullOrWhiteSpace(newTitle) ? "녹음 데이터" : newTitle;
+        _log.Info($"[MMT-실행] UpdateRootTitle: {oldTitle} → {_rootTitle}");
+        if (_isWebViewReady)
+        {
+            _ = Dispatcher.InvokeAsync(() => RenderAsync()).Task;
+        }
     }
 
     /// <summary>
@@ -297,6 +374,16 @@ public partial class MindMapOverlay : UserControl
     /// </summary>
     private string BuildMarkdown()
     {
+        // LLM 트리 우선 (무한 깊이, 무제한 개수) — X2
+        if (!string.IsNullOrWhiteSpace(_llmTreeMarkdown))
+        {
+            _log.Info($"[MMT-실행] BuildMarkdown — LLM 트리 사용 (줄수={_llmTreeMarkdown!.Split('\n').Length})");
+            return _llmTreeMarkdown!;
+        }
+
+        // 폴백: Jaccard 그룹핑
+        _log.Info("[MMT-실행] BuildMarkdown — 폴백 (Jaccard 그룹핑)");
+
         var sb = new StringBuilder();
         sb.AppendLine($"# {_rootTitle}");
         sb.AppendLine();
@@ -349,7 +436,7 @@ public partial class MindMapOverlay : UserControl
         foreach (var g in groups)
         {
             sb.AppendLine($"- {EscapeMd(g.Representative)}");
-            foreach (var kw in g.Keywords.Take(5))
+            foreach (var kw in g.Keywords)
             {
                 sb.AppendLine($"  - {EscapeMd(kw)}");
             }

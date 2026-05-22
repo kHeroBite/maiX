@@ -45,6 +45,7 @@
     font-weight: bold;
     cursor: pointer;
     z-index: 9999;
+    pointer-events: auto;
     display: flex;
     align-items: center;
     justify-content: center;
@@ -53,6 +54,8 @@
   #closeBtn:hover {
     background: var(--close-hover-bg);
   }
+  /* SVG 마인드맵 — 클릭 이벤트 허용 (closeBtn 가로채기 방지) */
+  #mindmap svg { pointer-events: auto; }
 </style>
 </head>
 <body>
@@ -114,17 +117,18 @@
     }
   };
 
-  // X 버튼 클릭 → C#에 close 메시지 전달
-  document.getElementById('closeBtn').addEventListener('click', () => {
-    console.log('[MMR] closeBtn clicked');
+  // X 버튼 클릭 → C#에 close 메시지 전달 (pointer-events:auto + stopPropagation)
+  document.getElementById('closeBtn').addEventListener('click', (e) => {
+    e.stopPropagation();
+    console.log('[MMR3] closeBtn clicked (pointer-events:auto)');
     try {
       if (window.chrome && window.chrome.webview) {
         window.chrome.webview.postMessage('close');
-        console.log('[MMR] postMessage(close) sent');
+        console.log('[MMR3] postMessage(close) sent');
       } else {
-        console.warn('[MMR] window.chrome.webview unavailable');
+        console.warn('[MMR3] window.chrome.webview unavailable');
       }
-    } catch (e) { console.error('[MMR] postMessage failed:', e); }
+    } catch (err) { console.error('[MMR3] postMessage failed:', err); }
   });
 
   // ESC 키 → C#에 close 메시지 전달 (이중 안전망)
@@ -140,6 +144,7 @@
 
   // 초기 빈 마인드맵
   document.addEventListener('DOMContentLoaded', () => {
+    console.log('[MMR3] closeBtn DOMContentLoaded — pointer-events:auto 적용');
     initMarkmap();
     if (markmapInstance && transformer) {
       const { root } = transformer.transform('# 녹음 데이터 대기 중\n\n- 녹음 시작 또는 파일 선택');
