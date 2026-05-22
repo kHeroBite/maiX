@@ -32,6 +32,11 @@ public interface IMindMapTreeService : IDisposable
     /// 마지막 LLM 응답 (캐시) — 즉시 사용 가능. null이면 아직 생성 전.
     /// </summary>
     string? LastTreeMarkdown { get; }
+
+    /// <summary>
+    /// 캐시 및 디바운스 무효화 — 녹음 파일 전환 시 호출하여 할루시네이션 방지
+    /// </summary>
+    void Reset();
 }
 
 /// <summary>
@@ -105,6 +110,15 @@ public sealed class MindMapTreeService : IMindMapTreeService
         IReadOnlyList<string> minuteSummaries,
         CancellationToken ct)
     {
+        // 빈입력 skip — LLM 호출 비용 절감 + 할루시네이션 방지
+        var realTopicCount = topics.Count(t => !t.IsSilence && !string.IsNullOrWhiteSpace(t.Title));
+        var realSummaryCount = minuteSummaries.Count(s => !string.IsNullOrWhiteSpace(s));
+        if (realTopicCount == 0 && realSummaryCount == 0)
+        {
+            _log.Info("[MMF-실행] GenerateTreeAsync — 빈입력 LLM 호출 skip");
+            return;
+        }
+
         // 동시 LLM 호출 방지 — 이미 진행 중이면 skip
         if (!await _httpLock.WaitAsync(0, ct).ConfigureAwait(false))
         {
@@ -126,13 +140,29 @@ public sealed class MindMapTreeService : IMindMapTreeService
             var baseUrl = (_aiProviders.OpenAI?.BaseUrl ?? "https://api.openai.com/v1").TrimEnd('/');
             var model = _oaiRecording.MinuteSummaryModel ?? "gpt-4o-mini";
 
-            var systemPrompt =
-                "당신은 회의 녹취를 마인드맵 트리 마크다운으로 변환하는 분석가다. " +
-                "출력은 markmap 호환 마크다운: # 루트 → ## L2 → ### L3 → #### L4... " +
-                "깊이 상한 없음, 노드 개수 상한 없음. " +
-                "의미적 유사 토픽은 묶고, 발언 흐름과 인과를 반영하라. " +
-                "묵음/잡음/(음)/(어) 등 노이즈는 제외. " +
-                "출력 JSON: {\"markdown_tree\":\"# Root\\n## ...\"}.";
+            var systemPrompt = """
+당신은 회의 녹취를 마인드맵 트리 마크다운으로 변환하는 분석가다.
+
+# 절대 규칙 — 할루시네이션 금지
+- 입력에 명시되지 않은 내용을 절대 생성 금지.
+- 추론·창작·예시·외부 지식·일반화 금지.
+- 입력 텍스트의 직접 인용된 토픽 단어와 키워드만 사용.
+- 입력이 짧으면 짧은 트리. 빈 부분 채우지 마라.
+
+# 출력 형식
+- markmap 호환 마크다운: # 루트 → - L1 → -- L2 → --- L3 ...
+- 깊이 상한 없음, 노드 개수 상한 없음.
+- 묵음·잡음·(음)·(어) 등 노이즈 제외.
+
+# 노드 통폐합 가이드라인
+- 의미적으로 유사한 토픽 2개 이상은 한 부모 노드 + 자식 분기로 묶어라.
+- 한 레벨에 형제 노드가 7개를 넘으면 더 큰 상위 카테고리로 그룹화하라 (Miller 7±2).
+- 동의어·유사 표현은 하나로 통합. 동일 단어 반복 금지.
+- 깊이 우선(L4, L5 이상) 가로 폭은 좁게 유지.
+
+# 출력 JSON
+{"markdown":"# Root\n- ..."}
+""";
 
             var userPrompt = BuildUserPrompt(topics, minuteSummaries);
 
@@ -148,7 +178,7 @@ public sealed class MindMapTreeService : IMindMapTreeService
                     new { role = "user",   content = userPrompt }
                 },
                 response_format = new { type = "json_object" },
-                temperature = 0.3,
+                temperature = 0,  // [MMF-실행] 할루시네이션 억제 — 0.3→0
                 max_completion_tokens = 1024
             };
 
@@ -175,7 +205,7 @@ public sealed class MindMapTreeService : IMindMapTreeService
             }
 
             var parsed = JsonSerializer.Deserialize<JsonElement>(content);
-            var markdown = parsed.GetProperty("markdown_tree").GetString();
+            var markdown = parsed.GetProperty("markdown").GetString();
 
             if (string.IsNullOrWhiteSpace(markdown))
             {
@@ -242,6 +272,14 @@ public sealed class MindMapTreeService : IMindMapTreeService
 
         sb.AppendLine("\n위 내용을 깊이/노드 수 제한 없는 마인드맵 트리 마크다운으로 작성하라.");
         return sb.ToString();
+    }
+
+    /// <inheritdoc/>
+    public void Reset()
+    {
+        _debounceCts?.Cancel();
+        _lastTreeMarkdown = null;
+        _log.Info("[MMF-실행] MindMapTreeService.Reset — 캐시+디바운스 무효화");
     }
 
     /// <inheritdoc/>

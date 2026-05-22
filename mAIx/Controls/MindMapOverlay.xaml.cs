@@ -226,6 +226,14 @@ public partial class MindMapOverlay : UserControl
         ObservableCollection<MinuteSummaryEntry>? summaries,
         string rootTitle)
     {
+        // [MMF-실행] 옛 녹음파일 캐시 무효화 — 할루시네이션 방지
+        if (_treeService != null)
+        {
+            _treeService.Reset();
+            _log.Info("[MMF-실행] Bind — TreeService Reset 호출");
+        }
+        _llmTreeMarkdown = null;  // 옛 응답 즉시 무효화
+
         Unbind();
         _topicSegments = topics;
         _minuteSummaries = summaries;
@@ -377,7 +385,7 @@ public partial class MindMapOverlay : UserControl
         // LLM 트리 우선 (무한 깊이, 무제한 개수) — X2
         if (!string.IsNullOrWhiteSpace(_llmTreeMarkdown))
         {
-            _log.Info($"[MMT-실행] BuildMarkdown — LLM 트리 사용 (줄수={_llmTreeMarkdown!.Split('\n').Length})");
+            _log.Info("[MMF-실행] BuildMarkdown — LLM 트리 사용");
             return _llmTreeMarkdown!;
         }
 
@@ -391,7 +399,9 @@ public partial class MindMapOverlay : UserControl
         var hasTopics = _topicSegments != null && _topicSegments.Count > 0;
         if (!hasTopics)
         {
-            return "# 녹음 데이터 대기 중\n\n- 녹음 시작 또는 파일 선택";
+            // 빈 상태 — 루트만 반환 (안내 텍스트 제거)
+            _log.Info("[MMF-실행] BuildMarkdown — 빈 상태 (루트만)");
+            return $"# {_rootTitle}";
         }
 
         // 1단계 — 필터 통과 segment를 그룹으로 병합 (Title Jaccard 0.5)
@@ -442,9 +452,7 @@ public partial class MindMapOverlay : UserControl
             }
         }
 
-        if (sb.Length < 30)
-            return "# 녹음 데이터 대기 중\n\n- 녹음 시작 또는 파일 선택";
-
+        // [MMF-실행] 30자 미만 가드 제거 — 루트 헤더가 항상 있어 안전
         return sb.ToString();
     }
 

@@ -142,15 +142,11 @@
     }
   });
 
-  // 초기 빈 마인드맵
+  // 초기화 — 안내 텍스트 setData 제거 (C# Bind 시 첫 renderMindMap 호출에서 데이터 주입)
   document.addEventListener('DOMContentLoaded', () => {
     console.log('[MMR3] closeBtn DOMContentLoaded — pointer-events:auto 적용');
     initMarkmap();
-    if (markmapInstance && transformer) {
-      const { root } = transformer.transform('# 녹음 데이터 대기 중\n\n- 녹음 시작 또는 파일 선택');
-      markmapInstance.setData(root);
-      markmapInstance.fit();
-    }
+    // [MMF-실행] 초기 안내 setData 제거 — C# Bind 시 첫 renderMindMap 호출에서 데이터 주입
   });
 </script>
 </body>
