@@ -314,7 +314,7 @@
     const leftRoot = d3.hierarchy({ ...currentTreeData, children: leftChildren });
 
     const dx = 24;
-    const dy = window.innerWidth / 4;
+    const dy = 160;
     d3.tree().nodeSize([dx, dy])(rightRoot);
     d3.tree().nodeSize([dx, dy])(leftRoot);
 
@@ -353,7 +353,7 @@
     const y0 = Math.min(...ys) - 40,       y1 = Math.max(...ys) + 40;
     const bw = x1 - x0, bh = y1 - y0;
     const W = window.innerWidth, H = window.innerHeight;
-    const scale = Math.min(0.9, Math.min(W / bw, H / bh));
+    const scale = Math.max(0.4, Math.min(0.9, Math.min(W / bw, H / bh)));
     const tx = W / 2 - scale * (x0 + bw / 2);
     const ty = H / 2 - scale * (y0 + bh / 2);
     svg.call(activeZoom.transform, d3.zoomIdentity.translate(tx, ty).scale(scale));
