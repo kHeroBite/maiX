@@ -1,4 +1,4 @@
-<!-- WebView2에서 d3 v7 radial mindmap을 렌더링하는 셸 HTML -->
+<!-- WebView2에서 d3 v7 마인드맵을 렌더링하는 셸 HTML — 5종 스타일 지원 -->
 <!DOCTYPE html>
 <html lang="ko" class="markmap-dark">
 <head>
@@ -41,6 +41,8 @@
   /* X 닫기 버튼 */
   #closeBtn { position: fixed; top: 10px; right: 10px; width: 36px; height: 36px; border-radius: 50%; border: none; background: var(--close-bg); color: var(--close-fg); font-size: 20px; font-weight: bold; cursor: pointer; z-index: 9999; display: flex; align-items: center; justify-content: center; pointer-events: auto; }
   #closeBtn:hover { background: var(--close-hover-bg); }
+  /* 스타일 선택 드롭다운 */
+  #styleSelector { position: fixed; top: 10px; left: 10px; background: var(--menu-bg); color: var(--menu-fg); border: 1px solid var(--menu-border); border-radius: 4px; padding: 4px 8px; font-size: 13px; z-index: 9999; cursor: pointer; }
   /* 컨텍스트 메뉴 */
   #ctxMenu { position: fixed; display: none; background: var(--menu-bg); color: var(--menu-fg); border: 1px solid var(--menu-border); border-radius: 4px; box-shadow: 0 4px 12px rgba(0,0,0,0.3); z-index: 10000; min-width: 140px; user-select: none; }
   #ctxMenu .item { padding: 8px 14px; cursor: pointer; font-size: 13px; }
@@ -49,6 +51,13 @@
 </style>
 </head>
 <body>
+<select id="styleSelector" title="마인드맵 스타일">
+  <option value="radial-tree">방사형 트리</option>
+  <option value="cluster">방사형 군집</option>
+  <option value="force">힘 시뮬레이션</option>
+  <option value="mindmap-lr">좌우 마인드맵</option>
+  <option value="sunburst">선버스트</option>
+</select>
 <button id="closeBtn" type="button" aria-label="마인드맵 닫기" title="닫기 (ESC)">×</button>
 <div id="ctxMenu">
   <div class="item" data-action="add">자식 추가</div>
@@ -62,7 +71,10 @@
   console.log('[MMRD-실행] mindmap.html 로드');
 
   let currentTreeData = null;  // 트리 데이터 (plain object)
-  let svg, g, zoom;
+  let svg, g;
+  let activeZoom = null;       // 현재 d3.zoom 핸들
+  let activeSimulation = null; // force 시뮬레이션 핸들
+  let currentStyle = 'radial-tree'; // 현재 선택된 스타일
   let nodeIdCounter = 0;
 
   // ===== 마크다운 → 트리 데이터 파서 =====
@@ -118,70 +130,283 @@
     return result;
   }
 
-  // ===== d3 radial tree 렌더 =====
+  // ===== SVG 초기화 =====
+  function initSvg() {
+    const width = window.innerWidth, height = window.innerHeight;
+    svg = d3.select('#mindmap')
+      .attr('viewBox', [-width / 2, -height / 2, width, height])
+      .style('font', '13px sans-serif');
+    g = svg.append('g');
+    activeZoom = d3.zoom()
+      .scaleExtent([0.1, 5])
+      .on('zoom', (e) => g.attr('transform', e.transform));
+    svg.call(activeZoom);
+  }
+
+  // ===== 이전 스타일 정리 =====
+  function detachAll() {
+    if (activeSimulation) {
+      activeSimulation.stop();
+      activeSimulation = null;
+    }
+    if (g) g.selectAll('*').remove();
+  }
+
+  // ===== 스타일 전환 진입점 (C# 또는 드롭다운에서 호출) =====
+  window.setMindMapStyle = function(style) {
+    const allowed = ['radial-tree', 'cluster', 'force', 'mindmap-lr', 'sunburst'];
+    if (!allowed.includes(style)) {
+      console.warn('[MMS-실행] 알 수 없는 스타일:', style, '→ radial-tree 폴백');
+      style = 'radial-tree';
+    }
+    currentStyle = style;
+    document.getElementById('styleSelector').value = style;
+    console.log('[MMS-실행] setMindMapStyle:', style);
+    if (currentTreeData) renderTree();
+  };
+
+  // ===== renderTree dispatcher =====
   function renderTree() {
     if (!currentTreeData) return;
+    detachAll();
+    if (!svg) initSvg();
+    // viewBox 갱신
+    svg.attr('viewBox', [-window.innerWidth / 2, -window.innerHeight / 2, window.innerWidth, window.innerHeight]);
 
-    const width = window.innerWidth;
-    const height = window.innerHeight;
-    const radius = Math.min(width, height) / 2 - 80;
-
-    if (!svg) {
-      svg = d3.select('#mindmap')
-        .attr('viewBox', [-width / 2, -height / 2, width, height])
-        .style('font', '13px sans-serif');
-
-      g = svg.append('g');
-
-      zoom = d3.zoom()
-        .scaleExtent([0.1, 5])
-        .on('zoom', function(event) { g.attr('transform', event.transform); });
-      svg.call(zoom);
-    } else {
-      // viewBox 갱신 후 내용만 클리어
-      svg.attr('viewBox', [-width / 2, -height / 2, width, height]);
-      g.selectAll('*').remove();
+    switch (currentStyle) {
+      case 'radial-tree': renderRadialTree(); break;
+      case 'cluster':     renderCluster();    break;
+      case 'force':       renderForce();      break;
+      case 'mindmap-lr':  renderMindMapLR();  break;
+      case 'sunburst':    renderSunburst();   break;
+      default:            renderRadialTree(); break;
     }
+  }
 
+  // ===== ① 방사형 트리 (기본) =====
+  function renderRadialTree() {
+    const radius = Math.min(window.innerWidth, window.innerHeight) / 2 - 80;
     const root = d3.hierarchy(currentTreeData);
-    const tree = d3.tree()
+    d3.tree()
       .size([2 * Math.PI, radius])
-      .separation(function(a, b) { return (a.parent === b.parent ? 1 : 2) / a.depth; });
-    tree(root);
+      .separation((a, b) => (a.parent === b.parent ? 1 : 2) / a.depth)(root);
 
-    // 링크 (방사형)
-    g.append('g')
-      .attr('class', 'links')
-      .selectAll('path')
-      .data(root.links())
-      .join('path')
+    g.append('g').attr('class', 'links')
+      .selectAll('path').data(root.links()).join('path')
         .attr('class', 'link')
-        .attr('d', d3.linkRadial().angle(function(d) { return d.x; }).radius(function(d) { return d.y; }));
+        .attr('d', d3.linkRadial().angle(d => d.x).radius(d => d.y));
 
-    // 노드
-    const node = g.append('g')
-      .attr('class', 'nodes')
-      .selectAll('g')
-      .data(root.descendants())
-      .join('g')
-        .attr('class', function(d) { return 'node' + (d.children ? ' _has-children' : ''); })
-        .attr('transform', function(d) { return 'rotate(' + (d.x * 180 / Math.PI - 90) + ') translate(' + d.y + ',0)'; });
+    const node = g.append('g').attr('class', 'nodes')
+      .selectAll('g').data(root.descendants()).join('g')
+        .attr('class', d => 'node' + (d.children ? ' _has-children' : ''))
+        .attr('transform', d => `rotate(${d.x * 180 / Math.PI - 90}) translate(${d.y},0)`);
 
     node.append('circle').attr('r', 4);
-
     node.append('text')
       .attr('dy', '0.31em')
-      .attr('x', function(d) { return d.x < Math.PI === !d.children ? 8 : -8; })
-      .attr('text-anchor', function(d) { return d.x < Math.PI === !d.children ? 'start' : 'end'; })
-      .attr('transform', function(d) { return d.x >= Math.PI ? 'rotate(180)' : null; })
-      .text(function(d) { return d.data.name; })
-      .on('contextmenu', function(event, d) {
-        event.preventDefault();
-        showCtxMenu(event.clientX, event.clientY, d);
+      .attr('x', d => d.x < Math.PI === !d.children ? 8 : -8)
+      .attr('text-anchor', d => d.x < Math.PI === !d.children ? 'start' : 'end')
+      .attr('transform', d => d.x >= Math.PI ? 'rotate(180)' : null)
+      .text(d => d.data.name)
+      .on('contextmenu', (event, d) => { event.preventDefault(); showCtxMenu(event.clientX, event.clientY, d); });
+
+    console.log('[MMS-실행] renderRadialTree — 노드', root.descendants().length);
+  }
+
+  // ===== ② 방사형 군집 (cluster) =====
+  function renderCluster() {
+    const radius = Math.min(window.innerWidth, window.innerHeight) / 2 - 80;
+    const root = d3.hierarchy(currentTreeData);
+    d3.cluster().size([2 * Math.PI, radius])(root);
+
+    g.append('g').attr('class', 'links')
+      .selectAll('path').data(root.links()).join('path')
+        .attr('class', 'link')
+        .attr('d', d3.linkRadial().angle(d => d.x).radius(d => d.y));
+
+    const node = g.append('g').attr('class', 'nodes')
+      .selectAll('g').data(root.descendants()).join('g')
+        .attr('class', d => 'node' + (d.children ? ' _has-children' : ''))
+        .attr('transform', d => `rotate(${d.x * 180 / Math.PI - 90}) translate(${d.y},0)`);
+
+    node.append('circle').attr('r', 4);
+    node.append('text')
+      .attr('dy', '0.31em')
+      .attr('x', d => d.x < Math.PI === !d.children ? 8 : -8)
+      .attr('text-anchor', d => d.x < Math.PI === !d.children ? 'start' : 'end')
+      .attr('transform', d => d.x >= Math.PI ? 'rotate(180)' : null)
+      .text(d => d.data.name)
+      .on('contextmenu', (event, d) => { event.preventDefault(); showCtxMenu(event.clientX, event.clientY, d); });
+
+    console.log('[MMS-실행] renderCluster — 노드', root.descendants().length);
+  }
+
+  // ===== ③ 힘 시뮬레이션 (force) =====
+  function renderForce() {
+    const root = d3.hierarchy(currentTreeData);
+    const nodes = root.descendants();
+    const links = root.links();
+
+    // CPU 가드: 노드 200 초과 시 skip
+    if (nodes.length > 200) {
+      console.warn('[MMS-실행] renderForce — 노드 200 초과, force skip');
+      g.append('text').attr('text-anchor', 'middle').attr('dy', '0.35em')
+        .attr('fill', 'var(--text-color)').attr('font-size', '14px')
+        .text('노드가 너무 많아 힘 시뮬레이션을 표시할 수 없습니다 (최대 200개).');
+      return;
+    }
+
+    const linkSel = g.append('g').attr('class', 'links')
+      .selectAll('line').data(links).join('line').attr('class', 'link');
+
+    const nodeSel = g.append('g').attr('class', 'nodes')
+      .selectAll('g').data(nodes).join('g')
+        .attr('class', d => 'node' + (d.children && d.children.length ? ' _has-children' : ''));
+
+    nodeSel.append('circle').attr('r', 6);
+    nodeSel.append('text')
+      .attr('dy', '0.31em').attr('x', 10)
+      .text(d => d.data.name)
+      .on('contextmenu', (event, d) => { event.preventDefault(); showCtxMenu(event.clientX, event.clientY, d); });
+
+    // 드래그
+    nodeSel.call(d3.drag()
+      .on('start', (event, d) => {
+        if (!event.active) activeSimulation.alphaTarget(0.3).restart();
+        d.fx = d.x; d.fy = d.y;
+      })
+      .on('drag', (event, d) => { d.fx = event.x; d.fy = event.y; })
+      .on('end', (event, d) => {
+        if (!event.active) activeSimulation.alphaTarget(0);
+        d.fx = null; d.fy = null;
+      }));
+
+    activeSimulation = d3.forceSimulation(nodes)
+      .force('link', d3.forceLink(links).id(d => d.data.id).distance(80))
+      .force('charge', d3.forceManyBody().strength(-200))
+      .force('radial', d3.forceRadial(d => d.depth * 80, 0, 0).strength(0.6))
+      .force('collide', d3.forceCollide(18))
+      .alphaDecay(0.05)
+      .on('tick', () => {
+        linkSel
+          .attr('x1', d => d.source.x).attr('y1', d => d.source.y)
+          .attr('x2', d => d.target.x).attr('y2', d => d.target.y);
+        nodeSel.attr('transform', d => `translate(${d.x},${d.y})`);
       });
 
-    console.log('[MMRD-실행] renderTree — 노드', root.descendants().length, '링크', root.links().length);
+    // 4초 후 자동 stop (CPU 보호)
+    setTimeout(() => { if (activeSimulation) activeSimulation.stop(); }, 4000);
+
+    console.log('[MMS-실행] renderForce — 노드', nodes.length, '링크', links.length);
   }
+
+  // ===== ④ 좌우 양방향 마인드맵 (mindmap-lr) =====
+  function renderMindMapLR() {
+    const root = d3.hierarchy(currentTreeData);
+    const children = root.children || [];
+    const half = Math.ceil(children.length / 2);
+    const rightChildren = children.slice(0, half);
+    const leftChildren = children.slice(half);
+
+    // 우측 트리
+    const rightRoot = d3.hierarchy({ ...currentTreeData, children: rightChildren });
+    // 좌측 트리
+    const leftRoot = d3.hierarchy({ ...currentTreeData, children: leftChildren });
+
+    const dx = 24;
+    const dy = window.innerWidth / 4;
+    d3.tree().nodeSize([dx, dy])(rightRoot);
+    d3.tree().nodeSize([dx, dy])(leftRoot);
+
+    // 좌측은 y좌표 반전
+    leftRoot.each(d => { d.y = -d.y; });
+
+    const allLinks = [...rightRoot.links(), ...leftRoot.links()];
+    const allNodes = [
+      rightRoot,
+      ...rightRoot.descendants().slice(1),
+      ...leftRoot.descendants().slice(1)
+    ];
+
+    g.append('g').attr('class', 'links')
+      .selectAll('path').data(allLinks).join('path')
+        .attr('class', 'link')
+        .attr('d', d3.linkHorizontal().x(d => d.y).y(d => d.x));
+
+    const node = g.append('g').attr('class', 'nodes')
+      .selectAll('g').data(allNodes).join('g')
+        .attr('class', d => 'node' + (d.children ? ' _has-children' : ''))
+        .attr('transform', d => `translate(${d.y},${d.x})`);
+
+    node.append('circle').attr('r', 4);
+    node.append('text')
+      .attr('dy', '0.31em')
+      .attr('x', d => d.y >= 0 ? (d.children ? -8 : 8) : (d.children ? 8 : -8))
+      .attr('text-anchor', d => d.y >= 0 ? (d.children ? 'end' : 'start') : (d.children ? 'start' : 'end'))
+      .text(d => d.data.name)
+      .on('contextmenu', (event, d) => { event.preventDefault(); showCtxMenu(event.clientX, event.clientY, d); });
+
+    // 전체 노드 범위를 뷰포트에 맞춰 자동 fit (zoom identity 리셋 후 적용)
+    svg.call(activeZoom.transform, d3.zoomIdentity);
+    const xs = allNodes.map(d => d.y), ys = allNodes.map(d => d.x);
+    const x0 = Math.min(...xs) - dy * 0.3, x1 = Math.max(...xs) + dy * 0.3;
+    const y0 = Math.min(...ys) - 40,       y1 = Math.max(...ys) + 40;
+    const bw = x1 - x0, bh = y1 - y0;
+    const W = window.innerWidth, H = window.innerHeight;
+    const scale = Math.min(0.9, Math.min(W / bw, H / bh));
+    const tx = W / 2 - scale * (x0 + bw / 2);
+    const ty = H / 2 - scale * (y0 + bh / 2);
+    svg.call(activeZoom.transform, d3.zoomIdentity.translate(tx, ty).scale(scale));
+
+    console.log('[MMS-실행] renderMindMapLR — 우', rightRoot.descendants().length, '좌', leftRoot.descendants().length - 1);
+  }
+
+  // ===== ⑤ 선버스트 (sunburst) =====
+  function renderSunburst() {
+    const radius = Math.min(window.innerWidth, window.innerHeight) / 2 - 40;
+    const root = d3.hierarchy(currentTreeData)
+      .sum(() => 1)
+      .sort((a, b) => b.value - a.value);
+    d3.partition().size([2 * Math.PI, radius])(root);
+
+    const arc = d3.arc()
+      .startAngle(d => d.x0).endAngle(d => d.x1)
+      .innerRadius(d => d.y0).outerRadius(d => d.y1);
+
+    const node = g.append('g').attr('class', 'nodes')
+      .selectAll('g').data(root.descendants()).join('g')
+        .attr('class', d => 'node' + (d.children ? ' _has-children' : ''));
+
+    node.append('path')
+      .attr('d', arc)
+      .attr('class', 'link')
+      .attr('fill-opacity', 0.3)
+      .on('contextmenu', (event, d) => { event.preventDefault(); showCtxMenu(event.clientX, event.clientY, d); });
+
+    node.append('text')
+      .attr('transform', d => {
+        const angle = (d.x0 + d.x1) / 2 * 180 / Math.PI - 90;
+        const r = (d.y0 + d.y1) / 2;
+        return `rotate(${angle}) translate(${r},0) rotate(${angle >= 180 ? 180 : 0})`;
+      })
+      .attr('text-anchor', 'middle')
+      .attr('dy', '0.31em')
+      .text(d => d.data.name)
+      .style('font-size', '10px');
+
+    console.log('[MMS-실행] renderSunburst — 노드', root.descendants().length);
+  }
+
+  // ===== 드롭다운 change 핸들러 =====
+  document.getElementById('styleSelector').addEventListener('change', (e) => {
+    const newStyle = e.target.value;
+    setMindMapStyle(newStyle);
+    // C#에 통지 (녹음파일별 + 글로벌 저장)
+    if (window.chrome && window.chrome.webview) {
+      window.chrome.webview.postMessage(JSON.stringify({ type: 'style_changed', style: newStyle }));
+    }
+    console.log('[MMS-실행] dropdown change:', newStyle);
+  });
 
   // ===== 외부 진입점 =====
   window.renderMindMap = function(markdown) {
@@ -301,8 +526,7 @@
 
   // ===== 윈도우 리사이즈 시 viewBox + 재렌더 =====
   window.addEventListener('resize', function() {
-    if (svg) {
-      svg.attr('viewBox', [-window.innerWidth / 2, -window.innerHeight / 2, window.innerWidth, window.innerHeight]);
+    if (svg && currentTreeData) {
       renderTree();
     }
   });

@@ -277,9 +277,10 @@ public partial class MindMapOverlay : UserControl
                 _log.Info($"[MMRD-실행] Bind — recordingPath='{recordingPath ?? "<live>"}'");
 
                 // 디스크 캐시 즉시 로드 (있으면 즉시 렌더)
+                MindMapTreeFile? diskFile = null;
                 if (!string.IsNullOrWhiteSpace(recordingPath))
                 {
-                    var diskFile = await _treeService.LoadFromDiskAsync(recordingPath).ConfigureAwait(true);
+                    diskFile = await _treeService.LoadFromDiskAsync(recordingPath).ConfigureAwait(true);
                     if (diskFile != null && !string.IsNullOrWhiteSpace(diskFile.Markdown))
                     {
                         _llmTreeMarkdown = diskFile.Markdown;
@@ -287,6 +288,41 @@ public partial class MindMapOverlay : UserControl
                         if (_isWebViewReady)
                             await RenderAsync().ConfigureAwait(true);
                     }
+                }
+
+                // 3단 우선순위로 스타일 결정 후 JS에 반영
+                string styleToApply;
+                if (diskFile != null && !string.IsNullOrWhiteSpace(diskFile.PreferredStyle))
+                {
+                    // 1순위: 녹음파일별 PreferredStyle
+                    styleToApply = diskFile.PreferredStyle;
+                    _log.Info($"[MMS-실행] Bind — 녹음파일별 스타일 복원 '{styleToApply}'");
+                }
+                else
+                {
+                    // 2순위: 글로벌 default (실패 시 3순위 폴백)
+                    try
+                    {
+                        styleToApply = await _treeService.LoadGlobalDefaultStyleAsync().ConfigureAwait(true);
+                        _log.Info($"[MMS-실행] Bind — 글로벌 default 스타일 적용 '{styleToApply}'");
+                    }
+                    catch (Exception ex)
+                    {
+                        _log.Error(ex, "[MMS-실행] LoadGlobalDefaultStyle 실패 — radial-tree 폴백");
+                        styleToApply = "radial-tree";
+                    }
+                }
+
+                if (_isWebViewReady)
+                {
+                    try
+                    {
+                        await MindMapWebView.CoreWebView2.ExecuteScriptAsync(
+                            $"window.setMindMapStyle && window.setMindMapStyle('{styleToApply}')"
+                        ).ConfigureAwait(true);
+                        _log.Info($"[MMS-실행] Bind — setMindMapStyle JS 호출 완료 '{styleToApply}'");
+                    }
+                    catch (Exception ex) { _log.Error(ex, "[MMS-실행] setMindMapStyle JS 호출 실패"); }
                 }
 
                 // 캐시된 응답이 있으면 즉시 사용 (디스크 캐시 없는 경우 폴백)
@@ -552,6 +588,12 @@ public partial class MindMapOverlay : UserControl
                     _log.Info($"[MMRD-실행] WebMessage tree_edited — {markdown.Length}자");
                     _ = HandleTreeEditedAsync(markdown);
                 }
+                else if (type == "style_changed")
+                {
+                    var style = doc.RootElement.GetProperty("style").GetString() ?? "radial-tree";
+                    _log.Info($"[MMS-실행] WebMessage style_changed — '{style}'");
+                    _ = HandleStyleChangedAsync(style);
+                }
                 else
                 {
                     _log.Warn($"[MMRD-실행] 알 수 없는 WebMessage type='{type}'");
@@ -594,6 +636,35 @@ public partial class MindMapOverlay : UserControl
         catch (Exception ex)
         {
             _log.Error(ex, "[MMRD-실행] HandleTreeEditedAsync 실패");
+        }
+    }
+
+    /// <summary>
+    /// style_changed WebMessage 처리 — 글로벌 default 저장 + 녹음파일별 저장 (2단 저장)
+    /// </summary>
+    private async Task HandleStyleChangedAsync(string style)
+    {
+        try
+        {
+            // (a) 항상 글로벌 default 갱신 (라이브 녹음에서도 저장)
+            if (_treeService != null)
+            {
+                await _treeService.SaveGlobalDefaultStyleAsync(style).ConfigureAwait(false);
+            }
+            // (b) 녹음파일 경로 있으면 녹음파일별 저장 추가
+            if (!string.IsNullOrWhiteSpace(_currentRecordingPath) && _treeService != null)
+            {
+                await _treeService.SaveStylePreferenceAsync(_currentRecordingPath, style).ConfigureAwait(false);
+                _log.Info($"[MMS-실행] HandleStyleChanged — 2단 저장 완료 (글로벌+녹음파일별) style='{style}'");
+            }
+            else
+            {
+                _log.Info($"[MMS-실행] HandleStyleChanged — 글로벌만 저장 (라이브 녹음) style='{style}'");
+            }
+        }
+        catch (Exception ex)
+        {
+            _log.Error(ex, "[MMS-실행] HandleStyleChangedAsync 실패");
         }
     }
 

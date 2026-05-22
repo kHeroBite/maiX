@@ -23,4 +23,12 @@ public sealed class MindMapTreeFile
     /// <summary>마지막 갱신 시각 (UTC)</summary>
     [JsonPropertyName("updatedAt")]
     public DateTime UpdatedAt { get; set; }
+
+    /// <summary>
+    /// 이 녹음파일에 사용자가 선택한 마인드맵 렌더링 스타일.
+    /// null이면 글로벌 default 스타일 사용.
+    /// 유효값: "radial-tree" | "cluster" | "force" | "mindmap-lr" | "sunburst"
+    /// </summary>
+    [JsonPropertyName("preferredStyle")]
+    public string? PreferredStyle { get; set; }
 }

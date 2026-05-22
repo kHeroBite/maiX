@@ -58,6 +58,22 @@ public interface IMindMapTreeService : IDisposable
     /// 사용자 편집 마크다운 저장 — isUserEdited=true로 SaveToDiskAsync 호출
     /// </summary>
     Task SaveUserEditedAsync(string recordingPath, string markdown, CancellationToken ct = default);
+
+    /// <summary>
+    /// 녹음파일별 스타일 선호 저장 — markdown/isUserEdited 보존, PreferredStyle만 갱신
+    /// </summary>
+    Task SaveStylePreferenceAsync(string recordingPath, string style, CancellationToken ct = default);
+
+    /// <summary>
+    /// 글로벌 default 스타일 로드 — 사용자가 마지막에 선택한 스타일 반환.
+    /// 파일 없으면 "radial-tree" 반환.
+    /// </summary>
+    Task<string> LoadGlobalDefaultStyleAsync(CancellationToken ct = default);
+
+    /// <summary>
+    /// 글로벌 default 스타일 저장 — 사용자가 스타일 선택 시 호출
+    /// </summary>
+    Task SaveGlobalDefaultStyleAsync(string style, CancellationToken ct = default);
 }
 
 /// <summary>
@@ -77,6 +93,18 @@ public sealed class MindMapTreeService : IMindMapTreeService
     private string? _currentRecordingPath;
     private readonly TimeSpan _debounce = TimeSpan.FromSeconds(5);
     private bool _disposed;
+
+    // 글로벌 default 스타일 — 메모리 캐시 + 잠금
+    private readonly SemaphoreSlim _globalLock = new(1, 1);
+    private string? _globalDefaultStyle;
+
+    // 유효 스타일 5종 (오타/누락 방지)
+    private static readonly string[] _validStyles =
+        new[] { "radial-tree", "cluster", "force", "mindmap-lr", "sunburst" };
+
+    private static string NormalizeStyle(string? style)
+        => string.IsNullOrWhiteSpace(style) || !Array.Exists(_validStyles, s => s == style)
+            ? "radial-tree" : style;
 
     /// <inheritdoc/>
     public event EventHandler<string>? TreeMarkdownGenerated;
@@ -387,6 +415,106 @@ public sealed class MindMapTreeService : IMindMapTreeService
         // 사용자 편집 마크다운 저장 — isUserEdited=true
         => SaveToDiskAsync(recordingPath, markdown, isUserEdited: true, ct);
 
+    private static string GetGlobalStylePath()
+    {
+        var dir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "MaiX");
+        Directory.CreateDirectory(dir);
+        return Path.Combine(dir, "mindmap_default_style.json");
+    }
+
+    /// <inheritdoc/>
+    public async Task<string> LoadGlobalDefaultStyleAsync(CancellationToken ct = default)
+    {
+        // [MMS-실행] 글로벌 default 스타일 로드 — 메모리 캐시 우선
+        if (!string.IsNullOrWhiteSpace(_globalDefaultStyle))
+            return _globalDefaultStyle!;
+
+        await _globalLock.WaitAsync(ct).ConfigureAwait(false);
+        try
+        {
+            if (!string.IsNullOrWhiteSpace(_globalDefaultStyle)) return _globalDefaultStyle!;
+            var path = GetGlobalStylePath();
+            if (!File.Exists(path))
+            {
+                _globalDefaultStyle = "radial-tree";
+                _log.Info("[MMS-실행] LoadGlobalDefaultStyle — 파일 없음, default 'radial-tree' 반환");
+                return _globalDefaultStyle;
+            }
+            using var fs = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read);
+            var obj = await JsonSerializer.DeserializeAsync<JsonElement>(fs, cancellationToken: ct).ConfigureAwait(false);
+            var style = obj.TryGetProperty("defaultStyle", out var p) ? p.GetString() : null;
+            _globalDefaultStyle = NormalizeStyle(style);
+            _log.Info($"[MMS-실행] LoadGlobalDefaultStyle — '{_globalDefaultStyle}'");
+            return _globalDefaultStyle;
+        }
+        catch (Exception ex)
+        {
+            _log.Error(ex, "[MMS-실행] LoadGlobalDefaultStyle 실패");
+            _globalDefaultStyle = "radial-tree";
+            return _globalDefaultStyle;
+        }
+        finally
+        {
+            _globalLock.Release();
+        }
+    }
+
+    /// <inheritdoc/>
+    public async Task SaveGlobalDefaultStyleAsync(string style, CancellationToken ct = default)
+    {
+        // [MMS-실행] 글로벌 default 스타일 저장 — 원자적 교체
+        var normalized = NormalizeStyle(style);
+        await _globalLock.WaitAsync(ct).ConfigureAwait(false);
+        try
+        {
+            var path = GetGlobalStylePath();
+            var tmpPath = path + ".tmp";
+            using (var fs = new FileStream(tmpPath, FileMode.Create, FileAccess.Write, FileShare.None))
+            {
+                await JsonSerializer.SerializeAsync(fs, new { defaultStyle = normalized }, cancellationToken: ct).ConfigureAwait(false);
+            }
+            if (File.Exists(path)) File.Delete(path);
+            File.Move(tmpPath, path);
+            _globalDefaultStyle = normalized;
+            _log.Info($"[MMS-실행] SaveGlobalDefaultStyle — '{normalized}'");
+        }
+        catch (Exception ex)
+        {
+            _log.Error(ex, "[MMS-실행] SaveGlobalDefaultStyle 실패");
+        }
+        finally
+        {
+            _globalLock.Release();
+        }
+    }
+
+    /// <inheritdoc/>
+    public async Task SaveStylePreferenceAsync(string recordingPath, string style, CancellationToken ct = default)
+    {
+        // [MMS-실행] 녹음파일별 스타일 선호 저장 — markdown/isUserEdited 보존, PreferredStyle만 갱신
+        if (string.IsNullOrWhiteSpace(recordingPath)) return;
+        var normalized = NormalizeStyle(style);
+        var existing = await LoadFromDiskAsync(recordingPath, ct).ConfigureAwait(false) ?? new MindMapTreeFile();
+        existing.PreferredStyle = normalized;
+        existing.UpdatedAt = DateTime.UtcNow;
+        var jsonPath = recordingPath + ".mindmap.json";
+        try
+        {
+            var tmpPath = jsonPath + ".tmp";
+            using (var fs = new FileStream(tmpPath, FileMode.Create, FileAccess.Write, FileShare.None))
+            {
+                await JsonSerializer.SerializeAsync(fs, existing, cancellationToken: ct).ConfigureAwait(false);
+            }
+            if (File.Exists(jsonPath)) File.Delete(jsonPath);
+            File.Move(tmpPath, jsonPath);
+            _log.Info($"[MMS-실행] SaveStylePreference — '{jsonPath}' style='{normalized}'");
+        }
+        catch (Exception ex)
+        {
+            _log.Error(ex, $"[MMS-실행] SaveStylePreference 실패 — {jsonPath}");
+        }
+    }
+
     /// <inheritdoc/>
     public void Dispose()
     {
@@ -398,5 +526,6 @@ public sealed class MindMapTreeService : IMindMapTreeService
         _debounceCts = null;
 
         _httpLock.Dispose();
+        _globalLock.Dispose();
     }
 }
