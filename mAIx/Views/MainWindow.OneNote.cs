@@ -550,7 +550,18 @@ namespace mAIx.Views
                 _oneNoteViewModel.IsMindMapVisible = newState;
                 if (newState)
                 {
-                    var rootTitle = _oneNoteViewModel.SelectedRecording?.FileName ?? "녹음 데이터";
+                    // 이슈 #1 — 라이브 녹음 중이면 페이지 제목 우선 (FileName="녹음중..." 방지)
+                    var recording = _oneNoteViewModel.SelectedRecording;
+                    string rootTitle;
+                    if (recording?.IsLiveRecording == true)
+                    {
+                        var pageTitle = _oneNoteViewModel.SelectedPage?.Title?.Trim();
+                        rootTitle = string.IsNullOrWhiteSpace(pageTitle) ? "현재 녹음" : pageTitle;
+                    }
+                    else
+                    {
+                        rootTitle = recording?.FileName ?? "녹음 데이터";
+                    }
                     MindMapOverlayInstance.CloseRequested = () =>
                     {
                         try

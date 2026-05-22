@@ -967,6 +967,7 @@ curl -s http://localhost:5858/api/status
 | 2026-05-01 | UI 버그 3종 수정 — BUG-2(ComposeWindow 닫기), BUG-3(인라인 컴포즈 패널), BUG-4(Dispatcher 블로킹) | mAIx/Views/ComposeWindow.xaml.cs, mAIx/ViewModels/MainViewModel.cs, mAIx/Views/MainWindow.xaml, mAIx/Views/MainWindow.xaml.cs | BUG-2: Dispatcher.BeginInvoke 지연 닫기; BUG-3: MainViewModel 인라인컴포즈 프로퍼티/커맨드+MainWindow 패널 UI; BUG-4: Dispatcher.Invoke→InvokeAsync 비동기 전환 |
 
 | 2026-05-21 | 마인드맵 오버레이 (WebView2+Markmap) 구축 — AC-MM01~MM09 PASS | mAIx/Controls/MindMapOverlay.xaml(신규), mAIx/Controls/MindMapOverlay.xaml.cs(신규), mAIx/Resources/mindmap.html(신규), mAIx/Resources/markmap-lib.js(신규), mAIx/Resources/markmap-view.js(신규), mAIx/Resources/markmap-d3.js(신규), mAIx/ViewModels/OneNoteViewModel.cs(IsMindMapVisible), mAIx/Views/MainWindow.xaml(토글+오버레이), mAIx/Views/MainWindow.OneNote.cs(토글 핸들러), mAIx/mAIx.csproj(Resources 등록) | WebView2 로컬 리소스 매핑+디바운스(L-487), RuntimeNotFoundException(L-488) |
+| 2026-05-22 | 마인드맵 6개 이슈 회귀+개선 — AC-MMP01~06 PASS | mAIx/Controls/MindMapOverlay.xaml.cs(이슈2/3/4/5/6 수정), mAIx/Views/MainWindow.OneNote.cs(이슈1 ResolveRootTitle), mAIx/Resources/mindmap.html(이슈4 X버튼+postMessage, 이슈6 CSS변수+setTheme) | WebView2 HWND z-order→HTML내부버튼+postMessage(L-490), 이벤트 대칭 해제(L-491), Markmap CSS테마(L-492), 묵음3중필터(L-493) |
 
 ---
 

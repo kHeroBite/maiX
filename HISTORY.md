@@ -2029,6 +2029,10 @@ ConfigureAwait(false)를 Service 레이어 전체에 적용하여 스레드 컨�
 - mAIx/Views/MainWindow.OneNote.cs (토글 스크롤/마우스휠 핸들러)
 - mAIx/Views/MainWindow.xaml (ScrollViewer x:Name/MAP DataTemplate 3분할)
 
+## 2026-05-22 — 마인드맵 6개 이슈 회귀+개선 (mm_polish)
+
+| 2026-05-22 | 🔧 마인드맵 6개 이슈 회귀+개선 — AC-MMP01~06 전항목 PASS. ① 루트 제목: IsLiveRecording 분기로 "현재 녹음" vs 페이지 제목 동적 결정. ② MinuteSummaries 노드 제거: 마인드맵에서 요약 노드 완전 제거(TopicSegments만 렌더). ③ 묵음 필터: IsSilence 우선 + _silenceWords HashSet + 1글자 이하 3중 필터. ④ X 버튼+WebMessage: WPF HWND z-order 한계 → HTML 내부 #closeBtn + postMessage 패턴(L-490). ⑤ Keywords/Context L2: Take(3)+2글자+stopWords 필터로 L2 키워드 노드 정제. ⑥ 테마 동기화: CSS 변수(:root/html.theme-light) + window.setTheme() + ThemeService 구독/Unbind 해제(L-491/L-492). 신규 교훈: L-490(WebView2 HWND z-order), L-491(이벤트 대칭 해제), L-492(Markmap 동적 테마), L-493(묵음 3중 필터). | mAIx/Controls/MindMapOverlay.xaml.cs (이슈2/3/4/5/6), mAIx/Views/MainWindow.OneNote.cs (이슈1 ResolveRootTitle), mAIx/Resources/mindmap.html (이슈4 X버튼+postMessage, 이슈6 CSS변수+setTheme) |
+
 ## 2026-05-21 — 마인드맵 오버레이 (WebView2+Markmap) 구축
 
 | 2026-05-21 | ✨ 마인드맵 오버레이 구축 — AC-MM01~MM09 전항목 PASS. WebView2+Markmap으로 녹음내용탭 STT/MAP/요약 데이터를 마인드맵 시각화. 토글 버튼(BranchFork24) 클릭으로 오버레이 표시/숨김. TopicSegments+MinuteSummaries CollectionChanged + 1초 디바운스 자동 재렌더. SetVirtualHostNameToFolderMapping 로컬 JS 참조. WebView2RuntimeNotFoundException catch UI 안내 패턴. 신규 교훈: L-487(WebView2 로컬 리소스 매핑+디바운스), L-488(RuntimeNotFoundException catch), L-489(ogrill 확정 후 oplan 재질문 0회). | mAIx/Controls/MindMapOverlay.xaml (신규), mAIx/Controls/MindMapOverlay.xaml.cs (신규), mAIx/Resources/mindmap.html (신규), mAIx/Resources/markmap-lib.js+markmap-view.js+markmap-d3.js (신규), mAIx/ViewModels/OneNoteViewModel.cs (IsMindMapVisible), mAIx/Views/MainWindow.xaml (토글+오버레이), mAIx/Views/MainWindow.OneNote.cs (토글 핸들러), mAIx/mAIx.csproj (Resources 등록) |

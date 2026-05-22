@@ -1,13 +1,32 @@
-🎨 OneNote UI 정리 5건 + STT 버그 3건 (9개 작업) by claude-opus-4-7
+🔧 마인드맵 6개 이슈 회귀+개선 — AC-MMP01~06 PASS by claude-opus-4-7
 
-- 미니맵 제거 / "대화 네비게이션" 라벨 / 타임라인 눈금 제거 / 본문 버튼 제거
-- 가로/세로 토글 레이아웃 신규 (Option B + TopicSegment.DisplayWidth)
-- "실시간 요약 중..." 텍스트
-- 키워드 하이라이트 B안 (LLM keywords 정식 경로 — MinuteSummaryEntry.Keywords)
-- 화자분리 STT: OpenAiTranscribeSttService response_format 모델별 분기
-- VAD off STT: 주기적 수동 commit + _sendLock (L-443)
+## 수정 내용
 
-대화ID: conv_177893864234
+### 이슈 1 — 루트 제목 (AC-MMP01)
+- MainWindow.OneNote.cs: IsLiveRecording 분기 → "현재 녹음" vs 페이지 제목 동적 결정
+
+### 이슈 2 — MinuteSummaries 노드 제거 (AC-MMP02)
+- MindMapOverlay.xaml.cs: 마인드맵에서 요약 노드 완전 제거 (TopicSegments만 렌더)
+
+### 이슈 3 — 묵음 필터 (AC-MMP03)
+- MindMapOverlay.xaml.cs: IsSilence 우선 + _silenceWords HashSet + 1글자 이하 3중 필터
+
+### 이슈 4 — X 버튼 + WebMessage (AC-MMP04)
+- mindmap.html: HTML 내부 #closeBtn + postMessage('close') + ESC keydown
+- MindMapOverlay.xaml.cs: OnWebMessageReceived + WebMessageReceived 구독/해제
+
+### 이슈 5 — Keywords/Context L2 (AC-MMP05)
+- MindMapOverlay.xaml.cs: Take(3) + 2글자 이상 + _stopWords 필터 Keywords 노드
+
+### 이슈 6 — 테마 동기화 (AC-MMP06)
+- mindmap.html: CSS 변수(:root/html.theme-light) + window.setTheme() 함수
+- MindMapOverlay.xaml.cs: ThemeService.ThemeChanged 구독/Unbind 해제 대칭 패턴
+
+## 신규 교훈
+- L-490: WebView2 HWND z-order → HTML 내부 버튼 + postMessage 패턴
+- L-491: ThemeService/이벤트 구독 해제 — Unbind 대칭 패턴
+- L-492: Markmap 동적 테마 = CSS 변수 + html.theme-light 클래스 토글
+- L-493: 음성 묵음 필터 3중 패턴 (IsSilence + HashSet + 1글자 이하)
 
 🤖 Generated with [Claude Code](https://claude.com/claude-code) (claude-opus-4-7)
 

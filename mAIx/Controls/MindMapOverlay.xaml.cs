@@ -1,5 +1,6 @@
 // WebView2 + Markmap으로 STT/MAP/요약 데이터를 마인드맵으로 렌더링하는 오버레이 컨트롤
 using System;
+using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Collections.Specialized;
 using System.IO;
@@ -13,6 +14,8 @@ using System.Windows.Threading;
 using Microsoft.Web.WebView2.Core;
 using NLog;
 using mAIx.Models;
+using mAIx.Services.Theme;
+using Wpf.Ui.Appearance;
 
 namespace mAIx.Controls;
 
@@ -30,6 +33,25 @@ public partial class MindMapOverlay : UserControl
     private ObservableCollection<TopicSegment>? _topicSegments;
     private ObservableCollection<MinuteSummaryEntry>? _minuteSummaries;
     private string _rootTitle = "녹음 데이터";
+
+    // 묵음/무의미 토픽 필터 키워드
+    private static readonly HashSet<string> _silenceWords = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "묵음", "무음", "(silence)", "(silent)", "(음)", "(어)",
+        "...", "음...", "어...", "음", "어"
+    };
+
+    // 키워드 L2 노드 불필요 단어 (MinuteSummaryService._stopWords와 동일 세트)
+    private static readonly HashSet<string> _stopWords = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "이것", "그것", "저것", "이거", "그거", "저거",
+        "이런", "그런", "저런", "이렇게", "그렇게", "저렇게",
+        "있는", "있어", "있다", "없는", "없어", "없다"
+    };
+
+    // ThemeService 구독 핸들러 (Unbind에서 해제 필수)
+    private EventHandler<ApplicationTheme>? _themeHandler;
+    private EventHandler<CoreWebView2WebMessageReceivedEventArgs>? _webMessageHandler;
 
     /// <summary>
     /// 닫기 콜백 — 부모(MainWindow.OneNote.cs)에서 등록
@@ -111,6 +133,26 @@ public partial class MindMapOverlay : UserControl
             {
                 _isWebViewReady = true;
                 _log.Info("[AC-MM-실행] WebView2 초기화 완료 — mindmap.html 로드");
+
+                // WebMessageReceived 핸들러 등록 (HTML 내부 X 버튼 → close 메시지)
+                _webMessageHandler = OnWebMessageReceived;
+                MindMapWebView.CoreWebView2.WebMessageReceived += _webMessageHandler;
+
+                // ThemeService 구독 + 초기 테마 적용
+                _themeHandler = async (_, theme) =>
+                {
+                    try
+                    {
+                        await ApplyThemeAsync(theme);
+                    }
+                    catch (Exception ex)
+                    {
+                        _log.Error(ex, "[AC-MMP-실행] ThemeHandler 실패");
+                    }
+                };
+                ThemeService.Instance.ThemeChanged += _themeHandler;
+                _ = ApplyThemeAsync(ThemeService.Instance.CurrentTheme);
+
                 _ = RenderAsync();
             };
 
@@ -180,6 +222,27 @@ public partial class MindMapOverlay : UserControl
         if (_minuteSummaries != null)
             _minuteSummaries.CollectionChanged -= OnDataChanged;
 
+        // ThemeChanged 구독 해제 (메모리 누수 방지 — 위험 #2)
+        if (_themeHandler != null)
+        {
+            ThemeService.Instance.ThemeChanged -= _themeHandler;
+            _themeHandler = null;
+        }
+
+        // WebMessageReceived 구독 해제
+        if (_webMessageHandler != null && _isWebViewReady)
+        {
+            try
+            {
+                MindMapWebView.CoreWebView2.WebMessageReceived -= _webMessageHandler;
+            }
+            catch (Exception ex)
+            {
+                _log.Warn(ex, "[AC-MMP-실행] WebMessageReceived 해제 실패");
+            }
+            _webMessageHandler = null;
+        }
+
         _topicSegments = null;
         _minuteSummaries = null;
         _debounceTimer?.Stop();
@@ -221,7 +284,8 @@ public partial class MindMapOverlay : UserControl
     }
 
     /// <summary>
-    /// TopicSegments + MinuteSummaries 데이터로 Markmap 마크다운 트리 빌드
+    /// TopicSegments 데이터로 Markmap 마크다운 트리 빌드
+    /// (이슈 #2 MinuteSummaries 노드 제거, #3 묵음 필터, #5 Keywords/Context L2 활용)
     /// </summary>
     private string BuildMarkdown()
     {
@@ -230,26 +294,43 @@ public partial class MindMapOverlay : UserControl
         sb.AppendLine();
 
         var hasTopics = _topicSegments != null && _topicSegments.Count > 0;
-        var hasSummaries = _minuteSummaries != null && _minuteSummaries.Count > 0;
 
         if (hasTopics)
         {
             foreach (var ts in _topicSegments!)
             {
+                // 이슈 #3 — IsSilence 플래그 필터
+                if (ts.IsSilence) continue;
+
                 var title = !string.IsNullOrWhiteSpace(ts.Title) ? ts.Title : ts.BodyDisplay;
                 if (string.IsNullOrWhiteSpace(title)) continue;
-                sb.AppendLine($"- {EscapeMd(title)}");
-            }
-        }
 
-        if (hasSummaries)
-        {
-            sb.AppendLine("- 요약");
-            foreach (var ms in _minuteSummaries!
-                .Where(m => !string.IsNullOrWhiteSpace(m.SummaryText))
-                .Take(10))
-            {
-                sb.AppendLine($"  - {EscapeMd(ms.SummaryText)}");
+                // 이슈 #3 — 1글자 이하 및 묵음 문자열 패턴 필터
+                var trimmed = title.Trim();
+                if (trimmed.Length <= 1) continue;
+                if (_silenceWords.Any(w => trimmed.Contains(w, StringComparison.OrdinalIgnoreCase))) continue;
+
+                sb.AppendLine($"- {EscapeMd(title)}");
+
+                // 이슈 #5 — Keywords L2 노드 (최대 3개, 2글자 이상, stopwords 제외)
+                if (ts.Keywords is { Count: > 0 })
+                {
+                    var kws = ts.Keywords
+                        .Where(k => !string.IsNullOrWhiteSpace(k) && k.Length >= 2
+                                    && !_silenceWords.Contains(k.Trim())
+                                    && !_stopWords.Contains(k.Trim()))
+                        .Take(3)
+                        .ToList();
+                    foreach (var kw in kws)
+                        sb.AppendLine($"  - {EscapeMd(kw)}");
+                }
+                // 이슈 #5 — Keywords 없으면 Context fallback (80자 트림)
+                else if (!string.IsNullOrWhiteSpace(ts.Context))
+                {
+                    var ctx = ts.Context.Trim();
+                    if (ctx.Length > 80) ctx = ctx[..80] + "…";
+                    sb.AppendLine($"  - {EscapeMd(ctx)}");
+                }
             }
         }
 
@@ -257,6 +338,45 @@ public partial class MindMapOverlay : UserControl
             return "# 녹음 데이터 대기 중\n\n- 녹음 시작 또는 파일 선택";
 
         return sb.ToString();
+    }
+
+    /// <summary>
+    /// 이슈 #6 — ThemeService 변경 이벤트 수신 → JS setTheme 호출
+    /// </summary>
+    private async Task ApplyThemeAsync(ApplicationTheme theme)
+    {
+        if (!_isWebViewReady) return;
+        try
+        {
+            var mode = theme == ApplicationTheme.Dark ? "dark" : "light";
+            var script = $"if (window.setTheme) window.setTheme('{mode}');";
+            await MindMapWebView.CoreWebView2.ExecuteScriptAsync(script);
+            _log.Info($"[AC-MMP-실행] 테마 적용 — {mode}");
+        }
+        catch (Exception ex)
+        {
+            _log.Error(ex, "[AC-MMP-실행] ApplyThemeAsync 실패");
+        }
+    }
+
+    /// <summary>
+    /// 이슈 #4 — HTML 내부 X 버튼 PostMessage 수신 → CloseRequested 트리거
+    /// </summary>
+    private void OnWebMessageReceived(object? sender, CoreWebView2WebMessageReceivedEventArgs e)
+    {
+        try
+        {
+            var msg = e.TryGetWebMessageAsString();
+            if (msg == "close")
+            {
+                _log.Info("[AC-MMP-실행] HTML X 버튼 클릭 (WebMessageReceived)");
+                Dispatcher.Invoke(() => CloseRequested?.Invoke());
+            }
+        }
+        catch (Exception ex)
+        {
+            _log.Error(ex, "[AC-MMP-실행] WebMessageReceived 처리 실패");
+        }
     }
 
     private static string EscapeMd(string s)

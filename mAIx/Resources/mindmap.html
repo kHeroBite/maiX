@@ -5,11 +5,57 @@
 <meta charset="UTF-8">
 <title>MindMap</title>
 <style>
-  html, body { margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden; background: #1e1e1e; }
+  :root {
+    --bg-color: #1e1e1e;
+    --text-color: #f0f0f0;
+    --line-color: #888;
+    --link-color: #4ec9b0;
+    --close-bg: rgba(0, 0, 0, 0.5);
+    --close-fg: #ffffff;
+    --close-hover-bg: rgba(255, 50, 50, 0.8);
+  }
+  html.theme-light {
+    --bg-color: #ffffff;
+    --text-color: #1e1e1e;
+    --line-color: #aaa;
+    --link-color: #007acc;
+    --close-bg: rgba(255, 255, 255, 0.7);
+    --close-fg: #1e1e1e;
+    --close-hover-bg: rgba(255, 50, 50, 0.8);
+  }
+  html, body { margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden; background: var(--bg-color); color: var(--text-color); }
   #mindmap { width: 100vw; height: 100vh; }
+  /* Markmap 노드 색상 — 라이트/다크 자동 */
+  .markmap-node-text { fill: var(--text-color); }
+  .markmap-link { stroke: var(--line-color); }
+  /* X 닫기 버튼 — 우상단 고정 */
+  #closeBtn {
+    position: fixed;
+    top: 10px;
+    right: 10px;
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    border: none;
+    background: var(--close-bg);
+    color: var(--close-fg);
+    font-size: 20px;
+    font-weight: bold;
+    cursor: pointer;
+    z-index: 9999;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: background 0.15s;
+  }
+  #closeBtn:hover {
+    background: var(--close-hover-bg);
+  }
 </style>
 </head>
 <body>
+<!-- 우상단 X 닫기 버튼 (WebView2 HWND 위로 항상 표시) -->
+<button id="closeBtn" type="button" aria-label="마인드맵 닫기" title="닫기 (ESC)">×</button>
 <svg id="mindmap"></svg>
 <script src="markmap-d3.js"></script>
 <script src="markmap-view.js"></script>
@@ -43,6 +89,48 @@
       return 'ERROR: ' + e.message;
     }
   };
+
+  // 테마 전환 함수 — C#에서 ExecuteScriptAsync('window.setTheme("light")')로 호출
+  window.setTheme = function(mode) {
+    try {
+      if (mode === 'light') {
+        document.documentElement.classList.add('theme-light');
+      } else {
+        document.documentElement.classList.remove('theme-light');
+      }
+      console.log('Theme applied:', mode);
+      // 마인드맵 재렌더 (스타일 갱신 보장)
+      if (typeof markmapInstance !== 'undefined' && markmapInstance) {
+        try { markmapInstance.fit(); } catch (e) {}
+      }
+      return 'OK';
+    } catch (e) {
+      console.error('setTheme failed:', e);
+      return 'ERROR: ' + e.message;
+    }
+  };
+
+  // X 버튼 클릭 → C#에 close 메시지 전달
+  document.getElementById('closeBtn').addEventListener('click', () => {
+    try {
+      if (window.chrome && window.chrome.webview) {
+        window.chrome.webview.postMessage('close');
+      }
+    } catch (e) {
+      console.error('postMessage close failed:', e);
+    }
+  });
+
+  // ESC 키 → C#에 close 메시지 전달 (이중 안전망)
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') {
+      try {
+        if (window.chrome && window.chrome.webview) {
+          window.chrome.webview.postMessage('close');
+        }
+      } catch (err) {}
+    }
+  });
 
   // 초기 빈 마인드맵
   document.addEventListener('DOMContentLoaded', () => {

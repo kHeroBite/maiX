@@ -2074,3 +2074,37 @@ L-424(WPF ItemsControl 가변높이 안티패턴 기각)가 직전 작업 완료
 - **적용 조건**: ogrill_result.md의 5축이 모두 채워지고 열린질문도 해소된 경우.
 - **예외**: ogrill 결과에 열린질문이 아직 남아있거나, 계획 수립 중 새로운 기술적 제약 발견 시 한 번만 확인 가능.
 - **Level**: 1 (파이프라인 진행 효율화 패턴)
+
+## L-490: WebView2 HWND z-order → HTML 내부 버튼 + postMessage 패턴 (2026-05-22)
+
+- **문제**: WebView2는 내부적으로 HWND를 가진 네이티브 컨트롤이므로 WPF z-order 체계 외부에 존재. WPF 오버레이 X 버튼을 WebView2 위에 배치해도 WebView2가 항상 최상위로 올라와 버튼이 가려짐.
+- **해결**: WPF 오버레이 버튼 방식을 포기하고, HTML 내부에 `<button id="closeBtn">×</button>`을 `position: fixed; top: 10px; right: 10px; z-index: 9999`로 배치. 클릭 시 `window.chrome.webview.postMessage('close')` 전송 → C#의 `WebMessageReceived` 이벤트에서 처리.
+- **이중 안전망**: ESC 키 `document.addEventListener('keydown', ...)` 리스너도 동일하게 postMessage 전송.
+- **C# 측 처리**: `NavigationCompleted` 내에서 `WebMessageReceived += _webMessageHandler` 등록 → `Unbind()`에서 해제(L-491 연동).
+- **Level**: 1 (WebView2 네이티브 창 z-order 한계 우회 패턴)
+
+## L-491: ThemeService/이벤트 구독 해제 필수 — NavigationCompleted 구독 대칭 Unbind 패턴 (2026-05-22)
+
+- **문제**: `NavigationCompleted` 이벤트 핸들러 내에서 `ThemeService.ThemeChanged += _themeHandler` 또는 `WebMessageReceived += _webMessageHandler`를 구독할 때, `Unbind()`에서 해제하지 않으면 오버레이가 닫혀도 핸들러가 계속 호출됨 (메모리 누수 + 좀비 호출).
+- **해결**: 핸들러를 `EventHandler _themeHandler; EventHandler _webMessageHandler;` 필드로 저장 → `Bind()`에서 람다를 필드에 대입 → `Unbind()`에서 `-=`로 해제.
+- **원칙**: NavigationCompleted 내에서 이벤트 구독 → Unbind()에서 반드시 대칭 해제. `NavigationCompleted` 자체도 Unbind()에서 해제.
+- **체크리스트**: Bind/Unbind 메서드를 나란히 두고 `+= X` 항목 개수가 `-= X` 개수와 일치하는지 확인.
+- **Level**: 1 (이벤트 구독 대칭 해제 패턴)
+
+## L-492: Markmap 동적 테마 = CSS 변수 + html.theme-light 클래스 토글 (2026-05-22)
+
+- **문제**: Markmap은 자체 스타일을 SVG에 직접 주입하므로 WPF ThemeResource와 연동 불가. `body { background: #1e1e1e; }` 하드코딩 시 라이트 모드에서도 다크 배경 고정.
+- **해결**: `:root { --bg-color: #1e1e1e; ... }` CSS 변수 정의(다크 기본값) → `html.theme-light { --bg-color: #ffffff; ... }` 클래스 오버라이드 → `window.setTheme(mode)` 함수로 `classList.add/remove('theme-light')` 전환. `markmapInstance.fit()` 호출로 렌더링 갱신.
+- **C# 측**: `ExecuteScriptAsync("window.setTheme('light')")` 또는 `setTheme('dark')`로 호출. ThemeService 구독으로 실시간 동기화.
+- **CSS 대상**: `.markmap-node-text`, `.markmap-link` 선택자로 Markmap 노드/링크 색상도 CSS 변수에 연결.
+- **Level**: 1 (WebView2 내 외부 라이브러리 동적 테마 패턴)
+
+## L-493: 음성 묵음 필터 3중 패턴 — IsSilence 우선 + HashSet + 1글자 이하 (2026-05-22)
+
+- **문제**: STT 결과에 "음...", "어...", "(silence)", "(silent)", "(음)", "(어)" 등 무의미 텍스트가 포함됨. 마인드맵 노드로 출력되면 품질 저하.
+- **해결**: BuildMarkdown 루프 상단에 3중 필터 순서대로 적용.
+  1. `if (ts.IsSilence) continue;` — IsSilence 플래그 우선 (가장 신뢰성 높음)
+  2. `if (_silenceWords.Any(w => text.Contains(w))) continue;` — HashSet 키워드 매칭 (묵음/무음/(silence)/(silent)/(음)/(어)/음.../어... 등)
+  3. `if (text.Length <= 1) continue;` — 1글자 이하 제거
+- **_silenceWords 정의 위치**: 클래스 필드로 `HashSet<string>` 초기화 (루프 내 생성 금지 — 성능).
+- **Level**: 1 (음성 STT 품질 필터링 패턴)
