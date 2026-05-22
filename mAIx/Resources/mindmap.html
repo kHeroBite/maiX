@@ -1,4 +1,4 @@
-<!-- WebView2에서 Markmap 마인드맵을 렌더링하는 셸 HTML -->
+<!-- WebView2에서 d3 v7 radial mindmap을 렌더링하는 셸 HTML -->
 <!DOCTYPE html>
 <html lang="ko" class="markmap-dark">
 <head>
@@ -13,6 +13,10 @@
     --close-bg: rgba(0, 0, 0, 0.5);
     --close-fg: #ffffff;
     --close-hover-bg: rgba(255, 50, 50, 0.8);
+    --menu-bg: #2a2a2a;
+    --menu-fg: #f0f0f0;
+    --menu-hover-bg: #3a3a3a;
+    --menu-border: #555;
   }
   html.theme-light {
     --bg-color: #ffffff;
@@ -22,132 +26,288 @@
     --close-bg: rgba(255, 255, 255, 0.7);
     --close-fg: #1e1e1e;
     --close-hover-bg: rgba(255, 50, 50, 0.8);
+    --menu-bg: #f5f5f5;
+    --menu-fg: #1e1e1e;
+    --menu-hover-bg: #e0e0e0;
+    --menu-border: #ccc;
   }
-  html, body { margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden; background: var(--bg-color); color: var(--text-color); }
-  #mindmap { width: 100vw; height: 100vh; }
-  /* Markmap 노드 색상 — 라이트/다크 자동 */
-  /* foreignObject 안의 div가 노드 텍스트의 실제 렌더 컨테이너 */
-  .markmap-foreign { color: var(--text-color) !important; }
-  .markmap-foreign div { color: var(--text-color) !important; }
-  .markmap-link { stroke: var(--line-color); }
-  /* X 닫기 버튼 — 우상단 고정 */
-  #closeBtn {
-    position: fixed;
-    top: 10px;
-    right: 10px;
-    width: 36px;
-    height: 36px;
-    border-radius: 50%;
-    border: none;
-    background: var(--close-bg);
-    color: var(--close-fg);
-    font-size: 20px;
-    font-weight: bold;
-    cursor: pointer;
-    z-index: 9999;
-    pointer-events: auto;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    transition: background 0.15s;
-  }
-  #closeBtn:hover {
-    background: var(--close-hover-bg);
-  }
-  /* SVG 마인드맵 — 클릭 이벤트 허용 (closeBtn 가로채기 방지) */
-  #mindmap svg { pointer-events: auto; }
+  html, body { margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden; background: var(--bg-color); color: var(--text-color); font-family: sans-serif; }
+  #mindmap { width: 100vw; height: 100vh; cursor: grab; }
+  #mindmap:active { cursor: grabbing; }
+  .node text { fill: var(--text-color); font-size: 13px; user-select: none; }
+  .node circle { fill: var(--bg-color); stroke: var(--line-color); stroke-width: 1.5px; cursor: pointer; }
+  .node._has-children circle { fill: var(--link-color); }
+  .link { fill: none; stroke: var(--line-color); stroke-opacity: 0.6; stroke-width: 1.5px; }
+  /* X 닫기 버튼 */
+  #closeBtn { position: fixed; top: 10px; right: 10px; width: 36px; height: 36px; border-radius: 50%; border: none; background: var(--close-bg); color: var(--close-fg); font-size: 20px; font-weight: bold; cursor: pointer; z-index: 9999; display: flex; align-items: center; justify-content: center; pointer-events: auto; }
+  #closeBtn:hover { background: var(--close-hover-bg); }
+  /* 컨텍스트 메뉴 */
+  #ctxMenu { position: fixed; display: none; background: var(--menu-bg); color: var(--menu-fg); border: 1px solid var(--menu-border); border-radius: 4px; box-shadow: 0 4px 12px rgba(0,0,0,0.3); z-index: 10000; min-width: 140px; user-select: none; }
+  #ctxMenu .item { padding: 8px 14px; cursor: pointer; font-size: 13px; }
+  #ctxMenu .item:hover { background: var(--menu-hover-bg); }
+  #ctxMenu .sep { height: 1px; background: var(--menu-border); margin: 2px 0; }
 </style>
 </head>
 <body>
-<!-- 우상단 X 닫기 버튼 (WebView2 HWND 위로 항상 표시) -->
 <button id="closeBtn" type="button" aria-label="마인드맵 닫기" title="닫기 (ESC)">×</button>
+<div id="ctxMenu">
+  <div class="item" data-action="add">자식 추가</div>
+  <div class="item" data-action="rename">이름 변경</div>
+  <div class="sep"></div>
+  <div class="item" data-action="delete">삭제</div>
+</div>
 <svg id="mindmap"></svg>
-<script src="markmap-d3.js"></script>
-<script src="markmap-view.js"></script>
-<script src="markmap-lib.js"></script>
+<script src="d3.v7.min.js"></script>
 <script>
-  // 외부에서 호출 가능한 전역 함수
-  let markmapInstance = null;
-  let transformer = null;
+  console.log('[MMRD-실행] mindmap.html 로드');
 
-  function initMarkmap() {
+  let currentTreeData = null;  // 트리 데이터 (plain object)
+  let svg, g, zoom;
+  let nodeIdCounter = 0;
+
+  // ===== 마크다운 → 트리 데이터 파서 =====
+  function parseMarkdown(md) {
+    const lines = md.split('\n').filter(l => l.trim());
+    let root = { id: ++nodeIdCounter, name: 'Mindmap', children: [] };
+    let stack = [{ depth: -1, node: root }];
+
+    for (const line of lines) {
+      // # Heading
+      const h = line.match(/^(#+)\s+(.+)$/);
+      if (h) {
+        const level = h[1].length;
+        if (level === 1) {
+          root.name = h[2].trim();
+        }
+        continue;
+      }
+      // - Item (스페이스 2개 = 1 depth)
+      const m = line.match(/^(\s*)-\s+(.+)$/);
+      if (!m) continue;
+      const depth = Math.floor(m[1].length / 2);
+      const text = m[2].trim();
+      const node = { id: ++nodeIdCounter, name: text, children: [] };
+
+      while (stack.length > 1 && stack[stack.length - 1].depth >= depth) {
+        stack.pop();
+      }
+      const parent = stack[stack.length - 1].node;
+      if (!parent.children) parent.children = [];
+      parent.children.push(node);
+      stack.push({ depth, node });
+    }
+    return root;
+  }
+
+  // ===== 트리 데이터 → 마크다운 직렬화 (편집 후 C# 전달용) =====
+  function serializeToMarkdown(node, depth) {
+    depth = depth || 0;
+    let result = '';
+    if (depth === 0) {
+      result += '# ' + node.name + '\n';
+      if (node.children) {
+        for (const c of node.children) result += serializeToMarkdown(c, 1);
+      }
+    } else {
+      const indent = '  '.repeat(depth - 1);
+      result += indent + '- ' + node.name + '\n';
+      if (node.children) {
+        for (const c of node.children) result += serializeToMarkdown(c, depth + 1);
+      }
+    }
+    return result;
+  }
+
+  // ===== d3 radial tree 렌더 =====
+  function renderTree() {
+    if (!currentTreeData) return;
+
+    const width = window.innerWidth;
+    const height = window.innerHeight;
+    const radius = Math.min(width, height) / 2 - 80;
+
+    if (!svg) {
+      svg = d3.select('#mindmap')
+        .attr('viewBox', [-width / 2, -height / 2, width, height])
+        .style('font', '13px sans-serif');
+
+      g = svg.append('g');
+
+      zoom = d3.zoom()
+        .scaleExtent([0.1, 5])
+        .on('zoom', function(event) { g.attr('transform', event.transform); });
+      svg.call(zoom);
+    } else {
+      // viewBox 갱신 후 내용만 클리어
+      svg.attr('viewBox', [-width / 2, -height / 2, width, height]);
+      g.selectAll('*').remove();
+    }
+
+    const root = d3.hierarchy(currentTreeData);
+    const tree = d3.tree()
+      .size([2 * Math.PI, radius])
+      .separation(function(a, b) { return (a.parent === b.parent ? 1 : 2) / a.depth; });
+    tree(root);
+
+    // 링크 (방사형)
+    g.append('g')
+      .attr('class', 'links')
+      .selectAll('path')
+      .data(root.links())
+      .join('path')
+        .attr('class', 'link')
+        .attr('d', d3.linkRadial().angle(function(d) { return d.x; }).radius(function(d) { return d.y; }));
+
+    // 노드
+    const node = g.append('g')
+      .attr('class', 'nodes')
+      .selectAll('g')
+      .data(root.descendants())
+      .join('g')
+        .attr('class', function(d) { return 'node' + (d.children ? ' _has-children' : ''); })
+        .attr('transform', function(d) { return 'rotate(' + (d.x * 180 / Math.PI - 90) + ') translate(' + d.y + ',0)'; });
+
+    node.append('circle').attr('r', 4);
+
+    node.append('text')
+      .attr('dy', '0.31em')
+      .attr('x', function(d) { return d.x < Math.PI === !d.children ? 8 : -8; })
+      .attr('text-anchor', function(d) { return d.x < Math.PI === !d.children ? 'start' : 'end'; })
+      .attr('transform', function(d) { return d.x >= Math.PI ? 'rotate(180)' : null; })
+      .text(function(d) { return d.data.name; })
+      .on('contextmenu', function(event, d) {
+        event.preventDefault();
+        showCtxMenu(event.clientX, event.clientY, d);
+      });
+
+    console.log('[MMRD-실행] renderTree — 노드', root.descendants().length, '링크', root.links().length);
+  }
+
+  // ===== 외부 진입점 =====
+  window.renderMindMap = function(markdown) {
     try {
-      transformer = new markmap.Transformer();
-      const svgEl = document.querySelector('#mindmap');
-      markmapInstance = markmap.Markmap.create(svgEl);
-      console.log('Markmap initialized');
+      currentTreeData = parseMarkdown(markdown);
+      renderTree();
+      console.log('[MMRD-실행] renderMindMap 완료 — 루트:', currentTreeData.name);
+      return 'OK';
     } catch (e) {
-      console.error('Markmap init failed:', e);
+      console.error('[MMRD-실행] renderMindMap 실패:', e);
+      return 'ERROR: ' + e.message;
+    }
+  };
+
+  window.clearMindMap = function() {
+    console.log('[MMRD-실행] clearMindMap 호출');
+    currentTreeData = { id: 0, name: '', children: [] };
+    if (g) g.selectAll('*').remove();
+    return 'OK';
+  };
+
+  window.setTheme = function(mode) {
+    try {
+      const root = document.documentElement;
+      root.classList.remove('theme-light', 'markmap-dark');
+      if (mode === 'light') root.classList.add('theme-light');
+      else root.classList.add('markmap-dark');
+      // CSS 변수 갱신 후 재렌더
+      renderTree();
+      console.log('[MMRD-실행] setTheme', mode);
+      return 'OK';
+    } catch (e) {
+      console.error('[MMRD-실행] setTheme 실패:', e);
+      return 'ERROR: ' + e.message;
+    }
+  };
+
+  // ===== 우클릭 컨텍스트 메뉴 =====
+  let ctxTargetNode = null;
+  const ctxMenu = document.getElementById('ctxMenu');
+
+  function showCtxMenu(x, y, d) {
+    ctxTargetNode = d;
+    ctxMenu.style.left = x + 'px';
+    ctxMenu.style.top = y + 'px';
+    ctxMenu.style.display = 'block';
+    console.log('[MMRD-실행] showCtxMenu', d.data.name);
+  }
+
+  function hideCtxMenu() {
+    ctxMenu.style.display = 'none';
+    ctxTargetNode = null;
+  }
+
+  document.addEventListener('click', function(e) {
+    if (!ctxMenu.contains(e.target)) hideCtxMenu();
+  });
+
+  ctxMenu.querySelectorAll('.item').forEach(function(item) {
+    item.addEventListener('click', function(e) {
+      const action = e.target.dataset.action;
+      if (!ctxTargetNode) { hideCtxMenu(); return; }
+      const targetData = ctxTargetNode.data;
+
+      if (action === 'add') {
+        const name = prompt('자식 노드 이름:', '새 노드');
+        if (name && name.trim()) {
+          if (!targetData.children) targetData.children = [];
+          targetData.children.push({ id: ++nodeIdCounter, name: name.trim(), children: [] });
+          notifyEdited();
+        }
+      } else if (action === 'rename') {
+        const newName = prompt('새 이름:', targetData.name);
+        if (newName && newName.trim()) {
+          targetData.name = newName.trim();
+          notifyEdited();
+        }
+      } else if (action === 'delete') {
+        if (ctxTargetNode.depth === 0) {
+          alert('루트는 삭제할 수 없습니다.');
+        } else {
+          const parent = ctxTargetNode.parent.data;
+          parent.children = parent.children.filter(function(c) { return c.id !== targetData.id; });
+          notifyEdited();
+        }
+      }
+      hideCtxMenu();
+    });
+  });
+
+  function notifyEdited() {
+    renderTree();
+    const markdown = serializeToMarkdown(currentTreeData);
+    console.log('[MMRD-실행] notifyEdited — postMessage tree_edited');
+    if (window.chrome && window.chrome.webview) {
+      window.chrome.webview.postMessage(JSON.stringify({ type: 'tree_edited', markdown: markdown }));
     }
   }
 
-  // 외부(C#)에서 호출하는 진입점 — markdown 문자열 받아 렌더
-  window.renderMindMap = function(markdownStr) {
-    try {
-      if (!markmapInstance) initMarkmap();
-      const { root } = transformer.transform(markdownStr);
-      markmapInstance.setData(root);
-      markmapInstance.fit();
-      return 'OK';
-    } catch (e) {
-      console.error('renderMindMap failed:', e);
-      return 'ERROR: ' + e.message;
-    }
-  };
-
-  // 테마 전환 함수 — C#에서 ExecuteScriptAsync('window.setTheme("light")')로 호출
-  window.setTheme = function(mode) {
-    try {
-      if (mode === 'light') {
-        document.documentElement.classList.add('theme-light');
-        document.documentElement.classList.remove('markmap-dark');
-      } else {
-        document.documentElement.classList.remove('theme-light');
-        document.documentElement.classList.add('markmap-dark');
-      }
-      console.log('Theme applied:', mode);
-      // 마인드맵 재렌더 (스타일 갱신 보장)
-      if (typeof markmapInstance !== 'undefined' && markmapInstance) {
-        try { markmapInstance.fit(); } catch (e) {}
-      }
-      return 'OK';
-    } catch (e) {
-      console.error('setTheme failed:', e);
-      return 'ERROR: ' + e.message;
-    }
-  };
-
-  // X 버튼 클릭 → C#에 close 메시지 전달 (pointer-events:auto + stopPropagation)
-  document.getElementById('closeBtn').addEventListener('click', (e) => {
+  // ===== 닫기 버튼 + ESC =====
+  document.getElementById('closeBtn').addEventListener('click', function(e) {
     e.stopPropagation();
-    console.log('[MMR3] closeBtn clicked (pointer-events:auto)');
-    try {
-      if (window.chrome && window.chrome.webview) {
-        window.chrome.webview.postMessage('close');
-        console.log('[MMR3] postMessage(close) sent');
-      } else {
-        console.warn('[MMR3] window.chrome.webview unavailable');
-      }
-    } catch (err) { console.error('[MMR3] postMessage failed:', err); }
-  });
-
-  // ESC 키 → C#에 close 메시지 전달 (이중 안전망)
-  document.addEventListener('keydown', (e) => {
-    if (e.key === 'Escape') {
-      try {
-        if (window.chrome && window.chrome.webview) {
-          window.chrome.webview.postMessage('close');
-        }
-      } catch (err) {}
+    console.log('[MMRD-실행] closeBtn clicked');
+    if (window.chrome && window.chrome.webview) {
+      window.chrome.webview.postMessage(JSON.stringify({ type: 'close' }));
     }
   });
 
-  // 초기화 — 안내 텍스트 setData 제거 (C# Bind 시 첫 renderMindMap 호출에서 데이터 주입)
-  document.addEventListener('DOMContentLoaded', () => {
-    console.log('[MMR3] closeBtn DOMContentLoaded — pointer-events:auto 적용');
-    initMarkmap();
-    // [MMF-실행] 초기 안내 setData 제거 — C# Bind 시 첫 renderMindMap 호출에서 데이터 주입
+  document.addEventListener('keydown', function(e) {
+    if (e.key === 'Escape') {
+      console.log('[MMRD-실행] ESC pressed');
+      if (window.chrome && window.chrome.webview) {
+        window.chrome.webview.postMessage(JSON.stringify({ type: 'close' }));
+      }
+    }
   });
+
+  // ===== 윈도우 리사이즈 시 viewBox + 재렌더 =====
+  window.addEventListener('resize', function() {
+    if (svg) {
+      svg.attr('viewBox', [-window.innerWidth / 2, -window.innerHeight / 2, window.innerWidth, window.innerHeight]);
+      renderTree();
+    }
+  });
+
+  console.log('[MMRD-실행] mindmap.html 초기화 완료');
 </script>
 </body>
 </html>

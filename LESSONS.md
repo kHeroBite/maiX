@@ -1936,6 +1936,37 @@ L-424(WPF ItemsControl 가변높이 안티패턴 기각)가 직전 작업 완료
 | L-476 | Timer 런타임 발화 검증 대체 조건 — 30초+ 주기 Timer는 정적 3조건(Start 호출/핸들러 존재/로그 패턴) 모두 충족 시 otest 정적 PASS 허용 (L-420 보완) | docs | LESSONS.md | 2026-05-20 | ✅ |
 | L-477 | PreviewMouseWheel 외부 전파 — e.Handled=true 먼저 + 새 MouseWheelEventArgs 인스턴스로 무한루프 방지 | docs | LESSONS.md | 2026-05-20 | ✅ |
 | L-478 | LLM JSON 스키마 확장 graceful 호환 — TryGetProperty+Empty fallback + NullToVisibilityConverter 조합으로 구형 응답 하위 호환 | docs | LESSONS.md | 2026-05-20 | ✅ |
+| L-479 | STT delta 누적 + 마침 문자 감지 자동 분리 패턴 — ConcurrentDictionary 버퍼, 역방향 마침 탐색 | docs | LESSONS.md | 2026-05-21 | ✅ |
+| L-480 | MAP 카드 단순화 — 사용자 피드백 기반 보정 패턴 | docs | LESSONS.md | 2026-05-21 | ✅ |
+| L-481 | 라이브 임시 카드 패턴 — 즉시 삽입 + 종료 시 교체 | docs | LESSONS.md | 2026-05-21 | ✅ |
+| L-482 | ObservableCollection Insert+즉시선택 guardScope 패턴 — L-385/L-386 Insert 버전 | docs | LESSONS.md + MEMORY.md | 2026-05-21 | ✅ |
+| L-485 | 단일 출처(DRY) + 일관 참조 패턴 — 스킬 간 판정 기준 분산 금지 | docs+skill | LESSONS.md + ogrill/SKILL.md | 2026-05-21 | ✅ |
+| L-486 | LLM 자가 판단 게이트 패턴 — 강제 spawn 금지, 권고 표준화 | docs+skill | LESSONS.md + ogrill/SKILL.md | 2026-05-21 | ✅ |
+| L-487 | WebView2 로컬 리소스 매핑 패턴 — SetVirtualHostNameToFolderMapping + ExecuteScriptAsync 디바운스 | docs | LESSONS.md | 2026-05-21 | ✅ |
+| L-488 | WebView2RuntimeNotFoundException catch 패턴 — 런타임 미설치 시 UI 안내 | docs | LESSONS.md | 2026-05-21 | ✅ |
+| L-489 | ogrill 5축 확정 후 oplan 재질문 0회 — 인터뷰 완료 후 신뢰 기반 진행 | docs | LESSONS.md | 2026-05-21 | ✅ |
+| L-490 | WebView2 HWND z-order → HTML 내부 버튼 + postMessage 패턴 | docs | LESSONS.md | 2026-05-22 | ✅ |
+| L-491 | ThemeService/이벤트 구독 해제 필수 — NavigationCompleted 구독 대칭 Unbind 패턴 | docs | LESSONS.md | 2026-05-22 | ✅ |
+| L-492 | Markmap 동적 테마 = CSS 변수 + html.theme-light 클래스 토글 | docs | LESSONS.md | 2026-05-22 | ✅ |
+| L-493 | 음성 묵음 필터 3중 패턴 — IsSilence 우선 + HashSet + 1글자 이하 | docs | LESSONS.md | 2026-05-22 | ✅ |
+| L-494 | LLM 트리 통합 패턴 — 별도 HTTP 서비스 + 5초 디바운스 + 메모리 캐시 | docs | LESSONS.md | 2026-05-22 | ✅ |
+| L-495 | X 버튼 WebView2 회귀 3-pronged 동시 보강 패턴 — HTML pointer-events + WPF ZIndex + NLog+DevTools 양쪽 마커 | docs | LESSONS.md | 2026-05-22 | ✅ |
+| L-496 | 정적 PASS ≠ 동작 PASS — UI 실측 보류 항목 명시 필수 | docs | LESSONS.md | 2026-05-22 | ✅ |
+| L-497 | otest auto_script grep 패턴 = oplan 마커명 = odev 실제 코드 — 셋이 일치해야 런타임 검증 가능 | docs | LESSONS.md | 2026-05-22 | ✅ |
+| L-498 | PropertyChanged 구독 해제 — CloseRequested/Unbind 콜백 대칭 패턴 | docs | LESSONS.md + MEMORY.md | 2026-05-22 | ✅ |
+| L-499 | Wave 패턴 — 다파일 다중 에이전트 충돌 방지. Wave1(시그니처 확정) → Wave2(구현 병렬) | docs | LESSONS.md | 2026-05-22 | ✅ |
+| L-500 | d3 v7 직접 임베드 패턴 — Resources/ + csproj Content Include. markmap 단방향 한계 우회 | docs | LESSONS.md | 2026-05-22 | ✅ |
+| L-501 | d3 v7 radial 트리 패턴 — tree.size([2*Math.PI, radius]) + d3.linkRadial | docs | LESSONS.md | 2026-05-22 | ✅ |
+| L-502 | WebView2 postMessage JSON 스키마 통일 — {type:'close'}/{type:'tree_edited',markdown:'...'} + 레거시 string fallback | docs | LESSONS.md | 2026-05-22 | ✅ |
+| L-503 | LLM 결과 디스크 영속화 패턴 — {recordingPath}.mindmap.json 페어링, 원자적 교체(.tmp→Move) | docs | LESSONS.md | 2026-05-22 | ✅ |
+| L-504 | WebView2 contextmenu 우클릭 메뉴 패턴 — HTML 내부 구현 + preventDefault + 절대 위치 div | docs | LESSONS.md | 2026-05-22 | ✅ |
+| L-505 | Bind 시그니처 확장 패턴 — RecordingInfo 복합 객체 단일 파라미터 추가, 호출부 최소 변경 | docs | LESSONS.md | 2026-05-22 | ✅ |
+| L-506 | WPF IsVisible 렌더 타이밍 함정 — ViewModel 단일 진실 원천(IsMindMapVisible) 사용 필수 | docs | LESSONS.md + MEMORY.md | 2026-05-22 | ✅ |
+| L-507 | PropertyChanged 재등록 패턴 — CloseRequested 해제 후 토글 ON 시 -= += 재등록 필수 | docs | LESSONS.md + MEMORY.md | 2026-05-22 | ✅ |
+| L-508 | BE→FE→통합 3Wave 심화 패턴 — W1(서비스/모델) → W2(HTML/JS) → W3(C# 바인딩). 7파일 640줄 역라우팅 0회 | docs | LESSONS.md | 2026-05-22 | ✅ |
+| L-509 | d3 바이너리 csproj Content Include 패턴 — CopyToOutputDirectory=Always 필수 | docs | LESSONS.md | 2026-05-22 | ✅ |
+| L-510 | WebView2 UI 실측 보류 2회 패턴(rev3+radial) — 커밋 메시지 명시 의무 심화 (L-496 Level 2 승급) | docs | LESSONS.md + MEMORY.md | 2026-05-22 | ✅ |
+| L-511 | result.json 사이클 간 잔존 위험 — 진입 시 substeps 내용과 현재 작업 대조 필수 | docs | LESSONS.md + MEMORY.md | 2026-05-22 | ✅ |
 
 ## L-476: Timer 런타임 발화 검증 대체 조건 — 30초+ 주기 Timer 정적 PASS 허용 기준 (2026-05-20)
 
@@ -2211,3 +2242,246 @@ vm.PropertyChanged -= _vmPropertyChangedHandler;
 - Wave1 완료 전 Wave2 병렬 spawn 금지
 - Wave1에서 타입/인터페이스/이벤트 시그니처 완전 확정 필수
 - Level: 1
+
+---
+
+## L-500: d3 v7 직접 임베드 패턴 — markmap 단방향 한계 우회 (2026-05-22)
+
+**문제**: markmap은 단방향 렌더(left-to-right)만 지원하며, 노드 편집/방사형 배치 불가. WebView2에서 인터랙티브 마인드맵을 구현하려면 직접 d3 v7 사용이 필요.
+
+**해결**:
+1. `d3.v7.min.js`를 `mAIx/Resources/` 폴더에 직접 임베드 (279,706 bytes)
+2. csproj에 `<Content Include="mAIx/Resources/d3.v7.min.js" CopyToOutputDirectory="Always" />` 추가
+3. WebView2 `SetVirtualHostNameToFolderMapping`으로 로컬 파일 서빙
+4. markmap-*.js 3개 제거 (csproj Content Include도 동시 제거)
+
+**규칙**:
+- d3 v7 직접 임베드: `Resources/{file}.js` + csproj Content Include
+- markmap 한계(단방향/편집불가) 시 d3 직접 사용
+- 구버전 참조 제거 + 신규 추가 동시 처리 의무 (csproj 미반영 시 빌드 제외)
+- Level: 1
+
+---
+
+## L-501: d3 v7 radial 트리 표준 패턴 — tree.size([2π, radius]) + d3.linkRadial (2026-05-22)
+
+**문제**: 단방향 트리와 방사형 트리의 d3 API가 다름. 방사형 변환 없이 x/y를 직접 사용하면 노드가 직선으로 배치됨.
+
+**해결**:
+```javascript
+// 방사형 레이아웃 설정
+const tree = d3.tree().size([2 * Math.PI, radius]);
+const root = tree(hierarchy);
+
+// 링크 그리기
+const link = d3.linkRadial().angle(d => d.x).radius(d => d.y);
+
+// 노드 좌표 변환
+const cx = Math.cos(d.x - Math.PI / 2) * d.y;
+const cy = Math.sin(d.x - Math.PI / 2) * d.y;
+
+// g 요소 중심 이동 (루트=캔버스 중심)
+g.attr("transform", `translate(${width/2},${height/2})`);
+```
+
+**규칙**:
+- `tree.size([2*Math.PI, radius])` — 전체 360° 방사형
+- 노드 좌표: `(cos(x-π/2)*y, sin(x-π/2)*y)` 변환 필수
+- g transform 중심 이동 필수 (루트 = 캔버스 중앙)
+- Level: 1
+
+---
+
+## L-502: WebView2 postMessage JSON 스키마 통일 패턴 (2026-05-22)
+
+**문제**: WebView2 WebMessageReceived에서 단순 string('close') + 복합 메시지({type, data}) 혼용 시 파싱 코드가 복잡해지고 확장 어려움. 레거시 string 메시지와 하위 호환도 필요.
+
+**해결**:
+```javascript
+// HTML → C#: 항상 JSON 사용
+postMessage(JSON.stringify({ type: 'close' }));
+postMessage(JSON.stringify({ type: 'tree_edited', markdown: '...' }));
+```
+```csharp
+// C#: JsonDocument.Parse + type 분기
+var doc = JsonDocument.Parse(args.WebMessageAsJson);
+var type = doc.RootElement.GetProperty("type").GetString();
+switch (type) {
+    case "close": // ...
+    case "tree_edited": // doc.RootElement.GetProperty("markdown").GetString()
+}
+// 레거시 string 호환 (try-catch fallback)
+```
+
+**규칙**:
+- WebView2 postMessage는 항상 JSON 스키마 사용
+- `using System.Text.Json` + `JsonDocument.Parse(args.WebMessageAsJson)` 패턴
+- 레거시 string 호환은 try-catch fallback으로 안전 처리
+- Level: 1
+
+---
+
+## L-503: LLM 결과 디스크 영속화 패턴 — {recordingPath}.mindmap.json 페어링 (2026-05-22)
+
+**문제**: LLM 마인드맵 트리는 생성 비용이 크고 세션 간 재사용이 필요. 메모리 전용 캐시는 앱 재시작 시 소실(L-434 패턴 확장).
+
+**해결**:
+1. 녹음 경로 기반 페어링 파일: `{recordingPath}.mindmap.json`
+2. `MindMapTreeFile` 모델: `Markdown`, `IsUserEdited`, `UpdatedAt` 필드
+3. 원자적 교체: `File.WriteAllText(tmpPath)` → `File.Move(tmpPath, target, overwrite: true)`
+4. `FileShare.ReadWrite` 명시로 동시 읽기 허용
+5. Bind 진입 시 `LoadFromDiskAsync` 호출 → 캐시 존재 시 즉시 렌더
+
+**규칙**:
+- LLM 생성 결과 영속화: `{원본경로}.{확장자}.json` 페어링 파일 패턴
+- 원자적 교체: `.tmp` 파일에 쓰기 후 `File.Move` overwrite=true
+- `FileShare.ReadWrite` 명시로 동시 접근 안전 보장
+- Level: 1
+
+---
+
+## L-504: WebView2 contextmenu 우클릭 메뉴 패턴 (2026-05-22)
+
+**문제**: WPF ContextMenu는 WebView2 HWND 위에 표시 불가(Airspace z-order 문제, L-490 연관). 우클릭 메뉴를 WPF에서 구현하면 WebView2 영역에서 표시되지 않음.
+
+**해결**:
+```javascript
+// HTML 내부에서 contextmenu 구현
+svg.on("contextmenu", (event, d) => {
+    event.preventDefault();  // 브라우저 기본 메뉴 억제
+    event.stopPropagation();
+    // 절대 위치 div 메뉴 표시
+    ctxMenu.style.left = `${event.clientX}px`;
+    ctxMenu.style.top = `${event.clientY}px`;
+    ctxMenu.style.display = "block";
+    currentContextNode = d;
+});
+```
+
+**규칙**:
+- WebView2 우클릭 메뉴: HTML 내부 contextmenu 이벤트 + `preventDefault()` + 절대 위치 div
+- WPF ContextMenu는 WebView2 Airspace로 사용 불가 (L-490 강화)
+- Level: 1
+
+---
+
+## L-505: Bind 시그니처 확장 패턴 — 복합 객체 단일 파라미터 추가 (2026-05-22)
+
+**문제**: Bind(topics, summaries, rootTitle) 시그니처에 recordingPath 추가 시 호출부 2곳 모두 수정 필요. 파라미터 수 증가 시 유지 보수성 저하.
+
+**해결**:
+- `RecordingInfo? recording` 객체를 첫 파라미터로 추가
+- 내부에서 `recording?.FilePath`, `recording?.IsLiveRecording` 등 필요 필드 추출
+- 기존 `topics, summaries, rootTitle` 파라미터 유지 → 호출부 변경 최소화
+
+**규칙**:
+- 새 파라미터 추가 시 복합 객체로 묶어 단일 추가 원칙
+- 내부에서 필드 추출, 호출부 최소 변경
+- `IsLiveRecording == true`이면 `recordingPath = null` (라이브 녹음은 디스크 저장 없음)
+- Level: 1
+
+---
+
+## L-506: WPF IsVisible 렌더 타이밍 함정 — ViewModel 단일 진실 원천 사용 필수 (2026-05-22)
+
+**문제**: `MindMapOverlayInstance.IsVisible`은 WPF 렌더 타이밍에 의존하여 PropertyChanged 발화 직후 `false`일 수 있음. 이 조건으로 early return하면 마인드맵이 선택 변경에 반응하지 않음.
+
+**해결**:
+```csharp
+// ❌ 잘못: WPF 렌더 타이밍 의존
+if (!MindMapOverlayInstance.IsVisible) return;
+
+// ✅ 올바름: ViewModel 단일 진실 원천
+if (_oneNoteViewModel?.IsMindMapVisible != true) return;
+```
+
+**규칙**:
+- WPF 요소의 `.IsVisible`은 렌더 타이밍 의존 — PropertyChanged 직후 `false` 가능
+- 상태 플래그는 반드시 ViewModel 프로퍼티를 단일 진실 원천으로 사용
+- Level: 2
+
+---
+
+## L-507: PropertyChanged 재등록 패턴 — CloseRequested 해제 후 토글 ON 시 재등록 (2026-05-22)
+
+**문제**: CloseRequested 콜백에서 ViewModel.PropertyChanged를 `-=` 해제한 후, 오버레이 재토글 ON 시 Loaded 이벤트가 재발화되지 않아 PropertyChanged 등록이 누락됨. 마인드맵이 녹음 선택 변경에 반응하지 않게 됨.
+
+**해결**:
+```csharp
+// 토글 ON 분기에서
+viewModel.PropertyChanged -= OnViewModelPropertyChanged_ForMindMap;  // 중복 방지
+viewModel.PropertyChanged += OnViewModelPropertyChanged_ForMindMap;  // 재등록
+```
+
+**규칙**:
+- 구독 해제 후 재구독 필요 시: 토글 ON 분기에서 `-=` 먼저 (중복 방지) + `+=` 재등록
+- Loaded 이벤트 재발화에 의존하지 않는다
+- Level: 2
+
+---
+
+## L-508: BE→FE→통합 3Wave 패턴 심화 — 7파일 640줄 역라우팅 0회 (2026-05-22)
+
+**문제**: 백엔드 서비스 + HTML/JS 프론트엔드 + WPF 통합 레이어 동시 수정 시 의존성 순서 미준수로 충돌 위험.
+
+**해결** (radial 사이클 실증):
+1. **Wave1** (BE): `MindMapTreeService.cs` + `MindMapTreeFile.cs` — 서비스 인터페이스/모델 확정
+2. **Wave2** (FE): `mindmap.html` + `d3.v7.min.js` + csproj — HTML/JS 구현
+3. **Wave3-1** (통합): `MindMapOverlay.xaml.cs` — WebView2 바인딩 + WebMessage 처리
+4. **Wave3-2** (통합): `MainWindow.OneNote.cs` — ViewModel PropertyChanged 재등록
+
+**규칙**:
+- BE 서비스/모델 먼저 확정 → FE HTML/JS 구현 → WPF 통합 바인딩 순서
+- 각 Wave가 이전 Wave의 인터페이스에 의존 — 의존성 방향 준수 시 충돌 없음
+- L-499(rev3 Wave 패턴) + L-439(다파일 Wave) 심화 적용
+- Level: 1
+
+---
+
+## L-509: d3 바이너리 csproj Content Include 패턴 (2026-05-22)
+
+**문제**: WebView2 로컬 리소스로 JS 파일을 서빙할 때 csproj Content Include가 없으면 빌드 출력 디렉토리에 복사되지 않아 런타임에 파일 없음 오류 발생.
+
+**해결**:
+```xml
+<!-- csproj에 추가 -->
+<Content Include="mAIx\Resources\d3.v7.min.js">
+  <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+</Content>
+<!-- 제거된 파일 항목 삭제 -->
+<!-- markmap-*.js Content Include 3개 제거 -->
+```
+
+**규칙**:
+- WebView2 로컬 리소스: csproj `<Content Include>` + `CopyToOutputDirectory=Always` 필수
+- 바이너리 파일 Add 후 반드시 csproj 확인 (git에 추가되어도 빌드에 포함 안 될 수 있음)
+- 구버전 Content Include 제거 + 신규 추가 동시 처리
+- Level: 1
+
+---
+
+## L-510: WebView2 UI 실측 보류 2회 패턴 — 커밋 메시지 명시 의무 심화 (2026-05-22)
+
+**문제**: WebView2 내부 d3 SVG, contextmenu, 노드 편집 등은 FlaUI WPF 자동화로 도달 불가. rev3에서 L-496으로 기록했으나 radial 사이클에서 동일 패턴 재발생(2회).
+
+**규칙**:
+- WebView2 내부 인터랙션은 정적 grep으로 충분 (런타임 자동화 도달 불가)
+- **사용자 UI 실측 보류 항목은 otest 결과 + 커밋 메시지에 명시 의무** (rev3 L-496 심화)
+- 2회 발생 → Level 2 (L-496 Level 1에서 승급)
+- Level: 2
+
+---
+
+## L-511: result.json 사이클 간 잔존 위험 — 진입 시 내용 검증 필수 (2026-05-22)
+
+**문제**: 이전 사이클(rev3)의 `odone-1_result.json`이 `status='completed'`로 잔존하여 현재 radial 사이클 odone 진입 시 "이미 완료된 것"으로 오판할 위험. 실제로는 다른 작업의 결과였음.
+
+**해결**:
+- 진입 시 result.json의 `substeps_completed` 내용과 현재 작업 일치 여부 대조
+- 일치하지 않으면 result.json 초기화 후 처음부터 실행
+- 사이클 종료 시 `/clear` 또는 세션 재시작 권고
+
+**규칙**:
+- result.json status='completed'이어도 substeps 내용과 현재 작업 대조 필수
+- 불일치 시 즉시 초기화 (이전 사이클 결과 재활용 금지)
+- Level: 2

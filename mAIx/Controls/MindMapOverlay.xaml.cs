@@ -1,4 +1,4 @@
-// WebView2 + Markmap으로 STT/MAP/요약 데이터를 마인드맵으로 렌더링하는 오버레이 컨트롤
+// WebView2 + D3 radial로 STT/MAP/요약 데이터를 마인드맵으로 렌더링하는 오버레이 컨트롤
 using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
@@ -6,6 +6,7 @@ using System.Collections.Specialized;
 using System.IO;
 using System.Linq;
 using System.Text;
+using System.Text.Json;
 using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Controls;
@@ -54,6 +55,9 @@ public partial class MindMapOverlay : UserControl
     // LLM 트리 서비스 + 캐시 (X2 — LLM 패스스루)
     private IMindMapTreeService? _treeService;
     private string? _llmTreeMarkdown;
+
+    // 현재 바인딩된 녹음 파일 경로 (라이브 녹음 시 null)
+    private string? _currentRecordingPath;
 
     // ThemeService 구독 핸들러 (Unbind에서 해제 필수)
     private EventHandler<ApplicationTheme>? _themeHandler;
@@ -219,47 +223,89 @@ public partial class MindMapOverlay : UserControl
     }
 
     /// <summary>
-    /// 컬렉션 데이터 바인딩 — TopicSegments/MinuteSummaries CollectionChanged 구독
+    /// 컬렉션 데이터 바인딩 — TopicSegments/MinuteSummaries CollectionChanged 구독.
+    /// recording이 null이면 라이브 녹음으로 간주하여 디스크 캐시 로드를 건너뜁니다.
     /// </summary>
-    public void Bind(
+    public async void Bind(
+        RecordingInfo? recording,
         ObservableCollection<TopicSegment>? topics,
         ObservableCollection<MinuteSummaryEntry>? summaries,
         string rootTitle)
     {
-        // [MMF-실행] 옛 녹음파일 캐시 무효화 — 할루시네이션 방지
-        if (_treeService != null)
+        try
         {
-            _treeService.Reset();
-            _log.Info("[MMF-실행] Bind — TreeService Reset 호출");
-        }
-        _llmTreeMarkdown = null;  // 옛 응답 즉시 무효화
-
-        Unbind();
-        _topicSegments = topics;
-        _minuteSummaries = summaries;
-        _rootTitle = string.IsNullOrWhiteSpace(rootTitle) ? "녹음 데이터" : rootTitle;
-
-        if (_topicSegments != null)
-            _topicSegments.CollectionChanged += OnDataChanged;
-        if (_minuteSummaries != null)
-            _minuteSummaries.CollectionChanged += OnDataChanged;
-
-        // LLM 트리 서비스 구독 (X2 — DI에서 싱글턴 가져오기)
-        _treeService = (Application.Current as App)?.ServiceProvider?.GetService<IMindMapTreeService>();
-        if (_treeService != null)
-        {
-            _treeService.TreeMarkdownGenerated += OnTreeMarkdownGenerated;
-            // 캐시된 응답이 있으면 즉시 사용
-            if (!string.IsNullOrWhiteSpace(_treeService.LastTreeMarkdown))
+            // 이전 트리 즉시 캔버스 비우기 (캔버스 잔존 0초)
+            if (_isWebViewReady)
             {
-                _llmTreeMarkdown = _treeService.LastTreeMarkdown;
+                try
+                {
+                    await MindMapWebView.CoreWebView2.ExecuteScriptAsync(
+                        "window.clearMindMap && window.clearMindMap()").ConfigureAwait(true);
+                    _log.Info("[MMRD-실행] Bind 진입 — clearMindMap 호출");
+                }
+                catch (Exception ex) { _log.Error(ex, "[MMRD-실행] clearMindMap 실패"); }
             }
-            // 첫 LLM 트리 요청
-            RequestTreeUpdate();
-        }
 
-        TriggerRender();
-        _log.Info($"[AC-MM-실행] 마인드맵 바인딩 완료 — rootTitle={_rootTitle}");
+            // [MMF-실행] 옛 녹음파일 캐시 무효화 — 할루시네이션 방지
+            if (_treeService != null)
+            {
+                _treeService.Reset();
+                _log.Info("[MMF-실행] Bind — TreeService Reset 호출");
+            }
+            _llmTreeMarkdown = null;  // 옛 응답 즉시 무효화
+
+            Unbind();
+            _topicSegments = topics;
+            _minuteSummaries = summaries;
+            _rootTitle = string.IsNullOrWhiteSpace(rootTitle) ? "녹음 데이터" : rootTitle;
+
+            if (_topicSegments != null)
+                _topicSegments.CollectionChanged += OnDataChanged;
+            if (_minuteSummaries != null)
+                _minuteSummaries.CollectionChanged += OnDataChanged;
+
+            // 현재 녹음 경로 설정 (라이브 녹음이면 null)
+            var recordingPath = recording?.IsLiveRecording == true ? null : recording?.FilePath;
+            _currentRecordingPath = recordingPath;
+
+            // LLM 트리 서비스 구독 (X2 — DI에서 싱글턴 가져오기)
+            _treeService = (Application.Current as App)?.ServiceProvider?.GetService<IMindMapTreeService>();
+            if (_treeService != null)
+            {
+                _treeService.SetCurrentRecording(recordingPath);
+                _treeService.TreeMarkdownGenerated += OnTreeMarkdownGenerated;
+                _log.Info($"[MMRD-실행] Bind — recordingPath='{recordingPath ?? "<live>"}'");
+
+                // 디스크 캐시 즉시 로드 (있으면 즉시 렌더)
+                if (!string.IsNullOrWhiteSpace(recordingPath))
+                {
+                    var diskFile = await _treeService.LoadFromDiskAsync(recordingPath).ConfigureAwait(true);
+                    if (diskFile != null && !string.IsNullOrWhiteSpace(diskFile.Markdown))
+                    {
+                        _llmTreeMarkdown = diskFile.Markdown;
+                        _log.Info($"[MMRD-실행] Bind — 디스크 캐시 로드 완료 (isUserEdited={diskFile.IsUserEdited})");
+                        if (_isWebViewReady)
+                            await RenderAsync().ConfigureAwait(true);
+                    }
+                }
+
+                // 캐시된 응답이 있으면 즉시 사용 (디스크 캐시 없는 경우 폴백)
+                if (_llmTreeMarkdown == null && !string.IsNullOrWhiteSpace(_treeService.LastTreeMarkdown))
+                {
+                    _llmTreeMarkdown = _treeService.LastTreeMarkdown;
+                }
+
+                // 첫 LLM 트리 요청
+                RequestTreeUpdate();
+            }
+
+            TriggerRender();
+            _log.Info($"[AC-MM-실행] 마인드맵 바인딩 완료 — rootTitle={_rootTitle}");
+        }
+        catch (Exception ex)
+        {
+            _log.Error(ex, "[MMRD-실행] Bind 실패");
+        }
     }
 
     /// <summary>
@@ -286,9 +332,11 @@ public partial class MindMapOverlay : UserControl
         if (_treeService != null)
         {
             _treeService.TreeMarkdownGenerated -= OnTreeMarkdownGenerated;
+            _treeService.SetCurrentRecording(null);
             _treeService = null;
         }
         _llmTreeMarkdown = null;
+        _currentRecordingPath = null;
 
         _topicSegments = null;
         _minuteSummaries = null;
@@ -476,23 +524,76 @@ public partial class MindMapOverlay : UserControl
     }
 
     /// <summary>
-    /// 이슈 #4 — HTML 내부 X 버튼 PostMessage 수신 → CloseRequested 트리거
+    /// HTML WebMessage 수신 처리 — JSON 스키마: {type:'close'} / {type:'tree_edited',markdown:'...'}
+    /// 레거시 단순 문자열 'close' 호환 유지
     /// </summary>
     private void OnWebMessageReceived(object? sender, CoreWebView2WebMessageReceivedEventArgs e)
     {
         try
         {
             var msg = e.TryGetWebMessageAsString();
-            _log.Info($"[AC-MMR-실행] WebMessageReceived 진입 — msg='{msg}'");
-            if (msg == "close")
+            _log.Info($"[MMRD-실행] WebMessageReceived 진입 — msg='{(msg?.Length > 80 ? msg[..80] + "..." : msg)}'");
+            if (string.IsNullOrWhiteSpace(msg)) return;
+
+            // JSON 분기 (graceful — 첫 글자 '{' 판정)
+            if (msg.TrimStart().StartsWith("{"))
             {
-                _log.Info("[AC-MMR-실행] HTML X 버튼/ESC close 수신 → CloseRequested 호출");
-                Dispatcher.Invoke(() => CloseRequested?.Invoke());
+                using var doc = JsonDocument.Parse(msg);
+                var type = doc.RootElement.GetProperty("type").GetString();
+
+                if (type == "close")
+                {
+                    _log.Info("[MMRD-실행] WebMessage close 수신 → CloseRequested 호출");
+                    Dispatcher.Invoke(() => CloseRequested?.Invoke());
+                }
+                else if (type == "tree_edited")
+                {
+                    var markdown = doc.RootElement.GetProperty("markdown").GetString() ?? "";
+                    _log.Info($"[MMRD-실행] WebMessage tree_edited — {markdown.Length}자");
+                    _ = HandleTreeEditedAsync(markdown);
+                }
+                else
+                {
+                    _log.Warn($"[MMRD-실행] 알 수 없는 WebMessage type='{type}'");
+                }
+            }
+            else
+            {
+                // 레거시 단순 문자열 호환 (rev4 잔존 시)
+                if (msg == "close")
+                {
+                    _log.Info("[MMRD-실행] WebMessage close (legacy) 수신 → CloseRequested 호출");
+                    Dispatcher.Invoke(() => CloseRequested?.Invoke());
+                }
             }
         }
         catch (Exception ex)
         {
-            _log.Error(ex, "[AC-MMP-실행] WebMessageReceived 처리 실패");
+            _log.Error(ex, "[MMRD-실행] OnWebMessageReceived 처리 실패");
+        }
+    }
+
+    /// <summary>
+    /// tree_edited WebMessage 처리 — 사용자 편집 마크다운을 디스크에 저장
+    /// </summary>
+    private async Task HandleTreeEditedAsync(string markdown)
+    {
+        try
+        {
+            _llmTreeMarkdown = markdown;
+            if (!string.IsNullOrWhiteSpace(_currentRecordingPath) && _treeService != null)
+            {
+                await _treeService.SaveUserEditedAsync(_currentRecordingPath, markdown).ConfigureAwait(false);
+                _log.Info("[MMRD-실행] 사용자 편집 디스크 저장 완료");
+            }
+            else
+            {
+                _log.Info("[MMRD-실행] 사용자 편집 — 라이브 녹음이거나 서비스 없음, 디스크 저장 건너뜀");
+            }
+        }
+        catch (Exception ex)
+        {
+            _log.Error(ex, "[MMRD-실행] HandleTreeEditedAsync 실패");
         }
     }
 

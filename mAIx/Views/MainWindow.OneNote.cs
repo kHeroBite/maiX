@@ -568,6 +568,10 @@ namespace mAIx.Views
                     {
                         rootTitle = recording?.FileName ?? "녹음 데이터";
                     }
+                    // [MMRD-실행] PropertyChanged 재등록 — CloseRequested 콜백에서 해제되므로 토글 ON 시 재등록 필수
+                    _oneNoteViewModel.PropertyChanged -= OnViewModelPropertyChanged_ForMindMap;
+                    _oneNoteViewModel.PropertyChanged += OnViewModelPropertyChanged_ForMindMap;
+                    _oneNoteLog.Info("[MMRD-실행] 토글 ON — PropertyChanged 등록");
                     MindMapOverlayInstance.CloseRequested = () =>
                     {
                         try
@@ -587,6 +591,7 @@ namespace mAIx.Views
                         }
                     };
                     MindMapOverlayInstance.Bind(
+                        _oneNoteViewModel.SelectedRecording,
                         _oneNoteViewModel.TopicSegments,
                         _oneNoteViewModel.MinuteSummaries,
                         rootTitle);
@@ -614,6 +619,8 @@ namespace mAIx.Views
         {
             try
             {
+                // [MMRD-실행] PropertyChanged 발화 감지
+                _oneNoteLog.Debug($"[MMRD-실행] PropertyChanged 발화 — PropertyName='{e.PropertyName}'");
                 if (e.PropertyName == nameof(OneNoteViewModel.SelectedRecording)
                     || e.PropertyName == nameof(OneNoteViewModel.SelectedPage))
                 {
@@ -634,13 +641,20 @@ namespace mAIx.Views
         {
             try
             {
-                if (MindMapOverlayInstance == null || !MindMapOverlayInstance.IsVisible) return;
+                // [MMRD-실행] OnSelectedRecordingChangedForMindMap 진입
+                // 가설 B 수정: MindMapOverlayInstance.IsVisible 대신 ViewModel.IsMindMapVisible 사용
+                // (IsVisible은 WPF 렌더 타이밍에 따라 PropertyChanged 직후 false일 수 있음)
+                var isMindMapOpen = _oneNoteViewModel?.IsMindMapVisible ?? false;
+                _oneNoteLog.Info($"[MMRD-실행] OnSelectedRecordingChangedForMindMap 진입 — IsMindMapVisible={isMindMapOpen}, IsVisible={MindMapOverlayInstance?.IsVisible}");
+                if (MindMapOverlayInstance == null || !isMindMapOpen) return;
 
                 var newTitle = ResolveRootTitleForMindMap();
-                _oneNoteLog.Info($"[MMT-실행] 녹음 전환 — Bind 재호출, rootTitle='{newTitle}'");
+                // [MMRD-실행] Bind 재호출 직전
+                _oneNoteLog.Info($"[MMRD-실행] 녹음 전환 — Bind 재호출, rootTitle='{newTitle}'");
 
                 MindMapOverlayInstance.Unbind();
                 MindMapOverlayInstance.Bind(
+                    _oneNoteViewModel?.SelectedRecording,
                     _oneNoteViewModel?.TopicSegments ?? new ObservableCollection<TopicSegment>(),
                     _oneNoteViewModel?.MinuteSummaries ?? new ObservableCollection<MinuteSummaryEntry>(),
                     newTitle);

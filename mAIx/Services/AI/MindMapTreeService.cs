@@ -1,6 +1,7 @@
-// LLM(GPT-4o) HTTP 호출로 마인드맵 무한 트리 마크다운을 생성하는 서비스
+// LLM(GPT-4o) HTTP 호출로 마인드맵 무한 트리 마크다운을 생성하며 디스크 영속화를 지원하는 서비스
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Net.Http;
 using System.Net.Http.Json;
 using System.Text;
@@ -37,6 +38,26 @@ public interface IMindMapTreeService : IDisposable
     /// 캐시 및 디바운스 무효화 — 녹음 파일 전환 시 호출하여 할루시네이션 방지
     /// </summary>
     void Reset();
+
+    /// <summary>
+    /// 현재 녹음 파일 경로 설정 — 디스크 영속화 대상 지정 (null이면 라이브 녹음 또는 미설정)
+    /// </summary>
+    void SetCurrentRecording(string? path);
+
+    /// <summary>
+    /// 디스크에서 마인드맵 JSON 파일 로드 — 파일 없으면 null 반환
+    /// </summary>
+    Task<MindMapTreeFile?> LoadFromDiskAsync(string recordingPath, CancellationToken ct = default);
+
+    /// <summary>
+    /// 마인드맵 마크다운을 디스크에 저장 — .mindmap.json 파일로 원자적 교체
+    /// </summary>
+    Task SaveToDiskAsync(string recordingPath, string markdown, bool isUserEdited = false, CancellationToken ct = default);
+
+    /// <summary>
+    /// 사용자 편집 마크다운 저장 — isUserEdited=true로 SaveToDiskAsync 호출
+    /// </summary>
+    Task SaveUserEditedAsync(string recordingPath, string markdown, CancellationToken ct = default);
 }
 
 /// <summary>
@@ -53,6 +74,7 @@ public sealed class MindMapTreeService : IMindMapTreeService
     private readonly SemaphoreSlim _httpLock = new(1, 1);
     private CancellationTokenSource? _debounceCts;
     private string? _lastTreeMarkdown;
+    private string? _currentRecordingPath;
     private readonly TimeSpan _debounce = TimeSpan.FromSeconds(5);
     private bool _disposed;
 
@@ -110,6 +132,19 @@ public sealed class MindMapTreeService : IMindMapTreeService
         IReadOnlyList<string> minuteSummaries,
         CancellationToken ct)
     {
+        // 디스크 확인 — isUserEdited=true면 LLM skip (사용자 편집 보존)
+        if (!string.IsNullOrWhiteSpace(_currentRecordingPath))
+        {
+            var existing = await LoadFromDiskAsync(_currentRecordingPath, ct).ConfigureAwait(false);
+            if (existing?.IsUserEdited == true)
+            {
+                _log.Info("[MMRD-skip] LLM 갱신 skip — isUserEdited=true (사용자 편집 보존)");
+                // 사용자 편집 마크다운 그대로 발화 (UI 동기화)
+                TreeMarkdownGenerated?.Invoke(this, existing.Markdown);
+                return;
+            }
+        }
+
         // 빈입력 skip — LLM 호출 비용 절감 + 할루시네이션 방지
         var realTopicCount = topics.Count(t => !t.IsSilence && !string.IsNullOrWhiteSpace(t.Title));
         var realSummaryCount = minuteSummaries.Count(s => !string.IsNullOrWhiteSpace(s));
@@ -214,8 +249,14 @@ public sealed class MindMapTreeService : IMindMapTreeService
             }
 
             _lastTreeMarkdown = markdown;
-            _log.Info($"[MMT-실행] LLM 트리 생성 완료 — 줄수={markdown.Split('\n').Length}");
+            _log.Info($"[MMRD-실행] LLM 트리 생성 완료 — 줄수={markdown.Split('\n').Length}");
             TreeMarkdownGenerated?.Invoke(this, markdown);
+
+            // 자동 디스크 저장 (라이브 녹음은 _currentRecordingPath null이면 skip)
+            if (!string.IsNullOrWhiteSpace(_currentRecordingPath))
+            {
+                await SaveToDiskAsync(_currentRecordingPath, markdown, isUserEdited: false, ct).ConfigureAwait(false);
+            }
         }
         catch (OperationCanceledException)
         {
@@ -279,8 +320,72 @@ public sealed class MindMapTreeService : IMindMapTreeService
     {
         _debounceCts?.Cancel();
         _lastTreeMarkdown = null;
-        _log.Info("[MMF-실행] MindMapTreeService.Reset — 캐시+디바운스 무효화");
+        _currentRecordingPath = null;
+        _log.Info("[MMF-실행] MindMapTreeService.Reset — 캐시+디바운스+녹음경로 무효화");
     }
+
+    /// <inheritdoc/>
+    public void SetCurrentRecording(string? path)
+    {
+        // 현재 녹음 파일 경로 설정 — 디스크 영속화 대상 지정
+        _currentRecordingPath = path;
+        _log.Info($"[MMRD-실행] SetCurrentRecording — '{path ?? "<null/live>"}'");
+    }
+
+    /// <inheritdoc/>
+    public async Task<MindMapTreeFile?> LoadFromDiskAsync(string recordingPath, CancellationToken ct = default)
+    {
+        // 디스크에서 마인드맵 JSON 파일 로드
+        if (string.IsNullOrWhiteSpace(recordingPath)) return null;
+        var jsonPath = recordingPath + ".mindmap.json";
+        if (!File.Exists(jsonPath)) return null;
+        try
+        {
+            using var fs = new FileStream(jsonPath, FileMode.Open, FileAccess.Read, FileShare.Read);
+            var file = await JsonSerializer.DeserializeAsync<MindMapTreeFile>(fs, cancellationToken: ct).ConfigureAwait(false);
+            _log.Info($"[MMRD-실행] LoadFromDisk — '{jsonPath}' isUserEdited={file?.IsUserEdited}");
+            if (file != null && !string.IsNullOrWhiteSpace(file.Markdown))
+            {
+                _lastTreeMarkdown = file.Markdown;
+            }
+            return file;
+        }
+        catch (Exception ex)
+        {
+            _log.Error(ex, $"[MMRD-실행] LoadFromDisk 실패 — {jsonPath}");
+            return null;
+        }
+    }
+
+    /// <inheritdoc/>
+    public async Task SaveToDiskAsync(string recordingPath, string markdown, bool isUserEdited = false, CancellationToken ct = default)
+    {
+        // 마인드맵 마크다운을 디스크에 원자적 교체로 저장
+        if (string.IsNullOrWhiteSpace(recordingPath)) return;
+        var jsonPath = recordingPath + ".mindmap.json";
+        try
+        {
+            var file = new MindMapTreeFile { Markdown = markdown, IsUserEdited = isUserEdited, UpdatedAt = DateTime.UtcNow };
+            var tmpPath = jsonPath + ".tmp";
+            using (var fs = new FileStream(tmpPath, FileMode.Create, FileAccess.Write, FileShare.None))
+            {
+                await JsonSerializer.SerializeAsync(fs, file, new JsonSerializerOptions { WriteIndented = false }, ct).ConfigureAwait(false);
+            }
+            // 원자적 교체
+            if (File.Exists(jsonPath)) File.Delete(jsonPath);
+            File.Move(tmpPath, jsonPath);
+            _log.Info($"[MMRD-실행] SaveToDisk — '{jsonPath}' isUserEdited={isUserEdited} markdown={markdown.Length}자");
+        }
+        catch (Exception ex)
+        {
+            _log.Error(ex, $"[MMRD-실행] SaveToDisk 실패 — {jsonPath}");
+        }
+    }
+
+    /// <inheritdoc/>
+    public Task SaveUserEditedAsync(string recordingPath, string markdown, CancellationToken ct = default)
+        // 사용자 편집 마크다운 저장 — isUserEdited=true
+        => SaveToDiskAsync(recordingPath, markdown, isUserEdited: true, ct);
 
     /// <inheritdoc/>
     public void Dispose()
