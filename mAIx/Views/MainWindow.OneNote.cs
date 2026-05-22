@@ -551,6 +551,19 @@ namespace mAIx.Views
                 if (newState)
                 {
                     var rootTitle = _oneNoteViewModel.SelectedRecording?.FileName ?? "녹음 데이터";
+                    MindMapOverlayInstance.CloseRequested = () =>
+                    {
+                        try
+                        {
+                            if (_oneNoteViewModel != null) _oneNoteViewModel.IsMindMapVisible = false;
+                            MindMapOverlayInstance.Unbind();
+                            _oneNoteLog.Info("[AC-MMX-실행] CloseRequested 콜백 — 오버레이 OFF");
+                        }
+                        catch (Exception cbEx)
+                        {
+                            _oneNoteLog.Error(cbEx, "[AC-MMX-실행] CloseRequested 콜백 실패");
+                        }
+                    };
                     MindMapOverlayInstance.Bind(
                         _oneNoteViewModel.TopicSegments,
                         _oneNoteViewModel.MinuteSummaries,

@@ -4,9 +4,12 @@
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
              xmlns:wv2="clr-namespace:Microsoft.Web.WebView2.Wpf;assembly=Microsoft.Web.WebView2.Wpf"
+             xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
              mc:Ignorable="d"
              d:DesignHeight="600" d:DesignWidth="800"
-             Background="#F01E1E1E">
+             Background="#F01E1E1E"
+             Focusable="True"
+             PreviewKeyDown="MindMapOverlay_PreviewKeyDown">
     <Grid>
         <wv2:WebView2 x:Name="MindMapWebView"/>
         <TextBlock x:Name="ErrorMessage"
@@ -17,5 +20,17 @@
                    VerticalAlignment="Center"
                    TextAlignment="Center"
                    Padding="20"/>
+        <!-- 우상단 X 닫기 버튼 (Z-order 가장 위) -->
+        <Button x:Name="CloseButton"
+                Click="CloseButton_Click"
+                HorizontalAlignment="Right"
+                VerticalAlignment="Top"
+                Margin="0,8,12,0"
+                Width="32" Height="32"
+                Background="#80000000"
+                BorderThickness="0"
+                ToolTip="마인드맵 닫기 (ESC)">
+            <ui:SymbolIcon Symbol="Dismiss24" FontSize="14" Foreground="White"/>
+        </Button>
     </Grid>
 </UserControl>

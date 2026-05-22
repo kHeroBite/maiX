@@ -8,6 +8,7 @@ using System.Text;
 using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Input;
 using System.Windows.Threading;
 using Microsoft.Web.WebView2.Core;
 using NLog;
@@ -30,6 +31,11 @@ public partial class MindMapOverlay : UserControl
     private ObservableCollection<MinuteSummaryEntry>? _minuteSummaries;
     private string _rootTitle = "녹음 데이터";
 
+    /// <summary>
+    /// 닫기 콜백 — 부모(MainWindow.OneNote.cs)에서 등록
+    /// </summary>
+    public Action? CloseRequested { get; set; }
+
     public MindMapOverlay()
     {
         InitializeComponent();
@@ -38,12 +44,53 @@ public partial class MindMapOverlay : UserControl
             try
             {
                 await InitializeAsync();
+                Focus();
             }
             catch (Exception ex)
             {
                 _log.Error(ex, "[AC-MM-실행] MindMapOverlay Loaded 핸들러 실패");
             }
         };
+        IsVisibleChanged += (s, e) =>
+        {
+            if ((bool)e.NewValue) Focus();
+        };
+    }
+
+    /// <summary>
+    /// 우상단 X 버튼 클릭 → CloseRequested 콜백 호출
+    /// </summary>
+    private void CloseButton_Click(object sender, RoutedEventArgs e)
+    {
+        try
+        {
+            _log.Info("[AC-MMX-실행] X 닫기 버튼 클릭");
+            CloseRequested?.Invoke();
+        }
+        catch (Exception ex)
+        {
+            _log.Error(ex, "[AC-MMX-실행] CloseButton_Click 실패");
+        }
+    }
+
+    /// <summary>
+    /// ESC 키 감지 → CloseRequested 콜백 호출
+    /// </summary>
+    private void MindMapOverlay_PreviewKeyDown(object sender, KeyEventArgs e)
+    {
+        try
+        {
+            if (e.Key == Key.Escape)
+            {
+                _log.Info("[AC-MMX-실행] ESC 키 감지 — 닫기 요청");
+                CloseRequested?.Invoke();
+                e.Handled = true;
+            }
+        }
+        catch (Exception ex)
+        {
+            _log.Error(ex, "[AC-MMX-실행] PreviewKeyDown 실패");
+        }
     }
 
     /// <summary>
