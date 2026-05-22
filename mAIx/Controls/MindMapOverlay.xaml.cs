@@ -52,6 +52,7 @@ public partial class MindMapOverlay : UserControl
     // ThemeService 구독 핸들러 (Unbind에서 해제 필수)
     private EventHandler<ApplicationTheme>? _themeHandler;
     private EventHandler<CoreWebView2WebMessageReceivedEventArgs>? _webMessageHandler;
+    private bool _webMessageHooked;
 
     /// <summary>
     /// 닫기 콜백 — 부모(MainWindow.OneNote.cs)에서 등록
@@ -125,6 +126,16 @@ public partial class MindMapOverlay : UserControl
             var env = await CoreWebView2Environment.CreateAsync();
             await MindMapWebView.EnsureCoreWebView2Async(env);
 
+            // WebMessageReceived 핸들러 등록 — 단 한 번만 (재진입 가드)
+            MindMapWebView.CoreWebView2.Settings.IsWebMessageEnabled = true;
+            if (!_webMessageHooked)
+            {
+                _webMessageHandler = OnWebMessageReceived;
+                MindMapWebView.CoreWebView2.WebMessageReceived += _webMessageHandler;
+                _webMessageHooked = true;
+                _log.Info("[AC-MMR-실행] WebMessageReceived 핸들러 등록 완료");
+            }
+
             var resourcePath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Resources");
             MindMapWebView.CoreWebView2.SetVirtualHostNameToFolderMapping(
                 "mindmap.local", resourcePath, CoreWebView2HostResourceAccessKind.Allow);
@@ -133,10 +144,6 @@ public partial class MindMapOverlay : UserControl
             {
                 _isWebViewReady = true;
                 _log.Info("[AC-MM-실행] WebView2 초기화 완료 — mindmap.html 로드");
-
-                // WebMessageReceived 핸들러 등록 (HTML 내부 X 버튼 → close 메시지)
-                _webMessageHandler = OnWebMessageReceived;
-                MindMapWebView.CoreWebView2.WebMessageReceived += _webMessageHandler;
 
                 // ThemeService 구독 + 초기 테마 적용
                 _themeHandler = async (_, theme) =>
@@ -241,6 +248,7 @@ public partial class MindMapOverlay : UserControl
                 _log.Warn(ex, "[AC-MMP-실행] WebMessageReceived 해제 실패");
             }
             _webMessageHandler = null;
+            _webMessageHooked = false;
         }
 
         _topicSegments = null;
@@ -285,7 +293,7 @@ public partial class MindMapOverlay : UserControl
 
     /// <summary>
     /// TopicSegments 데이터로 Markmap 마크다운 트리 빌드
-    /// (이슈 #2 MinuteSummaries 노드 제거, #3 묵음 필터, #5 Keywords/Context L2 활용)
+    /// (이슈 5 회귀+개선 — Jaccard 0.5 그룹핑으로 중복 토픽 병합, 키워드 누적)
     /// </summary>
     private string BuildMarkdown()
     {
@@ -294,43 +302,56 @@ public partial class MindMapOverlay : UserControl
         sb.AppendLine();
 
         var hasTopics = _topicSegments != null && _topicSegments.Count > 0;
-
-        if (hasTopics)
+        if (!hasTopics)
         {
-            foreach (var ts in _topicSegments!)
+            return "# 녹음 데이터 대기 중\n\n- 녹음 시작 또는 파일 선택";
+        }
+
+        // 1단계 — 필터 통과 segment를 그룹으로 병합 (Title Jaccard 0.5)
+        var groups = new List<(string Representative, List<string> Keywords)>();
+        int totalSegments = 0, acceptedSegments = 0;
+
+        foreach (var ts in _topicSegments!)
+        {
+            totalSegments++;
+            if (ts.IsSilence) continue;
+            var title = !string.IsNullOrWhiteSpace(ts.Title) ? ts.Title : ts.BodyDisplay;
+            if (string.IsNullOrWhiteSpace(title)) continue;
+            var trimmed = title.Trim();
+            if (trimmed.Length <= 1) continue;
+            if (_silenceWords.Any(w => trimmed.Contains(w, StringComparison.OrdinalIgnoreCase))) continue;
+
+            acceptedSegments++;
+
+            var titleTokens = Tokenize(trimmed);
+            var keywords = FilterValidKeywords(ts.Keywords);
+
+            // 기존 그룹과 Jaccard 비교 — 첫 매칭(>= 0.5)에 병합
+            bool merged = false;
+            for (int i = 0; i < groups.Count; i++)
             {
-                // 이슈 #3 — IsSilence 플래그 필터
-                if (ts.IsSilence) continue;
-
-                var title = !string.IsNullOrWhiteSpace(ts.Title) ? ts.Title : ts.BodyDisplay;
-                if (string.IsNullOrWhiteSpace(title)) continue;
-
-                // 이슈 #3 — 1글자 이하 및 묵음 문자열 패턴 필터
-                var trimmed = title.Trim();
-                if (trimmed.Length <= 1) continue;
-                if (_silenceWords.Any(w => trimmed.Contains(w, StringComparison.OrdinalIgnoreCase))) continue;
-
-                sb.AppendLine($"- {EscapeMd(title)}");
-
-                // 이슈 #5 — Keywords L2 노드 (최대 3개, 2글자 이상, stopwords 제외)
-                if (ts.Keywords is { Count: > 0 })
+                var gTokens = Tokenize(groups[i].Representative);
+                if (Jaccard(titleTokens, gTokens) >= 0.5)
                 {
-                    var kws = ts.Keywords
-                        .Where(k => !string.IsNullOrWhiteSpace(k) && k.Length >= 2
-                                    && !_silenceWords.Contains(k.Trim())
-                                    && !_stopWords.Contains(k.Trim()))
-                        .Take(3)
-                        .ToList();
-                    foreach (var kw in kws)
-                        sb.AppendLine($"  - {EscapeMd(kw)}");
+                    MergeKeywordsUnique(groups[i].Keywords, keywords);
+                    merged = true;
+                    break;
                 }
-                // 이슈 #5 — Keywords 없으면 Context fallback (80자 트림)
-                else if (!string.IsNullOrWhiteSpace(ts.Context))
-                {
-                    var ctx = ts.Context.Trim();
-                    if (ctx.Length > 80) ctx = ctx[..80] + "…";
-                    sb.AppendLine($"  - {EscapeMd(ctx)}");
-                }
+            }
+            if (!merged)
+            {
+                groups.Add((trimmed, new List<string>(keywords)));
+            }
+        }
+
+        _log.Debug($"[AC-MMR-실행] BuildMarkdown — segments_total={totalSegments} accepted={acceptedSegments} groups={groups.Count}");
+
+        foreach (var g in groups)
+        {
+            sb.AppendLine($"- {EscapeMd(g.Representative)}");
+            foreach (var kw in g.Keywords.Take(5))
+            {
+                sb.AppendLine($"  - {EscapeMd(kw)}");
             }
         }
 
@@ -367,9 +388,10 @@ public partial class MindMapOverlay : UserControl
         try
         {
             var msg = e.TryGetWebMessageAsString();
+            _log.Info($"[AC-MMR-실행] WebMessageReceived 진입 — msg='{msg}'");
             if (msg == "close")
             {
-                _log.Info("[AC-MMP-실행] HTML X 버튼 클릭 (WebMessageReceived)");
+                _log.Info("[AC-MMR-실행] HTML X 버튼/ESC close 수신 → CloseRequested 호출");
                 Dispatcher.Invoke(() => CloseRequested?.Invoke());
             }
         }
@@ -381,4 +403,49 @@ public partial class MindMapOverlay : UserControl
 
     private static string EscapeMd(string s)
         => s.Replace("\n", " ").Replace("\r", "").Trim();
+
+    // === Helper 메서드 (이슈 5 — Jaccard + Keywords 누적) ===
+
+    private static HashSet<string> Tokenize(string s)
+    {
+        return new HashSet<string>(
+            s.Split(new[] { ' ', '\t', '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries)
+             .Select(t => t.Trim().ToLowerInvariant())
+             .Where(t => t.Length > 0),
+            StringComparer.OrdinalIgnoreCase);
+    }
+
+    private static double Jaccard(HashSet<string> a, HashSet<string> b)
+    {
+        if (a.Count == 0 && b.Count == 0) return 0.0;
+        var inter = a.Intersect(b, StringComparer.OrdinalIgnoreCase).Count();
+        var union = a.Union(b, StringComparer.OrdinalIgnoreCase).Count();
+        return union == 0 ? 0.0 : (double)inter / union;
+    }
+
+    private List<string> FilterValidKeywords(IEnumerable<string>? src)
+    {
+        if (src is null) return new List<string>();
+        return src
+            .Where(k => !string.IsNullOrWhiteSpace(k))
+            .Select(k => k.Trim())
+            .Where(k => k.Length >= 2
+                        && !_silenceWords.Contains(k)
+                        && !_stopWords.Contains(k))
+            .ToList();
+    }
+
+    private static void MergeKeywordsUnique(List<string> dst, IEnumerable<string> src)
+    {
+        var existing = new HashSet<string>(dst, StringComparer.OrdinalIgnoreCase);
+        foreach (var k in src)
+        {
+            var trimmed = k.Trim();
+            if (string.IsNullOrEmpty(trimmed)) continue;
+            if (existing.Add(trimmed))
+            {
+                dst.Add(trimmed);
+            }
+        }
+    }
 }

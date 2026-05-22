@@ -1,6 +1,6 @@
 <!-- WebView2에서 Markmap 마인드맵을 렌더링하는 셸 HTML -->
 <!DOCTYPE html>
-<html lang="ko">
+<html lang="ko" class="markmap-dark">
 <head>
 <meta charset="UTF-8">
 <title>MindMap</title>
@@ -26,7 +26,9 @@
   html, body { margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden; background: var(--bg-color); color: var(--text-color); }
   #mindmap { width: 100vw; height: 100vh; }
   /* Markmap 노드 색상 — 라이트/다크 자동 */
-  .markmap-node-text { fill: var(--text-color); }
+  /* foreignObject 안의 div가 노드 텍스트의 실제 렌더 컨테이너 */
+  .markmap-foreign { color: var(--text-color) !important; }
+  .markmap-foreign div { color: var(--text-color) !important; }
   .markmap-link { stroke: var(--line-color); }
   /* X 닫기 버튼 — 우상단 고정 */
   #closeBtn {
@@ -95,8 +97,10 @@
     try {
       if (mode === 'light') {
         document.documentElement.classList.add('theme-light');
+        document.documentElement.classList.remove('markmap-dark');
       } else {
         document.documentElement.classList.remove('theme-light');
+        document.documentElement.classList.add('markmap-dark');
       }
       console.log('Theme applied:', mode);
       // 마인드맵 재렌더 (스타일 갱신 보장)
@@ -112,13 +116,15 @@
 
   // X 버튼 클릭 → C#에 close 메시지 전달
   document.getElementById('closeBtn').addEventListener('click', () => {
+    console.log('[MMR] closeBtn clicked');
     try {
       if (window.chrome && window.chrome.webview) {
         window.chrome.webview.postMessage('close');
+        console.log('[MMR] postMessage(close) sent');
+      } else {
+        console.warn('[MMR] window.chrome.webview unavailable');
       }
-    } catch (e) {
-      console.error('postMessage close failed:', e);
-    }
+    } catch (e) { console.error('[MMR] postMessage failed:', e); }
   });
 
   // ESC 키 → C#에 close 메시지 전달 (이중 안전망)
