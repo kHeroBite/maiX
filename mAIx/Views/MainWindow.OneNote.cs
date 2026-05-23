@@ -622,8 +622,10 @@ namespace mAIx.Views
                 // [MMRD-실행] PropertyChanged 발화 감지
                 _oneNoteLog.Debug($"[MMRD-실행] PropertyChanged 발화 — PropertyName='{e.PropertyName}'");
                 if (e.PropertyName == nameof(OneNoteViewModel.SelectedRecording)
-                    || e.PropertyName == nameof(OneNoteViewModel.SelectedPage))
+                    || e.PropertyName == nameof(OneNoteViewModel.SelectedPage)
+                    || e.PropertyName == nameof(OneNoteViewModel.IsRecording))
                 {
+                    // IsRecording true 전환 = 새 녹음 시작 → 마인드맵 캐시 무효화 필수
                     OnSelectedRecordingChangedForMindMap();
                 }
             }
