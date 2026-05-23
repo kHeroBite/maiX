@@ -691,21 +691,5 @@ namespace mAIx.Views
             return string.IsNullOrWhiteSpace(fallbackTitle) ? "녹음 데이터" : fallbackTitle;
         }
 
-        /// <summary>
-        /// 외부 ScrollViewer에 직접 등록된 PreviewMouseWheel 핸들러.
-        /// ListBoxItem 위 hit-test에서도 외부 ScrollViewer 라우트는 100% 통과하므로 일관 동작 보장.
-        /// 진단 로그([휠진단]) 포함 — 호출 여부 + Offset 변화 측정.
-        /// </summary>
-        private void OneNoteRecordingsScrollViewer_PreviewMouseWheel(object sender, System.Windows.Input.MouseWheelEventArgs e)
-        {
-            if (OneNoteRecordingsScrollViewer == null) return;
-            if (e.Handled) return;
-            var src = e.OriginalSource?.GetType().Name ?? "(null)";
-            var before = OneNoteRecordingsScrollViewer.VerticalOffset;
-            OneNoteRecordingsScrollViewer.ScrollToVerticalOffset(before - e.Delta);
-            var after = OneNoteRecordingsScrollViewer.VerticalOffset;
-            _oneNoteLog.Info($"[휠진단] Source={src}, Delta={e.Delta}, OffsetBefore={before}, OffsetAfter={after}, 변화={after - before}");
-            e.Handled = true;
-        }
     }
 }
