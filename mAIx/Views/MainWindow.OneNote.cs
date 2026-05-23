@@ -692,18 +692,17 @@ namespace mAIx.Views
         }
 
         /// <summary>
-        /// 녹음 파일 목록 ListBox의 마우스 휠 이벤트를 외부 ScrollViewer로 전파.
-        /// ListBox 내부 ScrollViewer가 휠 이벤트를 흡수하므로 외부 ScrollViewer로 재발행.
+        /// 녹음 파일 목록 ListBox의 마우스 휠을 외부 ScrollViewer로 직접 전달.
+        /// ListBox 내부 ScrollViewer가 휠을 흡수하므로 외부 ScrollViewer VerticalOffset을 직접 조정한다.
+        /// RaiseEvent 합성 이벤트는 ScrollViewer.OnMouseWheel을 트리거하지 못해 ScrollToVerticalOffset 사용.
         /// </summary>
         private void OneNoteRecordingsList_PreviewMouseWheel(object sender, System.Windows.Input.MouseWheelEventArgs e)
         {
+            if (OneNoteRecordingsScrollViewer == null) return;
             if (e.Handled) return;
+            OneNoteRecordingsScrollViewer.ScrollToVerticalOffset(
+                OneNoteRecordingsScrollViewer.VerticalOffset - e.Delta);
             e.Handled = true;
-            var args = new System.Windows.Input.MouseWheelEventArgs(e.MouseDevice, e.Timestamp, e.Delta)
-            {
-                RoutedEvent = System.Windows.UIElement.MouseWheelEvent
-            };
-            OneNoteRecordingsScrollViewer?.RaiseEvent(args);
         }
     }
 }
