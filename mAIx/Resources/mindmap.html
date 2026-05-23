@@ -34,7 +34,7 @@
   html, body { margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden; background: var(--bg-color); color: var(--text-color); font-family: sans-serif; }
   #mindmap { width: 100vw; height: 100vh; cursor: grab; }
   #mindmap:active { cursor: grabbing; }
-  .node text { fill: var(--text-color); font-size: 13px; user-select: none; }
+  .node text, svg text { fill: var(--text-color) !important; font-size: 13px; user-select: none; }
   .node circle { fill: var(--bg-color); stroke: var(--line-color); stroke-width: 1.5px; cursor: pointer; }
   .node._has-children circle { fill: var(--link-color); }
   .link { fill: none; stroke: var(--line-color); stroke-opacity: 0.6; stroke-width: 1.5px; }
