@@ -234,6 +234,8 @@ public partial class MindMapOverlay : UserControl
     {
         try
         {
+            // 이전 Bind의 LLM 트리 캐시 즉시 무효화 (라이브 녹음 케이스 옛 트리 잔존 방지)
+            _llmTreeMarkdown = null;
             // 이전 트리 즉시 캔버스 비우기 (캔버스 잔존 0초)
             if (_isWebViewReady)
             {
