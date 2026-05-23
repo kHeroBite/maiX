@@ -7020,23 +7020,27 @@
                                                         <ColumnDefinition Width="Auto"/>
                                                     </Grid.ColumnDefinitions>
                                                     <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-                                                        <ui:SymbolIcon Symbol="TextBulletListLtr24" FontSize="18" Margin="0,0,8,0" VerticalAlignment="Center"/>
-                                                        <TextBlock Text="MAP" FontSize="15" FontWeight="SemiBold" VerticalAlignment="Center"/>
+                                                        <ui:SymbolIcon Symbol="TextBulletListLtr24" FontSize="16" Margin="0,0,6,0" VerticalAlignment="Center"/>
+                                                        <TextBlock Text="MAP" FontSize="14" FontWeight="SemiBold" VerticalAlignment="Center"/>
                                                     </StackPanel>
                                                     <Button x:Name="OneNoteMindMapToggle"
                                                             Grid.Column="1"
-                                                            Padding="10,5"
+                                                            Padding="5,2"
+                                                            MinWidth="0"
+                                                            MinHeight="0"
                                                             ToolTip="마인드맵 토글"
                                                             Style="{StaticResource {x:Static ToolBar.ButtonStyleKey}}"
                                                             Click="OneNoteMindMapToggle_Click">
-                                                        <ui:SymbolIcon Symbol="Share24" FontSize="14"/>
+                                                        <ui:SymbolIcon Symbol="Branch24" FontSize="12"/>
                                                     </Button>
                                                     <ToggleButton x:Name="OneNoteTopicNavOrientationToggle"
                                                                   Grid.Column="2"
-                                                                  Padding="10,5"
+                                                                  Padding="5,2"
+                                                                  MinWidth="0"
+                                                                  MinHeight="0"
                                                                   ToolTip="우측/하단 도킹 전환"
                                                                   Click="OneNoteTopicNavOrientationToggle_Click">
-                                                        <ui:SymbolIcon Symbol="ArrowRotateClockwise24" FontSize="14"/>
+                                                        <ui:SymbolIcon Symbol="ArrowRotateClockwise24" FontSize="12"/>
                                                     </ToggleButton>
                                                 </Grid>
 
@@ -8431,6 +8435,9 @@
                                                         <ListBox x:Name="OneNoteRecordingsList"
                                                                  Background="Transparent"
                                                                  BorderThickness="0"
+                                                                 ScrollViewer.VerticalScrollBarVisibility="Disabled"
+                                                                 ScrollViewer.HorizontalScrollBarVisibility="Disabled"
+                                                                 ScrollViewer.CanContentScroll="False"
                                                                  SelectedItem="{Binding SelectedRecording, Mode=TwoWay}"
                                                                  PreviewMouseLeftButtonDown="OneNoteRecordingsList_PreviewMouseLeftButtonDown"
                                                                  SelectionChanged="OneNoteRecordingsList_SelectionChanged"
