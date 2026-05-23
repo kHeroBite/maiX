@@ -62,6 +62,7 @@
   <option value="3d-force">3D 힘 그래프 (Three.js)</option>
 </select>
 <div id="threeContainer" style="position:fixed; top:0; left:0; width:100vw; height:100vh; display:none; background:var(--bg-color); z-index:1;"></div>
+<button id="rotateBtn" type="button" aria-label="회전 토글" title="자동 회전 토글" style="position:fixed; top:10px; right:56px; width:36px; height:36px; border-radius:50%; border:none; background:var(--close-bg); color:var(--close-fg); font-size:16px; cursor:pointer; z-index:9999; display:none; align-items:center; justify-content:center;">⏸</button>
 <button id="closeBtn" type="button" aria-label="마인드맵 닫기" title="닫기 (ESC)">×</button>
 <div id="ctxMenu">
   <div class="item" data-action="add">자식 추가</div>
@@ -73,6 +74,7 @@
 <script src="d3.v7.min.js"></script>
 <script src="three.min.js"></script>
 <script src="3d-force-graph.min.js"></script>
+<script src="three-spritetext.min.js"></script>
 <script>
   console.log('[MMRD-실행] mindmap.html 로드');
 
@@ -83,6 +85,7 @@
   let currentStyle = 'radial-tree'; // 현재 선택된 스타일
   let activeAnimationId = null; // requestAnimationFrame ID (orbit/solar 회전 정리용)
   let active3DGraph = null;    // 3d-force-graph 인스턴스 (Three.js)
+  let autoRotateEnabled = true; // 3D 자동 회전 ON/OFF
   let nodeIdCounter = 0;
 
   // ===== 마크다운 → 트리 데이터 파서 =====
@@ -170,6 +173,9 @@
     if (threeC) { threeC.style.display = 'none'; threeC.innerHTML = ''; }
     const svgEl = document.getElementById('mindmap');
     if (svgEl) svgEl.style.display = '';
+    // 회전 토글 버튼 기본 숨김 (각 스타일에서 필요 시 표시)
+    const rotateBtn = document.getElementById('rotateBtn');
+    if (rotateBtn) rotateBtn.style.display = 'none';
     if (g) g.selectAll('*').remove();
   }
 
@@ -485,10 +491,16 @@
       .on('contextmenu', (event, d) => { event.preventDefault(); showCtxMenu(event.clientX, event.clientY, d); });
 
     let t0 = performance.now();
+    let pausedT = 0;
+    let lastT = t0;
     function tick() {
-      const t = (performance.now() - t0);
+      const now = performance.now();
+      if (autoRotateEnabled) {
+        pausedT += (now - lastT);
+      }
+      lastT = now;
       nodes.forEach(d => {
-        const a = d.angle0 + d.speed * t;
+        const a = d.angle0 + d.speed * pausedT;
         d.x = Math.cos(a) * d.r;
         d.y = Math.sin(a) * d.r;
       });
@@ -497,6 +509,12 @@
       activeAnimationId = requestAnimationFrame(tick);
     }
     tick();
+    // 회전 토글 버튼 표시
+    const rotateBtn = document.getElementById('rotateBtn');
+    if (rotateBtn) {
+      rotateBtn.style.display = 'flex';
+      rotateBtn.textContent = autoRotateEnabled ? '⏸' : '▶';
+    }
     console.log('[MMS-실행] renderOrbit — 노드', nodes.length, 'maxDepth', maxDepth);
   }
 
@@ -540,17 +558,23 @@
       .on('contextmenu', (event, d) => { event.preventDefault(); showCtxMenu(event.clientX, event.clientY, d); });
 
     let t0 = performance.now();
+    let pausedT = 0;
+    let lastT = t0;
     function tick() {
-      const t = (performance.now() - t0);
+      const now = performance.now();
+      if (autoRotateEnabled) {
+        pausedT += (now - lastT);
+      }
+      lastT = now;
       // 행성 위치 갱신 (depth 1)
       planets.forEach(d => {
-        const a = d.angle0 + d.speed * t;
+        const a = d.angle0 + d.speed * pausedT;
         d.x = Math.cos(a) * d.r;
         d.y = Math.sin(a) * d.r;
       });
       // 위성 위치 갱신 (부모 위치 기준)
       satellites.forEach(d => {
-        const a = d.angle0 + d.speed * t;
+        const a = d.angle0 + d.speed * pausedT;
         const px = (d.parent && d.parent.x) || 0;
         const py = (d.parent && d.parent.y) || 0;
         d.x = px + Math.cos(a) * d.r;
@@ -561,6 +585,12 @@
       activeAnimationId = requestAnimationFrame(tick);
     }
     tick();
+    // 회전 토글 버튼 표시
+    const rotateBtn = document.getElementById('rotateBtn');
+    if (rotateBtn) {
+      rotateBtn.style.display = 'flex';
+      rotateBtn.textContent = autoRotateEnabled ? '⏸' : '▶';
+    }
     console.log('[MMS-실행] renderSolar — 행성', planets.length, '위성', satellites.length);
   }
 
@@ -609,6 +639,18 @@
       .linkOpacity(0.6)
       .linkWidth(1)
       .nodeRelSize(6)
+      .nodeThreeObject(node => {
+        // SpriteText로 노드 위에 항상 보이는 텍스트 라벨
+        if (typeof SpriteText === 'undefined') return null;
+        const sprite = new SpriteText(node.name || '?');
+        sprite.color = isDark ? '#f0f0f0' : '#1e1e1e';
+        sprite.textHeight = 6;
+        sprite.backgroundColor = isDark ? 'rgba(30,30,30,0.6)' : 'rgba(255,255,255,0.7)';
+        sprite.padding = 2;
+        sprite.borderRadius = 2;
+        return sprite;
+      })
+      .nodeThreeObjectExtend(true)  // sprite + 기본 sphere 동시 표시
       .onNodeClick(node => {
         // 노드 클릭 시 카메라 줌
         const distance = 80;
@@ -625,24 +667,33 @@
         showCtxMenu(event ? event.clientX : window.innerWidth/2, event ? event.clientY : window.innerHeight/2, fakeNode);
       });
 
-    // 자동 회전 (천천히)
+    // 자동 회전 (천천히) — autoRotateEnabled가 true일 때만
     let cameraAngle = 0;
     let t0 = performance.now();
     function autoRotate() {
       if (!active3DGraph) return;
-      const t = performance.now() - t0;
-      cameraAngle = t * 0.0001;
-      const dist = 400;
-      try {
-        active3DGraph.cameraPosition({
-          x: Math.cos(cameraAngle) * dist,
-          z: Math.sin(cameraAngle) * dist
-        });
-      } catch (e) {}
+      if (autoRotateEnabled) {
+        const t = performance.now() - t0;
+        cameraAngle = t * 0.0001;
+        const dist = 400;
+        try {
+          active3DGraph.cameraPosition({
+            x: Math.cos(cameraAngle) * dist,
+            z: Math.sin(cameraAngle) * dist
+          });
+        } catch (e) {}
+      }
       activeAnimationId = requestAnimationFrame(autoRotate);
     }
     // 초기 카메라 위치 설정 후 회전 시작
     setTimeout(() => { try { active3DGraph.cameraPosition({ z: 400 }); autoRotate(); } catch (e) {} }, 500);
+
+    // 회전 토글 버튼 표시 (3D + 애니메이션 스타일에서만)
+    const rotateBtn = document.getElementById('rotateBtn');
+    if (rotateBtn) {
+      rotateBtn.style.display = 'flex';
+      rotateBtn.textContent = autoRotateEnabled ? '⏸' : '▶';
+    }
 
     console.log('[MMS-실행] render3DForce — 노드', nodes.length, '링크', links.length);
   }
@@ -763,6 +814,14 @@
     if (window.chrome && window.chrome.webview) {
       window.chrome.webview.postMessage(JSON.stringify({ type: 'close' }));
     }
+  });
+
+  // 회전 토글 버튼 핸들러
+  document.getElementById('rotateBtn').addEventListener('click', function(e) {
+    e.stopPropagation();
+    autoRotateEnabled = !autoRotateEnabled;
+    this.textContent = autoRotateEnabled ? '⏸' : '▶';
+    console.log('[MMS-실행] autoRotate 토글:', autoRotateEnabled);
   });
 
   document.addEventListener('keydown', function(e) {
