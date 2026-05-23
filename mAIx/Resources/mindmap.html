@@ -181,8 +181,8 @@
       case 'sunburst':    renderSunburst();   break;
       default:            renderRadialTree(); break;
     }
-    // 모든 스타일에 공통 자동 fit (콤보박스 변경/녹음전환/refresh 시 캔버스 가득)
-    autoFitToCanvas();
+    // 모든 스타일에 공통 자동 fit (브라우저 페인트 후 bbox 정확 측정 보장)
+    requestAnimationFrame(() => requestAnimationFrame(autoFitToCanvas));
   }
 
   // ===== 공통 자동 fit — SVG 콘텐츠 bbox 기반 zoom 재계산 =====
@@ -365,9 +365,13 @@
       .attr('dy', '0.31em')
       .attr('x', d => d.y >= 0 ? 8 : -8)
       .attr('text-anchor', d => d.y >= 0 ? 'start' : 'end')
-      .text(d => d.data.name)
+      .attr('fill', 'var(--text-color)')
+      .text(d => (d.data && d.data.name) ? d.data.name : '?')
       .on('contextmenu', (event, d) => { event.preventDefault(); showCtxMenu(event.clientX, event.clientY, d); });
 
+    // [Layer-진단] 자식 노드 d.data.name 실측
+    const nodeNames = allNodes.slice(0, 5).map(d => `${d.depth}:${(d.data && d.data.name) || '<empty>'}`);
+    console.log('[MMS-진단] renderMindMapLR — 노드명 샘플 5개:', nodeNames.join(', '));
     console.log('[MMS-실행] renderMindMapLR — 우', rightRoot.descendants().length, '좌', leftRoot.descendants().length - 1);
   }
 
