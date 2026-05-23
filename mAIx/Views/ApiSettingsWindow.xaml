@@ -458,6 +458,43 @@
                                 </ComboBox>
                             </Grid>
 
+                            <!-- 자동 말풍선 분리 설정 섹션 -->
+                            <TextBlock Text="자동 말풍선 분리" FontWeight="SemiBold" FontSize="12"
+                                       Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                                       Margin="0,0,0,8"/>
+
+                            <!-- 자동 분리 활성화 토글 -->
+                            <CheckBox x:Name="AutoSplitEnabledCheckBox"
+                                      AutomationProperties.AutomationId="AutoSplitEnabledCheckBox"
+                                      Content="자동 말풍선 분리 사용"
+                                      Margin="0,0,0,8"/>
+
+                            <!-- tier1 최소 글자수 (20~200, 임의 값 입력 가능) -->
+                            <Grid Margin="0,0,0,8">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="130"/>
+                                    <ColumnDefinition Width="*"/>
+                                </Grid.ColumnDefinitions>
+                                <TextBlock Text="분리 기준(1단계)" VerticalAlignment="Center" FontSize="12"/>
+                                <ui:NumberBox x:Name="AutoSplitPrimaryNumberBox" Grid.Column="1"
+                                              AutomationProperties.AutomationId="AutoSplitPrimaryNumberBox"
+                                              Minimum="20" Maximum="200" SmallChange="5" Value="50"
+                                              Width="160" HorizontalAlignment="Left"/>
+                            </Grid>
+
+                            <!-- tier2 최소 글자수 (100~500, 임의 값 입력 가능) -->
+                            <Grid Margin="0,0,0,16">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="130"/>
+                                    <ColumnDefinition Width="*"/>
+                                </Grid.ColumnDefinitions>
+                                <TextBlock Text="분리 기준(2단계)" VerticalAlignment="Center" FontSize="12"/>
+                                <ui:NumberBox x:Name="AutoSplitSecondaryNumberBox" Grid.Column="1"
+                                              AutomationProperties.AutomationId="AutoSplitSecondaryNumberBox"
+                                              Minimum="100" Maximum="500" SmallChange="10" Value="150"
+                                              Width="160" HorizontalAlignment="Left"/>
+                            </Grid>
+
                             <!-- 프리셋 버튼 -->
                             <TextBlock Text="모델 프리셋" FontWeight="SemiBold" FontSize="12"
                                        Foreground="{DynamicResource TextFillColorSecondaryBrush}"

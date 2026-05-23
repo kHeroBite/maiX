@@ -764,6 +764,11 @@ public partial class ApiSettingsWindow : FluentWindow
         }
         if (TtsVoiceComboBox.SelectedItem == null)
             TtsVoiceComboBox.SelectedIndex = 0; // 기본 alloy
+
+        // 자동 말풍선 분리 설정 로드
+        AutoSplitEnabledCheckBox.IsChecked = rec.AutoSplitEnabled;
+        AutoSplitPrimaryNumberBox.Value = rec.AutoSplitPrimaryMinChars;
+        AutoSplitSecondaryNumberBox.Value = rec.AutoSplitSecondaryMinChars;
     }
 
     /// <summary>
@@ -797,6 +802,11 @@ public partial class ApiSettingsWindow : FluentWindow
             rec.TtsModel = TtsModelTextBox.Text.Trim();
         if (TtsVoiceComboBox.SelectedItem is ComboBoxItem voiceItem)
             rec.TtsVoice = voiceItem.Tag?.ToString() ?? rec.TtsVoice;
+
+        // 자동 말풍선 분리 설정 저장
+        rec.AutoSplitEnabled = AutoSplitEnabledCheckBox.IsChecked == true;
+        rec.AutoSplitPrimaryMinChars = (int)AutoSplitPrimaryNumberBox.Value;
+        rec.AutoSplitSecondaryMinChars = (int)AutoSplitSecondaryNumberBox.Value;
 
         _settingsManager.SaveAll();
         Log4.Debug("[ApiSettingsWindow] 녹음 STT/LLM 설정 저장 완료");

@@ -2,6 +2,26 @@
 
 > PROJECT.md 작업 이력 테이블의 상세 보완본
 
+## [2026-05-23] 실시간 STT 자동분리 2단계 임계치 + ApiSettingsWindow UI 노출 (O3 Fast Path — 단일사이클 PASS)
+
+**분류**: O3 Fast Path (lesson + docs + git)
+**otest 결과**: Phase 1 빌드 PASS + Phase 2 C-1~C-5 정적/UI 검증 전부 PASS
+**범위**: 수정 4파일 (~110줄)
+**파이프라인 이력**: 단일 사이클 (oplan → odev → odev 후속 NumberBox 교체 → otest → odone)
+**대화ID**: conv_177950815462
+
+### 변경 내용
+
+- **AutoSplit 3옵션 추가** (`OpenAiRecordingSettings.cs`): `AutoSplitEnabled`(bool) + `AutoSplitTier1Threshold`(int, 기본 50) + `AutoSplitTier2Threshold`(int, 기본 150) 프로퍼티 신규.
+- **2단계 자동분리 로직** (`OpenAiRealtimeSttService.cs`): `AutoSplitEnabled` 가드 + tier1 (50자+강마침표: `.!?`) + tier2 (150자+약구분자/강마침표: `,·.!?`) 분리 로직. 강제 절단 없음 — 임계치 초과 + 구분자 동시 충족 시에만 분리.
+- **ApiSettingsWindow UI 노출** (`ApiSettingsWindow.xaml`): NumberBox 2개(tier1/tier2 임계치) + CheckBox(활성화) + 도움말 텍스트. ServerVadEnabled 인접 배치.
+- **Load/Save 코드** (`ApiSettingsWindow.xaml.cs`): 3개 설정 프로퍼티 Load/Save 연결.
+
+### 교훈 (L-512, L-513)
+
+- L-512: SSOT 파일 경유 컨텍스트 전달 — 메시지 잘림 방지 패턴
+- L-513: NumberBox vs ComboBox — SSOT 명시 컨트롤 타입 사양 준수 의무
+
 ## [2026-05-17] 대화네비 1/2 정정 + 녹음중지 STT 사라짐 회귀 근본수정 (O3 Fast Path)
 
 **분류**: O3 Fast Path (review + docs + git)

@@ -146,6 +146,24 @@ public class OpenAiRecordingSettings
     [XmlElement("VadSilenceDurationMs")]
     public int VadSilenceDurationMs { get; set; } = 500;
 
+    /// <summary>자동 말풍선 분리 활성화 여부 (기본 true — AC-017 분리 로직 적용).</summary>
+    [XmlElement("AutoSplitEnabled")]
+    public bool AutoSplitEnabled { get; set; } = true;
+
+    /// <summary>
+    /// 자동 분리 1단계(tier1) 최소 글자수 (강마침표 전용 탐색 기준, 기본 50).
+    /// 누적 텍스트가 이 값 이상이면 강마침표(. ! ? 。 ！ ？)로 분리 시도.
+    /// </summary>
+    [XmlElement("AutoSplitPrimaryMinChars")]
+    public int AutoSplitPrimaryMinChars { get; set; } = 50;
+
+    /// <summary>
+    /// 자동 분리 2단계(tier2) 최소 글자수 (강+약 구분자 탐색 기준, 기본 150).
+    /// 누적 텍스트가 이 값 이상이면 강마침표 + 약구분자(, ; 、 ；)로도 분리 시도.
+    /// </summary>
+    [XmlElement("AutoSplitSecondaryMinChars")]
+    public int AutoSplitSecondaryMinChars { get; set; } = 150;
+
     /// <summary>STT 화면에서 주제어 키워드를 하이라이트로 표시할지 여부. 기본 true.</summary>
     [XmlElement("KeywordHighlightEnabled")]
     public bool KeywordHighlightEnabled { get; set; } = true;

@@ -138,9 +138,10 @@ public sealed class OpenAiRealtimeSttService : IOpenAiRealtimeSttService
     // delta 누적 버퍼 (item_id → 누적 텍스트)
     private readonly System.Collections.Concurrent.ConcurrentDictionary<string, string> _deltaBuffers = new();
 
-    // AC-017: 50자+마침 자동 분리 상수
-    private const int AutoSplitMinLength = 50;
+    // AC-017: 자동 분리 구분자 집합 (길이 기준은 _settings.OaiRecording에서 참조)
     private static readonly HashSet<char> AutoSplitTerminators = new() { '.', '!', '?', '。', '！', '？' };
+    private static readonly HashSet<char> AutoSplitSoftSeparators = new() { ',', ';', '、', '；' };
+    private static readonly HashSet<char> _autoSplitAllSeparators = new(AutoSplitTerminators.Concat(AutoSplitSoftSeparators));
 
     public OpenAiRealtimeSttService(AppSettingsManager settings)
     {
@@ -512,27 +513,40 @@ public sealed class OpenAiRealtimeSttService : IOpenAiRealtimeSttService
                         _log.Info($"[OpenAi-Realtime] delta — text='{deltaText}' openAiItemId={openAiItemId} accum_len={accum.Length}");
                         TranscriptSegmentUpdated?.Invoke(openAiItemId, ts, tsEnd, accum);
 
-                        // AC-017: 50자 이상 + 마침 문자 감지 시 강제 분리
-                        if (accum.Length >= AutoSplitMinLength)
+                        // AC-017: 자동 말풍선 분리 (tier1: 강마침표 전용, tier2: 강+약 구분자)
+                        if (_settings.OaiRecording.AutoSplitEnabled)
                         {
-                            // 마지막 마침 문자 위치를 역방향 탐색
-                            int splitIdx = -1;
-                            for (int i = accum.Length - 1; i >= 0; i--)
+                            var primaryMin = _settings.OaiRecording.AutoSplitPrimaryMinChars;
+                            var secondaryMin = _settings.OaiRecording.AutoSplitSecondaryMinChars;
+
+                            bool isTier2 = accum.Length >= secondaryMin;
+                            bool isTier1 = !isTier2 && accum.Length >= primaryMin;
+
+                            if (isTier1 || isTier2)
                             {
-                                if (AutoSplitTerminators.Contains(accum[i]))
+                                // tier2: 강+약 구분자, tier1: 강마침표만 탐색
+                                var separators = isTier2 ? _autoSplitAllSeparators : AutoSplitTerminators;
+                                int splitIdx = -1;
+                                for (int i = accum.Length - 1; i >= 0; i--)
                                 {
-                                    splitIdx = i;
-                                    break;
+                                    if (separators.Contains(accum[i]))
+                                    {
+                                        splitIdx = i;
+                                        break;
+                                    }
                                 }
-                            }
-                            if (splitIdx >= 0)
-                            {
-                                var splitText = accum[..(splitIdx + 1)];
-                                var remainder = accum[(splitIdx + 1)..];
-                                _log.Info($"[AC017-AutoSplit] 분리 발화 — len={splitText.Length}, lastChar={accum[splitIdx]}, remainder_len={remainder.Length}");
-                                try { TranscriptSegmentReceived?.Invoke(ts, splitText); }
-                                catch (Exception ex) { _log.Error(ex, "[AC017-AutoSplit] TranscriptSegmentReceived 발화 예외"); }
-                                _deltaBuffers[openAiItemId] = remainder;
+                                if (splitIdx >= 0)
+                                {
+                                    var splitText = accum[..(splitIdx + 1)];
+                                    var remainder = accum[(splitIdx + 1)..];
+                                    if (isTier2)
+                                        _log.Info($"[AC017-AutoSplit-L2] 약구분자 분리 — len={splitText.Length}, lastChar={accum[splitIdx]}, remainder_len={remainder.Length}");
+                                    else
+                                        _log.Info($"[AC017-AutoSplit] 분리 발화 — len={splitText.Length}, lastChar={accum[splitIdx]}, remainder_len={remainder.Length}");
+                                    try { TranscriptSegmentReceived?.Invoke(ts, splitText); }
+                                    catch (Exception ex) { _log.Error(ex, "[AC017-AutoSplit] TranscriptSegmentReceived 발화 예외"); }
+                                    _deltaBuffers[openAiItemId] = remainder;
+                                }
                             }
                         }
                     }
