@@ -8413,7 +8413,8 @@
                                             <!-- Row 1: 탭 콘텐츠 (녹음파일 / 옵션 겹침) -->
                                             <!-- 녹음 파일 패널 (기본 활성) -->
                                             <Border Grid.Row="1" x:Name="OneNoteRecordingsLeftPanel" Visibility="Visible" Padding="0">
-                                                <ScrollViewer x:Name="OneNoteRecordingsScrollViewer" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+                                                <ScrollViewer x:Name="OneNoteRecordingsScrollViewer" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled"
+                                                              PreviewMouseWheel="OneNoteRecordingsScrollViewer_PreviewMouseWheel">
                                                     <StackPanel x:Name="OneNoteRecordingsLeftStack">
                                                         <!-- 녹음 파일 목록 헤더 -->
                                                         <Grid Margin="0,0,0,8">
@@ -8440,8 +8441,7 @@
                                                                  ScrollViewer.CanContentScroll="False"
                                                                  SelectedItem="{Binding SelectedRecording, Mode=TwoWay}"
                                                                  PreviewMouseLeftButtonDown="OneNoteRecordingsList_PreviewMouseLeftButtonDown"
-                                                                 SelectionChanged="OneNoteRecordingsList_SelectionChanged"
-                                                                 PreviewMouseWheel="OneNoteRecordingsList_PreviewMouseWheel">
+                                                                 SelectionChanged="OneNoteRecordingsList_SelectionChanged">
                                                             <ListBox.ItemContainerStyle>
                                                                 <Style TargetType="ListBoxItem">
                                                                     <Setter Property="Padding" Value="0"/>
