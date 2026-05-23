@@ -8435,6 +8435,7 @@
                                                         <ListBox x:Name="OneNoteRecordingsList"
                                                                  Background="Transparent"
                                                                  BorderThickness="0"
+                                                                 MaxHeight="600"
                                                                  SelectedItem="{Binding SelectedRecording, Mode=TwoWay}"
                                                                  PreviewMouseLeftButtonDown="OneNoteRecordingsList_PreviewMouseLeftButtonDown"
                                                                  SelectionChanged="OneNoteRecordingsList_SelectionChanged">
