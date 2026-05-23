@@ -57,7 +57,11 @@
   <option value="force">힘 시뮬레이션</option>
   <option value="mindmap-lr">좌우 마인드맵</option>
   <option value="sunburst">선버스트</option>
+  <option value="orbit">궤도 (Orbit)</option>
+  <option value="solar">태양계 (Solar)</option>
+  <option value="3d-force">3D 힘 그래프 (Three.js)</option>
 </select>
+<div id="threeContainer" style="position:fixed; top:0; left:0; width:100vw; height:100vh; display:none; background:var(--bg-color); z-index:1;"></div>
 <button id="closeBtn" type="button" aria-label="마인드맵 닫기" title="닫기 (ESC)">×</button>
 <div id="ctxMenu">
   <div class="item" data-action="add">자식 추가</div>
@@ -67,6 +71,8 @@
 </div>
 <svg id="mindmap"></svg>
 <script src="d3.v7.min.js"></script>
+<script src="three.min.js"></script>
+<script src="3d-force-graph.min.js"></script>
 <script>
   console.log('[MMRD-실행] mindmap.html 로드');
 
@@ -75,6 +81,8 @@
   let activeZoom = null;       // 현재 d3.zoom 핸들
   let activeSimulation = null; // force 시뮬레이션 핸들
   let currentStyle = 'radial-tree'; // 현재 선택된 스타일
+  let activeAnimationId = null; // requestAnimationFrame ID (orbit/solar 회전 정리용)
+  let active3DGraph = null;    // 3d-force-graph 인스턴스 (Three.js)
   let nodeIdCounter = 0;
 
   // ===== 마크다운 → 트리 데이터 파서 =====
@@ -149,12 +157,25 @@
       activeSimulation.stop();
       activeSimulation = null;
     }
+    if (activeAnimationId) {
+      cancelAnimationFrame(activeAnimationId);
+      activeAnimationId = null;
+    }
+    if (active3DGraph) {
+      try { active3DGraph._destructor && active3DGraph._destructor(); } catch (e) {}
+      active3DGraph = null;
+    }
+    // 3D 컨테이너/SVG 가시성 토글 (다음 렌더가 결정)
+    const threeC = document.getElementById('threeContainer');
+    if (threeC) { threeC.style.display = 'none'; threeC.innerHTML = ''; }
+    const svgEl = document.getElementById('mindmap');
+    if (svgEl) svgEl.style.display = '';
     if (g) g.selectAll('*').remove();
   }
 
   // ===== 스타일 전환 진입점 (C# 또는 드롭다운에서 호출) =====
   window.setMindMapStyle = function(style) {
-    const allowed = ['radial-tree', 'cluster', 'force', 'mindmap-lr', 'sunburst'];
+    const allowed = ['radial-tree', 'cluster', 'force', 'mindmap-lr', 'sunburst', 'orbit', 'solar', '3d-force'];
     if (!allowed.includes(style)) {
       console.warn('[MMS-실행] 알 수 없는 스타일:', style, '→ radial-tree 폴백');
       style = 'radial-tree';
@@ -179,6 +200,9 @@
       case 'force':       renderForce();      break;
       case 'mindmap-lr':  renderMindMapLR();  break;
       case 'sunburst':    renderSunburst();   break;
+      case 'orbit':       renderOrbit();      break;
+      case 'solar':       renderSolar();      break;
+      case '3d-force':    render3DForce();    break;
       default:            renderRadialTree(); break;
     }
     // 모든 스타일에 공통 자동 fit (브라우저 페인트 후 bbox 정확 측정 보장)
@@ -421,6 +445,206 @@
       .style('font-size', '10px');
 
     console.log('[MMS-실행] renderSunburst — 노드', root.descendants().length);
+  }
+
+  // ===== ⑥ 궤도 (Orbit) — depth별 동심원 궤도를 천천히 회전 =====
+  function renderOrbit() {
+    const root = d3.hierarchy(currentTreeData);
+    const nodes = root.descendants();
+    const maxDepth = d3.max(nodes, d => d.depth) || 1;
+    const minR = 80, maxR = Math.min(window.innerWidth, window.innerHeight) / 2 - 80;
+    const radiusFor = d => d.depth === 0 ? 0 : minR + ((d.depth - 1) / Math.max(1, maxDepth - 1)) * (maxR - minR);
+
+    // depth별 그룹화 + 각도 균등 분배
+    const byDepth = d3.group(nodes.filter(d => d.depth > 0), d => d.depth);
+    byDepth.forEach((group, depth) => {
+      const n = group.length;
+      group.forEach((d, i) => {
+        d.angle0 = (i / n) * 2 * Math.PI;
+        d.r = radiusFor(d);
+        // 각 depth마다 속도 다르게 (가까울수록 빠름)
+        d.speed = (0.0008 / Math.max(1, depth)) * (depth % 2 === 0 ? 1 : -1);
+      });
+    });
+    root.angle0 = 0; root.r = 0; root.speed = 0;
+
+    // 동심원 궤도 가이드
+    const orbits = g.append('g').attr('class', 'orbits');
+    [...byDepth.keys()].sort().forEach(depth => {
+      orbits.append('circle')
+        .attr('class', 'link').attr('cx', 0).attr('cy', 0)
+        .attr('r', radiusFor({ depth })).attr('fill', 'none').attr('stroke-dasharray', '2 4').attr('stroke-opacity', 0.3);
+    });
+
+    const linkSel = g.append('g').attr('class', 'links').selectAll('line').data(root.links()).join('line').attr('class', 'link');
+    const nodeSel = g.append('g').attr('class', 'nodes').selectAll('g').data(nodes).join('g')
+      .attr('class', d => 'node' + (d.children ? ' _has-children' : ''));
+    nodeSel.append('circle').attr('r', d => d.depth === 0 ? 8 : 5);
+    nodeSel.append('text').attr('dy', '0.31em').attr('x', 8).attr('text-anchor', 'start')
+      .text(d => (d.data && d.data.name) ? d.data.name : '?')
+      .on('contextmenu', (event, d) => { event.preventDefault(); showCtxMenu(event.clientX, event.clientY, d); });
+
+    let t0 = performance.now();
+    function tick() {
+      const t = (performance.now() - t0);
+      nodes.forEach(d => {
+        const a = d.angle0 + d.speed * t;
+        d.x = Math.cos(a) * d.r;
+        d.y = Math.sin(a) * d.r;
+      });
+      linkSel.attr('x1', d => d.source.x).attr('y1', d => d.source.y).attr('x2', d => d.target.x).attr('y2', d => d.target.y);
+      nodeSel.attr('transform', d => `translate(${d.x},${d.y})`);
+      activeAnimationId = requestAnimationFrame(tick);
+    }
+    tick();
+    console.log('[MMS-실행] renderOrbit — 노드', nodes.length, 'maxDepth', maxDepth);
+  }
+
+  // ===== ⑦ 태양계 (Solar) — 루트=태양, depth1=행성(공전), depth2+=달 =====
+  function renderSolar() {
+    const root = d3.hierarchy(currentTreeData);
+    const nodes = root.descendants();
+
+    // 루트=태양 (중앙 큰 원, 회전 없음)
+    root.x = 0; root.y = 0; root.r = 0; root.angle0 = 0; root.speed = 0;
+
+    // depth=1 행성: 큰 궤도, 느린 공전
+    const planets = nodes.filter(d => d.depth === 1);
+    const planetOrbitR = Math.min(window.innerWidth, window.innerHeight) / 3;
+    planets.forEach((d, i) => {
+      d.angle0 = (i / planets.length) * 2 * Math.PI;
+      d.r = planetOrbitR;
+      d.speed = 0.0003 + Math.random() * 0.0002;
+    });
+
+    // depth>=2 위성: 부모 주변 작은 궤도, 빠른 공전
+    const satellites = nodes.filter(d => d.depth >= 2);
+    satellites.forEach((d, i) => {
+      d.angle0 = (i * 137.5 * Math.PI / 180); // 황금각 분포
+      d.r = 40 + (d.depth - 2) * 25;
+      d.speed = 0.0015 - (d.depth - 2) * 0.0002;
+    });
+
+    // 행성 궤도 가이드
+    const orbits = g.append('g').attr('class', 'orbits');
+    orbits.append('circle').attr('cx', 0).attr('cy', 0).attr('r', planetOrbitR)
+      .attr('fill', 'none').attr('class', 'link').attr('stroke-dasharray', '4 6').attr('stroke-opacity', 0.3);
+
+    const linkSel = g.append('g').attr('class', 'links').selectAll('line').data(root.links()).join('line').attr('class', 'link');
+    const nodeSel = g.append('g').attr('class', 'nodes').selectAll('g').data(nodes).join('g')
+      .attr('class', d => 'node' + (d.children ? ' _has-children' : ''));
+    nodeSel.append('circle').attr('r', d => d.depth === 0 ? 14 : (d.depth === 1 ? 8 : 4))
+      .attr('fill', d => d.depth === 0 ? '#ffaa00' : (d.depth === 1 ? '#4ec9b0' : 'var(--bg-color)'));
+    nodeSel.append('text').attr('dy', '0.31em').attr('x', d => d.depth === 0 ? 16 : 8).attr('text-anchor', 'start')
+      .text(d => (d.data && d.data.name) ? d.data.name : '?')
+      .on('contextmenu', (event, d) => { event.preventDefault(); showCtxMenu(event.clientX, event.clientY, d); });
+
+    let t0 = performance.now();
+    function tick() {
+      const t = (performance.now() - t0);
+      // 행성 위치 갱신 (depth 1)
+      planets.forEach(d => {
+        const a = d.angle0 + d.speed * t;
+        d.x = Math.cos(a) * d.r;
+        d.y = Math.sin(a) * d.r;
+      });
+      // 위성 위치 갱신 (부모 위치 기준)
+      satellites.forEach(d => {
+        const a = d.angle0 + d.speed * t;
+        const px = (d.parent && d.parent.x) || 0;
+        const py = (d.parent && d.parent.y) || 0;
+        d.x = px + Math.cos(a) * d.r;
+        d.y = py + Math.sin(a) * d.r;
+      });
+      linkSel.attr('x1', d => d.source.x).attr('y1', d => d.source.y).attr('x2', d => d.target.x).attr('y2', d => d.target.y);
+      nodeSel.attr('transform', d => `translate(${d.x},${d.y})`);
+      activeAnimationId = requestAnimationFrame(tick);
+    }
+    tick();
+    console.log('[MMS-실행] renderSolar — 행성', planets.length, '위성', satellites.length);
+  }
+
+  // ===== ⑧ 3D 힘 그래프 (Three.js) — 진정한 3D 회전 가능 =====
+  function render3DForce() {
+    // SVG 숨기고 3D 컨테이너 표시
+    const svgEl = document.getElementById('mindmap');
+    if (svgEl) svgEl.style.display = 'none';
+    const container = document.getElementById('threeContainer');
+    if (!container) {
+      console.error('[MMS-실행] render3DForce — threeContainer 없음');
+      return;
+    }
+    container.style.display = 'block';
+    container.innerHTML = '';
+
+    if (typeof ForceGraph3D === 'undefined') {
+      console.error('[MMS-실행] render3DForce — ForceGraph3D 미정의 (3d-force-graph.min.js 로드 실패)');
+      container.innerHTML = '<div style="color:var(--text-color); padding:40px;">3D 라이브러리 로드 실패</div>';
+      return;
+    }
+
+    // 트리 → 노드/링크 변환
+    const nodes = [];
+    const links = [];
+    function walk(node, parentId) {
+      const id = String(node.id);
+      nodes.push({ id, name: (node.name || '?') });
+      if (parentId !== null) links.push({ source: parentId, target: id });
+      (node.children || []).forEach(c => walk(c, id));
+    }
+    walk(currentTreeData, null);
+
+    const isDark = document.documentElement.classList.contains('markmap-dark') || !document.documentElement.classList.contains('theme-light');
+    const bgColor = isDark ? '#1e1e1e' : '#ffffff';
+    const nodeColor = isDark ? '#4ec9b0' : '#007acc';
+    const linkColor = isDark ? '#888' : '#aaa';
+
+    active3DGraph = ForceGraph3D()(container)
+      .graphData({ nodes, links })
+      .backgroundColor(bgColor)
+      .nodeColor(() => nodeColor)
+      .linkColor(() => linkColor)
+      .nodeLabel('name')
+      .nodeAutoColorBy('id')
+      .linkOpacity(0.6)
+      .linkWidth(1)
+      .nodeRelSize(6)
+      .onNodeClick(node => {
+        // 노드 클릭 시 카메라 줌
+        const distance = 80;
+        const distRatio = 1 + distance / Math.hypot(node.x, node.y, node.z);
+        active3DGraph.cameraPosition(
+          { x: node.x * distRatio, y: node.y * distRatio, z: node.z * distRatio },
+          node,
+          2000
+        );
+      })
+      .onNodeRightClick((node, event) => {
+        if (event) event.preventDefault();
+        const fakeNode = { data: { id: node.id, name: node.name } };
+        showCtxMenu(event ? event.clientX : window.innerWidth/2, event ? event.clientY : window.innerHeight/2, fakeNode);
+      });
+
+    // 자동 회전 (천천히)
+    let cameraAngle = 0;
+    let t0 = performance.now();
+    function autoRotate() {
+      if (!active3DGraph) return;
+      const t = performance.now() - t0;
+      cameraAngle = t * 0.0001;
+      const dist = 400;
+      try {
+        active3DGraph.cameraPosition({
+          x: Math.cos(cameraAngle) * dist,
+          z: Math.sin(cameraAngle) * dist
+        });
+      } catch (e) {}
+      activeAnimationId = requestAnimationFrame(autoRotate);
+    }
+    // 초기 카메라 위치 설정 후 회전 시작
+    setTimeout(() => { try { active3DGraph.cameraPosition({ z: 400 }); autoRotate(); } catch (e) {} }, 500);
+
+    console.log('[MMS-실행] render3DForce — 노드', nodes.length, '링크', links.length);
   }
 
   // ===== 드롭다운 change 핸들러 =====
