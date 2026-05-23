@@ -181,6 +181,28 @@
       case 'sunburst':    renderSunburst();   break;
       default:            renderRadialTree(); break;
     }
+    // 모든 스타일에 공통 자동 fit (콤보박스 변경/녹음전환/refresh 시 캔버스 가득)
+    autoFitToCanvas();
+  }
+
+  // ===== 공통 자동 fit — SVG 콘텐츠 bbox 기반 zoom 재계산 =====
+  function autoFitToCanvas() {
+    if (!svg || !g) return;
+    try {
+      const gNode = g.node();
+      if (!gNode) return;
+      const bbox = gNode.getBBox();
+      if (bbox.width === 0 || bbox.height === 0) return;
+      const W = window.innerWidth, H = window.innerHeight;
+      const padding = 60;
+      const scale = Math.min((W - padding * 2) / bbox.width, (H - padding * 2) / bbox.height, 1.5);
+      const tx = W / 2 - scale * (bbox.x + bbox.width / 2);
+      const ty = H / 2 - scale * (bbox.y + bbox.height / 2);
+      svg.call(activeZoom.transform, d3.zoomIdentity.translate(tx, ty).scale(scale));
+      console.log('[MMS-실행] autoFitToCanvas — bbox', Math.round(bbox.width), 'x', Math.round(bbox.height), 'scale', scale.toFixed(2));
+    } catch (e) {
+      console.error('[MMS-실행] autoFitToCanvas 실패:', e);
+    }
   }
 
   // ===== ① 방사형 트리 (기본) =====
@@ -341,22 +363,10 @@
     node.append('circle').attr('r', 4);
     node.append('text')
       .attr('dy', '0.31em')
-      .attr('x', d => d.y >= 0 ? (d.children ? -8 : 8) : (d.children ? 8 : -8))
-      .attr('text-anchor', d => d.y >= 0 ? (d.children ? 'end' : 'start') : (d.children ? 'start' : 'end'))
+      .attr('x', d => d.y >= 0 ? 8 : -8)
+      .attr('text-anchor', d => d.y >= 0 ? 'start' : 'end')
       .text(d => d.data.name)
       .on('contextmenu', (event, d) => { event.preventDefault(); showCtxMenu(event.clientX, event.clientY, d); });
-
-    // 전체 노드 범위를 뷰포트에 맞춰 자동 fit (zoom identity 리셋 후 적용)
-    svg.call(activeZoom.transform, d3.zoomIdentity);
-    const xs = allNodes.map(d => d.y), ys = allNodes.map(d => d.x);
-    const x0 = Math.min(...xs) - dy * 0.3, x1 = Math.max(...xs) + dy * 0.3;
-    const y0 = Math.min(...ys) - 40,       y1 = Math.max(...ys) + 40;
-    const bw = x1 - x0, bh = y1 - y0;
-    const W = window.innerWidth, H = window.innerHeight;
-    const scale = Math.max(0.4, Math.min(0.9, Math.min(W / bw, H / bh)));
-    const tx = W / 2 - scale * (x0 + bw / 2);
-    const ty = H / 2 - scale * (y0 + bh / 2);
-    svg.call(activeZoom.transform, d3.zoomIdentity.translate(tx, ty).scale(scale));
 
     console.log('[MMS-실행] renderMindMapLR — 우', rightRoot.descendants().length, '좌', leftRoot.descendants().length - 1);
   }
