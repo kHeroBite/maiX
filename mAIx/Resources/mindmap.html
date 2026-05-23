@@ -205,9 +205,10 @@
       const W = window.innerWidth, H = window.innerHeight;
       const padding = 60;
       const scale = Math.min((W - padding * 2) / bbox.width, (H - padding * 2) / bbox.height, 1.5);
-      // 루트 중심 정렬 (bbox 중심을 캔버스 중심으로)
-      const tx = W / 2 - scale * (bbox.x + bbox.width / 2);
-      const ty = H / 2 - scale * (bbox.y + bbox.height / 2);
+      // viewBox가 [-W/2, -H/2, W, H] 중심 원점이므로 translate도 중심 기준
+      // bbox 중심을 (0,0)으로 이동: tx = -scale * bboxCenterX
+      const tx = -scale * (bbox.x + bbox.width / 2);
+      const ty = -scale * (bbox.y + bbox.height / 2);
       svg.call(activeZoom.transform, d3.zoomIdentity.translate(tx, ty).scale(scale));
       console.log('[MMS-실행] autoFitToCanvas — bbox', Math.round(bbox.width), 'x', Math.round(bbox.height), 'scale', scale.toFixed(2), 'tx/ty', Math.round(tx), Math.round(ty));
     } catch (e) {
