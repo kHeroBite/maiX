@@ -327,8 +327,11 @@ public partial class MindMapOverlay : UserControl
                     catch (Exception ex) { _log.Error(ex, "[MMS-실행] setMindMapStyle JS 호출 실패"); }
                 }
 
-                // 캐시된 응답이 있으면 즉시 사용 (디스크 캐시 없는 경우 폴백)
-                if (_llmTreeMarkdown == null && !string.IsNullOrWhiteSpace(_treeService.LastTreeMarkdown))
+                // 캐시된 응답 활용 — 단 라이브 녹음(recordingPath=null)은 옛 트리 잔존 방지를 위해 LastTreeMarkdown 무시
+                if (_llmTreeMarkdown == null
+                    && !string.IsNullOrWhiteSpace(recordingPath)
+                    && _treeService != null
+                    && !string.IsNullOrWhiteSpace(_treeService.LastTreeMarkdown))
                 {
                     _llmTreeMarkdown = _treeService.LastTreeMarkdown;
                 }
