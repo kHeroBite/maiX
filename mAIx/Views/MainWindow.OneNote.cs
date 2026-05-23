@@ -646,7 +646,14 @@ namespace mAIx.Views
                 // (IsVisible은 WPF 렌더 타이밍에 따라 PropertyChanged 직후 false일 수 있음)
                 var isMindMapOpen = _oneNoteViewModel?.IsMindMapVisible ?? false;
                 _oneNoteLog.Info($"[MMRD-실행] OnSelectedRecordingChangedForMindMap 진입 — IsMindMapVisible={isMindMapOpen}, IsVisible={MindMapOverlayInstance?.IsVisible}");
-                if (MindMapOverlayInstance == null || !isMindMapOpen) return;
+                if (MindMapOverlayInstance == null) return;
+                if (!isMindMapOpen)
+                {
+                    // 마인드맵 닫힌 상태 — 캐시만 무효화 (다음 열기 시 옛 트리 잔존 방지)
+                    _oneNoteLog.Info("[MMRD-실행] 마인드맵 닫힘 상태 — Unbind로 캐시 무효화");
+                    MindMapOverlayInstance.Unbind();
+                    return;
+                }
 
                 var newTitle = ResolveRootTitleForMindMap();
                 // [MMRD-실행] Bind 재호출 직전
