@@ -186,20 +186,30 @@
   }
 
   // ===== 공통 자동 fit — SVG 콘텐츠 bbox 기반 zoom 재계산 =====
-  function autoFitToCanvas() {
+  function autoFitToCanvas(retryCount) {
     if (!svg || !g) return;
+    retryCount = retryCount || 0;
     try {
       const gNode = g.node();
       if (!gNode) return;
       const bbox = gNode.getBBox();
-      if (bbox.width === 0 || bbox.height === 0) return;
+      if (bbox.width === 0 || bbox.height === 0) {
+        if (retryCount < 3) {
+          console.log('[MMS-진단] autoFit bbox=0 — 재시도', retryCount + 1);
+          setTimeout(() => autoFitToCanvas(retryCount + 1), 100);
+        } else {
+          console.warn('[MMS-진단] autoFit bbox=0 — 3회 재시도 실패');
+        }
+        return;
+      }
       const W = window.innerWidth, H = window.innerHeight;
       const padding = 60;
       const scale = Math.min((W - padding * 2) / bbox.width, (H - padding * 2) / bbox.height, 1.5);
+      // 루트 중심 정렬 (bbox 중심을 캔버스 중심으로)
       const tx = W / 2 - scale * (bbox.x + bbox.width / 2);
       const ty = H / 2 - scale * (bbox.y + bbox.height / 2);
       svg.call(activeZoom.transform, d3.zoomIdentity.translate(tx, ty).scale(scale));
-      console.log('[MMS-실행] autoFitToCanvas — bbox', Math.round(bbox.width), 'x', Math.round(bbox.height), 'scale', scale.toFixed(2));
+      console.log('[MMS-실행] autoFitToCanvas — bbox', Math.round(bbox.width), 'x', Math.round(bbox.height), 'scale', scale.toFixed(2), 'tx/ty', Math.round(tx), Math.round(ty));
     } catch (e) {
       console.error('[MMS-실행] autoFitToCanvas 실패:', e);
     }
@@ -324,25 +334,26 @@
 
   // ===== ④ 좌우 양방향 마인드맵 (mindmap-lr) =====
   function renderMindMapLR() {
-    const root = d3.hierarchy(currentTreeData);
-    const children = root.children || [];
-    const half = Math.ceil(children.length / 2);
-    const rightChildren = children.slice(0, half);
-    const leftChildren = children.slice(half);
-
-    // 우측 트리
-    const rightRoot = d3.hierarchy({ ...currentTreeData, children: rightChildren });
-    // 좌측 트리
-    const leftRoot = d3.hierarchy({ ...currentTreeData, children: leftChildren });
-
+    // 단일 hierarchy로 만든 후 자식 절반씩 좌/우 분할 (데이터 공유 회피)
     const dx = 24;
     const dy = 160;
+
+    // 우측/좌측 데이터 객체를 명시적으로 새로 생성 (spread보다 안전)
+    const allChildren = (currentTreeData.children || []);
+    const half = Math.ceil(allChildren.length / 2);
+    const rightData = { id: 'r_' + (currentTreeData.id || 0), name: currentTreeData.name, children: allChildren.slice(0, half) };
+    const leftData  = { id: 'l_' + (currentTreeData.id || 0), name: currentTreeData.name, children: allChildren.slice(half) };
+
+    const rightRoot = d3.hierarchy(rightData);
+    const leftRoot  = d3.hierarchy(leftData);
+
     d3.tree().nodeSize([dx, dy])(rightRoot);
     d3.tree().nodeSize([dx, dy])(leftRoot);
 
     // 좌측은 y좌표 반전
     leftRoot.each(d => { d.y = -d.y; });
 
+    // 두 루트가 동일 위치 (0,0) — 하나만 노드로 렌더하고 leftRoot의 root 노드는 skip
     const allLinks = [...rightRoot.links(), ...leftRoot.links()];
     const allNodes = [
       rightRoot,
