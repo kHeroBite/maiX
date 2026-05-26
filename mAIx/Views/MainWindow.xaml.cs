@@ -11799,28 +11799,88 @@ public partial class MainWindow : FluentWindow
     }
 
     /// <summary>
-    /// OneNote 새 노트북 버튼 클릭
+    /// OneNote 새 항목 버튼 클릭 — 선택 상태에 따라 노트북/섹션/페이지 생성 분기
     /// </summary>
     private async void OneNoteNewNotebookButton_Click(object sender, RoutedEventArgs e)
     {
         try
         {
-            // 간단한 입력 다이얼로그 (실제 구현에서는 별도 다이얼로그 필요)
-            var dialog = new Wpf.Ui.Controls.MessageBox
-            {
-                Title = "새 노트북",
-                Content = "새 노트북 이름을 입력하세요 (현재는 기본 이름 사용)",
-                PrimaryButtonText = "만들기",
-                CloseButtonText = "취소"
-            };
+            if (_oneNoteViewModel == null) return;
 
-            var result = await dialog.ShowDialogAsync();
-            if (result == Wpf.Ui.Controls.MessageBoxResult.Primary)
+            // 분기 1: 아무것도 선택되지 않음 → 새 노트북 생성
+            if (_oneNoteViewModel.SelectedNotebook == null)
             {
-                if (_oneNoteViewModel != null)
+                var dialog = new Wpf.Ui.Controls.MessageBox
+                {
+                    Title = "새 노트북",
+                    Content = "새 노트북 이름을 입력하세요 (현재는 기본 이름 사용)",
+                    PrimaryButtonText = "만들기",
+                    CloseButtonText = "취소"
+                };
+
+                var result = await dialog.ShowDialogAsync();
+                if (result == Wpf.Ui.Controls.MessageBoxResult.Primary)
                 {
                     await _oneNoteViewModel.CreateNotebookAsync($"새 노트북 {DateTime.Now:yyyyMMdd_HHmmss}");
                     await LoadOneNoteNotebooksAsync();
+                }
+            }
+            // 분기 2: 노트북만 선택됨 → 새 섹션 생성
+            else if (_oneNoteViewModel.SelectedSection == null)
+            {
+                var inputTextBox = new Wpf.Ui.Controls.TextBox
+                {
+                    PlaceholderText = "섹션 이름 입력",
+                    MinWidth = 280
+                };
+
+                var contentPanel = new StackPanel();
+                contentPanel.Children.Add(new System.Windows.Controls.TextBlock { Text = "새 섹션 이름을 입력하세요.", Margin = new Thickness(0, 0, 0, 8) });
+                contentPanel.Children.Add(inputTextBox);
+
+                var dialog = new Wpf.Ui.Controls.MessageBox
+                {
+                    Title = "새 섹션",
+                    Content = contentPanel,
+                    PrimaryButtonText = "만들기",
+                    CloseButtonText = "취소"
+                };
+
+                var result = await dialog.ShowDialogAsync();
+                if (result == Wpf.Ui.Controls.MessageBoxResult.Primary)
+                {
+                    var sectionName = inputTextBox.Text?.Trim();
+                    if (!string.IsNullOrEmpty(sectionName))
+                        await _oneNoteViewModel.CreateSectionAsync(sectionName);
+                }
+            }
+            // 분기 3: 섹션이 선택됨 → 새 페이지 생성
+            else
+            {
+                var inputTextBox = new Wpf.Ui.Controls.TextBox
+                {
+                    PlaceholderText = "페이지 제목 입력",
+                    MinWidth = 280
+                };
+
+                var contentPanel = new StackPanel();
+                contentPanel.Children.Add(new System.Windows.Controls.TextBlock { Text = "새 페이지 제목을 입력하세요.", Margin = new Thickness(0, 0, 0, 8) });
+                contentPanel.Children.Add(inputTextBox);
+
+                var dialog = new Wpf.Ui.Controls.MessageBox
+                {
+                    Title = "새 페이지",
+                    Content = contentPanel,
+                    PrimaryButtonText = "만들기",
+                    CloseButtonText = "취소"
+                };
+
+                var result = await dialog.ShowDialogAsync();
+                if (result == Wpf.Ui.Controls.MessageBoxResult.Primary)
+                {
+                    var pageTitle = inputTextBox.Text?.Trim();
+                    if (!string.IsNullOrEmpty(pageTitle))
+                        await _oneNoteViewModel.CreatePageAsync(pageTitle);
                 }
             }
         }

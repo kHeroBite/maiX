@@ -2076,3 +2076,7 @@ ConfigureAwait(false)를 Service 레이어 전체에 적용하여 스레드 컨�
 ## 2026-05-21 — 4개 이슈 통합 수정 (녹음시작 자동체크 + MAP 단순화 + 휠 진단 + STT 50자 분리)
 
 | 2026-05-21 | 🐛 4개 이슈 통합 수정 — AC-012: 녹음 시작 시 SttAutoScroll/SummaryAutoScroll 강제 ON (백킹필드 false→true 우회 패턴); AC-013/014: MAP 카드 Context TextBlock 외과적 제거(세로+가로 양쪽); AC-016: 휠 스크롤 [AC016-휠] 진단 로그 추가; AC-017: STT delta 50자+마침 자동분리 패턴. L-479(delta 분리)/L-480(MAP 단순화 보정) 교훈 등록. | OneNoteViewModel.cs, OpenAiRealtimeSttService.cs, MainWindow.xaml, MainWindow.OneNote.cs |
+
+## 2026-05-26 — OneNote 탭 + 버튼 컨텍스트 인식 3분기
+
+| 2026-05-26 | ✨ OneNote 탭 + 버튼 컨텍스트 인식 3분기 — OneNoteNewNotebookButton_Click에서 SelectedNotebook/SelectedSection/SelectedPage 선택 상태에 따라 노트북/섹션/페이지 생성 3분기 처리. System.Windows.Controls.TextBlock 명시 네임스페이스로 CS0104 해결. 신규 교훈: L-515(Wpf.Ui 혼용 파일 TextBlock CS0104). | mAIx/Views/MainWindow.xaml.cs |

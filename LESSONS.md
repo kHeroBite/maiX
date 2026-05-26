@@ -1967,6 +1967,7 @@ L-424(WPF ItemsControl 가변높이 안티패턴 기각)가 직전 작업 완료
 | L-509 | d3 바이너리 csproj Content Include 패턴 — CopyToOutputDirectory=Always 필수 | docs | LESSONS.md | 2026-05-22 | ✅ |
 | L-510 | WebView2 UI 실측 보류 2회 패턴(rev3+radial) — 커밋 메시지 명시 의무 심화 (L-496 Level 2 승급) | docs | LESSONS.md + MEMORY.md | 2026-05-22 | ✅ |
 | L-511 | result.json 사이클 간 잔존 위험 — 진입 시 substeps 내용과 현재 작업 대조 필수 | docs | LESSONS.md + MEMORY.md | 2026-05-22 | ✅ |
+| L-515 | Wpf.Ui 혼용 파일에서 `new TextBlock {}` → CS0104 모호한 참조 — `System.Windows.Controls.TextBlock` 명시 필수 (L-051 TextBlock 버전) | docs | LESSONS.md | 2026-05-26 | ✅ |
 
 ## L-476: Timer 런타임 발화 검증 대체 조건 — 30초+ 주기 Timer 정적 PASS 허용 기준 (2026-05-20)
 
@@ -2517,3 +2518,40 @@ viewModel.PropertyChanged += OnViewModelPropertyChanged_ForMindMap;  // 재등�
 - result.json status='completed'이어도 substeps 내용과 현재 작업 대조 필수
 - 불일치 시 즉시 초기화 (이전 사이클 결과 재활용 금지)
 - Level: 2
+
+---
+
+## L-514: WSL2+WT+tmux 환경 터미널 타이틀 잠금 — OSC 0+2 이중 송출 + DCS passthrough 패턴 (2026-05-26)
+
+**문제**: Windows Terminal(WT) + tmux 환경에서 statusline.py가 OSC 2만 송출하면 WT cold-start(tmux 첫 attach) 시 탭 타이틀이 갱신되지 않음. PS1의 OSC 0이 tmux 외부에서는 잘 작동하지만 tmux 내부에서는 DCS passthrough 없이 무시됨.
+
+**근본원인**:
+- tmux는 OSC 시퀀스를 내부에서 가로채므로 WT까지 도달하려면 DCS passthrough(`\x1bPtmux;\x1b\x1b]N;...\x07\x1b\\`) 감싸기 필수.
+- OSC 2(window title)만 있고 OSC 0(icon+title)이 없으면 일부 WT 버전/상황에서 타이틀 미갱신.
+- `sys.stdout.flush()` 누락 시 Python 버퍼링으로 인해 시퀀스가 지연 또는 유실될 수 있음.
+
+**해결**:
+1. `statusline.py`: OSC 2 앞에 OSC 0 DCS passthrough 추가 + `sys.stdout.flush()` 추가.
+2. `SessionStart.sh`: `_wt_title_warmup()` 함수 추가 — tmux 첫 세션 시작 시 OSC 0+2 DCS passthrough로 초기 타이틀 강제 송출(마커 파일로 1회 실행 보장).
+3. `.bashrc`: PS1 OSC 0을 tmux 유무 조건 분기 처리(tmux 내부에서는 DCS passthrough 형식 사용).
+
+**규칙**:
+- tmux 내부에서 WT 탭 타이틀 갱신 시: 반드시 DCS passthrough 형식 사용.
+- OSC 0(icon+title)과 OSC 2(window title) 양쪽 동시 송출 권장.
+- Python stdout 시퀀스 송출 후 `sys.stdout.flush()` 필수.
+- cold-start warmup: SessionStart 시점에 1회 강제 송출(마커 파일로 중복 방지).
+
+**심각도**: 낮음
+**Level**: 1
+**대화ID**: conv_177975912864
+
+## L-515: Wpf.Ui 혼용 파일에서 `new TextBlock { }` → CS0104 모호한 참조 (2026-05-26)
+
+- **문제**: `Wpf.Ui.Controls` 네임스페이스와 `System.Windows.Controls`가 동시에 using된 파일에서 `new TextBlock { Text = ... }` 사용 시 CS0104 빌드 에러 발생.
+- **근본원인**: `Wpf.Ui.Controls.TextBlock`과 `System.Windows.Controls.TextBlock`이 동일 이름으로 충돌. L-051(MessageBox 인수 타입 충돌)의 TextBlock 버전.
+- **해결**: `new System.Windows.Controls.TextBlock { Text = ... }` 로 명시 네임스페이스 사용.
+- **교훈**: Wpf.Ui를 사용하는 파일에서 코드비하인드(C#)로 컨트롤 인스턴스를 직접 생성할 때 `TextBlock`, `Button`, `Grid` 등 공통 WPF 타입은 반드시 `System.Windows.Controls.` 접두사를 붙인다. L-051과 함께 체크리스트로 관리.
+- **심각도**: 낮음
+- **Level**: 1
+- **연관**: L-051 (Wpf.Ui MessageBox 인수 타입 CS0104)
+- **대화ID**: conv_177975912864
