@@ -2080,3 +2080,7 @@ ConfigureAwait(false)를 Service 레이어 전체에 적용하여 스레드 컨�
 ## 2026-05-26 — OneNote 탭 + 버튼 컨텍스트 인식 3분기
 
 | 2026-05-26 | ✨ OneNote 탭 + 버튼 컨텍스트 인식 3분기 — OneNoteNewNotebookButton_Click에서 SelectedNotebook/SelectedSection/SelectedPage 선택 상태에 따라 노트북/섹션/페이지 생성 3분기 처리. System.Windows.Controls.TextBlock 명시 네임스페이스로 CS0104 해결. 신규 교훈: L-515(Wpf.Ui 혼용 파일 TextBlock CS0104). | mAIx/Views/MainWindow.xaml.cs |
+
+## 2026-05-26 — OneNote + 버튼 분기 회귀 수정
+
+| 2026-05-26 | 🐛 OneNote + 버튼 분기 회귀 수정 — TreeView PreviewMouseLeftButtonDown의 e.Handled=true가 SelectedItemChanged 이벤트를 차단하여 SelectedNotebook/SelectedSection이 영구 null이던 문제 해결. PreviewMouseLeftButtonUp 핸들러에서 노트북/섹션 클릭 시 ViewModel 속성 명시 설정 + LoadOneNotePageAsync에서 페이지 클릭 시 부모 섹션/노트북 역추적 추가. 신규 교훈: L-516(WPF TreeView e.Handled=true → SelectedItemChanged 차단). | mAIx/Views/MainWindow.xaml.cs |

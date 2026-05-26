@@ -13861,9 +13861,17 @@ public partial class MainWindow : FluentWindow
             var clickedTreeViewItem = FindParentTreeViewItem(e.OriginalSource as DependencyObject);
             if (clickedTreeViewItem != treeViewItem) return;
 
-            if (treeViewItem.DataContext is NotebookItemViewModel || treeViewItem.DataContext is SectionItemViewModel)
+            if (treeViewItem.DataContext is NotebookItemViewModel clickedNotebook && _oneNoteViewModel != null)
             {
                 treeViewItem.IsExpanded = !treeViewItem.IsExpanded;
+                _oneNoteViewModel.SelectedNotebook = clickedNotebook;
+                _oneNoteViewModel.SelectedSection = null;
+                e.Handled = true;
+            }
+            else if (treeViewItem.DataContext is SectionItemViewModel clickedSection && _oneNoteViewModel != null)
+            {
+                treeViewItem.IsExpanded = !treeViewItem.IsExpanded;
+                _oneNoteViewModel.SelectedSection = clickedSection;
                 e.Handled = true;
             }
         }
@@ -14315,6 +14323,21 @@ public partial class MainWindow : FluentWindow
                 OneNotePageTitleEdit.Visibility = Visibility.Collapsed;
             if (OneNotePageTitleText != null)
                 OneNotePageTitleText.Visibility = Visibility.Visible;
+
+            // 페이지의 부모 섹션/노트북 역추적 (TreeView 직접 클릭 없이 페이지 선택 시 SelectedSection/SelectedNotebook이 null일 수 있음)
+            if (string.IsNullOrEmpty(_oneNoteViewModel.SelectedSection?.Id) || _oneNoteViewModel.SelectedSection.Id != page.SectionId)
+            {
+                foreach (var notebook in _oneNoteViewModel.Notebooks)
+                {
+                    var parentSection = notebook.Sections.FirstOrDefault(s => s.Id == page.SectionId);
+                    if (parentSection != null)
+                    {
+                        _oneNoteViewModel.SelectedSection = parentSection;
+                        _oneNoteViewModel.SelectedNotebook = notebook;
+                        break;
+                    }
+                }
+            }
 
             // SelectedPage 설정 (저장 기능에 필요)
             _oneNoteViewModel.SelectedPage = page;

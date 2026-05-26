@@ -2545,6 +2545,17 @@ viewModel.PropertyChanged += OnViewModelPropertyChanged_ForMindMap;  // 재등�
 **Level**: 1
 **대화ID**: conv_177975912864
 
+## L-516: WPF TreeView PreviewMouseLeftButtonDown e.Handled=true → SelectedItemChanged 차단 (2026-05-26)
+
+- **문제**: TreeView에 `PreviewMouseLeftButtonDown` 핸들러를 달고 `e.Handled=true`를 설정하면 WPF 내부의 선택 처리 경로가 차단되어 `SelectedItemChanged` 이벤트가 발화하지 않음. 이로 인해 ViewModel의 `SelectedNotebook`/`SelectedSection` 같은 선택 속성이 영구 null로 잔류.
+- **증상**: `SelectedItem` 기반 분기 로직(예: OneNote + 버튼의 노트북/섹션/페이지 3분기)이 항상 첫 번째 분기(null 분기)만 실행.
+- **해결**: `PreviewMouseLeftButtonUp` 또는 `SelectedItemChanged` 핸들러에서 명시적으로 ViewModel 선택 속성을 설정한다. `e.Handled=true`가 필요한 경우 Down 이벤트 대신 Up 이벤트에서 선택 동기화 수행.
+- **교훈**: WPF TreeView에서 `PreviewMouseLeftButtonDown`에 `e.Handled=true`를 두면 내장 선택 이벤트 체인이 끊긴다. 선택 의존 로직이 있는 경우 반드시 `PreviewMouseLeftButtonUp` 또는 `SelectedItemChanged`에서 ViewModel 속성을 보정하라. `e.Handled=true`를 사용하는 이벤트 핸들러 아래에 선택 의존 분기가 있다면 역라우팅 원인 1순위로 의심.
+- **심각도**: 중간 (선택 의존 분기 전체가 오동작)
+- **Level**: 2
+- **연관**: L-259 (WPF ListBox PreviewMouseLeftButtonDown 첫 클릭 무시)
+- **대화ID**: conv_177977681684
+
 ## L-515: Wpf.Ui 혼용 파일에서 `new TextBlock { }` → CS0104 모호한 참조 (2026-05-26)
 
 - **문제**: `Wpf.Ui.Controls` 네임스페이스와 `System.Windows.Controls`가 동시에 using된 파일에서 `new TextBlock { Text = ... }` 사용 시 CS0104 빌드 에러 발생.
