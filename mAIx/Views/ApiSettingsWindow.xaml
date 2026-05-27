@@ -349,10 +349,16 @@
                                     <ColumnDefinition Width="130"/>
                                     <ColumnDefinition Width="*"/>
                                 </Grid.ColumnDefinitions>
-                                <TextBlock Text="실시간 STT 모델" VerticalAlignment="Center" FontSize="12"/>
-                                <ui:TextBox x:Name="RealtimeSttModelTextBox" Grid.Column="1"
-                                           AutomationProperties.AutomationId="RealtimeSttModelTextBox"
-                                           PlaceholderText="gpt-4o-realtime-preview"/>
+                                <TextBlock Text="실시간 STT 모델 (선택)" VerticalAlignment="Center" FontSize="12"/>
+                                <ComboBox x:Name="RealtimeSttModelTextBox" Grid.Column="1"
+                                          AutomationProperties.AutomationId="RealtimeSttModelTextBox"
+                                          IsEditable="True">
+                                    <ComboBoxItem Content="gpt-realtime-whisper"/>
+                                    <ComboBoxItem Content="gpt-4o-transcribe"/>
+                                    <ComboBoxItem Content="gpt-4o-mini-transcribe"/>
+                                    <ComboBoxItem Content="whisper-1"/>
+                                    <ComboBoxItem Content="gpt-realtime-2"/>
+                                </ComboBox>
                             </Grid>
 
                             <!-- 화자분리 STT 모델 -->
@@ -361,10 +367,16 @@
                                     <ColumnDefinition Width="130"/>
                                     <ColumnDefinition Width="*"/>
                                 </Grid.ColumnDefinitions>
-                                <TextBlock Text="화자분리 STT 모델" VerticalAlignment="Center" FontSize="12"/>
-                                <ui:TextBox x:Name="TranscribeSttModelTextBox" Grid.Column="1"
-                                           AutomationProperties.AutomationId="TranscribeSttModelTextBox"
-                                           PlaceholderText="gpt-4o-transcribe"/>
+                                <TextBlock Text="화자분리 STT 모델 (선택)" VerticalAlignment="Center" FontSize="12"/>
+                                <ComboBox x:Name="TranscribeSttModelTextBox" Grid.Column="1"
+                                          AutomationProperties.AutomationId="TranscribeSttModelTextBox"
+                                          IsEditable="True">
+                                    <ComboBoxItem Content="gpt-realtime-whisper"/>
+                                    <ComboBoxItem Content="gpt-4o-transcribe"/>
+                                    <ComboBoxItem Content="gpt-4o-mini-transcribe"/>
+                                    <ComboBoxItem Content="whisper-1"/>
+                                    <ComboBoxItem Content="gpt-realtime-2"/>
+                                </ComboBox>
                             </Grid>
 
                             <!-- LLM 모델 섹션 -->

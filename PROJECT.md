@@ -55,6 +55,7 @@ mAIx/
 │   ├── Models/                # 데이터 모델
 │   ├── Services/              # 비즈니스 로직
 │   │   ├── AI/               # AI 프로바이더
+│   │   │   └── Strategies/   # STT 모델별 Strategy (ISttModelStrategy + Factory + 4 구현체, L-520)
 │   │   ├── Analysis/         # 이메일 분석
 │   │   ├── Api/              # REST API 서버
 │   │   ├── Cloud/            # 클라우드 링크 처리
@@ -414,6 +415,14 @@ AI_Services:
     역할: OpenAI Realtime API WebSocket 기반 실시간 STT 서비스 (화자분리 OFF 모드)
     인터페이스: IOpenAiRealtimeSttService
     이벤트: TranscriptSegmentReceived
+    변경_2026-05-27: Strategy 패턴 도입 (Services/AI/Strategies/) — 모델별 분기를 ISttModelStrategy로 격리 (L-518/L-520)
+    지원_모델: gpt-realtime-whisper / gpt-4o-transcribe / gpt-4o-mini-transcribe / whisper-1 / gpt-realtime-2 (L-441 out-of-band)
+
+  - 파일명: Strategies/ISttModelStrategy.cs (신규 — 2026-05-27)
+    경로: Services/AI/Strategies/
+    역할: STT 모델별 동작 추상화 인터페이스 (ConnectionUri/SessionUpdate/ManualCommit/이벤트 타입/OutOfBand 페이로드)
+    구현체: RealtimeWhisperStrategy / RealtimeTranscribeStrategy / Whisper1Strategy / RealtimeGptReasoningStrategy
+    팩토리: SttStrategyFactory.Create(modelId)
 
   - 파일명: OpenAiTranscribeSttService.cs
     역할: OpenAI Transcription API 청크 기반 STT 서비스 (화자분리 ON 모드, Jaccard dedup)

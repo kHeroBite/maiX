@@ -146,6 +146,10 @@ public class OpenAiRecordingSettings
     [XmlElement("VadSilenceDurationMs")]
     public int VadSilenceDurationMs { get; set; } = 500;
 
+    /// <summary>gpt-realtime-whisper 모델의 delay 파라미터 (선택, 예: "low"/"medium"/"high" 또는 ms 값). null이면 미전송 — whisper 외 모델에서는 무시됨.</summary>
+    [XmlElement("WhisperDelay")]
+    public string? WhisperDelay { get; set; }
+
     /// <summary>자동 말풍선 분리 활성화 여부 (기본 true — AC-017 분리 로직 적용).</summary>
     [XmlElement("AutoSplitEnabled")]
     public bool AutoSplitEnabled { get; set; } = true;

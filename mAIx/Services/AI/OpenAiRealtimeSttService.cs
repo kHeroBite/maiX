@@ -10,6 +10,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using mAIx.Models;
 using mAIx.Models.Settings;
+using mAIx.Services.AI.Strategies;
 using mAIx.Services.AI.Testing;
 using mAIx.Services.Storage;
 using NLog;
@@ -65,6 +66,9 @@ public sealed class OpenAiRealtimeSttService : IOpenAiRealtimeSttService
     private CancellationTokenSource? _cts;
     private Task? _receiveTask;
     private bool _disposed;
+    // L-440 + L-447: 활성 STT 모델별 동작 전략 (URL/페이로드/이벤트 타입/out-of-band 분기).
+    // StartAsync 진입 시 SttStrategyFactory.Create(TranscriptionModel)로 주입되어 ReceiveLoop/StopAsync에서 참조.
+    private ISttModelStrategy? _currentStrategy;
     private double _lastSpeechStartedMs = 0;
     private double _lastSpeechStoppedMs = 0;
     private DateTime? _silenceStartedAt = null;
@@ -168,8 +172,15 @@ public sealed class OpenAiRealtimeSttService : IOpenAiRealtimeSttService
         _ws.Options.SetRequestHeader("Authorization", $"Bearer {apiKey}");
         // OpenAI-Beta 헤더 제거 — GA transcription 모드에서 불필요 (구 preview 전용)
 
-        // GA transcription 모드 URL — model 파라미터 미허용, intent=transcription 고정
-        var uri = new Uri("wss://api.openai.com/v1/realtime?intent=transcription");
+        // L-440 + L-447: 모델별 Strategy 주입 — URL/페이로드/이벤트 타입/out-of-band/manual commit 분기.
+        // 기존 동작 회귀 0 보장: gpt-4o-transcribe 선택 시 RealtimeTranscribeStrategy가 동일 URI + 동일 페이로드 반환.
+        var transcriptionModel = string.IsNullOrWhiteSpace(_settings.OaiRecording.TranscriptionModel)
+            ? "gpt-4o-transcribe"
+            : _settings.OaiRecording.TranscriptionModel;
+        _currentStrategy = SttStrategyFactory.Create(transcriptionModel);
+        var uri = _currentStrategy.BuildConnectionUri();
+        _log.Info("[OpenAi-Realtime] STT Strategy 활성화: {ModelId} (RequiresManualCommit={Manual})",
+            _currentStrategy.ModelId, _currentStrategy.RequiresManualCommit(_settings.OaiRecording.ServerVadEnabled));
 
         try
         {
@@ -184,57 +195,37 @@ public sealed class OpenAiRealtimeSttService : IOpenAiRealtimeSttService
             throw;
         }
 
-        // session.update 발송 — GA transcription nested 구조 (audio.input.* 경로)
+        // session.update 발송 — Strategy가 모델별 페이로드 구조를 결정.
+        // gpt-4o-transcribe/mini: 기존 GA transcription nested 구조 (audio.input.* 경로).
+        // gpt-realtime-whisper: prompt 필드 제외 + 조건부 delay.
+        // gpt-realtime-2: instructions + input_audio_format + create_response=false (L-441).
         var sttLang = string.IsNullOrWhiteSpace(_settings.OaiRecording.SttLanguage) ? "ko" : _settings.OaiRecording.SttLanguage;
         var sttPrompt = _settings.OaiRecording.SttPrompt ?? string.Empty;
-        var transcriptionModel = string.IsNullOrWhiteSpace(_settings.OaiRecording.TranscriptionModel)
-            ? "gpt-4o-transcribe"
-            : _settings.OaiRecording.TranscriptionModel;
-
-        // GA shape: session.type="transcription" + audio.input.format/transcription/turn_detection nested
-        // ⚠️ format은 object 타입으로 우선 시도. OpenAI가 거부 시 string "pcm16" 폴백 필요 (TODO)
-        await SendJsonAsync(new
-        {
-            type = "session.update",
-            session = new
-            {
-                type = "transcription",
-                audio = new
-                {
-                    input = new
-                    {
-                        format = new { type = "audio/pcm", rate = 24000 },
-                        transcription = new
-                        {
-                            model = transcriptionModel,
-                            language = sttLang,
-                            prompt = sttPrompt
-                        },
-                        turn_detection = (transcriptionModel != null && transcriptionModel.Contains("whisper"))
-                            ? null
-                            : (_settings.OaiRecording.ServerVadEnabled
-                                ? (object)new { type = "server_vad", threshold = _settings.OaiRecording.VadThreshold, prefix_padding_ms = 300, silence_duration_ms = _settings.OaiRecording.VadSilenceDurationMs }
-                                : null)
-                    }
-                }
-            }
-        }).ConfigureAwait(false);
-        _log.Info($"[OpenAi-Realtime] session.update 발송 (GA transcription shape) — VAD={(_settings.OaiRecording.ServerVadEnabled ? $"server_vad(thr={_settings.OaiRecording.VadThreshold},sil={_settings.OaiRecording.VadSilenceDurationMs}ms)" : "OFF (수동 commit)")}, transcriptionModel={transcriptionModel}, language={sttLang}, prompt={sttPrompt.Length}자");
+        var sessionPayload = _currentStrategy.BuildSessionUpdatePayload(
+            language: sttLang,
+            prompt: sttPrompt,
+            serverVadEnabled: _settings.OaiRecording.ServerVadEnabled,
+            vadThreshold: _settings.OaiRecording.VadThreshold,
+            vadSilenceDurationMs: _settings.OaiRecording.VadSilenceDurationMs,
+            whisperDelay: _settings.OaiRecording.WhisperDelay
+        );
+        await SendJsonAsync(sessionPayload).ConfigureAwait(false);
+        _log.Info($"[OpenAi-Realtime] session.update 발송 (Strategy={_currentStrategy.ModelId}) — VAD={(_settings.OaiRecording.ServerVadEnabled ? $"server_vad(thr={_settings.OaiRecording.VadThreshold},sil={_settings.OaiRecording.VadSilenceDurationMs}ms)" : "OFF (수동 commit)")}, transcriptionModel={transcriptionModel}, language={sttLang}, prompt={sttPrompt.Length}자");
 
         _silenceStartedAt = DateTime.Now;
         _lastSilenceMarkerSec = 0;
         _silenceMonitorTask = SilenceMonitorLoopAsync(_cts.Token);
         _receiveTask = ReceiveLoopAsync(_cts.Token);
 
-        // 항목9: turn_detection==null(서버 VAD 비활성) 시 OpenAI 자동 commit 없음 → 주기적 수동 commit 필요.
-        // 조건은 session.update의 turn_detection 분기와 동일: whisper 계열 또는 ServerVadEnabled=false.
-        var isWhisperModel = transcriptionModel.Contains("whisper", StringComparison.OrdinalIgnoreCase);
-        var serverVadActive = _settings.OaiRecording.ServerVadEnabled && !isWhisperModel;
-        if (!serverVadActive)
+        // L-448 + L-440: Strategy가 모델별 수동 commit 필요 여부를 결정.
+        // gpt-4o-transcribe: ServerVadEnabled=false일 때만 수동 commit.
+        // gpt-realtime-whisper: 항상 수동 commit (서버 자동 commit 없음).
+        // gpt-realtime-2: ServerVadEnabled=false일 때만 수동 commit.
+        if (_currentStrategy.RequiresManualCommit(_settings.OaiRecording.ServerVadEnabled))
         {
             _audioAppendedSinceCommit = false;
             _manualCommitTask = ManualCommitLoopAsync(_cts.Token);
-            _log.Info($"[OpenAi-Realtime] VAD OFF 감지 — 주기적 수동 commit 루프 시작 (간격 {ManualCommitIntervalSec:F0}s)");
+            _log.Info($"[OpenAi-Realtime] 수동 commit 루프 시작 (Strategy={_currentStrategy.ModelId}, 간격 {ManualCommitIntervalSec:F0}s)");
         }
     }
 
@@ -297,11 +288,34 @@ public sealed class OpenAiRealtimeSttService : IOpenAiRealtimeSttService
             {
                 // GA transcription 모드: response 자동 생성 — response.create 불필요 (제거됨)
                 // server_vad 활성 시 OpenAI 자동 commit 수행 — 수동 commit은 더블 commit 유발 가능 (커뮤니티 권고)
-                var isWhisper = (_settings.OaiRecording.TranscriptionModel ?? string.Empty).Contains("whisper");
-                var useServerVad = _settings.OaiRecording.ServerVadEnabled && !isWhisper;
-                if (!useServerVad)
+                // L-440: Strategy 기반 commit 필요 여부 — 기존 분기와 동일한 결과 (whisper/VAD OFF 시 수동 commit).
+                // _currentStrategy null 폴백: 기존 인라인 로직 그대로 유지 (회귀 0 안전망).
+                bool needManualCommit;
+                if (_currentStrategy != null)
+                {
+                    needManualCommit = _currentStrategy.RequiresManualCommit(_settings.OaiRecording.ServerVadEnabled);
+                }
+                else
+                {
+                    var isWhisper = (_settings.OaiRecording.TranscriptionModel ?? string.Empty).Contains("whisper");
+                    var useServerVad = _settings.OaiRecording.ServerVadEnabled && !isWhisper;
+                    needManualCommit = !useServerVad;
+                }
+                if (needManualCommit)
                 {
                     await SendJsonAsync(new { type = "input_audio_buffer.commit" }).ConfigureAwait(false);
+
+                    // L-441 out-of-band response.create — gpt-realtime-2 등 일반 세션만 페이로드 반환.
+                    if (_currentStrategy != null)
+                    {
+                        var outOfBand = _currentStrategy.BuildOutOfBandResponsePayload(
+                            _settings.OaiRecording.SttLanguage ?? "ko");
+                        if (outOfBand != null)
+                        {
+                            await SendJsonAsync(outOfBand).ConfigureAwait(false);
+                            _log.Info("[OpenAi-Realtime] Stop 시 out-of-band response.create 송신 (Strategy={ModelId})", _currentStrategy.ModelId);
+                        }
+                    }
                 }
 
                 // Close handshake
@@ -379,6 +393,19 @@ public sealed class OpenAiRealtimeSttService : IOpenAiRealtimeSttService
                     await SendJsonAsync(new { type = "input_audio_buffer.commit" }).ConfigureAwait(false);
                     _committedCount++;
                     _log.Info($"[OpenAi-Realtime] VAD OFF 수동 commit 송신 (주기 {ManualCommitIntervalSec:F0}s) — committedCount={_committedCount}");
+
+                    // L-441 out-of-band response.create — 일반 Realtime 세션(gpt-realtime-2)에서만 페이로드 반환.
+                    // transcription 세션 모델(whisper/transcribe)은 null 반환 — 별도 응답 트리거 불필요.
+                    if (_currentStrategy != null)
+                    {
+                        var outOfBand = _currentStrategy.BuildOutOfBandResponsePayload(
+                            _settings.OaiRecording.SttLanguage ?? "ko");
+                        if (outOfBand != null)
+                        {
+                            await SendJsonAsync(outOfBand).ConfigureAwait(false);
+                            _log.Info("[OpenAi-Realtime] out-of-band response.create 송신 (Strategy={ModelId})", _currentStrategy.ModelId);
+                        }
+                    }
                 }
                 catch (Exception ex)
                 {
@@ -496,9 +523,11 @@ public sealed class OpenAiRealtimeSttService : IOpenAiRealtimeSttService
                     _log.Warn($"[RealtimeSTT] transcript 미수신 — committed {_committedCount}회 후 .completed 0건. transcription.prompt/모델권한/include 확인 필요");
                 }
             }
-            else if (type == "conversation.item.input_audio_transcription.delta")
+            else if (_currentStrategy != null && type == _currentStrategy.TranscriptionDeltaEventType)
             {
-                // 발화 중 부분 transcript 점진 표시 — OpenAI item_id를 그대로 사용하여 비동기 매칭 어긋남 방지
+                // 발화 중 부분 transcript 점진 표시 — OpenAI item_id를 그대로 사용하여 비동기 매칭 어긋남 방지.
+                // L-440: Strategy의 이벤트 타입(예: transcription 세션은 "...transcription.delta",
+                // gpt-realtime-2 일반 세션은 "response.text.delta")으로 분기.
                 if (root.TryGetProperty("delta", out var deltaProp))
                 {
                     var deltaText = deltaProp.GetString() ?? string.Empty;
@@ -552,8 +581,10 @@ public sealed class OpenAiRealtimeSttService : IOpenAiRealtimeSttService
                     }
                 }
             }
-            else if (type == "conversation.item.input_audio_transcription.completed")
+            else if (_currentStrategy != null && type == _currentStrategy.TranscriptionCompletedEventType)
             {
+                // L-440: Strategy의 이벤트 타입으로 분기 (transcription 세션은 "...transcription.completed",
+                // gpt-realtime-2 일반 세션은 "response.output_item.done").
                 if (root.TryGetProperty("transcript", out var tr))
                 {
                     var text = tr.GetString() ?? string.Empty;
@@ -710,6 +741,7 @@ public sealed class OpenAiRealtimeSttService : IOpenAiRealtimeSttService
         _receiveTask = null;
         _silenceMonitorTask = null;
         _manualCommitTask = null;
+        _currentStrategy = null;
     }
 
     public void Dispose()

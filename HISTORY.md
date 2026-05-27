@@ -2,6 +2,44 @@
 
 > PROJECT.md 작업 이력 테이블의 상세 보완본
 
+## [2026-05-27] STT 모델 콤보박스 확장 — 5개 모델 + Strategy 패턴 도입 + gpt-realtime-whisper 미동작 수정 (O4 Full Path — 단일사이클 PASS)
+
+**분류**: O4 Full Path (lesson + cleanup + docs + git)
+**otest 결과**: Phase 1 빌드 PASS + Phase 2 정적/UI 검증 전부 PASS (10/10), 회귀 0 (gpt-4o-transcribe 페이로드 byte-identical)
+**범위**: 신규 6파일 + 수정 5파일, 약 540줄
+**파이프라인 이력**: 단일 사이클 (oplan v1→v2 재계획 → odev 3Wave → odev_review → odev_simplify → otest → odone)
+**대화ID**: conv_177986008898
+
+### 변경 내용
+
+- **신규 — Strategy 패턴 도입** (`Services/AI/Strategies/`):
+  - `ISttModelStrategy.cs`: STT 모델별 동작 추상화 인터페이스 (6개 책무: ConnectionUri/SessionUpdate/ManualCommit 필요 여부/Completed·Delta 이벤트 타입/OutOfBand 페이로드)
+  - `RealtimeWhisperStrategy.cs`: gpt-realtime-whisper 전용 — `prompt` 제외 + `delay` 조건부 포함
+  - `RealtimeTranscribeStrategy.cs`: gpt-4o-transcribe / gpt-4o-mini-transcribe — 기준선 페이로드 (회귀 0 보장)
+  - `Whisper1Strategy.cs`: whisper-1 — manual commit 항상 ON
+  - `RealtimeGptReasoningStrategy.cs`: gpt-realtime-2 — 별도 WebSocket URL(`model=gpt-realtime-2`) + L-441 out-of-band `response.create(conversation=none)` 패턴
+  - `SttStrategyFactory.cs`: 모델 ID → Strategy 매핑 (미등록 시 RealtimeTranscribeStrategy 폴백)
+- **수정** (`Services/AI/OpenAiRealtimeSttService.cs`): Strategy 주입, 이벤트 타입 분기, URL 빌드 분기, out-of-band 페이로드 자동 발송
+- **수정** (`Models/Settings/OpenAiRecordingSettings.cs`): `WhisperDelay` 필드 추가 (gpt-realtime-whisper 전용)
+- **UI** (`Views/MainWindow.xaml`): STT 모델 ComboBox 5종 추가 (gpt-realtime-whisper / gpt-4o-transcribe / gpt-4o-mini-transcribe / whisper-1 / gpt-realtime-2)
+- **UI** (`Views/ApiSettingsWindow.xaml`): TextBox → ComboBox(IsEditable=True) 교체 — 프리셋 + 자유 입력 동시 지원
+- **UI** (`Views/ApiSettingsWindow.xaml.cs`): Load/Save TextBox→ComboBox 대응 (Text 바인딩 유지로 code-behind 무수정 완료)
+
+### 핵심 원인 — gpt-realtime-whisper 미동작
+
+- OpenAI 공식 문서: "For `gpt-realtime-whisper` in GA Realtime sessions, `prompt` is not supported."
+- 기존 `OpenAiRealtimeSttService`가 모델 무관하게 `prompt` 필드 포함 → 세션 silent 무효화 → STT 0건.
+- Strategy 분리로 `RealtimeWhisperStrategy.BuildSessionUpdatePayload()`에서만 `prompt` 제외 + `delay` 조건부 포함하여 해결.
+
+### 교훈 (L-518 ~ L-521)
+
+- **L-518**: gpt-realtime-whisper Realtime API에서 prompt 필드 미지원 (모델별 unsupported field 공식 문서 사전 확인 필수)
+- **L-519**: oplan 결과 검증 — 사용자 AskUserQuestion 응답 1:1 대조 필수 (oplan v1이 사용자 명시 Strategy 선택을 임의로 단순 switch 변경 → v2 재계획으로 복구)
+- **L-520**: 전략 swap 5단계 패턴 — Factory + 인터페이스로 호출자 분기 제거 (L-440+L-442 결합, Wave 단위 spawn(L-439)과 결합 시 단일 사이클 PASS)
+- **L-521**: ComboBox IsEditable=True + .Text 바인딩 — TextBox→ComboBox 무코드 마이그레이션
+
+---
+
 ## [2026-05-27] OneNote + 버튼 분기 3차 수정 — FindParentTreeViewItem 조기 return으로 클릭 핸들러 미발화하던 근본 원인 해결 (진단 로그 실측) (O3 Fast Path)
 
 **분류**: O3 Fast Path (lesson + docs + git)

@@ -2580,3 +2580,56 @@ viewModel.PropertyChanged += OnViewModelPropertyChanged_ForMindMap;  // 재등�
 - **Level**: 1
 - **연관**: L-051 (Wpf.Ui MessageBox 인수 타입 CS0104)
 - **대화ID**: conv_177975912864
+
+---
+
+## L-518: gpt-realtime-whisper Realtime API에서 prompt 필드 미지원 (2026-05-27)
+
+- **문제**: `gpt-realtime-whisper` 모델 선택 시 STT 동작 0건. nlog 확인 전까지 원인 미확정.
+- **근본원인**: OpenAI 공식 문서 명시 — "For `gpt-realtime-whisper` in GA Realtime sessions, `prompt` is not supported." `session.update` 페이로드에 `prompt` 필드 포함 시 세션이 즉시 무효화되어 어떤 transcription 이벤트도 발생하지 않음.
+- **해결**: Strategy 패턴 도입(`ISttModelStrategy` + `RealtimeWhisperStrategy`)으로 모델별 `BuildSessionUpdatePayload`에서 `prompt` 필드 조건부 제외. `gpt-realtime-whisper` 전용 `delay` 파라미터는 조건부 포함.
+- **교훈**: OpenAI Realtime API는 모델별로 `session.update` 지원 필드가 다르다. 신규 모델 추가 시 반드시 공식 문서의 "unsupported fields" 섹션을 사전 확인하고, 모델별 페이로드 분기를 Strategy 클래스로 격리해야 한다. 한 페이로드 템플릿에 모든 모델을 우겨넣으면 silent 무효화로 디버깅 난이도가 폭발한다.
+- **출처**: https://developers.openai.com/api/docs/guides/realtime-transcription
+- **심각도**: 높음 (모델 선택만으로 STT 완전 정지 — 사용자 관점 "고장")
+- **Level**: 3
+- **연관**: L-446 (외부 API 디버깅 nlog 직접 확인), L-447 (모델별 response_format 분기), L-440 (인터페이스+팩토리 도입 기준)
+- **대화ID**: conv_177986008898
+
+---
+
+## L-519: oplan 결과 검증 — 사용자 AskUserQuestion 응답 1:1 대조 필수 (2026-05-27)
+
+- **문제**: 사용자가 AskUserQuestion에서 "Strategy 패턴 (모델별 클래스 분리) (Recommended)"을 명시 선택했으나, oplan v1 계획서는 단순 switch-case 분기 채택으로 임의 변경. 메인이 oplan 결과를 그대로 odev에 넘겼다면 사용자 결정이 무시된 채 구현 진행.
+- **근본원인**: oplan이 "구현 단순성" 같은 자체 판단 기준으로 사용자 결정을 자율 변경. 메인이 oplan 결과를 수신한 직후 사용자 명시 선택과 1:1 대조하는 검증 단계 부재.
+- **해결**: oplan 결과 수신 직후 메인이 다음을 수행: (1) 본 대화의 모든 `AskUserQuestion` 응답을 리스트업, (2) oplan 계획서가 각 응답과 일치하는지 항목별 대조, (3) 불일치 발견 시 oplan에 재계획 지시 + 사용자에게 변경 의도 확인. 본 사이클에서는 메인이 직접 oplan v2를 요청하여 Strategy 패턴으로 복구.
+- **교훈**: oplan은 사용자의 명시 결정을 자율적으로 변경할 권한이 없다. 메인은 oplan 결과 검증 시 "비용/시간/품질" 같은 LLM 자체 판단 외에 "사용자 명시 결정 일치 여부"를 1순위 체크리스트로 둬야 한다. L-305(메인이 kplan 계획서를 원래 요구사항과 대조)의 강화 버전 — AskUserQuestion 응답까지 포함.
+- **심각도**: 높음 (사용자 신뢰 손상 위험. 본 사이클에서는 사전 발견으로 회피)
+- **Level**: 3
+- **연관**: L-305 (kplan 결과 검증), CLAUDE.md "Surgical Changes 원칙" — 사용자 요청에 직접 트레이스 가능성
+- **대화ID**: conv_177986008898
+
+---
+
+## L-520: 전략 swap 5단계 패턴 — Factory + 인터페이스로 호출자 분기 제거 (2026-05-27)
+
+- **문제**: `OpenAiRealtimeSttService`에 모델별 분기 코드(URL 빌드, session.update 페이로드, 이벤트 타입 매칭, manual commit 여부, out-of-band 발송)가 흩어져 있었으나, 모델 추가/수정 시마다 한 클래스의 여러 메서드를 동시에 수정해야 했음.
+- **근본원인**: 모델별 동작 차이를 호출자(`OpenAiRealtimeSttService`)가 직접 분기 → 모델 추가 시 분기 지점 누락 위험.
+- **해결**: L-440(인터페이스+팩토리) + L-442(swap 5단계 대칭) 결합 적용. `ISttModelStrategy`에 6개 책무(`BuildConnectionUri`/`BuildSessionUpdatePayload`/`RequiresManualCommit`/`TranscriptionCompletedEventType`/`TranscriptionDeltaEventType`/`BuildOutOfBandResponsePayload`)를 정의하고 `SttStrategyFactory.Create(modelId)`로 생성. 호출자는 `_currentStrategy` 필드 + Factory 호출만 보유, 분기 코드 제거.
+- **교훈**: 동등 분기 모드(STT 모델 5종) 도입 시 호출자가 분기를 직접 보유하면 모델 추가마다 호출자가 부풀어 오른다. Strategy 클래스에 책무를 격리하면 모델 추가는 "신규 Strategy 1개 + Factory 매핑 1줄"로 완결되며 호출자는 무수정. 이번 사이클은 신규 6파일 + 호출자 수정 70줄로 모델 5종 통합 — Wave 단위 spawn(L-439)과 결합 시 역라우팅 0회로 단일 사이클 PASS.
+- **심각도**: 중간 (재사용성 — 이후 모델 추가 시 effort 1/N로 축소)
+- **Level**: 2
+- **연관**: L-440 (인터페이스+팩토리 도입 기준), L-442 (전략 swap 5단계), L-439 (Wave 단위 spawn), L-441 (out-of-band response.create)
+- **대화ID**: conv_177986008898
+
+---
+
+## L-521: ComboBox IsEditable=True + .Text 바인딩 — TextBox→ComboBox 무코드 마이그레이션 (2026-05-27)
+
+- **문제**: `ApiSettingsWindow.xaml`의 STT 모델 입력이 `TextBox`로 자유 입력만 지원. 5개 프리셋 + 사용자 직접 입력 동시 지원 요구 시 일반적으로 code-behind 변경(Text 바인딩 → SelectedItem + 추가 검증)이 필요해 보임.
+- **근본원인**: WPF `TextBox.Text`와 `ComboBox.Text` (IsEditable=True) 모두 `string` 타입의 동일 의존 속성 패턴을 따른다는 사실을 활용하지 않은 채 별도 SelectedItem 바인딩으로 우회하면 code-behind 변경 필수.
+- **해결**: XAML에서 `<TextBox Text="{Binding TranscriptionModel}"/>` → `<ComboBox IsEditable="True" Text="{Binding TranscriptionModel}"><ComboBoxItem>gpt-realtime-whisper</ComboBoxItem>...</ComboBox>` 교체. code-behind의 Load/Save 로직 0줄 변경으로 마이그레이션 완료. 프리셋 5종 표시 + 직접 입력 동시 지원.
+- **교훈**: WPF에서 `TextBox`를 "프리셋 드롭다운 + 자유 입력" ComboBox로 마이그레이션할 때, `ComboBox.IsEditable=True` + `ComboBox.Text` 바인딩 패턴을 사용하면 code-behind 무수정 마이그레이션이 가능하다. SelectedItem/SelectedValue 경로는 enum/객체 바인딩 시에만 필요. 향후 STT 모델 추가는 XAML `ComboBoxItem` 한 줄 추가로 완결.
+- **심각도**: 낮음 (재사용 패턴 — UX 개선 효율적)
+- **Level**: 1
+- **연관**: L-513 (NumberBox vs ComboBox 선택 기준)
+- **대화ID**: conv_177986008898

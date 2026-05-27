@@ -8633,10 +8633,11 @@
                                                                               SelectedValue="{Binding TranscriptionModel, Mode=TwoWay}"
                                                                               SelectedValuePath="Tag"
                                                                               FontSize="12" Width="220">
-                                                                        <ComboBoxItem Content="gpt-realtime-whisper (실시간 전용)" Tag="gpt-realtime-whisper"/>
-                                                                        <ComboBoxItem Content="gpt-4o-mini-transcribe (권장)" Tag="gpt-4o-mini-transcribe"/>
-                                                                        <ComboBoxItem Content="gpt-4o-transcribe (고품질)" Tag="gpt-4o-transcribe"/>
-                                                                        <ComboBoxItem Content="whisper-1 (구형, 일괄)" Tag="whisper-1"/>
+                                                                        <ComboBoxItem Content="gpt-realtime-whisper (저지연 STT, GPT-5급)" Tag="gpt-realtime-whisper"/>
+                                                                        <ComboBoxItem Content="gpt-4o-transcribe (기준선)" Tag="gpt-4o-transcribe"/>
+                                                                        <ComboBoxItem Content="gpt-4o-mini-transcribe (경량·저비용)" Tag="gpt-4o-mini-transcribe"/>
+                                                                        <ComboBoxItem Content="whisper-1 (레거시)" Tag="whisper-1"/>
+                                                                        <ComboBoxItem Content="gpt-realtime-2 (GPT-5급 추론 + STT)" Tag="gpt-realtime-2"/>
                                                                     </ComboBox>
                                                                 </StackPanel>
                                                                 <StackPanel Orientation="Horizontal" Margin="0,0,0,4"

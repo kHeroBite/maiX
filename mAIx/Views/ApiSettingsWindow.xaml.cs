@@ -778,8 +778,11 @@ public partial class ApiSettingsWindow : FluentWindow
     {
         var rec = _settingsManager.OaiRecording;
 
-        rec.RealtimeSttModel = RealtimeSttModelTextBox.Text?.Trim() ?? rec.RealtimeSttModel;
-        rec.TranscribeSttModel = TranscribeSttModelTextBox.Text?.Trim() ?? rec.TranscribeSttModel;
+        // ComboBox(IsEditable=True) — 빈 문자열은 기존 값 유지 (회귀 방지: 사용자가 텍스트를 지운 경우 기본값으로 폴백)
+        var realtimeSttText = RealtimeSttModelTextBox.Text?.Trim();
+        rec.RealtimeSttModel = string.IsNullOrEmpty(realtimeSttText) ? rec.RealtimeSttModel : realtimeSttText;
+        var transcribeSttText = TranscribeSttModelTextBox.Text?.Trim();
+        rec.TranscribeSttModel = string.IsNullOrEmpty(transcribeSttText) ? rec.TranscribeSttModel : transcribeSttText;
         rec.KeywordExtractModel = KeywordExtractModelTextBox.Text?.Trim() ?? rec.KeywordExtractModel;
         rec.MinuteSummaryModel = MinuteSummaryModelTextBox.Text?.Trim() ?? rec.MinuteSummaryModel;
         rec.CumulativeSummaryModel = CumulativeSummaryModelTextBox.Text?.Trim() ?? rec.CumulativeSummaryModel;
