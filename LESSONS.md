@@ -2556,6 +2556,20 @@ viewModel.PropertyChanged += OnViewModelPropertyChanged_ForMindMap;  // 재등�
 - **연관**: L-259 (WPF ListBox PreviewMouseLeftButtonDown 첫 클릭 무시)
 - **대화ID**: conv_177977681684
 
+## L-517: WPF 커스텀 ControlTemplate TreeViewItem — FindParentTreeViewItem 조기 return으로 클릭 핸들러 미발화 (2026-05-27)
+
+- **문제**: `PreviewMouseLeftButtonDown/Up` 핸들러 앞단에서 `OriginalSource → VisualTree` 탐색으로 `FindParentTreeViewItem`를 호출하고 `clickedTreeViewItem != treeViewItem` 조건 불일치 시 조기 `return`하는 패턴이 존재할 때, 커스텀 `ControlTemplate`을 가진 TreeViewItem에서는 이 체크가 항상 실패하여 핸들러 본문 전체가 실행되지 않음.
+- **증상**: `SelectedNotebook`/`SelectedSection` 등 선택 의존 속성이 영구 null 잔류. + 버튼 클릭 시 분기 로직이 항상 null 분기만 실행. 진단 로그로 핸들러 발화 여부를 실측하기 전까지 원인 미확정 (정적 grep + 빌드 PASS만으로는 발견 불가).
+- **근본원인**: `FindParentTreeViewItem`은 `OriginalSource`로부터 VisualTree를 역탐색하여 현재 핸들러의 `treeViewItem` 참조와 비교하는데, 커스텀 ControlTemplate 적용 시 VisualTree 구조가 달라 `null` 또는 다른 인스턴스가 반환되어 일치 조건이 항상 false.
+- **해결**: `FindParentTreeViewItem` 체크를 제거하고 `sender.DataContext`를 직접 분기하여 노트북/섹션/페이지 타입별로 처리. `PreviewMouseLeftButtonDown` 핸들러에서 `DataContext` 타입 확인 후 직접 처리 + `e.Handled=true`.
+- **교훈**: WPF 커스텀 ControlTemplate 적용 TreeViewItem에서 `PreviewMouseLeftButtonDown/Up` 핸들러가 침묵 실패할 때, `FindParentTreeViewItem` 류의 VisualTree 일치 체크가 원인일 수 있다. UI 이벤트 핸들러 버그는 "발화 여부 진단 로그"가 정적 분석보다 결정적. 2회 추측 수정이 실패하면 핸들러 진입 여부를 직접 실측하라.
+- **심각도**: 높음 (클릭 핸들러 전체 미발화 → 선택 의존 분기 완전 오동작)
+- **Level**: 3
+- **연관**: L-516 (WPF TreeView PreviewMouseLeftButtonDown e.Handled=true → SelectedItemChanged 차단)
+- **대화ID**: conv_177977681684
+
+---
+
 ## L-515: Wpf.Ui 혼용 파일에서 `new TextBlock { }` → CS0104 모호한 참조 (2026-05-26)
 
 - **문제**: `Wpf.Ui.Controls` 네임스페이스와 `System.Windows.Controls`가 동시에 using된 파일에서 `new TextBlock { Text = ... }` 사용 시 CS0104 빌드 에러 발생.

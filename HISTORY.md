@@ -2,6 +2,24 @@
 
 > PROJECT.md 작업 이력 테이블의 상세 보완본
 
+## [2026-05-27] OneNote + 버튼 분기 3차 수정 — FindParentTreeViewItem 조기 return으로 클릭 핸들러 미발화하던 근본 원인 해결 (진단 로그 실측) (O3 Fast Path)
+
+**분류**: O3 Fast Path (lesson + docs + git)
+**범위**: 수정 3파일 (MainWindow.xaml.cs, MainWindow.xaml, OneNoteViewModel.cs)
+**대화ID**: conv_177977681684
+
+### 변경 내용
+
+- **근본 원인 해결** (`MainWindow.xaml.cs`): `OneNoteTreeViewItem_PreviewMouseLeftButtonDown`의 `FindParentTreeViewItem` 체크(커스텀 ControlTemplate으로 항상 조기 return) 제거 → `sender.DataContext` 직접 분기(노트북/섹션 expand+선택설정, 페이지 `LoadOneNotePageAsync` 직접 호출) + `e.Handled=true`.
+- **null 보완** (`MainWindow.xaml.cs`): `OneNoteNewNotebookButton_Click`에서 `SelectedNotebook null` 시 `SelectedPage` 역추적 보완. `LoadOneNotePageAsync`에 `FavoritePages` fallback 탐색 추가.
+- **진단 로그 제거**: [ONENOTE-DIAG] A~F 마커 전부 제거.
+
+### 교훈 (L-517)
+
+- L-517: WPF 커스텀 ControlTemplate TreeViewItem — FindParentTreeViewItem 조기 return으로 클릭 핸들러 미발화. 진단 로그 실측이 정적 분석보다 결정적.
+
+---
+
 ## [2026-05-23] 실시간 STT 자동분리 2단계 임계치 + ApiSettingsWindow UI 노출 (O3 Fast Path — 단일사이클 PASS)
 
 **분류**: O3 Fast Path (lesson + docs + git)

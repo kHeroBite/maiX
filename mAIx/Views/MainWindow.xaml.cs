@@ -11807,6 +11807,46 @@ public partial class MainWindow : FluentWindow
         {
             if (_oneNoteViewModel == null) return;
 
+            // 즐겨찾기/페이지 선택 시 SelectedNotebook이 null이면 SelectedPage로 역추적 시도
+            if (_oneNoteViewModel.SelectedNotebook == null && _oneNoteViewModel.SelectedPage != null)
+            {
+                var page = _oneNoteViewModel.SelectedPage;
+                bool found = false;
+                // 1) 메인 Notebooks 탐색 (섹션이 이미 로드된 경우)
+                foreach (var nb in _oneNoteViewModel.Notebooks)
+                {
+                    var sec = nb.Sections.FirstOrDefault(s => s.Id == page.SectionId);
+                    if (sec != null)
+                    {
+                        _oneNoteViewModel.SelectedNotebook = nb;
+                        _oneNoteViewModel.SelectedSection = sec;
+                        found = true;
+                        break;
+                    }
+                }
+                // 2) 메인 Notebooks 탐색 실패 시 FavoritePages에서 역추적
+                if (!found && !string.IsNullOrEmpty(page.SectionId))
+                {
+                    var favSec = _oneNoteViewModel.FavoritePages
+                        .FirstOrDefault(f => f.ItemType == FavoriteItemType.Section && f.Id == page.SectionId);
+                    if (favSec != null)
+                    {
+                        _oneNoteViewModel.SelectedSection = new SectionItemViewModel
+                        {
+                            Id = favSec.Id,
+                            DisplayName = favSec.Title,
+                            GroupId = favSec.GroupId ?? string.Empty,
+                            SiteId = favSec.SiteId ?? string.Empty
+                        };
+                        // 섹션 FavoriteItem의 SectionId = 노트북 ID
+                        var favNb = _oneNoteViewModel.FavoritePages
+                            .FirstOrDefault(f => f.ItemType == FavoriteItemType.Notebook && f.Id == favSec.SectionId);
+                        if (favNb != null)
+                            _oneNoteViewModel.SelectedNotebook = new NotebookItemViewModel { Id = favNb.Id, DisplayName = favNb.Title };
+                    }
+                }
+            }
+
             // 분기 1: 아무것도 선택되지 않음 → 새 노트북 생성
             if (_oneNoteViewModel.SelectedNotebook == null)
             {
@@ -11875,12 +11915,30 @@ public partial class MainWindow : FluentWindow
                     CloseButtonText = "취소"
                 };
 
+                // 다이얼로그 표시 후 TextBox에 자동 포커스
+                dialog.Loaded += (_, _) => inputTextBox.Focus();
+
                 var result = await dialog.ShowDialogAsync();
                 if (result == Wpf.Ui.Controls.MessageBoxResult.Primary)
                 {
                     var pageTitle = inputTextBox.Text?.Trim();
                     if (!string.IsNullOrEmpty(pageTitle))
+                    {
+                        // 즐겨찾기에서 선택된 섹션 ID 미리 캡처 (CreatePageAsync 후 갱신에 사용)
+                        var selectedSectionId = _oneNoteViewModel.SelectedSection?.Id;
+
                         await _oneNoteViewModel.CreatePageAsync(pageTitle);
+
+                        // 즐겨찾기 목록 실시간 갱신 — SelectedSection.Id로 FavoritePages에서 섹션 항목 탐색
+                        if (_oneNoteViewModel.SelectedPage != null && !string.IsNullOrEmpty(selectedSectionId))
+                        {
+                            AddPageToFavoriteSectionChildren(selectedSectionId, _oneNoteViewModel.SelectedPage);
+                        }
+
+                        // 생성된 페이지 자동 열기
+                        if (_oneNoteViewModel.SelectedPage != null)
+                            await LoadOneNotePageAsync(_oneNoteViewModel.SelectedPage);
+                    }
                 }
             }
         }
@@ -12092,6 +12150,14 @@ public partial class MainWindow : FluentWindow
                     {
                         FillPageGroupAndSiteInfo(selectedItem);
                     }
+
+                    // 페이지의 SectionId로 FavoritePages 전체(자식 포함)를 탐색하여 SelectedSection/SelectedNotebook 설정
+                    // (LoadOneNotePageAsync 역추적보다 선행 처리 — 온디맨드 미로드 섹션도 처리 가능)
+                    if (!string.IsNullOrEmpty(selectedItem.SectionId))
+                    {
+                        SetSelectedContextFromFavorites(selectedItem.SectionId);
+                    }
+
                     await LoadOneNotePageAsync(selectedItem);
                 }
                 // 노트북/섹션은 확장만 하면 됨 (Expanded 이벤트에서 자식 로드)
@@ -12100,6 +12166,141 @@ public partial class MainWindow : FluentWindow
         catch (Exception ex)
         {
             Serilog.Log.Error(ex, "[MainWindow] OneNoteFavoritesTreeView_SelectedItemChanged 실패");
+        }
+    }
+
+    /// <summary>
+    /// 즐겨찾기 페이지 선택 시 SectionId로 SelectedSection/SelectedNotebook을 역추적하여 설정.
+    /// FavoritePages 최상위 섹션 + 노트북의 동적 자식 섹션까지 재귀 탐색.
+    /// </summary>
+    private void SetSelectedContextFromFavorites(string sectionId)
+    {
+        if (_oneNoteViewModel == null || string.IsNullOrEmpty(sectionId)) return;
+
+        // 1) FavoritePages 최상위 섹션에서 탐색
+        var topSec = _oneNoteViewModel.FavoritePages
+            .FirstOrDefault(f => f.ItemType == FavoriteItemType.Section && f.Id == sectionId);
+        if (topSec != null)
+        {
+            _oneNoteViewModel.SelectedSection = new SectionItemViewModel
+            {
+                Id = topSec.Id,
+                DisplayName = topSec.Title,
+                GroupId = topSec.GroupId ?? string.Empty,
+                SiteId = topSec.SiteId ?? string.Empty
+            };
+            // 이 섹션의 부모 노트북: 섹션 FavoriteItem의 SectionId = NotebookId
+            var parentNb = _oneNoteViewModel.FavoritePages
+                .FirstOrDefault(f => f.ItemType == FavoriteItemType.Notebook && f.Id == topSec.SectionId);
+            if (parentNb != null)
+                _oneNoteViewModel.SelectedNotebook = new NotebookItemViewModel { Id = parentNb.Id, DisplayName = parentNb.Title };
+            Log4.Debug($"[OneNote] SetSelectedContext(최상위 섹션): SEC={topSec.Title}, NB={_oneNoteViewModel.SelectedNotebook?.DisplayName ?? "null"}");
+            return;
+        }
+
+        // 2) FavoritePages 노트북의 동적 자식 섹션에서 탐색 (노트북 확장 후 로드된 섹션)
+        foreach (var nb in _oneNoteViewModel.FavoritePages.Where(f => f.ItemType == FavoriteItemType.Notebook))
+        {
+            var childSec = nb.Children.FirstOrDefault(c => c.ItemType == FavoriteItemType.Section && c.Id == sectionId);
+            if (childSec != null)
+            {
+                _oneNoteViewModel.SelectedSection = new SectionItemViewModel
+                {
+                    Id = childSec.Id,
+                    DisplayName = childSec.Title,
+                    GroupId = childSec.GroupId ?? string.Empty,
+                    SiteId = childSec.SiteId ?? string.Empty
+                };
+                _oneNoteViewModel.SelectedNotebook = new NotebookItemViewModel { Id = nb.Id, DisplayName = nb.Title };
+                Log4.Debug($"[OneNote] SetSelectedContext(노트북 자식 섹션): SEC={childSec.Title}, NB={nb.Title}");
+                return;
+            }
+        }
+
+        // 3) 메인 Notebooks에서 탐색 (섹션이 이미 로드된 경우)
+        foreach (var notebook in _oneNoteViewModel.Notebooks)
+        {
+            var sec = notebook.Sections.FirstOrDefault(s => s.Id == sectionId);
+            if (sec != null)
+            {
+                _oneNoteViewModel.SelectedSection = sec;
+                _oneNoteViewModel.SelectedNotebook = notebook;
+                Log4.Debug($"[OneNote] SetSelectedContext(메인 Notebooks): SEC={sec.DisplayName}, NB={notebook.DisplayName}");
+                return;
+            }
+        }
+
+        Log4.Debug($"[OneNote] SetSelectedContext 실패: SectionId={sectionId}");
+    }
+
+    /// <summary>
+    /// 새 페이지 생성 후 즐겨찾기 섹션 Children에 실시간 추가.
+    /// FavoritePages 최상위 및 노트북 자식 섹션 모두 탐색.
+    /// </summary>
+    private void AddPageToFavoriteSectionChildren(string sectionId, PageItemViewModel pageItem)
+    {
+        if (_oneNoteViewModel == null || string.IsNullOrEmpty(sectionId)) return;
+
+        // 1) FavoritePages 최상위 섹션
+        var topSec = _oneNoteViewModel.FavoritePages
+            .FirstOrDefault(f => f.ItemType == FavoriteItemType.Section && f.Id == sectionId);
+        if (topSec != null)
+        {
+            topSec.Children.Insert(0, pageItem);
+            Log4.Debug($"[OneNote] 즐겨찾기 최상위 섹션에 페이지 추가: SEC={topSec.Title}, PAGE={pageItem.Title}");
+            return;
+        }
+
+        // 2) 노트북 자식 섹션
+        foreach (var nb in _oneNoteViewModel.FavoritePages.Where(f => f.ItemType == FavoriteItemType.Notebook))
+        {
+            var childSec = nb.Children.FirstOrDefault(c => c.ItemType == FavoriteItemType.Section && c.Id == sectionId);
+            if (childSec != null)
+            {
+                childSec.Children.Insert(0, pageItem);
+                Log4.Debug($"[OneNote] 즐겨찾기 노트북 자식 섹션에 페이지 추가: NB={nb.Title}, SEC={childSec.Title}, PAGE={pageItem.Title}");
+                return;
+            }
+        }
+
+        Log4.Debug($"[OneNote] 즐겨찾기에서 섹션 미발견 (메인 트리만 갱신됨): SectionId={sectionId}");
+    }
+
+    /// <summary>
+    /// OneNote 페이지 삭제 버튼 클릭
+    /// </summary>
+    private async void OneNoteDeleteButton_Click(object sender, RoutedEventArgs e)
+    {
+        try
+        {
+            if (_oneNoteViewModel?.SelectedPage == null) return;
+
+            var page = _oneNoteViewModel.SelectedPage;
+            var dialog = new Wpf.Ui.Controls.MessageBox
+            {
+                Title = "페이지 삭제",
+                Content = $"'{page.Title}' 페이지를 삭제하시겠습니까?\n삭제된 페이지는 복구할 수 없습니다.",
+                PrimaryButtonText = "삭제",
+                CloseButtonText = "취소"
+            };
+
+            var result = await dialog.ShowDialogAsync();
+            if (result != Wpf.Ui.Controls.MessageBoxResult.Primary) return;
+
+            _isDeletingPage = true;
+            try
+            {
+                await _oneNoteViewModel.DeletePageAsync(page.Id);
+                ResetOneNoteUI();
+            }
+            finally
+            {
+                _isDeletingPage = false;
+            }
+        }
+        catch (Exception ex)
+        {
+            Serilog.Log.Error(ex, "[MainWindow] OneNoteDeleteButton_Click 실패");
         }
     }
 
@@ -12408,9 +12609,23 @@ public partial class MainWindow : FluentWindow
             var clickedTreeViewItem = FindParentTreeViewItem(e.OriginalSource as DependencyObject);
             if (clickedTreeViewItem != treeViewItem) return;
 
-            if (item.ItemType == FavoriteItemType.Notebook || item.ItemType == FavoriteItemType.Section)
+            if (item.ItemType == FavoriteItemType.Notebook)
             {
                 treeViewItem.IsExpanded = !treeViewItem.IsExpanded;
+                // 즐겨찾기 노트북 선택 시 SelectedNotebook 설정 (+ 버튼 분기 보정)
+                if (_oneNoteViewModel != null)
+                {
+                    _oneNoteViewModel.SelectedNotebook = new NotebookItemViewModel { Id = item.Id, DisplayName = item.Title };
+                    _oneNoteViewModel.SelectedSection = null;
+                }
+                e.Handled = true;
+            }
+            else if (item.ItemType == FavoriteItemType.Section)
+            {
+                treeViewItem.IsExpanded = !treeViewItem.IsExpanded;
+                // 즐겨찾기 섹션 선택 시 SelectedSection + SelectedNotebook 역추적
+                if (_oneNoteViewModel != null)
+                    SetSelectedContextFromFavorites(item.Id);
                 e.Handled = true;
             }
         }
@@ -12652,8 +12867,16 @@ public partial class MainWindow : FluentWindow
     {
         if (_oneNoteViewModel == null) return;
 
-        // 더미 자식("로딩 중...") 제거
-        favoriteSection.Children.Clear();
+        // 더미 자식("로딩 중...") 제거 — Id가 비어있는 항목이 더미
+        var dummies = favoriteSection.Children.Where(c => string.IsNullOrEmpty(c.Id)).ToList();
+        foreach (var d in dummies) favoriteSection.Children.Remove(d);
+
+        // 이미 실제 페이지가 로드된 상태면 재로드 스킵 (실시간 추가 항목 보존)
+        if (favoriteSection.Children.Any(c => !string.IsNullOrEmpty(c.Id)))
+        {
+            Log4.Debug($"[OneNote] 즐겨찾기 섹션 이미 로드됨 — 재로드 스킵: {favoriteSection.Title}");
+            return;
+        }
 
         // 먼저 이미 로드된 노트북에서 페이지 찾기
         foreach (var notebook in _oneNoteViewModel.Notebooks)
@@ -13828,53 +14051,67 @@ public partial class MainWindow : FluentWindow
     }
 
     /// <summary>
-    /// OneNote 트리뷰 아이템 클릭 시 노트북/섹션은 선택하지 않고 토글만
+    /// OneNote 트리뷰 아이템 클릭 — 노트북/섹션은 expand 토글 + 선택 설정, 페이지는 직접 로드
     /// </summary>
-    private void OneNoteTreeViewItem_PreviewMouseLeftButtonDown(object sender, System.Windows.Input.MouseButtonEventArgs e)
+    private async void OneNoteTreeViewItem_PreviewMouseLeftButtonDown(object sender, System.Windows.Input.MouseButtonEventArgs e)
     {
-        if (sender is System.Windows.Controls.TreeViewItem treeViewItem)
+        try
         {
-            // 직접 클릭된 TreeViewItem인지 확인 (버블링된 이벤트 무시)
-            var clickedTreeViewItem = FindParentTreeViewItem(e.OriginalSource as DependencyObject);
-            if (clickedTreeViewItem != treeViewItem)
-            {
-                // 자식 항목에서 버블링된 이벤트는 무시
-                return;
-            }
+            if (sender is not System.Windows.Controls.TreeViewItem treeViewItem) return;
+            if (_oneNoteViewModel == null) return;
 
-            // 노트북 또는 섹션인 경우 MouseDown에서는 선택만 방지 (토글은 MouseUp에서)
-            if (treeViewItem.DataContext is NotebookItemViewModel || treeViewItem.DataContext is SectionItemViewModel)
-            {
-                e.Handled = true;
-            }
-            // 페이지는 기본 동작 (선택)
-        }
-    }
+            // PreviewMouseLeftButtonDown은 터널링 이벤트 — 부모→자식 순으로 모든 TreeViewItem 핸들러가 호출됨.
+            // OriginalSource에서 올라간 TreeViewItem이 sender와 동일한 경우만 처리하여
+            // 부모 TreeViewItem(노트북)이 자식(섹션/페이지) 클릭에 반응하지 않도록 방지.
+            var directlyClicked = FindParentTreeViewItem(e.OriginalSource as System.Windows.DependencyObject);
+            if (directlyClicked != treeViewItem) return;
 
-    /// <summary>
-    /// OneNote 트리뷰 마우스 업 — 드래그가 아닌 클릭 시에만 노트북/섹션 토글
-    /// </summary>
-    private void OneNoteTreeViewItem_PreviewMouseLeftButtonUp(object sender, System.Windows.Input.MouseButtonEventArgs e)
-    {
-        if (sender is System.Windows.Controls.TreeViewItem treeViewItem)
-        {
-            var clickedTreeViewItem = FindParentTreeViewItem(e.OriginalSource as DependencyObject);
-            if (clickedTreeViewItem != treeViewItem) return;
-
-            if (treeViewItem.DataContext is NotebookItemViewModel clickedNotebook && _oneNoteViewModel != null)
+            // 노트북 클릭 — expand 토글 + SelectedNotebook 설정
+            if (treeViewItem.DataContext is NotebookItemViewModel clickedNotebook)
             {
                 treeViewItem.IsExpanded = !treeViewItem.IsExpanded;
                 _oneNoteViewModel.SelectedNotebook = clickedNotebook;
                 _oneNoteViewModel.SelectedSection = null;
+                Log4.Debug($"[OneNote] 노트북 선택: {clickedNotebook.DisplayName}");
                 e.Handled = true;
             }
-            else if (treeViewItem.DataContext is SectionItemViewModel clickedSection && _oneNoteViewModel != null)
+            // 섹션 클릭 — expand 토글 + SelectedSection + SelectedNotebook 역추적
+            else if (treeViewItem.DataContext is SectionItemViewModel clickedSection)
             {
                 treeViewItem.IsExpanded = !treeViewItem.IsExpanded;
                 _oneNoteViewModel.SelectedSection = clickedSection;
+                // 섹션의 부모 노트북 역추적
+                if (_oneNoteViewModel.SelectedNotebook == null ||
+                    !_oneNoteViewModel.SelectedNotebook.Sections.Any(s => s.Id == clickedSection.Id))
+                {
+                    var parentNb = _oneNoteViewModel.Notebooks
+                        .FirstOrDefault(nb => nb.Sections.Any(s => s.Id == clickedSection.Id));
+                    if (parentNb != null)
+                        _oneNoteViewModel.SelectedNotebook = parentNb;
+                }
+                Log4.Debug($"[OneNote] 섹션 선택: {clickedSection.DisplayName}, NB={_oneNoteViewModel.SelectedNotebook?.DisplayName ?? "null"}");
                 e.Handled = true;
             }
+            // 페이지 클릭 — SelectedItemChanged가 발화 안 되므로 직접 로드
+            else if (treeViewItem.DataContext is PageItemViewModel clickedPage)
+            {
+                Log4.Debug($"[OneNote] 페이지 선택: {clickedPage.Title}");
+                e.Handled = true;
+                await LoadOneNotePageAsync(clickedPage);
+            }
         }
+        catch (Exception ex)
+        {
+            Serilog.Log.Error(ex, "[MainWindow] OneNoteTreeViewItem_PreviewMouseLeftButtonDown 실패");
+        }
+    }
+
+    /// <summary>
+    /// OneNote 트리뷰 마우스 업 — 페이지 이외 항목은 Down에서 처리하므로 Up은 pass-through
+    /// </summary>
+    private void OneNoteTreeViewItem_PreviewMouseLeftButtonUp(object sender, System.Windows.Input.MouseButtonEventArgs e)
+    {
+        // 노트북/섹션은 Down에서 이미 처리됨. 추가 처리 없음.
     }
 
     /// <summary>
@@ -14327,6 +14564,8 @@ public partial class MainWindow : FluentWindow
             // 페이지의 부모 섹션/노트북 역추적 (TreeView 직접 클릭 없이 페이지 선택 시 SelectedSection/SelectedNotebook이 null일 수 있음)
             if (string.IsNullOrEmpty(_oneNoteViewModel.SelectedSection?.Id) || _oneNoteViewModel.SelectedSection.Id != page.SectionId)
             {
+                bool found = false;
+                // 1) 메인 Notebooks 탐색
                 foreach (var notebook in _oneNoteViewModel.Notebooks)
                 {
                     var parentSection = notebook.Sections.FirstOrDefault(s => s.Id == page.SectionId);
@@ -14334,9 +14573,37 @@ public partial class MainWindow : FluentWindow
                     {
                         _oneNoteViewModel.SelectedSection = parentSection;
                         _oneNoteViewModel.SelectedNotebook = notebook;
+                        found = true;
+                        Log4.Debug($"[OneNote] 역추적 성공(Notebooks): NB={notebook.DisplayName}, SEC={parentSection.DisplayName}");
                         break;
                     }
                 }
+                // 2) 메인 Notebooks에 섹션이 로드 안 됐으면 FavoritePages에서 탐색
+                if (!found && !string.IsNullOrEmpty(page.SectionId))
+                {
+                    var favSec = _oneNoteViewModel.FavoritePages
+                        .FirstOrDefault(f => f.ItemType == FavoriteItemType.Section && f.Id == page.SectionId);
+                    if (favSec != null)
+                    {
+                        _oneNoteViewModel.SelectedSection = new SectionItemViewModel
+                        {
+                            Id = favSec.Id,
+                            DisplayName = favSec.Title,
+                            GroupId = favSec.GroupId ?? string.Empty,
+                            SiteId = favSec.SiteId ?? string.Empty
+                        };
+                        // 부모 노트북: 섹션 FavoriteItem의 SectionId = 노트북 ID (AddToFavorites(section)에서 SectionId = section.NotebookId로 저장)
+                        var favNb = _oneNoteViewModel.FavoritePages
+                            .FirstOrDefault(f => f.ItemType == FavoriteItemType.Notebook &&
+                                f.Id == favSec.SectionId);
+                        if (favNb != null)
+                            _oneNoteViewModel.SelectedNotebook = new NotebookItemViewModel { Id = favNb.Id, DisplayName = favNb.Title };
+                        Log4.Debug($"[OneNote] 역추적 성공(FavoritePages): SEC={favSec.Title}, NB={favNb?.Title ?? "N/A"}");
+                        found = true;
+                    }
+                }
+                if (!found)
+                    Log4.Debug($"[OneNote] 역추적 실패: SectionId={page.SectionId ?? "null"}");
             }
 
             // SelectedPage 설정 (저장 기능에 필요)

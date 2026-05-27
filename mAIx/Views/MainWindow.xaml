@@ -6755,10 +6755,9 @@
                                                Click="OneNoteSaveButton_Click"/>
                                     <ui:Button x:Name="OneNoteEditButton" Icon="{ui:SymbolIcon Edit24}"
                                                Appearance="Transparent" ToolTip="편집" Padding="8"/>
-                                    <ui:Button x:Name="OneNoteShareButton" Icon="{ui:SymbolIcon Share24}"
-                                               Appearance="Transparent" ToolTip="공유" Padding="8"/>
-                                    <ui:Button x:Name="OneNoteMoreButton" Icon="{ui:SymbolIcon MoreHorizontal24}"
-                                               Appearance="Transparent" ToolTip="더보기" Padding="8"/>
+                                    <ui:Button x:Name="OneNoteDeleteButton" Icon="{ui:SymbolIcon Delete24}"
+                                               Appearance="Transparent" ToolTip="페이지 삭제" Padding="8"
+                                               Click="OneNoteDeleteButton_Click"/>
                                 </StackPanel>
                             </Grid>
                         </Border>

@@ -5231,10 +5231,56 @@ public partial class OneNoteViewModel : ViewModelBase
                     SectionId = SelectedSection.Id,
                     CreatedDateTime = page.CreatedDateTime?.DateTime
                 };
-                SelectedSection.Pages.Add(pageItem);
+                // 섹션 목록 맨 앞에 추가 (실시간 목록 반영)
+                SelectedSection.Pages.Insert(0, pageItem);
+                // 생성된 페이지 자동 선택 (View에서 LoadOneNotePageAsync 트리거용)
+                SelectedPage = pageItem;
                 _logger.Information("페이지 생성 완료: {Title}", title);
             }
         }, "페이지 생성 실패");
+    }
+
+    /// <summary>
+    /// 페이지 삭제
+    /// </summary>
+    public async Task DeletePageAsync(string pageId)
+    {
+        if (string.IsNullOrWhiteSpace(pageId)) return;
+
+        await ExecuteAsync(async () =>
+        {
+            await _oneNoteService.DeletePageAsync(pageId);
+
+            // 메인 트리에서 삭제
+            foreach (var nb in Notebooks)
+            {
+                foreach (var sec in nb.Sections)
+                {
+                    var page = sec.Pages.FirstOrDefault(p => p.Id == pageId);
+                    if (page != null) { sec.Pages.Remove(page); break; }
+                }
+            }
+
+            // 즐겨찾기에서 삭제
+            RemovePageFromFavorites(pageId, FavoritePages);
+
+            // 선택 해제
+            if (SelectedPage?.Id == pageId)
+                SelectedPage = null;
+
+            _logger.Information("페이지 삭제 완료: {PageId}", pageId);
+        }, "페이지 삭제 실패");
+    }
+
+    /// <summary>
+    /// FavoritePages 트리에서 pageId에 해당하는 항목 재귀 삭제
+    /// </summary>
+    private void RemovePageFromFavorites(string pageId, System.Collections.ObjectModel.ObservableCollection<PageItemViewModel> items)
+    {
+        var target = items.FirstOrDefault(p => p.Id == pageId);
+        if (target != null) { items.Remove(target); return; }
+        foreach (var item in items)
+            RemovePageFromFavorites(pageId, item.Children);
     }
 
     /// <summary>
