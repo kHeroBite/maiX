@@ -585,54 +585,64 @@ public sealed class OpenAiRealtimeSttService : IOpenAiRealtimeSttService
             {
                 // L-440: Strategy의 이벤트 타입으로 분기 (transcription 세션은 "...transcription.completed",
                 // gpt-realtime-2 일반 세션은 "response.output_item.done").
-                if (root.TryGetProperty("transcript", out var tr))
+                // L-분기: gpt-realtime-2(response.text.done)는 최상위 text 필드, 나머지는 transcript 필드
+                string text;
+                string openAiItemId;
+                if (type == "response.text.done")
                 {
-                    var text = tr.GetString() ?? string.Empty;
+                    // gpt-realtime-2 (RealtimeGptReasoningStrategy) — text 최상위 필드 직접 읽기
+                    text = root.TryGetProperty("text", out var t2) ? (t2.GetString() ?? string.Empty) : string.Empty;
+                    openAiItemId = root.TryGetProperty("item_id", out var idProp2) ? (idProp2.GetString() ?? string.Empty) : string.Empty;
+                }
+                else
+                {
+                    // 기존 transcription 세션 (Whisper/Transcribe/Whisper1) — transcript 필드 (기존 동작 100% 보존)
+                    text = root.TryGetProperty("transcript", out var tr) ? (tr.GetString() ?? string.Empty) : string.Empty;
                     // OpenAI item_id를 그대로 사용 (delta와 정확히 매칭 — 비동기 어긋남 차단)
-                    var openAiItemId = root.TryGetProperty("item_id", out var idProp) ? (idProp.GetString() ?? string.Empty) : string.Empty;
-                    var itemId = !string.IsNullOrEmpty(openAiItemId) ? openAiItemId : $"item_fallback_{DateTime.Now.Ticks}";
-                    _lastDeltaAt = DateTime.Now;
-                    if (!string.IsNullOrEmpty(text))
+                    openAiItemId = root.TryGetProperty("item_id", out var idProp) ? (idProp.GetString() ?? string.Empty) : string.Empty;
+                }
+                var itemId = !string.IsNullOrEmpty(openAiItemId) ? openAiItemId : $"item_fallback_{DateTime.Now.Ticks}";
+                _lastDeltaAt = DateTime.Now;
+                if (!string.IsNullOrEmpty(text))
+                {
+                    // hallucination 차단 — 누적된 delta 항목도 제거
+                    if (IsHallucination(text))
                     {
-                        // hallucination 차단 — 누적된 delta 항목도 제거
-                        if (IsHallucination(text))
-                        {
-                            _log.Warn($"[OpenAi-Realtime] hallucination 차단 — text={text.Substring(0, Math.Min(80, text.Length))}");
-                            _deltaBuffers.TryRemove(itemId, out _);
-                            TranscriptSegmentRemoved?.Invoke(itemId);
-                            return;
-                        }
-                        var ts = TimeSpan.FromMilliseconds(_lastSpeechStartedMs);
-                        var tsEnd = TimeSpan.FromMilliseconds(_lastSpeechStoppedMs > 0 ? _lastSpeechStoppedMs : _lastSpeechStartedMs);
-                        // delta가 도착했으면 LiveSTT UI는 Updated로 final 교체 (itemId 매칭 in-place)
-                        if (_deltaBuffers.ContainsKey(itemId))
-                        {
-                            TranscriptSegmentUpdated?.Invoke(itemId, ts, tsEnd, text);
-                        }
-                        // ★ TopicExtractor/MinuteSummary 전달은 항상 Received로 한 번 더 발화 (delta 유무 무관)
-                        // 이유: Updated 핸들러는 LiveSTTSegments UI만 갱신하므로 텍스트 통계 누락 방지
-                        TranscriptSegmentReceived?.Invoke(ts, text);
+                        _log.Warn($"[OpenAi-Realtime] hallucination 차단 — text={text.Substring(0, Math.Min(80, text.Length))}");
                         _deltaBuffers.TryRemove(itemId, out _);
-                        _completedCount++;
-                        _log.Info($"[OpenAi-Realtime] transcription.completed — text={text.Substring(0, Math.Min(50, text.Length))}");
+                        TranscriptSegmentRemoved?.Invoke(itemId);
+                        return;
+                    }
+                    var ts = TimeSpan.FromMilliseconds(_lastSpeechStartedMs);
+                    var tsEnd = TimeSpan.FromMilliseconds(_lastSpeechStoppedMs > 0 ? _lastSpeechStoppedMs : _lastSpeechStartedMs);
+                    // delta가 도착했으면 LiveSTT UI는 Updated로 final 교체 (itemId 매칭 in-place)
+                    if (_deltaBuffers.ContainsKey(itemId))
+                    {
+                        TranscriptSegmentUpdated?.Invoke(itemId, ts, tsEnd, text);
+                    }
+                    // ★ TopicExtractor/MinuteSummary 전달은 항상 Received로 한 번 더 발화 (delta 유무 무관)
+                    // 이유: Updated 핸들러는 LiveSTTSegments UI만 갱신하므로 텍스트 통계 누락 방지
+                    TranscriptSegmentReceived?.Invoke(ts, text);
+                    _deltaBuffers.TryRemove(itemId, out _);
+                    _completedCount++;
+                    _log.Info($"[OpenAi-Realtime] transcription.completed — text={text.Substring(0, Math.Min(50, text.Length))}");
 
-                        // 옵션: GPT-4o-mini로 오타 후처리 (EnableTypoFix=true 시) — fire-and-forget
-                        if (_settings.OaiRecording.EnableTypoFix)
+                    // 옵션: GPT-4o-mini로 오타 후처리 (EnableTypoFix=true 시) — fire-and-forget
+                    if (_settings.OaiRecording.EnableTypoFix)
+                    {
+                        _ = Task.Run(async () =>
                         {
-                            _ = Task.Run(async () =>
+                            try
                             {
-                                try
+                                var fixedText = await FixTypoAsync(text).ConfigureAwait(false);
+                                if (!string.IsNullOrEmpty(fixedText) && fixedText != text)
                                 {
-                                    var fixedText = await FixTypoAsync(text).ConfigureAwait(false);
-                                    if (!string.IsNullOrEmpty(fixedText) && fixedText != text)
-                                    {
-                                        TranscriptSegmentReceived?.Invoke(ts, $"[보정] {fixedText}");
-                                        _log.Info($"[OpenAi-Realtime] 오타 후처리 완료 — {text.Length}자 → {fixedText.Length}자");
-                                    }
+                                    TranscriptSegmentReceived?.Invoke(ts, $"[보정] {fixedText}");
+                                    _log.Info($"[OpenAi-Realtime] 오타 후처리 완료 — {text.Length}자 → {fixedText.Length}자");
                                 }
-                                catch (Exception ex) { _log.Warn(ex, "[OpenAi-Realtime] 오타 후처리 실패"); }
-                            });
-                        }
+                            }
+                            catch (Exception ex) { _log.Warn(ex, "[OpenAi-Realtime] 오타 후처리 실패"); }
+                        });
                     }
                 }
             }

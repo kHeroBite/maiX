@@ -2,6 +2,36 @@
 
 > PROJECT.md 작업 이력 테이블의 상세 보완본
 
+## [2026-05-27] gpt-realtime-2 미동작 수정 — session.type 필드 누락 + completed 이벤트 분기 (O3 Fast Path)
+
+**분류**: O3 Fast Path (lesson + docs + git)
+**otest 결과**: 자동 검증 7/7 PASS, 회귀 0 (4개 기존 Strategy else 절 100% 보존)
+**범위**: 수정 2파일 (RealtimeGptReasoningStrategy.cs, OpenAiRealtimeSttService.cs)
+**대화ID**: conv_177988101398
+
+### 변경 내용
+
+- **수정** (`Services/AI/Strategies/RealtimeGptReasoningStrategy.cs`):
+  - `BuildSessionUpdatePayload()`에 `session.type = "realtime"` 필수 필드 추가
+  - `TranscriptionCompletedEventType`: `response.output_item.done` → `response.text.done` 교정
+- **수정** (`Services/AI/OpenAiRealtimeSttService.cs`):
+  - completed 핸들러에 `if (type == "response.text.done") { text 최상위 필드 파싱 } else { 기존 transcript 필드 파싱 }` 분기 추가
+  - else 절 기존 코드 100% 보존 → 4개 기존 Strategy 영향 0
+
+### 핵심 원인
+
+1. **session.type 누락**: `invalid_request_error param=session.type` → session.update 거부 → 서버 기본값(audio 모드) 강제
+2. **completed 이벤트 타입 오류**: `response.output_item.done` (중첩 구조) → 최상위 `text` 필드 기대와 불일치
+3. **else 절 부재**: 신규 이벤트 타입 추가 시 기존 Strategy 동작 충돌 위험
+
+### 교훈 (L-522 ~ L-524)
+
+- **L-522**: Realtime API session.update — session.type 필수 필드 누락 (공식 레퍼런스 사전 확인 필수)
+- **L-523**: Realtime API text 전사 이벤트 — response.text.done vs response.output_item.done
+- **L-524**: Strategy 분기 격리로 호환성 유지 — else 절 보존 패턴
+
+---
+
 ## [2026-05-27] STT 모델 콤보박스 확장 — 5개 모델 + Strategy 패턴 도입 + gpt-realtime-whisper 미동작 수정 (O4 Full Path — 단일사이클 PASS)
 
 **분류**: O4 Full Path (lesson + cleanup + docs + git)

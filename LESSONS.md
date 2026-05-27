@@ -2633,3 +2633,42 @@ viewModel.PropertyChanged += OnViewModelPropertyChanged_ForMindMap;  // 재등�
 - **Level**: 1
 - **연관**: L-513 (NumberBox vs ComboBox 선택 기준)
 - **대화ID**: conv_177986008898
+
+---
+
+## L-522: Realtime API session.update — session.type 필수 필드 누락 (2026-05-27)
+
+- **문제**: `RealtimeGptReasoningStrategy` 신규 작성 시 `session.type = "realtime"` 필드 미포함. nlog에 `invalid_request_error code=missing_required_parameter param=session.type` → session.update 거부 → 서버 기본값(output_modalities=audio) 적용 → STT 텍스트 미수신.
+- **근본원인**: OpenAI Realtime API의 session.update 페이로드에서 `type` 필드는 공식 필수 필드(`"type": "realtime"`)이나, Strategy 구현 시 명세에서 누락.
+- **해결**: `RealtimeGptReasoningStrategy.BuildSessionUpdatePayload()`에 `session.type = "realtime"` 추가. `TranscriptionCompletedEventType` 도 `response.output_item.done`→`response.text.done`으로 교정 (실제 텍스트가 담기는 이벤트 타입).
+- **교훈**: OpenAI Realtime API session.update 구현 시 반드시 공식 server-events 레퍼런스에서 필수 필드를 사전 확인해야 한다. 특히 `type="realtime"` 같은 비직관적 필수 필드는 누락 시 silent 동작 변화(audio 모드 강제)로 이어져 디버깅 난이도가 높다. 신규 Strategy 작성 시 기존 Strategy를 참조 템플릿으로 삼아 필드 누락을 방지하라.
+- **출처**: https://platform.openai.com/docs/api-reference/realtime/server-events
+- **심각도**: 높음 (STT 텍스트 완전 미수신 — 사용자 관점 "동작 안 함")
+- **Level**: 3
+- **연관**: L-446 (외부 API 디버깅 nlog 직접 확인), L-518 (gpt-realtime-whisper 미지원 필드), L-440 (인터페이스+팩토리)
+- **대화ID**: conv_177988101398
+
+---
+
+## L-523: Realtime API text 전사 이벤트 — response.text.done vs response.output_item.done (2026-05-27)
+
+- **문제**: `RealtimeGptReasoningStrategy.TranscriptionCompletedEventType`을 `response.output_item.done`으로 설정. 이 이벤트는 content 배열 내 중첩 3단계(`item.content[].text`)로 텍스트 접근이 필요하나, 핸들러는 `response.text.done`의 단순 최상위 `text` 필드 파싱을 기대 → 텍스트 추출 실패.
+- **근본원인**: 일반 Realtime 세션 + `output_modalities=["text"]` 환경에서 텍스트 완료 이벤트는 `response.text.done` (최상위 `.text` 필드 직접 접근). `response.output_item.done`은 구조가 다름.
+- **해결**: `TranscriptionCompletedEventType = "response.text.done"` 으로 수정. `OpenAiRealtimeSttService` completed 핸들러에 `if (type == "response.text.done") else` 분기 추가 — else 절은 기존 transcript 필드 읽기 100% 보존하여 4개 기존 Strategy 영향 0.
+- **교훈**: 일반 Realtime 세션에서 text 완료 이벤트는 `response.text.done`을 사용한다. `response.output_item.done`은 추가 구조 파싱이 필요하므로 단순성 측면에서 불리하다. 새 Strategy 추가 시 페이로드 구조를 기존 Strategy 핸들러와 호환되는 이벤트 타입으로 선택해야 회귀를 방지할 수 있다.
+- **심각도**: 높음 (텍스트 파싱 실패 — STT 결과 0건)
+- **Level**: 3
+- **연관**: L-447 (모델별 response_format 분기), L-522 (session.type 필수 필드), L-442 (전략 swap 5단계)
+- **대화ID**: conv_177988101398
+
+---
+
+## L-524: Strategy 분기 격리로 호환성 유지 — else 절 보존 패턴 (2026-05-27)
+
+- **문제**: 신규 Strategy 이벤트 타입(`response.text.done`) 추가 시 기존 4개 Strategy의 `transcript` 필드 파싱 경로가 공존해야 함.
+- **해결**: `OpenAiRealtimeSttService` completed 핸들러에 `if (type == "response.text.done") { text 필드 파싱 } else { 기존 transcript 필드 파싱 }` 분기 추가. else 절은 기존 코드 100% 보존 → 회귀 0.
+- **교훈**: 호출자(서비스) 측 이벤트 타입 분기를 Strategy 클래스와 연동할 때, else 절을 기존 동작으로 유지하면 새 모델 추가 시 기존 모델 영향을 0으로 격리할 수 있다. L-440(인터페이스+팩토리) + 호출자 else 보존은 backward-compatible Strategy 확장의 표준 패턴이다.
+- **심각도**: 낮음 (재사용 패턴 — 회귀 방지 구조)
+- **Level**: 2
+- **연관**: L-440 (인터페이스+팩토리 도입 기준), L-442 (전략 swap 5단계), L-522, L-523
+- **대화ID**: conv_177988101398

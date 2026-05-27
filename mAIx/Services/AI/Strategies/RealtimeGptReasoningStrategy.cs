@@ -8,7 +8,7 @@ namespace mAIx.Services.AI.Strategies;
 /// transcription 세션이 아닌 일반 Realtime 세션을 사용하므로 다음과 같이 분기한다:
 ///  - 연결 URI: <c>model=gpt-realtime-2</c> (intent=transcription 아님).
 ///  - session.update: <c>input_audio_transcription</c> 미사용. instructions + input_audio_format + turn_detection.
-///  - 전사 이벤트: <c>response.text.delta</c> / <c>response.output_item.done</c>.
+///  - 전사 이벤트: <c>response.text.delta</c> / <c>response.text.done</c>.
 ///  - L-441 out-of-band: <c>response.create</c>에 <c>conversation = "none"</c>을 지정해 멀티턴 누적 없이 매 commit마다 1회성 전사 응답 추출.
 /// </summary>
 public sealed class RealtimeGptReasoningStrategy : ISttModelStrategy
@@ -44,6 +44,7 @@ public sealed class RealtimeGptReasoningStrategy : ISttModelStrategy
             type = "session.update",
             session = new
             {
+                type = "realtime",  // OpenAI 공식 필수 필드 (일반 Realtime 세션)
                 instructions = instructions,
                 input_audio_format = "pcm16",
                 turn_detection = serverVadEnabled
@@ -72,8 +73,9 @@ public sealed class RealtimeGptReasoningStrategy : ISttModelStrategy
     /// <inheritdoc/>
     /// <remarks>
     /// 일반 Realtime 세션의 응답 완료 이벤트 — transcription 세션과 이벤트 타입이 다르다.
+    /// <c>response.text.done</c>: { type, response_id, item_id, output_index, content_index, text: string }
     /// </remarks>
-    public string TranscriptionCompletedEventType => "response.output_item.done";
+    public string TranscriptionCompletedEventType => "response.text.done";
 
     /// <inheritdoc/>
     /// <remarks>
