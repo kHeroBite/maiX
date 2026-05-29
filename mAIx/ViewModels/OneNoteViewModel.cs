@@ -607,6 +607,12 @@ public partial class OneNoteViewModel : ViewModelBase
     private bool _isAutoFinalSummary = false;
 
     /// <summary>
+    /// 최종 요약 백그라운드 생성 진행 중 여부 (UI 스피너 바인딩용)
+    /// </summary>
+    [ObservableProperty]
+    private bool _isFinalSummaryInProgress;
+
+    /// <summary>
     /// STT 오타 수정 후처리 활성화 (GPT-4o-mini, 옵트인, 기본 false)
     /// </summary>
     [ObservableProperty]
@@ -3213,17 +3219,30 @@ public partial class OneNoteViewModel : ViewModelBase
                 // 최종 요약 생성 (IsAutoFinalSummary=true 시 자동 실행, false 시 수동 클릭 대기)
                 if (IsAutoFinalSummary)
                 {
-                    try
+                    IsFinalSummaryInProgress = true;
+                    _ = Task.Run(async () =>
                     {
-                        var finalText = await _cumulativeSummaryService.FinalSummarizeAsync();
-                        FinalSummaryText = finalText ?? string.Empty;
-                        Log4.Info($"[녹음] 최종 요약 생성 완료: {FinalSummaryText.Length}자");
-                        TriggerRealtimePersist();
-                    }
-                    catch (Exception ex)
-                    {
-                        Log4.Warn($"[녹음] 최종 요약 생성 실패: {ex.Message}");
-                    }
+                        try
+                        {
+                            var finalText = await _cumulativeSummaryService.FinalSummarizeAsync().ConfigureAwait(false);
+                            await System.Windows.Application.Current.Dispatcher.InvokeAsync(() =>
+                            {
+                                FinalSummaryText = finalText ?? string.Empty;
+                                IsFinalSummaryInProgress = false;
+                                TriggerRealtimePersist();
+                            }).Task.ConfigureAwait(false);
+                            Log4.Info($"[녹음] 최종 요약 백그라운드 완료: {(finalText ?? "").Length}자");
+                        }
+                        catch (Exception ex)
+                        {
+                            Log4.Error($"[녹음] 최종 요약 백그라운드 실패: {ex.Message}");
+                            await System.Windows.Application.Current.Dispatcher.InvokeAsync(() =>
+                            {
+                                IsFinalSummaryInProgress = false;
+                            }).Task.ConfigureAwait(false);
+                        }
+                    });
+                    Log4.Info("[녹음] 최종 요약 백그라운드 시작 (녹음 종료 차단 없음)");
                 }
                 else
                 {

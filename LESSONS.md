@@ -2672,3 +2672,27 @@ viewModel.PropertyChanged += OnViewModelPropertyChanged_ForMindMap;  // 재등�
 - **Level**: 2
 - **연관**: L-440 (인터페이스+팩토리 도입 기준), L-442 (전략 swap 5단계), L-522, L-523
 - **대화ID**: conv_177988101398
+
+## L-525: Stop 경로 외부 API 동기 await → fire-and-forget 분리 + IsFinalSummaryInProgress 플래그 패턴 (2026-05-29)
+
+- **문제**: OneNote 녹음 종료 시 1분 이상 hang 발생 — StopRecordingAsync() 안에서 FinalSummarizeAsync()가 OpenAI API를 최대 90초 동기 await.
+- **근본원인**: 종료(Stop) 경로에서 장기 외부 API 호출을 직접 await → API 응답 지연이 그대로 UI hang으로 전파.
+- **해결**: FinalSummarizeAsync를 Task.Run fire-and-forget으로 분리 + IsFinalSummaryInProgress ObservableProperty 추가 + 타임아웃 90s→30s.
+- **트레이드오프**: 앱 강제 종료 시 최종요약 유실 가능. 완화: 백그라운드 완료 시 persist 호출.
+- **교훈**: Stop/Dispose 경로의 장기 비동기 작업(외부 API 등)은 반드시 fire-and-forget Task.Run 분리. 진행 상태는 IsFinalSummaryInProgress 같은 ObservableProperty 플래그로 UI에 노출.
+- **심각도**: 중간 (패턴 — 재현 가능성 있음)
+- **Level**: 2
+- **연관**: L-379 (fire-and-forget 예외 소실 주의), L-388 (정리 함수 fire-and-forget), L-451 (WebSocket CloseAsync CancellationToken.None)
+- **수정 파일**: Services/AI/OpenAiRealtimeSttService.cs, Services/AI/CumulativeSummaryService.cs, ViewModels/OneNoteViewModel.cs
+- **대화ID**: conv_178002381649
+
+## L-526: oplan 코드 탐색으로 사용자 추정 hang 원인 가설 검증 필수 (2026-05-29)
+
+- **문제**: 사용자는 "점진 저장이 없어서 종료 시 일괄 저장 → hang"으로 추정했으나, TriggerRealtimePersist(2.5s debounce)는 이미 구현되어 있었음. 실제 hang 원인은 FinalSummarizeAsync API 동기 await.
+- **근본원인**: 사용자 추정 원인을 코드로 검증하지 않고 그대로 수용할 경우 잘못된 방향으로 수정될 위험.
+- **해결**: oplan 탐색 단계에서 사용자 가설을 코드로 교차 검증 → TriggerRealtimePersist 존재 확인 → 실제 hang 지점(FinalSummarizeAsync) 특정.
+- **교훈**: 사용자 추정 원인은 oplan 코드 탐색으로 반드시 검증 (L-419 정의부+호출부 동시 확인 연계). "원인이라고 추정되는 곳"이 실제 문제가 아닐 수 있음.
+- **심각도**: 낮음 (1회 발생, 방향 오류 예방)
+- **Level**: 1
+- **연관**: L-419 (oplan 정의부+호출부 동시 확인)
+- **대화ID**: conv_178002381649

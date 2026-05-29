@@ -318,8 +318,9 @@ public sealed class OpenAiRealtimeSttService : IOpenAiRealtimeSttService
                     }
                 }
 
-                // Close handshake
-                await _ws.CloseAsync(WebSocketCloseStatus.NormalClosure, "stop", CancellationToken.None).ConfigureAwait(false);
+                // Close handshake (L-451: 취소 불가 CancellationToken.None 대신 5초 타임아웃 적용)
+                using var closeCts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+                await _ws.CloseAsync(WebSocketCloseStatus.NormalClosure, "stop", closeCts.Token).ConfigureAwait(false);
             }
         }
         catch (Exception ex)

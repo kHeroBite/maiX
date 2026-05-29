@@ -2,6 +2,39 @@
 
 > PROJECT.md 작업 이력 테이블의 상세 보완본
 
+## [2026-05-29] OneNote 녹음 종료 1분 hang 제거 — 최종요약 fire-and-forget 분리 + WebSocket close 타임아웃 (O3 Fast Path)
+
+**분류**: O3 Fast Path (lesson + docs + git)
+**otest 결과**: 정적 PASS (빌드 경고 12개 전부 NU1510/NU1902/NU1903 패키지 취약성, 코드 오류 0). 런타임 AC-1/2/4 사용자 수동 검증 필요 (자동 STT 구동 불가).
+**범위**: 수정 3파일 (OpenAiRealtimeSttService.cs, CumulativeSummaryService.cs, OneNoteViewModel.cs)
+**대화ID**: conv_178002381649
+
+### 근본 원인
+
+- **주 hang**: `FinalSummarizeAsync()` — OpenAI chat/completions API를 Stop 경로에서 직접 await (최대 90초)
+- **부 hang**: `_ws.CloseAsync(…, CancellationToken.None)` — WebSocket stall 시 무한 대기 (L-451)
+- **오해 보정**: 사용자 추정("점진 저장 부재 → 종료 시 일괄 저장 → hang")은 코드 탐색으로 반증됨. TriggerRealtimePersist(2.5s debounce)는 이미 구현되어 있었음.
+
+### 수정 내용
+
+| 파일 | 수정 내용 |
+|------|-----------|
+| `Services/AI/OpenAiRealtimeSttService.cs` | CloseAsync `CancellationToken.None` → 5초 타임아웃 CT (L-451 준수) |
+| `Services/AI/CumulativeSummaryService.cs` | FinalSummarizeAsync 타임아웃 90s → 30s |
+| `ViewModels/OneNoteViewModel.cs` | `IsFinalSummaryInProgress` ObservableProperty 추가 + FinalSummarizeAsync Task.Run fire-and-forget 분리 (Stop 즉시 UI 반환) |
+
+### 트레이드오프
+
+- fire-and-forget 분리로 Stop 즉시 UI 반환 — 앱 강제 종료 시 최종요약 유실 가능
+- 완화: `IsFinalSummaryInProgress=true` 플래그 + 백그라운드 완료 시 persist 호출로 보완
+
+### 교훈
+
+- L-525: Stop 경로 외부 API 동기 await → fire-and-forget 분리 + IsFinalSummaryInProgress 플래그 패턴
+- L-526: oplan 코드 탐색으로 사용자 추정 hang 원인 가설 검증 필수 (L-419 연계)
+
+---
+
 ## [2026-05-27] gpt-realtime-2 미동작 수정 — session.type 필드 누락 + completed 이벤트 분기 (O3 Fast Path)
 
 **분류**: O3 Fast Path (lesson + docs + git)

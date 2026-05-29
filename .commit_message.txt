@@ -1,33 +1,26 @@
-🔧 마인드맵 6개 이슈 회귀+개선 — AC-MMP01~06 PASS by claude-opus-4-7
+🐛 OneNote 녹음 종료 1분 hang 제거 — 최종요약 fire-and-forget 분리 + WebSocket close 타임아웃 by claude-opus-4-8
+
+## 근본 원인
+- 주 hang: StopRecordingAsync() → FinalSummarizeAsync() → OpenAI API 최대 90초 동기 await
+- 부 hang: _ws.CloseAsync(CancellationToken.None) — WebSocket stall 시 무한 대기 (L-451)
+- 오해 보정: 사용자 추정("점진 저장 부재 → 일괄 저장 hang")은 코드 탐색으로 반증 (L-526)
+  TriggerRealtimePersist(2.5s debounce)는 이미 구현되어 있었음
 
 ## 수정 내용
+- OpenAiRealtimeSttService.cs: CloseAsync CancellationToken.None → 5초 타임아웃 CT (L-451 준수)
+- CumulativeSummaryService.cs: FinalSummarizeAsync 타임아웃 90s → 30s
+- OneNoteViewModel.cs: IsFinalSummaryInProgress ObservableProperty 추가
+  + FinalSummarizeAsync Task.Run fire-and-forget 분리 (Stop 즉시 UI 반환)
+  + Task.Run 내부 try-catch + Dispatcher.InvokeAsync로 플래그 복구 (L-379/L-374 준수)
 
-### 이슈 1 — 루트 제목 (AC-MMP01)
-- MainWindow.OneNote.cs: IsLiveRecording 분기 → "현재 녹음" vs 페이지 제목 동적 결정
-
-### 이슈 2 — MinuteSummaries 노드 제거 (AC-MMP02)
-- MindMapOverlay.xaml.cs: 마인드맵에서 요약 노드 완전 제거 (TopicSegments만 렌더)
-
-### 이슈 3 — 묵음 필터 (AC-MMP03)
-- MindMapOverlay.xaml.cs: IsSilence 우선 + _silenceWords HashSet + 1글자 이하 3중 필터
-
-### 이슈 4 — X 버튼 + WebMessage (AC-MMP04)
-- mindmap.html: HTML 내부 #closeBtn + postMessage('close') + ESC keydown
-- MindMapOverlay.xaml.cs: OnWebMessageReceived + WebMessageReceived 구독/해제
-
-### 이슈 5 — Keywords/Context L2 (AC-MMP05)
-- MindMapOverlay.xaml.cs: Take(3) + 2글자 이상 + _stopWords 필터 Keywords 노드
-
-### 이슈 6 — 테마 동기화 (AC-MMP06)
-- mindmap.html: CSS 변수(:root/html.theme-light) + window.setTheme() 함수
-- MindMapOverlay.xaml.cs: ThemeService.ThemeChanged 구독/Unbind 해제 대칭 패턴
+## 트레이드오프
+fire-and-forget 분리 → 앱 강제 종료 시 최종요약 유실 가능
+완화: IsFinalSummaryInProgress 플래그 UI 노출 + 백그라운드 완료 시 persist 호출
 
 ## 신규 교훈
-- L-490: WebView2 HWND z-order → HTML 내부 버튼 + postMessage 패턴
-- L-491: ThemeService/이벤트 구독 해제 — Unbind 대칭 패턴
-- L-492: Markmap 동적 테마 = CSS 변수 + html.theme-light 클래스 토글
-- L-493: 음성 묵음 필터 3중 패턴 (IsSilence + HashSet + 1글자 이하)
+- L-525: Stop 경로 외부 API fire-and-forget 분리 + IsFinalSummaryInProgress 패턴
+- L-526: oplan 가설 검증 — 사용자 추정 원인 코드 교차 확인 필수 (L-419 연계)
 
-🤖 Generated with [Claude Code](https://claude.com/claude-code) (claude-opus-4-7)
+🤖 Generated with [Claude Code](https://claude.com/claude-code) (claude-opus-4-8)
 
 Co-Authored-By: Claude <noreply@anthropic.com>

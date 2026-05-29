@@ -323,7 +323,7 @@ public sealed class CumulativeSummaryService : ICumulativeSummaryService
 
             var json = JsonSerializer.Serialize(requestBody);
             using var content = new StringContent(json, Encoding.UTF8, "application/json");
-            using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(90));
+            using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(30));
             var response = await _httpClient.PostAsync(url, content, cts.Token).ConfigureAwait(false);
 
             if (!response.IsSuccessStatusCode)
