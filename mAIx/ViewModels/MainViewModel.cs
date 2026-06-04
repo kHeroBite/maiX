@@ -597,8 +597,16 @@ public partial class MainViewModel : ViewModelBase, IDisposable
                     // 복원 직전 가드 OFF → SelectedEmail = restored → OnSelectedEmailChanged → LoadMailBodyAsync 정상 호출
                     _isSwitchingFolder = false;
                     guardScope = false; // finally 재설정 방지
-                    // [신규] 동일 메일(Id 일치) sync 복원 시 재할당 생략 → LoadMailBodyAsync 불필요 재호출 차단 (본문 깜빡임 제거)
-                    bool isSameMail = SelectedEmail?.Id == restored.Id;
+                    // [수정] 동일 메일 판정은 EntryId(안정적 Graph 식별자) 우선 비교.
+                    // 정수 Id는 로컬 DB PK로, 캐시 스냅샷 객체(Graph 유래, 미영속)는 Id=0일 수 있어
+                    // Id-only 비교는 sync마다 false → SelectedEmail 재할당 → 본문 재로드(깜빡임 + 줌 초기화)를 유발했음.
+                    // 캐시/복원 로직 전체가 EntryId를 신원 키로 사용하므로 가드도 EntryId 기준으로 통일한다.
+                    bool isSameMail;
+                    if (!string.IsNullOrEmpty(SelectedEmail?.EntryId) && !string.IsNullOrEmpty(restored.EntryId))
+                        isSameMail = string.Equals(SelectedEmail!.EntryId, restored.EntryId, StringComparison.Ordinal);
+                    else
+                        isSameMail = SelectedEmail?.Id == restored.Id;
+
                     if (!isSameMail)
                     {
                         SelectedEmail = restored;

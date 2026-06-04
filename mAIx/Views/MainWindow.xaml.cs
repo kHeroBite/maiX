@@ -38,6 +38,10 @@ public partial class MainWindow : FluentWindow
     private Folder? _rightClickedFolder;
     private Email? _rightClickedEmail;
     private bool _webView2Initialized;
+    // 메일 본문 줌 영속화 가드: 메일 전환(네비게이션) 중에는 Chromium의 1.0 리셋으로 발생하는
+    // ZoomFactorChanged를 저장하지 않도록, 저장값 재적용 중에는 프로그래밍 set 이벤트를 저장하지 않도록 한다.
+    private bool _isNavigatingMailBody;
+    private bool _isApplyingSavedZoom;
     private bool _draftEditorInitialized;
     private bool _draftEditorReady;
     private readonly string _cidTempDir = System.IO.Path.Combine(System.IO.Path.GetTempPath(), "mAIx_cid");
@@ -752,10 +756,16 @@ public partial class MainWindow : FluentWindow
     #endregion
 
     /// <summary>
-    /// 메일 본문 줌 변경 시 UserPreferences에 저장 (Ctrl+휠로 변경 시 발화)
+    /// 메일 본문 줌 변경 시 UserPreferences에 저장 (사용자 Ctrl+휠 조작 시에만 저장)
     /// </summary>
     private void MailBodyWebView_ZoomFactorChanged(object? sender, EventArgs e)
     {
+        // 네비게이션(메일 전환) 중 Chromium이 1.0으로 리셋하며 발생시키는 ZoomFactorChanged,
+        // 또는 저장값 재적용 중 발생시키는 이벤트는 사용자 의도가 아니므로 저장하지 않는다.
+        // (이를 저장하면 사용자가 조정한 줌이 매 전환마다 1.0으로 덮어써져 영속화가 무력화됨)
+        if (_isNavigatingMailBody || _isApplyingSavedZoom)
+            return;
+
         App.Settings.UserPreferences.MailBodyZoomFactor = MailBodyWebView.ZoomFactor;
         App.Settings.SaveUserPreferences();
     }
@@ -767,9 +777,20 @@ public partial class MainWindow : FluentWindow
         object? sender,
         Microsoft.Web.WebView2.Core.CoreWebView2NavigationCompletedEventArgs e)
     {
-        var savedZoom = App.Settings.UserPreferences.MailBodyZoomFactor;
-        if (Math.Abs(savedZoom - 1.0) > 0.001)
-            MailBodyWebView.ZoomFactor = savedZoom;
+        try
+        {
+            var savedZoom = App.Settings.UserPreferences.MailBodyZoomFactor;
+            // 프로그래밍 방식 set이 유발하는 ZoomFactorChanged가 저장 핸들러에서 무시되도록 가드
+            _isApplyingSavedZoom = true;
+            if (Math.Abs(MailBodyWebView.ZoomFactor - savedZoom) > 0.001)
+                MailBodyWebView.ZoomFactor = savedZoom;
+        }
+        finally
+        {
+            _isApplyingSavedZoom = false;
+            // 네비게이션 완료 — 이후 발생하는 ZoomFactorChanged는 사용자 조작으로 간주
+            _isNavigatingMailBody = false;
+        }
     }
 
     /// <summary>
@@ -1084,6 +1105,8 @@ public partial class MainWindow : FluentWindow
         if (string.IsNullOrEmpty(email.Body))
         {
             Log4.Debug($"[LoadMailBody] 빈 본문 분기: Subject={email.Subject}, PreviewText={email.PreviewText?.Substring(0, Math.Min(50, email.PreviewText?.Length ?? 0))}");
+            // 메일 전환 네비게이션 시작 — Chromium 줌 1.0 리셋 이벤트 저장 차단 (NavigationCompleted에서 해제)
+            _isNavigatingMailBody = true;
             // 빈 본문: 이전 메일 내용 잔류 방지를 위해 먼저 초기화 후 placeholder 표시
             MailBodyWebView.CoreWebView2.NavigateToString("<html><body></body></html>");
             // 테마 색상 결정 (빈 본문 대체 표시에도 필요)
@@ -1092,6 +1115,7 @@ public partial class MainWindow : FluentWindow
             var bgColor0 = isDark0 ? "#1e1e1e" : "#ffffff";
             var textColor0 = isDark0 ? "#e0e0e0" : "#1e1e1e";
             var placeholderHtml = BuildEmptyBodyPlaceholder(email, bgColor0, textColor0);
+            _isNavigatingMailBody = true;
             MailBodyWebView.CoreWebView2.NavigateToString(placeholderHtml);
             return;
         }
@@ -1290,6 +1314,8 @@ public partial class MainWindow : FluentWindow
 </html>";
             }
 
+            // 메일 전환 네비게이션 시작 — Chromium 줌 1.0 리셋 이벤트 저장 차단 (NavigationCompleted에서 해제)
+            _isNavigatingMailBody = true;
             MailBodyWebView.CoreWebView2.NavigateToString(htmlContent);
         }
         catch (System.Exception ex)
