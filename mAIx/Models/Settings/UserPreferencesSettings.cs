@@ -251,4 +251,10 @@ public class UserPreferencesSettings
     [XmlElement("DensityMode")]
     public string DensityMode { get; set; } = "Normal";
 
+    /// <summary>
+    /// 메일 본문 뷰어 확대 비율 (기본값 1.0 = 100%). 앱 재시작 후에도 유지됨.
+    /// </summary>
+    [XmlElement("MailBodyZoomFactor")]
+    public double MailBodyZoomFactor { get; set; } = 1.0;
+
 }

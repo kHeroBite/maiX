@@ -456,6 +456,11 @@ public partial class MainWindow : FluentWindow
             MailBodyWebView.CoreWebView2.NewWindowRequested += CoreWebView2_NewWindowRequested;
             MailBodyWebView.CoreWebView2.ContextMenuRequested += CoreWebView2_ContextMenuRequested;
 
+            // 줌 비율 영속화: 사용자가 Ctrl+휠로 변경 시 UserPreferences에 저장
+            MailBodyWebView.ZoomFactorChanged += MailBodyWebView_ZoomFactorChanged;
+            // 줌 비율 복원: NavigateToString 후 Chromium이 1.0으로 리셋하므로 완료 시점에 재적용
+            MailBodyWebView.CoreWebView2.NavigationCompleted += MailBodyWebView_NavigationCompleted;
+
             Log4.Debug("WebView2 초기화 완료");
 
             // 이미 선택된 메일이 있으면 로드
@@ -745,6 +750,27 @@ public partial class MainWindow : FluentWindow
     }
 
     #endregion
+
+    /// <summary>
+    /// 메일 본문 줌 변경 시 UserPreferences에 저장 (Ctrl+휠로 변경 시 발화)
+    /// </summary>
+    private void MailBodyWebView_ZoomFactorChanged(object? sender, EventArgs e)
+    {
+        App.Settings.UserPreferences.MailBodyZoomFactor = MailBodyWebView.ZoomFactor;
+        App.Settings.SaveUserPreferences();
+    }
+
+    /// <summary>
+    /// 메일 본문 로드 완료 시 저장된 줌 비율 재적용 (NavigateToString 후 Chromium 리셋 보정)
+    /// </summary>
+    private void MailBodyWebView_NavigationCompleted(
+        object? sender,
+        Microsoft.Web.WebView2.Core.CoreWebView2NavigationCompletedEventArgs e)
+    {
+        var savedZoom = App.Settings.UserPreferences.MailBodyZoomFactor;
+        if (Math.Abs(savedZoom - 1.0) > 0.001)
+            MailBodyWebView.ZoomFactor = savedZoom;
+    }
 
     /// <summary>
     /// WebView2 링크 클릭 처리 - 새 브라우저 창에서 열기
