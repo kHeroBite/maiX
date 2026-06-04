@@ -597,7 +597,13 @@ public partial class MainViewModel : ViewModelBase, IDisposable
                     // 복원 직전 가드 OFF → SelectedEmail = restored → OnSelectedEmailChanged → LoadMailBodyAsync 정상 호출
                     _isSwitchingFolder = false;
                     guardScope = false; // finally 재설정 방지
-                    SelectedEmail = restored;
+                    // [신규] 동일 메일(Id 일치) sync 복원 시 재할당 생략 → LoadMailBodyAsync 불필요 재호출 차단 (본문 깜빡임 제거)
+                    bool isSameMail = SelectedEmail?.Id == restored.Id;
+                    if (!isSameMail)
+                    {
+                        SelectedEmail = restored;
+                    }
+                    // isSameMail=true: SelectedEmail 재할당 없음 → PropertyChanged 미발화 → 깜빡임 없음
                 }
                 else if (restored == null)
                 {
