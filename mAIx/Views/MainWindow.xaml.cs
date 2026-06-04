@@ -42,6 +42,8 @@ public partial class MainWindow : FluentWindow
     // ZoomFactorChanged를 저장하지 않도록, 저장값 재적용 중에는 프로그래밍 set 이벤트를 저장하지 않도록 한다.
     private bool _isNavigatingMailBody;
     private bool _isApplyingSavedZoom;
+    // 깜빡임 방지: 직전 로드한 메일 신원키. 동일 메일 재로드 요청 시 skip 가드에 사용.
+    private string? _lastLoadedMailKey;
     private bool _draftEditorInitialized;
     private bool _draftEditorReady;
     private readonly string _cidTempDir = System.IO.Path.Combine(System.IO.Path.GetTempPath(), "mAIx_cid");
@@ -125,9 +127,10 @@ public partial class MainWindow : FluentWindow
                         view?.Refresh();
                     }
 
-                    // WebView2 테마 업데이트
+                    // WebView2 테마 업데이트 — 테마 변경 시 동일 메일 재로드 skip 가드 초기화
                     if (_viewModel.SelectedEmail != null)
                     {
+                        _lastLoadedMailKey = null;
                         _ = LoadMailBodyAsync(_viewModel.SelectedEmail);
                     }
 
@@ -1075,6 +1078,17 @@ public partial class MainWindow : FluentWindow
     /// </summary>
     private async Task LoadMailBodyAsync(Email? email)
     {
+        // 깜빡임 방지: 동일 메일 재로드 요청은 skip (경로 A·B·C·D 모두 차단)
+        // 신원키: EntryId 우선, 없으면 Id, null이면 "null" 고정값
+        var newKey = !string.IsNullOrEmpty(email?.EntryId)
+            ? email!.EntryId
+            : (email != null ? $"id:{email.Id}" : "null");
+        if (newKey == _lastLoadedMailKey && newKey != "null")
+        {
+            Log4.Debug($"[LoadMailBody] 동일 메일 재로드 skip — key={newKey}");
+            return;
+        }
+        _lastLoadedMailKey = newKey;
         Log4.Debug($"[LoadMailBody] 진입: email={email?.Subject ?? "null"}, Body.Length={email?.Body?.Length ?? -1}, IsHtml={email?.IsHtml}, webView2Init={_webView2Initialized}");
         if (!_webView2Initialized || MailBodyWebView.CoreWebView2 == null)
             return;
@@ -4474,6 +4488,26 @@ public partial class MainWindow : FluentWindow
                     NavSettingsButton.IsChecked = true;
                     ShowSettingsView();
                     e.Handled = true;
+                    break;
+
+                case Key.D0:
+                    // Ctrl+0: 메일 본문 줌 100% 초기화
+                    if (MailBodyWebView.CoreWebView2 != null)
+                    {
+                        _isApplyingSavedZoom = true;
+                        try
+                        {
+                            MailBodyWebView.ZoomFactor = 1.0;
+                        }
+                        finally
+                        {
+                            _isApplyingSavedZoom = false;
+                        }
+                        App.Settings.UserPreferences.MailBodyZoomFactor = 1.0;
+                        App.Settings.SaveUserPreferences();
+                        Log4.Debug("[Ctrl+0] 메일 본문 줌 1.0 초기화 및 저장");
+                        e.Handled = true;
+                    }
                     break;
             }
         }

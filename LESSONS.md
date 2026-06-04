@@ -2686,6 +2686,45 @@ viewModel.PropertyChanged += OnViewModelPropertyChanged_ForMindMap;  // 재등�
 - **수정 파일**: Services/AI/OpenAiRealtimeSttService.cs, Services/AI/CumulativeSummaryService.cs, ViewModels/OneNoteViewModel.cs
 - **대화ID**: conv_178002381649
 
+## L-527: 멀티경로 버그는 최종 수렴 지점 단일 차단이 정답 (2026-06-04)
+
+- **문제**: 메일 본문 주기적 깜빡임이 1차(SelectedEmail Id 가드)·2차(EntryId 가드) 수정으로 해결되지 않음. 두 수정 모두 ReplaceEmails 경로만 차단했으나, UpdateFlagStatusAsync의 OnPropertyChanged 직접 발화 등 다른 경로에서도 LoadMailBodyAsync 재호출이 발생하고 있었음.
+- **근본원인**: 여러 경로에서 LoadMailBodyAsync가 호출될 수 있는 구조에서, 개별 호출 지점(ReplaceEmails 내부)만 차단하는 방식은 다른 경로를 모두 찾아 차단해야 한다는 치명적 약점이 있음.
+- **해결**: LoadMailBodyAsync 진입부에 `_lastLoadedMailKey` 기반 동일 메일 재로드 skip 가드 추가. 이 최종 게이트는 어떤 경로로 호출되든 동일 메일이면 무조건 차단.
+- **교훈**: **여러 호출 지점을 개별 차단 < 최종 수렴 지점 1곳 차단.** 멀티경로 재진입 버그는 모든 호출 지점을 추적하는 대신, 최종으로 수렴하는 단일 함수 진입부에 가드를 두는 것이 근본 해결이다. 가드 키는 현재 처리 중인 항목의 식별자(EntryId 또는 fallback Id)로 설정한다.
+- **심각도**: 높음 (3회 미해결 끝에 패턴 확립)
+- **Level**: 3
+- **연관**: L-385(ObservableCollection.Clear+Add selection write-back), L-420(주기적 동작 런타임 발화 검증 필수)
+- **대화ID**: conv_178055554303
+
+---
+
+## L-528: 주기적 동작 버그 — 정적 추측 수정 2회 실패 후에야 진단 로그로 발화 경로 실측 (2026-06-04)
+
+- **문제**: 메일 본문 깜빡임 버그를 코드만 보고 "이 경로일 것"이라 추측하여 수정(1차: ReplaceEmails Id 가드, 2차: EntryId 가드)했으나 두 번 모두 빗나감. 실제 발화 경로(UpdateFlagStatusAsync → OnPropertyChanged 직접 발화)는 런타임 진단 로그 삽입 후에야 확인됨.
+- **근본원인**: L-446(외부 API 디버깅 장기전) + L-420(주기적 동작 런타임 발화 검증 필수) 규칙을 주기적 동작 UI 버그에도 동등하게 적용하지 않음.
+- **해결**: 진단 로그 삽입 → 런타임 실측 → 발화 경로 확정 후 최종 게이트 수정.
+- **교훈**: **주기적 동작(BackgroundSync 등)이 트리거하는 UI 버그는 코드 정적 분석만으로 발화 경로를 단정할 수 없다.** 단발 추측 수정 2회+ 실패는 매몰비용 신호 — 즉시 진단 로그 삽입 → 런타임 실측으로 전환해야 한다. L-420(otest 런타임 발화 검증)을 UI 인터랙션 필요 시나리오에서는 "사용자 확인 영역"으로 명확히 분리하고, otest 정적 검증 PASS만으로 완료 선언 불가.
+- **심각도**: 중간 (패턴 — 3회 반복 위험)
+- **Level**: 2
+- **연관**: L-420 (otest 주기적 동작 런타임 발화 검증), L-446 (단발 추측 수정 매몰비용 경고)
+- **대화ID**: conv_178055554303
+
+---
+
+## L-529: 헤드리스 런타임 검증 한계 — UI 인터랙션 필요 시나리오는 사용자 확인 영역 (2026-06-04)
+
+- **문제**: 메일 선택 + BackgroundSync 주기 대기 등 UI 인터랙션이 필요한 깜빡임 재현 시나리오는 otest가 직접 측정 불가. otest가 정적 빌드 검증만으로 PASS 판정 → 실제 검증 공백 발생.
+- **근본원인**: otest_run이 WPF 앱을 구동하더라도 메일 선택, 폴더 전환 등 사용자 수동 동작이 필요한 시나리오는 자동화 불가.
+- **해결**: acceptance_criteria에 "사용자 수동 확인 필수" 항목을 명시하고 otest 완료 보고에 "사용자 확인 영역"으로 분리 기록.
+- **교훈**: **otest 자동화 불가 시나리오는 수동 확인 항목으로 명확히 분리해야 한다.** acceptance_criteria에 자동/수동 검증 영역을 구분 명시. "자동 검증 PASS"와 "수동 검증 미완료"를 혼동하지 않는다.
+- **심각도**: 낮음 (프로세스 명확화)
+- **Level**: 1
+- **연관**: L-420 (otest 주기적 동작 런타임 발화 검증 필수)
+- **대화ID**: conv_178055554303
+
+---
+
 ## L-526: oplan 코드 탐색으로 사용자 추정 hang 원인 가설 검증 필수 (2026-05-29)
 
 - **문제**: 사용자는 "점진 저장이 없어서 종료 시 일괄 저장 → hang"으로 추정했으나, TriggerRealtimePersist(2.5s debounce)는 이미 구현되어 있었음. 실제 hang 원인은 FinalSummarizeAsync API 동기 await.
