@@ -204,7 +204,10 @@ public partial class MainViewModel : ViewModelBase, IDisposable
                     var snapshot = _cacheService.GetSnapshot(SelectedFolder.Id, ShowSnoozedEmails);
                     if (snapshot != null)
                     {
-                        ReplaceEmails(snapshot, preserveSelection: true);
+                        // [깜빡임 수정] Clear+Add(ReplaceEmails) 대신 점진 정합화 사용.
+                        // Clear 시 ListBox SelectionChanged가 SelectedEmail=null write-back → 본문영역 Visibility 토글(깜빡임) 유발.
+                        // 기존 인스턴스를 재사용하면 SelectedItem이 null을 경유하지 않아 깜빡임이 사라진다. (L-385/L-386)
+                        ReconcileEmailsPreservingSelection(snapshot);
                     }
                 }
             }
@@ -626,6 +629,70 @@ public partial class MainViewModel : ViewModelBase, IDisposable
         finally
         {
             // [안전망] 예외/early return 시에도 가드 반드시 OFF
+            if (guardScope) _isSwitchingFolder = false;
+        }
+    }
+
+    /// <summary>
+    /// 캐시 스냅샷과 _emails를 EntryId 기준으로 점진 정합화한다 (Clear+Add 회피).
+    /// 기존 인스턴스를 재사용하므로 ListBox.SelectedItem(=SelectedEmail 2-way)이 null을 경유하지 않는다.
+    /// → BackgroundSync(OnMailSyncCompleted) 갱신 시 본문영역 Visibility 토글(깜빡임) 제거.
+    /// (L-385/L-386: ObservableCollection.Clear()의 SelectionChanged null write-back 회피)
+    /// </summary>
+    private void ReconcileEmailsPreservingSelection(IReadOnlyList<Email> snapshot)
+    {
+        if (snapshot == null) return;
+
+        // 안전망: 정합화 중 혹시라도 SelectionChanged가 발화해도 LoadMailBodyAsync 차단
+        bool guardScope = true;
+        _isSwitchingFolder = true;
+        try
+        {
+            lock (_emailsLock)
+            {
+                // 1) 스냅샷 EntryId 집합 (순서 유지용 인덱스 맵 포함)
+                var snapEntryIds = new HashSet<string>(StringComparer.Ordinal);
+                foreach (var s in snapshot)
+                    if (!string.IsNullOrEmpty(s.EntryId)) snapEntryIds.Add(s.EntryId!);
+
+                // 2) 스냅샷에 없는 기존 항목 제거 (EntryId 없는 항목은 보존 — 식별 불가)
+                for (int i = _emails.Count - 1; i >= 0; i--)
+                {
+                    var e = _emails[i];
+                    if (!string.IsNullOrEmpty(e.EntryId) && !snapEntryIds.Contains(e.EntryId!))
+                        _emails.RemoveAt(i);
+                }
+
+                // 3) 기존 인스턴스 맵 (EntryId → 인스턴스)
+                var existingByEntryId = new Dictionary<string, Email>(StringComparer.Ordinal);
+                foreach (var e in _emails)
+                    if (!string.IsNullOrEmpty(e.EntryId)) existingByEntryId[e.EntryId!] = e;
+
+                // 4) 스냅샷 순서대로 정합화: 기존 인스턴스 재사용(Move), 신규는 스냅샷 인스턴스 Insert
+                int targetIndex = 0;
+                foreach (var snap in snapshot)
+                {
+                    if (string.IsNullOrEmpty(snap.EntryId)) continue;
+
+                    if (existingByEntryId.TryGetValue(snap.EntryId!, out var existing))
+                    {
+                        int curIndex = _emails.IndexOf(existing);
+                        if (curIndex != targetIndex && curIndex >= 0)
+                            _emails.Move(curIndex, targetIndex); // 인스턴스 보존 → SelectedItem 유지
+                    }
+                    else
+                    {
+                        _emails.Insert(targetIndex, snap); // 신규 메일만 추가
+                    }
+                    targetIndex++;
+                }
+            }
+
+            OnPropertyChanged(nameof(EmailCount));
+            OnPropertyChanged(nameof(StatusBarCountText));
+        }
+        finally
+        {
             if (guardScope) _isSwitchingFolder = false;
         }
     }
@@ -1837,7 +1904,8 @@ public partial class MainViewModel : ViewModelBase, IDisposable
                 if (snapshot != null)
                 {
                     Log4.Debug($"[Perf][SyncIncremental] Emails재바인딩 시작 {swSync.ElapsedMilliseconds}ms");
-                    ReplaceEmails(snapshot, preserveSelection: true);
+                    // [깜빡임 수정] Clear+Add 대신 점진 정합화 — 선택 메일 인스턴스 보존으로 SelectedItem null 경유 제거 (L-385/L-386)
+                    ReconcileEmailsPreservingSelection(snapshot);
                     StatusMessage = $"{Emails.Count}개 이메일 (캐시 + 신규 {newEmails.Count}건)";
                     Log4.Debug($"[Perf][SyncIncremental] Emails재바인딩 완료 {swSync.ElapsedMilliseconds}ms");
                 }
