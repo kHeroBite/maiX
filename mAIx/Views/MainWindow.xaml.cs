@@ -16,6 +16,7 @@ using Wpf.Ui.Controls;
 using mAIx.Models;
 using mAIx.Models.Settings;
 using mAIx.Services.Search;
+using mAIx.Helpers;
 using mAIx.Utils;
 using mAIx.ViewModels;
 using mAIx.Views.Dialogs;
@@ -6412,7 +6413,7 @@ public partial class MainWindow : FluentWindow
                     case nameof(ViewModels.OneNoteViewModel.RecordingDuration):
                         if (OneNoteRecordingTime != null)
                         {
-                            OneNoteRecordingTime.Text = _oneNoteViewModel.RecordingDuration.ToString(@"mm\:ss");
+                            OneNoteRecordingTime.Text = TimeSpanFormatter.FormatTimeSpan(_oneNoteViewModel.RecordingDuration);
                         }
                         break;
                     case nameof(ViewModels.OneNoteViewModel.RecordingVolume):

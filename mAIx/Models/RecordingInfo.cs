@@ -1,6 +1,7 @@
 using System;
 using System.ComponentModel;
 using System.Runtime.CompilerServices;
+using mAIx.Helpers;
 
 namespace mAIx.Models;
 
@@ -93,7 +94,7 @@ public class RecordingInfo : INotifyPropertyChanged
     /// <summary>
     /// 녹음 길이 표시 문자열
     /// </summary>
-    public string DurationDisplay => Duration.ToString(@"mm\:ss");
+    public string DurationDisplay => TimeSpanFormatter.FormatTimeSpan(Duration);
 
     /// <summary>
     /// 파일 출처 (mAIx 녹음 vs 외부 파일)
@@ -266,7 +267,7 @@ public class RecordingInfo : INotifyPropertyChanged
     /// <summary>
     /// 현재 재생 위치 표시
     /// </summary>
-    public string CurrentPositionDisplay => CurrentPosition.ToString(@"mm\:ss");
+    public string CurrentPositionDisplay => TimeSpanFormatter.FormatTimeSpan(CurrentPosition);
 
     /// <summary>
     /// 진행률 (0.0 ~ 1.0)

@@ -3,6 +3,7 @@ using System;
 using System.Collections.Generic;
 using System.ComponentModel;
 using System.Runtime.CompilerServices;
+using mAIx.Helpers;
 
 namespace mAIx.Models;
 
@@ -194,7 +195,7 @@ public class TopicSegment : INotifyPropertyChanged
     /// 시간 범위 표시 문자열 (예: 00:00 ~ 05:23)
     /// </summary>
     public string TimeRangeDisplay =>
-        $"{StartTime:mm\\:ss} ~ {EndTime:mm\\:ss}";
+        $"{TimeSpanFormatter.FormatTimeSpan(StartTime)} ~ {TimeSpanFormatter.FormatTimeSpan(EndTime)}";
 
     /// <summary>
     /// 카드 본문 표시 — 핵심요약(우선) 또는 키워드 fallback

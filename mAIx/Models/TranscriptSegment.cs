@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using mAIx.Helpers;
 
 namespace mAIx.Models;
 
@@ -46,7 +47,7 @@ public class TranscriptSegment
     /// <summary>
     /// 시간 범위 표시 (예: "00:05 - 00:12")
     /// </summary>
-    public string TimeRange => $"{StartTime:mm\\:ss} - {EndTime:mm\\:ss}";
+    public string TimeRange => $"{TimeSpanFormatter.FormatTimeSpan(StartTime)} - {TimeSpanFormatter.FormatTimeSpan(EndTime)}";
 
     /// <summary>
     /// 시작 시간 표시 (초 단위)

@@ -2200,6 +2200,10 @@ ConfigureAwait(false)를 Service 레이어 전체에 적용하여 스레드 컨�
 
 | 2026-05-26 | ✨ OneNote 탭 + 버튼 컨텍스트 인식 3분기 — OneNoteNewNotebookButton_Click에서 SelectedNotebook/SelectedSection/SelectedPage 선택 상태에 따라 노트북/섹션/페이지 생성 3분기 처리. System.Windows.Controls.TextBlock 명시 네임스페이스로 CS0104 해결. 신규 교훈: L-515(Wpf.Ui 혼용 파일 TextBlock CS0104). | mAIx/Views/MainWindow.xaml.cs |
 
+## 2026-06-18 — OneNote탭 60분 경계 시간 리셋 버그 수정
+
+| 2026-06-18 | 🐛 원노트탭 60분 경계 시간 리셋 버그 수정 — TimeSpan mm 포맷 wrap(0~59) 제거, TimeSpanFormatter 헬퍼 도입으로 60분+ 단조 증가 보장. DurationDisplay/CurrentPositionDisplay/TimeRangeDisplay/TimeRange 6개 지점 교체. 신규 교훈: L-530(mm 포맷 wrap), L-531(표시 vs 처리 검증 범위). | mAIx/Helpers/TimeSpanFormatter.cs(신규), mAIx/Models/RecordingInfo.cs, mAIx/Models/TopicSegment.cs, mAIx/Models/TranscriptSegment.cs, mAIx/Services/AI/MinuteSummaryService.cs, mAIx/Views/MainWindow.xaml.cs |
+
 ## 2026-05-26 — OneNote + 버튼 분기 회귀 수정
 
 | 2026-05-26 | 🐛 OneNote + 버튼 분기 회귀 수정 — TreeView PreviewMouseLeftButtonDown의 e.Handled=true가 SelectedItemChanged 이벤트를 차단하여 SelectedNotebook/SelectedSection이 영구 null이던 문제 해결. PreviewMouseLeftButtonUp 핸들러에서 노트북/섹션 클릭 시 ViewModel 속성 명시 설정 + LoadOneNotePageAsync에서 페이지 클릭 시 부모 섹션/노트북 역추적 추가. 신규 교훈: L-516(WPF TreeView e.Handled=true → SelectedItemChanged 차단). | mAIx/Views/MainWindow.xaml.cs |

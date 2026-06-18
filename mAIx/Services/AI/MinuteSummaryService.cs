@@ -9,6 +9,7 @@ using System.Text.Json;
 using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
+using mAIx.Helpers;
 using mAIx.Models;
 using mAIx.Models.Settings;
 using mAIx.Services.AI.Testing;
@@ -262,7 +263,7 @@ public sealed class MinuteSummaryService : IMinuteSummaryService
                 """;
 
             var userPrompt = $"""
-                다음은 녹음 전사 텍스트 (구간: {startTime.ToString(@"mm\:ss")} ~ {endTime.ToString(@"mm\:ss")}) 입니다.
+                다음은 녹음 전사 텍스트 (구간: {TimeSpanFormatter.FormatTimeSpan(startTime)} ~ {TimeSpanFormatter.FormatTimeSpan(endTime)}) 입니다.
 
                 [전사 텍스트]
                 {combinedText}
