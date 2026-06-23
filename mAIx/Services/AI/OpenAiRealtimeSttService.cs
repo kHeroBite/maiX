@@ -69,6 +69,10 @@ public sealed class OpenAiRealtimeSttService : IOpenAiRealtimeSttService
     // L-440 + L-447: 활성 STT 모델별 동작 전략 (URL/페이로드/이벤트 타입/out-of-band 분기).
     // StartAsync 진입 시 SttStrategyFactory.Create(TranscriptionModel)로 주입되어 ReceiveLoop/StopAsync에서 참조.
     private ISttModelStrategy? _currentStrategy;
+
+    // 재연결 제어: 사용자 명시 StopAsync에 의한 종료 여부 추적 (의도적 종료 vs 비정상 종료 구분)
+    private volatile bool _userRequestedStop = false;
+    private const int MaxReconnectAttempts = 3;
     private double _lastSpeechStartedMs = 0;
     private double _lastSpeechStoppedMs = 0;
     private DateTime? _silenceStartedAt = null;
@@ -160,6 +164,7 @@ public sealed class OpenAiRealtimeSttService : IOpenAiRealtimeSttService
             _log.Warn("[RealtimeSTT] 이미 실행 중 — StartAsync 무시");
             return;
         }
+        _userRequestedStop = false;
 
         var apiKey = _settings.AIProviders?.OpenAI?.ApiKey ?? string.Empty;
         var model = _settings.OaiRecording.RealtimeSttModel;
@@ -280,6 +285,8 @@ public sealed class OpenAiRealtimeSttService : IOpenAiRealtimeSttService
     {
         if (_ws == null) return;
 
+        // 사용자 명시 중지 — 재연결 루프가 이 플래그를 확인하여 재연결을 시도하지 않음
+        _userRequestedStop = true;
         _log.Info("[RealtimeSTT] 중지 시작");
 
         try
@@ -422,43 +429,143 @@ public sealed class OpenAiRealtimeSttService : IOpenAiRealtimeSttService
     {
         var buffer = new byte[8192];
         var messageBuffer = new List<byte>();
+        int reconnectAttempt = 0;
 
-        try
+        while (!ct.IsCancellationRequested)
         {
-            while (!ct.IsCancellationRequested && _ws?.State == WebSocketState.Open)
+            // 내부 수신 루프 — WebSocket이 열려 있는 동안 메시지 수신
+            try
             {
-                WebSocketReceiveResult result;
-                try
+                while (!ct.IsCancellationRequested && _ws?.State == WebSocketState.Open)
                 {
-                    result = await _ws.ReceiveAsync(new ArraySegment<byte>(buffer), ct).ConfigureAwait(false);
-                }
-                catch (OperationCanceledException)
-                {
-                    break;
-                }
+                    WebSocketReceiveResult result;
+                    try
+                    {
+                        result = await _ws.ReceiveAsync(new ArraySegment<byte>(buffer), ct).ConfigureAwait(false);
+                    }
+                    catch (OperationCanceledException)
+                    {
+                        goto exitLoop;
+                    }
 
-                if (result.MessageType == WebSocketMessageType.Close)
-                {
-                    _log.Info("[RealtimeSTT] 서버에서 연결 종료");
-                    break;
-                }
+                    if (result.MessageType == WebSocketMessageType.Close)
+                    {
+                        _log.Info("[RealtimeSTT] 서버에서 연결 종료");
+                        break;
+                    }
 
-                messageBuffer.AddRange(new ArraySegment<byte>(buffer, 0, result.Count));
+                    messageBuffer.AddRange(new ArraySegment<byte>(buffer, 0, result.Count));
 
-                if (result.EndOfMessage)
-                {
-                    var json = Encoding.UTF8.GetString(messageBuffer.ToArray());
-                    messageBuffer.Clear();
-                    _log.Debug($"[OpenAi-Realtime] WS 수신 RAW ({json?.Length ?? 0}자) — {json}");
-                    ProcessMessage(json);
+                    if (result.EndOfMessage)
+                    {
+                        var json = Encoding.UTF8.GetString(messageBuffer.ToArray());
+                        messageBuffer.Clear();
+                        _log.Debug($"[OpenAi-Realtime] WS 수신 RAW ({json?.Length ?? 0}자) — {json}");
+                        ProcessMessage(json);
+                    }
                 }
             }
-        }
-        catch (Exception ex) when (!ct.IsCancellationRequested)
-        {
-            _log.Error(ex, "[RealtimeSTT] 수신 루프 오류");
+            catch (Exception ex) when (!ct.IsCancellationRequested)
+            {
+                _log.Error(ex, "[RealtimeSTT] 수신 루프 오류");
+            }
+
+            // 내부 루프 종료 — 취소 또는 재연결 판단
+            if (ct.IsCancellationRequested || _userRequestedStop)
+                break;
+
+            // 비정상 종료 감지 → 재연결 시도
+            if (reconnectAttempt >= MaxReconnectAttempts)
+            {
+                _log.Warn("[RealtimeSTT] 최대 재연결 횟수({Max}) 초과 — 재연결 중단", MaxReconnectAttempts);
+                break;
+            }
+
+            reconnectAttempt++;
+            var delaySeconds = (int)Math.Pow(2, reconnectAttempt); // 2s / 4s / 8s
+            _log.Warn("[RealtimeSTT] WebSocket 비정상 종료 감지 — {Attempt}/{Max}회 재연결 시도 ({Delay}s 후)",
+                reconnectAttempt, MaxReconnectAttempts, delaySeconds);
+
+            try
+            {
+                await Task.Delay(TimeSpan.FromSeconds(delaySeconds), ct).ConfigureAwait(false);
+            }
+            catch (OperationCanceledException)
+            {
+                break;
+            }
+
+            // L-442 전략 swap 5단계: Unsubscribe → DisposeAsync → Factory.New → Subscribe → StartAsync
+            // 재연결: 기존 보조 태스크 취소(Unsubscribe) → WS Cleanup(Dispose) → 새 WS + 세션 재설정(Factory.New+Subscribe+StartAsync)
+            // 단, _cts는 외부(사용자) 취소 토큰 연결이므로 교체하지 않고 WS만 재생성
+            try
+            {
+                _log.Info("[RealtimeSTT] 재연결 준비 — 기존 WS 정리");
+
+                // 기존 보조 태스크 취소 후 완료 대기 (새 취소 소스 없이 기존 _cts 활용)
+                // WS만 재생성하고 _cts는 그대로 유지 (외부 취소 신호 보존)
+                if (_silenceMonitorTask != null)
+                {
+                    try { await _silenceMonitorTask.ConfigureAwait(false); } catch { }
+                    _silenceMonitorTask = null;
+                }
+                if (_manualCommitTask != null)
+                {
+                    try { await _manualCommitTask.ConfigureAwait(false); } catch { }
+                    _manualCommitTask = null;
+                }
+
+                // 기존 WS Dispose
+                _ws?.Dispose();
+                _ws = null;
+
+                if (ct.IsCancellationRequested || _userRequestedStop)
+                    break;
+
+                // 새 WebSocket 생성 및 연결
+                var apiKey = _settings.AIProviders?.OpenAI?.ApiKey ?? string.Empty;
+                var uri = _currentStrategy!.BuildConnectionUri();
+                var newWs = new ClientWebSocket();
+                newWs.Options.SetRequestHeader("Authorization", $"Bearer {apiKey}");
+
+                await newWs.ConnectAsync(uri, ct).ConfigureAwait(false);
+                _ws = newWs;
+                _log.Info("[RealtimeSTT] 재연결 WebSocket 연결 성공 (시도 {Attempt}/{Max})", reconnectAttempt, MaxReconnectAttempts);
+
+                // session.update 재발송
+                var sttLang = string.IsNullOrWhiteSpace(_settings.OaiRecording.SttLanguage) ? "ko" : _settings.OaiRecording.SttLanguage;
+                var sessionPayload = _currentStrategy.BuildSessionUpdatePayload(
+                    language: sttLang,
+                    prompt: _settings.OaiRecording.SttPrompt ?? string.Empty,
+                    serverVadEnabled: _settings.OaiRecording.ServerVadEnabled,
+                    vadThreshold: _settings.OaiRecording.VadThreshold,
+                    vadSilenceDurationMs: _settings.OaiRecording.VadSilenceDurationMs,
+                    whisperDelay: _settings.OaiRecording.WhisperDelay
+                );
+                await SendJsonAsync(sessionPayload).ConfigureAwait(false);
+                _log.Info("[RealtimeSTT] 재연결 session.update 재발송 완료");
+
+                // 보조 태스크 재시작
+                _silenceMonitorTask = SilenceMonitorLoopAsync(ct);
+                if (_currentStrategy.RequiresManualCommit(_settings.OaiRecording.ServerVadEnabled))
+                {
+                    _audioAppendedSinceCommit = false;
+                    _manualCommitTask = ManualCommitLoopAsync(ct);
+                }
+
+                // messageBuffer 초기화 후 내부 루프 재진입
+                messageBuffer.Clear();
+                _log.Info("[RealtimeSTT] 재연결 완료 — 수신 루프 재개");
+                reconnectAttempt = 0; // 성공 시 재시도 카운터 초기화
+            }
+            catch (Exception ex)
+            {
+                _log.Error(ex, "[RealtimeSTT] 재연결 실패 (시도 {Attempt}/{Max})", reconnectAttempt, MaxReconnectAttempts);
+                // 루프 계속하여 다음 재시도 또는 최대 초과 시 종료
+            }
         }
 
+        exitLoop:
         _log.Info("[RealtimeSTT] 수신 루프 종료");
     }
 

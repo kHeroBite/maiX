@@ -2753,6 +2753,18 @@ viewModel.PropertyChanged += OnViewModelPropertyChanged_ForMindMap;  // 재등�
 
 ---
 
+## L-532: OpenAI Realtime WebSocket 비정상 종료 — 재연결 루프 필수 (2026-06-23)
+
+- **문제**: 원노트 녹음 60분 이후 실시간 요약·마인드맵이 완전 멈춤. 녹음 타이머(WASAPI DataAvailable)는 계속 돌아 시간 표시는 정상.
+- **근본원인**: OpenAI Realtime API WebSocket 세션이 비정상 종료되었을 때 재연결 로직이 없어 STT 이벤트가 영구 중단 → 버퍼 영구 빔 → 요약/맵 완전 멈춤.
+- **오해 주의**: "60분 상한 인덱스"나 "_minuteStartTime 미전진"이 원인이라는 추측은 전수 grep으로 반증됨. 60분 경계와 관계없이 WebSocket 재연결 부재가 핵심이었음.
+- **해결**: ReceiveLoop를 외부 while 루프로 감싸 비정상 종료 시 지수 백오프(2s/4s/8s) 재연결. `_userRequestedStop` 플래그로 의도적 StopAsync와 구분하여 재연결 차단.
+- **교훈**: 장시간 실행 STT 서비스는 WebSocket 재연결 없이는 불안정. 비정상 종료(Close 프레임/예외) 감지 + 재연결 루프 + 의도적 종료 구분이 필수 3요소. L-442 5단계 대칭 구조 준수.
+- **심각도**: 높음 (60분 이상 녹음 시 항상 발생)
+- **Level**: 2 (MEMORY.md 기록)
+- **수정 파일**: `OpenAiRealtimeSttService.cs`(재연결 루프), `MinuteSummaryService.cs`(빈 버퍼 시 시간 전진), `CumulativeSummaryService.cs`(TimeSpanFormatter), `MinuteSummaryEntry.cs`(TimeSpanFormatter)
+- **연관**: L-441(Realtime API out-of-band), L-442(전략 swap 5단계), L-448(VAD OFF 수동 commit)
+
 ## L-526: oplan 코드 탐색으로 사용자 추정 hang 원인 가설 검증 필수 (2026-05-29)
 
 - **문제**: 사용자는 "점진 저장이 없어서 종료 시 일괄 저장 → hang"으로 추정했으나, TriggerRealtimePersist(2.5s debounce)는 이미 구현되어 있었음. 실제 hang 원인은 FinalSummarizeAsync API 동기 await.

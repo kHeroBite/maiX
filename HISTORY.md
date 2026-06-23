@@ -2,6 +2,29 @@
 
 > PROJECT.md 작업 이력 테이블의 상세 보완본
 
+## [2026-06-23] 원노트 녹음 60분+ 요약·맵 멈춤 해결 — STT WebSocket 자동 재연결 + 시간포맷 60분초과 통일 (O3 Fast Path)
+
+**분류**: O3 Fast Path (lesson + docs + git)
+**otest 결과**: 정적 PASS (빌드 성공). 런타임 검증 사용자 수동 확인 필요 (60분+ 녹음 후 STT 재연결 발화 확인).
+**범위**: 수정 4파일 (OpenAiRealtimeSttService.cs, MinuteSummaryService.cs, CumulativeSummaryService.cs, MinuteSummaryEntry.cs)
+
+### 근본 원인
+
+- **주 원인**: OpenAI Realtime WebSocket 세션이 장시간 녹음 중 비정상 종료되었을 때 재연결 로직이 없어 STT 이벤트 영구 중단 → 버퍼 영구 빔 → 요약/맵 완전 멈춤
+- **부 원인**: STT 버퍼 없는 틱에서 `_minuteStartTime` 미전진으로 인한 시간 레이블 어긋남
+- **표시 버그**: 60분 이상 경과 시 `mm:ss` 포맷이 0~59 wrap-around(TimeSpan.mm는 분 컴포넌트) → TimeSpanFormatter 미적용
+
+### 수정 내용
+
+| 파일 | 수정 내용 |
+|------|-----------|
+| `Services/AI/OpenAiRealtimeSttService.cs` | ReceiveLoop 외부 while 감싸 비정상 종료 시 지수 백오프 재연결(2s/4s/8s, 최대 3회). `_userRequestedStop` 플래그로 의도적 StopAsync 구분 |
+| `Services/AI/MinuteSummaryService.cs` | STT 버퍼 없어도 `_minuteStartTime` 60초 전진 (시간 레이블 어긋남 방지) |
+| `Services/AI/CumulativeSummaryService.cs` | LLM 프롬프트 `mm:ss` → `TimeSpanFormatter.FormatTimeSpan` 통일 |
+| `Models/MinuteSummaryEntry.cs` | `TimeRangeDisplay` → `TimeSpanFormatter` 통일 (60분 이상 h:mm:ss) |
+
+---
+
 ## [2026-05-29] OneNote 녹음 종료 1분 hang 제거 — 최종요약 fire-and-forget 분리 + WebSocket close 타임아웃 (O3 Fast Path)
 
 **분류**: O3 Fast Path (lesson + docs + git)

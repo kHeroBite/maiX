@@ -8,6 +8,7 @@ using System.Text;
 using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
+using mAIx.Helpers;
 using mAIx.Models;
 using mAIx.Models.Settings;
 using mAIx.Services.AI.Testing;
@@ -213,7 +214,7 @@ public sealed class CumulativeSummaryService : ICumulativeSummaryService
         {
             // 압축 갱신 모드: 이전 누적요약 먼저 압축 후 새 N분 통합
             var recentSummaries = string.Join("\n\n", recentEntries.Select(e =>
-                $"[{e.StartTime:mm\\:ss}~{e.EndTime:mm\\:ss}] {e.SummaryText}"));
+                $"[{TimeSpanFormatter.FormatTimeSpan(e.StartTime)}~{TimeSpanFormatter.FormatTimeSpan(e.EndTime)}] {e.SummaryText}"));
 
             prompt = $"""
                 다음은 이전까지의 누적 요약과 최근 추가된 1분 요약들입니다.
@@ -233,7 +234,7 @@ public sealed class CumulativeSummaryService : ICumulativeSummaryService
         else
         {
             var recentSummaries = string.Join("\n\n", recentEntries.Select(e =>
-                $"[{e.StartTime:mm\\:ss}~{e.EndTime:mm\\:ss}] {e.SummaryText}"));
+                $"[{TimeSpanFormatter.FormatTimeSpan(e.StartTime)}~{TimeSpanFormatter.FormatTimeSpan(e.EndTime)}] {e.SummaryText}"));
 
             prompt = $"""
                 다음은 현재까지의 누적 요약과 최근 추가된 1분 요약들입니다.
@@ -294,7 +295,7 @@ public sealed class CumulativeSummaryService : ICumulativeSummaryService
             }
 
             var lastMinuteSummary = lastEntry != null
-                ? $"[{lastEntry.StartTime:mm\\:ss}~{lastEntry.EndTime:mm\\:ss}] {lastEntry.SummaryText}"
+                ? $"[{TimeSpanFormatter.FormatTimeSpan(lastEntry.StartTime)}~{TimeSpanFormatter.FormatTimeSpan(lastEntry.EndTime)}] {lastEntry.SummaryText}"
                 : "(없음)";
 
             var prompt = $"""

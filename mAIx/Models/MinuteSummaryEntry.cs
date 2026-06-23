@@ -1,6 +1,7 @@
 // 1분 요약 엔트리 (내부 압축용 — 누적요약 입력 자료)
 using System;
 using System.Collections.Generic;
+using mAIx.Helpers;
 
 namespace mAIx.Models;
 
@@ -64,8 +65,8 @@ public class MinuteSummaryEntry
     public DateTime CreatedAt { get; set; } = DateTime.Now;
 
     /// <summary>
-    /// UI 표시용 시간 범위 (mm:ss ~ mm:ss)
+    /// UI 표시용 시간 범위 (60분 미만: mm:ss ~ mm:ss, 60분 이상: h:mm:ss ~ h:mm:ss)
     /// </summary>
     public string TimeRangeDisplay =>
-        $"{(int)StartTime.TotalMinutes:D2}:{StartTime.Seconds:D2} ~ {(int)EndTime.TotalMinutes:D2}:{EndTime.Seconds:D2}";
+        $"{TimeSpanFormatter.FormatTimeSpan(StartTime)} ~ {TimeSpanFormatter.FormatTimeSpan(EndTime)}";
 }

@@ -173,7 +173,12 @@ public sealed class MinuteSummaryService : IMinuteSummaryService
                     _log.Debug("[MinuteSummary] PeriodicTimer 틱 — buffer={Count}개", _currentMinuteBuffer.Count);
                     if (_currentMinuteBuffer.Count == 0)
                     {
-                        _log.Info("[MinuteSummary] PeriodicTimer 스킵 — STT 버퍼 없음 (아직 텍스트 미수신)");
+                        // 버퍼가 비어있어도 _minuteStartTime을 다음 분 경계로 전진 — 실제 경과시간과 요약 시간레이블 일치
+                        var emptyStart = _minuteStartTime;
+                        _minuteStartTime = emptyStart + TimeSpan.FromSeconds(60);
+                        _lastStartedAt = DateTime.Now;
+                        _log.Info("[MinuteSummary] PeriodicTimer 스킵 — STT 버퍼 없음, 시간 전진: {Start} → {Next}",
+                            emptyStart, _minuteStartTime);
                         continue;
                     }
                     snapshot = new List<string>(_currentMinuteBuffer);
