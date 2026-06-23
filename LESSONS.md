@@ -1968,6 +1968,8 @@ L-424(WPF ItemsControl 가변높이 안티패턴 기각)가 직전 작업 완료
 | L-510 | WebView2 UI 실측 보류 2회 패턴(rev3+radial) — 커밋 메시지 명시 의무 심화 (L-496 Level 2 승급) | docs | LESSONS.md + MEMORY.md | 2026-05-22 | ✅ |
 | L-511 | result.json 사이클 간 잔존 위험 — 진입 시 substeps 내용과 현재 작업 대조 필수 | docs | LESSONS.md + MEMORY.md | 2026-05-22 | ✅ |
 | L-515 | Wpf.Ui 혼용 파일에서 `new TextBlock {}` → CS0104 모호한 참조 — `System.Windows.Controls.TextBlock` 명시 필수 (L-051 TextBlock 버전) | docs | LESSONS.md | 2026-05-26 | ✅ |
+| L-533 | v2.1.178+ 팀명 = session-{UUID앞8자} 고정 — 임의 팀명 시 HOOK_BLOCK_TEAM_NOT_EXIST | skill+docs | ok/SKILL.md + full_task_team_guard.sh + LESSONS.md + MEMORY.md | 2026-06-23 | ✅ |
+| L-534 | 도구 제거 시 관련 hook 안내 메시지 동기화 필수 — 메시지-현실 drift 방지 | docs | LESSONS.md + MEMORY.md | 2026-06-23 | ✅ |
 
 ## L-476: Timer 런타임 발화 검증 대체 조건 — 30초+ 주기 Timer 정적 PASS 허용 기준 (2026-05-20)
 
@@ -2775,3 +2777,27 @@ viewModel.PropertyChanged += OnViewModelPropertyChanged_ForMindMap;  // 재등�
 - **Level**: 1
 - **연관**: L-419 (oplan 정의부+호출부 동시 확인)
 - **대화ID**: conv_178002381649
+
+## L-533: v2.1.178+ 팀명 = session-{UUID앞8자} 고정 패턴 — 임의 팀명 지정 시 HOOK_BLOCK_TEAM_NOT_EXIST 발생 (2026-06-23)
+
+- **문제**: v2.1.178+ 이후 TeamCreate/TeamDelete 도구가 제거되었음. ok 파이프라인이 team_name 파일 부재 시 프로젝트명·기능명 등 임의 팀명을 생성하면 `HOOK_BLOCK_TEAM_NOT_EXIST` 차단 발생.
+- **근본원인**: v2.1.178+에서 팀은 Agent 호출 시 `session-{UUID앞8자}` 패턴으로 자동 생성됨. 임의 팀명(ex: "maix-team", "my-project")은 자동 생성 팀명과 불일치 → hook 차단.
+- **해결**: ok/SKILL.md L-221 섹션에 명시 — team_name 파일 없을 때 반드시 `session-${UUID:0:8}` 패턴 사용. 임의 팀명(프로젝트명·기능명 등) 사용 금지 경고 추가.
+- **재발방지**: full_task_team_guard.sh 메시지에 올바른 팀명 패턴(`session-{UUID앞8자}`) 명시.
+- **교훈**: v2.1.178+ 기준 자동 팀명 패턴이 `session-{UUID앞8자}`로 확정됨. 스킬 수정 시 이 패턴을 반드시 참조할 것.
+- **심각도**: 높음 (ok 파이프라인 전면 차단 원인)
+- **Level**: 2 (MEMORY.md 기록 — 파이프라인 전체에 영향)
+- **수정 파일**: `ok/SKILL.md`(L-221 섹션 팀명 결정 규칙), `/home/rioky/.claude/hooks/full_task_team_guard.sh`(차단 메시지 교정)
+- **연관**: MEMORY.md claude-code-2178-team-model, L-534
+
+## L-534: 도구 제거 시 관련 hook 안내 메시지 동기화 필수 — 메시지-현실 drift 방지 (2026-06-23)
+
+- **문제**: v2.1.178+ TeamCreate 도구 제거 후 `full_task_team_guard.sh` 차단 메시지가 여전히 "TeamCreate를 다시 호출하세요" 형태로 남아 있었음. 사용자(LLM)가 존재하지 않는 도구 호출 안내를 따라가려 했음.
+- **근본원인**: Claude Code 버전 업그레이드로 도구가 제거되었을 때, hook 스크립트의 안내 메시지가 동기화되지 않아 메시지-현실 drift 발생.
+- **해결**: 차단 메시지를 v2.1.178+ 기준으로 교정 — TeamCreate 안내 제거, `session-{UUID앞8자}` 패턴 안내 추가, L-340 메시지는 `/oinit` 안내로 교체.
+- **교훈**: Claude Code 버전 업그레이드(도구 추가/제거) 시 관련 hook 안내 메시지도 동시 동기화 필수. "사라진 도구 안내"는 따라 할 수 없는 가이드 → 혼란 가중.
+- **체크리스트**: 도구 제거 시 ① hook 스크립트 메시지 ② SKILL.md 절차 ③ CLAUDE.md 매핑표 동시 점검.
+- **심각도**: 중간 (안내 오류 → 불필요한 반복 시도)
+- **Level**: 2 (MEMORY.md 기록 — 업그레이드 시 재발 가능)
+- **수정 파일**: `/home/rioky/.claude/hooks/full_task_team_guard.sh`
+- **연관**: L-533

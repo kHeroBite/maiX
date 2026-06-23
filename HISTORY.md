@@ -2,6 +2,26 @@
 
 > PROJECT.md 작업 이력 테이블의 상세 보완본
 
+## [2026-06-23] TeamCreate 제거 대응 — ok 자동 팀명(session-{uuid8}) 강제 + hook 안내 메시지 교정 (O3 Fast Path)
+
+**분류**: O3 Fast Path (lesson + docs + git)
+**범위**: 인프라 파일 2개 (ok/SKILL.md, full_task_team_guard.sh) — mAIx git 미추적 파일 (.claude/ gitignore)
+**git 커밋**: 해당 없음 — 변경 파일이 .gitignore로 git 미추적 (ok/SKILL.md는 .claude/ 전체 ignore)
+
+### 변경 내용
+
+| 파일 | 변경 내용 |
+|------|-----------|
+| `.claude/skills/ok/SKILL.md` (L-221 섹션) | team_name 파일 없을 때 `session-${UUID:0:8}` 패턴 강제 + 임의 팀명 금지 경고 추가 |
+| `/home/rioky/.claude/hooks/full_task_team_guard.sh` | 사라진 TeamCreate 안내 제거 + 동적 팀명(`session-{UUID앞8자}`) 안내 + L-340 메시지 `/oinit` 안내로 교체 |
+
+### 교훈
+
+- **L-533**: v2.1.178+ 팀명 = `session-{UUID앞8자}` 고정 패턴 (임의 팀명 시 HOOK_BLOCK_TEAM_NOT_EXIST)
+- **L-534**: 도구 제거 시 관련 hook 안내 메시지 동기화 필수 — 메시지-현실 drift 방지
+
+---
+
 ## [2026-06-23] 원노트 녹음 60분+ 요약·맵 멈춤 해결 — STT WebSocket 자동 재연결 + 시간포맷 60분초과 통일 (O3 Fast Path)
 
 **분류**: O3 Fast Path (lesson + docs + git)
