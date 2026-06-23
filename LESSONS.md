@@ -2778,6 +2778,53 @@ viewModel.PropertyChanged += OnViewModelPropertyChanged_ForMindMap;  // 재등�
 - **연관**: L-419 (oplan 정의부+호출부 동시 확인)
 - **대화ID**: conv_178002381649
 
+## L-535: SendMessage 라우팅 단절 — 완료보고 evidence 파일 폴링으로 보완 (2026-06-23)
+
+- **문제**: 팀에이전트가 team-lead에게 보낸 일반 완료보고 SendMessage가 `success:true`여도 메인 대화 턴에 주입되지 않을 수 있음(in-process 라우팅 특성). 메인은 inbox 파일 폴링 시 `[]`만 보고 "무응답"으로 오판.
+- **근본원인**: Claude Code 팀 SendMessage는 in-process 라우팅이므로 turn-injection 타이밍이 보장되지 않음. 메인이 inbox만 폴링하면 타이밍 미스로 완료를 놓칠 수 있음.
+- **해결**: `sendmessage_ack_write.sh` hook이 팀에이전트의 team-lead 수신 일반 완료보고를 `evidence/agent_report_{이름}.json`에 기록. 메인은 inbox 빈 경우 이 파일을 폴링하여 완료 확인.
+- **재발방지**: pane `capture-pane`이 완료 확인의 1차 수단. inbox 빈 경우 `evidence/agent_report_{이름}.json` 확인을 2차 수단으로 사용.
+- **교훈**: 팀에이전트 완료 확인 순서: ① capture-pane 직접 확인 → ② evidence/agent_report_*.json 폴링 → ③ inbox 폴링. inbox만 의존하지 말 것.
+- **심각도**: 높음 (팀 파이프라인 오판 → 불필요한 재시도)
+- **Level**: 2 (MEMORY.md 기록)
+- **수정 파일**: `/home/rioky/.claude/hooks/sendmessage_ack_write.sh`
+- **대화ID**: conv_178220564695
+
+## L-536: 팀에이전트 하위 Agent spawn 금지 물리화 — PIPELINE_UUID 환경변수 차단 (2026-06-23)
+
+- **문제**: 팀에이전트가 직접 Agent spawn하면 flat team 구조에서 추적 불가. L-299로 규칙은 있었으나 물리 차단이 없어 위반 가능했음.
+- **근본원인**: L-299 규칙이 CLAUDE.md/LESSONS.md 문서로만 존재 → LLM이 무시할 수 있음(재발방지 정책: LLM 의지 의존 금지).
+- **해결**: `full_task_team_guard.sh`가 `PIPELINE_UUID` 환경변수 유무로 팀에이전트 식별 → 팀에이전트의 하위 Agent spawn 전면 물리 차단. 메인(`PIPELINE_UUID` 없음)은 통과(회귀 0).
+- **재발방지**: hook 물리 차단(1순위). 팀에이전트는 `SPAWN_REQUEST: ...` 형식으로 메인에 위임만 허용.
+- **심각도**: 높음 (추적 불가 에이전트 생성 → 파이프라인 구조 붕괴)
+- **Level**: 2 (MEMORY.md 기록)
+- **수정 파일**: `/home/rioky/.claude/hooks/full_task_team_guard.sh`
+- **연관**: L-299
+- **대화ID**: conv_178220564695
+
+## L-537: bash 디렉토리 glob 함정 — agents/{name}은 파일, 디렉토리 glob으로 못 잡힘 (2026-06-23)
+
+- **문제**: `agents/{name}`은 파일인데 `for x in "$dir"/*/`(디렉토리 glob)로 순회하면 nullglob 미설정 시 파일을 못 잡아 발신자 판정이 항상 실패. hook이 항상 "팀에이전트 아님"으로 오판.
+- **근본원인**: bash의 `*/` glob은 디렉토리만 매칭. 파일인 agents/{name}은 매칭 안 됨. `bash -n` 문법검사와 grep 정적 검증으로는 이 로직 결함을 탐지 불가.
+- **해결**: 디렉토리 glob 대신 `[ -e "$dir/$name" ]` 파일 존재 판정 사용.
+- **재발방지**: hook 핵심 판정 분기는 격리 실행 테스트(Case A/B/C)로 반드시 검증. bash -n + grep만으로 PASS 불가.
+- **심각도**: 높음 (hook 판정 전면 실패 → 물리 차단 무력화)
+- **Level**: 1
+- **수정 파일**: `/home/rioky/.claude/hooks/sendmessage_ack_write.sh`
+- **대화ID**: conv_178220564695
+
+## L-538: hook 재발방지 검증은 격리 실행 테스트 필수 — 정적 분석만으로 불충분 (2026-06-23)
+
+- **문제**: bash -n 문법검사 + grep 정적 검증으로 otest PASS → 배포 후 L-537 로직 결함 발견. 핵심 판정 분기가 실제 입력에서 항상 실패하는 버그를 정적 분석이 못 잡음.
+- **근본원인**: 정적 분석은 코드 존재를 확인하나 실행 흐름의 정확성은 검증 못 함. hook 같은 소규모 bash 스크립트에서도 로직 결함은 런타임에만 드러남.
+- **해결**: 핵심 판정 분기마다 격리 실행 테스트(Case A: 팀에이전트 해당, Case B: 메인 통과, Case C: 조건 미해당) 수행 후 각 케이스 PASS 확인.
+- **재발방지**: hook 재발방지 검증 체크리스트에 "격리 실행 테스트 최소 3-case" 추가.
+- **교훈**: `bash -n` + 정적 grep ≠ 검증 완료. 핵심 로직은 반드시 실제 입력으로 실행 테스트.
+- **심각도**: 중간 (검증 방법론 결함 → 배포 후 버그)
+- **Level**: 1
+- **연관**: L-537
+- **대화ID**: conv_178220564695
+
 ## L-533: v2.1.178+ 팀명 = session-{UUID앞8자} 고정 패턴 — 임의 팀명 지정 시 HOOK_BLOCK_TEAM_NOT_EXIST 발생 (2026-06-23)
 
 - **문제**: v2.1.178+ 이후 TeamCreate/TeamDelete 도구가 제거되었음. ok 파이프라인이 team_name 파일 부재 시 프로젝트명·기능명 등 임의 팀명을 생성하면 `HOOK_BLOCK_TEAM_NOT_EXIST` 차단 발생.
