@@ -3365,6 +3365,11 @@ public partial class OneNoteViewModel : ViewModelBase
             if (dispatcher == null) return;
             await dispatcher.InvokeAsync(() =>
             {
+                // ★ 재연결 시 서버 audio_start_ms(세션 상대값)가 리셋되어도 시간이 되돌아가지 않도록,
+                // 절대 경과시간(RecordingDuration, 일시정지 보정 포함)을 앵커로 사용한다.
+                var recordingDuration = _recordingService?.RecordingDuration ?? TimeSpan.Zero;
+                var anchorEndTime = recordingDuration > TimeSpan.Zero ? recordingDuration : endTime;
+
                 Models.TranscriptSegment? existing = null;
                 foreach (var seg in LiveSTTSegments)
                 {
@@ -3373,7 +3378,7 @@ public partial class OneNoteViewModel : ViewModelBase
                 if (existing != null)
                 {
                     existing.Text = text;
-                    existing.EndTime = endTime;
+                    existing.EndTime = anchorEndTime;
                     // ObservableCollection은 Property 변경을 감지 못하므로 강제 갱신: Replace
                     var idx = LiveSTTSegments.IndexOf(existing);
                     LiveSTTSegments[idx] = new Models.TranscriptSegment
@@ -3382,18 +3387,19 @@ public partial class OneNoteViewModel : ViewModelBase
                         Speaker = existing.Speaker,
                         Text = text,
                         StartTime = existing.StartTime,
-                        EndTime = endTime
+                        EndTime = anchorEndTime
                     };
                 }
                 else
                 {
+                    var anchorStartTime = recordingDuration > TimeSpan.Zero ? recordingDuration : startTime;
                     LiveSTTSegments.Add(new Models.TranscriptSegment
                     {
                         ItemId = itemId,
                         Speaker = "화자",
                         Text = text,
-                        StartTime = startTime,
-                        EndTime = endTime
+                        StartTime = anchorStartTime,
+                        EndTime = anchorEndTime
                     });
                 }
             }).Task.ConfigureAwait(false);

@@ -2250,3 +2250,7 @@ ConfigureAwait(false)를 Service 레이어 전체에 적용하여 스레드 컨�
 ## 2026-05-26 — OneNote + 버튼 분기 회귀 수정
 
 | 2026-05-26 | 🐛 OneNote + 버튼 분기 회귀 수정 — TreeView PreviewMouseLeftButtonDown의 e.Handled=true가 SelectedItemChanged 이벤트를 차단하여 SelectedNotebook/SelectedSection이 영구 null이던 문제 해결. PreviewMouseLeftButtonUp 핸들러에서 노트북/섹션 클릭 시 ViewModel 속성 명시 설정 + LoadOneNotePageAsync에서 페이지 클릭 시 부모 섹션/노트북 역추적 추가. 신규 교훈: L-516(WPF TreeView e.Handled=true → SelectedItemChanged 차단). | mAIx/Views/MainWindow.xaml.cs |
+
+## 2026-07-09 — 원노트탭 실시간 STT 세그먼트 경과시간 리셋 버그 수정
+
+| 2026-07-09 | 🐛 원노트 실시간 STT 경과시간 리셋 해결 — 3초 주기 input_audio_buffer.commit이 서버 audio_start_ms(상대값)를 리셋시키는 근본원인 확정. OnSttTranscriptSegmentUpdated 신규 세그먼트 생성 시 StartTime을 AudioRecordingService.RecordingDuration 절대 앵커로 전환(RecordingDuration=Zero 폴백 유지). 세션 시작 전부터 있던 OpenAiRealtimeSttService.cs 미커밋 121줄(_auxCts 분리 등)은 diff 스코프 오염 방지를 위해 이번 커밋에서 전부 제외(사용자 결정). 신규 교훈: L-539(미커밋 잔여물 diff 스코프 오염 — otest 정밀 대조로 선제 발견). | mAIx/ViewModels/OneNoteViewModel.cs |

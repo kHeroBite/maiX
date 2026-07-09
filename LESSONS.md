@@ -1,5 +1,16 @@
 # LESSONS.md — MaiX 프로젝트 교훈 로그
 
+## L-539: 세션 시작 전 미커밋 잔여물 diff 스코프 오염 — otest 정밀 대조로 선제 발견 (2026-07-09)
+
+- **문제**: OpenAiRealtimeSttService.cs에 세션 시작 전부터 존재하던 미커밋 121줄(_auxCts 분리, DebugForceReconnectLoopAsync 신설, MAIX_DEBUG_STT_RECONNECT_SEC 강제재연결 트리거, SendJsonAsync CancellationToken 등)이 이번 버그수정(STT 세그먼트 경과시간 리셋) 대상 파일과 동일 파일에 혼재.
+- **근본원인**: git status가 세션 시작 전부터 M으로 표시하던 파일에 새 수정(진단 로그 2줄)을 추가하면, 무관한 기존 변경분까지 diff에 함께 잡혀 커밋 스코프가 오염될 위험이 있음.
+- **해결**: otest가 git diff를 acceptance_criteria와 정밀 대조하여 "handoff에 언급된 것보다 훨씬 큰 변경"을 선제 발견 → team-lead에게 FYI 보고 → 사용자가 "버그수정만 커밋" 결정. odone은 hunk 단위 분리를 시도했으나 진단 로그 2줄도 121줄과 동일 hunk에 섞여 있어 분리 불가 → 해당 파일 전체를 커밋에서 제외(OneNoteViewModel.cs만 커밋).
+- **교훈**: otest/odone은 git status에서 세션 시작 전부터 M으로 남아있던 파일을 수정 대상 파일과 대조해야 함. hunk 분리가 애매하면 "121줄을 한 줄도 포함시키지 않는 것"을 최우선으로 하여 파일 전체를 커밋 스코프에서 제외하는 것이 안전.
+- **심각도**: 중간 (커밋 스코프 오염 위험 — 실제 커밋 전 발견되어 사고로 이어지지 않음)
+- **Level**: 1
+- **수정 파일**: 해당 없음 (문서 교훈 기록만)
+- **대화ID**: conv_178356130382
+
 ## L-045: AI 프롬프트 negative examples 필수 (2026-02-17)
 
 - **문제**: OneNote AI 분석에서 마커 카테고리명(★중요★, ⚠주의⚠) 도배 — 3회 반복 지적
