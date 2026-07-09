@@ -8595,7 +8595,8 @@
                                             <Border Grid.Row="1" x:Name="OneNoteOptionsTabContent" Visibility="Collapsed"
                                                 Padding="10,8"
                                                 VerticalAlignment="Stretch">
-                                                <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+                                                <ScrollViewer x:Name="OneNoteOptionsScrollViewer" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled"
+                                                              PreviewMouseWheel="OneNoteOptionsScrollViewer_PreviewMouseWheel">
                                                     <StackPanel>
                                                         <!-- ╔════ STT 그룹 ════╗ -->
                                                         <Border Background="{DynamicResource ControlFillColorDefaultBrush}"

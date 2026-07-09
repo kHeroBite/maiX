@@ -283,6 +283,14 @@ public partial class MainWindow : FluentWindow
 
         // 최대화/복원 버튼 아이콘 동기화 (타이틀바 더블클릭, Win+화살표, 스냅, 시작 시 복원 등
         // CustomMaximizeButton_Click을 거치지 않는 모든 WindowState 변경 경로를 커버하는 최종 수렴 지점)
+        UpdateMaximizeIconState();
+    }
+
+    /// <summary>
+    /// 현재 WindowState에 맞춰 최대화/복원 버튼 아이콘과 툴팁을 동기화
+    /// </summary>
+    private void UpdateMaximizeIconState()
+    {
         if (WindowState == System.Windows.WindowState.Maximized)
         {
             MaximizeIcon.Symbol = Wpf.Ui.Controls.SymbolRegular.SquareMultiple24;
@@ -1708,6 +1716,10 @@ public partial class MainWindow : FluentWindow
                 WindowState = System.Windows.WindowState.Maximized;
                 Log4.Info("창 최대화 상태 복원");
             }
+
+            // 시작 시 WindowState에 맞춰 최대화 버튼 아이콘/툴팁 강제 동기화
+            // (StateChanged 미발화 경로 대비 — 최종 수렴 지점 1회 명시 호출)
+            UpdateMaximizeIconState();
 
             Log4.Info("창 위치/크기 복원 완료");
         }
@@ -17626,6 +17638,18 @@ public partial class MainWindow : FluentWindow
                 e.Handled = true;
             }
             // 일반 휠은 기본 동작 (자식 스크롤뷰어로 전달하여 상하 스크롤)
+        }
+    }
+
+    /// <summary>
+    /// 옵션탭 카드 영역 위 마우스 휠 스크롤 (카드 내부 컨트롤이 이벤트를 가로채도 상위 ScrollViewer가 항상 스크롤되도록 직접 처리)
+    /// </summary>
+    private void OneNoteOptionsScrollViewer_PreviewMouseWheel(object sender, MouseWheelEventArgs e)
+    {
+        if (sender is ScrollViewer scrollViewer)
+        {
+            scrollViewer.ScrollToVerticalOffset(scrollViewer.VerticalOffset - e.Delta);
+            e.Handled = true;
         }
     }
 
