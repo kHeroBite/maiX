@@ -280,6 +280,19 @@ public partial class MainWindow : FluentWindow
             _lastNormalWidth = Width;
             _lastNormalHeight = Height;
         }
+
+        // 최대화/복원 버튼 아이콘 동기화 (타이틀바 더블클릭, Win+화살표, 스냅, 시작 시 복원 등
+        // CustomMaximizeButton_Click을 거치지 않는 모든 WindowState 변경 경로를 커버하는 최종 수렴 지점)
+        if (WindowState == System.Windows.WindowState.Maximized)
+        {
+            MaximizeIcon.Symbol = Wpf.Ui.Controls.SymbolRegular.SquareMultiple24;
+            CustomMaximizeButton.ToolTip = "복원";
+        }
+        else if (WindowState == System.Windows.WindowState.Normal)
+        {
+            MaximizeIcon.Symbol = Wpf.Ui.Controls.SymbolRegular.Maximize24;
+            CustomMaximizeButton.ToolTip = "최대화";
+        }
     }
 
     /// <summary>
