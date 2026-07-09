@@ -8298,7 +8298,7 @@
                         </Border>
 
                         <!-- AI 탭 컨텐츠 -->
-                        <ScrollViewer Grid.Row="2" VerticalScrollBarVisibility="Auto">
+                        <ScrollViewer x:Name="OneNoteAiTabScrollViewer" Grid.Row="2" VerticalScrollBarVisibility="Auto">
                             <Grid>
                                 <!-- 녹음 탭 -->
                                 <Border x:Name="OneNoteAIRecordPanel" Visibility="Visible" Padding="12">

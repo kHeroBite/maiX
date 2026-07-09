@@ -17642,15 +17642,32 @@ public partial class MainWindow : FluentWindow
     }
 
     /// <summary>
-    /// 옵션탭 카드 영역 위 마우스 휠 스크롤 (카드 내부 컨트롤이 이벤트를 가로채도 상위 ScrollViewer가 항상 스크롤되도록 직접 처리)
+    /// 옵션탭 카드 영역 위 마우스 휠 스크롤.
+    /// 근본 원인: OneNoteOptionsScrollViewer는 바깥 OneNoteAiTabScrollViewer(무한 높이 측정) 안에 중첩되어
+    /// ScrollableHeight가 항상 0 — 자기 자신을 스크롤하면 무효과이면서 e.Handled=true로 바깥 스크롤까지 차단됨.
+    /// 해결: 실제 스크롤 가능한 대상(내부 우선, 불가 시 바깥 AI탭 ScrollViewer)을 선택해 스크롤.
     /// </summary>
     private void OneNoteOptionsScrollViewer_PreviewMouseWheel(object sender, MouseWheelEventArgs e)
     {
-        if (sender is ScrollViewer scrollViewer)
-        {
-            scrollViewer.ScrollToVerticalOffset(scrollViewer.VerticalOffset - e.Delta);
-            e.Handled = true;
-        }
+        if (sender is not ScrollViewer scrollViewer) return;
+
+        var target = scrollViewer.ScrollableHeight > 0 ? scrollViewer : OneNoteAiTabScrollViewer;
+        if (target == null) return;
+
+        double beforeOffset = target.VerticalOffset;
+        target.ScrollToVerticalOffset(beforeOffset - e.Delta);
+        e.Handled = true;
+
+        Serilog.Log.Information(
+            "[OneNoteOptionsScrollViewer_PreviewMouseWheel] 휠스크롤 이벤트 발생 — Delta={Delta}, 내부ScrollableHeight={InnerScrollable}, 대상={TargetName}, 대상ScrollableHeight={TargetScrollable}, 스크롤전Offset={BeforeOffset}",
+            e.Delta, scrollViewer.ScrollableHeight, target.Name, target.ScrollableHeight, beforeOffset);
+
+        // 레이아웃 반영 후 실제 offset 변화 실측 (로그 발화가 아니라 offset 변화가 진짜 성공 지표)
+        Dispatcher.BeginInvoke(new Action(() =>
+            Serilog.Log.Information(
+                "[OneNoteOptionsScrollViewer_PreviewMouseWheel] 스크롤후Offset={AfterOffset} (대상={TargetName})",
+                target.VerticalOffset, target.Name)),
+            System.Windows.Threading.DispatcherPriority.Loaded);
     }
 
     /// <summary>
