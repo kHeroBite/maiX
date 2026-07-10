@@ -16,9 +16,10 @@ public static class SttStrategyFactory
             "gpt-4o-transcribe" => new RealtimeTranscribeStrategy("gpt-4o-transcribe"),
             "gpt-4o-mini-transcribe" => new RealtimeTranscribeStrategy("gpt-4o-mini-transcribe"),
             "whisper-1" => new Whisper1Strategy(),
-            "gpt-realtime-2" => new RealtimeGptReasoningStrategy("gpt-realtime-2"),
-            "gpt-realtime-2.1" => new RealtimeGptReasoningStrategy("gpt-realtime-2.1"),
-            "gpt-realtime-2.1-mini" => new RealtimeGptReasoningStrategy("gpt-realtime-2.1-mini"),
+            // 주의: gpt-realtime-2 / gpt-realtime-2.1 / gpt-realtime-2.1-mini는 실시간 STT(transcription) 모델이 아님.
+            // OpenAI 서버 확인(2026-07-10): transcription.model 허용 목록은 whisper-1 / gpt-realtime-whisper /
+            // gpt-4o-transcribe / gpt-4o-mini-transcribe(-2025-03-20/-2025-12-15) 6종뿐 — gpt-realtime-2 계열은
+            // speech-to-speech 음성대화 모델이라 STT 슬롯에서 invalid_value 반환. 따라서 STT 선택지에서 전부 제외 (L-447).
             _ => new RealtimeTranscribeStrategy("gpt-4o-transcribe")  // 폴백 — 기존 동작
         };
     }

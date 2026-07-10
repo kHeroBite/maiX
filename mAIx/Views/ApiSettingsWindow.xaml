@@ -357,9 +357,6 @@
                                     <ComboBoxItem Content="gpt-4o-transcribe"/>
                                     <ComboBoxItem Content="gpt-4o-mini-transcribe"/>
                                     <ComboBoxItem Content="whisper-1"/>
-                                    <ComboBoxItem Content="gpt-realtime-2"/>
-                                    <ComboBoxItem Content="gpt-realtime-2.1"/>
-                                    <ComboBoxItem Content="gpt-realtime-2.1-mini"/>
                                 </ComboBox>
                             </Grid>
 
@@ -377,9 +374,6 @@
                                     <ComboBoxItem Content="gpt-4o-transcribe"/>
                                     <ComboBoxItem Content="gpt-4o-mini-transcribe"/>
                                     <ComboBoxItem Content="whisper-1"/>
-                                    <ComboBoxItem Content="gpt-realtime-2"/>
-                                    <ComboBoxItem Content="gpt-realtime-2.1"/>
-                                    <ComboBoxItem Content="gpt-realtime-2.1-mini"/>
                                 </ComboBox>
                             </Grid>
 

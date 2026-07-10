@@ -1,5 +1,21 @@
 # LESSONS.md — MaiX 프로젝트 교훈 로그
-
+
+## L-542: gpt-realtime-2 계열은 STT(transcription) 모델 아님 — 기능 추가 전 모델 capability 서버 확인 필수 (2026-07-10)
+
+- **문제**: 사용자 요청으로 gpt-realtime-2.1 / gpt-realtime-2.1-mini를 실시간 STT 모델 선택지에 추가했으나 전사 0건. 조사 중 gpt-realtime-2(기존 등록분)도 동일 문제로 판명되어 3종 전부 STT 목록에서 제거.
+- **근본원인 (OpenAI 서버 응답으로 확정)**: gpt-realtime-2 계열은 **speech-to-speech 음성대화 모델**이지 transcription 모델이 아님.
+  - 일반 Realtime 세션(RealtimeGptReasoningStrategy, beta shape)으로 붙이면: `unknown_parameter: session.input_audio_format` (beta 스키마 거부) → 세션이 기본 음성챗봇으로 남아 음성답변 생성, transcript=null.
+  - transcription 세션(RealtimeTranscribeStrategy, GA shape)으로 붙이면: `invalid_value: 'gpt-realtime-2.1'. Supported values are: whisper-1, gpt-realtime-whisper, gpt-4o-transcribe, gpt-4o-mini-transcribe(-2025-03-20/-2025-12-15)` → 모델 자체가 STT 슬롯 미허용.
+- **진단 경로 (모범)**: NLog `nlog-*.log` 실측이 정답(L-446 재확인). 추측 수정 0회 — 서버 error 이벤트 2개(unknown_parameter → invalid_value)가 단계적으로 정확한 원인을 알려줌. `[WARN] transcript 미수신 — committed N회 후 .completed 0건`이 조기 신호.
+- **교훈**: 모델 "추가" 요청 시 그 모델이 **해당 용도(STT vs 음성대화)를 실제 지원하는지** 코드 작성 전 확인 필수 (L-447 강화). 확실하지 않으면 첫 실행 로그로 서버 응답 확인. "이름에 realtime이 있으니 STT 되겠지" 추정 금지.
+- **STT transcription.model 허용 목록 (2026-07-10 서버 확인)**: whisper-1 / gpt-realtime-whisper / gpt-4o-transcribe / gpt-4o-mini-transcribe / gpt-4o-mini-transcribe-2025-03-20 / gpt-4o-mini-transcribe-2025-12-15 — 6종뿐.
+- **조치**: SttStrategyFactory + ApiSettingsWindow.xaml(콤보 2곳) + MainWindow.xaml + OpenAiRecordingSettings 주석에서 gpt-realtime-2 계열 3종 제거. RealtimeGptReasoningStrategy.cs는 타 세션(1ba4342d) 생성 파일이라 dead code로 남기되 삭제 보류(Surgical — 내가 안 만든 파일).
+- **심각도**: 중간 (기능 미동작 — 서버 미지원 모델)
+- **Level**: 2 (MEMORY.md 기록 — 모델 capability 확인 원칙)
+- **수정 파일**: SttStrategyFactory.cs, ApiSettingsWindow.xaml, MainWindow.xaml, OpenAiRecordingSettings.cs
+- **연관**: L-447(모델별 capability 확인), L-446(nlog 실측), cc40e582(2.1 추가 커밋을 되돌림)
+- **대화ID**: conv_178365897346
+
 ## L-541: oio bash_exec 백그라운드 로그 /tmp 직하위 하드코딩 — 세션 격리 경로로 전환 (2026-07-10)
 
 - **문제**: `sleep` 포함 명령이 자동 백그라운드화되면 oio `bash_exec.py`가 `/tmp/oio_bg_*.log`를 생성. 84개 잔여물 누적. CLAUDE.md "임시파일 저장 위치 규칙"(/tmp 직하위 UUID 없는 공유 경로 금지) 위반. 사용자 직접 지적("/tmp 왜 또 쓰나, 안 쓰게 만들어라").
