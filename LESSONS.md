@@ -1,4 +1,33 @@
 # LESSONS.md — MaiX 프로젝트 교훈 로그
+
+## L-541: oio bash_exec 백그라운드 로그 /tmp 직하위 하드코딩 — 세션 격리 경로로 전환 (2026-07-10)
+
+- **문제**: `sleep` 포함 명령이 자동 백그라운드화되면 oio `bash_exec.py`가 `/tmp/oio_bg_*.log`를 생성. 84개 잔여물 누적. CLAUDE.md "임시파일 저장 위치 규칙"(/tmp 직하위 UUID 없는 공유 경로 금지) 위반. 사용자 직접 지적("/tmp 왜 또 쓰나, 안 쓰게 만들어라").
+- **근본원인**: `bash_exec.py`가 3곳에서 `/tmp` 하드코딩 — ① `_bg_log_cleanup_once` `tmp_dir="/tmp"` ② BG 로그 `mkstemp(dir="/tmp")` ③ fg PIPE 데드락 방지 stdout/stderr tempfile(dir 미지정→기본 /tmp). 다중 세션 동시 실행 시 파일명 충돌 씨앗.
+- **해결 (oio 서버 수정 — 재발방지 2순위)**: `_bg_log_dir()` 헬퍼 신설 — 우선순위 `OIO_BG_DIR` env → `$CLAUDE_CONFIG_DIR/oio-bg` → `$HOME/.claude/oio-bg`(모두 EXT4). 디렉토리 생성 실패 시에만 `/tmp` 최후 폴백(가용성). 3개 사용처 전부 헬퍼 경유로 교체. `py_compile` 통과. 기존 84개 `/tmp/oio_bg_*` 정리.
+- **교훈**: MCP 서버가 자동 생성하는 임시파일도 세션 격리 대상. `/tmp` 직하위는 헬퍼 함수로 중앙화하여 한 곳에서 통제. `sleep` 회피만으로는 근본 해결 아님(서버가 하드코딩하면 언제든 재발) → 서버 코드 수정이 물리 재발방지.
+- **적용 조건**: oio MCP 서버 **재시작 필요** (`/mcp` 재연결 또는 다음 세션 자동 반영). 재시작 전까진 기존 바이너리가 `/tmp` 사용 지속.
+- **심각도**: 중간 (다중 세션 충돌 위험 + 누적 잔여물)
+- **Level**: 2 (MEMORY.md 기록 — 서버 재시작 전 재발 가능)
+- **수정 파일**: `/mnt/c/DATA/Project/ai/MCP-Servers/oio-mcp-server/bash_exec.py`
+- **연관**: L-303(run_in_background 금지), CLAUDE.md 임시파일 위치 규칙
+- **대화ID**: conv_178364485658
+
+## L-540: Agent 런타임 세션 바인딩 교착 — hook 정본 vs 런타임 옛세션ID 불일치 (2026-07-10)
+
+- **문제**: `/ok` 파이프라인에서 oplan 팀에이전트 spawn이 전면 교착. `team_name="session-7b18724d"`(런타임 요구) → hook `full_task_team_guard.sh`가 "임의 팀명" 차단. `team_name="session-c521ac78"`(hook 정본=UUID앞8자) → Agent 런타임이 "team file for \"session-7b18724d\" not found. should have been initialized at startup" 반환. 두 요구가 상호 배타 → 어느 쪽도 spawn 불가.
+- **근본원인**: hook의 SESSION_ID(=`c521ac78`, `sessions/*.json`의 활성 sessionId 정본)와 Claude Code Agent 런타임이 내부적으로 바인딩한 세션ID(=`7b18724d`, 옛 세션)가 불일치. `/tmp/cc-*/teams/`가 비어(startup 미초기화) 팀 자동 생성 불가. **hook은 정확히 동작했음** — 교착은 hook 통과 후 런타임 레이어에서 발생.
+- **핵심 진단**: `sessions/90506.json`의 `sessionId`가 `c521ac78`로 확인 → 정본은 hook이 강제한 값이 맞음. 런타임이 옛 세션 `7b18724d`(같은 `/tmp/cc-*/session-env/`에 잔존)에 고착. **in-process 런타임 영역이라 hook(PreToolUse는 decision:block만 가능)·oio·파일·session_state 어느 것으로도 해소 불가.**
+- **해결**: 사용자 선택으로 메인 직접 구현(팀 우회)으로 STT 모델 2종 추가 완주. 근본 해소는 `/oinit`(세션 팀 강제 재초기화) 또는 `/clear` 재시작뿐.
+- **재발방지 (물리 차단 불가 → 감지+안내로 최선)**:
+  - 조치1 (hook, 1순위): `full_task_team_guard.sh`가 자동팀명 통과 직전 SESSION_ID를 `sessions/*.json` 활성목록과 대조 → 불일치 시 `session_bind_mismatch.log` 기록 (L-NEW2). 재발 시 즉시 원인 규명.
+  - 조치2 (skill): `ok/SKILL.md`에 "런타임_세션_교착_감지" 규칙 추가 — spawn이 다른 세션ID의 "team file not found"로 실패 시 **2회까지만 재시도 후 중단 + /oinit 안내**. 무한 재시도/team_name 임의 조작 절대 금지.
+- **Hook 1순위 미적용 정직 고지**: 이 교착의 근본(런타임 세션 바인딩)은 Claude Code 내부 영역이라 hook으로 **완전 차단 불가**. "물리 차단 10/10"은 이 문제에선 원천 달성 불가 → 감지+복구경로가 현실적 최선임을 명시.
+- **심각도**: 높음 (파이프라인 전면 교착, 다중 파이프라인 연속 실행 세션에서 재발 가능)
+- **Level**: 2 (MEMORY.md 기록 — 재발 가능, L-533 전제 붕괴 사례)
+- **수정 파일**: `full_task_team_guard.sh`(NTFS 원본 `/mnt/c/DATA/Project/ai/.claude/hooks/`), `ok/SKILL.md`
+- **연관**: L-533(자동팀명=session-{UUID앞8자} 전제), L-538, in-process 캐시 한계(MEMORY)
+- **대화ID**: conv_178364485658
 
 ## L-539: 세션 시작 전 미커밋 잔여물 diff 스코프 오염 — otest 정밀 대조로 선제 발견 (2026-07-09)
 

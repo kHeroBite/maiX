@@ -16,7 +16,9 @@ public static class SttStrategyFactory
             "gpt-4o-transcribe" => new RealtimeTranscribeStrategy("gpt-4o-transcribe"),
             "gpt-4o-mini-transcribe" => new RealtimeTranscribeStrategy("gpt-4o-mini-transcribe"),
             "whisper-1" => new Whisper1Strategy(),
-            "gpt-realtime-2" => new RealtimeGptReasoningStrategy(),
+            "gpt-realtime-2" => new RealtimeGptReasoningStrategy("gpt-realtime-2"),
+            "gpt-realtime-2.1" => new RealtimeGptReasoningStrategy("gpt-realtime-2.1"),
+            "gpt-realtime-2.1-mini" => new RealtimeGptReasoningStrategy("gpt-realtime-2.1-mini"),
             _ => new RealtimeTranscribeStrategy("gpt-4o-transcribe")  // 폴백 — 기존 동작
         };
     }

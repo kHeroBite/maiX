@@ -8639,6 +8639,8 @@
                                                                         <ComboBoxItem Content="gpt-4o-mini-transcribe (경량·저비용)" Tag="gpt-4o-mini-transcribe"/>
                                                                         <ComboBoxItem Content="whisper-1 (레거시)" Tag="whisper-1"/>
                                                                         <ComboBoxItem Content="gpt-realtime-2 (GPT-5급 추론 + STT)" Tag="gpt-realtime-2"/>
+                                                                        <ComboBoxItem Content="gpt-realtime-2.1 (GPT-5급 추론 + STT)" Tag="gpt-realtime-2.1"/>
+                                                                        <ComboBoxItem Content="gpt-realtime-2.1-mini (경량 추론 + STT)" Tag="gpt-realtime-2.1-mini"/>
                                                                     </ComboBox>
                                                                 </StackPanel>
                                                                 <StackPanel Orientation="Horizontal" Margin="0,0,0,4"

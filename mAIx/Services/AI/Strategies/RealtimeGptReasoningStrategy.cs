@@ -1,20 +1,33 @@
-// gpt-realtime-2 (GPT-5급 추론) STT Strategy — L-441 out-of-band response.create + 일반 Realtime 세션 + 다른 이벤트 타입
+// gpt-realtime-2 계열 (GPT-5급 추론) STT Strategy — L-441 out-of-band response.create + 일반 Realtime 세션 + 다른 이벤트 타입
 using System;
 
 namespace mAIx.Services.AI.Strategies;
 
 /// <summary>
-/// gpt-realtime-2 (GPT-5급 추론) 전용 STT 전략.
+/// gpt-realtime-2 계열 (GPT-5급 추론) STT 전략. 생성자로 모델 ID를 주입받아
+/// gpt-realtime-2 / gpt-realtime-2.1 / gpt-realtime-2.1-mini 등 동일 동작 모델을 공유한다
+/// (RealtimeTranscribeStrategy와 동일한 modelId 파라미터화 패턴).
 /// transcription 세션이 아닌 일반 Realtime 세션을 사용하므로 다음과 같이 분기한다:
-///  - 연결 URI: <c>model=gpt-realtime-2</c> (intent=transcription 아님).
+///  - 연결 URI: <c>model={modelId}</c> (intent=transcription 아님).
 ///  - session.update: <c>input_audio_transcription</c> 미사용. instructions + input_audio_format + turn_detection.
 ///  - 전사 이벤트: <c>response.text.delta</c> / <c>response.text.done</c>.
 ///  - L-441 out-of-band: <c>response.create</c>에 <c>conversation = "none"</c>을 지정해 멀티턴 누적 없이 매 commit마다 1회성 전사 응답 추출.
 /// </summary>
 public sealed class RealtimeGptReasoningStrategy : ISttModelStrategy
 {
+    private readonly string _modelId;
+
+    /// <summary>
+    /// 모델 ID를 주입받아 전략을 생성한다.
+    /// </summary>
+    /// <param name="modelId">일반 Realtime 세션 모델 ID (예: "gpt-realtime-2", "gpt-realtime-2.1", "gpt-realtime-2.1-mini").</param>
+    public RealtimeGptReasoningStrategy(string modelId)
+    {
+        _modelId = modelId;
+    }
+
     /// <inheritdoc/>
-    public string ModelId => "gpt-realtime-2";
+    public string ModelId => _modelId;
 
     /// <inheritdoc/>
     /// <remarks>
@@ -22,7 +35,7 @@ public sealed class RealtimeGptReasoningStrategy : ISttModelStrategy
     /// </remarks>
     public Uri BuildConnectionUri()
     {
-        return new Uri("wss://api.openai.com/v1/realtime?model=gpt-realtime-2");
+        return new Uri($"wss://api.openai.com/v1/realtime?model={_modelId}");
     }
 
     /// <inheritdoc/>

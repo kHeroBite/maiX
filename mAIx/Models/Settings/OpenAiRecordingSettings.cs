@@ -13,7 +13,8 @@ public class OpenAiRecordingSettings
 {
     /// <summary>
     /// 실시간 STT 모델 (WebSocket 기반) — GA transcription 모드 호환 모델.
-    /// 사용 가능: "gpt-realtime-whisper" (GA 스트리밍 전용), "gpt-4o-transcribe" (오프라인 파일 전용)
+    /// 사용 가능: "gpt-realtime-whisper" (GA 스트리밍 전용), "gpt-4o-transcribe" (오프라인 파일 전용),
+    /// "gpt-realtime-2" / "gpt-realtime-2.1" / "gpt-realtime-2.1-mini" (일반 Realtime 세션 + out-of-band 전사)
     /// </summary>
     [XmlElement("RealtimeSttModel")]
     public string RealtimeSttModel { get; set; } = "gpt-realtime-whisper";
