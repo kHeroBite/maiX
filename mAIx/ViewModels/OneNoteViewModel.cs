@@ -3539,25 +3539,51 @@ public partial class OneNoteViewModel : ViewModelBase
         RebuildTimelineTicks();
     }
 
-    private const int MAX_TOPIC_SEGMENTS = 15;
-    private const int SOFT_TARGET_TOPIC_SEGMENTS = 10;
+    // 주제 세그먼트 개수 하한/상한 앵커 — 10분 미만 기본값.
+    // 10분 이상은 녹음 길이에 비례해 상한을 최대 20까지 동적 확대 (ComputeTopicLimits 참조).
+    private const int BASE_MAX_TOPIC_SEGMENTS = 15;
+    private const int BASE_SOFT_TARGET_TOPIC_SEGMENTS = 10;
+    private const int HARD_MAX_TOPIC_SEGMENTS = 20;   // 절대 상한 (10~20 요구의 상단)
 
     /// <summary>
-    /// 인접 중복 주제 병합 시도 — 5개 이하 skip, 6~15개 유사 주제 검사, 15개 초과 강제 병합
-    /// 호출 1회당 최대 1쌍 병합 (점진 수렴)
+    /// 현재 녹음 길이에 따라 주제 세그먼트의 (소프트 목표, 하드 상한)을 동적 산출한다.
+    /// - 10분 미만: 기존 동작 유지 (soft=10, max=15).
+    /// - 10분 이상: 길이에 비례해 max를 15→20으로 서서히 확대 (2분당 +1), soft는 max-5로 연동.
+    /// 주의: 이 값은 "채워야 할 목표"가 아니라 "병합을 트리거하는 상한"이다.
+    ///       실제 개수는 유사 주제가 있을 때만 병합되어 자연 수렴하므로, 내용이 적으면 상한에 도달하지 않는다
+    ///       (즉 20 고정 앵커링이 발생하지 않는다 — 밀도 비례).
+    /// </summary>
+    private (int soft, int max) ComputeTopicLimits()
+    {
+        var minutes = (_recordingService?.RecordingDuration ?? _recordingDuration).TotalMinutes;
+        if (minutes < 10)
+            return (BASE_SOFT_TARGET_TOPIC_SEGMENTS, BASE_MAX_TOPIC_SEGMENTS);
+
+        // 10분부터 2분당 +1씩 상한 확대, 20에서 클램프. (10분→15, 20분→20, 이후 20 유지)
+        var dynamicMax = BASE_MAX_TOPIC_SEGMENTS + (int)((minutes - 10) / 2);
+        if (dynamicMax > HARD_MAX_TOPIC_SEGMENTS) dynamicMax = HARD_MAX_TOPIC_SEGMENTS;
+        var dynamicSoft = dynamicMax - 5;  // 상한과 5 간격 유지 (10~15 구간)
+        return (dynamicSoft, dynamicMax);
+    }
+
+    /// <summary>
+    /// 인접 중복 주제 병합 시도 — 5개 이하 skip, soft~max 구간 유사 주제 검사, max 초과 강제 병합.
+    /// soft/max는 녹음 길이 비례 동적값 (ComputeTopicLimits). 호출 1회당 최대 1쌍 병합 (점진 수렴).
     /// </summary>
     private void TryMergeAdjacentTopics()
     {
         if (TopicSegments.Count <= 5) return;  // 5개 이하 통폐합 불필요
 
-        if (TopicSegments.Count > MAX_TOPIC_SEGMENTS)
+        var (softTarget, maxSegments) = ComputeTopicLimits();
+
+        if (TopicSegments.Count > maxSegments)
         {
             ForceMergeBestPair();
             return;
         }
 
-        // 6~15 구간: Count > SOFT_TARGET 시 유사도 0.6 탐색 → 없으면 0.45 완화 → 없으면 강제 병합
-        if (TopicSegments.Count > SOFT_TARGET_TOPIC_SEGMENTS)
+        // soft~max 구간: Count > soft 시 유사도 0.6 탐색 → 없으면 0.45 완화 → 없으면 강제 병합
+        if (TopicSegments.Count > softTarget)
         {
             var idx = FindDuplicateAdjacent(0.6);
             if (idx >= 0) { MergeAt(idx); return; }
@@ -3567,7 +3593,7 @@ public partial class OneNoteViewModel : ViewModelBase
             return;
         }
 
-        // Count <= SOFT_TARGET: 기존 동작 유지 (0.6 임계값)
+        // Count <= soft: 기존 동작 유지 (0.6 임계값 — 유사한 주제만 병합, 강제 없음)
         var mergedIndex = FindDuplicateAdjacent(0.6);
         if (mergedIndex >= 0)
             MergeAt(mergedIndex);

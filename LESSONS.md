@@ -1,5 +1,18 @@
 # LESSONS.md — MaiX 프로젝트 교훈 로그
-
+
+## L-543: 토픽 세그먼트 "10개 고정" 원인은 프롬프트가 아닌 C# 병합 상한 상수 (2026-07-10)
+
+- **문제**: 마인드맵(map)/토픽 세그먼트가 항상 ~10개까지만 표시. 사용자는 10분 이상 녹음 시 10~20개 범위 유동을 원함. 과거 프롬프트 조정 시도는 "항상 20개 고정"으로 앵커링.
+- **근본원인 (코드 실측)**: 개수 제어는 **프롬프트가 아니라** `OneNoteViewModel.TryMergeAdjacentTopics()`의 하드코딩 상수 `MAX_TOPIC_SEGMENTS=15` / `SOFT_TARGET_TOPIC_SEGMENTS=10`. 1분 요약마다 TopicSegment 1개 추가 → soft 초과분을 유사도 병합으로 지속 제거 → 실질 10 근처 수렴. 녹음 길이 무관 고정.
+- **오진 방지 (중요)**: 사용자가 "20개로만 나온다"고 하면 프롬프트 상한 앵커링으로 추정하기 쉬우나, 이 프로젝트는 **C# 병합 로직이 진짜 제어점**. UI 표시 상한(XAML ItemsControl Take/제한)은 없음 — 전체 컬렉션 바인딩. "10개까지만 보인다"는 병합 수렴 결과지 표시 잘림이 아님.
+- **해결**: `ComputeTopicLimits()` 신설 — 녹음 길이(RecordingDuration) 비례 동적 상한. 10분 미만은 기존(soft=10,max=15) 유지, 10분 이상은 2분당 +1로 max를 15→20 확대(HARD_MAX=20 클램프), soft=max-5. **핵심**: 상한은 "채울 목표"가 아니라 "병합 트리거 임계"라 유사 주제 없으면 병합 안 됨 → 내용 적으면 상한 미도달(20 고정 앵커링 원천 차단, 밀도 비례).
+- **교훈**: "개수가 특정 값에 고정된다"는 신고는 프롬프트보다 **후처리 코드(병합/필터/상한 상수)를 먼저 grep**. 앵커링을 프롬프트 문제로 단정 금지 — 실측으로 제어점 확정.
+- **심각도**: 중간 (기능 UX — 긴 녹음에서 주제 세분화 부족)
+- **Level**: 2 (MEMORY.md 기록 — 개수 고정 신고 진단 패턴)
+- **수정 파일**: OneNoteViewModel.cs (ComputeTopicLimits 신설, TryMergeAdjacentTopics 동적화)
+- **연관**: L-433(토픽 세그먼트 Clear 체크리스트), L-045(프롬프트 negative example)
+- **대화ID**: conv_178366859156
+
 ## L-542: gpt-realtime-2 계열은 STT(transcription) 모델 아님 — 기능 추가 전 모델 capability 서버 확인 필수 (2026-07-10)
 
 - **문제**: 사용자 요청으로 gpt-realtime-2.1 / gpt-realtime-2.1-mini를 실시간 STT 모델 선택지에 추가했으나 전사 0건. 조사 중 gpt-realtime-2(기존 등록분)도 동일 문제로 판명되어 3종 전부 STT 목록에서 제거.
@@ -44,6 +57,7 @@
 - **수정 파일**: `full_task_team_guard.sh`(NTFS 원본 `/mnt/c/DATA/Project/ai/.claude/hooks/`), `ok/SKILL.md`
 - **연관**: L-533(자동팀명=session-{UUID앞8자} 전제), L-538, in-process 캐시 한계(MEMORY)
 - **대화ID**: conv_178364485658
+- **보강 (2026-07-10, conv_178366717865)**: `/oinit`으로도 이 교착은 **해소 불가** 실측 확인. oinit이 파일/pane/state를 모두 정리해도(잔류물 0건이었음) 런타임 in-process 세션 바인딩은 그대로라 spawn이 여전히 `team file for session-<옛ID> not found`로 실패. **유일 해법은 /clear 또는 Claude Code 프로세스 재시작.** 따라서 이 교착 감지 시 /oinit을 권하지 말고 곧바로 /clear 재시작을 안내해야 함. (ok/SKILL.md L-NEW2의 "/oinit 후 재시도" 문구도 이 한계를 반영해 /clear 우선으로 조정 필요.)
 
 ## L-539: 세션 시작 전 미커밋 잔여물 diff 스코프 오염 — otest 정밀 대조로 선제 발견 (2026-07-09)
 
