@@ -3845,10 +3845,10 @@ public partial class OneNoteViewModel : ViewModelBase
                     CumulativeSummaryText = text ?? string.Empty;
                     Log4.Info($"[녹음] 누적 요약 갱신: {CumulativeSummaryText.Length}자");
 
-                    // 롤업: 누적요약 주기 도달 시 현재 쌓인 1분요약들을 하나의 5분요약 항목으로 묶어
+                    // 롤업: 누적요약 주기 도달 시 현재 쌓인 1분요약들을 "그 구간만 재요약"한 5분요약 항목으로 묶어
                     // CumulativeSummaries에 추가하고 MinuteSummaries를 비운다.
-                    // → 실시간요약 탭에는 "완료된 구간별 5분요약들 + 진행 중 구간의 1분요약들"만 남는다 (사용자 요구).
-                    RollUpMinuteSummaries(text ?? string.Empty);
+                    // → 실시간요약 탭에는 "완료된 구간별 5분요약들 + 진행 중 구간의 1분요약들(≤5개)"만 남는다 (사용자 요구).
+                    RollUpMinuteSummaries();
                 }).Task.ConfigureAwait(false);
             }
             TriggerRealtimePersist();
@@ -3860,32 +3860,36 @@ public partial class OneNoteViewModel : ViewModelBase
     }
 
     /// <summary>
-    /// 누적요약 주기 도달 시 롤업: 현재 MinuteSummaries(진행 구간의 1분요약들)를 하나의 5분요약 항목으로
-    /// 묶어 CumulativeSummaries에 추가하고 MinuteSummaries를 비운다.
+    /// 누적요약 주기 도달 시 롤업: 현재 MinuteSummaries(진행 구간의 1분요약들, 보통 5개)를
+    /// "그 구간만 재요약"한 5분요약 카드 1개로 만들어 CumulativeSummaries에 추가하고 MinuteSummaries를 비운다.
+    ///
+    /// 사용자 명세:
+    ///  - 5분요약(CumulativeSummaries)은 무제한 누적.
+    ///  - 1분 실시간요약(MinuteSummaries)은 롤업 즉시 Clear → 항상 5개 이하 유지.
+    ///  - 각 5분카드는 "해당 구간 1분요약들만" 재요약 (전체 누적 아님 — 각 카드 독립).
+    ///
+    /// 구현: MinuteSummaries.Clear()는 즉시(5개 이하 보장), 구간 재요약은 백그라운드 후 카드 Add.
+    ///  (MinuteSummaryEntry가 INotifyPropertyChanged 아니므로 "먼저 Add 후 갱신"은 UI 미반영 → 재요약 완료 후 Add.)
     /// 반드시 UI 스레드에서 호출 (호출부 OnCumulativeSummaryUpdated가 Dispatcher.InvokeAsync 내부).
     /// </summary>
-    /// <param name="cumulativeText">이번 주기의 누적요약 텍스트 (5분요약 항목의 SummaryText로 사용).</param>
-    private void RollUpMinuteSummaries(string cumulativeText)
+    private void RollUpMinuteSummaries()
     {
         // 진행 구간에 실제 1분요약이 없으면 롤업 대상 없음 (묵음-only 등) — 스킵.
         var rollupTargets = MinuteSummaries
             .Where(m => !m.IsSilence && !string.IsNullOrWhiteSpace(m.SummaryText))
             .ToList();
-        if (rollupTargets.Count == 0)
-        {
-            // 실질 내용 없으면 구간만 비우고 5분요약 카드는 만들지 않는다 (빈 카드 방지).
-            if (MinuteSummaries.Count > 0) MinuteSummaries.Clear();
-            return;
-        }
+
+        // 1분요약은 즉시 비운다 (묵음 포함 전부) — "5개 이하 유지" 보장. 실질 내용 없으면 카드도 안 만든다.
+        if (MinuteSummaries.Count > 0) MinuteSummaries.Clear();
+        MinuteSummaryCount = 0;   // 다음 구간 카운트 리셋 (구간별 색상 팔레트 인덱스 정합)
+        if (rollupTargets.Count == 0) return;
 
         // 구간 경계: 롤업 대상 1분요약들의 최소 StartTime ~ 최대 EndTime.
         var startTime = rollupTargets.Min(m => m.StartTime);
         var endTime = rollupTargets.Max(m => m.EndTime);
 
-        // 누적요약 텍스트가 비면 1분요약들을 이어붙여 폴백 (LLM 누적요약 실패 시에도 롤업 내용 보존).
-        var summaryText = !string.IsNullOrWhiteSpace(cumulativeText)
-            ? cumulativeText
-            : string.Join("\n", rollupTargets.Select(m => m.SummaryText));
+        // 폴백 텍스트: 구간 1분요약 이어붙이기 (재요약 실패/서비스 부재 시 내용 보존).
+        var fallbackText = string.Join("\n", rollupTargets.Select(m => m.SummaryText));
 
         // 롤업 키워드: 구간 1분요약 키워드 중복 제거 병합 (최대 8개).
         var mergedKeywords = rollupTargets
@@ -3895,23 +3899,44 @@ public partial class OneNoteViewModel : ViewModelBase
             .Take(8)
             .ToList();
 
-        var rollupEntry = new Models.MinuteSummaryEntry
+        var svc = _cumulativeSummaryService;
+
+        // 구간만 재요약 (백그라운드) → 완료 후 UI 스레드에서 카드 Add. 서비스 없으면 폴백으로 즉시 Add.
+        _ = System.Threading.Tasks.Task.Run(async () =>
         {
-            Index = CumulativeSummaries.Count,
-            StartTime = startTime,
-            EndTime = endTime,
-            SummaryText = summaryText,
-            Title = $"{mAIx.Helpers.TimeSpanFormatter.FormatTimeSpan(startTime)} ~ {mAIx.Helpers.TimeSpanFormatter.FormatTimeSpan(endTime)} 요약",
-            Keywords = mergedKeywords,
-            IsSilence = false,
-            CreatedAt = DateTime.Now,
-        };
+            string segmentText = fallbackText;
+            try
+            {
+                if (svc != null)
+                {
+                    var reSummarized = await svc.SummarizeSegmentAsync(rollupTargets).ConfigureAwait(false);
+                    if (!string.IsNullOrWhiteSpace(reSummarized)) segmentText = reSummarized;
+                }
+            }
+            catch (Exception ex)
+            {
+                Log4.Warn($"[녹음] 롤업 구간 재요약 실패 — 폴백 사용: {ex.Message}");
+            }
 
-        CumulativeSummaries.Add(rollupEntry);
-        MinuteSummaries.Clear();  // 롤업된 1분요약 제거 — 실시간요약 탭에서 사라지고 5분요약으로 대체
-        MinuteSummaryCount = 0;   // 다음 구간 카운트 리셋 (구간별 색상 팔레트 인덱스 정합)
-
-        Log4.Info($"[녹음] 롤업: 1분요약 {rollupTargets.Count}개 → 5분요약 1개 ({rollupEntry.Title}). 누적요약 카드 총 {CumulativeSummaries.Count}개");
+            var dispatcher = System.Windows.Application.Current?.Dispatcher;
+            if (dispatcher == null) return;
+            await dispatcher.InvokeAsync(() =>
+            {
+                var rollupEntry = new Models.MinuteSummaryEntry
+                {
+                    Index = CumulativeSummaries.Count,
+                    StartTime = startTime,
+                    EndTime = endTime,
+                    SummaryText = segmentText,
+                    Title = $"{mAIx.Helpers.TimeSpanFormatter.FormatTimeSpan(startTime)} ~ {mAIx.Helpers.TimeSpanFormatter.FormatTimeSpan(endTime)} 요약",
+                    Keywords = mergedKeywords,
+                    IsSilence = false,
+                    CreatedAt = DateTime.Now,
+                };
+                CumulativeSummaries.Add(rollupEntry);
+                Log4.Info($"[녹음] 롤업 완료: 1분요약 {rollupTargets.Count}개 → 5분요약 1개 ({rollupEntry.Title}). 누적 카드 총 {CumulativeSummaries.Count}개");
+            }).Task.ConfigureAwait(false);
+        });
     }
 
     /// <summary>

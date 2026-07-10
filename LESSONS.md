@@ -14,6 +14,7 @@
 - **수정 파일**: OneNoteViewModel.cs(RollUpMinuteSummaries 신설+Clear 6곳+persist), MainWindow.xaml(실시간요약 탭 2목록 구조), RealtimeRecordingResult.cs(필드 추가)
 - **연관**: L-433(요약 Clear 체크리스트), L-434/L-435(영속화 페어), L-543(토픽 세그먼트 — 별개 컬렉션)
 - **대화ID**: conv_178366928152
+- **보정 (2026-07-10, conv_178367637891)**: 1차 구현(92e2a953)은 각 5분카드 SummaryText에 서비스의 `CumulativeSummaryText`(prev+recent 전체 누적)를 넣어 **2번째 카드부터 이전 구간 내용까지 중복** 포함되는 버그가 있었음(ointaug가 사전 예측). 수정: `ICumulativeSummaryService.SummarizeSegmentAsync(entries)` 신설 — `prevCumulative=""`로 CallCumulativeSummaryApiAsync 재사용해 **구간 엔트리만 독립 재요약**. RollUpMinuteSummaries를 백그라운드 재요약 방식으로 전환(MinuteSummaries.Clear는 즉시=5개 이하 보장, 카드 Add는 재요약 완료 후). **함정**: MinuteSummaryEntry가 INotifyPropertyChanged 아니라 "카드 먼저 Add 후 SummaryText 갱신"이 UI 미반영 → 재요약 완료 후 Add로 설계. 최종 명세: 5분요약 무제한 누적 / 1분요약 항상 ≤5개 / 각 카드 구간 독립.
 
 ## L-543: 토픽 세그먼트 "10개 고정" 원인은 프롬프트가 아닌 C# 병합 상한 상수 (2026-07-10)
 

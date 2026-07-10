@@ -41,6 +41,14 @@ public interface ICumulativeSummaryService : IDisposable
     /// 종료 시 최종 요약 1회 생성 (전체 누적요약 + 마지막 1분요약 입력)
     /// </summary>
     Task<string> FinalSummarizeAsync();
+
+    /// <summary>
+    /// 특정 구간의 1분요약들만 입력받아 그 구간에 한정된 5분(구간) 요약을 생성한다 (롤업용).
+    /// 전체 누적요약(prevCumulative)을 포함하지 않으므로 각 구간 카드가 서로 독립적인 내용을 갖는다.
+    /// </summary>
+    /// <param name="segmentEntries">해당 구간의 1분요약 엔트리들 (보통 5개).</param>
+    /// <returns>구간 요약 텍스트. 실패 시 빈 문자열.</returns>
+    Task<string> SummarizeSegmentAsync(List<MinuteSummaryEntry> segmentEntries);
 }
 
 /// <summary>
@@ -269,6 +277,33 @@ public sealed class CumulativeSummaryService : ICumulativeSummaryService
 
         var respJson = await response.Content.ReadAsStringAsync(ct).ConfigureAwait(false);
         return ExtractContentText(respJson);
+    }
+
+    /// <inheritdoc/>
+    public async Task<string> SummarizeSegmentAsync(List<MinuteSummaryEntry> segmentEntries)
+    {
+        // 유효 엔트리만 (묵음/빈 요약 제외)
+        var valid = (segmentEntries ?? new List<MinuteSummaryEntry>())
+            .Where(e => !e.IsSilence && !string.IsNullOrWhiteSpace(e.SummaryText))
+            .ToList();
+        if (valid.Count == 0) return string.Empty;
+
+        // Mock 분기 — 테스트 시 실호출 없이 mock 반환 (누적요약 mock 재사용).
+        if (MockOpenAiResponseInjector.TryHandleCumulativeSummary(out var mockSummary))
+            return mockSummary;
+
+        try
+        {
+            var model = _settings.OaiRecording.CumulativeSummaryModel;
+            // prevCumulative="" 로 호출 → 전체 누적 없이 이 구간 엔트리들만 요약 (구간 독립 카드).
+            return await CallCumulativeSummaryApiAsync(string.Empty, valid, 0, model, CancellationToken.None)
+                .ConfigureAwait(false);
+        }
+        catch (Exception ex)
+        {
+            _log.Warn("[CumulativeSummary] 구간 요약 실패: {Msg}", ex.Message);
+            return string.Empty;
+        }
     }
 
     /// <inheritdoc/>
