@@ -1,5 +1,20 @@
 # LESSONS.md — MaiX 프로젝트 교훈 로그
-
+
+## L-544: 실시간요약→누적요약 롤업 — 서비스 무변경, ViewModel 레벨 컬렉션 롤업 (2026-07-10)
+
+- **요구**: 5분 누적요약 주기 도달 시 그 구간의 1분요약(실시간요약) N개를 제거하고 5분요약 1개로 대체. 5분요약도 구간별 누적(0~5분, 5~10분...).
+- **구조 실측**: `MinuteSummaries`(ObservableCollection, 1분마다 Add) vs `CumulativeSummaryText`(단일 텍스트, 5분마다 덮어쓰기). `CumulativeSummaryService`는 매 주기 `prevCumulative + recentEntries`로 전체 재요약(단일 텍스트 누적) → 구간별 델타 없음.
+- **설계 (서비스 무변경, 회귀 최소화)**: ViewModel에 `CumulativeSummaries` ObservableCollection 신설(MinuteSummaryEntry 재사용). `OnCumulativeSummaryUpdated`(5분 발화)에서 `RollUpMinuteSummaries()` 호출 — 현재 MinuteSummaries를 구간 경계(Min StartTime~Max EndTime)로 묶어 5분요약 카드 1개 생성 후 CumulativeSummaries.Add + MinuteSummaries.Clear. 서비스 이벤트 시그니처(Action<string>) 그대로 사용.
+- **부작용 점검**: (a) `MinuteSummaryCount=0` 리셋은 navSegment.Id(표시/색상용, 고유키 아님 — TopicSegments는 인덱스 접근)라 TopicSegments 충돌 없음. (b) 롤업은 MinuteSummaries만 Clear — TopicSegments(주제맵, L-543)는 무관하게 유지. (c) L-433 준수: 6개 세션전환 Clear 지점 전부에 CumulativeSummaries.Clear() 동반.
+- **영속화 (L-434/L-435)**: RealtimeRecordingResult에 CumulativeSummaries 필드 추가 + 저장/로드 복원 — 롤업 카드가 .realtime.json 재로드 시 보존.
+- **함정**: TimeSpanFormatter는 `mAIx.Helpers` 네임스페이스인데 ViewModel엔 `using mAIx.Helpers` 없음 → 완전 수식 `mAIx.Helpers.TimeSpanFormatter`로 회피(불필요한 using 추가 대신).
+- **교훈**: 서비스가 "누적 단일 텍스트"를 뱉어도 UI 롤업은 ViewModel에서 컬렉션 조작으로 달성 가능(서비스 변경 회귀 회피). 컬렉션 신설 시 L-433 Clear 체크리스트 + L-434 영속화 페어 항상 동반.
+- **심각도**: 낮음 (UX 개선, 신규 기능)
+- **Level**: 1
+- **수정 파일**: OneNoteViewModel.cs(RollUpMinuteSummaries 신설+Clear 6곳+persist), MainWindow.xaml(실시간요약 탭 2목록 구조), RealtimeRecordingResult.cs(필드 추가)
+- **연관**: L-433(요약 Clear 체크리스트), L-434/L-435(영속화 페어), L-543(토픽 세그먼트 — 별개 컬렉션)
+- **대화ID**: conv_178366928152
+
 ## L-543: 토픽 세그먼트 "10개 고정" 원인은 프롬프트가 아닌 C# 병합 상한 상수 (2026-07-10)
 
 - **문제**: 마인드맵(map)/토픽 세그먼트가 항상 ~10개까지만 표시. 사용자는 10분 이상 녹음 시 10~20개 범위 유동을 원함. 과거 프롬프트 조정 시도는 "항상 20개 고정"으로 앵커링.

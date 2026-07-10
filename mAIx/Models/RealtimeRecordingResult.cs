@@ -27,9 +27,15 @@ public class RealtimeRecordingResult
     public List<TopicSegment> TopicSegments { get; set; } = new();
 
     /// <summary>
-    /// 1분 단위 실시간 요약 목록
+    /// 1분 단위 실시간 요약 목록 (진행 중 미완성 구간만 — 롤업된 구간은 CumulativeSummaries로 이동)
     /// </summary>
     public List<MinuteSummaryEntry> MinuteSummaries { get; set; } = new();
+
+    /// <summary>
+    /// 누적요약(5분) 롤업 카드 목록 — 완료된 구간별 5분요약. 각 항목은 MinuteSummaryEntry로 표현
+    /// (StartTime/EndTime = 구간 경계, SummaryText = 5분 누적요약 텍스트).
+    /// </summary>
+    public List<MinuteSummaryEntry> CumulativeSummaries { get; set; } = new();
 
     /// <summary>
     /// 누적 요약 텍스트

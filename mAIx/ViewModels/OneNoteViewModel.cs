@@ -526,6 +526,14 @@ public partial class OneNoteViewModel : ViewModelBase
     [ObservableProperty]
     private System.Collections.ObjectModel.ObservableCollection<Models.MinuteSummaryEntry> _minuteSummaries = new();
 
+    /// <summary>
+    /// 누적 요약(5분) 롤업 컬렉션 — 누적요약 주기 도달 시 그 구간의 1분요약들을 하나의 항목으로 묶어 여기에 쌓는다.
+    /// 실시간요약 탭 상단에 구간별로 누적 표시(0~5분, 5~10분, ...). 롤업된 1분요약은 MinuteSummaries에서 제거됨.
+    /// MinuteSummaryEntry 재사용 (StartTime/EndTime = 구간 경계, SummaryText = 5분 누적요약 텍스트).
+    /// </summary>
+    [ObservableProperty]
+    private System.Collections.ObjectModel.ObservableCollection<Models.MinuteSummaryEntry> _cumulativeSummaries = new();
+
     // ─── 주제어 네비게이션 / 실시간 AI 요약 프로퍼티 ──────────────────────
 
     /// <summary>
@@ -2024,6 +2032,7 @@ public partial class OneNoteViewModel : ViewModelBase
                 STTSegments.Clear();
                 TopicSegments.Clear();
                 MinuteSummaries.Clear();
+                CumulativeSummaries.Clear();
                 CumulativeSummaryText = string.Empty;
                 FinalSummaryText = string.Empty;
                 MinuteSummaryCount = 0;
@@ -3111,6 +3120,7 @@ public partial class OneNoteViewModel : ViewModelBase
             // 누적/1분 요약 초기화
             TopicSegments.Clear();
             MinuteSummaries.Clear();
+            CumulativeSummaries.Clear();
             CumulativeSummaryText = string.Empty;
             FinalSummaryText = string.Empty;
             MinuteSummaryCount = 0;
@@ -3834,6 +3844,11 @@ public partial class OneNoteViewModel : ViewModelBase
                 {
                     CumulativeSummaryText = text ?? string.Empty;
                     Log4.Info($"[녹음] 누적 요약 갱신: {CumulativeSummaryText.Length}자");
+
+                    // 롤업: 누적요약 주기 도달 시 현재 쌓인 1분요약들을 하나의 5분요약 항목으로 묶어
+                    // CumulativeSummaries에 추가하고 MinuteSummaries를 비운다.
+                    // → 실시간요약 탭에는 "완료된 구간별 5분요약들 + 진행 중 구간의 1분요약들"만 남는다 (사용자 요구).
+                    RollUpMinuteSummaries(text ?? string.Empty);
                 }).Task.ConfigureAwait(false);
             }
             TriggerRealtimePersist();
@@ -3842,6 +3857,61 @@ public partial class OneNoteViewModel : ViewModelBase
         {
             Log4.Error($"[녹음] OnCumulativeSummaryUpdated 처리 실패: {ex.Message}");
         }
+    }
+
+    /// <summary>
+    /// 누적요약 주기 도달 시 롤업: 현재 MinuteSummaries(진행 구간의 1분요약들)를 하나의 5분요약 항목으로
+    /// 묶어 CumulativeSummaries에 추가하고 MinuteSummaries를 비운다.
+    /// 반드시 UI 스레드에서 호출 (호출부 OnCumulativeSummaryUpdated가 Dispatcher.InvokeAsync 내부).
+    /// </summary>
+    /// <param name="cumulativeText">이번 주기의 누적요약 텍스트 (5분요약 항목의 SummaryText로 사용).</param>
+    private void RollUpMinuteSummaries(string cumulativeText)
+    {
+        // 진행 구간에 실제 1분요약이 없으면 롤업 대상 없음 (묵음-only 등) — 스킵.
+        var rollupTargets = MinuteSummaries
+            .Where(m => !m.IsSilence && !string.IsNullOrWhiteSpace(m.SummaryText))
+            .ToList();
+        if (rollupTargets.Count == 0)
+        {
+            // 실질 내용 없으면 구간만 비우고 5분요약 카드는 만들지 않는다 (빈 카드 방지).
+            if (MinuteSummaries.Count > 0) MinuteSummaries.Clear();
+            return;
+        }
+
+        // 구간 경계: 롤업 대상 1분요약들의 최소 StartTime ~ 최대 EndTime.
+        var startTime = rollupTargets.Min(m => m.StartTime);
+        var endTime = rollupTargets.Max(m => m.EndTime);
+
+        // 누적요약 텍스트가 비면 1분요약들을 이어붙여 폴백 (LLM 누적요약 실패 시에도 롤업 내용 보존).
+        var summaryText = !string.IsNullOrWhiteSpace(cumulativeText)
+            ? cumulativeText
+            : string.Join("\n", rollupTargets.Select(m => m.SummaryText));
+
+        // 롤업 키워드: 구간 1분요약 키워드 중복 제거 병합 (최대 8개).
+        var mergedKeywords = rollupTargets
+            .SelectMany(m => m.Keywords ?? new System.Collections.Generic.List<string>())
+            .Where(k => !string.IsNullOrWhiteSpace(k))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .Take(8)
+            .ToList();
+
+        var rollupEntry = new Models.MinuteSummaryEntry
+        {
+            Index = CumulativeSummaries.Count,
+            StartTime = startTime,
+            EndTime = endTime,
+            SummaryText = summaryText,
+            Title = $"{mAIx.Helpers.TimeSpanFormatter.FormatTimeSpan(startTime)} ~ {mAIx.Helpers.TimeSpanFormatter.FormatTimeSpan(endTime)} 요약",
+            Keywords = mergedKeywords,
+            IsSilence = false,
+            CreatedAt = DateTime.Now,
+        };
+
+        CumulativeSummaries.Add(rollupEntry);
+        MinuteSummaries.Clear();  // 롤업된 1분요약 제거 — 실시간요약 탭에서 사라지고 5분요약으로 대체
+        MinuteSummaryCount = 0;   // 다음 구간 카운트 리셋 (구간별 색상 팔레트 인덱스 정합)
+
+        Log4.Info($"[녹음] 롤업: 1분요약 {rollupTargets.Count}개 → 5분요약 1개 ({rollupEntry.Title}). 누적요약 카드 총 {CumulativeSummaries.Count}개");
     }
 
     /// <summary>
@@ -4392,6 +4462,7 @@ public partial class OneNoteViewModel : ViewModelBase
                 CreatedAt = DateTime.Now,
                 TopicSegments = TopicSegments.ToList(),
                 MinuteSummaries = MinuteSummaries.ToList(),
+                CumulativeSummaries = CumulativeSummaries.ToList(),
                 CumulativeSummaryText = CumulativeSummaryText,
                 FinalSummaryText = FinalSummaryText
             };
@@ -4429,6 +4500,7 @@ public partial class OneNoteViewModel : ViewModelBase
                 {
                     TopicSegments.Clear();
                     MinuteSummaries.Clear();
+                    CumulativeSummaries.Clear();
                     CumulativeSummaryText = string.Empty;
                     FinalSummaryText = string.Empty;
                     MinuteSummaryCount = 0;
@@ -4455,6 +4527,11 @@ public partial class OneNoteViewModel : ViewModelBase
                 MinuteSummaries.Clear();
                 foreach (var entry in result.MinuteSummaries)
                     MinuteSummaries.Add(entry);
+
+                CumulativeSummaries.Clear();
+                if (result.CumulativeSummaries != null)
+                    foreach (var entry in result.CumulativeSummaries)
+                        CumulativeSummaries.Add(entry);
                 MinuteSummaryCount = result.MinuteSummaries.Count;
 
                 CumulativeSummaryText = result.CumulativeSummaryText;
@@ -4726,6 +4803,7 @@ public partial class OneNoteViewModel : ViewModelBase
             // 녹음 관련 데이터 초기화 (페이지 변경 시)
             TopicSegments.Clear();
             MinuteSummaries.Clear();
+            CumulativeSummaries.Clear();
             CumulativeSummaryText = string.Empty;
             FinalSummaryText = string.Empty;
             MinuteSummaryCount = 0;
@@ -4749,6 +4827,7 @@ public partial class OneNoteViewModel : ViewModelBase
             // 녹음 관련 데이터 초기화 (페이지 삭제 또는 미선택 시)
             TopicSegments.Clear();
             MinuteSummaries.Clear();
+            CumulativeSummaries.Clear();
             CumulativeSummaryText = string.Empty;
             FinalSummaryText = string.Empty;
             MinuteSummaryCount = 0;
