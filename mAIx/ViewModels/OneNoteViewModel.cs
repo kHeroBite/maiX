@@ -642,6 +642,13 @@ public partial class OneNoteViewModel : ViewModelBase
     [ObservableProperty]
     private double _vadThreshold = 0.5;
 
+    /// <summary>
+    /// 클라이언트 카드 병합 침묵 임계값 (초, 기본 2.0).
+    /// 서버 VAD(VadSilenceDurationMs, ms)와 별개 — delta 도착 간 침묵 갭이 이 값 미만이면 같은 화자 카드로 병합.
+    /// </summary>
+    [ObservableProperty]
+    private double _cardMergeSilenceThresholdSec = 2.0;
+
     /// <summary>발화 종료 침묵 기준 (ms, 기본 500)</summary>
     [ObservableProperty]
     private int _vadSilenceDurationMs = 500;
@@ -800,6 +807,7 @@ public partial class OneNoteViewModel : ViewModelBase
             _isServerVadEnabled = oaiSettings.ServerVadEnabled;
             _vadThreshold = oaiSettings.VadThreshold;
             _vadSilenceDurationMs = oaiSettings.VadSilenceDurationMs;
+            _cardMergeSilenceThresholdSec = oaiSettings.CardMergeSilenceThresholdSec;
             _chunkOverlapSeconds = oaiSettings.ChunkOverlapSeconds;
             _sttAutoScroll = oaiSettings.SttAutoScroll;
             _summaryAutoScroll = oaiSettings.SummaryAutoScroll;
@@ -2167,6 +2175,23 @@ public partial class OneNoteViewModel : ViewModelBase
         catch (Exception ex)
         {
             Log4.Error($"[옵션] VadSilenceDurationMs 저장 예외: {ex}");
+        }
+    }
+
+    /// <summary>카드 병합 침묵 임계값 변경 시 영구 저장</summary>
+    partial void OnCardMergeSilenceThresholdSecChanged(double value)
+    {
+        try
+        {
+            if (App.Settings?.OaiRecording != null)
+            {
+                App.Settings.OaiRecording.CardMergeSilenceThresholdSec = value;
+                App.Settings.SaveAll();
+            }
+        }
+        catch (Exception ex)
+        {
+            Log4.Error($"[옵션] CardMergeSilenceThresholdSec 저장 예외: {ex}");
         }
     }
 

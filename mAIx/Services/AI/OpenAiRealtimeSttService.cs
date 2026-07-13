@@ -82,6 +82,22 @@ public sealed class OpenAiRealtimeSttService : IOpenAiRealtimeSttService
     // 항목9: VAD OFF(turn_detection=null) 시 OpenAI 서버가 자동 commit 하지 않으므로
     // 주기적 수동 input_audio_buffer.commit을 송신하여 녹음 중 실시간 전사를 유도.
     private Task? _manualCommitTask = null;
+
+    // 보조 태스크 전용 CTS — 재연결 시 _cts(사용자 취소) 대신 _auxCts만 취소하여
+    // ghost loop 누적 없이 보조 태스크를 확실히 종료 후 새 태스크로 교체. (수정 1: 교착 해소)
+    private CancellationTokenSource? _auxCts = null;
+
+    // [DEBUG] 강제 재연결 트리거 태스크 — MAIX_DEBUG_STT_RECONNECT_SEC 환경변수가 설정된 경우에만 활성화.
+    // 미설정/0/파싱실패 시 _debugForceReconnectTask는 null로 유지되어 프로덕션 동작에 영향 없음.
+    private Task? _debugForceReconnectTask = null;
+    // 강제 재연결 주기 (초). 환경변수에서 파싱, 0이면 비활성.
+    private static readonly int _debugReconnectSec = ParseDebugReconnectSec();
+    private static int ParseDebugReconnectSec()
+    {
+        var raw = Environment.GetEnvironmentVariable("MAIX_DEBUG_STT_RECONNECT_SEC");
+        if (string.IsNullOrWhiteSpace(raw)) return 0;
+        return int.TryParse(raw, out var v) && v > 0 ? v : 0;
+    }
     // PeriodicTimer commit과 SendAudioChunkAsync append가 동시에 _ws.SendAsync를 호출하므로
     // ClientWebSocket InvalidOperationException 방지를 위해 송신 직렬화 (L-443).
     private readonly SemaphoreSlim _sendLock = new(1, 1);
@@ -90,10 +106,19 @@ public sealed class OpenAiRealtimeSttService : IOpenAiRealtimeSttService
     // VAD OFF 수동 commit 주기 (초). 짧으면 부분 전사 빈번, 길면 지연 → 3초 절충.
     private const double ManualCommitIntervalSec = 3.0;
 
-    // 옵션 C: N초 침묵 기반 카드 분할 — delta 도착 사이 간격이 N초 이상이면 새 itemId 생성
+    // 옵션 C: N초 침묵 기반 카드 분할 — delta 도착 사이 간격이 N초 이상이면 새 카드 키 생성
+    // 카드 병합 임계값은 하드코딩 대신 설정값(_settings.OaiRecording.CardMergeSilenceThresholdSec) 참조로 전환.
     private string? _currentSpeechItemId = null;
     private DateTime _lastDeltaAt = DateTime.MinValue;
-    private const double SilenceCardThresholdSec = 2.0; // 2초 침묵 시 새 카드
+    // 최소 병합 임계값 clamp (0 이하 설정 시 매 delta 새 카드 = 병합 비활성 방지)
+    private const double MinCardMergeSilenceThresholdSec = 0.1;
+
+    // OpenAI item_id → 병합 카드 키 매핑 (2계층 VAD 카드 병합).
+    // _deltaBuffers는 OpenAI item_id를 그대로 키로 유지(completed 이벤트가 item_id로 매칭하므로),
+    // UI에는 병합 카드 키를 전달하여 침묵 갭이 짧으면 여러 OpenAI item이 하나의 카드로 보이게 한다.
+    private readonly System.Collections.Concurrent.ConcurrentDictionary<string, string> _itemIdToCardKey = new();
+    // 카드 키별 누적 텍스트 (같은 카드 키에 속한 여러 OpenAI item의 델타 텍스트를 이어붙인 누적)
+    private readonly System.Collections.Concurrent.ConcurrentDictionary<string, string> _cardAccumTexts = new();
 
     // 스트리밍 미활성 조기 감지 — session.updated 수신 시각 기록
     private DateTime? _sessionUpdatedAt = null;
@@ -219,8 +244,19 @@ public sealed class OpenAiRealtimeSttService : IOpenAiRealtimeSttService
 
         _silenceStartedAt = DateTime.Now;
         _lastSilenceMarkerSec = 0;
-        _silenceMonitorTask = SilenceMonitorLoopAsync(_cts.Token);
+
+        // 보조 태스크 전용 CTS 생성 — _cts와 독립. 재연결 시 _auxCts만 취소.
+        _auxCts = CancellationTokenSource.CreateLinkedTokenSource(_cts.Token);
+        _silenceMonitorTask = SilenceMonitorLoopAsync(_auxCts.Token);
         _receiveTask = ReceiveLoopAsync(_cts.Token);
+
+        // [DEBUG] 강제 재연결 트리거 — MAIX_DEBUG_STT_RECONNECT_SEC 환경변수 설정 시에만 활성화.
+        // 미설정/0이면 프로덕션 동작 완전 보존 (이 블록 자체가 실행되지 않음).
+        if (_debugReconnectSec > 0)
+        {
+            _log.Warn("[Realtime][DEBUG] 강제 재연결 트리거 활성화 — MAIX_DEBUG_STT_RECONNECT_SEC={Sec}초", _debugReconnectSec);
+            _debugForceReconnectTask = DebugForceReconnectLoopAsync(_auxCts.Token);
+        }
 
         // L-448 + L-440: Strategy가 모델별 수동 commit 필요 여부를 결정.
         // gpt-4o-transcribe: ServerVadEnabled=false일 때만 수동 commit.
@@ -229,7 +265,7 @@ public sealed class OpenAiRealtimeSttService : IOpenAiRealtimeSttService
         if (_currentStrategy.RequiresManualCommit(_settings.OaiRecording.ServerVadEnabled))
         {
             _audioAppendedSinceCommit = false;
-            _manualCommitTask = ManualCommitLoopAsync(_cts.Token);
+            _manualCommitTask = ManualCommitLoopAsync(_auxCts.Token);
             _log.Info($"[OpenAi-Realtime] 수동 commit 루프 시작 (Strategy={_currentStrategy.ModelId}, 간격 {ManualCommitIntervalSec:F0}s)");
         }
     }
@@ -337,6 +373,8 @@ public sealed class OpenAiRealtimeSttService : IOpenAiRealtimeSttService
         finally
         {
             _silenceStartedAt = null;
+            // _auxCts 먼저 취소 → 보조 태스크(SilenceMonitor/ManualCommit/DebugForceReconnect)를 즉시 종료 신호 전달
+            _auxCts?.Cancel();
             _cts?.Cancel();
             if (_receiveTask != null)
             {
@@ -349,6 +387,11 @@ public sealed class OpenAiRealtimeSttService : IOpenAiRealtimeSttService
             if (_manualCommitTask != null)
             {
                 try { await _manualCommitTask.ConfigureAwait(false); } catch { /* 취소 예외 무시 */ }
+            }
+            // [DEBUG] 강제 재연결 트리거 정리 (환경변수 미설정 시 null이므로 no-op)
+            if (_debugForceReconnectTask != null)
+            {
+                try { await _debugForceReconnectTask.ConfigureAwait(false); } catch { /* 취소 예외 무시 */ }
             }
             Cleanup();
         }
@@ -400,7 +443,7 @@ public sealed class OpenAiRealtimeSttService : IOpenAiRealtimeSttService
                 {
                     await SendJsonAsync(new { type = "input_audio_buffer.commit" }).ConfigureAwait(false);
                     _committedCount++;
-                    _log.Info($"[OpenAi-Realtime] VAD OFF 수동 commit 송신 (주기 {ManualCommitIntervalSec:F0}s) — committedCount={_committedCount}");
+                    _log.Info($"[OpenAi-Realtime] VAD OFF 수동 commit 송신 (주기 {ManualCommitIntervalSec:F0}s) — committedCount={_committedCount} (이 commit 직후 speech_started의 audio_start_ms가 0 근처로 리셋될 수 있음 — 세그먼트 시간은 RecordingDuration 앵커로 보정됨)");
 
                     // L-441 out-of-band response.create — 일반 Realtime 세션(gpt-realtime-2)에서만 페이로드 반환.
                     // transcription 세션 모델(whisper/transcribe)은 null 반환 — 별도 응답 트리거 불필요.
@@ -423,6 +466,45 @@ public sealed class OpenAiRealtimeSttService : IOpenAiRealtimeSttService
         }
         catch (OperationCanceledException) { /* 정상 종료 */ }
         catch (Exception ex) { _log.Error(ex, "[OpenAi-Realtime] 수동 commit 루프 오류"); }
+    }
+
+    /// <summary>
+    /// [DEBUG 전용] 강제 재연결 트리거 루프 — MAIX_DEBUG_STT_RECONNECT_SEC 환경변수 설정 시에만 활성화.
+    /// 미설정/0이면 이 메서드는 호출되지 않으므로 프로덕션 동작에 영향 없음.
+    /// 기존 재연결 경로(_ws?.Dispose() → ReceiveLoopAsync 재연결 블록) 를 그대로 재사용.
+    /// L-380: PeriodicTimer 콜백 외부 try-catch. L-376: ct 취소 시 정상 종료.
+    /// </summary>
+    private async Task DebugForceReconnectLoopAsync(CancellationToken ct)
+    {
+        _log.Warn("[Realtime][DEBUG] 강제 재연결 루프 시작 — {Sec}초마다 WS Dispose로 재연결 유발", _debugReconnectSec);
+        try
+        {
+            using var timer = new PeriodicTimer(TimeSpan.FromSeconds(_debugReconnectSec));
+            while (await timer.WaitForNextTickAsync(ct).ConfigureAwait(false))
+            {
+                if (_ws == null || _ws.State != WebSocketState.Open)
+                {
+                    _log.Info("[Realtime][DEBUG] 강제 재연결 트리거 — WS 이미 닫힘, 스킵");
+                    continue;
+                }
+                _log.Warn("[Realtime][DEBUG] 강제 재연결 트리거 발동 ({Sec}초 경과) — WS Dispose로 재연결 유발", _debugReconnectSec);
+                try
+                {
+                    // 기존 재연결 경로 재사용:
+                    // WS를 강제 Close한 뒤 null로 만들면 ReceiveLoopAsync 내부 루프가
+                    // _ws?.State != Open 조건으로 빠져나와 재연결 블록(_auxCts 정리 → 새 WS 생성)으로 진입.
+                    _ws.Dispose();
+                    _ws = null;
+                }
+                catch (Exception ex)
+                {
+                    _log.Warn(ex, "[Realtime][DEBUG] 강제 재연결 트리거 WS Dispose 실패 (무시)");
+                }
+            }
+        }
+        catch (OperationCanceledException) { /* 정상 종료 — _auxCts 취소 시 */ }
+        catch (Exception ex) { _log.Error(ex, "[Realtime][DEBUG] 강제 재연결 루프 오류"); }
+        _log.Info("[Realtime][DEBUG] 강제 재연결 루프 종료");
     }
 
     private async Task ReceiveLoopAsync(CancellationToken ct)
@@ -500,10 +582,12 @@ public sealed class OpenAiRealtimeSttService : IOpenAiRealtimeSttService
             // 단, _cts는 외부(사용자) 취소 토큰 연결이므로 교체하지 않고 WS만 재생성
             try
             {
-                _log.Info("[RealtimeSTT] 재연결 준비 — 기존 WS 정리");
+                _log.Info("[Realtime] 재연결 시작 — 기존 보조 태스크 정리");
 
-                // 기존 보조 태스크 취소 후 완료 대기 (새 취소 소스 없이 기존 _cts 활용)
-                // WS만 재생성하고 _cts는 그대로 유지 (외부 취소 신호 보존)
+                // 수정 1 (교착 해소): _auxCts 취소로 보조 태스크를 즉시 종료 신호 전달 후 await.
+                // _cts는 사용자 취소 신호이므로 절대 취소하지 않음.
+                // ghost loop 누적 방지: 옛 _auxCts 취소 → 새 _auxCts 재생성 → 새 보조 태스크에 전달.
+                _auxCts?.Cancel();
                 if (_silenceMonitorTask != null)
                 {
                     try { await _silenceMonitorTask.ConfigureAwait(false); } catch { }
@@ -514,6 +598,15 @@ public sealed class OpenAiRealtimeSttService : IOpenAiRealtimeSttService
                     try { await _manualCommitTask.ConfigureAwait(false); } catch { }
                     _manualCommitTask = null;
                 }
+                // [DEBUG] 강제 재연결 트리거 태스크도 _auxCts 취소로 함께 종료 대기 (누수 방지, L-376/L-388)
+                if (_debugForceReconnectTask != null)
+                {
+                    try { await _debugForceReconnectTask.ConfigureAwait(false); } catch { }
+                    _debugForceReconnectTask = null;
+                }
+                _auxCts?.Dispose();
+                _auxCts = null;
+                _log.Info("[Realtime] 보조 태스크 정리 완료");
 
                 // 기존 WS Dispose
                 _ws?.Dispose();
@@ -531,6 +624,7 @@ public sealed class OpenAiRealtimeSttService : IOpenAiRealtimeSttService
                 await newWs.ConnectAsync(uri, ct).ConfigureAwait(false);
                 _ws = newWs;
                 _log.Info("[RealtimeSTT] 재연결 WebSocket 연결 성공 (시도 {Attempt}/{Max})", reconnectAttempt, MaxReconnectAttempts);
+                _log.Warn("[RealtimeSTT] 재연결로 세션 재시작 — audio_start_ms가 리셋될 수 있음 (세그먼트 시간은 ViewModel의 RecordingDuration 앵커로 보정됨. 3초 주기 수동 commit도 동일하게 audio_start_ms를 리셋시킬 수 있음 — ManualCommitLoopAsync 로그 참조)");
 
                 // session.update 재발송
                 var sttLang = string.IsNullOrWhiteSpace(_settings.OaiRecording.SttLanguage) ? "ko" : _settings.OaiRecording.SttLanguage;
@@ -545,17 +639,32 @@ public sealed class OpenAiRealtimeSttService : IOpenAiRealtimeSttService
                 await SendJsonAsync(sessionPayload).ConfigureAwait(false);
                 _log.Info("[RealtimeSTT] 재연결 session.update 재발송 완료");
 
-                // 보조 태스크 재시작
-                _silenceMonitorTask = SilenceMonitorLoopAsync(ct);
+                // 새 _auxCts 생성 후 보조 태스크 재시작 (ghost loop 누적 0 보장)
+                _auxCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
+                _silenceMonitorTask = SilenceMonitorLoopAsync(_auxCts.Token);
                 if (_currentStrategy.RequiresManualCommit(_settings.OaiRecording.ServerVadEnabled))
                 {
                     _audioAppendedSinceCommit = false;
-                    _manualCommitTask = ManualCommitLoopAsync(ct);
+                    _manualCommitTask = ManualCommitLoopAsync(_auxCts.Token);
                 }
+
+                // [DEBUG] 강제 재연결 트리거 재시작 — 재연결 후에도 동일한 주기로 계속 발동 (누적 방지됨)
+                if (_debugReconnectSec > 0)
+                {
+                    _debugForceReconnectTask = DebugForceReconnectLoopAsync(_auxCts.Token);
+                    _log.Warn("[Realtime][DEBUG] 강제 재연결 트리거 재시작 — MAIX_DEBUG_STT_RECONNECT_SEC={Sec}초", _debugReconnectSec);
+                }
+
+                // 2계층 VAD 카드 병합 상태 리셋 — 재연결 후 첫 delta가 이전 세션의 카드 키와
+                // 잘못 병합되지 않도록 함 (계획서 §11 엣지케이스).
+                _currentSpeechItemId = null;
+                _lastDeltaAt = DateTime.MinValue;
+                _itemIdToCardKey.Clear();
+                _cardAccumTexts.Clear();
 
                 // messageBuffer 초기화 후 내부 루프 재진입
                 messageBuffer.Clear();
-                _log.Info("[RealtimeSTT] 재연결 완료 — 수신 루프 재개");
+                _log.Info("[Realtime] 재연결 완료 — 수신 루프 재개 (병합 카드 상태 리셋 완료)");
                 reconnectAttempt = 0; // 성공 시 재시도 카운터 초기화
             }
             catch (Exception ex)
@@ -642,13 +751,52 @@ public sealed class OpenAiRealtimeSttService : IOpenAiRealtimeSttService
                     var openAiItemId = root.TryGetProperty("item_id", out var idProp) ? (idProp.GetString() ?? string.Empty) : string.Empty;
                     if (!string.IsNullOrEmpty(deltaText) && !string.IsNullOrEmpty(openAiItemId))
                     {
+                        // _deltaBuffers는 completed 이벤트 매칭용 — OpenAI item_id 키 그대로 유지 (회귀 방지).
                         var accum = _deltaBuffers.AddOrUpdate(openAiItemId, deltaText, (_, prev) => prev + deltaText);
-                        _lastDeltaAt = DateTime.Now;
-                        _currentSpeechItemId = openAiItemId;
+
+                        // 2계층 VAD 카드 병합 판정: delta 도착 간격(gap)이 임계 미만이면 기존 카드 키 유지, 이상이면 새 카드 키 생성.
+                        var now = DateTime.Now;
+                        var threshold = Math.Max(_settings.OaiRecording.CardMergeSilenceThresholdSec, MinCardMergeSilenceThresholdSec);
+                        var gap = _lastDeltaAt == DateTime.MinValue ? double.MaxValue : (now - _lastDeltaAt).TotalSeconds;
+                        // 같은 openAiItemId가 이어지는 delta(정상 진행 중인 발화)는 항상 병합 — 카드 분할 판정은
+                        // "새 openAiItemId가 등장했을 때"만 침묵 갭 기준으로 결정한다.
+                        bool sameItem = _itemIdToCardKey.ContainsKey(openAiItemId);
+                        bool merged = sameItem || (_currentSpeechItemId != null && gap < threshold);
+                        if (!merged)
+                        {
+                            _currentSpeechItemId = $"card_{now.Ticks}";
+                        }
+                        var cardKey = _currentSpeechItemId!;
+                        _itemIdToCardKey[openAiItemId] = cardKey;
+                        _lastDeltaAt = now;
+
+                        _log.Info($"[병합판정] gap={(gap == double.MaxValue ? -1 : gap):F2}s 임계={threshold:F2}s → {(merged ? "기존카드유지" : "새카드생성")} cardKey={cardKey}");
+
+                        // 카드 키 기준 누적 텍스트: 같은 item_id의 재-delta는 이번 item의 전체 accum으로 교체,
+                        // 새 item_id가 기존 카드에 병합되는 경우에만 기존 카드 누적 뒤에 이어붙임.
+                        string cardAccum;
+                        if (sameItem)
+                        {
+                            // 같은 item_id의 재-delta: 이 item이 카드의 최신 item이므로 accum(이 item 전체 누적)을 그대로 사용
+                            cardAccum = accum;
+                            _cardAccumTexts[cardKey] = cardAccum;
+                        }
+                        else if (merged)
+                        {
+                            var prevCardAccum = _cardAccumTexts.TryGetValue(cardKey, out var pv2) ? pv2 : string.Empty;
+                            cardAccum = prevCardAccum + accum;
+                            _cardAccumTexts[cardKey] = cardAccum;
+                        }
+                        else
+                        {
+                            cardAccum = accum;
+                            _cardAccumTexts[cardKey] = cardAccum;
+                        }
+
                         var ts = TimeSpan.FromMilliseconds(_lastSpeechStartedMs);
                         var tsEnd = TimeSpan.FromMilliseconds(_lastSpeechStoppedMs > 0 ? _lastSpeechStoppedMs : _lastSpeechStartedMs);
-                        _log.Info($"[OpenAi-Realtime] delta — text='{deltaText}' openAiItemId={openAiItemId} accum_len={accum.Length}");
-                        TranscriptSegmentUpdated?.Invoke(openAiItemId, ts, tsEnd, accum);
+                        _log.Info($"[OpenAi-Realtime] delta — text='{deltaText}' openAiItemId={openAiItemId} cardKey={cardKey} accum_len={accum.Length}");
+                        TranscriptSegmentUpdated?.Invoke(cardKey, ts, tsEnd, cardAccum);
 
                         // AC-017: 자동 말풍선 분리 (tier1: 강마침표 전용, tier2: 강+약 구분자)
                         if (_settings.OaiRecording.AutoSplitEnabled)
@@ -723,15 +871,19 @@ public sealed class OpenAiRealtimeSttService : IOpenAiRealtimeSttService
                     }
                     var ts = TimeSpan.FromMilliseconds(_lastSpeechStartedMs);
                     var tsEnd = TimeSpan.FromMilliseconds(_lastSpeechStoppedMs > 0 ? _lastSpeechStoppedMs : _lastSpeechStartedMs);
-                    // delta가 도착했으면 LiveSTT UI는 Updated로 final 교체 (itemId 매칭 in-place)
+                    // delta가 도착했으면 LiveSTT UI는 Updated로 final 교체 — 병합 카드 키로 발행(2계층 VAD 카드 병합).
+                    // itemId → 카드 키 매핑이 없으면(delta 없이 바로 completed) itemId 자체를 카드 키로 사용.
                     if (_deltaBuffers.ContainsKey(itemId))
                     {
-                        TranscriptSegmentUpdated?.Invoke(itemId, ts, tsEnd, text);
+                        var completedCardKey = _itemIdToCardKey.TryGetValue(itemId, out var ck) ? ck : itemId;
+                        TranscriptSegmentUpdated?.Invoke(completedCardKey, ts, tsEnd, text);
+                        _cardAccumTexts.TryRemove(completedCardKey, out _);
                     }
                     // ★ TopicExtractor/MinuteSummary 전달은 항상 Received로 한 번 더 발화 (delta 유무 무관)
                     // 이유: Updated 핸들러는 LiveSTTSegments UI만 갱신하므로 텍스트 통계 누락 방지
                     TranscriptSegmentReceived?.Invoke(ts, text);
                     _deltaBuffers.TryRemove(itemId, out _);
+                    _itemIdToCardKey.TryRemove(itemId, out _);
                     _completedCount++;
                     _log.Info($"[OpenAi-Realtime] transcription.completed — text={text.Substring(0, Math.Min(50, text.Length))}");
 
@@ -793,10 +945,12 @@ public sealed class OpenAiRealtimeSttService : IOpenAiRealtimeSttService
         var json = JsonSerializer.Serialize(payload);
         var bytes = Encoding.UTF8.GetBytes(json);
         // L-443: PeriodicTimer 수동 commit과 audio append가 동시에 _ws.SendAsync 호출 가능 → 직렬화.
-        await _sendLock.WaitAsync().ConfigureAwait(false);
+        // L-451: WaitAsync/SendAsync에 취소 토큰 전달 — 소켓 stall 시 StopAsync hang 방지.
+        var ct = _cts?.Token ?? CancellationToken.None;
+        await _sendLock.WaitAsync(ct).ConfigureAwait(false);
         try
         {
-            await _ws.SendAsync(new ArraySegment<byte>(bytes), WebSocketMessageType.Text, true, CancellationToken.None).ConfigureAwait(false);
+            await _ws.SendAsync(new ArraySegment<byte>(bytes), WebSocketMessageType.Text, true, ct).ConfigureAwait(false);
         }
         finally
         {
@@ -854,11 +1008,14 @@ public sealed class OpenAiRealtimeSttService : IOpenAiRealtimeSttService
     {
         _ws?.Dispose();
         _ws = null;
+        _auxCts?.Dispose();
+        _auxCts = null;
         _cts?.Dispose();
         _cts = null;
         _receiveTask = null;
         _silenceMonitorTask = null;
         _manualCommitTask = null;
+        _debugForceReconnectTask = null;
         _currentStrategy = null;
     }
 
@@ -866,6 +1023,7 @@ public sealed class OpenAiRealtimeSttService : IOpenAiRealtimeSttService
     {
         if (_disposed) return;
         _disposed = true;
+        _auxCts?.Cancel();
         _cts?.Cancel();
         Cleanup();
         // L-376: SemaphoreSlim은 IDisposable — 필드 보유 시 Dispose에서 해제.

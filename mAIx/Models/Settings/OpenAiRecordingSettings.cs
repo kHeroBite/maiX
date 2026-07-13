@@ -147,6 +147,14 @@ public class OpenAiRecordingSettings
     [XmlElement("VadSilenceDurationMs")]
     public int VadSilenceDurationMs { get; set; } = 500;
 
+    /// <summary>
+    /// 클라이언트 카드 병합 침묵 임계값 (초, 기본 2.0).
+    /// 서버 VAD(VadSilenceDurationMs)와는 별개 — delta 도착 간 침묵 갭이 이 값 미만이면
+    /// 같은 화자 카드로 병합, 이상이면 새 카드 생성 (2계층 VAD 카드 병합 아키텍처).
+    /// </summary>
+    [XmlElement("CardMergeSilenceThresholdSec")]
+    public double CardMergeSilenceThresholdSec { get; set; } = 2.0;
+
     /// <summary>gpt-realtime-whisper 모델의 delay 파라미터 (선택, 예: "low"/"medium"/"high" 또는 ms 값). null이면 미전송 — whisper 외 모델에서는 무시됨.</summary>
     [XmlElement("WhisperDelay")]
     public string? WhisperDelay { get; set; }

@@ -8718,6 +8718,13 @@
                                                                                 PlaceholderText="100~3000, 기본 500"
                                                                                 Width="100" FontSize="12"/>
                                                                 </StackPanel>
+                                                                <StackPanel Orientation="Horizontal" Margin="0,2,0,4">
+                                                                    <TextBlock Text="카드 병합 침묵(초)" FontSize="12" VerticalAlignment="Center" Margin="0,0,6,0"/>
+                                                                    <ui:TextBox Text="{Binding CardMergeSilenceThresholdSec, Mode=TwoWay}"
+                                                                                PlaceholderText="0.1~10, 기본 2.0"
+                                                                                Width="100" FontSize="12"
+                                                                                ToolTip="delta 도착 간 침묵 갭이 이 값 미만이면 같은 화자 카드로 병합(서버 VAD와 별개)."/>
+                                                                </StackPanel>
                                                                 <CheckBox Content="주제 키워드 하이라이트 표시 (STT 화면)"
                                                                           IsChecked="{Binding IsKeywordHighlightEnabled, Mode=TwoWay}"
                                                                           FontSize="12" Margin="0,0,0,4"

@@ -2254,3 +2254,7 @@ ConfigureAwait(false)를 Service 레이어 전체에 적용하여 스레드 컨�
 ## 2026-07-09 — 원노트탭 실시간 STT 세그먼트 경과시간 리셋 버그 수정
 
 | 2026-07-09 | 🐛 원노트 실시간 STT 경과시간 리셋 해결 — 3초 주기 input_audio_buffer.commit이 서버 audio_start_ms(상대값)를 리셋시키는 근본원인 확정. OnSttTranscriptSegmentUpdated 신규 세그먼트 생성 시 StartTime을 AudioRecordingService.RecordingDuration 절대 앵커로 전환(RecordingDuration=Zero 폴백 유지). 세션 시작 전부터 있던 OpenAiRealtimeSttService.cs 미커밋 121줄(_auxCts 분리 등)은 diff 스코프 오염 방지를 위해 이번 커밋에서 전부 제외(사용자 결정). 신규 교훈: L-539(미커밋 잔여물 diff 스코프 오염 — otest 정밀 대조로 선제 발견). | mAIx/ViewModels/OneNoteViewModel.cs |
+
+## 2026-07-13 — 원노트탭 실시간 STT 2계층 VAD 카드 병합 구현
+
+| 2026-07-13 | ✨ 원노트탭 실시간 STT 2계층 VAD 카드 병합 구현 — gpt-4o-transcribe가 VAD 세그먼트 종료 후에만 delta를 batch 방출하는 특성으로 발화 도중 화면이 비던 문제를, 서버 VAD(VadSilenceDurationMs)를 짧게 하여 delta를 자주 받고 클라이언트에서 긴 침묵 갭(CardMergeSilenceThresholdSec, 신설) 기준으로 하나의 화자 카드로 병합하는 방식으로 해결. 기존 "옵션C" 병합은 필드만 있고 미구현이었던 것을 실제 침묵 갭 판정 로직으로 신규 구현. OpenAI item_id는 _deltaBuffers 키로 유지하고 item_id→병합카드키 별도 매핑 dictionary 신설(completed 매칭 회귀 방지). 재연결 시 병합 상태 리셋, 0.1초 clamp 적용. 런타임 [병합판정] 로그 발화는 마이크 녹음 UI 인터랙션 필요로 otest_deferred — 사용자 재녹음 RETEST 예정(PARTIAL_PASS). 신규 교훈: L-545(로그 채널 분산 재확인), L-546(필드 선언≠구현 재확인), L-547(모델 capability 제약 우회), L-548(UI 인터랙션 검증 분리 재확인). | mAIx/Models/Settings/OpenAiRecordingSettings.cs, mAIx/Services/AI/OpenAiRealtimeSttService.cs, mAIx/ViewModels/OneNoteViewModel.cs, mAIx/Views/MainWindow.xaml |
