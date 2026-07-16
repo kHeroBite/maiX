@@ -8713,17 +8713,18 @@
                                                                                 Width="100" FontSize="12"/>
                                                                 </StackPanel>
                                                                 <StackPanel Orientation="Horizontal" Margin="0,2,0,4">
-                                                                    <TextBlock Text="발화 종료 침묵 (ms)" FontSize="12" VerticalAlignment="Center" Margin="0,0,6,0"/>
+                                                                    <TextBlock Text="서버 VAD · 발화종료 침묵 (ms)" FontSize="12" VerticalAlignment="Center" Margin="0,0,6,0"
+                                                                               ToolTip="OpenAI 서버 turn_detection.silence_duration_ms — 서버가 발화 종료로 판단하는 침묵 길이(ms)."/>
                                                                     <ui:TextBox Text="{Binding VadSilenceDurationMs, Mode=TwoWay}"
                                                                                 PlaceholderText="100~3000, 기본 500"
                                                                                 Width="100" FontSize="12"/>
                                                                 </StackPanel>
                                                                 <StackPanel Orientation="Horizontal" Margin="0,2,0,4">
-                                                                    <TextBlock Text="카드 병합 침묵(초)" FontSize="12" VerticalAlignment="Center" Margin="0,0,6,0"/>
+                                                                    <TextBlock Text="클라이언트 VAD · 카드병합 침묵 (초)" FontSize="12" VerticalAlignment="Center" Margin="0,0,6,0"/>
                                                                     <ui:TextBox Text="{Binding CardMergeSilenceThresholdSec, Mode=TwoWay}"
                                                                                 PlaceholderText="0.1~10, 기본 2.0"
                                                                                 Width="100" FontSize="12"
-                                                                                ToolTip="delta 도착 간 침묵 갭이 이 값 미만이면 같은 화자 카드로 병합(서버 VAD와 별개)."/>
+                                                                                ToolTip="클라이언트 측 delta 도착 간 침묵 갭이 이 값 미만이면 같은 화자 카드로 병합(서버 VAD와 별개)."/>
                                                                 </StackPanel>
                                                                 <CheckBox Content="주제 키워드 하이라이트 표시 (STT 화면)"
                                                                           IsChecked="{Binding IsKeywordHighlightEnabled, Mode=TwoWay}"
