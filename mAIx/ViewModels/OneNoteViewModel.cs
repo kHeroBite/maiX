@@ -3412,6 +3412,7 @@ public partial class OneNoteViewModel : ViewModelBase
                 }
                 if (existing != null)
                 {
+                    Log4.Info($"[카드변환] itemId={itemId} 매칭=교체 count={LiveSTTSegments.Count} startTime={startTime} endTime={endTime} anchorStart={existing.StartTime} anchorEnd={anchorEndTime}");
                     existing.Text = text;
                     existing.EndTime = anchorEndTime;
                     // ObservableCollection은 Property 변경을 감지 못하므로 강제 갱신: Replace
@@ -3428,6 +3429,7 @@ public partial class OneNoteViewModel : ViewModelBase
                 else
                 {
                     var anchorStartTime = recordingDuration > TimeSpan.Zero ? recordingDuration : startTime;
+                    Log4.Info($"[카드변환] itemId={itemId} 매칭=신규Add count={LiveSTTSegments.Count} startTime={startTime} endTime={endTime} anchorStart={anchorStartTime} anchorEnd={anchorEndTime}");
                     LiveSTTSegments.Add(new Models.TranscriptSegment
                     {
                         ItemId = itemId,

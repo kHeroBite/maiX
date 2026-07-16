@@ -2977,3 +2977,16 @@ viewModel.PropertyChanged += OnViewModelPropertyChanged_ForMindMap;  // 재등�
 - **Level**: 1
 - **연관**: L-529
 - **대화ID**: conv_178390796062
+
+## L-549: STT 세그먼트 시각 카드별 dictionary 고정 필요 — 클래스 필드 1개 재사용은 카드별 시작시각 유실 (2026-07-16)
+
+- **문제**: 원노트탭 실시간 STT "화자 starttime - endtime" 표시에서 카드가 delta 1건만 받고 곧바로 completed되면 StartTime≈EndTime이 되어 사용자가 "카드가 100ms 단위로 계속 분리된다"고 오인.
+- **근본원인(H5)**: `OpenAiRealtimeSttService.cs`의 STT 세그먼트 시각 계산이 클래스 필드 `_lastSpeechStartedMs`/`_lastSpeechStoppedMs`(전역 1개씩) 재사용 구조 — 서버 `speech_started`/`speech_stopped` VAD 이벤트가 올 때마다 덮어써져 카드별 시작시각이 못박히지 않음.
+- **결정적 단서**: 증상("카드 100ms 분리")을 곧이곧대로 "병합 로직 버그"로 가정하지 않고, nlog `[병합판정]` 로그 전수(10,489건) 실측으로 병합 로직 자체는 정상(gap≥2.0s에서만 분리)임을 먼저 확인 → 진짜 원인이 시간표시 로직에 있음을 특정(L-446/L-530 계열 "증상≠원인" 재확인).
+- **해결**: `ConcurrentDictionary<string,double> _cardStartTimes` 신설 — 카드 키별 최초 delta 도착 시각 1회만 캡처(TryAdd)해 StartTime 고정, EndTime은 매 delta/completed 시점 값으로 계속 전진. completed 시 다른 item이 더 이상 해당 cardKey를 참조하지 않을 때만(`_itemIdToCardKey.Values.Contains` 역참조 체크) `_cardStartTimes`에서 제거해 메모리 누수 방지.
+- **교훈**: 이벤트 기반 시각 계산에서 "클래스 필드 1개 = 전역 상태 재사용"은 다중 세그먼트/카드 단위 로직에서 항상 유실 위험 신호 — 설계 시 카드/세션 단위 dictionary 우선 검토.
+- **심각도**: 중간 (사용자 체감 버그 — UI 시간표시 오인 유발)
+- **Level**: 1 (기존 L-446/L-530 "증상≠원인" 원칙 재확인 — 신규 규칙 불필요, 사례 축적)
+- **연관**: L-446, L-530
+- **수정 파일**: `mAIx/Services/AI/OpenAiRealtimeSttService.cs`, `mAIx/ViewModels/OneNoteViewModel.cs` (진단 로그 [STT시각]/[카드변환] 추가 — 사용자 런타임 검증용, 제거하지 않음)
+- **대화ID**: conv_178416922477

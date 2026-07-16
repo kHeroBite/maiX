@@ -119,6 +119,10 @@ public sealed class OpenAiRealtimeSttService : IOpenAiRealtimeSttService
     private readonly System.Collections.Concurrent.ConcurrentDictionary<string, string> _itemIdToCardKey = new();
     // 카드 키별 누적 텍스트 (같은 카드 키에 속한 여러 OpenAI item의 델타 텍스트를 이어붙인 누적)
     private readonly System.Collections.Concurrent.ConcurrentDictionary<string, string> _cardAccumTexts = new();
+    // 카드 키별 "최초 delta 도착 시각"(ms) 고정 캡처 — StartTime=EndTime 표시 버그 수정용(H5).
+    // _lastSpeechStartedMs/_lastSpeechStoppedMs는 클래스 필드 1개뿐이라 서버 VAD 이벤트마다 덮어써져
+    // 카드별 시작시각을 못박지 못했다. 새 카드 생성 시점에 1회만 기록하고, completed 시 제거한다.
+    private readonly System.Collections.Concurrent.ConcurrentDictionary<string, double> _cardStartTimes = new();
 
     // 스트리밍 미활성 조기 감지 — session.updated 수신 시각 기록
     private DateTime? _sessionUpdatedAt = null;
@@ -769,6 +773,8 @@ public sealed class OpenAiRealtimeSttService : IOpenAiRealtimeSttService
                         var cardKey = _currentSpeechItemId!;
                         _itemIdToCardKey[openAiItemId] = cardKey;
                         _lastDeltaAt = now;
+                        // 카드별 시작시각 최초 1회 고정 캡처(H5 수정) — 이미 있으면 덮어쓰지 않음
+                        _cardStartTimes.TryAdd(cardKey, _lastSpeechStartedMs);
 
                         _log.Info($"[병합판정] gap={(gap == double.MaxValue ? -1 : gap):F2}s 임계={threshold:F2}s → {(merged ? "기존카드유지" : "새카드생성")} cardKey={cardKey}");
 
@@ -793,9 +799,12 @@ public sealed class OpenAiRealtimeSttService : IOpenAiRealtimeSttService
                             _cardAccumTexts[cardKey] = cardAccum;
                         }
 
-                        var ts = TimeSpan.FromMilliseconds(_lastSpeechStartedMs);
+                        // H5 수정: StartTime은 카드별 고정 시작시각(_cardStartTimes), EndTime은 현재 시점 값으로 전진
+                        var cardStartMs = _cardStartTimes.TryGetValue(cardKey, out var csm) ? csm : _lastSpeechStartedMs;
+                        var ts = TimeSpan.FromMilliseconds(cardStartMs);
                         var tsEnd = TimeSpan.FromMilliseconds(_lastSpeechStoppedMs > 0 ? _lastSpeechStoppedMs : _lastSpeechStartedMs);
                         _log.Info($"[OpenAi-Realtime] delta — text='{deltaText}' openAiItemId={openAiItemId} cardKey={cardKey} accum_len={accum.Length}");
+                        _log.Info($"[STT시각] cardKey={cardKey} itemId={openAiItemId} evt=delta start={ts} end={tsEnd} rawStartMs={_lastSpeechStartedMs} rawStopMs={_lastSpeechStoppedMs} cardStartMs={cardStartMs}");
                         TranscriptSegmentUpdated?.Invoke(cardKey, ts, tsEnd, cardAccum);
 
                         // AC-017: 자동 말풍선 분리 (tier1: 강마침표 전용, tier2: 강+약 구분자)
@@ -869,13 +878,17 @@ public sealed class OpenAiRealtimeSttService : IOpenAiRealtimeSttService
                         TranscriptSegmentRemoved?.Invoke(itemId);
                         return;
                     }
-                    var ts = TimeSpan.FromMilliseconds(_lastSpeechStartedMs);
+                    // H5 수정: completed 시점도 카드별 고정 시작시각(_cardStartTimes)을 우선 사용
+                    var completedCardKeyForTs = _itemIdToCardKey.TryGetValue(itemId, out var ckForTs) ? ckForTs : itemId;
+                    var completedCardStartMs = _cardStartTimes.TryGetValue(completedCardKeyForTs, out var ccsm) ? ccsm : _lastSpeechStartedMs;
+                    var ts = TimeSpan.FromMilliseconds(completedCardStartMs);
                     var tsEnd = TimeSpan.FromMilliseconds(_lastSpeechStoppedMs > 0 ? _lastSpeechStoppedMs : _lastSpeechStartedMs);
+                    _log.Info($"[STT시각] cardKey={completedCardKeyForTs} itemId={itemId} evt=completed start={ts} end={tsEnd} rawStartMs={_lastSpeechStartedMs} rawStopMs={_lastSpeechStoppedMs} cardStartMs={completedCardStartMs}");
                     // delta가 도착했으면 LiveSTT UI는 Updated로 final 교체 — 병합 카드 키로 발행(2계층 VAD 카드 병합).
                     // itemId → 카드 키 매핑이 없으면(delta 없이 바로 completed) itemId 자체를 카드 키로 사용.
                     if (_deltaBuffers.ContainsKey(itemId))
                     {
-                        var completedCardKey = _itemIdToCardKey.TryGetValue(itemId, out var ck) ? ck : itemId;
+                        var completedCardKey = completedCardKeyForTs;
                         TranscriptSegmentUpdated?.Invoke(completedCardKey, ts, tsEnd, text);
                         _cardAccumTexts.TryRemove(completedCardKey, out _);
                     }
@@ -884,6 +897,11 @@ public sealed class OpenAiRealtimeSttService : IOpenAiRealtimeSttService
                     TranscriptSegmentReceived?.Invoke(ts, text);
                     _deltaBuffers.TryRemove(itemId, out _);
                     _itemIdToCardKey.TryRemove(itemId, out _);
+                    // 카드가 완전히 종료됐는지(다른 itemId가 더 이상 이 cardKey를 참조하지 않는지) 확인 후 시작시각 정리
+                    if (!_itemIdToCardKey.Values.Contains(completedCardKeyForTs))
+                    {
+                        _cardStartTimes.TryRemove(completedCardKeyForTs, out _);
+                    }
                     _completedCount++;
                     _log.Info($"[OpenAi-Realtime] transcription.completed — text={text.Substring(0, Math.Min(50, text.Length))}");
 

@@ -2258,3 +2258,7 @@ ConfigureAwait(false)를 Service 레이어 전체에 적용하여 스레드 컨�
 ## 2026-07-13 — 원노트탭 실시간 STT 2계층 VAD 카드 병합 구현
 
 | 2026-07-13 | ✨ 원노트탭 실시간 STT 2계층 VAD 카드 병합 구현 — gpt-4o-transcribe가 VAD 세그먼트 종료 후에만 delta를 batch 방출하는 특성으로 발화 도중 화면이 비던 문제를, 서버 VAD(VadSilenceDurationMs)를 짧게 하여 delta를 자주 받고 클라이언트에서 긴 침묵 갭(CardMergeSilenceThresholdSec, 신설) 기준으로 하나의 화자 카드로 병합하는 방식으로 해결. 기존 "옵션C" 병합은 필드만 있고 미구현이었던 것을 실제 침묵 갭 판정 로직으로 신규 구현. OpenAI item_id는 _deltaBuffers 키로 유지하고 item_id→병합카드키 별도 매핑 dictionary 신설(completed 매칭 회귀 방지). 재연결 시 병합 상태 리셋, 0.1초 clamp 적용. 런타임 [병합판정] 로그 발화는 마이크 녹음 UI 인터랙션 필요로 otest_deferred — 사용자 재녹음 RETEST 예정(PARTIAL_PASS). 신규 교훈: L-545(로그 채널 분산 재확인), L-546(필드 선언≠구현 재확인), L-547(모델 capability 제약 우회), L-548(UI 인터랙션 검증 분리 재확인). | mAIx/Models/Settings/OpenAiRecordingSettings.cs, mAIx/Services/AI/OpenAiRealtimeSttService.cs, mAIx/ViewModels/OneNoteViewModel.cs, mAIx/Views/MainWindow.xaml |
+
+## 2026-07-16 — 원노트탭 실시간 STT 화자 시간표시 start=end 버그 수정
+
+| 2026-07-16 | 🐛 실시간 STT 화자 시간표시 start=end 버그 수정 — [병합판정] 로그 전수(10,489건) 실측으로 병합 로직 자체는 정상임을 먼저 확인(H1~H4 기각 유지) 후, 시간 계산이 클래스 필드(_lastSpeechStartedMs/_lastSpeechStoppedMs, 전역 1개) 재사용 구조라 카드별 시작시각이 고정되지 않는 것을 근본 원인(H5)으로 확정. `_cardStartTimes`(ConcurrentDictionary) 신설로 카드 키별 최초 delta 시각 1회 캡처(StartTime 고정) + EndTime은 전진, completed 시 역참조 체크 후 제거. [STT시각]/[카드변환] 진단 로그 추가(사용자 런타임 검증용, 제거하지 않음). 신규 교훈: L-549(클래스 필드 1개 재사용 → 카드별 시각 유실, 증상≠원인 재확인). | mAIx/Services/AI/OpenAiRealtimeSttService.cs, mAIx/ViewModels/OneNoteViewModel.cs |
