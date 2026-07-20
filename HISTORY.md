@@ -2262,3 +2262,7 @@ ConfigureAwait(false)를 Service 레이어 전체에 적용하여 스레드 컨�
 ## 2026-07-16 — 원노트탭 실시간 STT 화자 시간표시 start=end 버그 수정
 
 | 2026-07-16 | 🐛 실시간 STT 화자 시간표시 start=end 버그 수정 — [병합판정] 로그 전수(10,489건) 실측으로 병합 로직 자체는 정상임을 먼저 확인(H1~H4 기각 유지) 후, 시간 계산이 클래스 필드(_lastSpeechStartedMs/_lastSpeechStoppedMs, 전역 1개) 재사용 구조라 카드별 시작시각이 고정되지 않는 것을 근본 원인(H5)으로 확정. `_cardStartTimes`(ConcurrentDictionary) 신설로 카드 키별 최초 delta 시각 1회 캡처(StartTime 고정) + EndTime은 전진, completed 시 역참조 체크 후 제거. [STT시각]/[카드변환] 진단 로그 추가(사용자 런타임 검증용, 제거하지 않음). 신규 교훈: L-549(클래스 필드 1개 재사용 → 카드별 시각 유실, 증상≠원인 재확인). | mAIx/Services/AI/OpenAiRealtimeSttService.cs, mAIx/ViewModels/OneNoteViewModel.cs |
+
+## 2026-07-20 — 원노트탭 실시간 STT 카드 분리+시간표시 근본원인 2건 수정
+
+| 2026-07-20 | 🐛 실시간 STT 카드 분리+시간표시 근본원인 수정 — (A) 병합판정 gap을 벽시계 delta 도착 간격(now-_lastDeltaAt)에서 오디오 타임라인 기준 `_lastTurnSilenceSec`(audio_start_ms/audio_end_ms, speech_started 핸들러 계산)로 교체 — 서버 committed→STT변환→delta스트리밍 왕복 지연(~2~2.5초)이 벽시계 gap에 섞여 끊김없는 발화가 새 카드로 오분리되던 문제 해결. (B) 카드 종료시각(end)이 전역 `_lastSpeechStoppedMs`를 읽어 새 카드 직후 직전 카드 종료값을 반환하며 start>end 음수 지속시간이 나던 문제를, 카드별 `_cardEndTimes`(ConcurrentDictionary) 신설 + Math.Max 단조증가·하한 보정으로 해결. [카드변환-수신] 진단 로그 추가(제거하지 않음). oplan의 "로그 채널 경합으로 [카드변환] 0건" 진단은 odev 실측 결과 오진으로 확인(파일 경로 오판정). 신규 교훈: L-550(병합판정 오디오 타임라인 기준), L-551(로그 0건 진단 시 경로 우선 확정). | mAIx/Services/AI/OpenAiRealtimeSttService.cs, mAIx/ViewModels/OneNoteViewModel.cs |

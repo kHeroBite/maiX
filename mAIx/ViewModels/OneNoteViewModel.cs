@@ -3412,6 +3412,7 @@ public partial class OneNoteViewModel : ViewModelBase
                 }
                 if (existing != null)
                 {
+                    Log4.Info($"[카드변환-수신] itemId={itemId} 기존키목록=[{string.Join(",", LiveSTTSegments.Select(s => s.ItemId))}] 매칭=교체");
                     Log4.Info($"[카드변환] itemId={itemId} 매칭=교체 count={LiveSTTSegments.Count} startTime={startTime} endTime={endTime} anchorStart={existing.StartTime} anchorEnd={anchorEndTime}");
                     existing.Text = text;
                     existing.EndTime = anchorEndTime;
@@ -3429,6 +3430,7 @@ public partial class OneNoteViewModel : ViewModelBase
                 else
                 {
                     var anchorStartTime = recordingDuration > TimeSpan.Zero ? recordingDuration : startTime;
+                    Log4.Info($"[카드변환-수신] itemId={itemId} 기존키목록=[{string.Join(",", LiveSTTSegments.Select(s => s.ItemId))}] 매칭=신규Add");
                     Log4.Info($"[카드변환] itemId={itemId} 매칭=신규Add count={LiveSTTSegments.Count} startTime={startTime} endTime={endTime} anchorStart={anchorStartTime} anchorEnd={anchorEndTime}");
                     LiveSTTSegments.Add(new Models.TranscriptSegment
                     {

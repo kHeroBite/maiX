@@ -75,6 +75,9 @@ public sealed class OpenAiRealtimeSttService : IOpenAiRealtimeSttService
     private const int MaxReconnectAttempts = 3;
     private double _lastSpeechStartedMs = 0;
     private double _lastSpeechStoppedMs = 0;
+    // 3.1: 오디오 타임라인 기준 턴 간 무음(초) — speech_started 시점에 갱신, [병합판정] gap 대체용.
+    // double.MaxValue = 최초 발화(직전 speech_stopped 없음) → 항상 새 카드 판정.
+    private double _lastTurnSilenceSec = double.MaxValue;
     private DateTime? _silenceStartedAt = null;
     private double _lastSilenceMarkerSec = 0;
     private Task? _silenceMonitorTask = null;
@@ -123,6 +126,11 @@ public sealed class OpenAiRealtimeSttService : IOpenAiRealtimeSttService
     // _lastSpeechStartedMs/_lastSpeechStoppedMs는 클래스 필드 1개뿐이라 서버 VAD 이벤트마다 덮어써져
     // 카드별 시작시각을 못박지 못했다. 새 카드 생성 시점에 1회만 기록하고, completed 시 제거한다.
     private readonly System.Collections.Concurrent.ConcurrentDictionary<string, double> _cardStartTimes = new();
+    // 카드 키별 "최신 종료시각"(ms) — start>end 음수 지속시간 버그 수정용(3.0).
+    // _lastSpeechStoppedMs 전역 필드를 그대로 읽으면 새 카드 시작 직후 아직 이번 턴의
+    // speech_stopped가 도착하지 않아 직전 카드(이전 발화 턴)의 종료값을 그대로 반환한다.
+    // 카드 키로 스코프를 격리하고, 매 delta마다 Math.Max(start, candidate)로 하한 보정하여 갱신한다.
+    private readonly System.Collections.Concurrent.ConcurrentDictionary<string, double> _cardEndTimes = new();
 
     // 스트리밍 미활성 조기 감지 — session.updated 수신 시각 기록
     private DateTime? _sessionUpdatedAt = null;
@@ -665,6 +673,7 @@ public sealed class OpenAiRealtimeSttService : IOpenAiRealtimeSttService
                 _lastDeltaAt = DateTime.MinValue;
                 _itemIdToCardKey.Clear();
                 _cardAccumTexts.Clear();
+                _cardEndTimes.Clear();
 
                 // messageBuffer 초기화 후 내부 루프 재진입
                 messageBuffer.Clear();
@@ -720,10 +729,14 @@ public sealed class OpenAiRealtimeSttService : IOpenAiRealtimeSttService
                 // 옵션 C: itemId는 delta 도착 시 N초 침묵 기반으로 결정 (speech_started에서 변경 안 함)
                 _log.Info($"[OpenAi-Realtime] speech_started — audio_start_ms={startMs}");
 
+                // 3.1: 오디오 타임라인 기준 무음(턴 간 실제 무음) — [병합판정] gap의 벽시계 대체용으로 저장.
+                // 최초 발화(_lastSpeechStoppedMs==0)는 무조건 새 카드로 처리하도록 double.MaxValue 유지.
+                _lastTurnSilenceSec = _lastSpeechStoppedMs > 0 ? (startMs - _lastSpeechStoppedMs) / 1000.0 : double.MaxValue;
+
                 // 묵음 구간 표시: 직전 speech_stopped 이후 시간 차이가 10초 이상이면 발화
                 if (_lastSpeechStoppedMs > 0)
                 {
-                    var silenceSec = (startMs - _lastSpeechStoppedMs) / 1000.0;
+                    var silenceSec = _lastTurnSilenceSec;
                     if (silenceSec >= 10.0)
                     {
                         var ts = TimeSpan.FromMilliseconds(_lastSpeechStoppedMs);
@@ -758,14 +771,18 @@ public sealed class OpenAiRealtimeSttService : IOpenAiRealtimeSttService
                         // _deltaBuffers는 completed 이벤트 매칭용 — OpenAI item_id 키 그대로 유지 (회귀 방지).
                         var accum = _deltaBuffers.AddOrUpdate(openAiItemId, deltaText, (_, prev) => prev + deltaText);
 
-                        // 2계층 VAD 카드 병합 판정: delta 도착 간격(gap)이 임계 미만이면 기존 카드 키 유지, 이상이면 새 카드 키 생성.
+                        // 2계층 VAD 카드 병합 판정(3.1): 오디오 타임라인 기준 턴 간 무음(_lastTurnSilenceSec)이 임계
+                        // 미만이면 기존 카드 키 유지, 이상이면 새 카드 키 생성. 벽시계 gap(_lastDeltaAt 간격)은
+                        // OpenAI 서버 committed→STT변환→delta스트리밍 왕복 지연(~2~2.5초)이 섞여 실제 무음이
+                        // 아닌데도 새카드생성으로 오판정하므로 참고 로그로만 남기고 판정 기준에서 제외한다.
                         var now = DateTime.Now;
                         var threshold = Math.Max(_settings.OaiRecording.CardMergeSilenceThresholdSec, MinCardMergeSilenceThresholdSec);
                         var gap = _lastDeltaAt == DateTime.MinValue ? double.MaxValue : (now - _lastDeltaAt).TotalSeconds;
+                        var turnSilence = _lastTurnSilenceSec;
                         // 같은 openAiItemId가 이어지는 delta(정상 진행 중인 발화)는 항상 병합 — 카드 분할 판정은
-                        // "새 openAiItemId가 등장했을 때"만 침묵 갭 기준으로 결정한다.
+                        // "새 openAiItemId가 등장했을 때"만 오디오 타임라인 무음 기준으로 결정한다.
                         bool sameItem = _itemIdToCardKey.ContainsKey(openAiItemId);
-                        bool merged = sameItem || (_currentSpeechItemId != null && gap < threshold);
+                        bool merged = sameItem || (_currentSpeechItemId != null && turnSilence < threshold);
                         if (!merged)
                         {
                             _currentSpeechItemId = $"card_{now.Ticks}";
@@ -776,7 +793,7 @@ public sealed class OpenAiRealtimeSttService : IOpenAiRealtimeSttService
                         // 카드별 시작시각 최초 1회 고정 캡처(H5 수정) — 이미 있으면 덮어쓰지 않음
                         _cardStartTimes.TryAdd(cardKey, _lastSpeechStartedMs);
 
-                        _log.Info($"[병합판정] gap={(gap == double.MaxValue ? -1 : gap):F2}s 임계={threshold:F2}s → {(merged ? "기존카드유지" : "새카드생성")} cardKey={cardKey}");
+                        _log.Info($"[병합판정] turnSilence={(turnSilence == double.MaxValue ? -1 : turnSilence):F2}s(오디오) gap={(gap == double.MaxValue ? -1 : gap):F2}s(벽시계참고) 임계={threshold:F2}s → {(merged ? "기존카드유지" : "새카드생성")} cardKey={cardKey}");
 
                         // 카드 키 기준 누적 텍스트: 같은 item_id의 재-delta는 이번 item의 전체 accum으로 교체,
                         // 새 item_id가 기존 카드에 병합되는 경우에만 기존 카드 누적 뒤에 이어붙임.
@@ -800,9 +817,19 @@ public sealed class OpenAiRealtimeSttService : IOpenAiRealtimeSttService
                         }
 
                         // H5 수정: StartTime은 카드별 고정 시작시각(_cardStartTimes), EndTime은 현재 시점 값으로 전진
+                        // 3.0 수정: end는 전역 _lastSpeechStoppedMs를 그대로 쓰지 않는다 — 새 카드 시작 직후
+                        // 아직 이번 턴의 speech_stopped가 도착하지 않은 시점엔 직전 카드(이전 발화 턴)의
+                        // 종료값을 그대로 반환해 end<start(음수 지속시간)가 발생한다. 카드 키로 스코프
+                        // 격리한 _cardEndTimes에 Math.Max(start, candidate) 하한 보정 후 기록한다.
+                        // 카드별 end는 해당 카드 내에서만 단조 전진(과거로 되돌아가지 않음) — 다른 카드의
+                        // _lastSpeechStoppedMs 잔존값이 섞여도 기존 _cardEndTimes[cardKey]보다 과거면 무시.
                         var cardStartMs = _cardStartTimes.TryGetValue(cardKey, out var csm) ? csm : _lastSpeechStartedMs;
+                        var candidateEndMs = _lastSpeechStoppedMs > 0 ? _lastSpeechStoppedMs : _lastSpeechStartedMs;
+                        var cardEndMs = Math.Max(cardStartMs,
+                            _cardEndTimes.TryGetValue(cardKey, out var prevEndMs) ? Math.Max(prevEndMs, candidateEndMs) : candidateEndMs);
+                        _cardEndTimes[cardKey] = cardEndMs;
                         var ts = TimeSpan.FromMilliseconds(cardStartMs);
-                        var tsEnd = TimeSpan.FromMilliseconds(_lastSpeechStoppedMs > 0 ? _lastSpeechStoppedMs : _lastSpeechStartedMs);
+                        var tsEnd = TimeSpan.FromMilliseconds(cardEndMs);
                         _log.Info($"[OpenAi-Realtime] delta — text='{deltaText}' openAiItemId={openAiItemId} cardKey={cardKey} accum_len={accum.Length}");
                         _log.Info($"[STT시각] cardKey={cardKey} itemId={openAiItemId} evt=delta start={ts} end={tsEnd} rawStartMs={_lastSpeechStartedMs} rawStopMs={_lastSpeechStoppedMs} cardStartMs={cardStartMs}");
                         TranscriptSegmentUpdated?.Invoke(cardKey, ts, tsEnd, cardAccum);
@@ -879,10 +906,14 @@ public sealed class OpenAiRealtimeSttService : IOpenAiRealtimeSttService
                         return;
                     }
                     // H5 수정: completed 시점도 카드별 고정 시작시각(_cardStartTimes)을 우선 사용
+                    // 3.0 수정: end도 delta 처리부와 동일하게 카드별 _cardEndTimes + Math.Max 하한 보정 사용.
                     var completedCardKeyForTs = _itemIdToCardKey.TryGetValue(itemId, out var ckForTs) ? ckForTs : itemId;
                     var completedCardStartMs = _cardStartTimes.TryGetValue(completedCardKeyForTs, out var ccsm) ? ccsm : _lastSpeechStartedMs;
+                    var completedCandidateEndMs = _lastSpeechStoppedMs > 0 ? _lastSpeechStoppedMs : _lastSpeechStartedMs;
+                    var completedCardEndMs = Math.Max(completedCardStartMs,
+                        _cardEndTimes.TryGetValue(completedCardKeyForTs, out var ceEnd) ? Math.Max(ceEnd, completedCandidateEndMs) : completedCandidateEndMs);
                     var ts = TimeSpan.FromMilliseconds(completedCardStartMs);
-                    var tsEnd = TimeSpan.FromMilliseconds(_lastSpeechStoppedMs > 0 ? _lastSpeechStoppedMs : _lastSpeechStartedMs);
+                    var tsEnd = TimeSpan.FromMilliseconds(completedCardEndMs);
                     _log.Info($"[STT시각] cardKey={completedCardKeyForTs} itemId={itemId} evt=completed start={ts} end={tsEnd} rawStartMs={_lastSpeechStartedMs} rawStopMs={_lastSpeechStoppedMs} cardStartMs={completedCardStartMs}");
                     // delta가 도착했으면 LiveSTT UI는 Updated로 final 교체 — 병합 카드 키로 발행(2계층 VAD 카드 병합).
                     // itemId → 카드 키 매핑이 없으면(delta 없이 바로 completed) itemId 자체를 카드 키로 사용.
@@ -901,6 +932,7 @@ public sealed class OpenAiRealtimeSttService : IOpenAiRealtimeSttService
                     if (!_itemIdToCardKey.Values.Contains(completedCardKeyForTs))
                     {
                         _cardStartTimes.TryRemove(completedCardKeyForTs, out _);
+                        _cardEndTimes.TryRemove(completedCardKeyForTs, out _);
                     }
                     _completedCount++;
                     _log.Info($"[OpenAi-Realtime] transcription.completed — text={text.Substring(0, Math.Min(50, text.Length))}");

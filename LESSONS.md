@@ -2986,6 +2986,27 @@ viewModel.PropertyChanged += OnViewModelPropertyChanged_ForMindMap;  // 재등�
 - **해결**: `ConcurrentDictionary<string,double> _cardStartTimes` 신설 — 카드 키별 최초 delta 도착 시각 1회만 캡처(TryAdd)해 StartTime 고정, EndTime은 매 delta/completed 시점 값으로 계속 전진. completed 시 다른 item이 더 이상 해당 cardKey를 참조하지 않을 때만(`_itemIdToCardKey.Values.Contains` 역참조 체크) `_cardStartTimes`에서 제거해 메모리 누수 방지.
 - **교훈**: 이벤트 기반 시각 계산에서 "클래스 필드 1개 = 전역 상태 재사용"은 다중 세그먼트/카드 단위 로직에서 항상 유실 위험 신호 — 설계 시 카드/세션 단위 dictionary 우선 검토.
 - **심각도**: 중간 (사용자 체감 버그 — UI 시간표시 오인 유발)
+
+## L-550: 병합판정 gap은 벽시계 delta 도착 간격이 아닌 오디오 타임라인 기준이어야 함 (2026-07-20)
+
+- **문제**: 원노트탭 실시간 STT에서 끊김없이 말해도 카드가 계속 분리됨(서버VAD 100ms만 적용, 클라이언트 VAD 2초 병합 미작동 증상).
+- **근본원인**: `[병합판정]` 로직이 `gap = now - _lastDeltaAt`(벽시계 delta 도착 간격)을 침묵 판정 기준으로 사용했는데, 여기에 실제 오디오 무음이 아니라 OpenAI 서버의 committed→STT변환→delta스트리밍 처리 왕복 지연(~2~2.5초)이 섞여 들어감. nlog 실측: `speech_stopped(audio_end_ms=29248)`→`speech_started(audio_start_ms=29556)` 실제무음 308ms인데 `[병합판정] gap=2.53s`로 오판정하여 끊김없는 발화가 새 카드로 분리됨.
+- **해결**: 병합판정 기준을 벽시계 gap → `_lastTurnSilenceSec`(오디오 타임라인 `audio_start_ms`/`audio_end_ms` 기반, `speech_started` 핸들러에서 계산)로 교체. 벽시계 gap은 참고 로그로만 유지.
+- **교훈**: 실시간 스트리밍 파이프라인에서 "이벤트 도착 간격(벽시계)"과 "실제 소스 타임라인 간격(오디오/데이터)"은 서버 처리 지연만큼 괴리가 생긴다 — 병합/분할 판정 등 시간 임계값 로직은 반드시 소스 타임라인 필드를 기준으로 삼아야 하며, 벽시계 delta는 참고용으로만 남긴다.
+- **심각도**: 중간 (사용자 체감 핵심 버그 — 카드 분리 오작동)
+- **Level**: 2 (신규 규칙 — 실시간 스트리밍 시간 판정은 소스 타임라인 기준 원칙)
+- **연관**: L-549
+- **대화ID**: conv_178451224854
+
+## L-551: 로그 "0건" 진단 시 올바른 로그 파일 경로(APPDATA vs 프로젝트 상대경로) 우선 확정 필요 (2026-07-20)
+
+- **문제**: oplan이 "log4net/Serilog 동일파일 경합으로 [카드변환] 0건"이라 진단했으나, odev 실측 결과 오진이었음.
+- **근본원인**: log4net 파일(`%APPDATA%\MaiX\logs\20260720.log`)과 Serilog 파일(`mAIx-20260720.log`)은 이미 파일명이 분리돼 있었고, `[카드변환]` 로그는 log4net 파일에 7927건 정상 기록 중이었음. oplan이 잘못된(경로가 다른) 파일만 확인하여 "0건"으로 오판정.
+- **교훈**: 로그 "0건" 진단 시 반드시 올바른 로그 파일 경로부터 먼저 확정하라(APPDATA 절대경로 vs 프로젝트 상대경로, log4net vs Serilog 채널 분리 여부). 파일 경로를 틀리고 "0건"이라 결론 내리는 것은 채널 오진의 대표 패턴 — L-406/L-408(로그 채널 오진) 계열 보강.
+- **심각도**: 낮음 (oplan 단계 오진 — odev 실측으로 정정됨, 실제 코드 결함 아님)
+- **Level**: 1 (기존 L-406/L-408 원칙 재확인)
+- **연관**: L-406, L-408
+- **대화ID**: conv_178451224854
 - **Level**: 1 (기존 L-446/L-530 "증상≠원인" 원칙 재확인 — 신규 규칙 불필요, 사례 축적)
 - **연관**: L-446, L-530
 - **수정 파일**: `mAIx/Services/AI/OpenAiRealtimeSttService.cs`, `mAIx/ViewModels/OneNoteViewModel.cs` (진단 로그 [STT시각]/[카드변환] 추가 — 사용자 런타임 검증용, 제거하지 않음)
