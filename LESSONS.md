@@ -2998,6 +2998,29 @@ viewModel.PropertyChanged += OnViewModelPropertyChanged_ForMindMap;  // 재등�
 - **연관**: L-549
 - **대화ID**: conv_178451224854
 
+## L-552: 카드 단위 누적은 "현재 itemId accum 대입"이 아닌 "카드 base + 현재 item accum" 재구성 필수 (2026-07-20)
+
+- **문제**: 직전 커밋(ad1c8e45)으로 카드 분리는 해결됐으나, 2초 이내 연속발화가 기존 카드에 append(누적)되지 않고
+  마지막 조각으로 덮어써지는 재발 버그.
+- **근본원인 (H8a, 로그+코드 확정)**: `OpenAiRealtimeSttService.cs` delta 처리부에서 같은 `openAiItemId`로
+  재-delta가 올 때(`sameItem=true`) `cardAccum = accum`(현재 itemId만의 누적)을 그대로 대입 → 직전에 병합된
+  이전 itemId들의 텍스트가 통째로 소실. `merged`(새 itemId 병합) 분기만 `이전카드누적+accum`으로 정상 이어붙임 —
+  `sameItem` 분기가 누락되어 있었음.
+- **해결**: `_cardBaseTexts`(ConcurrentDictionary) 신설 — 카드에 이미 병합된 이전 itemId들의 고정 텍스트를
+  스냅샷 보관. `sameItem` 분기도 `cardAccum = baseText + accum`으로 재구성. `merged` 분기는 병합 시점에
+  `_cardBaseTexts[cardKey] = prevCardAccum`으로 base를 스냅샷. completed 시 `_cardAccumTexts`와 함께
+  `_cardBaseTexts`도 TryRemove.
+- **교훈**: 여러 발화 턴(itemId)을 하나의 카드로 병합할 때, 텍스트 누적은 "itemId 단위 accum"이 아니라
+  "카드 단위 base(이전 병합분 스냅샷) + 현재 item accum"으로 항상 재구성해야 한다. 같은 itemId 재-delta 시
+  현재 item accum만 대입하면 이전 병합 텍스트가 소실된다 — 병합 판정(merged) 로직이 정상이어도 병합 이후의
+  누적 계산 분기(sameItem)를 별도로 검증해야 함.
+- **심각도**: 중간 (핵심 UX — 실시간 STT 카드 텍스트 소실)
+- **Level**: 2 (신규 규칙 — 카드/그룹 단위 누적은 base+current 재구성 패턴 필수)
+- **수정 파일**: `mAIx/Services/AI/OpenAiRealtimeSttService.cs` (`_cardBaseTexts` 필드 신설, sameItem/merged/새카드
+  3분기 재구성, completed 시 정리, [카드누적] 진단 로그 추가 — 사용자 런타임 검증용, 제거하지 않음)
+- **연관**: L-549, L-550, L-551 (STT 카드 병합 시리즈)
+- **대화ID**: conv_178451447925
+
 ## L-551: 로그 "0건" 진단 시 올바른 로그 파일 경로(APPDATA vs 프로젝트 상대경로) 우선 확정 필요 (2026-07-20)
 
 - **문제**: oplan이 "log4net/Serilog 동일파일 경합으로 [카드변환] 0건"이라 진단했으나, odev 실측 결과 오진이었음.

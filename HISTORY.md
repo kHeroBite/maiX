@@ -2,6 +2,14 @@
 
 > PROJECT.md 작업 이력 테이블의 상세 보완본
 
+## [2026-07-20] 실시간 STT 카드 텍스트 덮어쓰기(overwrite) 버그 수정 (O3 Fast Path)
+
+**분류**: O3 Fast Path (lesson + git)
+**범위**: `mAIx/Services/AI/OpenAiRealtimeSttService.cs` 1개 파일
+**근본원인**: 같은 openAiItemId 재-delta 시(sameItem) `cardAccum=accum`으로 카드 전체 누적을 현재 item 누적만으로
+대체하여 직전 병합된 이전 itemId 텍스트가 소실되는 버그(H8a). `_cardBaseTexts` 신설로 "카드 base(이전 병합분
+스냅샷) + 현재 item accum" 재구성 방식으로 교정. 상세: LESSONS.md L-552 참조.
+
 ## [2026-06-23] TeamCreate 제거 대응 — ok 자동 팀명(session-{uuid8}) 강제 + hook 안내 메시지 교정 (O3 Fast Path)
 
 **분류**: O3 Fast Path (lesson + docs + git)
