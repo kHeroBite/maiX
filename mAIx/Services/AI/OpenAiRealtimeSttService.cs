@@ -122,9 +122,11 @@ public sealed class OpenAiRealtimeSttService : IOpenAiRealtimeSttService
     private readonly System.Collections.Concurrent.ConcurrentDictionary<string, string> _itemIdToCardKey = new();
     // 카드 키별 누적 텍스트 (같은 카드 키에 속한 여러 OpenAI item의 델타 텍스트를 이어붙인 누적)
     private readonly System.Collections.Concurrent.ConcurrentDictionary<string, string> _cardAccumTexts = new();
-    // 카드 키별 base 텍스트 — "이전에 병합된 itemId들의 고정 누적 텍스트"(현재 활성 itemId의 accum 제외).
-    // sameItem(같은 itemId 재-delta)일 때 base+accum으로 cardAccum을 재구성하여 이전 병합분 소실을 방지한다(H8a 수정).
-    private readonly System.Collections.Concurrent.ConcurrentDictionary<string, string> _cardBaseTexts = new();
+    // 카드 키별 itemId 등장순 리스트 — 다중 item 인터리브를 순서보존하여 표현(단일 base 모델 결함 근본수정).
+    // 각 item의 텍스트는 진행중이면 _deltaBuffers[itemId], 완료되면 _cardItemFinalTexts[itemId]에서 조회.
+    private readonly System.Collections.Concurrent.ConcurrentDictionary<string, System.Collections.Generic.List<string>> _cardItemOrder = new();
+    // itemId → 완료 확정 텍스트 (completed 수신 후에는 _deltaBuffers에서 제거되므로 별도 보관).
+    private readonly System.Collections.Concurrent.ConcurrentDictionary<string, string> _cardItemFinalTexts = new();
     // 카드 키별 "최초 delta 도착 시각"(ms) 고정 캡처 — StartTime=EndTime 표시 버그 수정용(H5).
     // _lastSpeechStartedMs/_lastSpeechStoppedMs는 클래스 필드 1개뿐이라 서버 VAD 이벤트마다 덮어써져
     // 카드별 시작시각을 못박지 못했다. 새 카드 생성 시점에 1회만 기록하고, completed 시 제거한다.
@@ -676,7 +678,8 @@ public sealed class OpenAiRealtimeSttService : IOpenAiRealtimeSttService
                 _lastDeltaAt = DateTime.MinValue;
                 _itemIdToCardKey.Clear();
                 _cardAccumTexts.Clear();
-                _cardBaseTexts.Clear();
+                _cardItemOrder.Clear();        // 추가 — 재연결 후 이전 세션 인터리브 잔존 방지
+                _cardItemFinalTexts.Clear();   // 추가
                 _cardEndTimes.Clear();
 
                 // messageBuffer 초기화 후 내부 루프 재진입
@@ -693,6 +696,23 @@ public sealed class OpenAiRealtimeSttService : IOpenAiRealtimeSttService
 
         exitLoop:
         _log.Info("[RealtimeSTT] 수신 루프 종료");
+    }
+
+    // 카드의 현재 전체 텍스트 = 등장순 itemId별 (완료확정텍스트 우선, 없으면 진행중 delta버퍼) join.
+    // 다중 item 인터리브 시 중복/진동/순서뒤섞임을 방지하는 근본 수정(단일 base 모델 폐기).
+    private string RebuildCardText(string cardKey)
+    {
+        if (!_cardItemOrder.TryGetValue(cardKey, out var order)) return string.Empty;
+        var sb = new System.Text.StringBuilder();
+        List<string> snapshot;
+        lock (order) { snapshot = new List<string>(order); }   // 인터리브 동시성 보호 — 스냅샷 후 lock 밖에서 join
+        foreach (var iid in snapshot)
+        {
+            var part = _cardItemFinalTexts.TryGetValue(iid, out var ft) ? ft
+                     : (_deltaBuffers.TryGetValue(iid, out var db) ? db : string.Empty);
+            sb.Append(part);
+        }
+        return sb.ToString();
     }
 
     private void ProcessMessage(string json)
@@ -799,31 +819,13 @@ public sealed class OpenAiRealtimeSttService : IOpenAiRealtimeSttService
 
                         _log.Info($"[병합판정] turnSilence={(turnSilence == double.MaxValue ? -1 : turnSilence):F2}s(오디오) gap={(gap == double.MaxValue ? -1 : gap):F2}s(벽시계참고) 임계={threshold:F2}s → {(merged ? "기존카드유지" : "새카드생성")} cardKey={cardKey}");
 
-                        // 카드 키 기준 누적 텍스트: 같은 item_id의 재-delta는 카드 base(이전 병합 itemId들의
-                        // 고정 텍스트) + 현재 item accum으로 재구성, 새 item_id가 기존 카드에 병합될 때는
-                        // 직전까지의 카드 누적 전체를 base로 스냅샷한 뒤 이어붙임(H8a 수정 — 기존엔 sameItem일 때
-                        // cardAccum=accum으로 대입되어 이전 병합분이 통째로 소실되는 덮어쓰기 버그가 있었음).
-                        string cardAccum;
-                        if (sameItem)
-                        {
-                            var baseText = _cardBaseTexts.TryGetValue(cardKey, out var bt0) ? bt0 : string.Empty;
-                            cardAccum = baseText + accum;
-                            _cardAccumTexts[cardKey] = cardAccum;
-                        }
-                        else if (merged)
-                        {
-                            var prevCardAccum = _cardAccumTexts.TryGetValue(cardKey, out var pv2) ? pv2 : string.Empty;
-                            _cardBaseTexts[cardKey] = prevCardAccum;
-                            cardAccum = prevCardAccum + accum;
-                            _cardAccumTexts[cardKey] = cardAccum;
-                        }
-                        else
-                        {
-                            _cardBaseTexts[cardKey] = string.Empty;
-                            cardAccum = accum;
-                            _cardAccumTexts[cardKey] = cardAccum;
-                        }
-                        _log.Info($"[카드누적] cardKey={cardKey} openAiItemId={openAiItemId} sameItem={sameItem} merged={merged} baseLen={(_cardBaseTexts.TryGetValue(cardKey, out var blog) ? blog.Length : 0)} deltaAccumLen={accum.Length} cardAccumLen={cardAccum.Length}");
+                        // 카드 키 기준 순서보존 재조립: 이 item을 카드의 등장순 리스트에 (최초 1회) 추가한 뒤
+                        // 카드 전체를 등장순으로 재조립하여 발행한다(단일 base 모델의 중복/진동/순서뒤섞임 근본수정).
+                        var order = _cardItemOrder.GetOrAdd(cardKey, _ => new List<string>());
+                        lock (order) { if (!order.Contains(openAiItemId)) order.Add(openAiItemId); }
+                        var cardAccum = RebuildCardText(cardKey);   // _deltaBuffers[openAiItemId]는 위에서 이미 accum 반영됨
+                        _cardAccumTexts[cardKey] = cardAccum;
+                        _log.Info($"[카드누적] cardKey={cardKey} openAiItemId={openAiItemId} sameItem={sameItem} merged={merged} itemCount={order.Count} deltaAccumLen={accum.Length} cardAccumLen={cardAccum.Length}");
 
                         // H5 수정: StartTime은 카드별 고정 시작시각(_cardStartTimes), EndTime은 현재 시점 값으로 전진
                         // 3.0 수정: end는 전역 _lastSpeechStoppedMs를 그대로 쓰지 않는다 — 새 카드 시작 직후
@@ -929,11 +931,12 @@ public sealed class OpenAiRealtimeSttService : IOpenAiRealtimeSttService
                     if (_deltaBuffers.ContainsKey(itemId))
                     {
                         var completedCardKey = completedCardKeyForTs;
-                        // 병합 카드 최종 텍스트 = 이전 병합분(base) + 이번 item 전체 전사(text) — overwrite 버그 수정
-                        var baseText = _cardBaseTexts.TryGetValue(completedCardKey, out var bt) ? bt : string.Empty;
-                        var cardFinal = baseText + text;
-                        // 이번 item을 base에 확정 편입 — 다음 병합 item이 이 텍스트를 이어받도록
-                        _cardBaseTexts[completedCardKey] = cardFinal;
+                        // 이 item의 확정 전사(text)를 등장순 위치에 반영(완료 후 _deltaBuffers 제거돼도 유지되도록 별도 맵).
+                        _cardItemFinalTexts[itemId] = text;
+                        // item이 아직 순서리스트에 없으면(=delta 없이 바로 completed 진입 경계) 추가.
+                        var completedOrder = _cardItemOrder.GetOrAdd(completedCardKey, _ => new List<string>());
+                        lock (completedOrder) { if (!completedOrder.Contains(itemId)) completedOrder.Add(itemId); }
+                        var cardFinal = RebuildCardText(completedCardKey);   // 등장순 전체 재조립(중복/순서뒤섞임 제거)
                         _cardAccumTexts[completedCardKey] = cardFinal;
                         TranscriptSegmentUpdated?.Invoke(completedCardKey, ts, tsEnd, cardFinal);
                     }
@@ -948,7 +951,11 @@ public sealed class OpenAiRealtimeSttService : IOpenAiRealtimeSttService
                         _cardStartTimes.TryRemove(completedCardKeyForTs, out _);
                         _cardEndTimes.TryRemove(completedCardKeyForTs, out _);
                         _cardAccumTexts.TryRemove(completedCardKeyForTs, out _);
-                        _cardBaseTexts.TryRemove(completedCardKeyForTs, out _);
+                        // 카드 완전종료 → 순서리스트 + 그 카드에 속한 item들의 확정텍스트도 정리.
+                        if (_cardItemOrder.TryRemove(completedCardKeyForTs, out var doneOrder))
+                        {
+                            lock (doneOrder) { foreach (var iid in doneOrder) _cardItemFinalTexts.TryRemove(iid, out _); }
+                        }
                     }
                     _completedCount++;
                     _log.Info($"[OpenAi-Realtime] transcription.completed — text={text.Substring(0, Math.Min(50, text.Length))}");

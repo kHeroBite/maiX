@@ -2,6 +2,16 @@
 
 > PROJECT.md 작업 이력 테이블의 상세 보완본
 
+## [2026-07-21] 서버VAD STT 카드 인터리브 근본수정 — item별 순서보존 누적 모델 교체 (O3 Fast Path)
+
+**분류**: O3 Fast Path (lesson + git)
+**범위**: `mAIx/Services/AI/OpenAiRealtimeSttService.cs` 1개 파일
+**근본원인**: 서버VAD 모드에서 한 카드에 다중 OpenAI item이 인터리브되는데, 카드당 단일 문자열(`_cardBaseTexts`)
+모델로는 이를 표현 불가 — base+accum 이어붙이기는 특정 인터리브 패턴에서 진동/중복 재발. `_cardItemOrder`(등장순
+itemId 리스트) + `_cardItemFinalTexts`(item별 확정텍스트) + `RebuildCardText()`(등장순 재조립)로 데이터모델 교체.
+082f63e4/89e2998c는 최종합침 개선에 그쳐 3번째 수정에서야 근본해결. 상세: LESSONS.md L-545 참조.
+**런타임검증**: 자동검증 PASS, 런타임 발화검증(진행중진동/최종순서/reconnect/auto-split)은 사용자 재기동 테스트 대기.
+
 ## [2026-07-20] 실시간 STT 카드 텍스트 덮어쓰기(overwrite) 버그 수정 (O3 Fast Path)
 
 **분류**: O3 Fast Path (lesson + git)
