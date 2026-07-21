@@ -12009,54 +12009,64 @@ public partial class MainWindow : FluentWindow
             // 분기 3: 섹션이 선택됨 → 새 페이지 생성
             else
             {
-                var inputTextBox = new Wpf.Ui.Controls.TextBox
-                {
-                    PlaceholderText = "페이지 제목 입력",
-                    MinWidth = 280
-                };
-
-                var contentPanel = new StackPanel();
-                contentPanel.Children.Add(new System.Windows.Controls.TextBlock { Text = "새 페이지 제목을 입력하세요.", Margin = new Thickness(0, 0, 0, 8) });
-                contentPanel.Children.Add(inputTextBox);
-
-                var dialog = new Wpf.Ui.Controls.MessageBox
-                {
-                    Title = "새 페이지",
-                    Content = contentPanel,
-                    PrimaryButtonText = "만들기",
-                    CloseButtonText = "취소"
-                };
-
-                // 다이얼로그 표시 후 TextBox에 자동 포커스
-                dialog.Loaded += (_, _) => inputTextBox.Focus();
-
-                var result = await dialog.ShowDialogAsync();
-                if (result == Wpf.Ui.Controls.MessageBoxResult.Primary)
-                {
-                    var pageTitle = inputTextBox.Text?.Trim();
-                    if (!string.IsNullOrEmpty(pageTitle))
-                    {
-                        // 즐겨찾기에서 선택된 섹션 ID 미리 캡처 (CreatePageAsync 후 갱신에 사용)
-                        var selectedSectionId = _oneNoteViewModel.SelectedSection?.Id;
-
-                        await _oneNoteViewModel.CreatePageAsync(pageTitle);
-
-                        // 즐겨찾기 목록 실시간 갱신 — SelectedSection.Id로 FavoritePages에서 섹션 항목 탐색
-                        if (_oneNoteViewModel.SelectedPage != null && !string.IsNullOrEmpty(selectedSectionId))
-                        {
-                            AddPageToFavoriteSectionChildren(selectedSectionId, _oneNoteViewModel.SelectedPage);
-                        }
-
-                        // 생성된 페이지 자동 열기
-                        if (_oneNoteViewModel.SelectedPage != null)
-                            await LoadOneNotePageAsync(_oneNoteViewModel.SelectedPage);
-                    }
-                }
+                await CreateNewPageInSelectedSectionAsync();
             }
         }
         catch (Exception ex)
         {
             Serilog.Log.Error(ex, "[MainWindow] OneNoteNewNotebookButton_Click 실패");
+        }
+    }
+
+    /// <summary>
+    /// 선택된 섹션에 새 페이지 생성 (제목 입력 다이얼로그 → 생성 → 즐겨찾기 갱신 → 자동 오픈)
+    /// </summary>
+    private async Task CreateNewPageInSelectedSectionAsync()
+    {
+        if (_oneNoteViewModel?.SelectedSection == null) return;
+
+        var inputTextBox = new Wpf.Ui.Controls.TextBox
+        {
+            PlaceholderText = "페이지 제목 입력",
+            MinWidth = 280
+        };
+
+        var contentPanel = new StackPanel();
+        contentPanel.Children.Add(new System.Windows.Controls.TextBlock { Text = "새 페이지 제목을 입력하세요.", Margin = new Thickness(0, 0, 0, 8) });
+        contentPanel.Children.Add(inputTextBox);
+
+        var dialog = new Wpf.Ui.Controls.MessageBox
+        {
+            Title = "새 페이지",
+            Content = contentPanel,
+            PrimaryButtonText = "만들기",
+            CloseButtonText = "취소"
+        };
+
+        // 다이얼로그 표시 후 TextBox에 자동 포커스
+        dialog.Loaded += (_, _) => inputTextBox.Focus();
+
+        var result = await dialog.ShowDialogAsync();
+        if (result == Wpf.Ui.Controls.MessageBoxResult.Primary)
+        {
+            var pageTitle = inputTextBox.Text?.Trim();
+            if (!string.IsNullOrEmpty(pageTitle))
+            {
+                // 즐겨찾기에서 선택된 섹션 ID 미리 캡처 (CreatePageAsync 후 갱신에 사용)
+                var selectedSectionId = _oneNoteViewModel.SelectedSection?.Id;
+
+                await _oneNoteViewModel.CreatePageAsync(pageTitle);
+
+                // 즐겨찾기 목록 실시간 갱신 — SelectedSection.Id로 FavoritePages에서 섹션 항목 탐색
+                if (_oneNoteViewModel.SelectedPage != null && !string.IsNullOrEmpty(selectedSectionId))
+                {
+                    AddPageToFavoriteSectionChildren(selectedSectionId, _oneNoteViewModel.SelectedPage);
+                }
+
+                // 생성된 페이지 자동 열기
+                if (_oneNoteViewModel.SelectedPage != null)
+                    await LoadOneNotePageAsync(_oneNoteViewModel.SelectedPage);
+            }
         }
     }
 
@@ -14268,21 +14278,7 @@ public partial class MainWindow : FluentWindow
                 return;
             }
 
-            // 간단한 입력 다이얼로그 (실제 구현에서는 별도 다이얼로그 필요)
-            var createDialog = new Wpf.Ui.Controls.MessageBox
-            {
-                Title = "새 페이지",
-                Content = "새 페이지를 만드시겠습니까?",
-                PrimaryButtonText = "만들기",
-                CloseButtonText = "취소"
-            };
-
-            var result = await createDialog.ShowDialogAsync();
-            if (result == Wpf.Ui.Controls.MessageBoxResult.Primary)
-            {
-                await _oneNoteViewModel.CreatePageAsync($"새 페이지 {DateTime.Now:HH:mm}");
-                await LoadOneNoteNotebooksAsync();
-            }
+            await CreateNewPageInSelectedSectionAsync();
         }
         catch (Exception ex)
         {
