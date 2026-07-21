@@ -929,9 +929,13 @@ public sealed class OpenAiRealtimeSttService : IOpenAiRealtimeSttService
                     if (_deltaBuffers.ContainsKey(itemId))
                     {
                         var completedCardKey = completedCardKeyForTs;
-                        TranscriptSegmentUpdated?.Invoke(completedCardKey, ts, tsEnd, text);
-                        _cardAccumTexts.TryRemove(completedCardKey, out _);
-                        _cardBaseTexts.TryRemove(completedCardKey, out _);
+                        // 병합 카드 최종 텍스트 = 이전 병합분(base) + 이번 item 전체 전사(text) — overwrite 버그 수정
+                        var baseText = _cardBaseTexts.TryGetValue(completedCardKey, out var bt) ? bt : string.Empty;
+                        var cardFinal = baseText + text;
+                        // 이번 item을 base에 확정 편입 — 다음 병합 item이 이 텍스트를 이어받도록
+                        _cardBaseTexts[completedCardKey] = cardFinal;
+                        _cardAccumTexts[completedCardKey] = cardFinal;
+                        TranscriptSegmentUpdated?.Invoke(completedCardKey, ts, tsEnd, cardFinal);
                     }
                     // ★ TopicExtractor/MinuteSummary 전달은 항상 Received로 한 번 더 발화 (delta 유무 무관)
                     // 이유: Updated 핸들러는 LiveSTTSegments UI만 갱신하므로 텍스트 통계 누락 방지
@@ -943,6 +947,8 @@ public sealed class OpenAiRealtimeSttService : IOpenAiRealtimeSttService
                     {
                         _cardStartTimes.TryRemove(completedCardKeyForTs, out _);
                         _cardEndTimes.TryRemove(completedCardKeyForTs, out _);
+                        _cardAccumTexts.TryRemove(completedCardKeyForTs, out _);
+                        _cardBaseTexts.TryRemove(completedCardKeyForTs, out _);
                     }
                     _completedCount++;
                     _log.Info($"[OpenAi-Realtime] transcription.completed — text={text.Substring(0, Math.Min(50, text.Length))}");
