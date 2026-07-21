@@ -956,6 +956,13 @@ public sealed class OpenAiRealtimeSttService : IOpenAiRealtimeSttService
                         {
                             lock (doneOrder) { foreach (var iid in doneOrder) _cardItemFinalTexts.TryRemove(iid, out _); }
                         }
+                        // ★ 생명주기 버그 수정: 카드가 완전종료되어 order/finalTexts를 제거했는데
+                        //   _currentSpeechItemId가 여전히 이 죽은 cardKey를 가리키면, 다음 delta가
+                        //   merged 분기(turnSilence<threshold)에서 죽은 카드를 재사용 → 빈 order로
+                        //   RebuildCardText 축소 → UI 카드 전체교체(이전대화 소실). 죽은 포인터를
+                        //   즉시 무효화하여 다음 발화가 새 카드로 시작되게 한다.
+                        if (_currentSpeechItemId == completedCardKeyForTs)
+                            _currentSpeechItemId = null;
                     }
                     _completedCount++;
                     _log.Info($"[OpenAi-Realtime] transcription.completed — text={text.Substring(0, Math.Min(50, text.Length))}");
