@@ -809,6 +809,20 @@ public sealed class OpenAiRealtimeSttService : IOpenAiRealtimeSttService
                         bool merged = sameItem || (_currentSpeechItemId != null && turnSilence < threshold);
                         if (!merged)
                         {
+                            // 진짜 새 카드 생성 — 직전 카드는 더 이상 병합 대상 아님.
+                            // completed 시점에 단계1 가드로 보존해 둔 old 카드 상태맵을 여기서 정리(누수 상한).
+                            // 단, 아직 in-flight item이 참조 중이면(_itemIdToCardKey에 값 존재) 정리하지 않는다.
+                            var oldCardKey = _currentSpeechItemId;
+                            if (oldCardKey != null && !_itemIdToCardKey.Values.Contains(oldCardKey))
+                            {
+                                _cardStartTimes.TryRemove(oldCardKey, out _);
+                                _cardEndTimes.TryRemove(oldCardKey, out _);
+                                _cardAccumTexts.TryRemove(oldCardKey, out _);
+                                if (_cardItemOrder.TryRemove(oldCardKey, out var oldOrder))
+                                {
+                                    lock (oldOrder) { foreach (var iid in oldOrder) _cardItemFinalTexts.TryRemove(iid, out _); }
+                                }
+                            }
                             _currentSpeechItemId = $"card_{now.Ticks}";
                         }
                         var cardKey = _currentSpeechItemId!;
@@ -946,7 +960,8 @@ public sealed class OpenAiRealtimeSttService : IOpenAiRealtimeSttService
                     _deltaBuffers.TryRemove(itemId, out _);
                     _itemIdToCardKey.TryRemove(itemId, out _);
                     // 카드가 완전히 종료됐는지(다른 itemId가 더 이상 이 cardKey를 참조하지 않는지) 확인 후 시작시각 정리
-                    if (!_itemIdToCardKey.Values.Contains(completedCardKeyForTs))
+                    if (!_itemIdToCardKey.Values.Contains(completedCardKeyForTs)
+                        && _currentSpeechItemId != completedCardKeyForTs)
                     {
                         _cardStartTimes.TryRemove(completedCardKeyForTs, out _);
                         _cardEndTimes.TryRemove(completedCardKeyForTs, out _);
@@ -956,13 +971,6 @@ public sealed class OpenAiRealtimeSttService : IOpenAiRealtimeSttService
                         {
                             lock (doneOrder) { foreach (var iid in doneOrder) _cardItemFinalTexts.TryRemove(iid, out _); }
                         }
-                        // ★ 생명주기 버그 수정: 카드가 완전종료되어 order/finalTexts를 제거했는데
-                        //   _currentSpeechItemId가 여전히 이 죽은 cardKey를 가리키면, 다음 delta가
-                        //   merged 분기(turnSilence<threshold)에서 죽은 카드를 재사용 → 빈 order로
-                        //   RebuildCardText 축소 → UI 카드 전체교체(이전대화 소실). 죽은 포인터를
-                        //   즉시 무효화하여 다음 발화가 새 카드로 시작되게 한다.
-                        if (_currentSpeechItemId == completedCardKeyForTs)
-                            _currentSpeechItemId = null;
                     }
                     _completedCount++;
                     _log.Info($"[OpenAi-Realtime] transcription.completed — text={text.Substring(0, Math.Min(50, text.Length))}");

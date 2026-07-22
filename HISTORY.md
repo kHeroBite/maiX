@@ -2,6 +2,14 @@
 
 > PROJECT.md 작업 이력 테이블의 상세 보완본
 
+## [2026-07-22] 서버VAD STT 카드 병합/소실 양립 수정 — 상태맵 보존+새카드 evict (O3 Fast Path)
+
+**분류**: O3 Fast Path (lesson + git)
+**범위**: `mAIx/Services/AI/OpenAiRealtimeSttService.cs` 1개 파일
+**근본원인**: b55a143b(재사용 금지)가 병합 2254건→8건 진자반전 유발 — 카드 재사용 허용하되 병합대상 카드 상태맵
+(`_cardItemOrder`/`finalTexts`) 보존 + 새 카드 생성 시에만 old evict로 양립 해결. 상세: LESSONS.md L-553 참조.
+**런타임검증**: 빌드/재기동/코드정합성 PASS, 양방향 런타임(병합회복+소실무재발)은 사용자 재기동 발화 테스트 대기.
+
 ## [2026-07-21] 서버VAD STT 카드 인터리브 근본수정 — item별 순서보존 누적 모델 교체 (O3 Fast Path)
 
 **분류**: O3 Fast Path (lesson + git)
