@@ -856,6 +856,51 @@ Converters:
   - HexToReadableForegroundConverter.cs: 배경 색상 기반 전경색(흰/검) 자동 계산 변환기 [신규 2026-05-13]
 ```
 
+### 8. MS365 탭 인벤토리 (Phase 0~7, 2026-04-09)
+
+> 출처: 구 `oinfra_maix/PROJECT.md` 에서 이 문서에 없던 내용만 병합했다(2026-10-26). 파일 실존은 2026-10-26 에 실측했다. 원본 사본: `docs/archive/oinfra_maix_PROJECT.md`.
+> 실측 부재: MiniCalendarControl, EventCardControl, TodoListControl, MyDayControl, TodoDetailPanel, ContactActionBar, MessageBubbleControl (구 문서에는 있었으나 코드에 없음 — 목록에서 뺐다).
+
+| 위치 | 파일 | 설명 | Phase |
+|------|------|------|------|
+| Controls/ | CalendarGridControl.xaml/.cs | 월간 그리드 뷰(미니 캘린더 역할 겸함) | 1 |
+| Controls/ | WeekViewControl.xaml/.cs | 주간 뷰 | 1 |
+| Controls/ | DayViewControl.xaml/.cs | 일간 뷰 | 1 |
+| Controls/ | ContactListControl.xaml/.cs | 연락처 목록 | 3 |
+| Controls/ | ContactDetailControl.xaml/.cs | 연락처 상세 | 3 |
+| Controls/ | ThreadPanel.xaml/.cs | Teams 스레드 패널 | 4 |
+| Controls/ | MentionPopup.xaml/.cs | @멘션 팝업 | 4 |
+| Controls/ | FilePreviewPanel.xaml/.cs | OneDrive 파일 미리보기 | 5 |
+| Controls/ | BreadcrumbNav.xaml/.cs | OneDrive 경로 탐색 | 5 |
+| Controls/ | FileGridControl.xaml/.cs | OneDrive 파일 그리드 | 5 |
+| Controls/ | KanbanBoardControl.xaml/.cs | Planner 칸반 보드 | 6 |
+| Controls/ | KanbanCardControl.xaml/.cs | Planner 칸반 카드 | 6 |
+| Controls/ | BacklinkPanel.xaml/.cs | OneNote 백링크 패널 | 6 |
+| Controls/ | NotebookTreeControl.xaml/.cs | OneNote 노트북 트리 | 6 |
+| Controls/ | ActivityFeedControl.xaml/.cs | 활동 피드 | 7 |
+| Controls/ | CallHistoryControl.xaml/.cs | 통화 기록 | 7 |
+| ViewModels/ | TodoViewModel.cs | ToDo (스마트목록, 반복패턴) | 2 |
+| ViewModels/ | ContactsViewModel.cs | 연락처 (CRUD, 그룹 필터) | 3 |
+| ViewModels/ | OneDriveViewModel.cs | OneDrive (미리보기, 청크업로드, 공유, 버전) | 5 |
+| ViewModels/ | ActivityViewModel.cs | 활동 피드 | 7 |
+| ViewModels/ | CallsViewModel.cs | 통화 기록 | 7 |
+| Services/Graph/ | GraphToDoService.cs | ToDo Graph API | 2 |
+| Services/Graph/ | GraphOneDriveService.cs | OneDrive Graph API (공유, 버전, 업로드) | 5 |
+| Services/Graph/ | GraphActivityService.cs | Activity Graph API | 7 |
+| Services/Graph/ | GraphCallService.cs | 통화 Graph API | 7 |
+| Services/ | ChunkedUploadService.cs | OneDrive 대용량 청크 업로드 | 5 |
+| Services/ | CrossTabIntegrationService.cs | 탭 간 이벤트 통합 | 7 |
+| Models/ | PlannerCustomField.cs | Planner 커스텀 필드 | 6 |
+| Utilities/ | NaturalLanguageDateParser.cs | 자연어 날짜 파싱("다음 주 월요일" 등) | 0 |
+| Views/Dialogs/ | EventEditDialog.xaml/.cs | 일정 편집 다이얼로그 | 1 |
+| Views/Dialogs/ | ShareDialog.xaml/.cs | OneDrive 공유 다이얼로그 | 5 |
+| Views/Dialogs/ | VersionHistoryDialog.xaml/.cs | OneDrive 버전 기록 다이얼로그 | 5 |
+| Dialogs/ (루트) | MeetingScheduleDialog.xaml/.cs | Teams 미팅 일정 잡기 | 4 |
+
+**MainWindow partial class 분할** (Views/, Phase 0): `MainWindow.xaml.cs`(공통 로직) + `MainWindow.{Calendar,Todo,Contacts,Teams,OneDrive,OneNote,Planner,Activity,Calls}.cs`(탭별 이벤트·로직). 패턴은 ADVANCED.md "MainWindow Partial Class 분할 패턴" 절.
+
+**디렉토리 보충**: 위 디렉토리 구조에 없는 폴더 — `Dialogs/`(Views/Dialogs 와 별도), `Utilities/`(날짜 파서 등), `Queries/`, `Resources/`, `Services/{Audio,Cache,Editor,Speech,Theme}/`.
+
 ## 핵심 종속성
 
 ```xml

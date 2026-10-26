@@ -679,3 +679,53 @@ var rules = await context.MailRules
 | Subject | string | YES | - | NULL | 메일 제목 |
 | CreatedAt | datetime | NO | - | UtcNow | 생성 일시 |
 
+---
+
+## 20. PlannerCustomFields 테이블
+
+> 출처: 구 `oinfra_maix/DATABASE.md` 병합(2026-10-26). 컬럼은 `mAIx/Models/PlannerCustomField.cs` 실코드 기준으로 정정했다(구 문서의 CreatedAt 컬럼은 코드에 없음).
+
+**설명**: Planner 작업의 사용자 정의 필드 저장
+
+**Migration**: `20260409000013_AddPlannerCustomField`
+
+**컬럼 상세**:
+| 컬럼명 | 타입 | NULL | 키 | 기본값 | 설명 |
+|--------|------|------|-----|--------|------|
+| Id | int | NO | PK | AUTO | 기본 키 |
+| TaskId | string(255) | NO | - | "" | Planner 작업 ID |
+| FieldName | string(100) | NO | - | "" | 필드 이름 |
+| FieldValue | string(1000) | YES | - | "" | 필드 값 |
+| FieldType | string(20) | YES | - | "text" | text, number, date, checkbox |
+
+---
+
+## 전체 Migration 파일 목록 (2026-10-26 실측)
+
+> `mAIx/Migrations/` 실물 기준. 구 `oinfra_maix` 문서에 있던 `20260409000012_AddCalendarSyncToken` 은 실물이 없고 코드에도 `CalendarSyncToken` 참조가 없다(미생성으로 판단 — 표에서 제외). 000014 이후 행의 설명은 파일명에서 옮긴 것이다(본문 미검토).
+
+| Migration | 설명 |
+|-----------|------|
+| 20260112233939_InitialCreate | 초기 스키마 (Emails, Folders 등) |
+| 20260113061653_AddConverterSettings | 변환기 설정 |
+| 20260113091616_RemoveAccountsTable | Accounts 테이블 제거 |
+| 20260115114605_AddFolderIsFavorite | 폴더 즐겨찾기 |
+| 20260116040905_AddFavoriteOrder | 즐겨찾기 순서 |
+| 20260116061003_AddIsHtmlColumn | HTML 여부 컬럼 |
+| 20260116102555_AddFlagCategoriesStarred | 플래그/카테고리/별표 |
+| 20260117100000_AddEmailPinned | 메일 고정 |
+| 20260120081558_AddCalendarTables | 캘린더 테이블 |
+| 20260121100000_AddChatFavorites | 채팅 즐겨찾기 |
+| 20260329000001 ~ 000006 | Phase 1·3 (위 "Phase 1/3 스키마 변경" 절) |
+| 20260408000007 ~ 000011 | k5 파이프라인 (위 "k5 파이프라인 스키마 변경" 절) |
+| 20260409000013_AddPlannerCustomField | PlannerCustomFields 테이블 |
+| 20260409000014_UpgradeEmailFts5Trigram | Emails FTS5 trigram 전환 |
+| 20260409000015_AddAttachmentsFts | 첨부 FTS |
+| 20260410055545_AddTeamsChannelModels | Teams 채널 모델 |
+| 20260410060000_AddChannelNotificationIsFavorite | 채널 알림 즐겨찾기 |
+| 20260424000016_FixInternetMessageIdUniqueIndex | InternetMessageId 복합 UNIQUE |
+
+### EF Core 추가 주의사항 (구 oinfra_maix 병합)
+- **UNIQUE 위반**: 배치 SaveChangesAsync 실패 시 DbContext 오염 → 개별 저장 + `Entry.State = Detached` 패턴 필수 (L-286)
+- **DateTime 저장**: 항상 UTC 기준 저장, 표시 시 로컬 변환
+

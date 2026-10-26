@@ -937,3 +937,40 @@ if (dialog.ShowDialog() == true)
 - **안티패턴 금지**: ItemsPanelTemplate=Grid + RowDefinition 동적 생성 (ItemContainerGenerator/Grid.SetRow 3중 우회 필요, 신뢰 불가 — L-424).
 - **MAP 카드 3분할 DataTemplate (AC-011, 2026-05-20)**: 세로/가로 모드 양쪽 DataTemplate에 Title(Bold/FontSize=11) + Context(#666666/FontSize=10) + BodyDisplay(기존) 3분할 표시. `NullToVisibilityConverter`로 Title/Context 빈값 자동 Collapsed. 옛 LLM 응답(2필드) graceful 호환 — `TryGetProperty+string.Empty fallback` 패턴 (L-478). Option B 양쪽 ItemsControl 동등 적용 필수 (L-450).
 - **녹음목록 마우스휠 전파 (AC-010, 2026-05-20)**: `OneNoteRecordingsList_PreviewMouseWheel` — `e.Handled=true` 먼저 → 새 `MouseWheelEventArgs` 인스턴스 → `OneNoteRecordingsScrollViewer.RaiseEvent(args)`. 무한루프 방지 위해 e.Handled=true 선행 필수 (L-477).
+
+---
+
+## MS365 탭 UI·아키텍처 패턴 (Phase 0~7, 2026-04-09)
+
+> 출처: 구 `oinfra_maix/ADVANCED.md` 병합(2026-10-26). 파일 목록은 PROJECT.md "MS365 탭 인벤토리" 절. 원본 사본: `docs/archive/oinfra_maix_ADVANCED.md`.
+
+### MainWindow Partial Class 분할 패턴
+- 배경: MainWindow.xaml.cs 가 800KB 를 넘어 Phase 0 에서 탭별 partial class 로 분할했다.
+- 구조: `MainWindow.xaml.cs`(공통 초기화·네비게이션·DI) + `MainWindow.{Calendar,Todo,Contacts,Teams,OneDrive,OneNote,Planner,Activity,Calls}.cs`. 각 파일은 `public partial class MainWindow : FluentWindow`.
+- 규칙: 각 partial 파일은 해당 탭의 이벤트 핸들러와 탭 전환 로직만 둔다. 비즈니스 로직은 ViewModel 에 위임한다(MVVM). 공유 상태(ViewModel 인스턴스, DI 컨테이너)는 MainWindow.xaml.cs 에서 초기화한다.
+
+### Controls/ UserControl 패턴
+- 네임스페이스: `xmlns:controls="clr-namespace:mAIx.Controls"`
+- CalendarGridControl(월간): 6행×7열 UniformGrid, 셀은 DayCell 템플릿 + 이벤트 ItemsControl. 의존 프로퍼티 `CurrentMonth`, `Events`. 미니 캘린더 역할도 겸한다(MiniCalendarControl 은 실물 없음 — 2026-10-26 실측).
+- WeekViewControl(주간): 시간 축(0~23시) + 7일 컬럼, 이벤트는 Canvas 오버레이 절대 위치, 겹침은 너비 분할.
+- DayViewControl(일간): 시간 슬롯 세로 스크롤, 이벤트 클릭 → EventEditDialog.
+- KanbanBoardControl: 버킷별 ItemsControl + ScrollViewer, DragOver/Drop 으로 카드 이동, ViewModel `PlannerViewModel.Buckets`(ObservableCollection).
+- KanbanCardControl: 제목·담당자 아바타·우선순위 색상 바, 더블클릭 → 작업 상세, 의존 프로퍼티 `Task`(PlannerTask).
+- FilePreviewPanel: 유형별 프리뷰 — 이미지(Image)·텍스트(RichTextBox)·Office(WebView2), 닫기/다운로드/공유 버튼.
+- BreadcrumbNav: 경로 세그먼트를 Button 으로, 클릭 → `NavigateTo(folderId)`.
+- FileGridControl: 목록(ListView)/타일(WrapPanel) 전환, 이름·수정일·크기 정렬.
+- MentionPopup: TextBox 커서 위치 기준 팝업, @ 입력 시 멤버 필터링.
+- 실물 없음(2026-10-26 실측): MessageBubbleControl, TodoDetailPanel, ContactActionBar 등 — 상세 UI 는 다른 컨트롤로 대체됐을 수 있다(구 문서 기재, 미검증).
+
+### ViewModel 패턴
+- 자연어 날짜 파싱: `Utilities/NaturalLanguageDateParser.cs` — "오늘", "내일", "다음 주 월요일" 등. `new NaturalLanguageDateParser().Parse("다음 주 월요일")` → `DateTime?`.
+- 스마트 목록(TodoViewModel): 오늘 할 일·중요·계획됨·완료됨을 필터 기반 가상 목록으로 노출(`_allTasks.Where(t => SmartListFilter(t, SelectedSmartList))`).
+- 칸반 이동(PlannerViewModel): `MoveTaskToBucketAsync(task, targetBucket)` — Graph API 호출 + 로컬 갱신.
+- 크로스탭 통합(CrossTabIntegrationService, Phase 7): 탭 간 이벤트 브로드캐스트(예: Teams 미팅 생성 → 캘린더 자동 등록, `OnMeetingCreated`).
+
+### Graph API 서비스 확장 패턴
+- 공통: `ServiceException` 을 잡아 `_log.Error(ex, "Graph API 오류: {Message}", ex.Message)` 후 재throw.
+- OneDrive 청크 업로드(ChunkedUploadService): 5MB 초과 파일은 업로드 세션(`CreateUploadSession`) 생성 후 320KB 단위 청크 반복 전송.
+
+### 마이그레이션 추가
+- Windows dotnet 사용(WSL dotnet 금지): `cmd.exe /c "dotnet ef migrations add <이름> --project C:\DATA\Project\mAIx\mAIx\mAIx.csproj"`
